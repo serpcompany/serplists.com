@@ -87,7 +87,11 @@ test("the import page lists every failed template when none imported", async ({ 
   });
 
   await page.goto("/dashboard/import-templates");
-  await page.locator("#template-file-input").setInputFiles({
+  // The picker stays disabled until the template list and plan load; a file set on a
+  // disabled input is ignored.
+  const fileInput = page.locator("#template-file-input");
+  await expect(fileInput).toBeEnabled();
+  await fileInput.setInputFiles({
     name: "launch-plan.json",
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({
