@@ -297,12 +297,14 @@ export function TeamSettingsSection() {
     setRevokingInviteId(inviteId);
     try {
       await api.revokeTeamInvite(activeTeamId, inviteId);
-      await reload(invitesQuery, ['team-invites', activeTeamId]);
-      await reload(activityQuery, ['team-activity', activeTeamId]);
       toast.success('Invite revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke invite');
     } finally {
+      // A 409 means the invite was accepted first: the invitee is now a member.
+      await reload(invitesQuery, ['team-invites', activeTeamId]);
+      await reload(membersQuery, ['team-members', activeTeamId]);
+      await reload(activityQuery, ['team-activity', activeTeamId]);
       setRevokingInviteId(null);
     }
   };

@@ -37,6 +37,7 @@ function seedOrganization() {
     ["admin-user", "admin@example.test"],
     ["member-user", "member@example.test"],
     ["other-user", "other@example.test"],
+    ["new-user", "new@example.test"],
   ];
   for (const [id, email] of users) {
     d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)", id, email, id, createdAt);
@@ -283,6 +284,60 @@ describe("Organization membership writes against SQLite", () => {
       expect(result.status).toBe(409);
       expect(invite(inviteId).revoked_at).toBeNull();
       expect(revokedInviteAudits()).toEqual([]);
+    });
+  });
+
+  describe("invite revocation", () => {
+    async function createInvite() {
+      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });
+      expect(created.status).toBe(200);
+      return created.data?.id as string;
+    }
+
+    function revokedAudits() {
+      return auditActions("team_invite.revoked");
+    }
+
+    function newUserMembership() {
+      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+    }
+
+    it("revokes a pending invite and records one audit event", async () => {
+      const inviteId = await createInvite();
+
+      const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
+
+      expect(result).toEqual({ status: 200, data: { success: true } });
+      expect(revokedAudits()).toHaveLength(1);
+      expect(d1.rows("SELECT id FROM team_invites WHERE id = ? AND revoked_at IS NOT NULL", inviteId)).toHaveLength(1);
+    });
+
+    it("reports a conflict and logs nothing when the invite is accepted before the revoke writes", async () => {
+      const inviteId = await createInvite();
+      d1.beforeNextBatch(async () => {
+        const accepted = await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`);
+        expect(accepted.status).toBe(200);
+      });
+
+      const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
+
+      expect(result.status).toBe(409);
+      expect(result.data?.code).toBe("invite_already_accepted");
+      expect(revokedAudits()).toHaveLength(0);
+      expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
+    });
+
+    it("logs one revoke when two admins revoke the same invite at once", async () => {
+      const inviteId = await createInvite();
+      d1.beforeNextBatch(async () => {
+        const first = await asUser("owner-user", "DELETE", `/team-1/invites/${inviteId}`);
+        expect(first.status).toBe(200);
+      });
+
+      const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
+
+      expect(result.status).toBe(404);
+      expect(revokedAudits()).toHaveLength(1);
     });
   });
 });

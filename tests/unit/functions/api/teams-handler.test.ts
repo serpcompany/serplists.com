@@ -1071,6 +1071,44 @@ describe("Teams handler", () => {
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
+  it("reports a conflict instead of a revoke when the invite was accepted between read and write", async () => {
+    const pendingInvite = {
+      id: "invite-1",
+      team_id: "team-1",
+      email: "new@example.com",
+      role: "viewer",
+      token_hash: "hashed-token",
+      invited_by_user_id: "user-1",
+      accepted_by_user_id: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      accepted_at: null,
+      revoked_at: null,
+      created_at: "2026-01-01T00:00:00.000Z",
+      updated_at: null,
+    };
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([
+        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+      ])
+      .mockResolvedValueOnce([pendingInvite])
+      .mockResolvedValueOnce([{ accepted_at: "2026-01-02T00:00:00.000Z" }]);
+    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams/team-1/invites/invite-1", {
+        method: "DELETE",
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data.code).toBe("invite_already_accepted");
+    expect(data.success).toBeUndefined();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+  });
+
   it("rejects self membership updates for team admins", async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([

@@ -4,10 +4,11 @@ import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { createInviteToken, sha256Hex } from "../utils/crypto";
 import { buildAuditEventValues } from "../utils/audit";
-import { insertAuditEventWhere } from "../utils/guarded-writes";
+import { batchWriteMissed, insertAuditEventWhere } from "../utils/guarded-writes";
 import { getSessionUserId } from "../utils/session";
 import { generateSlug } from "../utils/slug";
 import { buildTeamInviteDelivery } from "../utils/team-invite-delivery";
+import { buildInviteRevocation } from "../utils/team-invite-revocation";
 import {
   canManageTeam,
   getActiveTeamMembership,
@@ -836,30 +837,26 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
       return jsonError("Invite not found", 404);
     }
 
-    const auditEvent = await buildAuditEventValues({
+    // The invite can be accepted or revoked by someone else before this batch runs; the
+    // revoke and its audit event then do nothing, and the response says what happened.
+    const [revoke, revokeAudit] = await buildInviteRevocation({
+      db,
+      invite: { ...invite, id: inviteId },
       actorUserId: userId,
-      subject: { type: "team", id: teamId },
-      resource: { type: "team_invite", id: inviteId },
-      action: "team_invite.revoked",
-      before: invite,
-      after: { ...invite, revoked_at: now, updated_at: now },
       request,
-      createdAt: now,
+      now,
     });
-    await db.batch([
-      db
-        .update(team_invites)
-        .set({ revoked_at: now, updated_at: now })
-        .where(
-          and(
-            eq(team_invites.id, inviteId),
-            eq(team_invites.team_id, teamId),
-            isNull(team_invites.accepted_at),
-            isNull(team_invites.revoked_at),
-          ),
-        ),
-      db.insert(audit_events).values(auditEvent),
-    ]);
+    const [revokeResult] = await db.batch([revoke, revokeAudit]);
+    if (batchWriteMissed(revokeResult)) {
+      const [current] = await db
+        .select({ accepted_at: team_invites.accepted_at })
+        .from(team_invites)
+        .where(and(eq(team_invites.id, inviteId), eq(team_invites.team_id, teamId)))
+        .limit(1);
+      return current?.accepted_at
+        ? jsonError("Invite was already accepted", 409, { code: "invite_already_accepted" })
+        : jsonError("Invite not found", 404);
+    }
 
     return json({ success: true });
   }

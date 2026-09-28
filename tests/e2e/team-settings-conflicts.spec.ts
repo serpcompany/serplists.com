@@ -181,3 +181,47 @@ test('changing a member status reloads pending invites so revoked ones disappear
   await expect(page.getByText('Member updated')).toBeVisible();
   await expect(revokeButton).toHaveCount(0);
 });
+
+test('revoking an invite that was just accepted reports the conflict and shows the new member', async ({ page }) => {
+  const acceptedInvite = {
+    id: 'invite-new',
+    team_id: 'team-1',
+    email: 'new@example.com',
+    role: 'viewer',
+    invited_by_user_id: 'user-owner',
+    expires_at: '2099-01-01T00:00:00.000Z',
+    created_at: '2026-07-01T00:00:00.000Z',
+    inviterEmail: 'owner@example.com',
+    inviterName: 'Owner User',
+  };
+  const newMember: Member = {
+    id: 'member-new',
+    email: 'new@example.com',
+    name: 'New Member',
+    role: 'viewer',
+    status: 'active',
+    user_id: 'user-new',
+  };
+  const state: MockState = {
+    members: [ownerMember],
+    invites: [acceptedInvite],
+    requests: [],
+    respond: (method, path) => {
+      if (method !== 'DELETE' || path !== '/api/teams/team-1/invites/invite-new') return null;
+      // The invitee accepted while the admin was clicking Revoke.
+      state.members = [ownerMember, newMember];
+      state.invites = [];
+      return { status: 409, body: { error: 'Invite was already accepted', code: 'invite_already_accepted' } };
+    },
+  };
+  await mockOrganizationApi(page, state);
+  await openOrganizationSettings(page);
+
+  const revokeButton = page.getByRole('button', { name: 'Revoke invite for new@example.com' });
+  await revokeButton.click();
+
+  await expect(page.getByText('Invite was already accepted')).toBeVisible();
+  await expect(page.getByText('Invite revoked')).toHaveCount(0);
+  await expect(revokeButton).toHaveCount(0);
+  await expect(page.getByText('New Member')).toBeVisible();
+});
