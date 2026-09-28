@@ -288,12 +288,13 @@ const TemplateDetail = () => {
       return;
     }
 
+    const visit = beginVisit();
     setIsUpdatingVisibility(true);
     try {
       const result = await setVisibility(nextIsPublic);
 
       if (result.kind === 'login_required') {
-        navigateToLoginWithReturnPath(navigate, location);
+        if (visit.isCurrent()) goToLogin();
       } else if (result.kind === 'ok') {
         toast.success(
           nextIsPublic ? 'Template is now public' : 'Template is now private',
