@@ -47,6 +47,13 @@ const {
   },
 }));
 
+// A static render runs no effects, so the page never counts as shown and every late
+// result would be ignored. These tests act as a user who is still on the page; leaving
+// it is covered by tests/unit/lib/navigation/pageVisit.test.ts.
+vi.mock('@/hooks/usePageVisit', () => ({
+  usePageVisit: () => () => ({ isCurrent: () => true }),
+}));
+
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
   useTemplateDetailModel: (...args: unknown[]) => mockUseTemplateDetailModel(...args),
 }));

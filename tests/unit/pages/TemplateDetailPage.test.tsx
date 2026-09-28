@@ -31,19 +31,30 @@ const {
   },
 }));
 
-// The real model derives permissions from the options the page passes; so does this mock.
+// The real model derives permissions from the options the page passes, and duplicates
+// through the page's createTemplate; so does this mock.
 vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
   const { getTemplateDetailPermissions } = await import(
     '@/features/template-detail/templatePermissions'
   );
+  const { duplicateOwnedTemplate } = await import(
+    '@/features/template-detail/templateActionOutcome'
+  );
   return {
     useTemplateDetailModel: (options: {
       canEditTemplates: boolean;
+      createTemplate: Parameters<typeof duplicateOwnedTemplate>[0]['createTemplate'];
       teamId?: string;
       userId?: string;
     }) => {
       const model = mockUseTemplateDetailModel(options);
       return {
+        duplicateTemplate: () =>
+          duplicateOwnedTemplate({
+            activeTeamId: options.teamId,
+            createTemplate: options.createTemplate,
+            template: model.template,
+          }),
         permissions: getTemplateDetailPermissions({
           activeTeamId: options.teamId,
           canEditTemplates: options.canEditTemplates,
