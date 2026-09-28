@@ -71,6 +71,20 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
 Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
 it moves ports. Do not hand-edit only one side.
 
+## Response headers
+
+`public/_headers` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on
+static responses (every SPA page). The Vite dev server never applies that file, so
+check policy changes on `wrangler pages dev` or a deployed host.
+
+- `frame-src` must list every video player origin in `EMBED_FRAME_ORIGINS`
+  (`src/lib/utils/embedOrigins.ts`): YouTube, youtube-nocookie, and Clipy.
+  `getVideoEmbedSource` frames only those origins; embed code from any other origin
+  renders as an "Open video" link instead of a frame the browser would refuse.
+- To support another provider, add its origin to both places.
+  `tests/unit/security/headers.test.ts` fails when they drift, or when a bundled
+  public template video would be blocked.
+
 ## Rate limits
 
 Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatch:

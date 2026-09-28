@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { generateSlug, getVideoEmbedSource } from '@/utils/urlHelpers';
 import { getOutboundLinkProps, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
+import { EMBED_FRAME_ORIGINS } from '@/lib/utils/embedOrigins';
 
 describe('urlHelpers', () => {
   describe('generateSlug', () => {
@@ -65,6 +66,55 @@ describe('getVideoEmbedSource', () => {
       kind: 'video',
       url: 'https://cdn.example.com/walkthrough.mp4',
     });
+  });
+
+  it.each([
+    ['https://www.youtube.com/watch?v=aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://youtube.com/watch?feature=share&v=aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://youtu.be/aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://youtu.be/aqz-KE-bpKQ?t=90', 'https://www.youtube.com/embed/aqz-KE-bpKQ?start=90'],
+    ['https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=1m30s', 'https://www.youtube.com/embed/aqz-KE-bpKQ?start=90'],
+    ['https://m.youtube.com/watch?v=aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://music.youtube.com/watch?v=aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://www.youtube.com/shorts/aqz-KE-bpKQ', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['https://www.youtube.com/live/aqz-KE-bpKQ?si=abc', 'https://www.youtube.com/embed/aqz-KE-bpKQ'],
+    ['<iframe src="https://www.youtube.com/embed/aqz-KE-bpKQ?start=5"></iframe>', 'https://www.youtube.com/embed/aqz-KE-bpKQ?start=5'],
+    ['<iframe src="http://www.youtube-nocookie.com/embed/aqz-KE-bpKQ"></iframe>', 'https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ'],
+    ['<iframe src="https://www.youtube.com/embed/videoseries?list=PL123"></iframe>', 'https://www.youtube.com/embed/videoseries?list=PL123'],
+  ])('embeds the YouTube player for %s', (input, url) => {
+    expect(getVideoEmbedSource(input)).toEqual({ kind: 'iframe', url });
+  });
+
+  it.each([
+    ['<iframe src="https://player.vimeo.com/video/76979871"></iframe>', 'https://player.vimeo.com/video/76979871'],
+    ['<iframe src="https://www.youtube.com.evil.test/embed/aqz-KE-bpKQ"></iframe>', 'https://www.youtube.com.evil.test/embed/aqz-KE-bpKQ'],
+    ['https://www.youtube.com/@serplists', 'https://www.youtube.com/@serplists'],
+    ['https://www.youtube.com/watch?v=short', 'https://www.youtube.com/watch?v=short'],
+    ['https://clipy.online/pricing', 'https://clipy.online/pricing'],
+  ])('links out instead of framing a source the policy blocks: %s', (input, url) => {
+    expect(getVideoEmbedSource(input)).toEqual({ kind: 'link', url });
+  });
+
+  it('rejects non-web protocols', () => {
+    expect(getVideoEmbedSource('javascript:alert(1)')).toBeNull();
+    expect(getVideoEmbedSource('<iframe src="data:text/html,hi"></iframe>')).toBeNull();
+  });
+
+  it('only returns iframe sources on an allowlisted embed origin', () => {
+    const inputs = [
+      'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+      '<iframe src="https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ"></iframe>',
+      '<iframe src="https://player.vimeo.com/video/76979871"></iframe>',
+      '<iframe src="https://www.loom.com/embed/abc"></iframe>',
+      '<iframe src="http://clipy.online/embed/tizg5pl1gkul"></iframe>',
+      'https://clipy.online/video/tizg5pl1gkul',
+    ];
+    for (const input of inputs) {
+      const source = getVideoEmbedSource(input);
+      if (source?.kind === 'iframe') {
+        expect(EMBED_FRAME_ORIGINS).toContain(new URL(source.url).origin);
+      }
+    }
   });
 });
 
