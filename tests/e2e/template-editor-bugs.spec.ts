@@ -686,6 +686,61 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  // Content blocks showed a grab handle that did nothing, so their order was fixed.
+  test("reorders content blocks by keyboard and by drag and saves the order", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Block order ${stamp}`;
+    const embedUrl = "https://www.loom.com/share/order";
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with blocks ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Text", exact: true }).last().click();
+    await page.getByPlaceholder("Enter text or markdown content").fill("Intro text");
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("button", { name: "Embed", exact: true }).last().click();
+    await page.getByLabel("Embed Code or URL").fill(embedUrl);
+
+    const handles = page.getByRole("button", { name: /^Drag (Text|Embed) block$/ });
+    await expect(handles).toHaveCount(2);
+
+    const embedHandle = page.getByRole("button", { name: "Drag Embed block" });
+    await embedHandle.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
+    await expect(embedHandle).toBeFocused();
+
+    // Drag the text block back above the embed block.
+    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+    await page.getByRole("button", { name: "Drag Text block" }).dispatchEvent("dragstart", { dataTransfer });
+    await embedHandle.dispatchEvent("dragover", { dataTransfer });
+    await expect(page.locator('[data-drop-indicator="content-before"]')).toBeVisible();
+    await embedHandle.dispatchEvent("drop", { dataTransfer });
+    await expect(handles.first()).toHaveAccessibleName("Drag Text block");
+
+    await embedHandle.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "embed", value: embedUrl }),
+      expect.objectContaining({ type: "text", value: "Intro text" }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
   test("waits for a file upload before saving or leaving", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Held upload ${stamp}`;

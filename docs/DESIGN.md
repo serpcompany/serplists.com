@@ -33,9 +33,9 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   `ROW_ACTIONS_REVEAL_CLASS` (`src/components/template-editor/reorder.ts`), and a unit
   test fails on any hover-only class string there.
 - Anything that reorders by drag also reorders from the keyboard. The template
-  editor's drag handles (`ReorderHandle`) move their section or task one place with
-  the Up and Down arrow keys, keep focus on the moved handle, and announce the new
-  position.
+  editor's drag handles (`ReorderHandle`) move their section, task or content block
+  one place with the Up and Down arrow keys, keep focus on the moved handle, and
+  announce the new position. A grab cursor goes only on a handle that works.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (`--mobile`).

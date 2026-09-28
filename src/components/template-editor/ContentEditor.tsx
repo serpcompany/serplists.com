@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";
 
 import { ContentAddPanel } from "@/components/template-editor/ContentAddPanel";
-import { ROW_ACTIONS_REVEAL_CLASS } from "@/components/template-editor/reorder";
+import { ReorderHandle, ReorderHint } from "@/components/template-editor/ReorderHandle";
+import { dropIndicatorClass, ROW_ACTIONS_REVEAL_CLASS } from "@/components/template-editor/reorder";
+import { useBlockDrag } from "@/components/template-editor/useBlockDrag";
 import { EmbedContentEditor } from "@/components/template-editor/content-types/EmbedContentEditor";
 import { MediaContentEditor } from "@/components/template-editor/content-types/MediaContentEditor";
 import { SubItemsEditor } from "@/components/template-editor/content-types/SubItemsEditor";
@@ -45,6 +47,11 @@ export function ContentEditor({
       control,
       name: `sections.${sectionIndex}.items.${itemIndex}.contents` as const,
     }) ?? [];
+  // Blocks reorder by dragging their handle or with the arrow keys on it. A move keeps
+  // each block's id, and useFieldArray.move marks the form dirty.
+  const blockDrag = useBlockDrag(contentsFieldArray.move);
+  const [moveAnnouncement, setMoveAnnouncement] = useState("");
+  const reorderHintId = useId();
 
   function handleAddContent(type: TemplateEditorContentType): void {
     contentsFieldArray.append(createTemplateEditorContent(type));
@@ -136,8 +143,10 @@ export function ContentEditor({
           />
         );
       case "subItems":
+        // Its field array is named by this index, so a moved block gets a fresh one.
         return (
           <SubItemsEditor
+            key={contentIndex}
             contentIndex={contentIndex}
             itemIndex={itemIndex}
             sectionIndex={sectionIndex}
@@ -182,36 +191,60 @@ export function ContentEditor({
         </div>
       ) : (
         <div className="space-y-3">
-          {contentsFieldArray.fields.map((contentField, contentIndex) => (
-            <div
-              className="group rounded-lg border border-border bg-card"
-              key={contentField.fieldId}
-            >
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                <div className="h-4 w-4 shrink-0 cursor-grab rounded bg-muted/50" />
-                <span className="flex-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {contentTypeLabels[contents[contentIndex]?.type ?? "text"]}
-                </span>
-                <Button
-                  aria-label={`Remove ${contentTypeLabels[contents[contentIndex]?.type ?? "text"]} block`}
-                  className={cn(
-                    "h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive",
-                    ROW_ACTIONS_REVEAL_CLASS,
-                  )}
-                  onClick={() => contentsFieldArray.remove(contentIndex)}
-                  size="icon"
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+          {contentsFieldArray.fields.map((contentField, contentIndex) => {
+            const typeLabel = contentTypeLabels[contents[contentIndex]?.type ?? "text"];
+            const dropEdge =
+              blockDrag.dropTarget?.index === contentIndex ? blockDrag.dropTarget.edge : null;
 
-              <div className="p-3">{renderContentEditor(contentIndex)}</div>
-            </div>
-          ))}
+            return (
+              <div
+                className={cn(
+                  "group relative rounded-lg border border-border bg-card",
+                  blockDrag.draggedIndex === contentIndex && "opacity-50",
+                  dropIndicatorClass(dropEdge),
+                )}
+                data-drop-indicator={dropEdge ? `content-${dropEdge}` : undefined}
+                key={contentField.fieldId}
+                onDragOver={(event) => blockDrag.handleDragOver(event, contentIndex)}
+                onDrop={(event) => blockDrag.handleDrop(event, contentIndex)}
+              >
+                <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+                  <ReorderHandle
+                    count={contentsFieldArray.fields.length}
+                    handleId={`content:${contentField.id}`}
+                    hintId={reorderHintId}
+                    index={contentIndex}
+                    label={`${typeLabel} block`}
+                    onDragEnd={blockDrag.finishDrag}
+                    onDragStart={(event) => blockDrag.startDrag(event, contentIndex)}
+                    onMove={contentsFieldArray.move}
+                    onMoved={setMoveAnnouncement}
+                  />
+                  <span className="flex-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {typeLabel}
+                  </span>
+                  <Button
+                    aria-label={`Remove ${typeLabel} block`}
+                    className={cn(
+                      "h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive",
+                      ROW_ACTIONS_REVEAL_CLASS,
+                    )}
+                    onClick={() => contentsFieldArray.remove(contentIndex)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                <div className="p-3">{renderContentEditor(contentIndex)}</div>
+              </div>
+            );
+          })}
         </div>
       )}
+      <ReorderHint announcement={moveAnnouncement} id={reorderHintId} />
     </div>
   );
 }
