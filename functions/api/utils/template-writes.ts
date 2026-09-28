@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
-import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
 // Template inserts and the template-count limit. Create, clone and restore pre-check the
@@ -17,9 +17,11 @@ type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
 export type TemplateOwnerContext = { userId: string; teamId: string | null };
 export type TemplateCapacity = { owner: TemplateOwnerContext; limit: number };
 
+// SQLite reports a missing column as "no such column: rules" in reads and updates, and as
+// "table templates has no column named rules" in an INSERT column list.
 export function isMissingRulesColumnError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /templates[".]?\.?"?rules|no such column:.*rules/i.test(message);
+  return /templates[".]?\.?"?rules|no such column:.*rules|has no column named "?rules\b/i.test(message);
 }
 
 export function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
@@ -74,27 +76,34 @@ export async function insertTemplateWithHistoryFallback(
   const { audit_events, template_versions, templates } = schema;
   const templateId = String(values.id);
 
-  const runBatch = (templateValues: TemplateInsertValues) => capacity
-    ? db.batch([
-        insertRowWhere(db, templates, templateValues, templateCapacityAvailableSql(capacity)),
-        insertRowWhere(db, template_versions, versionValues, rowExistsSql(templates.id, templateId)),
-        insertRowWhere(db, audit_events, auditEventValues, rowExistsSql(templates.id, templateId)),
-      ])
-    : db.batch([
-        db.insert(templates).values(templateValues),
-        db.insert(template_versions).values(versionValues),
-        db.insert(audit_events).values(auditEventValues),
-      ]);
+  // Before the rules migration, the retry must leave `rules` out of the statement itself:
+  // Drizzle names every table column in an INSERT, so omitting the value alone still fails.
+  const runBatch = (omitColumns: readonly string[]) => {
+    const templateValues = (omitColumns.length
+      ? omitRulesColumn(values as Record<string, unknown>)
+      : values) as TemplateInsertValues;
+    return capacity
+      ? db.batch([
+          insertRowWhere(db, templates, templateValues, templateCapacityAvailableSql(capacity), { omitColumns }),
+          insertRowWhere(db, template_versions, versionValues, rowExistsSql(templates.id, templateId)),
+          insertRowWhere(db, audit_events, auditEventValues, rowExistsSql(templates.id, templateId)),
+        ])
+      : db.batch([
+          db.insert(withoutColumns(templates, omitColumns)).values(templateValues),
+          db.insert(template_versions).values(versionValues),
+          db.insert(audit_events).values(auditEventValues),
+        ]);
+  };
 
   let results: unknown[];
   try {
-    results = await runBatch(values);
+    results = await runBatch([]);
   } catch (error) {
     if (!isMissingRulesColumnError(error)) {
       throw error;
     }
 
-    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateInsertValues);
+    results = await runBatch(['rules']);
   }
 
   const meta = (results[0] as { meta?: { changes?: unknown } } | undefined)?.meta;

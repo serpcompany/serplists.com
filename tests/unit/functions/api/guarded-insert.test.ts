@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/d1';
 import { sql } from 'drizzle-orm';
 import { schema } from '@functions/api/db';
-import { insertRowWhere, rowExistsSql } from '@functions/api/utils/guarded-insert';
+import { insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
 import { activeRunCapacityAvailableSql } from '@functions/api/utils/active-run-limit';
 
 // Builds SQL only; nothing is executed.
@@ -27,6 +27,20 @@ describe('insertRowWhere', () => {
     expect(guarded.sql.endsWith(' where 1 = 1')).toBe(true);
     // Booleans are encoded through the column (true -> 1), and defaults match the plain insert.
     expect(guarded.params).toEqual(plain.params);
+  });
+
+  it('leaves omitted columns out of the statement, matching a plain insert of the rest', () => {
+    const template = { id: 'template-1', user_id: 'user-1', title: 'T', items: '[]', created_at: 'now' };
+    const plain = db.insert(withoutColumns(schema.templates, ['rules'])).values(template).toSQL();
+    const guarded = insertRowWhere(db as never, schema.templates, template, sql`1 = 1`, { omitColumns: ['rules'] }).toSQL();
+
+    expect(plain.sql).toMatch(/^insert into "templates" \(/);
+    expect(plain.sql).not.toContain('"rules"');
+    expect(guarded.sql).not.toContain('"rules"');
+    expect(guarded.sql.startsWith(`${plain.sql.slice(0, plain.sql.indexOf(' values '))} select `)).toBe(true);
+    expect(guarded.params).toEqual(plain.params);
+    // The table itself is untouched.
+    expect(db.insert(schema.templates).values(template).toSQL().sql).toContain('"rules"');
   });
 
   it('guards a run insert on the active-run count for its context', () => {
