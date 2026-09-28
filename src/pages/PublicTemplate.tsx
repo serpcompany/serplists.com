@@ -35,7 +35,7 @@ const PublicTemplate = () => {
   const { user, isAuthenticated } = useAuth();
   // Billing, Save and Start Run all use the active ownership context.
   const { activeTeamId, isTeamWorkspace, isWorkspaceLoading } = useWorkspace();
-  const { createRun, createTemplate, templates } = useTemplates();
+  const { createRun, createTemplate } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   // Set synchronously, so a second click before the re-render cannot create a second run.
   const startRunInFlight = useRef(false);
@@ -50,7 +50,6 @@ const PublicTemplate = () => {
     template,
     totalItems,
   } = useTemplateDetailModel({
-    cachedTemplates: templates,
     createRun,
     createTemplate,
     identifier: templateSlug,

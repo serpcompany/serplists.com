@@ -170,33 +170,6 @@ describe('template detail mappers', () => {
 });
 
 describe('loadTemplateDetailData', () => {
-  it('loads a public template from cached data first', async () => {
-    const cachedTemplate = buildTemplate({
-      ownerProfile: { username: 'alice' },
-    });
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-    };
-
-    const result = await loadTemplateDetailData(
-      {
-        mode: 'public',
-        identifier: 'camping-checklist',
-        ownerUsername: 'alice',
-        cachedTemplates: [cachedTemplate],
-      },
-      { apiClient },
-    );
-
-    expect(result).toEqual({ notFound: false, template: cachedTemplate });
-    expect(apiClient.getTemplateById).not.toHaveBeenCalled();
-    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
-  });
-
   it('falls back to the API and resolves the owner profile', async () => {
     const apiClient = {
       getTemplateById: vi.fn(),
@@ -223,7 +196,6 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'camping-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );
@@ -272,7 +244,6 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'legacy-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );
@@ -307,7 +278,6 @@ describe('loadTemplateDetailData', () => {
         mode: 'public',
         identifier: 'camping-checklist',
         ownerUsername: 'alice',
-        cachedTemplates: [],
       },
       { apiClient },
     );

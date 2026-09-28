@@ -8,6 +8,9 @@ import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 const mockUseTemplateDetailModel = vi.fn();
+const { workspaceTemplates } = vi.hoisted(() => ({
+  workspaceTemplates: [] as unknown[],
+}));
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
   useTemplateDetailModel: (...args: unknown[]) =>
@@ -32,6 +35,7 @@ vi.mock('@/contexts/TemplatesContext', () => {
     deleteTemplate: vi.fn(),
     getTemplate: vi.fn(),
     updateTemplate: vi.fn(),
+    workspaceTemplates,
   });
   return { useTemplates, useTemplateLists: useTemplates };
 });
@@ -48,7 +52,38 @@ vi.mock('@/lib/access-flow', () => ({
   navigateToLoginWithReturnPath: vi.fn(),
 }));
 
+const renderTemplateDetail = () =>
+  renderToStaticMarkup(
+    <StaticRouter location="/dashboard/templates/tpl-1">
+      <Routes>
+        <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
+      </Routes>
+    </StaticRouter>,
+  );
+
+const baseModel = () => ({
+  billingState: { billingEnabled: true, isLoading: false, isPro: true },
+  history: { data: null, isError: false, isLoading: false },
+  loading: false,
+  notFound: false,
+  saveTemplate: vi.fn(),
+  shareTemplate: vi.fn(),
+  startRun: vi.fn(),
+  template: buildV0DemoPrivateTemplate(),
+});
+
 describe('TemplateDetail page', () => {
+  it('looks templates up in the workspace list, which refreshes after edits, never the catalog', () => {
+    mockUseTemplateDetailModel.mockReturnValue(baseModel());
+
+    renderTemplateDetail();
+
+    const options = mockUseTemplateDetailModel.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(options.mode).toBe('private');
+    expect(options.workspaceTemplates).toBe(workspaceTemplates);
+    expect(options).not.toHaveProperty('getCachedTemplate');
+  });
+
   it('renders the v0 private template detail structure with stats, structure, and metadata cards', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       billingState: {

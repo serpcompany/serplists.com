@@ -171,8 +171,8 @@ const TemplateDetail = () => {
     createRun,
     createTemplate,
     deleteTemplate,
-    getTemplate,
     updateTemplate,
+    workspaceTemplates,
   } = useTemplateLists();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
@@ -198,13 +198,13 @@ const TemplateDetail = () => {
   } = useTemplateDetailModel({
     createRun,
     createTemplate,
-    getCachedTemplate: getTemplate,
     identifier: id,
     isAuthenticated,
     mode: 'private',
     teamId: activeTeamId,
     userId: user?.id,
     username: user?.username,
+    workspaceTemplates,
   });
   const displayTemplate = template;
   const metrics = (displayTemplate as (ChecklistTemplate & TemplateMetrics) | null) ?? null;

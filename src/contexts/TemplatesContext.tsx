@@ -139,6 +139,7 @@ export const useTemplateLists = (options: { catalog?: boolean; workspace?: boole
     ...context,
     templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
     runsLoading: !queries.ready || runs.isLoading,
+    workspaceTemplates: workspace.data, // Only the active workspace list, never the catalog.
   };
 };
 

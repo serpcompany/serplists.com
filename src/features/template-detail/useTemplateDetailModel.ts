@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getAccessFailure } from '@/lib/api-errors';
@@ -8,6 +8,7 @@ import {
   buildRepoTemplateCreatePayload,
   findPublicTemplateByIdentifier,
   isRepoTemplate,
+  repoTemplates,
 } from '@/lib/repoTemplateCatalog';
 import {
   buildCanonicalPublicTemplatePath,
@@ -44,8 +45,8 @@ type CreateRun = (params: {
   templateId: string;
 }) => Promise<ChecklistRun | null>;
 
+// Public pages always read the server copy: an in-memory list can be arbitrarily old.
 type PublicTemplateDetailOptions = {
-  cachedTemplates: ChecklistTemplate[];
   identifier?: string;
   mode: 'public';
   ownerUsername?: string;
@@ -55,6 +56,13 @@ type PrivateTemplateDetailOptions = {
   getCachedTemplate: (identifier: string) => ChecklistTemplate | undefined;
   identifier?: string;
   mode: 'private';
+};
+
+// Only the active workspace list, which the page refetches after edits; never the catalog.
+type PrivateTemplateDetailHookOptions = {
+  identifier?: string;
+  mode: 'private';
+  workspaceTemplates: ChecklistTemplate[] | undefined;
 };
 
 type TemplateDetailCommonOptions = {
@@ -68,7 +76,7 @@ type TemplateDetailCommonOptions = {
 };
 
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
-  (PublicTemplateDetailOptions | PrivateTemplateDetailOptions);
+  (PublicTemplateDetailOptions | PrivateTemplateDetailHookOptions);
 
 export type TemplateDetailActionResult =
   | { kind: 'ok'; runId?: string; shareUrl?: string; templateId?: string }
@@ -158,15 +166,17 @@ export const loadTemplateDetailData = async (
       return { template: null, notFound: true };
     }
 
-    const cachedTemplate = findPublicTemplateByIdentifier(
-      options.cachedTemplates,
+    // Library templates ship in the bundle (the API cannot serve them) and win on a slug clash.
+    const libraryTemplate = findPublicTemplateByIdentifier(
+      repoTemplates,
       options.identifier,
     );
-    if (cachedTemplate) {
-      const ownerSlug = resolvePublicTemplateOwnerSlug(cachedTemplate);
-      if (ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()) {
-        return { template: cachedTemplate, notFound: false };
-      }
+    if (
+      libraryTemplate &&
+      resolvePublicTemplateOwnerSlug(libraryTemplate)?.toLowerCase() ===
+        options.ownerUsername.toLowerCase()
+    ) {
+      return { template: libraryTemplate, notFound: false };
     }
 
     try {
@@ -195,7 +205,10 @@ export const loadTemplateDetailData = async (
     }
   }
 
-  const cachedTemplate = options.getCachedTemplate(options.identifier);
+  const identifier = options.identifier;
+  const cachedTemplate =
+    options.getCachedTemplate(identifier) ??
+    repoTemplates.find((template) => template.id === identifier);
   if (cachedTemplate) {
     return { template: cachedTemplate, notFound: false };
   }
@@ -374,10 +387,14 @@ export const useTemplateDetailModel = (
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const queryClient = useQueryClient();
-  const cachedTemplates =
-    options.mode === 'public' ? options.cachedTemplates : null;
-  const getCachedTemplate =
-    options.mode === 'private' ? options.getCachedTemplate : null;
+  const workspaceTemplates =
+    options.mode === 'private' ? options.workspaceTemplates : undefined;
+  // Changes only when the workspace list does, so a refetch reloads the template.
+  const getCachedTemplate = useCallback(
+    (identifier: string) =>
+      workspaceTemplates?.find((template) => template.id === identifier),
+    [workspaceTemplates],
+  );
   const publicOwnerUsername =
     options.mode === 'public' ? options.ownerUsername : undefined;
 
@@ -423,14 +440,12 @@ export const useTemplateDetailModel = (
       const result = await loadTemplateDetailData(
         options.mode === 'public'
           ? {
-              cachedTemplates: cachedTemplates ?? [],
               identifier: options.identifier,
               mode: 'public',
               ownerUsername: publicOwnerUsername,
             }
           : {
-              getCachedTemplate:
-                getCachedTemplate ?? (() => undefined),
+              getCachedTemplate,
               identifier: options.identifier,
               mode: 'private',
             },
@@ -451,7 +466,6 @@ export const useTemplateDetailModel = (
       cancelled = true;
     };
   }, [
-    cachedTemplates,
     getCachedTemplate,
     options.identifier,
     options.mode,

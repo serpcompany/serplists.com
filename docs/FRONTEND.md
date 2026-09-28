@@ -45,6 +45,12 @@ Canonical private routes live under `/dashboard/*`; the full route list is in
   ([D1 cost](design-docs/d1-cost.md)), so pages that only need official templates use
   the bundled `repoTemplates`. The catalog's query key has no user id because the
   catalog is the same for everyone.
+- Template detail pages never show a copy from a list they do not load: a list is
+  refetched after an edit only while a page observes it, so an unobserved copy can be
+  arbitrarily old. The public template page loads its template from the API on every
+  visit (bundled library templates excepted), and the private detail page reuses only
+  `workspaceTemplates` from `useTemplateLists()`, the active workspace list it keeps
+  fresh; anything else is fetched by id.
 - Mutations are complete only when the persistence promise resolves. Do not
   navigate or report success from a fire-and-forget mutation, and preserve fields
   you are not editing (for example, `rules`) on update.

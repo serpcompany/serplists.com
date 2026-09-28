@@ -58,7 +58,20 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => ({
     createRun: vi.fn(),
     createTemplate: vi.fn(),
-    templates: [],
+    // An old catalog copy: the page must not show it in place of the server's.
+    templates: [
+      {
+        id: 'clipy-template-1',
+        slug: 'reviewed-clipy-checklist',
+        title: 'Stale catalog title',
+        isPublic: true,
+        sections: [],
+        userId: 'user-1',
+        ownerProfile: { username: 'alice' },
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ],
   }),
 }));
 
@@ -345,6 +358,20 @@ describe('PublicTemplate ownership context', () => {
     expect(mockUseTemplateDetailModel).toHaveBeenCalledWith(
       expect.objectContaining({ teamId: 'team-1', userId: 'user-1' }),
     );
+  });
+
+  it('loads the template itself instead of reading the in-memory catalog', () => {
+    renderPublishedRoute(publishedClipyTemplate);
+
+    const options = mockUseTemplateDetailModel.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(options).toEqual(
+      expect.objectContaining({
+        identifier: 'reviewed-clipy-checklist',
+        mode: 'public',
+        ownerUsername: 'alice',
+      }),
+    );
+    expect(options).not.toHaveProperty('cachedTemplates');
   });
 
   it('keeps Personal as the context when no Organization is active', () => {
