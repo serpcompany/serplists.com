@@ -54,6 +54,13 @@ and user-facing failure states when a supporting service is unavailable.
   it comes back into view, at most once a minute, and after a back/forward cache
   restore. Tabs never re-announce what they learned, so one change costs one session
   read per other tab.
+- The server can end a session on its own: it expires, or the user signs out other
+  sessions or changes their password on another device. The API client reports every
+  `401` (`src/lib/unauthorizedResponses.ts`), and a signed-in tab re-reads the session:
+  one check for a burst of `401`s, at most one every 5 seconds. Only a confirmed
+  "no session" signs the tab out ("Your session ended. Sign in again."); `RequireAuth`
+  then sends the user to `/login` with the page to return to, and the previous user's
+  cached queries are dropped. A `403` never signs anyone out.
 - Passwords: Better Auth enforces length (10 to 128) and rejects breached passwords;
   `Register.tsx`, `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same
   policy client-side.

@@ -74,7 +74,7 @@ test('a sign-out in one tab signs the other tab out, and a sign-in brings it bac
   await signOut(tab2);
   await tab1.bringToFront();
   await expect(tab1).toHaveURL(/\/login/, { timeout: 15_000 });
-  await expect(tab1.getByText('You were signed out.')).toBeVisible();
+  await expect(tab1.getByText('Your session ended. Sign in again.')).toBeVisible();
 
   // Tab 1 waits on /login for its original page; John's sign-in in tab 2 takes it there as John.
   await signIn(tab2, 'Fill John');

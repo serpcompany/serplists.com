@@ -13,7 +13,7 @@ changes are risky or slow. D = needs attention before building on it.
 
 | Domain | Tests | Boundaries | Structure | Docs | Biggest gap |
 | --- | --- | --- | --- | --- | --- |
-| Identity and sessions | B | B | B | A | 401 handling in the app client (TD-10) |
+| Identity and sessions | B | B | B | A | Session checks read D1 (no Better Auth cookie cache), so re-checks must stay throttled |
 | Personal and Organization ownership | B | B | C | B | Legacy team/workspace naming in code identifiers (TD-5); `teams.ts` is about 1,050 lines |
 | Templates | A | C | D | A | `templates.ts` handler is about 1,600 lines; hand-normalized `sections` (TD-3, TD-8) |
 | Runs | B | C | C | B | `checklists.ts` is about 1,200 lines; `ChecklistRun.tsx` is near its cap |

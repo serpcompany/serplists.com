@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SessionCheck, SessionState } from '@/contexts/authSession';
 import {
   SESSION_RECHECK_INTERVAL_MS,
+  SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS,
   createSessionSync,
   type SessionSyncChannel,
   type SessionSyncEnvironment,
@@ -66,6 +67,7 @@ function createTab(options: {
   const notify = vi.fn();
   const visible = new Set<() => void>();
   const restored = new Set<() => void>();
+  const unauthorized = new Set<() => void>();
   const sync = createSessionSync({
     readSession,
     getState: () => state,
@@ -87,6 +89,10 @@ function createTab(options: {
       restored.add(listener);
       return () => restored.delete(listener);
     },
+    onUnauthorized: (listener) => {
+      unauthorized.add(listener);
+      return () => unauthorized.delete(listener);
+    },
     ...overrides,
   });
   return {
@@ -97,6 +103,8 @@ function createTab(options: {
     state: () => state,
     showTab: () => visible.forEach((listener) => listener()),
     restoreFromCache: () => restored.forEach((listener) => listener()),
+    // An API request came back 401.
+    receive401: () => unauthorized.forEach((listener) => listener()),
   };
 }
 
@@ -131,7 +139,7 @@ describe('session sync across tabs', () => {
     await flush();
 
     expect(tab1.state()).toEqual({ user: null, session: null, status: 'unauthenticated' });
-    expect(tab1.notify).toHaveBeenCalledWith('You were signed out.');
+    expect(tab1.notify).toHaveBeenCalledWith('Your session ended. Sign in again.');
   });
 
   it('ignores a report naming the user it already has, and reports while it is still loading', async () => {
@@ -305,5 +313,81 @@ describe('session sync across tabs', () => {
 
     expect(hub.channels.size).toBe(1);
     expect(tab1.readSession).not.toHaveBeenCalled();
+  });
+});
+
+// The session can also end on the server: it expires, or the user signs out other sessions or
+// changes their password on another device. Every request then gets a 401.
+describe('session sync after a 401', () => {
+  it('signs the tab out when the server confirms the session is gone', async () => {
+    const tab = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }] });
+    tab.sync.connect(tab.environment());
+
+    tab.receive401();
+    await flush();
+
+    expect(tab.state()).toEqual({ user: null, session: null, status: 'unauthenticated' });
+    expect(tab.notify).toHaveBeenCalledWith('Your session ended. Sign in again.');
+  });
+
+  it('keeps the user when the check cannot reach the server or still finds the session', async () => {
+    const tab = createTab({ state: signedInAs(alice), answers: [{ kind: 'unknown', status: 0 }, signedInCheck(alice)] });
+    tab.sync.connect(tab.environment());
+    const before = tab.state();
+
+    tab.receive401();
+    await flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(tab.state()).toBe(before);
+    expect(tab.notify).not.toHaveBeenCalled();
+  });
+
+  it('checks once for a burst of 401s from parallel requests, and not again right away', async () => {
+    let now = 1_000_000;
+    let resolveCheck: (check: SessionCheck) => void = () => {};
+    const tab = createTab({
+      state: signedInAs(alice),
+      readSession: () => new Promise<SessionCheck>((resolve) => { resolveCheck = resolve; }),
+      now: () => now,
+    });
+    tab.sync.connect(tab.environment());
+
+    tab.receive401();
+    tab.receive401();
+    tab.receive401();
+    resolveCheck(signedInCheck(alice));
+    await flush();
+    tab.receive401();
+    await flush();
+    expect(tab.readSession).toHaveBeenCalledTimes(1);
+
+    now += SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS;
+    tab.receive401();
+    expect(tab.readSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('checks on a 401 right after sign-in or page load, when the session may just have ended', async () => {
+    const tab = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }], now: () => 5_000 });
+    tab.sync.connect(tab.environment());
+    tab.sync.claim();
+
+    tab.receive401();
+    await flush();
+
+    expect(tab.state().status).toBe('unauthenticated');
+  });
+
+  it('ignores a 401 while signed out or still loading', async () => {
+    const signedOut = createTab({ state: { user: null, session: null, status: 'unauthenticated' } });
+    const loading = createTab({ state: { user: null, session: null, status: 'loading' } });
+    [signedOut, loading].forEach((tab) => tab.sync.connect(tab.environment()));
+
+    signedOut.receive401();
+    loading.receive401();
+    await flush();
+
+    expect(signedOut.readSession).not.toHaveBeenCalled();
+    expect(loading.readSession).not.toHaveBeenCalled();
   });
 });

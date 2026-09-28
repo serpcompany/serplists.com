@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
+
 import { applySessionCheck, type SessionCheck, type SessionState } from './authSession';
 
 // Every tab of a browser sends the same session cookie, so when one tab signs in as someone
@@ -9,11 +11,17 @@ import { applySessionCheck, type SessionCheck, type SessionState } from './authS
 // server's answer. A tab also re-reads it when it comes back into view, at most once per
 // SESSION_RECHECK_INTERVAL_MS (each check reads the session from D1), and after a restore from
 // the back/forward cache, where it may have missed messages.
+//
+// The session can also end on the server (it expired, or the user signed out other sessions or
+// changed their password elsewhere). Every API request then gets a 401, which the API client
+// reports; the tab re-reads the session and signs out only if the server confirms it is gone.
 
 export const SESSION_SYNC_CHANNEL = 'serplists-auth';
 export const SESSION_SYNC_STORAGE_KEY = 'serplists.sessionChanged';
 // Matches the Organizations list staleTime, so a focus refetch rarely runs without a check.
 export const SESSION_RECHECK_INTERVAL_MS = 60_000;
+// A burst of 401s from parallel requests costs one check, and repeats wait this long.
+export const SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS = 5_000;
 
 export type SessionSyncChannel = {
   postMessage: (message: unknown) => void;
@@ -27,6 +35,7 @@ export type SessionSyncEnvironment = {
   onStorage: (listener: (key: string | null, value: string | null) => void) => () => void;
   onVisible: (listener: () => void) => () => void;
   onRestored: (listener: () => void) => () => void;
+  onUnauthorized: (listener: () => void) => () => void;
 };
 
 type ConfirmedSessionCheck = Exclude<SessionCheck, { kind: 'unknown' }>;
@@ -48,7 +57,7 @@ export function applySessionRecheck(check: ConfirmedSessionCheck, current: Sessi
 
 export function describeSessionChange(previous: SessionState, check: ConfirmedSessionCheck): string | null {
   if (!previous.user) return null;
-  if (check.kind === 'unauthenticated') return 'You were signed out.';
+  if (check.kind === 'unauthenticated') return 'Your session ended. Sign in again.';
   return check.user.id === previous.user.id ? null : `Signed in as ${check.user.email} in another tab.`;
 }
 
@@ -66,6 +75,7 @@ export function createSessionSync(deps: {
   let ticketsIssued = 0;
   let appliedTicket = 0;
   let lastReadAt = Number.NEGATIVE_INFINITY;
+  let lastUnauthorizedCheckAt = Number.NEGATIVE_INFINITY;
   let running: Promise<void> | null = null;
   let checkAgain = false;
   let post: ((userId: string | null) => void) | null = null;
@@ -181,6 +191,13 @@ export function createSessionSync(deps: {
       stops.push(environment.onRestored(() => {
         if (deps.getState().status !== 'loading') void recheck();
       }));
+      stops.push(environment.onUnauthorized(() => {
+        const current = deps.getState();
+        if (!current.user || current.status === 'loading' || running) return;
+        if (now() - lastUnauthorizedCheckAt < SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS) return;
+        lastUnauthorizedCheckAt = now();
+        void recheck();
+      }));
       return () => {
         post = null;
         stops.forEach((stop) => stop());
@@ -235,5 +252,6 @@ export function browserSessionSyncEnvironment(): SessionSyncEnvironment {
       window.addEventListener('pageshow', handle);
       return () => window.removeEventListener('pageshow', handle);
     },
+    onUnauthorized: onUnauthorizedResponse,
   };
 }

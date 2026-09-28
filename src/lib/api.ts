@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
+import { reportUnauthorizedResponse } from "@/lib/unauthorizedResponses";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
@@ -195,6 +196,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401) reportUnauthorizedResponse();
       const error = await response.json().catch(() => undefined);
       throw createApiError(response.status, error);
     }
@@ -213,6 +215,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401) reportUnauthorizedResponse();
       const error = await response.json().catch(() => undefined);
       throw createApiError(response.status, error);
     }
