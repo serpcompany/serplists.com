@@ -50,6 +50,12 @@ async function stubCheckout(page: Page): Promise<{ requests: number }> {
 }
 
 test.describe("template limit upgrade path", () => {
+  // The page a test ends on is often still loading its billing status through the stub.
+  // Let that request finish, or closing the page fails the stub's route.fetch.
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "wait" });
+  });
+
   test("offers the upgrade in the editor and keeps the draft across checkout", async ({ page }) => {
     await registerFreeAccount(page);
     await createTemplateViaApi(page, "First template");
