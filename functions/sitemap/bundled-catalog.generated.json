@@ -2,27 +2,27 @@
   "staticPages": [
     {
       "path": "/",
-      "lastmod": "2026-09-29T21:11:47.000Z"
+      "lastmod": "2026-09-29T23:47:45.000Z"
     },
     {
       "path": "/features/",
-      "lastmod": "2026-09-29T21:09:45.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/features/template-builder/",
-      "lastmod": "2026-09-29T21:09:45.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/features/checklist-runs/",
-      "lastmod": "2026-09-29T21:09:45.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/features/public-sharing/",
-      "lastmod": "2026-09-29T21:09:45.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/features/import-export/",
-      "lastmod": "2026-09-29T21:09:45.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/pricing/",
@@ -38,11 +38,11 @@
     },
     {
       "path": "/templates/",
-      "lastmod": "2026-09-29T21:36:10.000Z"
+      "lastmod": "2026-09-29T23:10:54.000Z"
     },
     {
       "path": "/categories/",
-      "lastmod": "2026-09-29T20:38:22.000Z"
+      "lastmod": "2026-09-29T23:53:44.000Z"
     }
   ],
   "templates": [
