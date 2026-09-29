@@ -56,7 +56,7 @@ import { cn } from '@/lib/utils';
 import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 import { toast } from 'sonner';
-import { getRevalidateRunErrorMessage } from '@/lib/editConflicts';
+import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
 import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 import {
   buildRunTemplateLookup,
@@ -116,7 +116,8 @@ export function RunsDashboardView({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
-  const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
+  // Each run stays busy until its own Revalidate finishes.
+  const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
     useRunsDashboardSharing({ onRunShared, onStopSharingRun });
 
@@ -321,21 +322,11 @@ export function RunsDashboardView({
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={revalidatingRunId === run.id}
-                        onClick={async () => {
-                          setRevalidatingRunId(run.id);
-                          try {
-                            await onRevalidateRun(run);
-                            toast.success('Run revalidated against the latest template');
-                          } catch (error) {
-                            toast.error(getRevalidateRunErrorMessage(error));
-                          } finally {
-                            setRevalidatingRunId(null);
-                          }
-                        }}
+                        disabled={isRevalidating(run.id)}
+                        onClick={() => void revalidate(run)}
                       >
                         <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                        {revalidatingRunId === run.id ? 'Revalidating...' : 'Revalidate'}
+                        {isRevalidating(run.id) ? 'Revalidating...' : 'Revalidate'}
                       </Button>
                     ) : null}
                     {actions.canShare && run.isStale && run.isPublic && onStopSharingRun ? (
