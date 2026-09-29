@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
@@ -32,13 +32,15 @@ export function TemplateEditorReadOnlyNotice({ templateId, reason }: TemplateEdi
       </Alert>
       <div className="mt-4 flex flex-wrap gap-2">
         {templateId ? (
-          <Button asChild>
-            <Link href={buildConsoleTemplatePath(templateId)}>View template</Link>
-          </Button>
+          <Link
+            href={buildConsoleTemplatePath(templateId)}
+            className={buttonVariants()}
+          >View template</Link>
         ) : null}
-        <Button asChild variant="outline">
-          <Link href={buildConsoleTemplatesPath()}>Back to Templates</Link>
-        </Button>
+        <Link
+          href={buildConsoleTemplatesPath()}
+          className={buttonVariants({ variant: 'outline' })}
+        >Back to Templates</Link>
       </div>
     </div>
   );

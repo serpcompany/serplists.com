@@ -1,15 +1,17 @@
 import type { JSX } from 'react';
 import React, { useId, useRef, useState } from 'react';
-import { Button } from './button';
-import { Input } from './input';
-import { Textarea } from './textarea';
-import { Label } from './label';
 import { X, File, ImageIcon, Video } from 'lucide-react';
+
+import { Button } from './button';
+import { Field, FieldDescription, FieldLabel } from './field';
+import { Input } from './input';
+import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from './item';
+import { Textarea } from './textarea';
+import { cn } from '@/lib/utils';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 import { uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
@@ -19,6 +21,18 @@ const UPLOAD_BUCKET_BY_TYPE = {
   video: 'template-videos',
   file: 'template-files',
 } as const satisfies Record<FileUploadType, string>;
+
+const SOURCE_LABEL: Record<FileUploadType, string> = {
+  image: 'Image URL',
+  video: 'Video URL or embed code',
+  file: 'File URL',
+};
+
+const TYPE_ICON: Record<FileUploadType, typeof File> = {
+  image: ImageIcon,
+  video: Video,
+  file: File,
+};
 
 // An upload or a clear, reported as one change so the URL and the file details are
 // never written separately (a second write could restore a stale URL).
@@ -43,7 +57,7 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
     <img
       src={src}
       alt="Preview"
-      className="max-h-32 mx-auto rounded"
+      className="mx-auto max-h-32 rounded-md"
       onError={() => setFailed(true)}
     />
   );
@@ -53,6 +67,8 @@ interface FileUploadProps {
   type: FileUploadType;
   value: string;
   fileName?: string;
+  // The signed-in user, whose folder uploads go to. Without one, picking a file does nothing.
+  userId?: string;
   // Typing or pasting in the URL field.
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
@@ -62,31 +78,26 @@ interface FileUploadProps {
   className?: string;
 }
 
+// A media block's source: a URL field, or an upload, with a preview. Built from the shadcn
+// Field, Input, Textarea, Item and Button.
 export const FileUpload: React.FC<FileUploadProps> = ({
   type,
   value,
   fileName,
+  userId,
   onValueChange,
   onFileChange,
   onUploadStart,
-  className = ''
+  className,
 }) => {
   const [isUploading, setIsUploading] = useState(false);
   const sourceInputId = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
-
-  const getIcon = () => {
-    switch (type) {
-      case 'image': return <ImageIcon className="h-4 w-4" />;
-      case 'video': return <Video className="h-4 w-4" />;
-      case 'file': return <File className="h-4 w-4" />;
-    }
-  };
+  const TypeIcon = TYPE_ICON[type];
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) return;
+    if (!file || !userId) return;
 
     setIsUploading(true);
 
@@ -94,7 +105,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       await uploadSelectedFile({
         file,
         type,
-        userId: user.id,
+        userId,
         onUploadStart,
         onUploaded: (uploaded) => {
           onFileChange({ value: uploaded.url, fileName: uploaded.fileName, fileSize: uploaded.fileSize });
@@ -119,14 +130,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   const uploadedFileName = fileName && isUploadedAssetUrl(value) ? fileName : undefined;
 
   return (
-    <div className={`space-y-4 ${className}`}>
-      {/* URL Input */}
-      <div className="space-y-2">
-        <Label htmlFor={sourceInputId}>
-          {type === 'image' ? 'Image URL' : 
-           type === 'video' ? 'Video URL or embed code' :
-           'File URL'}
-        </Label>
+    <div className={cn('flex flex-col gap-4', className)}>
+      <Field>
+        <FieldLabel htmlFor={sourceInputId}>{SOURCE_LABEL[type]}</FieldLabel>
         {type === 'video' ? (
           <Textarea
             id={sourceInputId}
@@ -144,84 +150,76 @@ export const FileUpload: React.FC<FileUploadProps> = ({
             placeholder={`Enter ${type} URL...`}
           />
         )}
-      </div>
+      </Field>
 
-      {/* File Upload */}
-      <div className="space-y-2">
-        <Label>
-          Or upload {type === 'image' ? 'image' : type === 'video' ? 'video' : 'file'}
-        </Label>
-        
-        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-2">
-          {uploadedFileName ? (
-            <div className="flex items-center justify-between p-2 bg-muted rounded">
-              <div className="flex items-center gap-2">
-                {getIcon()}
-                <span className="text-sm font-medium">
-                  {uploadedFileName}
-                </span>
-              </div>
+      <Field>
+        <FieldLabel>Or upload {type}</FieldLabel>
+        {uploadedFileName ? (
+          <Item variant="outline" size="sm">
+            <ItemMedia variant="icon">
+              <TypeIcon />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>{uploadedFileName}</ItemTitle>
+            </ItemContent>
+            <ItemActions>
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 onClick={handleClear}
                 disabled={isUploading}
                 aria-label={`Remove uploaded ${type}`}
               >
-                <X className="h-4 w-4" />
+                <X />
               </Button>
-            </div>
-          ) : (
-            <div className="text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={uploadAcceptTypesForBlock(type)}
-                onChange={handleFileSelect}
-                disabled={isUploading}
-                className="hidden"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={isUploading}
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full"
-              >
-                {isUploading ? (
-                  <>Uploading...</>
-                ) : (
-                  <>
-                    {getIcon()}
-                    <span className="ml-2">
-                      Click to upload {type}
-                    </span>
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1">
-                Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+            </ItemActions>
+          </Item>
+        ) : (
+          <div className="flex flex-col items-center gap-1 rounded-lg border border-dashed p-2 text-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={uploadAcceptTypesForBlock(type)}
+              onChange={handleFileSelect}
+              disabled={isUploading}
+              className="hidden"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full"
+            >
+              {isUploading ? (
+                'Uploading...'
+              ) : (
+                <>
+                  <TypeIcon />
+                  Click to upload {type}
+                </>
+              )}
+            </Button>
+            <FieldDescription className="text-xs">
+              Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
+            </FieldDescription>
+          </div>
+        )}
+      </Field>
 
-      {/* Preview for images */}
-      {value && value.trim() && type === 'image' && (
-        <div className="border rounded-lg p-2">
+      {value && value.trim() && type === 'image' ? (
+        <div className="rounded-lg border p-2">
           <ImagePreview key={value} src={imagePreviewSrc(value)} />
         </div>
-      )}
-      
-      {/* Preview for videos */}
-      {value && type === 'video' && (
+      ) : null}
+
+      {value && type === 'video' ? (
         <div className="overflow-hidden rounded-lg border p-2">
-          <VideoEmbed className="h-72 w-full rounded" title="Video preview" url={value} />
+          <VideoEmbed className="h-72 w-full rounded-md" title="Video preview" url={value} />
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

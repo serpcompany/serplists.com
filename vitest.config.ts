@@ -39,6 +39,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // Compiled by the Next.js build; tests load a stand-in (tests/support/nextFontGoogle.ts).
+      'next/font/google': path.resolve(__dirname, './tests/support/nextFontGoogle.ts'),
       '@': path.resolve(__dirname, './src'),
       '@functions': path.resolve(__dirname, './functions'),
     },

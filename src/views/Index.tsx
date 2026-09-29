@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 
 import { IconBadge, PageHero, PageSection, Surface } from '@/components/layout/page-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
@@ -102,18 +103,17 @@ const Index = () => {
             align="center"
             actions={
               <>
-                <Button asChild>
-                  <Link href={primaryCta.href}>
+                <Link href={primaryCta.href} className={buttonVariants()}>
                     {primaryCta.label}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href={buildPublicTemplatesPath()}>
+                <Link
+                  href={buildPublicTemplatesPath()}
+                  className={buttonVariants({ variant: 'outline' })}
+                >
                     <Globe className="mr-2 h-4 w-4" />
                     Browse Templates
                   </Link>
-                </Button>
               </>
             }
             description="SERP Lists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
@@ -182,12 +182,13 @@ const Index = () => {
               Start with a real checklist, then make it yours.
             </h2>
           </div>
-          <Button asChild variant="ghost" className="w-fit">
-            <Link href={buildPublicTemplatesPath()}>
+          <Link
+            href={buildPublicTemplatesPath()}
+            className={cn(buttonVariants({ variant: 'ghost' }), 'w-fit')}
+          >
               View all templates
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
-          </Button>
         </div>
 
         {templatesLoading ? (
@@ -252,12 +253,11 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-3 pt-0">
-            <Button asChild>
-              <Link href={primaryCta.href}>{primaryCta.label}</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href={buildPublicFeaturesPath()}>Explore Features</Link>
-            </Button>
+            <Link href={primaryCta.href} className={buttonVariants()}>{primaryCta.label}</Link>
+            <Link
+              href={buildPublicFeaturesPath()}
+              className={buttonVariants({ variant: 'outline' })}
+            >Explore Features</Link>
           </CardContent>
         </Surface>
       </PageSection>

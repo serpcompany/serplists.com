@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -45,12 +46,9 @@ export function WorkspaceSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          aria-label="Switch context"
-          className="h-9 max-w-[220px] justify-start gap-2 rounded-md px-2"
-          variant="outline"
-        >
+      <DropdownMenuTrigger
+        render={<Button aria-label="Switch context" className="h-9 max-w-[220px] justify-start gap-2 rounded-md px-2" variant="outline" />}
+      >
           <ActiveIcon className="h-4 w-4 shrink-0" />
           <span className="min-w-0 flex-1 text-left">
             <span className="block truncate text-sm font-medium">
@@ -58,9 +56,9 @@ export function WorkspaceSwitcher() {
             </span>
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuGroup>
         <DropdownMenuLabel>Personal and Organizations</DropdownMenuLabel>
         {workspaces.map((workspace) => {
           const Icon = workspace.type === 'team' ? Users : User;
@@ -92,12 +90,15 @@ export function WorkspaceSwitcher() {
             </DropdownMenuItem>
           );
         })}
+        </DropdownMenuGroup>
         {/* The active context works on, but a failed list must not read as "no Organizations". */}
         {teamsUnavailable && workspaceStatus !== 'error' ? (
-          <DropdownMenuLabel className="flex items-center gap-3 font-normal text-muted-foreground">
-            <AlertTriangle className="h-4 w-4" />
-            Couldn&apos;t load your Organizations
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="flex items-center gap-3 font-normal text-muted-foreground">
+              <AlertTriangle className="h-4 w-4" />
+              Couldn&apos;t load your Organizations
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
         ) : null}
         {workspaceStatus === 'error' || teamsUnavailable ? (
           <DropdownMenuItem className="gap-3" onClick={retryWorkspace}>
@@ -106,12 +107,10 @@ export function WorkspaceSwitcher() {
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={buildConsoleSettingsPath()} className="gap-3">
+        <DropdownMenuItem render={<Link href={buildConsoleSettingsPath()} className="gap-3" />}>
             <Settings className="h-4 w-4 text-muted-foreground" />
             Settings
-          </Link>
-        </DropdownMenuItem>
+          </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

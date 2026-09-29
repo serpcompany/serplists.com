@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
+import { Button, buttonVariants } from './ui/button';
 import { Link } from './navigation/Link';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
@@ -125,11 +125,13 @@ export class ErrorBoundary extends Component<Props, State> {
                   <Button onClick={this.handleBack} variant="ghost">
                     Go back
                   </Button>
-                  <Button asChild variant="ghost">
-                    <Link href="/" onClick={this.handleReset}>
+                  <Link
+                    href="/"
+                    onClick={this.handleReset}
+                    className={buttonVariants({ variant: 'ghost' })}
+                  >
                       Go to home
                     </Link>
-                  </Button>
                 </div>
               </div>
               {process.env.NODE_ENV === 'development' && this.state.error && (

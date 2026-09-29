@@ -12,7 +12,7 @@ import {
   Settings,
 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { cn } from '@/lib/utils';
 import {
@@ -83,12 +83,13 @@ export function DashboardSidebar() {
 
       {canEditTemplates ? (
         <div className="p-3">
-          <Button asChild className="w-full justify-start gap-2">
-            <Link href={buildConsoleTemplateCreatePath()}>
+          <Link
+            href={buildConsoleTemplateCreatePath()}
+            className={cn(buttonVariants(), 'w-full justify-start gap-2')}
+          >
               <PlusCircle className="h-4 w-4" />
               New Template
             </Link>
-          </Button>
         </div>
       ) : null}
 
@@ -99,21 +100,18 @@ export function DashboardSidebar() {
 
             return (
               <li key={item.href}>
-                <Button
-                  asChild
-                  variant={active ? 'secondary' : 'ghost'}
-                  className={cn(
+                <Link
+                  href={item.href}
+                  className={cn(buttonVariants({ variant: active ? 'secondary' : 'ghost' }), cn(
                     'min-h-11 w-full justify-start gap-2 px-3 text-sm',
                     active
                       ? 'font-medium text-foreground'
                       : 'text-muted-foreground hover:text-foreground',
-                  )}
+                  ))}
                 >
-                  <Link href={item.href}>
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </Link>
-                </Button>
               </li>
             );
           })}
@@ -127,21 +125,18 @@ export function DashboardSidebar() {
 
             return (
               <li key={item.href}>
-                <Button
-                  asChild
-                  variant={active ? 'secondary' : 'ghost'}
-                  className={cn(
+                <Link
+                  href={item.href}
+                  className={cn(buttonVariants({ variant: active ? 'secondary' : 'ghost' }), cn(
                     'min-h-11 w-full justify-start gap-2 px-3 text-sm',
                     active
                       ? 'font-medium text-foreground'
                       : 'text-muted-foreground hover:text-foreground',
-                  )}
+                  ))}
                 >
-                  <Link href={item.href}>
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </Link>
-                </Button>
               </li>
             );
           })}
@@ -150,16 +145,13 @@ export function DashboardSidebar() {
 
       <div className="space-y-2 border-t border-border p-3">
         <ThemeToggle showLabel />
-        <Button
-          asChild
-          variant={importTemplatesActive ? 'secondary' : 'outline'}
-          className="w-full justify-start gap-2"
+        <Link
+          href={importTemplatesPath}
+          className={cn(buttonVariants({ variant: importTemplatesActive ? 'secondary' : 'outline' }), 'w-full justify-start gap-2')}
         >
-          <Link href={importTemplatesPath}>
             <Import className="h-4 w-4" />
             Import Templates
           </Link>
-        </Button>
       </div>
     </aside>
   );

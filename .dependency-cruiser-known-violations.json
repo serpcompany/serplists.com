@@ -43,14 +43,5 @@
       "severity": "error",
       "name": "screens-do-not-call-transport"
     }
-  },
-  {
-    "type": "dependency",
-    "from": "src/components/ui/file-upload.tsx",
-    "to": "src/contexts/CloudflareAuthContext.tsx",
-    "rule": {
-      "severity": "error",
-      "name": "ui-primitives-stay-presentational"
-    }
   }
 ]

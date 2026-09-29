@@ -1,5 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { FileUpload, type FileUploadChange } from "@/components/ui/file-upload";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
 import type { UploadResult } from "@/lib/utils/fileUpload";
 import { File, ImageIcon, Video } from "lucide-react";
 
@@ -20,6 +21,9 @@ export const MediaContentEditor = ({
   onFileChange,
   onUploadStart,
 }: MediaContentEditorProps) => {
+  // Uploads go to the signed-in user's folder.
+  const { user } = useAuth();
+
   const getIcon = () => {
     switch (type) {
       case 'image': return <ImageIcon className="h-4 w-4" />;
@@ -42,6 +46,7 @@ export const MediaContentEditor = ({
         type={type}
         value={value}
         fileName={fileName}
+        userId={user?.id}
         onValueChange={onValueChange}
         onFileChange={onFileChange}
         onUploadStart={onUploadStart}

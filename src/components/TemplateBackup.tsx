@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
-import type { ImportVisibility } from "@/lib/utils/templateBackup";
+import { IMPORT_VISIBILITY_LABELS, type ImportVisibility } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
 import type { PageVisit } from "@/lib/navigation/pageVisit";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
@@ -416,6 +416,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
                   </p>
                 </div>
                 <Switch
+                  // A native button, so the Label's htmlFor names it.
+                  nativeButton
+                  render={<button type="button" />}
                   id="include-public-templates"
                   checked={includePublicTemplates}
                   onCheckedChange={setIncludePublicTemplates}
@@ -435,14 +438,16 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 	            <h3 className="text-lg font-semibold">Import Templates</h3>
               <div className="space-y-2">
                 <Label>Import visibility</Label>
-                <Select value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
+                <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Choose visibility" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="preserve">Preserve visibility from file</SelectItem>
-                    <SelectItem value="public">Force public</SelectItem>
-                    <SelectItem value="private">Force private</SelectItem>
+                    {Object.entries(IMPORT_VISIBILITY_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">

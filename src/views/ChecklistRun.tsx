@@ -20,7 +20,7 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -364,7 +364,7 @@ const ChecklistRunPage = () => {
         </>
       )}
       <Badge
-        variant={displayRun.status === 'completed' ? 'success' : 'secondary'}
+        variant={displayRun.status === 'completed' ? 'default' : 'secondary'}
       >
         {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
       </Badge>
@@ -559,12 +559,10 @@ const ChecklistRunPage = () => {
                   Browse public templates and start a fresh run from a template
                   that matches your workflow.
                 </p>
-                <Button
-                  asChild
-                  className="mt-4 bg-foreground text-background hover:bg-foreground/90"
-                >
-                  <Link href={buildPublicTemplatesPath()}>Browse Public Templates</Link>
-                </Button>
+                <Link
+                  href={buildPublicTemplatesPath()}
+                  className={cn(buttonVariants(), 'mt-4 bg-foreground text-background hover:bg-foreground/90')}
+                >Browse Public Templates</Link>
               </Surface>
               </div>
             </PageContainer>

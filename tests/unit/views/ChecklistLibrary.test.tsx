@@ -234,7 +234,8 @@ describe('ChecklistLibrary route behavior', () => {
     const { markup, robots } = renderCategoryPage('/categories/not-a-real-category');
 
     expect(markup).toContain('That page does not exist');
-    expect(markup).toContain('/categories/not-a-real-category');
+    // The server's HTML never names the address (src/views/NotFound.tsx).
+    expect(markup).toContain('This route could not be found.');
     expect(markup).not.toContain('0 templates');
     expect(robots).toMatch(/name="robots" content="noindex/);
   });

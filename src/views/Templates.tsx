@@ -56,6 +56,18 @@ import { useAppRouter } from '@/lib/navigation/useAppRouter';
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
 
+// The filter and sort options; each Select shows the chosen one's label.
+const VISIBILITY_FILTER_LABELS: Record<VisibilityFilter, string> = {
+  all: 'All',
+  public: 'Public',
+  private: 'Private',
+};
+const SORT_OPTION_LABELS: Record<SortOption, string> = {
+  recent: 'Most Recent',
+  alphabetical: 'Alphabetical',
+  tasks: 'Most Tasks',
+};
+
 const Templates = () => {
   const model = useDashboardTemplatesModel();
   const router = useAppRouter();
@@ -218,6 +230,7 @@ const Templates = () => {
         </div>
 
         <Select
+          items={VISIBILITY_FILTER_LABELS}
           value={filterVisibility}
           onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
         >
@@ -225,13 +238,16 @@ const Templates = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="public">Public</SelectItem>
-            <SelectItem value="private">Private</SelectItem>
+            {Object.entries(VISIBILITY_FILTER_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         <Select
+          items={SORT_OPTION_LABELS}
           value={sortBy}
           onValueChange={(value) => setSortBy(value as SortOption)}
         >
@@ -239,9 +255,11 @@ const Templates = () => {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">Most Recent</SelectItem>
-            <SelectItem value="alphabetical">Alphabetical</SelectItem>
-            <SelectItem value="tasks">Most Tasks</SelectItem>
+            {Object.entries(SORT_OPTION_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -340,8 +358,14 @@ const Templates = () => {
           <form onSubmit={handleRunSubmit} className="space-y-6">
             <div className="space-y-2">
               <Select
+                items={model.templates.map((template) => ({
+                  label: template.title,
+                  value: template.id,
+                }))}
                 value={model.selectedTemplateId}
-                onValueChange={model.selectRunTemplate}
+                onValueChange={(templateId) => {
+                  if (templateId) model.selectRunTemplate(templateId);
+                }}
               >
                 <SelectTrigger id="run-template" className="rounded-md">
                   <SelectValue placeholder="Select a template" />

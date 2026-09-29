@@ -17,7 +17,7 @@ import {
   Settings,
 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
@@ -89,12 +89,10 @@ export function MobileNav() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden">
+      <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden" />}>
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle menu</span>
-        </Button>
-      </SheetTrigger>
+        </SheetTrigger>
       <SheetContent side="left" className="w-72 p-0">
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle className="text-left">{APP_BRAND_NAME}</SheetTitle>
@@ -103,28 +101,22 @@ export function MobileNav() {
         <div className="border-b border-border p-4">
           <div className="flex gap-2">
             {canEditTemplates ? (
-              <Button
-                asChild
-                className="flex-1"
-                size="sm"
+              <Link
                 onClick={() => setOpen(false)}
+                href={buildConsoleTemplateCreatePath()}
+                className={cn(buttonVariants({ size: 'sm' }), 'flex-1')}
               >
-                <Link href={buildConsoleTemplateCreatePath()}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Template
                 </Link>
-              </Button>
             ) : null}
-            <Button
-              asChild
+            <Link
               onClick={() => setOpen(false)}
-              size="sm"
-              variant="outline"
+              href={buildPublicTemplatesPath()}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              <Link href={buildPublicTemplatesPath()}>
                 <Search className="h-4 w-4" />
               </Link>
-            </Button>
           </div>
         </div>
 

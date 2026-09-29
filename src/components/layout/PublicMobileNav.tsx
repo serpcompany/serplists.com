@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Sheet,
   SheetContent,
@@ -61,17 +61,23 @@ export const PublicMobileMenu = ({
 
     <div className="flex flex-col gap-2">
       {signedIn ? (
-        <Button asChild onClick={onNavigate}>
-          <Link href={buildConsoleHomePath()}>Dashboard</Link>
-        </Button>
+        <Link
+          onClick={onNavigate}
+          href={buildConsoleHomePath()}
+          className={buttonVariants()}
+        >Dashboard</Link>
       ) : (
         <>
-          <Button asChild onClick={onNavigate} variant="outline">
-            <Link href={buildLoginPath()}>Log in</Link>
-          </Button>
-          <Button asChild onClick={onNavigate}>
-            <Link href={buildRegisterPath()}>Get started</Link>
-          </Button>
+          <Link
+            onClick={onNavigate}
+            href={buildLoginPath()}
+            className={buttonVariants({ variant: 'outline' })}
+          >Log in</Link>
+          <Link
+            onClick={onNavigate}
+            href={buildRegisterPath()}
+            className={buttonVariants()}
+          >Get started</Link>
         </>
       )}
     </div>
@@ -94,17 +100,12 @@ export function PublicMobileNav() {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button
-          className="md:hidden"
-          data-public-mobile-nav="trigger"
-          size="icon"
-          variant="ghost"
-        >
+      <SheetTrigger
+        render={<Button className="md:hidden" data-public-mobile-nav="trigger" size="icon" variant="ghost" />}
+      >
           <Menu className="h-5 w-5" />
           <span className="sr-only">Open menu</span>
-        </Button>
-      </SheetTrigger>
+        </SheetTrigger>
       <SheetContent side="right" className="w-72 p-0">
         <SheetHeader className="border-b border-border px-4 py-3">
           <SheetTitle className="text-left">{APP_BRAND_NAME}</SheetTitle>

@@ -17,9 +17,10 @@ export const onSingleClick =
   };
 
 // A dialog opened by a click is under the pointer when the rest of that double click lands
-// on its overlay, and a Radix dialog closes on a pointerdown outside its content. Pass
-// `markOpened` as the content's ref and `onPointerDownOutside` to the content, so outside
-// clicks close the dialog only once the double click is over.
+// on its overlay, and a dialog closes on a press outside its popup. Pass `markOpened` as the
+// popup's ref, and call `onOutsidePress` from the dialog's onOpenChange when it closes for an
+// outside press (with the change's cancel), so outside clicks close the dialog only once the
+// double click is over.
 export const createJustOpenedGuard = (now: () => number = () => Date.now()) => {
   let openedAt = Number.NEGATIVE_INFINITY;
 
@@ -27,8 +28,10 @@ export const createJustOpenedGuard = (now: () => number = () => Date.now()) => {
     markOpened: (node: unknown): void => {
       if (node) openedAt = now();
     },
-    onPointerDownOutside: (event: { preventDefault: () => void }): void => {
-      if (now() - openedAt < DOUBLE_CLICK_MS) event.preventDefault();
+    onOutsidePress: (cancel: () => void): boolean => {
+      if (now() - openedAt >= DOUBLE_CLICK_MS) return false;
+      cancel();
+      return true;
     },
   };
 };

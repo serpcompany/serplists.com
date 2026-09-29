@@ -1,6 +1,6 @@
 import { FileText, List, Play, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
@@ -72,9 +72,10 @@ export function TemplateListItem({
           </Button>
         ) : null}
         {canEdit ? (
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={buildConsoleTemplateEditPath(template.id)}>Edit</Link>
-          </Button>
+          <Link
+            href={buildConsoleTemplateEditPath(template.id)}
+            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+          >Edit</Link>
         ) : null}
         {onDelete ? (
           <Button

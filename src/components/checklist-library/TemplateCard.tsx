@@ -2,7 +2,7 @@ import React from 'react';
 import { Eye, FileText, List, Play } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicProfilePath,
@@ -96,12 +96,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
               aria-hidden="true"
               className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100"
             >
-              <Button asChild>
-                <Link tabIndex={-1} href={templatePath}>
+              <Link tabIndex={-1} href={templatePath} className={buttonVariants()}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Template
                 </Link>
-              </Button>
             </div>
           ) : null}
         </div>
@@ -166,12 +164,13 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             )}
 
             {templatePath ? (
-              <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
-                <Link href={templatePath}>
+              <Link
+                href={templatePath}
+                className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-7 px-2 text-xs')}
+              >
                   <Play className="mr-1 h-3 w-3" />
                   Start
                 </Link>
-              </Button>
             ) : null}
           </div>
         </div>

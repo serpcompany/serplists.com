@@ -87,6 +87,9 @@ export function AgentAccessSectionView({
   onRetry,
   onRevoke,
 }: AgentAccessSectionViewProps) {
+  // The key whose revoke confirmation is open. Confirming closes it before the request.
+  const [confirmKeyId, setConfirmKeyId] = useState<string | null>(null);
+
   return (
     <Card>
       <CardHeader>
@@ -244,7 +247,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{key.name}</span>
-                        <Badge variant={isActive ? 'success' : 'secondary'}>
+                        <Badge variant={isActive ? 'default' : 'secondary'}>
                           {isActive ? 'Active' : 'Revoked'}
                         </Badge>
                       </div>
@@ -255,12 +258,22 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                     </div>
 
                     {isActive ? (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button type="button" size="sm" variant="outline" disabled={revokingKeyId === key.id}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            {revokingKeyId === key.id ? 'Revoking...' : 'Revoke'}
-                          </Button>
+                      <AlertDialog
+                        open={confirmKeyId === key.id}
+                        onOpenChange={(open) => setConfirmKeyId(open ? key.id : null)}
+                      >
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={revokingKeyId === key.id}
+                            />
+                          }
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          {revokingKeyId === key.id ? 'Revoking...' : 'Revoke'}
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
@@ -273,8 +286,11 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => onRevoke(key)}
+                              variant="destructive"
+                              onClick={() => {
+                                setConfirmKeyId(null);
+                                onRevoke(key);
+                              }}
                             >
                               Revoke key
                             </AlertDialogAction>

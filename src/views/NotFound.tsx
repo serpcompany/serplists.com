@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { useIsClient } from '@/hooks/useIsClient';
 
 import { Link } from '@/components/navigation/Link';
@@ -41,9 +41,7 @@ const NotFound = () => {
           description={`${route} could not be found. Use the main navigation or head back to the home page.`}
         />
         <div className="mt-8 flex justify-center">
-          <Button asChild>
-            <Link href="/">Return to home</Link>
-          </Button>
+          <Link href="/" className={buttonVariants()}>Return to home</Link>
         </div>
       </Surface>
     </PageSection>

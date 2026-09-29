@@ -444,6 +444,7 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
 export {
   countImportPublicTemplates,
   generateUniqueIds,
+  IMPORT_VISIBILITY_LABELS,
   prepareTemplatesForImport,
   resolveImportIsPublic,
   type ImportVisibility,

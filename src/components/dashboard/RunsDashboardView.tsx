@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   DashboardContentShell,
   DashboardEmptyState,
@@ -89,6 +89,13 @@ interface RunsDashboardViewProps {
   loadError?: unknown;
   onRetryLoad?: () => void;
 }
+
+// The status filter's options; the Select shows the chosen one's label.
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All Runs',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+};
 
 const formatDate = (dateString: string) =>
   new Date(dateString).toLocaleDateString('en-US', {
@@ -179,6 +186,7 @@ export function RunsDashboardView({
         </div>
 
         <Select
+          items={STATUS_FILTER_LABELS}
           value={statusFilter}
           onValueChange={(value) => setStatusFilter(value as StatusFilter)}
         >
@@ -186,9 +194,11 @@ export function RunsDashboardView({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Runs</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
+            {Object.entries(STATUS_FILTER_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </DashboardToolbar>
@@ -226,9 +236,10 @@ export function RunsDashboardView({
             }
             action={
               !searchQuery ? (
-              <Button asChild>
-                <Link href={buildConsoleTemplatesPath()}>Browse Templates</Link>
-              </Button>
+              <Link
+                href={buildConsoleTemplatesPath()}
+                className={buttonVariants()}
+              >Browse Templates</Link>
               ) : null
             }
           />
@@ -346,33 +357,27 @@ export function RunsDashboardView({
                       </Button>
                     ) : null}
                     {!isCompleted ? (
-                      <Button asChild size="sm">
-                        <Link href={buildRunPath(run.id)}>
+                      <Link href={buildRunPath(run.id)} className={buttonVariants({ size: 'sm' })}>
                           <Play className="mr-1.5 h-3.5 w-3.5" />
                           Continue
                         </Link>
-                      </Button>
                     ) : (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={buildRunPath(run.id)}>
+                      <Link
+                        href={buildRunPath(run.id)}
+                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                      >
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                           View
                         </Link>
-                      </Button>
                     )}
 
                     {actions.canShare || actions.canDelete ? (
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label="Run options"
-                          >
+                        <DropdownMenuTrigger
+                          render={<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Run options" />}
+                        >
                             <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                          </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           {actions.canShare ? (
                             <DropdownMenuItem onClick={() => void shareRun(run.id)}>

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildConsoleTemplatesPath } from '@/lib/routes';
 
@@ -58,11 +58,9 @@ export function RouteErrorFallback({ reset }: { reset: () => void }) {
         >
           Go back
         </Button>
-        <Button asChild>
-          <Link href={home.to} onClick={reset}>
+        <Link href={home.to} onClick={reset} className={buttonVariants()}>
             {home.label}
           </Link>
-        </Button>
       </div>
     </div>
   );

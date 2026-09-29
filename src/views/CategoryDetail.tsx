@@ -223,7 +223,7 @@ const CategoryDetail = () => {
               <Select
                 value={sortBy}
                 onValueChange={(value) => {
-                  if (isCategorySort(value)) setSortBy(value);
+                  if (value && isCategorySort(value)) setSortBy(value);
                 }}
               >
                 <SelectTrigger className="w-40 border-border bg-card">

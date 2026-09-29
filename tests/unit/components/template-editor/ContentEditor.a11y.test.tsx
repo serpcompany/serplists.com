@@ -1,10 +1,9 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { useForm } from 'react-hook-form';
+import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
-import { Form } from '@/components/ui/form';
 import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
 import { findUnnamedControls, getByAccessibleName } from '../accessibleMarkup';
@@ -44,9 +43,9 @@ function ContentHarness(): JSX.Element {
   });
 
   return (
-    <Form {...form}>
+    <FormProvider {...form}>
       <ContentEditor itemIndex={0} sectionIndex={0} />
-    </Form>
+    </FormProvider>
   );
 }
 

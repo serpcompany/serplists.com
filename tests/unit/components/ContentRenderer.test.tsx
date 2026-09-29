@@ -95,7 +95,8 @@ describe('ContentRenderer accessibility', () => {
         onSubItemToggle={() => undefined}
       />,
     );
-    const checkboxes = markup.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? [];
+    // Base UI renders a checkbox as a <span role="checkbox"> beside a hidden input.
+    const checkboxes = markup.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? [];
 
     expect(checkboxes).toHaveLength(2);
     expect(checkboxes[0]).toContain('aria-label="Send the approval email"');

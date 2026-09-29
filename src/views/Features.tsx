@@ -9,7 +9,8 @@ import {
   PageSection,
   Surface,
 } from '@/components/layout/page-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FEATURES, findFeature } from '@/data/publicFeatures';
 import {
@@ -32,12 +33,13 @@ const Features = () => {
     return (
       <>
         <PageSection spacing="spacious" width="narrow">
-          <Button asChild className="mb-6" variant="ghost">
-            <Link href={buildPublicFeaturesPath()}>
+          <Link
+            href={buildPublicFeaturesPath()}
+            className={cn(buttonVariants({ variant: 'ghost' }), 'mb-6')}
+          >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Features
             </Link>
-          </Button>
 
           <Surface as="article" tone="docs">
             <CardHeader className="space-y-4">
@@ -58,12 +60,14 @@ const Features = () => {
                 ))}
               </ul>
               <div className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <Link href={buildPublicTemplatesPath()}>Browse Templates</Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href={buildPricingPath()}>See Pricing</Link>
-                </Button>
+                <Link
+                  href={buildPublicTemplatesPath()}
+                  className={buttonVariants()}
+                >Browse Templates</Link>
+                <Link
+                  href={buildPricingPath()}
+                  className={buttonVariants({ variant: 'outline' })}
+                >See Pricing</Link>
               </div>
             </CardContent>
           </Surface>
@@ -78,12 +82,11 @@ const Features = () => {
         <PageHero
           actions={
             <>
-              <Button asChild>
-                <Link href={buildPricingPath()}>See Pricing</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={buildPublicTemplatesPath()}>Browse Templates</Link>
-              </Button>
+              <Link href={buildPricingPath()} className={buttonVariants()}>See Pricing</Link>
+              <Link
+                href={buildPublicTemplatesPath()}
+                className={buttonVariants({ variant: 'outline' })}
+              >Browse Templates</Link>
             </>
           }
           align="center"

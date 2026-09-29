@@ -1,9 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { useForm } from 'react-hook-form';
+import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it } from 'vitest';
 
-import { Form } from '@/components/ui/form';
 import { SectionEditor } from '@/components/template-editor/SectionEditor';
 import { SEOMetaEditor } from '@/components/template-editor/SEOMetaEditor';
 import { TemplateBasicInfo } from '@/components/template-editor/TemplateBasicInfo';
@@ -29,7 +28,7 @@ function TemplateFormHarness(props: {
     defaultValues: { ...buildTemplateEditorDetailsFormValues(), tags: props.tags ?? [] },
   });
 
-  return <Form {...form}>{props.children}</Form>;
+  return <FormProvider {...form}>{props.children}</FormProvider>;
 }
 
 function SectionFormHarness(props: { children: React.ReactNode }): JSX.Element {
@@ -42,7 +41,7 @@ function SectionFormHarness(props: { children: React.ReactNode }): JSX.Element {
     }),
   });
 
-  return <Form {...form}>{props.children}</Form>;
+  return <FormProvider {...form}>{props.children}</FormProvider>;
 }
 
 describe('Template form panels', () => {
@@ -87,7 +86,7 @@ describe('Search & SEO preview URL', () => {
       defaultValues: { ...buildTemplateEditorDetailsFormValues(), ...props.values },
     });
 
-    return <Form {...form}>{props.children}</Form>;
+    return <FormProvider {...form}>{props.children}</FormProvider>;
   }
 
   it('previews the public template URL for the slug', () => {

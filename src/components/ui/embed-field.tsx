@@ -1,7 +1,8 @@
 import React from 'react';
-import { Label } from './label';
-import { Textarea } from './textarea';
 import { Code } from 'lucide-react';
+
+import { Field, FieldDescription, FieldLabel } from './field';
+import { Textarea } from './textarea';
 import { cn } from '@/lib/utils';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 
@@ -13,10 +14,12 @@ interface EmbedFieldProps {
 
 const URL_PREFIX = /^https?:\/\//i;
 
+// An embed block's value: a URL or iframe code, with what viewers will get below it.
+// Built from the shadcn Field and Textarea.
 export const EmbedField: React.FC<EmbedFieldProps> = ({
   value,
   onValueChange,
-  className = ''
+  className,
 }) => {
   const fieldId = React.useId();
   const isUrl = URL_PREFIX.test(value.trimStart());
@@ -27,11 +30,11 @@ export const EmbedField: React.FC<EmbedFieldProps> = ({
   // "https://" would remount the control and drop focus, the caret and undo history.
   // Only its props follow the mode, and newlines in embed code are kept.
   return (
-    <div className={`space-y-2 ${className}`}>
-      <Label htmlFor={fieldId} className="flex items-center gap-2">
-        <Code className="h-4 w-4" />
+    <Field className={className}>
+      <FieldLabel htmlFor={fieldId}>
+        <Code />
         Embed Code or URL
-      </Label>
+      </FieldLabel>
 
       <Textarea
         id={fieldId}
@@ -47,24 +50,22 @@ export const EmbedField: React.FC<EmbedFieldProps> = ({
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}
-        className={cn(isUrl ? 'min-h-9' : 'font-mono text-sm')}
+        className={cn(isUrl ? 'min-h-9' : 'font-mono')}
       />
 
-      <p className="text-xs text-muted-foreground">
+      <FieldDescription>
         Enter a URL or iframe embed code. Viewers get a link to the URL.
-      </p>
+      </FieldDescription>
 
       {embedLink ? (
-        <div className="border rounded-lg p-2 bg-muted">
-          <p className="break-all text-sm text-muted-foreground">
-            Embed URL: {embedLink}
-          </p>
-        </div>
-      ) : value.trim() ? (
-        <p className="text-xs text-muted-foreground">
-          No web address found, so viewers will see it as text.
+        <p className="rounded-lg bg-muted p-2 text-sm break-all text-muted-foreground">
+          Embed URL: {embedLink}
         </p>
+      ) : value.trim() ? (
+        <FieldDescription>
+          No web address found, so viewers will see it as text.
+        </FieldDescription>
       ) : null}
-    </div>
+    </Field>
   );
 };

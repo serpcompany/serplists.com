@@ -92,7 +92,11 @@ describe('EmbedContentEditor', () => {
 // text, so the field must not promise script embeds and shows what viewers will get.
 describe('EmbedField help and preview', () => {
   it('does not offer script embeds', () => {
-    expect(renderField('')).not.toMatch(/script/i);
+    // The text people read: markup attributes (data-slot="field-description") are not copy.
+    const text = renderField('')
+      .replace(/<[^>]*\bplaceholder="([^"]*)"[^>]*>/g, ' $1 ')
+      .replace(/<[^>]+>/g, ' ');
+    expect(text).not.toMatch(/script/i);
   });
 
   it('previews the link viewers get for iframe code', () => {

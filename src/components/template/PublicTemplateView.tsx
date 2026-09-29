@@ -15,7 +15,8 @@ import {
 import { toast } from 'sonner';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import {
   type WorkspaceErrorActions,
@@ -151,12 +152,13 @@ export function PublicTemplateView({
     <div className="min-h-screen bg-background">
       <header className="sticky top-14 z-40 border-b border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
-          <Button asChild variant="ghost" size="sm" className="gap-2">
-            <Link href={buildPublicTemplatesPath()}>
+          <Link
+            href={buildPublicTemplatesPath()}
+            className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-2')}
+          >
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
-          </Button>
 
           <div className="flex items-center gap-2">
             <Button

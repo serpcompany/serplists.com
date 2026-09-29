@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { CheckCircle2, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { createSingleFlight } from '@/features/teams/singleFlight';
@@ -103,9 +103,10 @@ export default function TeamInviteAccept() {
       <p className="text-sm text-muted-foreground">
         Invite declined. You did not join {teamName}.
       </p>
-      <Button asChild variant="outline">
-        <Link href={buildConsoleTemplatesPath()}>Open templates</Link>
-      </Button>
+      <Link
+        href={buildConsoleTemplatesPath()}
+        className={buttonVariants({ variant: 'outline' })}
+      >Open templates</Link>
     </>
   );
 
@@ -151,16 +152,15 @@ export default function TeamInviteAccept() {
             Create an account with that email address.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button asChild>
-              <Link href={withReturnPath(buildLoginPath(), invitePath)}>
+            <Link href={withReturnPath(buildLoginPath(), invitePath)} className={buttonVariants()}>
                 Log in to accept
               </Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href={withReturnPath(buildRegisterPath(), invitePath)}>
+            <Link
+              href={withReturnPath(buildRegisterPath(), invitePath)}
+              className={buttonVariants({ variant: 'outline' })}
+            >
                 Create an account
               </Link>
-            </Button>
           </div>
         </>
       );
@@ -184,9 +184,10 @@ export default function TeamInviteAccept() {
       return (
         <>
           <p className="text-sm text-destructive">{describeTeamInviteError(invite.previewError)}</p>
-          <Button asChild variant="outline">
-            <Link href={buildConsoleSettingsPath()}>Open settings</Link>
-          </Button>
+          <Link
+            href={buildConsoleSettingsPath()}
+            className={buttonVariants({ variant: 'outline' })}
+          >Open settings</Link>
         </>
       );
     }

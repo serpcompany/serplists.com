@@ -8,7 +8,7 @@ import {
   PageSection,
   Surface,
 } from '@/components/layout/page-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const Contact = () => {
@@ -38,9 +38,10 @@ const Contact = () => {
                 </CardDescription>
               </div>
               <div className="pt-2">
-                <Button asChild>
-                  <a href="mailto:support@serplists.com">support@serplists.com</a>
-                </Button>
+                <a
+                  href="mailto:support@serplists.com"
+                  className={buttonVariants()}
+                >support@serplists.com</a>
               </div>
             </CardHeader>
           </Surface>
@@ -58,11 +59,12 @@ const Contact = () => {
                 </CardDescription>
               </div>
               <div className="pt-2">
-                <Button asChild variant="outline">
-                  <a href="mailto:support@serplists.com?subject=SERP%20Lists%20feedback">
+                <a
+                  href="mailto:support@serplists.com?subject=SERP%20Lists%20feedback"
+                  className={buttonVariants({ variant: 'outline' })}
+                >
                     Share feedback
                   </a>
-                </Button>
               </div>
             </CardHeader>
           </Surface>

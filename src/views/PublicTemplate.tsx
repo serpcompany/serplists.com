@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { PageContainer, Surface } from '@/components/layout/page-shell';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -206,9 +207,10 @@ const PublicTemplate = () => {
           </p>
           <div className="mt-6 flex justify-center gap-2">
             <Button onClick={reload}>Try again</Button>
-            <Button asChild variant="outline">
-              <Link href={buildPublicTemplatesPath()}>Browse templates</Link>
-            </Button>
+            <Link
+              href={buildPublicTemplatesPath()}
+              className={buttonVariants({ variant: 'outline' })}
+            >Browse templates</Link>
           </div>
         </Surface>
       </PageContainer>
@@ -229,12 +231,10 @@ const PublicTemplate = () => {
           <p className="mt-4 text-base leading-7 text-muted-foreground">
             {TEMPLATE_NOT_FOUND_PAGE_TEXT.description}
           </p>
-          <Button asChild className="mt-6">
-            <Link href={buildPublicTemplatesPath()}>
+          <Link href={buildPublicTemplatesPath()} className={cn(buttonVariants(), 'mt-6')}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Browse templates
             </Link>
-          </Button>
         </Surface>
       </PageContainer>
     );

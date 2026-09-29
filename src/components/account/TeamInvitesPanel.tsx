@@ -104,7 +104,7 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
           <Label htmlFor="team-invite-role">Role</Label>
           <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}>
             <SelectTrigger id="team-invite-role">
-              <SelectValue />
+              <SelectValue>{(role: AssignableTeamRole) => formatRole(role)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {assignableRoles.map((role) => (

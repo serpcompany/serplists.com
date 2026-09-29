@@ -1,10 +1,9 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { useForm } from 'react-hook-form';
+import { FormProvider, useForm } from 'react-hook-form';
 import { describe, expect, it, vi } from 'vitest';
 
 import { OutlineSidebar } from '@/components/template-editor/OutlineSidebar';
-import { Form } from '@/components/ui/form';
 import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
 import { findControls } from './accessibleMarkup';
@@ -29,7 +28,7 @@ function SidebarHarness(): JSX.Element {
   });
 
   return (
-    <Form {...form}>
+    <FormProvider {...form}>
       <OutlineSidebar
         selectedItemIndex={null}
         selectedSectionIndex={0}
@@ -40,7 +39,7 @@ function SidebarHarness(): JSX.Element {
         onSelectSection={vi.fn()}
         onSelectTemplateInfo={vi.fn()}
       />
-    </Form>
+    </FormProvider>
   );
 }
 

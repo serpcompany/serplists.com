@@ -166,7 +166,8 @@ describe('App public route parity', () => {
     const html = renderToStaticMarkup(<NotFoundPage />);
 
     expect(html).toContain('That page does not exist');
-    expect(html).toContain('The route /docs could not be found.');
+    // The server's HTML never names the address (src/views/NotFound.tsx).
+    expect(html).toContain('This route could not be found.');
     expect(html).toContain('data-app-shell="public"');
     expect(html).not.toContain('Checklist &amp; Template Experience');
     expect(html).not.toContain('Prototype map');

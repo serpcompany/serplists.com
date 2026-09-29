@@ -80,24 +80,24 @@ export function TemplateCard({
 
           {hasMenuActions ? (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label={actionsLabel}
-                  // The only way to these actions on a touch screen or from the keyboard.
-                  className={cn('h-7 w-7 data-[state=open]:opacity-100', HOVER_REVEAL_CLASS)}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-                </Button>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    aria-label={actionsLabel}
+                    // The only way to these actions on a touch screen or from the keyboard.
+                    className={cn('h-7 w-7 data-popup-open:opacity-100', HOVER_REVEAL_CLASS)}
+                    size="icon"
+                    variant="ghost"
+                  />
+                }
+              >
+                <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
                 {canEdit ? (
-                  <DropdownMenuItem asChild>
-                    <Link href={buildConsoleTemplateEditPath(template.id)}>
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Edit
-                    </Link>
+                  <DropdownMenuItem render={<Link href={buildConsoleTemplateEditPath(template.id)} />}>
+                    <Edit3 className="mr-2 h-4 w-4" />
+                    Edit
                   </DropdownMenuItem>
                 ) : null}
                 {onStartRun ? (

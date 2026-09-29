@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { QueryErrorNotice } from '@/components/shared/QueryListState';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
@@ -104,9 +104,10 @@ const Pricing = () => {
                 </li>
               </ul>
               <div className="mt-6">
-                <Button asChild variant="outline">
-                  <Link href={buildRegisterPath()}>Start Free</Link>
-                </Button>
+                <Link
+                  href={buildRegisterPath()}
+                  className={buttonVariants({ variant: 'outline' })}
+                >Start Free</Link>
               </div>
             </CardContent>
           </Surface>
@@ -135,9 +136,7 @@ const Pricing = () => {
               </ul>
               <div className="mt-6">
                 {!user ? (
-                  <Button asChild>
-                    <Link href={buildRegisterPath()}>Get Started</Link>
-                  </Button>
+                  <Link href={buildRegisterPath()} className={buttonVariants()}>Get Started</Link>
                 ) : planStatus === 'unknown' ? (
                   <QueryErrorNotice
                     message={PLAN_UNKNOWN_MESSAGE}
@@ -146,9 +145,10 @@ const Pricing = () => {
                 ) : personalAction === 'support' ? (
                   <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
                 ) : personalAction === 'manage' ? (
-                  <Button asChild>
-                    <Link href={buildConsoleSettingsPath()}>{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
-                  </Button>
+                  <Link
+                    href={buildConsoleSettingsPath()}
+                    className={buttonVariants()}
+                  >{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
                 ) : (
                   <Button
                     onClick={handleUpgrade}

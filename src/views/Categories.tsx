@@ -19,7 +19,8 @@ import {
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { buildDiscoveryCategories } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -209,12 +210,13 @@ const Categories = () => {
             Create your own template from scratch and share it with the
             community.
           </p>
-          <Button asChild className="mt-4 bg-foreground text-background hover:bg-foreground/90">
-            <Link href={buildConsoleTemplateCreatePath()}>
+          <Link
+            href={buildConsoleTemplateCreatePath()}
+            className={cn(buttonVariants(), 'mt-4 bg-foreground text-background hover:bg-foreground/90')}
+          >
               Create Template
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
-          </Button>
         </section>
       </main>
     </div>

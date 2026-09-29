@@ -39,6 +39,13 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
 
 export type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
 
+/** How the import form names each visibility choice. */
+export const IMPORT_VISIBILITY_LABELS: Record<ImportVisibility, string> = {
+  preserve: "Preserve visibility from file",
+  public: "Force public",
+  private: "Force private",
+};
+
 /**
  * Whether an imported template ends up public under the chosen visibility override.
  * The import preview and the import payload both use this, and the server applies

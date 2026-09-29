@@ -40,10 +40,10 @@ describe('createJustOpenedGuard', () => {
     guard.markOpened({});
 
     now += DOUBLE_CLICK_MS - 1;
-    const preventDefault = vi.fn();
-    guard.onPointerDownOutside({ preventDefault });
+    const cancel = vi.fn();
 
-    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(guard.onOutsidePress(cancel)).toBe(true);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('lets a later click outside close the dialog as usual', () => {
@@ -52,24 +52,24 @@ describe('createJustOpenedGuard', () => {
     guard.markOpened({});
 
     now += DOUBLE_CLICK_MS;
-    const preventDefault = vi.fn();
-    guard.onPointerDownOutside({ preventDefault });
+    const cancel = vi.fn();
 
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(guard.onOutsidePress(cancel)).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it('does not block before the dialog has opened, and ignores the unmount call', () => {
     let now = 1_000;
     const guard = createJustOpenedGuard(() => now);
-    const preventDefault = vi.fn();
-    guard.onPointerDownOutside({ preventDefault });
-    expect(preventDefault).not.toHaveBeenCalled();
+    const cancel = vi.fn();
+    expect(guard.onOutsidePress(cancel)).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
 
     guard.markOpened({});
     now += DOUBLE_CLICK_MS;
     guard.markOpened(null);
-    guard.onPointerDownOutside({ preventDefault });
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(guard.onOutsidePress(cancel)).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
   });
 });
 

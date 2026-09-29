@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -150,19 +150,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const accountMenu = (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          aria-label="Account menu"
-          className="h-10 px-2 hover:bg-transparent"
-        >
+      <DropdownMenuTrigger
+        render={<Button variant="ghost" aria-label="Account menu" className="h-10 px-2 hover:bg-transparent" />}
+      >
           <Avatar className="h-8 w-8 border border-border">
             <AvatarFallback className="bg-secondary text-sm font-semibold text-foreground">
               {userInitial}
             </AvatarFallback>
           </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
+        </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         className="w-64 rounded-lg border bg-popover p-2 text-popover-foreground"
@@ -175,40 +171,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={buildConsoleHomePath()} className="cursor-pointer rounded-md">
+        <DropdownMenuItem
+          render={<Link href={buildConsoleHomePath()} className="cursor-pointer rounded-md" />}
+        >
             Dashboard
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link
-            href={buildConsoleTemplatesPath()}
-            className="cursor-pointer rounded-md"
-          >
-            My Templates
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={buildConsoleRunsPath()} className="cursor-pointer rounded-md">
-            My Runs
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={buildConsoleSettingsPath()} className="cursor-pointer rounded-md">
-            Settings
-          </Link>
-        </DropdownMenuItem>
-        {user?.username ? (
-          <DropdownMenuItem asChild>
-            <Link
-              href={buildPublicProfilePath(user.username)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cursor-pointer rounded-md"
-            >
-              Profile
-            </Link>
           </DropdownMenuItem>
+        <DropdownMenuItem
+          render={<Link href={buildConsoleTemplatesPath()} className="cursor-pointer rounded-md" />}
+        >
+            My Templates
+          </DropdownMenuItem>
+        <DropdownMenuItem
+          render={<Link href={buildConsoleRunsPath()} className="cursor-pointer rounded-md" />}
+        >
+            My Runs
+          </DropdownMenuItem>
+        <DropdownMenuItem
+          render={<Link href={buildConsoleSettingsPath()} className="cursor-pointer rounded-md" />}
+        >
+            Settings
+          </DropdownMenuItem>
+        {user?.username ? (
+          <DropdownMenuItem
+            render={<Link href={buildPublicProfilePath(user.username)} target="_blank" rel="noopener noreferrer" className="cursor-pointer rounded-md" />}
+          >
+              Profile
+            </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -264,16 +252,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             accountMenu
           ) : (
             <>
-              <Button
-                asChild
-                variant="ghost"
-                className="hidden text-muted-foreground md:inline-flex"
-              >
-                <Link href={buildLoginPath()}>Log in</Link>
-              </Button>
-              <Button asChild>
-                <Link href={buildRegisterPath()}>Get started</Link>
-              </Button>
+              <Link
+                href={buildLoginPath()}
+                className={cn(buttonVariants({ variant: 'ghost' }), 'hidden text-muted-foreground md:inline-flex')}
+              >Log in</Link>
+              <Link href={buildRegisterPath()} className={buttonVariants()}>Get started</Link>
             </>
           )}
           {shell === 'console' ? null : <PublicMobileNav />}

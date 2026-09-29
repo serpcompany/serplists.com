@@ -8,7 +8,7 @@ import {
   PageSection,
   Surface,
 } from '@/components/layout/page-shell';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { buildContactPath, buildPublicFeaturesPath } from '@/lib/routes';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -39,12 +39,14 @@ const About = () => {
         <PageHero
           actions={
             <>
-              <Button asChild>
-                <Link href={buildPublicFeaturesPath()}>Explore Features</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={buildContactPath()}>Contact Us</Link>
-              </Button>
+              <Link
+                href={buildPublicFeaturesPath()}
+                className={buttonVariants()}
+              >Explore Features</Link>
+              <Link
+                href={buildContactPath()}
+                className={buttonVariants({ variant: 'outline' })}
+              >Contact Us</Link>
             </>
           }
           align="center"

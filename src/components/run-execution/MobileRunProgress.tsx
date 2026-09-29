@@ -77,22 +77,18 @@ export function MobileRunProgress({
             </span>
           ) : null}
           <Sheet open={isTaskListOpen} onOpenChange={setIsTaskListOpen}>
-            <SheetTrigger asChild>
-              <Button data-mobile-run-tasks-trigger="true" size="sm" type="button" variant="outline">
+            <SheetTrigger
+              render={<Button data-mobile-run-tasks-trigger="true" size="sm" type="button" variant="outline" />}
+            >
                 <ListChecks className="h-4 w-4" />
                 Tasks
-              </Button>
-            </SheetTrigger>
+              </SheetTrigger>
             <SheetContent
               className="flex max-h-[85dvh] flex-col gap-0 p-0"
-              onOpenAutoFocus={(event) => {
-                // Start on the current task rather than the top of a long run.
-                const current = contentRef.current?.querySelector<HTMLElement>('[aria-current="step"]');
-                if (current) {
-                  event.preventDefault();
-                  current.focus();
-                }
-              }}
+              // Start on the current task rather than the top of a long run.
+              initialFocus={() =>
+                contentRef.current?.querySelector<HTMLElement>('[aria-current="step"]') ?? true
+              }
               ref={contentRef}
               side="bottom"
             >

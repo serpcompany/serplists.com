@@ -475,7 +475,9 @@ export function TeamSettingsSection() {
                             }
                           >
                             <SelectTrigger aria-label={`Role for ${memberLabel}`}>
-                              <SelectValue />
+                              <SelectValue>
+                                {(role: TeamMember['role']) => formatRole(role)}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {isOwner ? (
@@ -504,7 +506,9 @@ export function TeamSettingsSection() {
                             }
                           >
                             <SelectTrigger aria-label={`Status for ${memberLabel}`}>
-                              <SelectValue />
+                              <SelectValue>
+                                {(status: TeamMemberStatus) => formatMemberStatus(status)}
+                              </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {memberStatuses.map((status) => (

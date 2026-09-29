@@ -15,6 +15,12 @@ import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
 import { TEMPLATE_FIELD_LIMITS } from "@/lib/schemas/templateFields";
 
+// The template types; the Select shows the chosen one's label.
+const TEMPLATE_TYPE_LABELS = {
+  checklist: "Checklist",
+  recipe: "Recipe",
+} as const;
+
 interface TemplateBasicInfoProps {
   showIntro?: boolean;
 }
@@ -110,17 +116,21 @@ export const TemplateBasicInfo = ({
         <Field>
           <FieldLabel htmlFor={ids.templateType}>Template Type</FieldLabel>
           <Select
+            items={TEMPLATE_TYPE_LABELS}
             value={templateType}
-            onValueChange={(value: "checklist" | "recipe") =>
-              setValue("templateType", value, { shouldDirty: true })
-            }
+            onValueChange={(value) => {
+              if (value) setValue("templateType", value, { shouldDirty: true });
+            }}
           >
             <SelectTrigger className="bg-input" id={ids.templateType}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="checklist">Checklist</SelectItem>
-              <SelectItem value="recipe">Recipe</SelectItem>
+              {Object.entries(TEMPLATE_TYPE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Field>
@@ -189,6 +199,9 @@ export const TemplateBasicInfo = ({
               </p>
             </div>
             <Switch
+              // A native button, so the Label's htmlFor names it.
+              nativeButton
+              render={<button type="button" />}
               id={ids.isPublic}
               aria-describedby={ids.isPublicHint}
               checked={isPublic}

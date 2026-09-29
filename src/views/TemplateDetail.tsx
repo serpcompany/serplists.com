@@ -34,7 +34,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   Card,
   CardContent,
@@ -369,9 +370,10 @@ const TemplateDetail = () => {
             <p className="mb-6 text-muted-foreground">{loadError}</p>
             <div className="flex justify-center gap-2">
               <Button onClick={reload}>Try again</Button>
-              <Button asChild variant="outline">
-                <Link href={buildConsoleTemplatesPath()}>Back to Templates</Link>
-              </Button>
+              <Link
+                href={buildConsoleTemplatesPath()}
+                className={buttonVariants({ variant: 'outline' })}
+              >Back to Templates</Link>
             </div>
           </Card>
         </DashboardScrollArea>
@@ -386,12 +388,10 @@ const TemplateDetail = () => {
           title="Template Not Found"
           description="This template does not exist or you do not have access to it."
           actions={
-            <Button asChild>
-              <Link href={buildConsoleTemplatesPath()}>
+            <Link href={buildConsoleTemplatesPath()} className={buttonVariants()}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Templates
               </Link>
-            </Button>
           }
         />
         <DashboardScrollArea className="flex items-center justify-center">
@@ -408,12 +408,13 @@ const TemplateDetail = () => {
 
   const templateHeaderActions = (
     <>
-      <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-        <Link href={buildConsoleTemplatesPath()}>
+      <Link
+        href={buildConsoleTemplatesPath()}
+        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-muted-foreground')}
+      >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Link>
-      </Button>
 
       {isPublic ? (
         <Badge variant="secondary">
@@ -442,12 +443,13 @@ const TemplateDetail = () => {
             </Button>
           ) : null}
           {/* The loaded id, never the route param: this page also opens by slug, the editor only by id. */}
-          <Button asChild variant="outline" size="sm" className="border-border">
-            <Link href={buildConsoleTemplateEditPath(displayTemplate.id)}>
+          <Link
+            href={buildConsoleTemplateEditPath(displayTemplate.id)}
+            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'border-border')}
+          >
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Link>
-          </Button>
         </>
       ) : user ? (
         copyButton.visible ? (
@@ -463,11 +465,12 @@ const TemplateDetail = () => {
           </Button>
         ) : null
       ) : copyButton.visible ? (
-        <Button asChild variant="outline" size="sm" className="border-border">
-          <Link href={withReturnPath(buildLoginPath(), currentPath)}>
+        <Link
+          href={withReturnPath(buildLoginPath(), currentPath)}
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'border-border')}
+        >
             Log in to copy template
           </Link>
-        </Button>
       ) : null}
 
       {canStartRun || !user ? (
@@ -483,16 +486,11 @@ const TemplateDetail = () => {
 
       {canEditTemplate ? (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label="Template actions"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            >
+          <DropdownMenuTrigger
+            render={<Button aria-label="Template actions" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
+          >
               <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             {permissions.canDuplicate ? (
               <DropdownMenuItem onClick={handleCloneTemplate} disabled={isCloningTemplate}>
@@ -649,6 +647,9 @@ const TemplateDetail = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Switch
+                    // A native button, so the Label's htmlFor names it.
+                    nativeButton
+                    render={<button type="button" />}
                     id="template-visibility"
                     checked={isPublic}
                     disabled={!canEditTemplate || isChangingVisibility}
@@ -777,7 +778,13 @@ const TemplateDetail = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+            <AlertDialogAction
+              onClick={() => {
+                setArchiveDialogOpen(false);
+                void handleDelete();
+              }}
+              disabled={isDeleting}
+            >
               {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>

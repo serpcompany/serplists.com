@@ -327,7 +327,10 @@ describe('ChecklistRunPage completion', () => {
 
 // A completed run is frozen: unticking a task would leave it Completed with open tasks.
 describe('ChecklistRunPage on a completed run', () => {
-  const checkboxes = (html: string) => html.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? [];
+  // Any element with the checkbox role: the task's own <button> and the sub-tasks' Base UI
+  // checkboxes (<span role="checkbox">, disabled through aria-disabled).
+  const checkboxes = (html: string) => html.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? [];
+  const isLocked = (tag: string) => tag.includes('disabled=""') || tag.includes('aria-disabled="true"');
   const completedRun = (): ChecklistRun => {
     const run = twoTaskRun([true, true], 'completed');
     run.sections[0].items[0].contents = [
@@ -341,7 +344,7 @@ describe('ChecklistRunPage on a completed run', () => {
 
     expect(html).not.toContain('Mark Complete');
     expect(checkboxes(html).length).toBeGreaterThan(0);
-    expect(checkboxes(html).every((tag) => tag.includes('disabled=""'))).toBe(true);
+    expect(checkboxes(html).every(isLocked)).toBe(true);
     expect(html).toContain('Save notes');
   });
 
@@ -349,14 +352,14 @@ describe('ChecklistRunPage on a completed run', () => {
     const html = await renderRunPage(completedRun(), { selectedItemId: 'item-1', shared: true });
 
     expect(checkboxes(html)).toHaveLength(3);
-    expect(checkboxes(html).every((tag) => tag.includes('disabled=""'))).toBe(true);
+    expect(checkboxes(html).every(isLocked)).toBe(true);
     expect(html).toContain('Save notes');
   });
 
   it('leaves the checkboxes of an in-progress run enabled', async () => {
     const html = await renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1', shared: true });
 
-    expect(checkboxes(html).some((tag) => tag.includes('disabled=""'))).toBe(false);
+    expect(checkboxes(html).some(isLocked)).toBe(false);
   });
 });
 
@@ -500,7 +503,9 @@ describe('ChecklistRunPage task counts', () => {
   it('fills the task list bar with the same overall progress as the header', async () => {
     const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
 
-    expect(html.match(/width:8%/g)).toHaveLength(2);
+    // The header bar, the task list bar and the progress block's Progress (which fills to
+    // its value's width).
+    expect(html.match(/width:8%/g)).toHaveLength(3);
     expect(html).not.toContain('width:0%');
   });
 
@@ -514,7 +519,7 @@ describe('ChecklistRunPage task counts', () => {
 
 describe('ChecklistRunPage task checkboxes', () => {
   const taskCheckboxes = (html: string) =>
-    (html.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? []).filter((tag) => /aria-label="Mark /.test(tag));
+    (html.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? []).filter((tag) => /aria-label="Mark /.test(tag));
 
   it('names the task checkbox and shows its state in the private view', async () => {
     const html = await renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1' });

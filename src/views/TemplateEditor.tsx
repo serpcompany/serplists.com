@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,6 @@ import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
-import { Form } from "@/components/ui/form";
 import {
   Dialog,
   DialogContent,
@@ -316,7 +315,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         ) : null}
 
         <TemplateEditorUploadsContext.Provider value={uploads}>
-          <Form {...templateForm}>
+          <FormProvider {...templateForm}>
             <div className="flex min-h-[calc(100vh-3.5rem)]">
               <OutlineSidebar
                 selectedItemIndex={selectedItemIndex}
@@ -341,7 +340,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
                 showingTemplateInfo={showingTemplateInfo}
               />
             </div>
-          </Form>
+          </FormProvider>
         </TemplateEditorUploadsContext.Provider>
       </fieldset>
 

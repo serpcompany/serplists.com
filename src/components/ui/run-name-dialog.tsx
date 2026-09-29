@@ -8,8 +8,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { buildDefaultRunName, resolveRunName, RUN_TITLE_MAX_LENGTH } from "@/lib/runs/runName";
 
 interface RunNameDialogProps {
@@ -49,28 +49,26 @@ export const RunNameDialog: React.FC<RunNameDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Name Your Checklist Run</DialogTitle>
           <DialogDescription>
             Give your new checklist run a descriptive name to help you track progress.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="runName">Run Name</Label>
-              <Input
-                id="runName"
-                value={runName}
-                onChange={(e) => setRunName(e.target.value)}
-                placeholder={defaultName}
-                maxLength={RUN_TITLE_MAX_LENGTH}
-                disabled={loading}
-                autoFocus
-              />
-            </div>
-          </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor="runName">Run Name</FieldLabel>
+            <Input
+              id="runName"
+              value={runName}
+              onChange={(e) => setRunName(e.target.value)}
+              placeholder={defaultName}
+              maxLength={RUN_TITLE_MAX_LENGTH}
+              disabled={loading}
+              autoFocus
+            />
+          </Field>
           <DialogFooter>
             <Button
               type="button"

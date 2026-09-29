@@ -23,11 +23,19 @@ interface RunCompleteDialogProps {
 // The rest of that double click lands on the overlay or on this dialog's button, so it
 // neither closes the dialog nor completes the run (see repeatClick.ts).
 export function RunCompleteDialog({ isSharedRun, onComplete, onOpenChange, open }: RunCompleteDialogProps) {
-  const [{ markOpened, onPointerDownOutside }] = useState(() => createJustOpenedGuard());
+  const [{ markOpened, onOutsidePress }] = useState(() => createJustOpenedGuard());
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent ref={markOpened} onPointerDownOutside={onPointerDownOutside}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen, details) => {
+        if (!nextOpen && details.reason === 'outside-press' && onOutsidePress(details.cancel)) {
+          return;
+        }
+        onOpenChange(nextOpen);
+      }}
+    >
+      <DialogContent ref={markOpened}>
         <DialogHeader>
           <DialogTitle>Checklist Completed!</DialogTitle>
           <DialogDescription>

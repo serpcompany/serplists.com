@@ -1,7 +1,7 @@
 import React from 'react';
 import { Clock, Star, TrendingUp } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type {
   DiscoveryCategory,
@@ -88,15 +88,11 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
 
             if (categoryPath) {
               return (
-                <Button
-                  asChild
+                <Link
                   key={category.slug}
-                  variant={isActive ? 'default' : 'outline'}
-                  size="sm"
-                  className="shrink-0"
-                >
-                  <Link href={categoryPath}>{category.name}</Link>
-                </Button>
+                  href={categoryPath}
+                  className={cn(buttonVariants({ variant: isActive ? 'default' : 'outline', size: 'sm' }), 'shrink-0')}
+                >{category.name}</Link>
               );
             }
 

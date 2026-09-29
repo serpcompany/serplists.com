@@ -107,17 +107,11 @@ export const TemplateHeader = ({
         <ThemeToggle />
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="More actions"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              type="button"
-            >
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon" aria-label="More actions" className="h-8 w-8 text-muted-foreground hover:text-foreground" type="button" />}
+          >
               <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={onCancel}>Discard changes</DropdownMenuItem>
           </DropdownMenuContent>

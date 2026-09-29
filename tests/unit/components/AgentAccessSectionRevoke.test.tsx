@@ -32,13 +32,15 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   api: apiMocks,
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-// Radix renders the confirm dialog in a portal on document.body; render it in place so the
-// test can press "Revoke key" the way the user confirms.
+// The confirm dialog renders in a portal on document.body; render it in place so the test
+// can press "Revoke key" the way the user confirms.
 vi.mock('@/components/ui/alert-dialog', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
   return {
     AlertDialog: Pass,
-    AlertDialogTrigger: Pass,
+    // The trigger renders its `render` element (the Revoke button) around its children.
+    AlertDialogTrigger: ({ children, render }: { children?: ReactNode; render?: React.ReactElement }) =>
+      render ? React.cloneElement(render, undefined, children) : <>{children}</>,
     AlertDialogContent: Pass,
     AlertDialogHeader: Pass,
     AlertDialogFooter: Pass,
@@ -109,7 +111,7 @@ async function openSectionShowing(keys: AgentKey[]) {
 }
 
 const badges = (container: ReturnType<typeof createFakeContainer>) =>
-  findAll(container, (node) => node.nodeName === 'DIV' && ['Active', 'Revoked'].includes(node.textContent)).map(
+  findAll(container, (node) => node.nodeName === 'SPAN' && ['Active', 'Revoked'].includes(node.textContent)).map(
     (node) => node.textContent,
   );
 
