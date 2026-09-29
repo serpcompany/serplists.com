@@ -160,10 +160,13 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
         plans.set(sql, `(plan unavailable: ${error instanceof Error ? error.message : String(error)})`);
       }
     }
+    // One scalar subquery per table: D1 refuses a UNION ALL of six SELECTs ("too many terms
+    // in compound SELECT").
+    const countedTables = ["templates", "checklist_runs", "users", "audit_events", "template_versions", "team_invites"];
     const tableCounts = await platform.env.DB.prepare(
-      "SELECT 'templates' AS t, COUNT(*) AS n FROM templates UNION ALL SELECT 'checklist_runs', COUNT(*) FROM checklist_runs UNION ALL SELECT 'users', COUNT(*) FROM users UNION ALL SELECT 'audit_events', COUNT(*) FROM audit_events UNION ALL SELECT 'template_versions', COUNT(*) FROM template_versions UNION ALL SELECT 'team_invites', COUNT(*) FROM team_invites",
-    ).all<{ t: string; n: number }>();
-    plans.set("__counts__", tableCounts.results.map((row) => `${row.t}: ${row.n.toLocaleString()}`).join(", "));
+      `SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`,
+    ).first<Record<string, number>>();
+    plans.set("__counts__", countedTables.map((table) => `${table}: ${(tableCounts?.[table] ?? 0).toLocaleString()}`).join(", "));
   } finally {
     await platform.dispose();
   }

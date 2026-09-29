@@ -18,9 +18,10 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 - **Per statement:** set `D1_PROFILE=true` and every statement logs a `d1_query` line
   with `rowsRead`, `rowsWritten`, `rowsReturned`, and `durationMs`
   (`functions/api/utils/d1-profiler.ts`, wired in `functions/api/db.ts`).
-- **Per endpoint, at scale:** `pnpm run d1:profile` builds an isolated local D1 with
-  about 150k synthetic rows (20k templates, 40k runs, 40k audit events, 5k invites), replays
-  anonymous, Personal, and Organization requests, and writes
+- **Per endpoint, at scale:** `pnpm run d1:profile` builds the app with OpenNext and an
+  isolated local D1 with about 150k synthetic rows (20k templates, 40k runs, 40k audit
+  events, 5k invites), serves the build with `opennextjs-cloudflare preview`, replays
+  anonymous (public pages included), Personal, and Organization requests, and writes
   `tmp/d1-profile/report.md` with rows read and written per request and per
   statement, efficiency (rows returned / rows read), and `EXPLAIN QUERY PLAN`. Use
   `-- --scale N` for more volume and `-- --reuse` to skip rebuilding: each build is
