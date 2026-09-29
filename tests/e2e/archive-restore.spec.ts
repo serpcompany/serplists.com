@@ -1,13 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
+import { navigateInApp } from './support/navigation';
+import { fillSignInForm } from './support/sign-in';
 
 // Deleting a Template or Run archives it. The archive page, opened from the console
 // navigation, lists archived items and restores them (src/views/Archive.tsx).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
@@ -217,10 +219,7 @@ test('a template deleted from its page opens normally once restored', async ({ p
     },
   );
   // In-app navigation keeps the query cache.
-  await page.evaluate((to) => {
-    window.history.pushState({}, '', to);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, `/dashboard/templates/${templateId}`);
+  await navigateInApp(page, `/dashboard/templates/${templateId}`);
   await page.waitForTimeout(700);
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });

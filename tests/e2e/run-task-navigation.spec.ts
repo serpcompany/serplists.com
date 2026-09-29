@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // The run page shows one task at a time and the window scrolls. Moving to another task
 // (Mark Complete, Next, Previous) scrolls its header back into view below the sticky
@@ -8,7 +9,7 @@ import { apiJson, apiRequest } from './support/api-requests';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

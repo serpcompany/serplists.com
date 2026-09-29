@@ -1,13 +1,18 @@
+// Runs the browser tests on an isolated local stack: builds the app with OpenNext, wipes,
+// migrates and seeds a D1 of its own, and starts Playwright, whose web server serves that
+// build with `opennextjs-cloudflare preview` on a free port (tests/e2e/preview-server.mjs).
+//   pnpm run test:smoke                  # the @smoke tests
+//   pnpm run test:e2e:full               # every test, one worker
+//   ... -- --skip-build                  # reuse .open-next from `pnpm run build:worker`
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { findOpenPortPair } from "../../scripts/dev-auto-lib.mjs";
+import { findOpenPort } from "../../scripts/dev-auto-lib.mjs";
 import { execTool, spawnTool } from "../../scripts/lib/run-tool.mjs";
 import {
   assertSmokePersistPath,
-  DEFAULT_SMOKE_API_PORT,
-  DEFAULT_SMOKE_FRONTEND_PORT,
-  needsOpenPorts,
+  DEFAULT_E2E_PORT,
+  needsOpenPort,
   resolveSmokeEnv,
 } from "./run-smoke-lib.mjs";
 
@@ -26,8 +31,8 @@ function run(tool, args, options = {}) {
   });
 }
 
-// Wipes, migrates and seeds the D1 that Playwright's API server runs on
-// (PLAYWRIGHT_WRANGLER_PERSIST_TO, set by resolveSmokeEnv to this same path).
+// Wipes, migrates and seeds the D1 that the preview runs on (PLAYWRIGHT_WRANGLER_PERSIST_TO,
+// set by resolveSmokeEnv to this same path).
 function prepareSmokeD1(smokePersistPath) {
   rmSync(assertSmokePersistPath(smokePersistPath, repoRoot), { recursive: true, force: true });
   run(
@@ -59,22 +64,21 @@ function prepareSmokeD1(smokePersistPath) {
   );
 }
 
-const openPorts = needsOpenPorts(process.env)
-  ? await findOpenPortPair({
-    preferredFrontendPort: DEFAULT_SMOKE_FRONTEND_PORT,
-    preferredApiPort: DEFAULT_SMOKE_API_PORT,
-  })
-  : null;
-const { env, seedPath, notes } = resolveSmokeEnv(process.env, { openPorts, repoRoot });
+const RUNNER_FLAGS = new Set(["--all", "--skip-build"]);
+// `--all` runs the full e2e suite through the same isolated local stack.
+const runAll = process.argv.includes("--all");
+const skipBuild = process.argv.includes("--skip-build");
+const playwrightArgs = process.argv.slice(2).filter((arg) => !RUNNER_FLAGS.has(arg));
+
+const openPort = needsOpenPort(process.env) ? await findOpenPort({ preferredPort: DEFAULT_E2E_PORT }) : null;
+const { env, seedPath, notes } = resolveSmokeEnv(process.env, { openPort, repoRoot });
 notes.forEach((note) => console.log(note));
 
 if (seedPath) {
+  // The build bundles the pages and the API, so an older one would test older code.
+  if (!skipBuild) run("opennextjs-cloudflare", ["build"]);
   prepareSmokeD1(seedPath);
 }
-
-// `--all` runs the full e2e suite through the same isolated local stack.
-const runAll = process.argv.includes("--all");
-const playwrightArgs = process.argv.slice(2).filter((arg) => arg !== "--all");
 
 const child = spawnTool(
   "playwright",
@@ -88,7 +92,7 @@ const child = spawnTool(
 
 child.on("exit", (code, signal) => {
   if (signal) {
-    console.error(`Smoke tests stopped by ${signal}`);
+    console.error(`Browser tests stopped by ${signal}`);
     process.exit(1);
   }
 

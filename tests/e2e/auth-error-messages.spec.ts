@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // Errors the API router sends for /api/auth/* itself must reach the user, and a
 // 429 must read as "wait", never as a failed sign-in (src/lib/auth/authErrors.ts).
@@ -19,7 +20,7 @@ test('a rate-limited sign-in tells the user to wait', async ({ page }) => {
   });
 
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page.getByText('Too many attempts. Please try again in 2 minutes.')).toBeVisible();
@@ -32,7 +33,7 @@ test('a sign-in blocked by an older router body without a message still says to 
   });
 
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(page.getByText('Too many attempts. Please wait a few minutes and try again.')).toBeVisible();

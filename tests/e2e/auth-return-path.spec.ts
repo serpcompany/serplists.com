@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // The URL parser removes dot segments, so a return path such as /.//evil.com/share/x
 // normalizes to //evil.com/share/x, which a browser resolves to another origin. Sign-in
@@ -26,7 +27,7 @@ async function recordOffsiteRequests(page: Page): Promise<string[]> {
 }
 
 async function signInAsJohn(page: Page) {
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 

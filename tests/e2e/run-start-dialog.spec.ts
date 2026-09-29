@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // The Start Run dialog used to clear the run name as soon as it was submitted, so a start
 // that failed (network, 429, 5xx, an Organization plan limit) left the dialog open with the
@@ -8,7 +9,7 @@ import { apiJson, apiRequest } from './support/api-requests';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

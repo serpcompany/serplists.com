@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Pages that await a request and then navigate (Start Run to the new run, Save to the
 // template list) must not pull a user who already left back to that destination: React
@@ -8,7 +9,7 @@ import { apiJson, apiRequest } from './support/api-requests';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

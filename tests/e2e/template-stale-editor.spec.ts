@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // An editor loaded before a Share in another tab must not make the template private again
 // when it saves: the save is guarded by the version the editor loaded, even after the
@@ -8,7 +9,7 @@ import { apiJson } from './support/api-requests';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

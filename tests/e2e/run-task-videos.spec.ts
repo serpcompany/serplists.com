@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // The run page keeps one task panel mounted while the task changes. A video block at the
 // same position in the next task used to keep the previous task's player, which reads its
@@ -12,7 +13,7 @@ const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   // Signing in lands on Account Settings: let its requests finish before the test calls

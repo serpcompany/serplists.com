@@ -1,8 +1,9 @@
 import { expect, type APIRequestContext, type Page, type Request } from '@playwright/test';
 
-/** The API the browser tests run against, resolved as playwright.config.ts resolves it. */
-export const API_BASE_URL =
-  process.env.PLAYWRIGHT_API_URL ?? process.env.VITE_API_URL ?? 'http://localhost:8788/api';
+import { API_BASE_URL } from './stack';
+
+/** The API the browser tests run against: the app's own origin, under /api. */
+export { API_BASE_URL };
 
 // A page often sends its next request only once an earlier one has answered, so the
 // page's requests count as settled once none has started or ended for this long.
@@ -19,11 +20,14 @@ const QUIET_MS = 300;
  * meet an ended session.
  */
 export function trackApiRequests(page: Page, apiBaseUrl: string) {
-  const apiOrigin = new URL(apiBaseUrl).origin;
+  // The pages share the API's origin, so only requests under its path count.
+  const api = new URL(apiBaseUrl);
+  const apiPath = `${api.pathname.replace(/\/$/, '')}/`;
+  const isApiRequest = (url: URL) => url.origin === api.origin && url.pathname.startsWith(apiPath);
   const inFlight = new Set<Request>();
   let lastChange = Date.now();
   const onRequest = (request: Request) => {
-    if (new URL(request.url()).origin !== apiOrigin) return;
+    if (!isApiRequest(new URL(request.url()))) return;
     inFlight.add(request);
     lastChange = Date.now();
   };

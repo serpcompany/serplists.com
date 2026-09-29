@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // A session that ends in the background (a sign-out in another tab, an expired or revoked
 // session) unmounts every signed-in page and sends the tab to /login without a question. Unsaved
@@ -10,7 +11,7 @@ import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests'
 async function signIn(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible({ timeout: 30_000 });
   // Let the landing page's requests finish before the test calls the API, which the local
@@ -22,7 +23,7 @@ async function signIn(page: Page) {
 async function signInAgain(page: Page) {
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
   await expect(page.getByText('Your session ended. Sign in again.')).toBeVisible();
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 

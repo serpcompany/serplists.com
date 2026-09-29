@@ -1,18 +1,17 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-// Link-preview crawlers do not run JavaScript, so they read only the HTML the server
-// sends. A Cloudflare URL rewrite (docs/FRONTEND.md, Link previews) sends only those bots
-// from a public page to /link-preview/<page path>, where Pages Functions fill in the page's
-// own title, description, og:type and canonical URL. People get the public paths as static
-// files, which run no Function. These specs request /link-preview/ directly, as the rewrite
-// would. The functions run under wrangler pages dev (the API server here), not the Vite
-// frontend, so these requests go to the API origin.
+import { APP_URL } from './support/stack';
 
-const API_ORIGIN = new URL(process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api').origin;
+// Link-preview crawlers do not run JavaScript, so they read only the HTML the server sends.
+// Every public page renders its own title, description, og:type and canonical URL on the
+// server (Next.js's Metadata API, with the lookups in src/server/pageMeta), for crawlers and
+// people alike: there is no separate preview route or bot rewrite.
+
 const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
+const BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 
-async function fetchHead(request: APIRequestContext, path: string) {
-  const response = await request.get(`${API_ORIGIN}${path}`, { headers: { 'User-Agent': SLACKBOT } });
+async function fetchHead(request: APIRequestContext, path: string, userAgent = SLACKBOT) {
+  const response = await request.get(`${APP_URL}${path}`, { headers: { 'User-Agent': userAgent } });
   expect(response.status(), path).toBe(200);
   const html = await response.text();
   const head = html.slice(0, html.indexOf('</head>'));
@@ -29,7 +28,7 @@ async function fetchHead(request: APIRequestContext, path: string) {
 }
 
 test('a shared public template unfurls with its own title and a PNG card', async ({ request }) => {
-  const head = await fetchHead(request, '/link-preview/profile/serp/ultimate-camping-checklist?utm_source=slack');
+  const head = await fetchHead(request, '/profile/serp/ultimate-camping-checklist?utm_source=slack');
 
   expect(head.title).toBe('Ultimate Camping Checklist | SERP Lists');
   expect(head.meta('og:title')).toEqual(['Ultimate Camping Checklist | SERP Lists']);
@@ -40,40 +39,46 @@ test('a shared public template unfurls with its own title and a PNG card', async
   expect(head.canonical).toEqual(['https://serplists.com/profile/serp/ultimate-camping-checklist']);
   expect(head.meta('og:image')).toEqual(['https://serplists.com/og-default.png']);
 
-  const image = await request.get(`${API_ORIGIN}/og-default.png`);
+  const image = await request.get(`${APP_URL}/og-default.png`);
   expect(image.status()).toBe(200);
   expect(image.headers()['content-type']).toContain('image/png');
 });
 
 test('category and library links unfurl with their own titles', async ({ request }) => {
-  expect((await fetchHead(request, '/link-preview/categories/outdoor')).title).toBe('outdoor Templates | SERP Lists');
-  expect((await fetchHead(request, '/link-preview/categories/business')).title).toBe('Business &amp; Operations Templates | SERP Lists');
-  expect((await fetchHead(request, '/link-preview/categories')).title).toBe('Browse Template Categories | SERP Lists');
-  expect((await fetchHead(request, '/link-preview/templates')).title).toBe('Discover Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories/outdoor')).title).toBe('outdoor Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories/business')).title).toBe('Business &amp; Operations Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories')).title).toBe('Browse Template Categories | SERP Lists');
+  expect((await fetchHead(request, '/templates')).title).toBe('Discover Templates | SERP Lists');
 });
 
-test('an unknown template keeps the generic tags', async ({ request }) => {
+// The server answers what the page shows: not found, out of search, and no canonical URL,
+// since the address is not a page.
+test('an unknown template unfurls as not found', async ({ request }) => {
   // e2e-unseeded-template: no Template has this slug.
-  const head = await fetchHead(request, '/link-preview/profile/serp/no-such-template-anywhere');
+  const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere');
 
-  expect(head.title).toBe('SERP Lists');
+  expect(head.title).toBe('Template not found | SERP Lists');
+  expect(head.meta('robots')).toEqual(['noindex, nofollow']);
   expect(head.canonical).toEqual([]);
 });
 
-// Every page load by a person used to run a Function (billed as a Workers request) just to
-// fill in tags only bots read. The public paths are static again; the tags come only through
-// the rewrite to /link-preview/.
-test('public pages are served as the static app page, without the preview function', async ({ request }) => {
+test('people get the same tags as link-preview crawlers', async ({ request }) => {
   for (const path of ['/profile/serp/ultimate-camping-checklist', '/categories/outdoor', '/categories', '/templates']) {
-    const head = await fetchHead(request, path);
-    expect(head.title, path).toBe('SERP Lists');
-    expect(head.canonical, path).toEqual([]);
+    const forPeople = await fetchHead(request, path, BROWSER);
+    const forCrawlers = await fetchHead(request, path);
+    expect(forPeople.title, path).toBe(forCrawlers.title);
+    expect(forPeople.title, path).not.toBe('SERP Lists');
+    expect(forPeople.canonical, path).toEqual(forCrawlers.canonical);
   }
 });
 
-test('the category sitemap still answers next to the category pages', async ({ request }) => {
-  const response = await request.get(`${API_ORIGIN}/categories/sitemap.xml`, { maxRedirects: 0 });
+test('the category sitemap still answers next to the category pages, page included', async ({ request }) => {
+  const response = await request.get(`${APP_URL}/categories/sitemap.xml`, { maxRedirects: 0 });
 
   expect(response.status()).toBe(308);
   expect(response.headers().location).toBe('https://serplists.com/sitemaps/categories/1.xml');
+
+  const second = await request.get(`${APP_URL}/categories/sitemap.xml?page=2`, { maxRedirects: 0 });
+  expect(second.status()).toBe(308);
+  expect(second.headers().location).toBe('https://serplists.com/sitemaps/categories/2.xml');
 });

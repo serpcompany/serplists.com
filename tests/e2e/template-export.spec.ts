@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // Each export reads every Template in the context, plus every public one when asked, so
 // a double click on Export Portable Pack must send one request and download one file
@@ -6,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

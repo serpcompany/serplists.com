@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
+import { API_BASE_URL as apiBaseUrl } from './support/stack';
+import { fillSignInForm } from './support/sign-in';
+
 const protocolVersion = '2025-06-18';
 
 test.use({ screenshot: 'off', trace: 'off', video: 'off' });
@@ -36,7 +38,7 @@ async function mcpRequest(
 
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,
@@ -156,7 +158,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
 
 test('a Run Key created while the key list is still loading shows in the list', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,

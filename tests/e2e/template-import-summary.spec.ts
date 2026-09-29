@@ -1,10 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { apiRequest } from "./support/api-requests";
+import { fillSignInForm } from "./support/sign-in";
 
 async function signInAsAdmin(page: Page) {
   await page.goto("/login");
-  await page.getByRole("button", { name: /fill admin/i }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard\/settings/);
 }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // Sign out leaves the app only once the server has ended the session. A failed sign-out
 // (429 from the auth rate limit, a 5xx, or a dropped connection) keeps the user signed in and
@@ -10,7 +11,7 @@ async function openAccountMenu(page: Page) {
 
 test('a failed sign-out keeps the user signed in, and a later one signs them out for good', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

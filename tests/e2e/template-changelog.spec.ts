@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Share, archive and restore create no template version, only an audit event; the
 // Changelog must still show them (src/features/template-detail/templateHistoryTimeline.ts).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

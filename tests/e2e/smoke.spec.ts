@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { API_BASE_URL, APP_URL } from "./support/stack";
 import { readFileSync } from "node:fs";
 import { validateXML } from "xmllint-wasm";
 
@@ -134,9 +135,7 @@ test("@smoke removed docs prototype renders the public not-found page", async ({
 });
 
 test("@smoke public document installs the configured Google Tag Manager container", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
+  const pagesOrigin = new URL(APP_URL).origin;
   const response = await request.get(`${pagesOrigin}/`);
   const html = await response.text();
   const csp = response.headers()["content-security-policy"] ?? "";
@@ -157,7 +156,7 @@ test("@smoke public document installs the configured Google Tag Manager containe
 });
 
 test("@smoke authenticated template API returns the seeded private template", async ({ request }) => {
-  const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+  const apiBaseUrl = API_BASE_URL;
   const signInResponse = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
     data: {
       email: "admin@test.com",
@@ -190,9 +189,7 @@ test("@smoke authenticated template API returns the seeded private template", as
 });
 
 test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
+  const pagesOrigin = new URL(APP_URL).origin;
   const indexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
   const indexXml = await indexResponse.text();
   const childLocations = Array.from(
@@ -303,11 +300,17 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
-  // Pages the index never listed are refused before any build, and not cached.
+  // Pages the index never listed are refused before any build, and not cached. The route
+  // answers `no-store`; OpenNext sends every 404 as "private, no-cache, no-store, ...".
   for (const unpublished of ["profiles/999999", "templates/2", "templates/999", "categories/2"]) {
     const unpublishedResponse = await request.get(`${pagesOrigin}/sitemaps/${unpublished}.xml`);
     expect(unpublishedResponse.status(), unpublished).toBe(404);
-    expect(unpublishedResponse.headers()["cache-control"], unpublished).toBe("no-store");
+    const directives = (unpublishedResponse.headers()["cache-control"] ?? "").split(",").map((directive) => directive.trim());
+    expect(directives, unpublished).toContain("no-store");
+    expect(
+      directives.filter((directive) => /^(public|immutable|s-maxage=|stale-|max-age=(?!0$))/.test(directive)),
+      unpublished,
+    ).toEqual([]);
   }
   expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
   expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
@@ -328,7 +331,8 @@ test("@smoke protected routes render login after redirect without refresh", asyn
 }) => {
   await page.goto("/dashboard/settings");
 
-  await expect(page).toHaveURL(/\/login$/);
+  // The page it came from travels in ?next= (never in history state).
+  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard%2Fsettings$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();

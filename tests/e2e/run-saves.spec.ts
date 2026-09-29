@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Saves on the run page run one at a time, and a double click counts as one click
 // (src/features/run-execution/saveQueue.ts).
@@ -8,7 +9,7 @@ import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/a
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   // Signing in lands on Account Settings: let its requests finish before the test calls

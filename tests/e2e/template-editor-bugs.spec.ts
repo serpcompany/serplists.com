@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { apiJson, apiRequest } from "./support/api-requests";
+import { fillSignInForm } from "./support/sign-in";
 
 const PASSWORD = "Aa!template-editor-password-12345";
 
@@ -25,7 +26,7 @@ async function registerAccount(page: Page) {
 // Admin is a Pro persona created by `seed-test`, which the isolated e2e database runs.
 async function loginAsSeedUser(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,

@@ -1,13 +1,14 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // A failed list request must show an error with Retry, never the "nothing here" empty state,
 // and Retry must load the list (docs/FRONTEND.md).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

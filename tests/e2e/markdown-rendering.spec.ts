@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // Markdown task text is wrapped in `prose prose-sm` (src/components/shared/MarkdownBlock.tsx).
 // Without the typography plugin, Preflight leaves lists without markers, headings at body
@@ -19,7 +20,7 @@ const MARKDOWN = [
 
 async function openEditorPreview(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

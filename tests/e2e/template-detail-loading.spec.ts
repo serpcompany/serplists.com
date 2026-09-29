@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm, type TestUser } from './support/sign-in';
 
 // Template detail pages load their template once. Re-renders from auth, context, list, or
 // mutation state must not refetch it or swap the page for its loading spinner, which would
@@ -9,9 +10,9 @@ import { apiJson } from './support/api-requests';
 const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
-async function login(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
+async function login(page: Page, user: TestUser) {
   await page.goto('/login');
-  await page.getByRole('button', { name: fillButton }).click();
+  await fillSignInForm(page, user);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
@@ -26,7 +27,7 @@ function countRequests(page: Page, matches: (url: URL) => boolean) {
 
 for (const signedIn of [false, true]) {
   test(`a public template page fetches its template once on a direct visit (${signedIn ? 'signed in' : 'signed out'})`, async ({ page }) => {
-    if (signedIn) await login(page, 'Fill Admin');
+    if (signedIn) await login(page, 'admin');
     const requests = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/slug/${PUBLIC_TEMPLATE_SLUG}`));
 
     await page.goto(PUBLIC_TEMPLATE_PATH);
@@ -38,7 +39,7 @@ for (const signedIn of [false, true]) {
 }
 
 test('the Start Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
-  await login(page, 'Fill John');
+  await login(page, 'john');
   const { id: templateId } = await apiJson<{ id: string }>(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`);
 
   // Another owner's template is not in John's lists, so the page fetches it by id.

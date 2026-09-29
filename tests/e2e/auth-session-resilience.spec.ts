@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // A failed session check (5xx, 429, network) is not a sign-out: the user keeps their page and
 // their stored Organization, and gets a retry instead of /login (src/contexts/authSession.ts).
@@ -73,7 +74,7 @@ test('a failing session check keeps the page and the Organization, then recovers
 // a retry, against the real API.
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
@@ -107,7 +108,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   expect(rejected).toBe(1);
   // Once the retried check confirms the session, /dashboard forwards a signed-in user to
-  // their Templates (src/appRoutes.tsx), never to /login.
+  // their Templates (a redirect in next.config.ts), never to /login.
   expect(new URL(page.url()).pathname).toBe('/dashboard/templates');
   expect(loginNavigations).toEqual([]);
 });
@@ -124,10 +125,11 @@ test('a session check that keeps failing offers a retry instead of the login pag
     await route.continue();
   });
 
+  // The server sends /dashboard to My Templates (next.config.ts); the tab stays there.
   await page.goto('/dashboard');
   const retry = page.getByRole('button', { name: 'Retry' });
   await expect(retry).toBeVisible({ timeout: 30_000 });
-  expect(new URL(page.url()).pathname).toBe('/dashboard');
+  expect(new URL(page.url()).pathname).toBe('/dashboard/templates');
 
   failing = false;
   await retry.click();

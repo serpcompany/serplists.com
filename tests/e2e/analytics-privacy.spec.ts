@@ -18,8 +18,12 @@ async function recordTagRequests(page: Page): Promise<string[]> {
   return requests;
 }
 
+// The root layout runs the Tag Manager bootstrap while the browser parses the page, so the
+// page has had every chance to load the container once it has loaded and its requests have
+// settled.
 async function waitForApp(page: Page) {
-  await expect(page.locator('#boot-splash')).toHaveCount(0);
+  await page.waitForLoadState('load');
+  await page.waitForLoadState('networkidle');
 }
 
 const SENSITIVE_PAGES = [

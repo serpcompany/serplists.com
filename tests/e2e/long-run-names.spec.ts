@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // A template title may use the whole 160-character limit that run titles share, so the
 // default run name shortens the title instead of failing (src/lib/runs/runName.ts).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

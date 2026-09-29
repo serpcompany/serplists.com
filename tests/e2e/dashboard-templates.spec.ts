@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // My Templates is the main place runs start (the dashboard's "Start a new run" links here).
 
@@ -9,7 +10,7 @@ const RUN_LIMIT_MESSAGE =
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

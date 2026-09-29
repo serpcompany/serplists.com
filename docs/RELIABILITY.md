@@ -20,7 +20,7 @@ migrations, backups, and R2 storage are in
 | Pre-commit hook | Secret scan and ESLint on staged files |
 | Pre-push hook | `pnpm run verify` |
 | `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, architecture, generated artifacts), unit tests |
-| CI Quality Gate | `verify` steps plus local D1 fixture tests, build, and browser tests: smoke on every PR, the full suite on PRs into `main` |
+| CI Quality Gate | `verify` steps plus local D1 fixture tests, the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
@@ -33,9 +33,13 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 ## Deploy pipeline
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main` and
-`staging`. On pushes (or a manual run with "deploy" checked), its deploy job calls
-the reusable `.github/workflows/cloudflare-pages-deploy.yml` after both check jobs
-pass. The deploy workflow:
+`staging`, and deploys nothing while the app moves to Next.js on Workers: the app now
+builds for Workers through OpenNext, so `pnpm run build` no longer makes the `./dist`
+that Pages deployed. `.github/workflows/cloudflare-pages-deploy.yml` has no caller, and
+its first step fails, so it cannot publish a broken Pages deployment
+(`tests/unit/workflows/cloudflare-pages-deploy.test.ts`). The Workers deploy replaces it
+at launch ([Next.js migration](exec-plans/active/nextjs-migration.md), phase 4) and keeps
+its release checks. Until then, the Pages deploy workflow did this:
 
 1. validates the env contract with a placeholder `BETTER_AUTH_SECRET` (the real
    secret lives only in Cloudflare Pages)
@@ -61,9 +65,9 @@ Cloudflare Pages settings:
   `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
 - Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
 - Only `serplists.com` may be indexed. `next.config.ts` sends
-  `X-Robots-Tag: noindex, nofollow` with every page and API response on
-  `staging.serplists.com` and every `*.workers.dev` host, and `public/_headers` does the
-  same for their static files. Page metadata points canonical links at
+  `X-Robots-Tag: noindex, nofollow` with every page and API response on every other host
+  (`staging.serplists.com`, every `*.workers.dev` host, a local server), and
+  `public/_headers` does the same for the static files of staging and `*.workers.dev`. Page metadata points canonical links at
   `https://serplists.com` (`src/lib/seo/pageMetadata.ts`). Leave robots.txt crawlable on
   those hosts: a `Disallow` would hide the noindex from crawlers.
 - GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
@@ -74,10 +78,9 @@ Cloudflare Pages settings:
 - Keep `actions/checkout` and `actions/setup-node` on v5 or newer. Node is pinned
   to 22 in both workflows.
 
-To deploy by hand (rarely needed): `pnpm run build`, then
-`npx wrangler pages deploy ./dist --project-name serplists-com`. Never deploy a
-`build:dev` bundle. `build` ignores `.dev.vars` and refuses a localhost
-`VITE_API_URL`, so a local API URL cannot ship.
+There is no deploy by hand until the Workers deploy exists. `pnpm run build` refuses a
+localhost `NEXT_PUBLIC_API_URL` (unless `ALLOW_LOCAL_API_URL=1`), so a local API URL
+cannot ship.
 
 ## Observability
 
@@ -150,30 +153,40 @@ Common failures:
 ## Testing conventions
 
 - Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
-- Smoke and e2e suites run against local workers or dedicated staging, never
-  production. They use an isolated stack: frontend `localhost:4173`, API
-  `localhost:8788`, and D1 state in `.wrangler/smoke-state`. Keep both on the
-  `localhost` host name; mixing `127.0.0.1` drops `SameSite=Lax` cookies.
-  `tests/e2e/run-smoke.mjs` seeds the same directory the API server runs on
-  (`PLAYWRIGHT_WRANGLER_PERSIST_TO`) whatever ports or URLs you preset, and a
-  preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
-  other than `.wrangler/state`. It stops if a local `VITE_API_URL` or
-  `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
-  nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
-- Pages on the local stack carry the production robots tags: the `X-Robots-Tag` noindex
-  covers only staging and `*.workers.dev` hosts.
+- Smoke and e2e suites run against the production build on a local worker, or dedicated
+  staging, never production. `tests/e2e/run-smoke.mjs` builds the app with OpenNext
+  (skip with `-- --skip-build`), and Playwright's web server
+  (`tests/e2e/preview-server.mjs`) serves it with `opennextjs-cloudflare preview`
+  (workerd) on one origin for the pages and the API: `localhost:4173`, or the next free
+  port, with D1 state in `.wrangler/smoke-state`. Keep the `localhost` host name;
+  mixing `127.0.0.1` drops `SameSite=Lax` cookies. The runner seeds the same directory
+  the preview runs on (`PLAYWRIGHT_WRANGLER_PERSIST_TO`) whatever port or URL you preset,
+  and a preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
+  other than `.wrangler/state`. It stops if `PLAYWRIGHT_API_URL` is not on the app's
+  origin, and seeds nothing for a remote app or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
+- The production build has no dev helpers: specs sign in with `fillSignInForm()` from
+  `tests/e2e/support/sign-in.ts` (the login page's Fill buttons exist only in
+  `next dev`), and move inside the app without a reload with `navigateInApp()` from
+  `tests/e2e/support/navigation.ts` (Next.js's router; a synthetic `pushState` only
+  changes the URL).
+- Pages on the local stack carry the production robots tags in their HTML; like every host
+  but `serplists.com`, it also answers with `X-Robots-Tag: noindex, nofollow`.
   A spec that checks a page's own robots rule loads the page as
   `https://serplists.com` with `serveLocalAppAsProduction` in
   `tests/e2e/route-structure.spec.ts`: Playwright answers that origin from the local
-  wrangler Pages server (built app, page functions and API) and aborts every other
-  request, so nothing reaches production or analytics.
-- e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
+  preview (the built app, its pages and API) and aborts every other request, so nothing
+  reaches production or analytics. A page can carry two robots tags, its server
+  metadata's and the one it adds in the browser (`NoIndexMeta`), so `expectRobots` there
+  checks every one.
+- Browser tests run on one Playwright worker (`playwright.config.ts`): e2e specs share
+  one database (TD-11), and one workerd process renders every page and every link
+  prefetch, so parallel browsers only queue up behind each other there.
 - That database holds only what `seed-test` creates (`db/seeds/local.ts`), plus the
   Templates bundled in `src/data`. A spec that opens `/profile/<user>/<slug>` uses one
   of those or creates its own Template; `tests/unit/e2e/seeded-template-paths.test.ts`
   fails on any other literal path unless an `e2e-unseeded-template:` comment says it
   is missing on purpose.
-- The local API runs on workerd (wrangler's dev server), which closes a keep-alive
+- The local app runs on workerd (wrangler's dev server, under the preview), which closes a keep-alive
   connection that has been idle for 5 seconds; a request sent on it at that moment is
   lost. Playwright's request client (`page.request`, the `request` fixture,
   `route.fetch`) keeps idle connections with no limit of its own, so its request
@@ -206,7 +219,7 @@ Common failures:
 - Handler tests assert the public contract, not incidental query order. Request
   the legacy template backup explicitly with `?format=backup`; the default export
   is portable.
-- Pages Function unit tests mock `drizzle-orm/d1` at the adapter boundary with
+- API handler unit tests mock `drizzle-orm/d1` at the adapter boundary with
   `vi.hoisted` chains and keep real schema and query expressions. Call
   `vi.clearAllMocks()` in `beforeEach()` when hoisted chains are reused.
 

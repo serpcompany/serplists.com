@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Creating a run share link and copying it are separate steps: the link is always shown
 // in a dialog, and a refused clipboard write (Safari after an awaited request, denied
@@ -11,7 +12,7 @@ const SHARE_URL = /\/share\/[0-9a-f-]{36}$/;
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   // Signing in lands on Account Settings: let its requests finish before the test calls

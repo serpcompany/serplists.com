@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Share on a template detail page left open must not hand out a dead public link when the
 // template was made private or given a new slug elsewhere (another tab, device, or an
@@ -10,7 +11,7 @@ const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try 
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

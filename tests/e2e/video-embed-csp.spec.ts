@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-// The Vite dev server never applies public/_headers, where the
-// Content-Security-Policy lives, so load the page from the wrangler Pages origin.
-const pagesOrigin = new URL(
-  process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api',
-).origin;
+import { APP_URL } from './support/stack';
+
+// The Content-Security-Policy comes with every page from next.config.ts
+// (src/lib/http/securityHeaders.ts), as it does in production.
+const pagesOrigin = new URL(APP_URL).origin;
 
 type ViolationWindow = Window & { __cspViolations?: string[] };
 

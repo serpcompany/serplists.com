@@ -3,77 +3,85 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   assertSmokePersistPath,
-  needsOpenPorts,
+  buildPreviewArgs,
+  E2E_AUTH_SECRET,
+  needsOpenPort,
   resolveSmokeEnv,
   SMOKE_PERSIST_PATH,
 } from '../../e2e/run-smoke-lib.mjs';
 
 // run-smoke.mjs used to set PLAYWRIGHT_WRANGLER_PERSIST_TO only when it picked the
 // ports itself. With any port or URL preset it still wiped and seeded
-// .wrangler/smoke-state, but Playwright's API server ran on the default
-// .wrangler/state: the developer's own local D1.
+// .wrangler/smoke-state, but Playwright's server ran on the default .wrangler/state:
+// the developer's own local D1.
 
 const repoRoot = path.resolve('/repo');
-const openPorts = { frontendPort: 4180, apiPort: 8795 };
+const openPort = 4180;
 
 type Env = Record<string, string | undefined>;
 
 function resolve(processEnv: Env) {
-  return resolveSmokeEnv(processEnv, { openPorts: needsOpenPorts(processEnv) ? openPorts : null, repoRoot });
+  return resolveSmokeEnv(processEnv, { openPort: needsOpenPort(processEnv) ? openPort : null, repoRoot });
 }
 
 describe('resolveSmokeEnv', () => {
   it.each<[string, Env]>([
     ['nothing preset', {}],
-    ['VITE_API_URL', { VITE_API_URL: 'http://localhost:8788/api' }],
-    ['PLAYWRIGHT_API_PORT', { PLAYWRIGHT_API_PORT: '8790' }],
-    ['PLAYWRIGHT_FRONTEND_PORT', { PLAYWRIGHT_FRONTEND_PORT: '5173' }],
+    ['PLAYWRIGHT_PORT', { PLAYWRIGHT_PORT: '5173' }],
     ['PLAYWRIGHT_BASE_URL', { PLAYWRIGHT_BASE_URL: 'http://localhost:5173' }],
-    ['PLAYWRIGHT_API_URL', { PLAYWRIGHT_API_URL: 'http://127.0.0.1:8788/api' }],
-    [
-      'every port and URL',
-      {
-        PLAYWRIGHT_BASE_URL: 'http://localhost:5173',
-        PLAYWRIGHT_FRONTEND_PORT: '5173',
-        PLAYWRIGHT_API_PORT: '8790',
-        PLAYWRIGHT_API_URL: 'http://localhost:8790/api',
-        VITE_API_URL: 'http://localhost:8790/api',
-      },
-    ],
-    ['PLAYWRIGHT_REUSE_EXISTING_SERVER=0', { PLAYWRIGHT_REUSE_EXISTING_SERVER: '0', PLAYWRIGHT_API_PORT: '8790' }],
-  ])('runs the API server on the D1 it seeds with %s preset', (_, processEnv) => {
+    ['PLAYWRIGHT_API_URL', { PLAYWRIGHT_API_URL: 'http://localhost:4173/api' }],
+    ['every port and URL', { PLAYWRIGHT_BASE_URL: 'http://localhost:5173', PLAYWRIGHT_PORT: '5173', PLAYWRIGHT_API_URL: 'http://localhost:5173/api' }],
+    ['PLAYWRIGHT_REUSE_EXISTING_SERVER=0', { PLAYWRIGHT_REUSE_EXISTING_SERVER: '0', PLAYWRIGHT_PORT: '5173' }],
+  ])('runs the preview on the D1 it seeds with %s preset', (_, processEnv) => {
     const { env, seedPath } = resolve(processEnv);
 
     expect(seedPath).toBe(SMOKE_PERSIST_PATH);
     expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBe(seedPath);
+    expect(buildPreviewArgs(env)).toEqual(expect.arrayContaining(['--persist-to', seedPath]));
+  });
+
+  it('uses the free port it picked for the pages and the API alike', () => {
+    const { env } = resolve({});
+
+    expect(env.PLAYWRIGHT_BASE_URL).toBe('http://localhost:4180');
+    expect(env.PLAYWRIGHT_API_URL).toBe('http://localhost:4180/api');
+  });
+
+  it('keeps a preset port and puts the API on the same origin', () => {
+    const { env } = resolve({ PLAYWRIGHT_PORT: '5173' });
+
+    expect(env.PLAYWRIGHT_BASE_URL).toBe('http://localhost:5173');
+    expect(env.PLAYWRIGHT_API_URL).toBe('http://localhost:5173/api');
   });
 
   it('seeds and serves a preset persist path inside .wrangler', () => {
-    const custom = path.join('.wrangler', 'my-smoke');
-    const { env, seedPath } = resolve({ PLAYWRIGHT_API_PORT: '8790', PLAYWRIGHT_WRANGLER_PERSIST_TO: custom });
+    const custom = '.wrangler/my-smoke';
+    const { env, seedPath } = resolve({ PLAYWRIGHT_PORT: '5173', PLAYWRIGHT_WRANGLER_PERSIST_TO: custom });
 
     expect(seedPath).toBe(custom);
     expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBe(custom);
   });
 
-  it('neither seeds nor changes the persist path when reusing running servers', () => {
+  it('neither seeds nor changes the persist path when reusing a running server', () => {
     const { env, seedPath } = resolve({ PLAYWRIGHT_REUSE_EXISTING_SERVER: '1' });
 
     expect(seedPath).toBeNull();
     expect(env.PLAYWRIGHT_WRANGLER_PERSIST_TO).toBeUndefined();
   });
 
-  it('does not seed a local D1 for a remote API', () => {
-    const { seedPath, notes } = resolve({ PLAYWRIGHT_API_URL: 'https://staging.serplists.com/api' });
+  it('does not seed a local D1 for a remote app', () => {
+    const { seedPath, notes } = resolve({ PLAYWRIGHT_BASE_URL: 'https://staging.serplists.com' });
 
     expect(seedPath).toBeNull();
     expect(notes.join('\n')).toContain('not local');
   });
 
-  it('refuses an API URL on another local port than the server it starts', () => {
-    expect(() => resolve({ VITE_API_URL: 'http://localhost:9000/api' })).toThrow(/VITE_API_URL.*port 8788/);
-    expect(() => resolve({ PLAYWRIGHT_API_PORT: '8790', PLAYWRIGHT_API_URL: 'http://localhost:8788/api' })).toThrow(
-      /PLAYWRIGHT_API_URL.*port 8790/,
+  it('refuses an API URL off the app origin', () => {
+    expect(() => resolve({ PLAYWRIGHT_API_URL: 'http://localhost:8788/api' })).toThrow(
+      /PLAYWRIGHT_API_URL=http:\/\/localhost:8788\/api is not on the app's origin \(http:\/\/localhost:4173\)/,
+    );
+    expect(() => resolve({ PLAYWRIGHT_PORT: '5173', PLAYWRIGHT_API_URL: 'http://localhost:4173/api' })).toThrow(
+      /not on the app's origin/,
     );
   });
 });
@@ -90,6 +98,54 @@ describe('assertSmokePersistPath', () => {
     expect(assertSmokePersistPath(SMOKE_PERSIST_PATH, repoRoot)).toBe(path.join(repoRoot, '.wrangler', 'smoke-state'));
     expect(assertSmokePersistPath('.wrangler/custom-smoke', repoRoot)).toBe(path.join(repoRoot, '.wrangler', 'custom-smoke'));
   });
+
+  // The preview hands it to wrangler through a shell, unquoted.
+  it('refuses a path a shell would split or change', () => {
+    expect(() => assertSmokePersistPath('.wrangler/smoke state', repoRoot)).toThrow(/through a shell/);
+    expect(() => assertSmokePersistPath('.wrangler/smoke&state', repoRoot)).toThrow(/through a shell/);
+  });
+});
+
+describe('buildPreviewArgs', () => {
+  it('serves the build on the app port with the Worker vars that name its origin', () => {
+    expect(
+      buildPreviewArgs({
+        PLAYWRIGHT_BASE_URL: 'http://localhost:4180',
+        PLAYWRIGHT_WRANGLER_PERSIST_TO: '.wrangler/smoke-state',
+        CORS_ALLOWED_ORIGINS: 'https://tools.example.com',
+      }),
+    ).toEqual([
+      'preview',
+      '--port',
+      '4180',
+      '--show-interactive-dev-session=false',
+      '--persist-to',
+      '.wrangler/smoke-state',
+      '--var',
+      'FRONTEND_URL:http://localhost:4180',
+      '--var',
+      'CORS_ALLOWED_ORIGINS:https://tools.example.com,http://localhost:4180',
+      '--var',
+      `BETTER_AUTH_SECRET:${E2E_AUTH_SECRET}`,
+    ]);
+  });
+
+  it("uses the shell's auth secret when it sets one", () => {
+    expect(buildPreviewArgs({ BETTER_AUTH_SECRET: 'ci-build-placeholder-secret-32-chars-minimum' })).toContain(
+      'BETTER_AUTH_SECRET:ci-build-placeholder-secret-32-chars-minimum',
+    );
+  });
+
+  it('refuses a value the shell would change, without printing a secret', () => {
+    const secret = 'se cret&"%PATH%^!';
+
+    expect(() => buildPreviewArgs({ BETTER_AUTH_SECRET: secret })).toThrow(/BETTER_AUTH_SECRET reaches wrangler through a shell/);
+    try {
+      buildPreviewArgs({ BETTER_AUTH_SECRET: secret });
+    } catch (error) {
+      expect(String(error)).not.toContain('cret');
+    }
+  });
 });
 
 describe('playwright.config.ts', () => {
@@ -98,12 +154,14 @@ describe('playwright.config.ts', () => {
     vi.resetModules();
   });
 
-  it('starts the API server with --persist-to on the seeded path', async () => {
-    vi.stubEnv('PLAYWRIGHT_WRANGLER_PERSIST_TO', path.join('.wrangler', 'smoke state'));
+  it('serves the app from the preview script on the port run-smoke chose', async () => {
+    vi.stubEnv('PLAYWRIGHT_BASE_URL', 'http://localhost:4180');
     const config = (await import('../../../playwright.config')).default;
     const servers = Array.isArray(config.webServer) ? config.webServer : [config.webServer];
-    const api = servers.find((server) => server?.name === 'api');
 
-    expect(api?.command).toContain(`--persist-to "${path.join('.wrangler', 'smoke state')}"`);
+    expect(servers).toHaveLength(1);
+    expect(servers[0]?.command).toBe('node tests/e2e/preview-server.mjs');
+    expect(servers[0]?.url).toBe('http://localhost:4180/api/health');
+    expect(config.use?.baseURL).toBe('http://localhost:4180');
   }, 60_000);
 });

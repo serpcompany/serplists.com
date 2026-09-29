@@ -1,23 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { navigateInApp } from './support/navigation';
+import { fillSignInForm } from './support/sign-in';
 
 // The public template page must show the server's copy, not the catalog another page
 // loaded earlier in the same tab (docs/FRONTEND.md).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-// Navigates inside the app, so in-memory lists survive (no reload).
-async function navigateInApp(page: Page, path: string) {
-  await page.evaluate((nextPath) => {
-    window.history.pushState({}, '', nextPath);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, path);
 }
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {

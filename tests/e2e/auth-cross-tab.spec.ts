@@ -1,14 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { fillSignInForm, type TestUser } from './support/sign-in';
 
 // Every tab shares one session cookie. When another tab signs in as someone else or signs out,
 // an open tab must follow (src/contexts/sessionSync.ts) instead of showing the old user while
 // its requests, and any Template it saves, go to the new one. Tab 1 is never reloaded here.
 
-async function signIn(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
+async function signIn(page: Page, user: TestUser) {
   await page.goto('/login');
-  await page.getByRole('button', { name: fillButton }).click();
+  await fillSignInForm(page, user);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
@@ -39,7 +40,7 @@ test('an open tab follows another tab that signs in as someone else', async ({ c
   test.setTimeout(120_000);
   const tab1 = await context.newPage();
   const tab2 = await context.newPage();
-  await signIn(tab1, 'Fill Admin');
+  await signIn(tab1, 'admin');
   await openSignedInTab(tab1);
 
   // Tab 2 replaces the session cookie with John's without signing out first, then loads the app.
@@ -62,7 +63,7 @@ test('a sign-out in one tab signs the other tab out, and a sign-in brings it bac
   test.setTimeout(120_000);
   const tab1 = await context.newPage();
   const tab2 = await context.newPage();
-  await signIn(tab1, 'Fill Admin');
+  await signIn(tab1, 'admin');
   await openSignedInTab(tab1);
   await openSignedInTab(tab2);
 
@@ -72,7 +73,7 @@ test('a sign-out in one tab signs the other tab out, and a sign-in brings it bac
   await expect(tab1.getByText('Your session ended. Sign in again.')).toBeVisible();
 
   // Tab 1 waits on /login for its original page; John's sign-in in tab 2 takes it there as John.
-  await signIn(tab2, 'Fill John');
+  await signIn(tab2, 'john');
   await tab1.bringToFront();
   await expect(tab1).toHaveURL(/\/dashboard\/templates/, { timeout: 15_000 });
   await expectAccountEmail(tab1, 'john@test.com', 'admin@test.com');

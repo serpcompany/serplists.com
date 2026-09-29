@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // A failed request is not a missing template or user: the page says it could not load
 // and offers a retry (src/features/template-detail/useTemplateDetailModel.ts,
@@ -6,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

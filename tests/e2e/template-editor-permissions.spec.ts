@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // The editor opens its form only for someone who can save the template
 // (src/features/template-editor/templateEditPermission.ts). Seeded data: template-1 is
@@ -6,7 +7,7 @@ import { expect, test } from '@playwright/test';
 
 test("another user's public template opens as a read-only notice, not the editor", async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   const templateWrites: string[] = [];
@@ -30,7 +31,7 @@ test("another user's public template opens as a read-only notice, not the editor
 
 test('the owner still gets the editor for their template', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

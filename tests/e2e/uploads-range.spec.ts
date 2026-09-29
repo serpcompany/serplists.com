@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
 
+import { API_BASE_URL as apiBaseUrl } from './support/stack';
+
 // Uploaded videos are served with byte ranges (functions/api/utils/r2-file-response.ts),
 // which Safari needs to play them and every browser needs to seek. This runs against
 // Miniflare's real R2 binding, so it also catches misuse of the R2 range options.
-
-const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 test('an uploaded video answers byte-range requests with 206', async ({ request }) => {
   const signIn = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {

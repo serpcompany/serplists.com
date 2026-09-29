@@ -1,16 +1,17 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 
 /**
- * SEOHead noindexes every host but serplists.com (src/lib/seo/siteOrigin.ts), so a
- * page's own robots rule only shows on the production host. This serves the local
- * wrangler Pages server (the built app, its page functions and the API, all on one
- * origin like production) as https://serplists.com, and aborts every other request
- * (analytics, fonts), so nothing reaches the real site or reports a visit to it.
- * Register page mocks after this, so they answer first.
+ * Pages noindex every host but serplists.com (src/lib/seo/siteOrigin.ts), so a page's own
+ * robots rule only shows on the production host. This serves the local preview (the built
+ * app, its pages and the API, all on one origin like production) as
+ * https://serplists.com, and aborts every other request (analytics, fonts), so nothing
+ * reaches the real site or reports a visit to it. Register page mocks after this, so they
+ * answer first.
  */
 async function serveLocalAppAsProduction(page: Page) {
   const pagesOrigin = new URL(API_BASE_URL).origin;
@@ -24,6 +25,19 @@ async function serveLocalAppAsProduction(page: Page) {
     const localUrl = new URL(`${url.pathname}${url.search}`, pagesOrigin).href;
     await route.fulfill({ response: await route.fetch({ url: localUrl }) });
   });
+}
+
+/**
+ * Expects every robots tag on the page to say `expected`, and at least one. A page can carry
+ * two: its server metadata's and the one it adds in the browser once it knows it has nothing
+ * to show (NoIndexMeta). Search engines apply every tag.
+ */
+async function expectRobots(page: Page, expected: string | RegExp) {
+  const tags = page.locator('meta[name="robots"]');
+  await expect(tags.first()).toHaveAttribute('content', expected);
+  for (const content of await tags.evaluateAll((elements) => elements.map((element) => element.getAttribute('content')))) {
+    expect(content).toMatch(typeof expected === 'string' ? new RegExp(`^${expected}$`) : expected);
+  }
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
@@ -89,7 +103,7 @@ async function mockAuthenticatedRouteApi(page: Page) {
 
 async function signInAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: /fill admin/i }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard\/settings$/, { timeout: 30_000 });
 }
@@ -208,8 +222,9 @@ test.describe('route structure', () => {
   });
 
   test('not-found pages are noindexed and real pages are not', async ({ page }) => {
-    // Pages answers unknown paths with index.html and a 200, so the robots tag is the
-    // only thing that keeps a missing URL out of search results.
+    // Some missing URLs (an unknown category or feature) render the not-found view from a
+    // page that exists, with a 200, so the robots tag is what keeps them out of search
+    // results.
     await serveLocalAppAsProduction(page);
     for (const path of [
       '/definitely-missing',
@@ -220,10 +235,7 @@ test.describe('route structure', () => {
       await expect(
         page.getByRole('heading', { name: 'That page does not exist' }),
       ).toBeVisible();
-      await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-        'content',
-        /noindex/,
-      );
+      await expectRobots(page, /noindex/);
     }
 
     // Each page's own content shows it finished loading before its robots tag is read.
@@ -252,10 +264,7 @@ test.describe('route structure', () => {
       page.getByRole('heading', { exact: true, name: 'Business & Operations' }),
     ).toBeVisible();
     await expect(page.getByText('No public templates in this category yet.')).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'noindex, follow',
-    );
+    await expectRobots(page, 'noindex, follow');
   });
 
   test('shared checklist pages use /share and render noindex,nofollow', async ({
@@ -292,10 +301,7 @@ test.describe('route structure', () => {
     await expect(
       page.getByRole('heading', { level: 1, name: 'Share Route Verification' }),
     ).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'noindex, nofollow',
-    );
+    await expectRobots(page, 'noindex, nofollow');
   });
 
   test('missing public profiles and templates render noindex,nofollow', async ({
@@ -313,10 +319,7 @@ test.describe('route structure', () => {
     await expect(
       page.getByRole('heading', { name: 'User not found' }),
     ).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'noindex, nofollow',
-    );
+    await expectRobots(page, 'noindex, nofollow');
     await expect(page).toHaveTitle(/Profile not found/);
 
     // e2e-unseeded-template: the page for a Template that does not exist.
@@ -324,10 +327,7 @@ test.describe('route structure', () => {
     await expect(
       page.getByRole('heading', { name: 'Template not found' }),
     ).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'noindex, nofollow',
-    );
+    await expectRobots(page, 'noindex, nofollow');
     await expect(page).toHaveTitle(/Template not found/);
   });
 
@@ -339,14 +339,12 @@ test.describe('route structure', () => {
       fulfillJson(route, { error: 'Service unavailable' }, 503),
     );
 
-    // e2e-unseeded-template: every Template read is answered with a 503 above.
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/route-structure-owner/some-template`);
+    // A seeded public Template, so the server's metadata finds it; the page's own read of
+    // it in the browser is answered with the 503 above.
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/admin/sample-technical-seo-audit-checklist`);
     await expect(
       page.getByRole('heading', { name: 'Unable to load template' }),
     ).toBeVisible();
-    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-      'content',
-      'index, follow',
-    );
+    await expectRobots(page, 'index, follow');
   });
 });

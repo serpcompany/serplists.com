@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // The visibility switch sends the version of the template the page shows. When someone else
 // saved the template meanwhile, the server answers 409 edit_conflict. The page reloads the
@@ -8,7 +9,7 @@ import { apiRequest } from './support/api-requests';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }

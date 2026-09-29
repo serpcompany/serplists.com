@@ -1,21 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { navigateInApp } from './support/navigation';
+import { fillSignInForm } from './support/sign-in';
 
 // My Templates merges the user's own list with the cached public catalog (docs/FRONTEND.md).
 // A Template deleted after a page loaded the catalog must leave My Templates at once, without
 // a reload, even though the catalog copy is still cached.
 
-async function navigateInApp(page: Page, path: string) {
-  await page.evaluate((to) => {
-    window.history.pushState({}, '', to);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-  }, path);
-}
-
 test('a deleted public template leaves My Templates after the catalog was loaded', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 
@@ -58,7 +53,7 @@ test('a deleted public template leaves My Templates after the catalog was loaded
 // the next library visit would bring the deleted Template back.
 test('a deleted public template stays off the library while the edge still serves the old catalog', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

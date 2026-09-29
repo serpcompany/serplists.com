@@ -15,7 +15,8 @@ test('resets the title when navigating to a page without its own title', async (
   await page.goto('/templates');
   await expect(page).toHaveTitle('Discover Templates | SERP Lists');
 
-  // A header link navigates client-side; page.goto would reload index.html and hide the bug.
+  // A header link navigates client-side; page.goto would load the page from the server and
+  // hide the bug.
   await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
 
   await expect(page).toHaveURL(/\/pricing$/);

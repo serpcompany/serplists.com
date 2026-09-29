@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// index.html's static description, Open Graph and Twitter tags are handed to
-// react-helmet-async (data-rh), so a page's SEOHead replaces them instead of adding a
-// second copy after them, and leaving that page restores the site defaults.
+// The root layout's description, Open Graph and Twitter tags are the defaults a page's own
+// metadata replaces by name (Next.js's Metadata API), so a page never shows two copies,
+// and leaving that page for one without its own restores the site defaults.
 
 test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -40,7 +40,7 @@ test('leaving an SEO page restores the site defaults once', async ({ page }) => 
   await expect(page).toHaveTitle('Discover Templates | SERP Lists');
   await expectOneOfEachTag(page);
 
-  // A header link navigates client-side; page.goto would reload index.html.
+  // A header link navigates client-side; page.goto would load the page from the server.
   await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
   await expect(page).toHaveURL(/\/pricing$/);
   await expect(page).toHaveTitle('SERP Lists');
@@ -50,5 +50,8 @@ test('leaving an SEO page restores the site defaults once', async ({ page }) => 
     'content',
     'Create and run checklists for your processes.',
   );
-  await expect(page.locator('meta[name="twitter:title"]')).toHaveCount(0);
+  // Next.js gives every page a Twitter title, from the site's own title by default: one tag,
+  // and never the page's that was left.
+  await expect(page.locator('meta[name="twitter:title"]')).toHaveCount(1);
+  await expect(page.locator('meta[name="twitter:title"]')).toHaveAttribute('content', 'SERP Lists');
 });

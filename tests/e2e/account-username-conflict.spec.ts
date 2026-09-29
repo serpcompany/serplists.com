@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { fillSignInForm } from './support/sign-in';
 
 // Choosing a username another account already has must say so, not fail with
 // a bare 500 and "Failed to update profile" (functions/api/utils/username-conflict.ts).
 test('saving another account username shows it is already taken', async ({ page }) => {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

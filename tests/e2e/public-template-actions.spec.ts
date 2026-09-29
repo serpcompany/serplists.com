@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
+import { fillSignInForm } from './support/sign-in';
 
 // Start Run and Save on a public template page act once per click intent
 // (src/views/PublicTemplate.tsx, src/components/template/PublicTemplateView.tsx).
@@ -9,7 +10,7 @@ const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
+  await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
@@ -71,7 +72,7 @@ test('a failed Save keeps the Save button instead of showing Saved', async ({ pa
 test('a Free Personal user sees that Save leads to an upgrade', async ({ page }) => {
   // John has no Personal Pro plan; copying into Personal is a Pro feature.
   await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill John' }).click();
+  await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   let checkouts = 0;

@@ -1,8 +1,11 @@
 # Development Environment
 
 Every clone or git worktree runs its own isolated stack: local D1 state lives in
-that checkout's `.wrangler/`, and the launcher picks a free port pair. Requirements:
-Node.js 22 and pnpm 9 (Wrangler is a dev dependency).
+that checkout's `.wrangler/`, and the launcher picks a free port. The app is one Next.js
+server: the pages and the API (`src/app/api/[[...route]]/route.ts`) share an origin, and
+the Cloudflare bindings (D1, R2, vars) come from `wrangler.toml` and `.dev.vars` through
+`getCloudflareContext()`. Requirements: Node.js 22 and pnpm 9 (Wrangler is a dev
+dependency).
 
 ## Set up
 
@@ -14,8 +17,8 @@ pnpm run setup      # safe to re-run
 `setup` creates `.dev.vars` from `.dev.vars.example` with a generated
 `BETTER_AUTH_SECRET` and optional integrations commented out (never overwriting an
 existing file), creates local D1 if the checkout has none (otherwise applies pending
-migrations), seeds whatever seed data is missing, installs the Playwright browser,
-and builds `dist/` if it is missing. The seed decision comes from the database, not
+migrations), seeds whatever seed data is missing, and installs the Playwright browser.
+The seed decision comes from the database, not
 its directory: `tsx scripts/data/local-d1-data.ts seed-status` reports whether the
 test data, the official Templates and the official login are there, and setup runs
 only the missing stages, so a seed that failed or was interrupted is finished on the
@@ -24,52 +27,56 @@ Templates got `sample-` slugs has test Templates holding four official Templates
 slugs, so those official Templates are missing; setup renames the test Templates'
 slugs in place first (the `repair-test-slugs` stage) and then seeds them. Setup fails,
 without printing the sign-in hint, if a seed stage fails (the error names the stage
-and how to recover) or seed data is still missing afterwards. `.dev.vars` is the only local env file; variables are listed in
-[SECURITY.md](../SECURITY.md#secrets-and-environment). The client reads `VITE_*`
-variables through `src/env.ts`; `VITE_API_URL` overrides the dev API base
-(`http://localhost:8788/api`; `/api` when deployed). `pnpm run build` (the
-deployable build) does not read `.dev.vars` and fails if `VITE_API_URL` points at a
-loopback host, from the shell or any `.env` file (`scripts/lib/buildEnv.ts`);
-`pnpm run build:dev` still reads `.dev.vars` for local bundles. At runtime,
-`src/lib/apiBaseUrl.ts` also ignores a loopback `VITE_API_URL` unless the page itself
-is served from a loopback host.
+and how to recover) or seed data is still missing afterwards.
+
+`.dev.vars` is the only local env file; variables are listed in
+[SECURITY.md](../SECURITY.md#secrets-and-environment). The server reads it as Worker
+vars: `next dev` through `initOpenNextCloudflareForDev()` in `next.config.ts`, the preview
+through `wrangler dev`. The pages read `NEXT_PUBLIC_*` variables through `src/env.ts`,
+which Next.js inlines when it builds or serves them: `pnpm run dev:all` hands `.dev.vars`
+to `next dev`, and a build takes them from its shell. Pages call the API on their own
+origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another API. A build refuses a
+loopback `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`) unless
+`ALLOW_LOCAL_API_URL=1`, and at runtime `src/lib/apiBaseUrl.ts` ignores one unless the
+page itself is served from a loopback host. After changing `wrangler.toml` or the variable
+names in `.dev.vars`, `pnpm run cf-typegen` regenerates `cloudflare-env.d.ts`.
 
 ## Run
 
 ```bash
-pnpm run dev:all    # frontend + API (dev:auto is an alias)
-pnpm run dev        # frontend only (Vite)
-pnpm run dev:api    # API only (Pages Functions, serves dist/)
-pnpm run dev:stop   # stop them, including child processes
+pnpm run dev:all    # the app and its API on a free port (dev:api and dev:auto are aliases)
+pnpm run dev:stop   # stop it, including child processes
+pnpm run dev        # plain `next dev` on port 3000, without the launcher
+pnpm run preview    # build with OpenNext and serve the Worker in workerd, as deployed
 ```
 
-The frontend and API move together as a port pair, preferring `8080` and `8788`.
-A port counts as free only when nothing accepts a connection on `127.0.0.1` or `::1`
-and it binds on `127.0.0.1`, `::1`, `0.0.0.0` and `::` in turn (`isPortAvailable` in
+`dev:all` runs `next dev` on port `3000`, or the next free port. A port counts as free
+only when nothing accepts a connection on `127.0.0.1` or `::1` and it binds on
+`127.0.0.1`, `::1`, `0.0.0.0` and `::` in turn (`isPortAvailable` in
 `scripts/dev-auto-lib.mjs`): on Windows a bind to one address succeeds while another
-process holds the port on a different one, which is how Vite and Wrangler listen. The
-smoke runner and the Stripe listener's predicted target pick ports the same way.
-The chosen URLs are printed and saved in `tmp/dev-session.json`, and the launcher
-updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and `VITE_API_URL` together
-(do not hand-edit one side; auth origins and CORS must match). Use
-`pnpm run dev:stop` to stop: killing only the parent process leaves Vite and
-Wrangler running on Windows and holding the ports.
+process holds the port on a different one. The smoke runner and the Stripe listener's
+predicted target pick ports the same way. The URL is printed and saved in
+`tmp/dev-session.json`. The Worker vars that name the server cannot come from
+`.dev.vars`, since the port is picked at start: the launcher passes `FRONTEND_URL` (the
+server's origin), `CORS_ALLOWED_ORIGINS` (the configured origins plus that one) and the
+auth secret to `next dev` in `SERPLISTS_DEV_BINDINGS`, and `next.config.ts` sets them
+over the bindings (`scripts/lib/dev-bindings.mjs`), so the API's own links (Stripe
+returns, invites) come back to this server. Use `pnpm run dev:stop` to stop: killing only
+the launcher leaves Next.js and workerd running on Windows and holding the port.
 
-The session records each launcher's pid with its process start time. A launch or
+The session records the launcher's pid with its process start time. A launch or
 `dev:stop` trusts a recorded pid only while that pid still runs
 `scripts/dev-auto.mjs` and started at the recorded time, because the OS reuses the
 pid of a launcher that was killed. So a stale session file never makes `dev:all`
 skip starting, and `dev:stop` never kills an unrelated process: it skips (and
-reports) such pids and always clears the file.
+reports) such a pid and always clears the file. While the recorded launcher runs,
+`dev:all` prints its URL and exits instead of starting a second server.
 
-`dev` and `dev:api` join the pair of any launcher that is still running.
-`dev:all` treats `dev` plus `dev:api` on one pair as the full stack, but refuses
-(exit 1) while only one of them is running: a second pair would drop that launcher
-from the session, and `dev:stop` could no longer stop it. Start the missing half
-with the other single-role command, or run `dev:stop` first. The launcher never
-writes a session that forgets a launcher that is still running.
+Local servers (`localhost`, `127.0.0.1`) get the Content-Security-Policy without
+`upgrade-insecure-requests` (`next.config.ts`): on plain http the browser would upgrade
+the redirects the app's navigations follow to https, which nothing serves.
 
-Output is mirrored to `tmp/logs/dev-<mode>.log`. API logs are JSON lines with a
+Output is mirrored to `tmp/logs/dev-all.log`. API logs are JSON lines with a
 `requestId` (also the `X-Request-Id` response header):
 
 ```bash
@@ -91,13 +98,13 @@ Seeded users share the password `password123`:
 | `bob@test.com` | Free | |
 | `checklists@serp.co` | Pro | Official `serp` publisher that owns the official Templates |
 
-In development, `/login` has quick-fill buttons and `DevLoginBar` sits at the
-bottom of the app. `pnpm run db:reset:test-user-passwords` restores changed
-passwords. Admin and Jane are Pro only through their seeded overrides, never by
-email address, so a local D1 seeded before those rows existed shows them as Free
-until `pnpm run db:seed`. If sign-in fails, check the API is running, local D1 is seeded, and the
-browser calls the intended API URL. A `429` means the local sign-in rate limit (300
-per hour), not bad credentials.
+In development (`next dev`), `/login` has quick-fill buttons and `DevLoginBar` sits at
+the bottom of the app; production builds (the preview, the browser tests) have neither.
+`pnpm run db:reset:test-user-passwords` restores changed passwords. Admin and Jane are
+Pro only through their seeded overrides, never by email address, so a local D1 seeded
+before those rows existed shows them as Free until `pnpm run db:seed`. If sign-in fails,
+check `tmp/logs/dev-all.log` and that local D1 is seeded. A `429` means the local sign-in
+rate limit (300 per hour), not bad credentials.
 
 ## See the UI
 
@@ -106,7 +113,8 @@ pnpm run ui:snap -- dashboard/templates --login admin@test.com
 pnpm run ui:snap -- templates --mobile
 ```
 
-Saves a full-page screenshot in `tmp/snapshots/` (or at `--out`, which must end in
+Opens the app `dev:all` runs (its port from `tmp/dev-session.json`, else `3000`; the API
+is on the same origin). Saves a full-page screenshot in `tmp/snapshots/` (or at `--out`, which must end in
 `.png`, `.jpg` or `.jpeg`) with the accessibility tree beside it as `<name>.aria.yml`,
 and prints the tree (a readable text outline of the page), console errors, and
 failed requests. Write routes without the leading slash; Git Bash rewrites `/path`
@@ -138,9 +146,17 @@ pnpm run verify           # pre-PR gate
 pnpm run test:run         # unit tests (pnpm run test for watch mode)
 pnpm run test:local-d1    # local D1 fixture integration
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
-pnpm run test:e2e:full    # every browser spec on the same stack, one worker
+pnpm run test:e2e:full    # every browser spec on the same stack
 pnpm run test:coverage
 ```
+
+The browser tests run the production build: `test:smoke` and `test:e2e:full` build it
+with OpenNext, wipe, migrate and seed their own D1 in `.wrangler/smoke-state`, and serve
+the build with `opennextjs-cloudflare preview` (workerd) on a free port from `4173`
+(`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`). Pass `-- --skip-build` to
+reuse the build in `.open-next/` (`pnpm run build:worker`). They run on one Playwright
+worker: one workerd process renders every page and prefetch. `pnpm exec playwright test`
+serves the existing build on your own local D1.
 
 Browser failures keep a trace, video, and screenshot under `tests/test-results/`;
 open a trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure
@@ -160,7 +176,7 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 
 | Area | Scripts |
 | --- | --- |
-| Run | `setup`, `dev`, `dev:api`, `dev:all`, `dev:stop`, `build`, `build:dev`, `preview`, `ui:snap` |
+| Run | `setup`, `dev`, `dev:all`, `dev:api`, `dev:auto`, `dev:stop`, `build`, `build:worker`, `preview`, `cf-typegen`, `ui:snap` |
 | Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `deps:check`, `deps:baseline`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report`, `sre:dup` |
 | Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
 | Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `templates:generate`, `templates:render-markdown`, `docs:references` |
@@ -171,14 +187,16 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 ## Writing scripts
 
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
-`scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dev dependency's bin script
-(wrangler, vite, tsx, concurrently, playwright, drizzle-kit) with the current Node,
+`scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dependency's bin script
+(wrangler, next, opennextjs-cloudflare, tsx, playwright, drizzle-kit) with the current Node,
 and `execPnpm` runs pnpm itself through the pnpm that launched the script. Never
 spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
 shell fails with `ENOENT` (or `EINVAL` for `npx.cmd`), and passing arguments through
 a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values like
 the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
-`npx` or `pnpm` as a command.
+`npx` or `pnpm` as a command. `opennextjs-cloudflare preview` itself hands its extra
+arguments to `wrangler dev` through a shell without quoting them, so the smoke runner
+passes it only plain values (`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`).
 
 ## Line endings
 
