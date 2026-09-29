@@ -7,8 +7,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 // asking the keep-alive (sessionSync.ts). AuthProvider starts it once signed in and stops it
 // on sign-out; without that wiring the session expires while the user is still active.
 
-const { getSession, signOut, startSessionKeepAlive, stopKeepAlive } = vi.hoisted(() => ({
+const { getSession, keepAlive, signOut, startSessionKeepAlive, stopKeepAlive } = vi.hoisted(() => ({
   getSession: vi.fn(),
+  keepAlive: vi.fn(),
   signOut: vi.fn(),
   startSessionKeepAlive: vi.fn(),
   stopKeepAlive: vi.fn(),
@@ -23,12 +24,16 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-// The real session sync, without the browser listeners (there is no DOM here), and with the
-// keep-alive starter observed.
+// The real session sync, without the browser listeners (there is no DOM here), with its
+// keepAlive replaced by a spy and the keep-alive starter observed.
 vi.mock('@/contexts/sessionSync', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/contexts/sessionSync')>();
   return {
     ...actual,
+    createSessionSync: (...args: Parameters<typeof actual.createSessionSync>) => ({
+      ...actual.createSessionSync(...args),
+      keepAlive,
+    }),
     browserSessionSyncEnvironment: () => ({
       openChannel: () => null,
       writeStorage: () => {},
@@ -112,8 +117,11 @@ describe('AuthProvider session keep-alive', () => {
     const auth = await mountAuth();
     expect(auth().isAuthenticated).toBe(true);
     expect(startSessionKeepAlive).toHaveBeenCalledTimes(1);
-    const [keepAlive] = startSessionKeepAlive.mock.calls[0];
-    expect(typeof keepAlive).toBe('function');
+    // It is started with the session sync's own keepAlive, which reads the session.
+    expect(startSessionKeepAlive).toHaveBeenCalledWith(keepAlive);
+    const [startedWith] = startSessionKeepAlive.mock.calls[0] as [() => unknown];
+    startedWith();
+    expect(keepAlive).toHaveBeenCalledTimes(1);
     expect(stopKeepAlive).not.toHaveBeenCalled();
 
     await act(async () => {
