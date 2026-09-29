@@ -178,10 +178,10 @@ it moves ports. Do not hand-edit only one side.
 
 ## Secrets in URLs and third-party tags
 
-`index.html` loads the Google Tag Manager container, and its tags read the full page
-URL (GA4 sends it as `page_location`). So:
+The root layout loads the Google Tag Manager container from a script in `<head>`, and its
+tags read the full page URL (GA4 sends it as `page_location`). So:
 
-- The bootstrap in `index.html` skips the container for any document that opens on
+- The bootstrap skips the container for any document that opens on
   `/share/*`, `/team-invites/*` or `/reset-password`, or whose query has a `token`,
   `email`, `code` or `state` parameter, or a `next` return path
   (`src/lib/auth/returnPath.ts`) that points at one of those. The verification email
@@ -215,7 +215,7 @@ in step. `next dev` applies only `next.config.ts`, so check asset headers on
   `tests/unit/security/headers.test.ts` fails when they drift, or when a bundled
   public template video would be blocked.
 - `script-src` lists each third-party script origin by name, never `https:`:
-  Google Tag Manager (`index.html`), the Cloudflare Web Analytics beacon
+  Google Tag Manager (the root layout), the Cloudflare Web Analytics beacon
   (`static.cloudflareinsights.com`, injected by Cloudflare) and Ahrefs Web Analytics
   (`analytics.ahrefs.com`, loaded by a GTM tag). A tag added in GTM that loads a
   script from a new origin needs that origin here, and in the list in

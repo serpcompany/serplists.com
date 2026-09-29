@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import type { ReactNode } from 'react';
 
 import '@/index.css';
@@ -30,15 +29,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     // The theme script sets the html class before React hydrates.
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Plain scripts, so the browser runs them while it parses the page, before the first
+            paint (next/script's beforeInteractive would wait for Next.js's runtime to load):
+            the theme, so a dark page never flashes light, and Tag Manager, as early as its own
+            snippet runs and only on pages whose URL carries nothing sensitive. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT }} />
+      </head>
       <body>
-        {/* Both run before the page hydrates: the theme before the first paint, and Tag Manager
-            only on pages whose URL carries nothing sensitive. */}
-        <Script id="theme-boot" strategy="beforeInteractive">
-          {THEME_BOOT_SCRIPT}
-        </Script>
-        <Script id="tag-manager" strategy="beforeInteractive">
-          {TAG_MANAGER_BOOTSTRAP_SCRIPT}
-        </Script>
         <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}`}

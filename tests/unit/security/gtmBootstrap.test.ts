@@ -13,7 +13,7 @@ import {
 // Tags in the Google Tag Manager container read location.href at load (GA4 sends it as
 // page_location), so a document whose URL carries a share or invite token, a password
 // reset token or an email address must never load the container. The root layout renders
-// the bootstrap into every page before it is interactive.
+// the bootstrap into every page's <head>, where it runs while the page is parsed.
 
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 
@@ -50,8 +50,12 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
 }
 
 describe('Google Tag Manager bootstrap', () => {
-  it('runs from the root layout on every page, before the page is interactive', () => {
-    expect(layout).toMatch(/<Script id="tag-manager" strategy="beforeInteractive">\s*\{TAG_MANAGER_BOOTSTRAP_SCRIPT\}/);
+  // A plain script in <head> runs while the page is parsed, as Tag Manager's own snippet
+  // does; next/script's beforeInteractive would wait for Next.js's runtime to load.
+  it('runs from the root layout head on every page, while the page is parsed', () => {
+    const head = /<head>([\s\S]*?)<\/head>/.exec(layout)?.[1] ?? '';
+
+    expect(head).toMatch(/<script dangerouslySetInnerHTML=\{\{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT \}\} \/>/);
     // The script and the noscript fallback name the same container.
     expect(layout).toContain('https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}');
     expect(TAG_MANAGER_BOOTSTRAP_SCRIPT).toContain(`'${TAG_MANAGER_ID}'`);

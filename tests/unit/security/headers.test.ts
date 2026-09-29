@@ -42,7 +42,7 @@ const collectPackVideoValues = (): string[] => {
 };
 
 // Every third-party script origin the production site loads: Google Tag Manager
-// (index.html), the Cloudflare Web Analytics beacon (injected by Cloudflare), and
+// (the root layout), the Cloudflare Web Analytics beacon (injected by Cloudflare), and
 // Ahrefs Web Analytics (loaded by a GTM tag).
 const ANALYTICS_SCRIPT_ORIGINS = [
   'https://www.googletagmanager.com',

@@ -52,10 +52,14 @@ describe('theme boot script', () => {
     expect(runThemeScript(new Error('storage blocked')).dark).toBe(false);
   });
 
-  it('runs from the root layout before the page is interactive', () => {
+  // next/script's beforeInteractive only queues an inline script for Next.js's runtime, which
+  // runs it once its JavaScript has loaded: after the first paint.
+  it('runs from the root layout head while the page is parsed, before the first paint', () => {
     const layout = readFileSync('src/app/layout.tsx', 'utf8');
+    const head = /<head>([\s\S]*?)<\/head>/.exec(layout)?.[1] ?? '';
 
-    expect(layout).toMatch(/<Script id="theme-boot" strategy="beforeInteractive">\s*\{THEME_BOOT_SCRIPT\}/);
+    expect(head).toMatch(/<script dangerouslySetInnerHTML=\{\{ __html: THEME_BOOT_SCRIPT \}\} \/>/);
+    expect(layout).not.toMatch(/<Script[^>]*>\s*\{THEME_BOOT_SCRIPT\}/);
   });
 
   it('paints the page background from the theme tokens, dark under html.dark', () => {
