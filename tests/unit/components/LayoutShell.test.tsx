@@ -105,6 +105,19 @@ describe('Layout shell selection', () => {
     expect(html).toMatch(/<a[^>]*href="\/dashboard\/runs\/"[^>]*aria-current="page"/);
   });
 
+  // The 404 page picks its own shell (src/components/NotFoundLayout.tsx).
+  it('uses the shell it is given over the one its path would pick', () => {
+    navigation.reset('/dashboard/definitely-missing/');
+    const html = renderToStaticMarkup(
+      <Layout shell="public">
+        <div>Missing</div>
+      </Layout>,
+    );
+
+    expect(html).toContain('data-app-shell="public"');
+    expect(html).not.toContain('data-slot="sidebar"');
+  });
+
   it('uses the shared public shell for discovery routes', () => {
     const html = renderLayout('/templates', 'Discovery child');
 

@@ -27,6 +27,8 @@ Canonical private routes:
 - Settings: `/dashboard/settings`
 - Archive: `/dashboard/archive`, linked from the console sidebar (a sheet on phones)
 
+A missing page under `/dashboard/` answers 404 with the not-found page: in the console shell for a signed-in user, once the session check answers, and in the public shell (site header and footer) for anyone else.
+
 ## Templates
 
 - Users can create, edit, archive, restore, import, and export templates.

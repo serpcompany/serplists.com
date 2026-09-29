@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { Layout } from '@/components/Layout';
+import { NotFoundLayout } from '@/components/NotFoundLayout';
 import { buildPageTitle } from '@/lib/brand';
 import NotFound from '@/views/NotFound';
 
@@ -11,10 +11,11 @@ export const metadata: Metadata = {
   robots: 'noindex, follow',
 };
 
+// In the public shell, or the console shell for a signed-in user on a missing console path.
 export default function NotFoundPage() {
   return (
-    <Layout>
+    <NotFoundLayout>
       <NotFound />
-    </Layout>
+    </NotFoundLayout>
   );
 }

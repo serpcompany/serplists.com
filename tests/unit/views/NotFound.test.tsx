@@ -23,6 +23,11 @@ vi.mock('@/components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-layout="">{children}</div>,
 }));
 
+// The 404 picks its shell once the session check answers (tests/unit/components/NotFoundLayout.test.tsx).
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ sessionStatus: 'loading' }),
+}));
+
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
 });

@@ -433,3 +433,9 @@ Each of these needs the user's approval, or happens with the domain move:
   Sub-tasks, write notes and complete the Run (never rename or delete it); the shared page
   ("A read-only checklist run") and Home ("a clean read-only run") said otherwise. They, and
   the Share run dialog, now say what anyone with the link can do. The API is unchanged.
+- 2026-09-29: **The 404's shell follows the session.** `src/app/not-found.tsx` rendered the
+  shell the path picks, so a signed-out visitor to a missing `/dashboard/` path saw console
+  chrome, and the prerendered 404 (the public shell, for `/_not-found/`) did not match the first
+  client render there. `NotFoundLayout` renders the public shell in the HTML and until the
+  session check answers, then gives a signed-in user on a missing console path the console
+  shell, following the useIsClient pattern of the 404 hydration fix (`91dac1ae`).

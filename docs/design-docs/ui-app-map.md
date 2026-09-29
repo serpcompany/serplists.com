@@ -15,7 +15,7 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 `src/lib/routes.ts`).
 
 - **Public shell:** site header and site footer. Every page in the `(site)` route group, and
-  the 404 page on public paths.
+  the 404 page (on a missing console path too, for anyone not signed in).
 - **Console shell:** the console sidebar (shadcn's Sidebar block, a sheet on phones), a top bar
   with the sidebar trigger and the public header's navigation, and the site footer. Every page
   under `/dashboard/`. These pages sit in the `(app)` route group, which checks the session
@@ -208,8 +208,9 @@ leave the console shell for the public shell.
 | --- | --- | --- | --- | --- |
 | Any unmatched path | [404 page](ui-screen-inventory.md#404-page) | System page (`src/app/not-found.tsx`) | Shell overlays | None |
 
-An unmatched path under `/dashboard/` gets the console shell, because the shell follows the
-path (see the inventory's [open questions](ui-screen-inventory.md#open-questions)).
+A signed-in user on an unmatched path under `/dashboard/` sees the 404 in the console shell once
+the session check answers; everyone else sees it in the public shell
+(`src/components/NotFoundLayout.tsx`).
 
 ## Redirect-only paths
 

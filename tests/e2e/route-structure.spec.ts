@@ -231,6 +231,34 @@ test.describe('route structure', () => {
     ).toBeVisible();
   });
 
+  // Next.js serves one prerendered 404 for every missing path, in the public shell; a signed-in
+  // user on a missing console path moves to the console shell once the session check answers
+  // (src/components/NotFoundLayout.tsx), with no hydration error either way.
+  test('a missing console page is a public 404 for a visitor and a console 404 once signed in', async ({ page }) => {
+    const hydrationErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' && /hydrat|#418|#423|#425/i.test(message.text())) {
+        hydrationErrors.push(message.text());
+      }
+    });
+    const heading = page.getByRole('heading', { name: 'That page does not exist' });
+    const consoleNavigation = page.getByRole('navigation', { name: 'Dashboard' });
+
+    const missing = await page.goto('/dashboard/definitely-missing/');
+    expect(missing?.status()).toBe(404);
+    await expect(heading).toBeVisible();
+    await expect(page.getByRole('banner').getByRole('link', { name: 'Log in', exact: true })).toBeVisible();
+    await expect(page.getByRole('contentinfo')).toBeVisible();
+    await expect(consoleNavigation).toHaveCount(0);
+
+    await signInAsAdmin(page);
+    await page.goto('/dashboard/definitely-missing/');
+    await expect(heading).toBeVisible();
+    await expect(consoleNavigation).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible();
+    expect(hydrationErrors).toEqual([]);
+  });
+
   test('not-found pages are noindexed and real pages are not', async ({ page }) => {
     // Some missing URLs (an unknown category or feature) render the not-found view from a
     // page that exists, with a 200, so the robots tag is what keeps them out of search

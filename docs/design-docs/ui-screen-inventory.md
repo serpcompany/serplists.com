@@ -249,8 +249,8 @@ existing content, invent nothing):
 - **SCREEN NAME:** Public shell (site header and site footer)
 - **PURPOSE:** Frame every public page: brand, main navigation, sign-in actions, footer
   links.
-- **HOW USER GETS HERE:** any page in the `(site)` route group, and the 404 page on public
-  paths.
+- **HOW USER GETS HERE:** any page in the `(site)` route group, and the 404 page (on a missing
+  console path too, for anyone not signed in).
 - **WHAT'S ON THE SCREEN:**
   - Sticky header: brand link (the grid mark on the primary color and "SERP Lists") on the
     left; in the middle the "Site" NavigationMenu: "Templates" and "Features" open dropdowns
@@ -337,7 +337,8 @@ existing content, invent nothing):
 - **SCREEN NAME:** Signed-in console shell
 - **PURPOSE:** Frame every console page: move between console sections, see and switch the
   Ownership Context, reach the account.
-- **HOW USER GETS HERE:** any page under `/dashboard/`, after the session check.
+- **HOW USER GETS HERE:** any page under `/dashboard/`, after the session check; the 404 page
+  for a signed-in user on a missing path under `/dashboard/`.
 - **WHAT'S ON THE SCREEN:**
   - Left: the sidebar (full height). Header: the brand link and the [context
     switcher](#context-switcher) ("Switch context"). Content, in the "Dashboard" navigation
@@ -1523,7 +1524,10 @@ existing content, invent nothing):
   server's HTML says "This route"), "Return to home".
 - **PRIMARY ACTION:** "Return to home" → [Home](#home).
 - **SECONDARY ACTIONS:** the shell's navigation.
-- **STATES:** none. Titled "Page not found", `noindex, follow`, no canonical URL.
+- **STATES:** the shell: the public shell for anyone not signed in and on public paths; the
+  console shell for a signed-in user on a missing path under `/dashboard/`, once the session
+  check answers (the server's HTML and the first render in the browser are the public shell).
+  Titled "Page not found", `noindex, follow`, no canonical URL.
 - **NAVIGATION TYPE:** system page.
 - **PATTERN CHOICE (proposal):** [Page hero](#page-hero) (eyebrow, title, description, one
   button) with no card.
@@ -1532,9 +1536,15 @@ existing content, invent nothing):
   - LAYOUT ZONES: a centered card filling the window's height.
   - COMPONENT TYPES: eyebrow; heading; paragraph; primary button.
   - DATA FIELDS: the missing path.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/NotFound.tsx`, `src/app/not-found.tsx`. The shell follows the
-  path, so a missing path under `/dashboard/` gets the console shell.
+- **PROOF PASS:** Not restyled yet (step 2). The shells of 2026-09-29 under `/dashboard/`:
+  `tmp/design-review/decisions/not-found-dashboard-desktop-signed-out.png`,
+  `not-found-dashboard-desktop-signed-in.png`, `not-found-dashboard-mobile-signed-out.png` and
+  `not-found-dashboard-mobile-signed-in.png`.
+- **NOTES:** Code: `src/views/NotFound.tsx`, `src/app/not-found.tsx` and
+  `src/components/NotFoundLayout.tsx`, which picks the shell. Next.js prerenders the page once
+  and serves that HTML for every missing path, so the shell may change only after the session
+  check, like the missing address in the text. Until 2026-09-29 the shell followed the path
+  alone, so a signed-out visitor to a missing `/dashboard/` path saw console chrome.
 
 ## Overlays
 
@@ -1918,8 +1928,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- A missing path under `/dashboard/` renders the 404 page inside the console shell, also for
-  a signed-out visitor: `src/app/not-found.tsx` renders the shell without the session check.
 - Categories shows nothing (no message) when a search matches no category.
 - The Template editor's outline has a fixed width and no phone layout.
 - The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
