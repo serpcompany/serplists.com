@@ -165,6 +165,11 @@ Common failures:
   wrangler Pages server (built app, page functions and API) and aborts every other
   request, so nothing reaches production or analytics.
 - e2e specs share one database, so `test:e2e:full` runs with one worker (TD-11).
+- That database holds only what `seed-test` creates (`db/seeds/local.ts`), plus the
+  Templates bundled in `src/data`. A spec that opens `/profile/<user>/<slug>` uses one
+  of those or creates its own Template; `tests/unit/e2e/seeded-template-paths.test.ts`
+  fails on any other literal path unless an `e2e-unseeded-template:` comment says it
+  is missing on purpose.
 - The local API runs behind wrangler's dev proxy, which now and then drops a request
   that arrives while the page has several of its own in flight: a non-GET gets
   `503 Your worker restarted mid-request` without CORS headers (the browser reports

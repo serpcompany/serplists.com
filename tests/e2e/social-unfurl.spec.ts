@@ -50,6 +50,7 @@ test('category and library links unfurl with their own titles', async ({ request
 });
 
 test('an unknown template keeps the generic tags', async ({ request }) => {
+  // e2e-unseeded-template: no Template has this slug.
   const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere');
 
   expect(head.title).toBe('SERP Lists');

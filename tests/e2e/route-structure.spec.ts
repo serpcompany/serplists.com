@@ -347,6 +347,7 @@ test.describe('route structure', () => {
     );
     await expect(page).toHaveTitle(/Profile not found/);
 
+    // e2e-unseeded-template: the page for a Template that does not exist.
     await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/no-such-template`);
     await expect(
       page.getByRole('heading', { name: 'Template not found' }),
@@ -366,6 +367,7 @@ test.describe('route structure', () => {
       fulfillJson(route, { error: 'Service unavailable' }, 503),
     );
 
+    // e2e-unseeded-template: every Template read is answered with a 503 above.
     await page.goto(`${PRODUCTION_ORIGIN}/profile/route-structure-owner/some-template`);
     await expect(
       page.getByRole('heading', { name: 'Unable to load template' }),
