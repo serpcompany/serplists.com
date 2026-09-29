@@ -170,7 +170,7 @@ export interface TemplatesContextProps {
   // { includeTitle: true }. See src/contexts/runUpdatePayload.ts.
   updateRun: (run: ChecklistRun, options?: { includeTitle?: boolean }) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
-  // Marks a run just shared (now public) in the cached runs lists.
+  // Marks a run just shared (now public) in the cached runs lists and refreshes its Changelog.
   markRunShared?: (runId: string) => void;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;

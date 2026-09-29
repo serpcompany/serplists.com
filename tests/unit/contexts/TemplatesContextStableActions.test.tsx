@@ -27,7 +27,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
-import { markRunShared } from '@/lib/queryCache';
+import { markRunShared, queryKeys } from '@/lib/queryCache';
 
 // Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
 // container object, and a window while it commits, to run effects.
@@ -149,5 +149,27 @@ describe('TemplatesProvider actions', () => {
     for (const [name, action] of Object.entries(actionsOf(context()))) {
       expect(action, name).toBe(before[name as keyof typeof before]);
     }
+  });
+});
+
+describe('TemplatesProvider markRunShared (the runs list Share)', () => {
+  it("marks the run shared and refreshes that run's Changelog, which the share wrote to", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(['runs', 'user-1', 'personal'], [privateRun]);
+    const history = [...queryKeys.runHistory('run-1'), { limit: 8 }];
+    const otherHistory = [...queryKeys.runHistory('run-2'), { limit: 8 }];
+    queryClient.setQueryData(history, { events: [] });
+    queryClient.setQueryData(otherHistory, { events: [] });
+    const { context } = mountProvider(queryClient);
+
+    await act(async () => {
+      context().markRunShared?.('run-1');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(context().runs[0].isPublic).toBe(true);
+    // Otherwise the run page, reopened within 60s, shows the Changelog without "Created share link".
+    expect(queryClient.getQueryState(history)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(otherHistory)?.isInvalidated).toBe(false);
   });
 });

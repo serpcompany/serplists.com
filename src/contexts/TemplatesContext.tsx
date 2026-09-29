@@ -4,7 +4,6 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { isStaleRecordError } from "@/lib/editConflicts";
-import { markRunShared } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { buildTemplateUpdateRequest, describeTemplateUpdate } from "@/lib/templates/templateUpdate";
 import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
@@ -41,6 +40,7 @@ import {
 import {
   refreshAfterRunDelete,
   refreshAfterRunRevalidated,
+  refreshAfterRunShared,
   refreshAfterTemplateDelete,
   refreshAfterTemplateSave,
   refreshRunLists,
@@ -443,7 +443,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const deleteTemplate = useCallback(async (id: string) => { await deleteTemplateAsync(id); }, [deleteTemplateAsync]);
   const updateRun = useCallback((run: ChecklistRun, options?: RunUpdateOptions) => updateRunAsync({ run, options }), [updateRunAsync]);
   const revalidateRun = useCallback(async (run: ChecklistRun) => { await revalidateRunAsync(run); }, [revalidateRunAsync]);
-  const markShared = useCallback((runId: string) => void markRunShared(queryClient, runId), [queryClient]);
+  const markShared = useCallback((runId: string) => void refreshAfterRunShared(queryClient, runId), [queryClient]);
   const deleteRun = useCallback(async (id: string) => { await deleteRunAsync(id); }, [deleteRunAsync]);
   const importTemplates = useCallback(
     (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> =>

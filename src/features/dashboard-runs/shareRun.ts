@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
+import { refreshRunHistory } from '@/lib/queryCache';
 import { buildSharePath } from '@/lib/routes';
 
 type RunShareApiClient = Pick<typeof api, 'createChecklistRunShare'>;
@@ -19,8 +20,9 @@ export async function createRunsDashboardShareUrl(
 }
 
 // Stopping a share makes the run private, which the runs list shows (and which decides
-// whether Revalidate is offered), so the list refreshes once the API confirms it. Sharing
-// refreshes it through onShared (markRunShared in src/lib/queryCache.ts).
+// whether Revalidate is offered), so the list refreshes once the API confirms it, and so does
+// the run's Changelog, which the API wrote "Stopped sharing" to. Sharing refreshes both
+// through onShared (refreshAfterRunShared in src/contexts/templateListCache.ts).
 export function createRunSharingActions(
   queryClient: Pick<QueryClient, 'invalidateQueries'>,
   apiClient: Pick<typeof api, 'revokeChecklistRunShare'> = api,
@@ -28,7 +30,7 @@ export function createRunSharingActions(
   return {
     stopSharingRun: async (runId: string): Promise<void> => {
       await apiClient.revokeChecklistRunShare(runId);
-      await queryClient.invalidateQueries({ queryKey: ['runs'] });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['runs'] }), refreshRunHistory(queryClient, runId)]);
     },
   };
 }
