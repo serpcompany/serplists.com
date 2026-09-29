@@ -1,3 +1,8 @@
+# Static files (the build's /_next/static assets, fonts, images, robots.txt) are served
+# without running the Worker, so the headers in next.config.ts never reach them; Workers
+# Static Assets applies these rules to them instead. Pages and API responses get the same
+# security headers and host rules from next.config.ts (src/lib/http/securityHeaders.ts);
+# keep the two in step.
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
@@ -6,17 +11,11 @@
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.googletagmanager.com https://static.cloudflareinsights.com https://analytics.ahrefs.com; frame-src 'self' https://www.googletagmanager.com https://www.youtube.com https://www.youtube-nocookie.com https://clipy.online; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: http: ws: wss:; media-src 'self' blob: https:; upgrade-insecure-requests
 
-/share/*
-  X-Robots-Tag: noindex, nofollow
-
-# Only https://serplists.com may be indexed. Staging and the *.pages.dev aliases
+# Only https://serplists.com may be indexed. Staging and each Worker's workers.dev URL
 # serve the same app (staging with test data), so keep them out of search results.
 # Never add noindex to a rule that matches serplists.com.
 https://staging.serplists.com/*
   X-Robots-Tag: noindex, nofollow
 
-https://:project.pages.dev/*
-  X-Robots-Tag: noindex, nofollow
-
-https://:version.:project.pages.dev/*
+https://:worker.:account.workers.dev/*
   X-Robots-Tag: noindex, nofollow

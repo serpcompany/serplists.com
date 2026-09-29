@@ -1,6 +1,8 @@
 import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
+import { assertProductionApiUrl } from './scripts/lib/buildEnv';
 import { SECURITY_HEADERS } from './src/lib/http/securityHeaders';
 
 // Only https://serplists.com may be indexed. Staging and each Worker's workers.dev URL serve
@@ -51,7 +53,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  if (phase === PHASE_PRODUCTION_BUILD) {
+    // Next.js inlines NEXT_PUBLIC_* values into the browser bundle: a build must not ship
+    // a localhost API URL.
+    assertProductionApiUrl(process.env);
+  }
+  return nextConfig;
+}
 
 // Lets `next dev` read the Cloudflare bindings (D1, R2) through getCloudflareContext().
 initOpenNextCloudflareForDev();
