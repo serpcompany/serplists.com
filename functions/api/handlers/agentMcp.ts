@@ -23,6 +23,7 @@ import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 import {
   applyRunOperation,
+  assertRunCanBeCompleted,
   assertRunContentFits,
   boundedText,
   jsonByteLength,
@@ -424,13 +425,16 @@ async function updateRun(
     });
   }
 
+  const sections = parseStoredSections(existing.items);
+  if (args.operation === "set_run_status" && args.status === "completed" && existing.status !== "completed") {
+    assertRunCanBeCompleted(sections);
+  }
   if (args.operation === "set_run_status" && isReopening(existing.status, args.status)) {
     await assertActiveRunCapacity(env, { userId: identity.userId, teamId: null });
   }
 
   const now = new Date().toISOString();
   const updates: JsonRecord = { revision: currentRevision + 1, updated_at: now };
-  const sections = parseStoredSections(existing.items);
   if (args.operation === "set_run_status") {
     // Status only: the run content is unchanged, so it is not rewritten. Match the
     // checklist status endpoint: progress stays as it is, reopening does not erase

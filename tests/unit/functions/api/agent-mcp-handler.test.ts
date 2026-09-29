@@ -134,6 +134,26 @@ function largeSections(targetBytes: number, fillerNotes = 10_000): JsonRecord[] 
   return sections;
 }
 
+// Every task and Sub-task ticked: set_run_status completed refuses a run with work left.
+function tickEverything(sections: JsonRecord[]): JsonRecord[] {
+  const tick = (record: JsonRecord) => ({ ...record, isCompleted: true });
+  return sections.map((section) => ({
+    ...section,
+    items: (section.items as JsonRecord[]).map((item) => ({
+      ...tick(item),
+      ...(Array.isArray(item.contents)
+        ? { contents: item.contents.map((content: JsonRecord) => ({ ...content, subItems: (content.subItems as JsonRecord[]).map(tick) })) }
+        : {}),
+    })),
+  }));
+}
+
+const finishedRun = (overrides: JsonRecord = {}) =>
+  personalRun({ items: JSON.stringify(tickEverything(JSON.parse(personalRun().items as string))), ...overrides });
+
+const finishedFor = (operation: string, sections: JsonRecord[]) =>
+  operation === "set_run_status" ? tickEverything(sections) : sections;
+
 function ownedTemplate(items: unknown[]): JsonRecord {
   return {
     id: "template-1",
@@ -675,7 +695,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("stamps the completer and time when a run becomes completed", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([finishedRun({ revision: 2 })]);
 
     const response = await handleAgentMcp(callTool("update_run", {
       runId: "run-1",
@@ -689,6 +709,62 @@ describe("personal run MCP handler", () => {
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
     expect(updates.completed_by_user_id).toBe("user-1");
     expect(typeof updates.completed_at).toBe("string");
+  });
+
+  // The run page completes a run only once every task and Sub-task is done, and then freezes
+  // it, so an agent may not leave a run Completed with open work the page cannot reopen.
+  describe("completing a run with work left", () => {
+    const completeRun = (run: JsonRecord) => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
+      return handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 1,
+        operation: "set_run_status",
+        status: "completed",
+      }), env).then((response) => response.json() as Promise<any>);
+    };
+    const task = (fields: JsonRecord) => ({ id: "task-1", title: "Verify", ...fields });
+    const runOf = (...tasks: JsonRecord[]) => personalRun({ items: JSON.stringify([{ id: "section-1", title: "Release", items: tasks }]) });
+    const subTasks = (...flags: boolean[]) => [{
+      type: "subItems",
+      subItems: flags.map((isCompleted, index) => ({ id: `sub-${index + 1}`, title: `Sub ${index + 1}`, isCompleted })),
+    }];
+
+    it.each([
+      ["an open task", runOf(task({ isCompleted: true, id: "task-0" }), task({ isCompleted: false })), ["task-1"]],
+      ["a ticked task with an open Sub-task", runOf(task({ isCompleted: true, contents: subTasks(true, false) })), ["task-1"]],
+      ["a ticked task with an open direct Sub-task", runOf(task({ isCompleted: true, subItems: [{ id: "sub-9", title: "Old", isCompleted: false }] })), ["task-1"]],
+      ["an unticked task whose Sub-tasks are done", runOf(task({ isCompleted: false, contents: subTasks(true, true) })), ["task-1"]],
+      ["no tasks", personalRun({ items: JSON.stringify([{ id: "section-1", title: "Release", items: [] }]) }), []],
+    ])("refuses a run with %s and writes nothing", async (_label, run, openTaskIds) => {
+      const body = await completeRun(run);
+
+      expect(body.result.isError).toBe(true);
+      expect(body.result.structuredContent).toEqual(expect.objectContaining({
+        error: "run_incomplete",
+        details: { openTaskCount: openTaskIds.length, openTaskIds },
+      }));
+      expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it("names at most 20 open tasks", async () => {
+      const body = await completeRun(runOf(...Array.from({ length: 30 }, (_, index) => task({ id: `task-${index}`, isCompleted: false }))));
+
+      expect(body.result.structuredContent.details.openTaskCount).toBe(30);
+      expect(body.result.structuredContent.details.openTaskIds).toHaveLength(20);
+    });
+
+    it("completes a run whose every task and Sub-task is done, legacy completed keys included", async () => {
+      const body = await completeRun(runOf(
+        task({ id: "task-0", completed: true }),
+        task({ isCompleted: true, contents: [{ type: "subItems", subItems: [{ id: "sub-1", title: "Old", completed: true }] }] }),
+      ));
+
+      expect(body.result.isError).toBeUndefined();
+      const updates = dbMocks.updateChain.set.mock.calls[0][0];
+      expect(updates).toEqual(expect.objectContaining({ status: "completed", completed_by_user_id: "user-1" }));
+    });
   });
 
   it("refuses to reopen a completed run when the Free active-run limit is reached", async () => {
@@ -819,7 +895,7 @@ describe("personal run MCP handler", () => {
       ["set_run_status", { status: "completed" }],
     ])("records a compact %s change instead of copies of the run", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-        items: JSON.stringify(largeSections(200 * 1024)),
+        items: JSON.stringify(finishedFor(operation, largeSections(200 * 1024))),
         retired_items: JSON.stringify(largeSections(20 * 1024)),
         revision: 4,
       })]);
@@ -847,7 +923,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("does not rewrite run content for a status-only change", async () => {
-      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ progress: 40 })]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([finishedRun({ progress: 40 })]);
 
       await handleAgentMcp(callTool("update_run", {
         runId: "run-1",
@@ -926,7 +1002,7 @@ describe("personal run MCP handler", () => {
       const unused = Object.fromEntries(["taskId", "subtaskId", "completed", "notes", "status"]
         .filter((name) => !(name in fields))
         .map((name) => [name, null]));
-      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun()]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([operation === "set_run_status" ? finishedRun() : personalRun()]);
       const body = await toolBody(await handleAgentMcp(callTool("update_run", { ...args, ...unused }), env));
 
       expect(body.error).toBeUndefined();
@@ -1019,7 +1095,7 @@ describe("personal run MCP handler", () => {
       ["set_run_status", { status: "completed" }],
     ])("never reports a committed %s on an oversized run as a failure", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-        items: JSON.stringify(largeSections(600 * 1024)),
+        items: JSON.stringify(finishedFor(operation, largeSections(600 * 1024))),
         revision: 7,
       })]);
 

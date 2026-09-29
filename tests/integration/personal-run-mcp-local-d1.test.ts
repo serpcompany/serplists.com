@@ -384,8 +384,9 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       const response = await callTool("update_run", {
         runId,
         expectedRevision: 4,
-        operation: "set_run_status",
-        status: "completed",
+        operation: "set_task_completed",
+        taskId: "task-1",
+        completed: true,
       });
       const body = await bodyOf(response);
       expect(response.status).toBe(200);

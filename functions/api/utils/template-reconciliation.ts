@@ -339,6 +339,27 @@ export function calculateRunProgress(sections: unknown[]): number {
   return toProgressPercent(completed, total);
 }
 
+/**
+ * A run's tasks, and the ids of those that keep it from being completed: a task that is not
+ * ticked, or one with a Sub-task (direct or in a Sub-tasks block) that is not. A run can be
+ * completed once it has tasks and none is open, the rule the run page's Complete run follows
+ * (canFinishRun, which tests/unit/functions/api/run-completion-rule.test.ts keeps in step).
+ * Runs saved before isCompleted existed store `completed`, read the same way.
+ */
+export function findOpenRunTasks(sections: unknown[]): { total: number; open: string[] } {
+  let total = 0;
+  const open: string[] = [];
+  for (const section of sections.filter(isRecord)) {
+    for (const item of getArray(section.items).filter(isRecord)) {
+      total += 1;
+      if (!wasCompleted(item) || getSubItems(item).some((subItem) => !wasCompleted(subItem))) {
+        open.push(getId(item) ?? '');
+      }
+    }
+  }
+  return { total, open };
+}
+
 // Import refuses a section, task, content block or sub-task that is not an object. The
 // identity pass would silently drop it, and a client that spread a string into a record
 // would store its characters as keys on an untitled task.

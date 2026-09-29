@@ -1,5 +1,6 @@
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
+import { findOpenRunTasks } from "../utils/template-reconciliation";
 import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
 
 // Run content helpers for the personal run MCP endpoint: parsing, serialization, the
@@ -98,6 +99,24 @@ export function assertRunContentFits(nextBytes: number, currentBytes = 0): void 
     limit: MAX_RUN_CONTENT_BYTES,
     size: nextBytes,
   });
+}
+
+const MAX_REPORTED_OPEN_TASKS = 20;
+
+/**
+ * Refuses to complete a run that has no tasks or still has an open task or Sub-task, the rule
+ * the run page follows: it freezes a completed run, so it could never finish the open work.
+ * Call it only for a run becoming completed; re-sending completed for one already completed
+ * (even an older one with open work) stays a no-op.
+ */
+export function assertRunCanBeCompleted(sections: JsonRecord[]): void {
+  const { total, open } = findOpenRunTasks(sections);
+  if (total > 0 && open.length === 0) return;
+  throw new ToolError(
+    total === 0 ? "This run has no tasks to complete" : "Finish every task and Sub-task before completing the run",
+    "run_incomplete",
+    { openTaskCount: open.length, openTaskIds: open.slice(0, MAX_REPORTED_OPEN_TASKS) },
+  );
 }
 
 function sectionTasks(section: JsonRecord): JsonRecord[] {

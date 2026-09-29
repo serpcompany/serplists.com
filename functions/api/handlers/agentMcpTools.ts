@@ -146,7 +146,8 @@ export const toolDefinitions = [
     description: "Update one explicit part of a personal run. Pass the latest expectedRevision to prevent lost updates. "
       + "Each operation takes its own fields: set_task_completed needs taskId and completed; "
       + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes; "
-      + "set_run_status needs status. Leave out fields the operation does not use. "
+      + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
+      + "(it fails with run_incomplete, naming open taskIds, otherwise). Leave out fields the operation does not use. "
       + "Returns the run summary with its new revision and the changed task; call get_run for the full run.",
     // One flat object: model APIs reject a oneOf/anyOf/allOf at the root of a tool schema,
     // and many clients read only top-level properties. updateRunArgs enforces which
@@ -175,7 +176,11 @@ export const toolDefinitions = [
           maxLength: MAX_TASK_NOTES_LENGTH,
           description: "Required for set_task_notes. Replaces the task's notes.",
         },
-        status: { type: "string", enum: ["in_progress", "completed"], description: "Required for set_run_status." },
+        status: {
+          type: "string",
+          enum: ["in_progress", "completed"],
+          description: "Required for set_run_status. completed needs every task and Sub-task done.",
+        },
       },
       required: ["runId", "expectedRevision", "operation"],
       additionalProperties: false,
