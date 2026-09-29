@@ -125,7 +125,10 @@ let it ask, so the user is asked once.
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
   The archive lists load only on `/dashboard/archive`; deleting a Template or Run
-  marks them stale through `src/contexts/templateListCache.ts`. Each list reads as
+  marks them stale through `src/contexts/templateListCache.ts`. Deleting a Template also
+  removes it from the cached catalog and leaves the catalog fresh instead of stale: the
+  edge cache can serve the pre-delete catalog for up to 5 more minutes, so a refetch
+  would list the deleted Template again. Each list reads as
   loading until it has data or its request failed (`getArchiveListState`), including
   while it waits, disabled, for the Organizations to load.
 - Sign-out and sign-in are SPA navigations, so the QueryClient outlives a session.

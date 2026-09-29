@@ -18,8 +18,11 @@ import type { ChecklistTemplate } from '@/types/checklist';
 export const refreshRunLists = (queryClient: QueryClient): Promise<void> =>
   queryClient.invalidateQueries({ queryKey: ['runs'] });
 
+const isCatalogKey = (queryKey: readonly unknown[]): boolean =>
+  queryKey[0] === 'templates' && queryKey[1] === 'catalog';
+
 const isContextListKey = (queryKey: readonly unknown[]): boolean =>
-  (queryKey[0] === 'templates' && queryKey[1] !== 'catalog') || queryKey[0] === 'runs';
+  (queryKey[0] === 'templates' && !isCatalogKey(queryKey)) || queryKey[0] === 'runs';
 
 // A context switch runs in the click handler, before React re-renders, so the page's list
 // observers are still on the old context's keys. Only mark the Template and Run lists stale:
@@ -49,11 +52,13 @@ export const dropTemplateFromCatalog = (queryClient: QueryClient, templateId: st
 // Mark both stale for every user and context: the item may not belong to the active one.
 // The archived Template's own detail page and Changelog are only marked stale: reloading
 // them would ask for a template that is gone (see markArchivedTemplateStale).
+// The patched catalog stays fresh: a refetch would get the edge-cached copy that still
+// lists the deleted Template, and the patched copy's staleTime matches that cache's TTL.
 export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId: string): void => {
   dropTemplateFromCatalog(queryClient, templateId);
   void queryClient.invalidateQueries({
     queryKey: ['templates'],
-    predicate: (query) => !isTemplatePageOf(query, templateId),
+    predicate: (query) => !isCatalogKey(query.queryKey) && !isTemplatePageOf(query, templateId),
   });
   void markArchivedTemplateStale(queryClient, templateId);
   void refreshRunLists(queryClient);
