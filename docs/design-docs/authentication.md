@@ -150,7 +150,9 @@ and user-facing failure states when a supporting service is unavailable.
   given (usernames saved before Better Auth may be mixed case) or its lowercase
   form, preferring an exact match, with an `IN` list that stays on
   `idx_users_username`. `/profile/JohnDoe` then replaces the URL with the stored
-  `/profile/johndoe`, and Account settings previews the lowercase URL.
+  `/profile/johndoe`. Account settings links the saved username as stored (a legacy
+  mixed-case one is found only in that casing) and previews an unsaved edit as the
+  lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
   them on every user write (`functions/api/utils/user-profile-validation.ts`): the
   name is trimmed and must be 1-100 characters, and the avatar must be an upload

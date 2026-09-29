@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { handleProfileByUsername } from '@functions/api/handlers/auth';
+import { buildProfilePreviewPath } from '@/lib/routes';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 
 // Better Auth's username plugin stores usernames lowercased, and SQLite compares
@@ -70,6 +71,17 @@ describe('GET /api/profiles/by-username casing', () => {
     expect(await (await lookUp('JaneDoe')).json()).toMatchObject({ id: 'legacy' });
     expect(await (await lookUp('janedoe')).json()).toMatchObject({ id: 'newer' });
     expect(await (await lookUp('JANEDOE')).json()).toMatchObject({ id: 'newer' });
+  });
+
+  // The Settings preview must link a saved username in a form this lookup resolves to its owner.
+  it('resolves the Settings preview of an unedited legacy username to that user', async () => {
+    addUser('legacy', 'JaneDoe');
+    addUser('newer', 'janedoe');
+
+    const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
+    const previewUsername = decodeURIComponent(previewPath!.replace('/profile/', ''));
+
+    expect(await (await lookUp(previewUsername)).json()).toMatchObject({ id: 'legacy' });
   });
 
   it.each(['', '   '])('answers 400 for the blank username %j', async (typed) => {

@@ -7,7 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { ExternalLink, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
-import { buildPublicProfilePath } from '@/lib/routes';
+import { buildProfilePreviewPath } from '@/lib/routes';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
 
 interface ProfileData {
@@ -19,6 +19,8 @@ interface ProfileData {
 
 interface ProfileSectionProps {
   profileData: ProfileData;
+  // The username the server holds, which the preview links to as stored.
+  savedUsername: string | undefined;
   loading: boolean;
   // Takes an updater so a keystroke never overwrites a concurrent avatar change.
   onProfileDataChange: React.Dispatch<React.SetStateAction<ProfileData>>;
@@ -28,6 +30,7 @@ interface ProfileSectionProps {
 
 export const ProfileSection: React.FC<ProfileSectionProps> = ({
   profileData,
+  savedUsername,
   loading,
   onProfileDataChange,
   onProfileUpdate,
@@ -35,6 +38,9 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
 }) => {
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'https://serplists.com';
+  // The saved username as stored (a legacy one may be mixed case), or the lowercase URL an
+  // unsaved edit will have.
+  const profilePreviewPath = buildProfilePreviewPath(profileData.username, savedUsername);
 
   return (
     <Card>
@@ -104,16 +110,15 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Public profile URL:{' '}
-            {/* Usernames are saved lowercase, so preview the URL that will exist. */}
-            {profileData.username ? (
+            {profilePreviewPath ? (
               <Link
-                to={buildPublicProfilePath(profileData.username.toLowerCase())}
+                to={profilePreviewPath}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"
               >
                 {origin}
-                {buildPublicProfilePath(profileData.username.toLowerCase())}
+                {profilePreviewPath}
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (

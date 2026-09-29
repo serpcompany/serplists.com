@@ -117,6 +117,7 @@ const Account = () => {
         {/* Profile Section */}
         <ProfileSection
           profileData={profileData}
+          savedUsername={user?.username}
           loading={loading}
           onProfileDataChange={setProfileData}
           onProfileUpdate={handleProfileUpdate}

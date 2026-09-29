@@ -25,6 +25,7 @@ import {
   buildPublicCategoryPath,
   buildPublicFeaturePath,
   buildPublicProfilePath,
+  buildProfilePreviewPath,
   getCanonicalProfilePath,
   buildPublicTemplatesPath,
   buildPublicTemplatePath,
@@ -273,5 +274,22 @@ describe('getCanonicalProfilePath', () => {
   it('does nothing without both usernames', () => {
     expect(getCanonicalProfilePath(undefined, 'johndoe')).toBeNull();
     expect(getCanonicalProfilePath('JohnDoe', null)).toBeNull();
+  });
+});
+
+describe('buildProfilePreviewPath', () => {
+  it('links the saved username as stored, even a legacy mixed-case one', () => {
+    expect(buildProfilePreviewPath('JaneDoe', 'JaneDoe')).toBe('/profile/JaneDoe');
+    expect(buildProfilePreviewPath('  johndoe ', 'johndoe')).toBe('/profile/johndoe');
+  });
+
+  it('previews the lowercase form an unsaved edit will be stored as', () => {
+    expect(buildProfilePreviewPath('JANEDOE', 'JaneDoe')).toBe('/profile/janedoe');
+    expect(buildProfilePreviewPath('JohnDoe', 'john')).toBe('/profile/johndoe');
+    expect(buildProfilePreviewPath('JohnDoe', undefined)).toBe('/profile/johndoe');
+  });
+
+  it('has no URL for an empty field', () => {
+    expect(buildProfilePreviewPath('  ', 'JaneDoe')).toBeNull();
   });
 });
