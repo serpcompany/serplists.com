@@ -125,12 +125,12 @@ test("@smoke login page renders", async ({ page }) => {
 });
 
 test("@smoke removed docs prototype renders the public not-found page", async ({ page }) => {
-  await page.goto("/docs");
+  await page.goto("/docs/");
 
   await expect(
     page.getByRole("heading", { level: 1, name: "That page does not exist" }),
   ).toBeVisible();
-  await expect(page.getByText("The route /docs could not be found.")).toBeVisible();
+  await expect(page.getByText("The route /docs/ could not be found.")).toBeVisible();
   await expect(page.getByText("Checklist & Template Experience")).toHaveCount(0);
 });
 

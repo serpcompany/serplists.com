@@ -141,7 +141,7 @@ test('does not start checkout from the page the user went Back to when a My Temp
   await page.route('**/api/billing/checkout', async (route) => {
     checkoutRequests += 1;
     await route.fulfill({
-      body: JSON.stringify({ url: '/pricing?checkout=stubbed' }),
+      body: JSON.stringify({ url: '/pricing/?checkout=stubbed' }),
       contentType: 'application/json',
       status: 200,
     });

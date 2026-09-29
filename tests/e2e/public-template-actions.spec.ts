@@ -6,7 +6,7 @@ import { fillSignInForm } from './support/sign-in';
 // Start Run and Save on a public template page act once per click intent
 // (src/views/PublicTemplate.tsx, src/components/template/PublicTemplateView.tsx).
 
-const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');

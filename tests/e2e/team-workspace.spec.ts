@@ -129,7 +129,7 @@ async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfe
 
     if (path === '/api/teams/team-1/invites' && request.method() === 'POST') {
       const payload = request.postDataJSON() as InviteRequest;
-      const invitePath = '/team-invites/e2e-token';
+      const invitePath = '/team-invites/e2e-token/';
       const inviteUrl = new URL(invitePath, page.url()).toString();
       inviteRequests.push(payload);
       createdInvite = {
@@ -213,7 +213,7 @@ test('@smoke team workspace settings create link invites and expose owner contro
   await page.getByRole('button', { name: /create link/i }).click();
 
   await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveValue(
-    /\/team-invites\/e2e-token$/,
+    /\/team-invites\/e2e-token\/$/,
   );
   await expect(page.getByText('Invite link for new@example.com')).toBeVisible();
   // The Pending invites row shows the email on its own.

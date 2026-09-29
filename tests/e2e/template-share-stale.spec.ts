@@ -105,7 +105,7 @@ test('Share builds the link from the slug set elsewhere', async ({ page }) => {
     await expect(dialog).toBeVisible();
     const link = dialog.getByRole('textbox', { name: 'Share link' });
     await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${newSlug}/$`));
-    await expect(link).not.toHaveValue(new RegExp(`/${oldSlug}$`));
+    await expect(link).not.toHaveValue(new RegExp(`/${oldSlug}/$`));
   } finally {
     await callApi(page, 'DELETE', `/templates/${templateId}`);
   }

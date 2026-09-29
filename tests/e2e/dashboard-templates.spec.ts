@@ -41,7 +41,7 @@ test('Start Run at the run limit opens checkout instead of only toasting', async
   await page.route('**/api/billing/checkout', async (route) => {
     checkoutRequests += 1;
     await route.fulfill({
-      body: JSON.stringify({ url: '/pricing?checkout=stubbed' }),
+      body: JSON.stringify({ url: '/pricing/?checkout=stubbed' }),
       contentType: 'application/json',
       status: 200,
     });

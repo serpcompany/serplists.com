@@ -5,6 +5,10 @@ import { fillSignInForm } from './support/sign-in';
 // (429 from the auth rate limit, a 5xx, or a dropped connection) keeps the user signed in and
 // says so, because the session cookie is still valid (src/contexts/authSession.ts).
 
+// The home page, where a finished sign-out lands. Every page URL ends in a slash, so only
+// a path of exactly / means home.
+const HOME_URL = /^https?:\/\/[^/]+\/(?:[?#].*)?$/;
+
 async function openAccountMenu(page: Page) {
   await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
 }
@@ -22,7 +26,7 @@ test('a failed sign-out keeps the user signed in, and a later one signs them out
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
 
   await expect(page.getByText(/Sign out failed/)).toBeVisible();
-  await expect(page).not.toHaveURL(/\/$/);
+  await expect(page).not.toHaveURL(HOME_URL);
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible();
   // The UI told the truth: the session is still there after a reload.
   await page.reload();

@@ -28,7 +28,7 @@ test('shows edits and unpublishing on a public template page after the catalog l
     sections: [{ id: 'fresh-section', title: 'Original section', items: [{ id: 'fresh-item', title: 'Task' }] }],
   });
   const templateId = String(created.id);
-  const publicPath = `/profile/admin/${String(created.slug)}`;
+  const publicPath = `/profile/admin/${String(created.slug)}/`;
 
   try {
     // Loads the public catalog into memory for the rest of the tab session.

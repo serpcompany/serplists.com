@@ -81,7 +81,7 @@ test('a deleted public template stays off the library while the edge still serve
     await route.fulfill({ response, json });
   });
 
-  const search = `/templates?search=${encodeURIComponent(title)}`;
+  const search = `/templates/?search=${encodeURIComponent(title)}`;
   await page.goto(search);
   const card = page.getByRole('heading', { name: title, exact: true });
   await expect(card).toBeVisible({ timeout: 15_000 });

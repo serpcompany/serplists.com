@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // in a dialog, and a refused clipboard write (Safari after an awaited request, denied
 // permission) is not reported as a failed share (src/lib/shareLink.ts).
 
-const SHARE_URL = /\/share\/[0-9a-f-]{36}$/;
+const SHARE_URL = /\/share\/[0-9a-f-]{36}\/$/;
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);

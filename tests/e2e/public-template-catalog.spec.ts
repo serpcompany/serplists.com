@@ -201,7 +201,7 @@ test('a related category opens with no search or sort from the previous one', as
     .getByRole('link')
     .first();
   const relatedPath = await relatedLink.getAttribute('href');
-  expect(relatedPath).toMatch(/^\/categories\/[^/]+$/);
+  expect(relatedPath).toMatch(/^\/categories\/[^/]+\/$/);
   await relatedLink.click();
 
   await expect(page).toHaveURL(new RegExp(`${relatedPath}$`));
