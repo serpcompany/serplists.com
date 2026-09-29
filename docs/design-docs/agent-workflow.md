@@ -25,8 +25,10 @@ suite on it and deploys after merge. Open it from the branch that
 branches require linear history, so `main` never shares history with `staging` and a
 direct PR conflicts in files that already match. The prepared branch has exactly
 `staging`'s files with `main` recorded as merged, so it merges cleanly and no
-sync-back PR from `main` to `staging` is needed afterwards. The script refuses to run
-if `main` has changes that `staging` lacks.
+sync-back PR from `main` to `staging` is needed afterwards. Squash only: a rebase merge
+would replay `staging`'s history onto `main`. The script refuses to run if `main` has
+changes that `staging` lacks (a hotfix) and lists the files; bring those into `staging`
+with a normal PR, then run it again.
 
 ## Triage labels
 
