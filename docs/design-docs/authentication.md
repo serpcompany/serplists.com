@@ -57,7 +57,8 @@ and user-facing failure states when a supporting service is unavailable.
   and as a `next` query parameter, which Login, Register, and the verification
   callback carry forward so a new account returns to the page that sent it, such
   as an Organization invite. Only same-origin, non-auth paths are accepted (one
-  leading `/`, not `//`); without one, Login goes to `/dashboard/settings`.
+  leading `/`, not `//`, checked again after dot segments are removed, so
+  `/.//host` is rejected too); without one, Login goes to `/dashboard/settings`.
 - A password reset revokes every session for the account, including the one in
   the browser doing the reset; `ResetPassword.tsx` signs that browser out locally
   (the server answers that its session is gone) before sending it to `/login`.

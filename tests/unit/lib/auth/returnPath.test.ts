@@ -5,6 +5,7 @@ import {
   getPostRegisterDestination,
   getReturnPath,
   sanitizeReturnPath,
+  toSameOriginPath,
   withReturnPath,
 } from '@/lib/auth/returnPath';
 
@@ -41,6 +42,43 @@ describe('sanitizeReturnPath', () => {
     },
   );
 
+  // The URL parser removes dot segments, so these came back as the protocol-relative
+  // //evil.com, which a browser resolves to another origin.
+  it.each([
+    '/.//evil.com',
+    '/..//evil.com/share/x',
+    '/%2e//evil.com',
+    '/%2E%2E//evil.com',
+    '/./%2e//evil.com',
+    '/.///evil.com',
+    '/a/..//evil.com',
+  ])('rejects %j, which normalizes to another origin', (value) => {
+    expect(sanitizeReturnPath(value)).toBeNull();
+  });
+
+  it.each([
+    ['/./dashboard', '/dashboard'],
+    ['/a/../dashboard?x=1#h', '/dashboard?x=1#h'],
+    ['/./%2fevil.com', '/%2fevil.com'],
+  ])('accepts %j as the same-origin path %j', (value, expected) => {
+    expect(sanitizeReturnPath(value)).toBe(expected);
+  });
+
+  it('only returns paths that resolve to the app origin', () => {
+    const prefixes = ['', '/', '/.', '/..', '/a/..', '/%2e', '/%2e%2e', '/./%2e'];
+    const middles = ['', '/', '//', '///', '/%2f'];
+    for (const prefix of prefixes) {
+      for (const middle of middles) {
+        const result = sanitizeReturnPath(`${prefix}${middle}evil.com/share/x?y=1#h`);
+        if (result !== null) {
+          expect(result.startsWith('//')).toBe(false);
+          expect(new URL(result, 'https://app.test').origin).toBe('https://app.test');
+          expect(sanitizeReturnPath(result)).toBe(result);
+        }
+      }
+    }
+  });
+
   it('rejects non-strings', () => {
     expect(sanitizeReturnPath(undefined)).toBeNull();
     expect(sanitizeReturnPath(null)).toBeNull();
@@ -76,6 +114,10 @@ describe('getReturnPath', () => {
 
   it('ignores unsafe values in either source', () => {
     expect(getReturnPath({ state: { from: { pathname: '//evil.com' } }, search: '?next=https%3A%2F%2Fevil.com' })).toBeNull();
+    expect(getReturnPath({ state: { from: { pathname: '/.//evil.com' } }, search: '' })).toBeNull();
+    expect(getReturnPath({ state: { from: '/..//evil.com/share/x' }, search: '' })).toBeNull();
+    expect(getReturnPath({ state: null, search: '?next=%2F.%2F%2Fevil.com%2Fshare%2Fx' })).toBeNull();
+    expect(getReturnPath({ state: null, search: '?next=/.//evil.com/share/x' })).toBeNull();
     expect(getReturnPath({ state: 'nope', search: '' })).toBeNull();
     expect(getReturnPath({ state: { from: { search: '?x=1' } } })).toBeNull();
   });
@@ -122,6 +164,22 @@ describe('getReturnPath with the location RequireAuth saves', () => {
   ])('rejects the pathname %j, which is not a same-origin relative path', (pathname) => {
     expect(getReturnPath(fromState({ pathname }))).toBeNull();
   });
+});
+
+describe('toSameOriginPath', () => {
+  const origin = 'https://app.test';
+
+  it('returns the path, query, and hash of a same-origin target', () => {
+    expect(toSameOriginPath('/share/abc?x=1#h', origin)).toBe('/share/abc?x=1#h');
+    expect(toSameOriginPath('/./dashboard', origin)).toBe('/dashboard');
+  });
+
+  it.each(['//evil.com/share/x', '/.//evil.com/share/x', '/%2e//evil.com', 'https://evil.com/share/x'])(
+    'returns null for %j, which leaves the origin',
+    (value) => {
+      expect(toSameOriginPath(value, origin)).toBeNull();
+    },
+  );
 });
 
 describe('withReturnPath', () => {
