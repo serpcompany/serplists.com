@@ -58,7 +58,9 @@
 - **Agents act through Run Keys**, revocable credentials limited to reading
   Personal templates and listing, starting, reading, and updating Personal runs.
   Keys are stored hashed. The MCP routes are off on remote hosts unless
-  `PERSONAL_RUN_MCP_ENABLED=true`.
+  `PERSONAL_RUN_MCP_ENABLED=true`. Revoking a key its owner already revoked
+  succeeds with the original revoke time (a retry, or another tab); a missing key
+  and another user's key get the same 404.
 - **`/api/mcp` answers only known hosts** (DNS-rebinding defense in
   `functions/api/utils/agent-mcp-host.ts`): loopback hosts and the hosts in
   `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`.
