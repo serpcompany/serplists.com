@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FeaturePage, { generateMetadata as generateFeatureMetadata } from '@/app/(site)/features/[featureSlug]/page';
 import NotFoundPage, { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import NotFound from '@/views/NotFound';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -36,9 +39,36 @@ describe('NotFound page head', () => {
     const html = renderToStaticMarkup(<NotFoundPage />);
 
     expect(html).toContain('That page does not exist');
-    expect(html).toContain('The route /definitely-missing could not be found.');
     expect(notFoundMetadata.robots).toMatch(/^noindex/);
     expect(notFoundMetadata.title).toEqual({ absolute: `Page not found | ${APP_BRAND_NAME}` });
+  });
+
+  // Next.js prerenders the 404 once, for its own /_not-found/ path, and serves that HTML for
+  // every missing address: an address in it would be the wrong one, and the browser's first
+  // render (with the real address) would not match it.
+  it('names no address in the server HTML', () => {
+    navigation.reset('/definitely-missing');
+    const html = renderToStaticMarkup(<NotFoundPage />);
+
+    expect(html).toContain('This route could not be found.');
+    expect(html).not.toContain('/definitely-missing');
+  });
+
+  it('names the missing address once the page runs in the browser', async () => {
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    try {
+      navigation.reset('/definitely-missing');
+      const container = createFakeContainer();
+      const root = createRoot(container as unknown as HTMLElement);
+      await act(async () => {
+        root.render(<NotFound />);
+      });
+
+      expect(container.textContent).toContain('The route /definitely-missing could not be found.');
+      act(() => root.unmount());
+    } finally {
+      restoreGlobals();
+    }
   });
 
   it('declares no canonical URL for the missing address', () => {

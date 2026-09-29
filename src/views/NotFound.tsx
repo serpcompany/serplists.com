@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
+import { useIsClient } from '@/hooks/useIsClient';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -13,6 +14,10 @@ import { Link } from '@/components/navigation/Link';
 // renders it with <NoIndexMeta> (src/components/seo/NoIndexMeta.tsx).
 const NotFound = () => {
   const pathname = usePathname();
+  // Next.js prerenders this page once, for its own /_not-found/ path, and serves that HTML for
+  // every missing address. So the address is named only in the browser: the server's HTML
+  // never names a wrong one, and matches the first client render.
+  const route = useIsClient() ? `The route ${pathname}` : 'This route';
 
   useEffect(() => {
     console.error(
@@ -33,7 +38,7 @@ const NotFound = () => {
           align="center"
           eyebrow="404"
           title="That page does not exist"
-          description={`The route ${pathname} could not be found. Use the main navigation or head back to the home page.`}
+          description={`${route} could not be found. Use the main navigation or head back to the home page.`}
         />
         <div className="mt-8 flex justify-center">
           <Button asChild>
