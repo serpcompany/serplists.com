@@ -9,6 +9,7 @@ const signedInPersonal = {
   isProUser: true,
   isSaving: false,
   isTeamWorkspace: false,
+  isWorkspaceLoading: false,
 };
 
 describe('getPublicTemplateSaveLabels', () => {
@@ -39,8 +40,10 @@ describe('getPublicTemplateSaveLabels', () => {
     ).toEqual({ footer: 'Copy to Library', header: 'Save' });
   });
 
-  it('never asks an Organization or a signed-out visitor to upgrade', () => {
+  it('never asks an Organization, a signed-out visitor or an unconfirmed context to upgrade', () => {
     for (const params of [
+      // Until a stored Organization is confirmed, the plan loaded is Personal's.
+      { ...signedInPersonal, isProUser: false, isWorkspaceLoading: true },
       { ...signedInPersonal, isProUser: false, isTeamWorkspace: true },
       { ...signedInPersonal, isAuthenticated: false, isProUser: false },
     ]) {

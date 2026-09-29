@@ -13,7 +13,9 @@ const DEFAULT_LABELS: PublicTemplateSaveLabels = { header: 'Save', footer: 'Copy
  * Free user's click starts checkout, so the labels say so. Only a known Free plan does:
  * when the plan check failed, the click asks for a retry instead. An Organization's Template
  * limit is checked by the API, so an Organization never sees an upgrade label here.
- * Signed-out visitors are sent to log in and keep the plain labels.
+ * Neither does a context still being confirmed: the plan loaded so far is Personal's, and
+ * the tab may be in an Organization. Signed-out visitors are sent to log in and keep the
+ * plain labels.
  */
 export const getPublicTemplateSaveLabels = (params: {
   isAuthenticated: boolean;
@@ -22,12 +24,13 @@ export const getPublicTemplateSaveLabels = (params: {
   isProUser: boolean;
   isSaving: boolean;
   isTeamWorkspace: boolean;
+  isWorkspaceLoading: boolean;
 }): PublicTemplateSaveLabels => {
   if (params.isSaving) {
     return { header: 'Saving...', footer: 'Copying...' };
   }
 
-  if (!params.isAuthenticated || params.isTeamWorkspace) {
+  if (!params.isAuthenticated || params.isTeamWorkspace || params.isWorkspaceLoading) {
     return DEFAULT_LABELS;
   }
 

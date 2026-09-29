@@ -293,5 +293,41 @@ describe('PublicTemplateView', () => {
     expect(html).toContain('Your role in this Organization can view Templates only');
     expect(html).not.toContain('save it to your library');
   });
-});
 
+  // A failed teams request leaves a stored Organization unconfirmed, and the public shell has
+  // no WorkspaceGate or switcher: the page itself says why its actions wait.
+  describe('when the Organizations failed to load', () => {
+    const workspaceError = { onContinueInPersonal: () => undefined, onRetry: () => undefined };
+
+    it('explains the disabled actions and offers Retry and Continue in Personal', () => {
+      const html = renderView({ isWorkspaceLoading: true, workspaceError });
+
+      expect(html).toContain('role="alert"');
+      expect(html).toContain('Couldn&#x27;t load your Organizations');
+      expect(findButtons(html, /^Retry$/)).toHaveLength(1);
+      expect(findButtons(html, /^Continue in Personal$/)).toHaveLength(1);
+      const actions = findButtons(html, /^(Start Run|Save|Copy to Library)$/);
+      expect(actions).toHaveLength(4);
+      for (const button of actions) {
+        expect(button).toMatch(/<button[^>]*disabled=""/);
+        expect(button).toMatch(/<button[^>]*aria-describedby="public-template-workspace-error"/);
+      }
+    });
+
+    it('shows no notice while the Organizations are still loading or have loaded', () => {
+      for (const isWorkspaceLoading of [true, false]) {
+        const html = renderView({ isWorkspaceLoading, workspaceError: null });
+
+        expect(html).not.toContain('Couldn&#x27;t load your Organizations');
+        expect(html).not.toContain('aria-describedby="public-template-workspace-error"');
+      }
+    });
+
+    // The plan shown is Personal's, which may not be the context the user is in.
+    it('never labels Save as an upgrade until the active context is known', () => {
+      const html = renderView({ isProUser: false, isWorkspaceLoading: true, workspaceError });
+
+      expect(html).not.toContain('Upgrade to');
+    });
+  });
+});

@@ -53,6 +53,8 @@ const PublicTemplate = () => {
     canRunTemplates,
     isTeamWorkspace,
     isWorkspaceLoading,
+    retryWorkspace,
+    selectWorkspace,
     workspaceStatus,
   } = useWorkspace();
   const { createRun, createTemplate } = useTemplates();
@@ -273,6 +275,15 @@ const PublicTemplate = () => {
         isSaving={isSaving}
         isTeamWorkspace={isTeamWorkspace}
         isWorkspaceLoading={isWorkspaceLoading}
+        // The public shell has no WorkspaceGate, so a failed teams request is shown here.
+        workspaceError={
+          isAuthenticated && workspaceStatus === 'error'
+            ? {
+                onContinueInPersonal: () => selectWorkspace('personal'),
+                onRetry: retryWorkspace,
+              }
+            : null
+        }
         onStartRun={handleStartRun}
         onSaveTemplate={handleSaveTemplate}
       />
