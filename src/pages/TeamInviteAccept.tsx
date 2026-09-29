@@ -91,6 +91,17 @@ export default function TeamInviteAccept() {
     </>
   );
 
+  const renderDeclined = (teamName: string) => (
+    <>
+      <p className="text-sm text-muted-foreground">
+        Invite declined. You did not join {teamName}.
+      </p>
+      <Button asChild variant="outline">
+        <Link to={buildConsoleTemplatesPath()}>Open templates</Link>
+      </Button>
+    </>
+  );
+
   const renderEmailMismatch = () => (
     <>
       <p className="text-sm text-muted-foreground">
@@ -151,6 +162,16 @@ export default function TeamInviteAccept() {
       );
     }
 
+    // An answer this account gave wins over a later preview error: after a decline the
+    // invite is revoked, so the preview answers 404.
+    if (preview && invite.isAccepted) {
+      return renderJoined(preview.teamId, preview.teamName, 'Invite accepted.');
+    }
+
+    if (preview && invite.isDeclined) {
+      return renderDeclined(preview.teamName);
+    }
+
     if ([invite.previewError, invite.acceptError, invite.declineError].some(isInviteEmailMismatch)) {
       return renderEmailMismatch();
     }
@@ -175,28 +196,11 @@ export default function TeamInviteAccept() {
       );
     }
 
-    if (invite.isAccepted) {
-      return renderJoined(preview.teamId, preview.teamName, 'Invite accepted.');
-    }
-
     if (preview.status === 'already_member') {
       return renderJoined(
         preview.teamId,
         preview.teamName,
         `You're already a member of ${preview.teamName}.`,
-      );
-    }
-
-    if (invite.isDeclined) {
-      return (
-        <>
-          <p className="text-sm text-muted-foreground">
-            Invite declined. You did not join {preview.teamName}.
-          </p>
-          <Button asChild variant="outline">
-            <Link to={buildConsoleTemplatesPath()}>Open templates</Link>
-          </Button>
-        </>
       );
     }
 

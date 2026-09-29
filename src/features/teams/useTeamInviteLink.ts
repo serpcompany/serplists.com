@@ -48,40 +48,55 @@ export function useTeamInviteLink(token: string | undefined, viewerId: string | 
   // sends a single request.
   const [respondOnce] = useState(createSingleFlight);
 
-  const previewQuery = useQuery({
-    queryKey: teamInvitePreviewQueryKey(token, viewerId),
-    queryFn: () => api.getTeamInvitePreview(token as string),
-    enabled: Boolean(token) && Boolean(viewerId),
-    retry: false,
-    staleTime: 0,
-  });
-
   const refreshIncomingInvites = () =>
     queryClient.invalidateQueries({ queryKey: queryKindPrefix('incomingTeamInvites') });
+  // A preview read already under way when the answer lands must not overwrite it: after a
+  // decline the invite is revoked, so that read answers 404.
+  const stopReadingPreview = (_result: unknown, respondedAs: string | null) =>
+    queryClient.cancelQueries({ queryKey: teamInvitePreviewQueryKey(token, respondedAs) });
 
+  // Each answer records the account that gave it (the mutation variable), so another
+  // account that signs in on this page sees its own invite, not this answer.
   const acceptMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (_respondedAs: string | null) =>
       respondWithTimeout(
         acceptTeamInviteForWorkspace(token as string, { refreshTeams, rememberTeam }),
       ),
+    onSuccess: stopReadingPreview,
     onSettled: refreshIncomingInvites,
   });
 
   const declineMutation = useMutation({
-    mutationFn: () => respondWithTimeout(api.declineTeamInvite(token as string)),
+    mutationFn: (_respondedAs: string | null) =>
+      respondWithTimeout(api.declineTeamInvite(token as string)),
+    onSuccess: stopReadingPreview,
     onSettled: refreshIncomingInvites,
+  });
+
+  const isAccepted = acceptMutation.isSuccess && acceptMutation.variables === viewerId;
+  const isDeclined = declineMutation.isSuccess && declineMutation.variables === viewerId;
+
+  // Once this account has answered, the preview is not read again (on focus, reconnect or
+  // invalidation): the page keeps the loaded invite for its confirmation. An unanswered
+  // invite still rereads on focus, so a revoke or expiry shows up.
+  const previewQuery = useQuery({
+    queryKey: teamInvitePreviewQueryKey(token, viewerId),
+    queryFn: () => api.getTeamInvitePreview(token as string),
+    enabled: Boolean(token) && Boolean(viewerId) && !isAccepted && !isDeclined,
+    retry: false,
+    staleTime: 0,
   });
 
   return {
     preview: previewQuery.data,
     previewError: previewQuery.error,
     isPreviewLoading: previewQuery.isLoading,
-    accept: () => respondOnce(() => acceptMutation.mutateAsync()),
+    accept: () => respondOnce(() => acceptMutation.mutateAsync(viewerId)),
     acceptError: acceptMutation.error,
-    isAccepted: acceptMutation.isSuccess,
-    decline: () => respondOnce(() => declineMutation.mutateAsync()),
+    isAccepted,
+    decline: () => respondOnce(() => declineMutation.mutateAsync(viewerId)),
     declineError: declineMutation.error,
-    isDeclined: declineMutation.isSuccess,
+    isDeclined,
     isResponding: acceptMutation.isPending || declineMutation.isPending,
     switchToOrganization: (teamId: string) => selectWorkspace(teamId),
   };

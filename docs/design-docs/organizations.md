@@ -108,6 +108,7 @@ Invites are link-based today:
 5. A signed-out invitee can **Log in to accept** or **Create an account**; both return to the invite link afterward, including through email verification.
    Opening the link while signed in to another account names that account and offers **Sign out and continue**, which waits for sign-out and then opens the login page with the invite as the return path. The preview is cached per account, so the next account never sees the previous one's answer.
 6. Opening `/team-invites/:token` never joins anyone. The page loads the read-only preview and shows the Organization, inviter, and role with **Accept invite** and **Decline**; only a click accepts. Accepting leaves the active context unchanged and offers **Switch to <Organization>**, so a link from another site cannot quietly move a User's new Templates and Runs into an Organization.
+   Until the invitee answers, the page rereads the preview when the tab regains focus, so a revoked or expired invite shows up. Once that account has accepted or declined, it stops reading the preview (`useTeamInviteLink`), so the confirmation stays: a declined invite is revoked, and a later read would answer 404.
 7. Members other than the `owner` can leave from **Leave Organization** on `/dashboard/settings`, which returns them to Personal.
 
 Accepting an invite reactivates a disabled membership with the invite's role. An active
