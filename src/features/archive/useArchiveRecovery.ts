@@ -10,6 +10,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import {
   canRestoreArchiveItem,
   describeRestoreError,
+  getArchiveListState,
   parseArchiveItems,
   restoreArchiveItem,
   type ArchiveItem,
@@ -83,11 +84,13 @@ export function useArchiveRecovery() {
   return {
     archivedTemplates: templatesQuery.data ?? [],
     archivedRuns: runsQuery.data ?? [],
-    templatesError: templatesQuery.data ? null : templatesQuery.error,
-    runsError: runsQuery.data ? null : runsQuery.error,
+    templatesState: getArchiveListState(templatesQuery),
+    runsState: getArchiveListState(runsQuery),
+    // Shown only for a list whose state is 'error'.
+    templatesError: templatesQuery.error,
+    runsError: runsQuery.error,
     refetchTemplates: () => void templatesQuery.refetch(),
     refetchRuns: () => void runsQuery.refetch(),
-    isLoading: templatesQuery.isLoading || runsQuery.isLoading,
     canRestoreTemplates,
     canRestoreRuns,
     restoringIds,

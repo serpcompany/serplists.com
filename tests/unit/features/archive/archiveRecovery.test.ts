@@ -5,6 +5,7 @@ import { canEditTeamTemplates, canManageTeam, teamRoles } from '@functions/api/u
 import {
   canRestoreArchiveItem,
   describeRestoreError,
+  getArchiveListState,
   parseArchiveItems,
   restoreArchiveItem,
 } from '@/features/archive/archiveRecovery';
@@ -130,5 +131,23 @@ describe('describeRestoreError', () => {
     expect(describeRestoreError(limit, 'run')).toBe('Your plan allows 3 active runs.');
     expect(describeRestoreError(new Error(''), 'template')).toBe('Failed to restore template.');
     expect(describeRestoreError(createApiError(500, {}), 'run')).toBe('HTTP 500');
+  });
+});
+
+describe('getArchiveListState', () => {
+  it('is loading with no data while the query waits disabled, fetches, or retries after a failure', () => {
+    expect(getArchiveListState({ data: undefined, isError: false, isFetching: false })).toBe('loading');
+    expect(getArchiveListState({ data: undefined, isError: false, isFetching: true })).toBe('loading');
+    expect(getArchiveListState({ data: undefined, isError: true, isFetching: true })).toBe('loading');
+  });
+
+  it('is an error only once a first load failed and nothing is loading', () => {
+    expect(getArchiveListState({ data: undefined, isError: true, isFetching: false })).toBe('error');
+  });
+
+  it('keeps a loaded list, even an empty one or one whose refresh failed', () => {
+    expect(getArchiveListState({ data: [], isError: false, isFetching: false })).toBe('loaded');
+    expect(getArchiveListState({ data: [{ id: 'run-1' }], isError: true, isFetching: false })).toBe('loaded');
+    expect(getArchiveListState({ data: [{ id: 'run-1' }], isError: false, isFetching: true })).toBe('loaded');
   });
 });

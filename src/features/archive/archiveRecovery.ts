@@ -44,6 +44,21 @@ export function parseArchiveItems(rows: unknown, kind: ArchiveKind): ArchiveItem
   });
 }
 
+// What an archive list shows. A list with no data is loading until its request fails: while
+// the user or the Organizations load, the query waits disabled (React Query v5 then reports
+// isLoading false), then comes its first request, and a Retry loads again. A failed refresh
+// keeps the last loaded list. Only a loaded list may read as empty.
+export type ArchiveListState = 'loading' | 'error' | 'loaded';
+
+export const getArchiveListState = (query: {
+  data: readonly unknown[] | undefined;
+  isError: boolean;
+  isFetching: boolean;
+}): ArchiveListState => {
+  if (query.data !== undefined) return 'loaded';
+  return query.isError && !query.isFetching ? 'error' : 'loading';
+};
+
 // The API restores a Template for those who may edit it (editor and above in an
 // Organization, canEditTemplate) and a Run for admins and above (canRestoreRun). In Personal
 // the owner may restore both. Every archived row belongs to the active context.

@@ -3,7 +3,7 @@ import { FileText, ListChecks, RotateCcw } from 'lucide-react';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
 import { Button } from '@/components/ui/button';
-import type { ArchiveItem } from '@/features/archive/archiveRecovery';
+import type { ArchiveItem, ArchiveListState } from '@/features/archive/archiveRecovery';
 import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
 
 function formatArchiveDate(dateString: string): string {
@@ -27,6 +27,7 @@ type ArchiveListProps = {
   onRestore: (item: ArchiveItem) => void;
   onRetry: () => void;
   restoringIds: ReadonlySet<string>;
+  state: ArchiveListState;
   title: string;
 };
 
@@ -40,6 +41,7 @@ function ArchiveList({
   onRestore,
   onRetry,
   restoringIds,
+  state,
   title,
 }: ArchiveListProps) {
   return (
@@ -49,12 +51,18 @@ function ArchiveList({
           {icon}
           {title}
         </h2>
-        <span className="text-xs font-medium text-muted-foreground">
-          {items.length}
-        </span>
+        {state === 'loaded' ? (
+          <span className="text-xs font-medium text-muted-foreground">
+            {items.length}
+          </span>
+        ) : null}
       </div>
 
-      {error ? (
+      {state === 'loading' ? (
+        <div className="px-4 py-5 text-sm text-muted-foreground">
+          Loading {listName}...
+        </div>
+      ) : state === 'error' ? (
         <ListLoadErrorState error={error} listName={listName} onRetry={onRetry} />
       ) : items.length === 0 ? (
         <div className="px-4 py-5 text-sm text-muted-foreground">
@@ -104,25 +112,35 @@ export function ArchiveRecoverySection() {
   const {
     archivedTemplates,
     archivedRuns,
+    templatesState,
+    runsState,
     templatesError,
     runsError,
     refetchTemplates,
     refetchRuns,
-    isLoading,
     canRestoreTemplates,
     canRestoreRuns,
     restoringIds,
     restore,
   } = useArchiveRecovery();
   const archiveCount = archivedTemplates.length + archivedRuns.length;
+  const listStates = [templatesState, runsState];
+  // The total counts only once both lists loaded; a failed list shows its own error.
+  const badge = listStates.includes('loading')
+    ? 'Loading'
+    : listStates.includes('error')
+      ? null
+      : `${archiveCount} archived`;
 
   return (
     <section className="space-y-4" data-archive-recovery-section="true">
-      <div className="flex justify-end">
-        <span className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          {isLoading ? 'Loading' : `${archiveCount} archived`}
-        </span>
-      </div>
+      {badge ? (
+        <div className="flex justify-end">
+          <span className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+            {badge}
+          </span>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ArchiveList
@@ -131,6 +149,7 @@ export function ArchiveRecoverySection() {
           listName="archived templates"
           emptyLabel="No archived templates"
           error={templatesError}
+          state={templatesState}
           icon={<FileText className="h-4 w-4 text-muted-foreground" />}
           items={archivedTemplates}
           restoringIds={restoringIds}
@@ -143,6 +162,7 @@ export function ArchiveRecoverySection() {
           listName="archived runs"
           emptyLabel="No archived runs"
           error={runsError}
+          state={runsState}
           icon={<ListChecks className="h-4 w-4 text-muted-foreground" />}
           items={archivedRuns}
           restoringIds={restoringIds}
