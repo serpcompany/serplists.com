@@ -388,3 +388,6 @@ Each of these needs the user's approval, or happens with the domain move:
   Account Settings. The user chose the console home (`buildConsoleHomePath()`, My Templates):
   `getPostSignInDestination` in `src/lib/auth/returnPath.ts` gives it to the login page, which
   email verification and password reset end on, and sign-up without verification uses it too.
+- 2026-09-29: **Account menu without "Dashboard".** Its "Dashboard" and "My Templates" both
+  opened `/dashboard/templates/`. The user kept "My Templates", the name the spec uses with
+  My Runs.

@@ -22,15 +22,15 @@ import { signOutAndLeave } from '@/features/auth/signOut';
 import { leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import {
-  buildConsoleHomePath,
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
   buildPublicProfilePath,
 } from '@/lib/routes';
 
-// The signed-in user's menu: the console pages, the Public Profile and Sign out. The site
-// header opens it from an avatar button, the console sidebar from its footer row.
+// The signed-in user's menu: the console pages (My Templates, the console home, then My Runs
+// and Settings), the Public Profile and Sign out. The site header opens it from an avatar
+// button, the console sidebar from its footer row.
 function AccountMenuContent({
   side,
   trigger,
@@ -73,7 +73,6 @@ function AccountMenuContent({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem render={<Link href={buildConsoleHomePath()} />}>Dashboard</DropdownMenuItem>
           <DropdownMenuItem render={<Link href={buildConsoleTemplatesPath()} />}>
             My Templates
           </DropdownMenuItem>

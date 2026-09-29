@@ -346,8 +346,8 @@ existing content, invent nothing):
   - Content: "New Template" (when the role can edit Templates), "Templates", "Runs",
     "Discover", "Import Templates", "Archive", "Settings", and the "Categories" link the phone
     menu had.
-  - Footer: the theme toggle and the account menu ("Dashboard", "My Templates", "My Runs",
-    "Settings", "Profile", "Sign out").
+  - Footer: the theme toggle and the account menu ("My Templates", "My Runs", "Settings",
+    "Profile", "Sign out").
   - A top bar in the inset holds the sidebar trigger, and from `md` up the site links the
     console header had. On phones the sidebar opens as its own sheet and the bottom bar goes
     away. The site footer stays under console pages.
@@ -1089,7 +1089,7 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** My Templates (`/dashboard/templates/`)
 - **PURPOSE:** List the active context's Templates and start work from them.
-- **HOW USER GETS HERE:** sidebar "Templates"; account menu "Dashboard" or "My Templates";
+- **HOW USER GETS HERE:** sidebar "Templates"; account menu "My Templates";
   `/dashboard/` (redirect); Home "Open Dashboard"; a sign-in with no return path; after
   creating a Template; "Back to Templates" and the editor's back arrow; "Switch to
   <Organization>" on an invite.
@@ -1561,8 +1561,9 @@ replaced.
 - **PURPOSE:** Reach the console, the Public Profile, and sign out.
 - **HOW USER GETS HERE:** signed in: the avatar button ("Account menu") in the site header
   on public pages; the account row ("Account menu") in the sidebar footer on console pages.
-- **WHAT'S ON THE SCREEN:** the name (or "Your account") and email; "Dashboard", "My Templates",
-  "My Runs", "Settings", "Profile" (only with a username; opens a new tab); "Sign out".
+- **WHAT'S ON THE SCREEN:** the name (or "Your account") and email; "My Templates" (the
+  console home), "My Runs", "Settings", "Profile" (only with a username; opens a new tab);
+  "Sign out".
 - **PRIMARY ACTION:** a destination.
 - **SECONDARY ACTIONS:** "Sign out" → Home.
 - **STATES:** no username (no "Profile"); "Signing out..."; a page with unsaved work asks
@@ -1581,7 +1582,8 @@ replaced.
   the signed-in public shots (the avatar trigger).
 - **NOTES:**
   - Code: `src/components/layout/AccountMenu.tsx`.
-  - "Dashboard" and "My Templates" open the same page (`/dashboard/templates/`).
+  - Each console page is listed once: the menu had a "Dashboard" item that opened My
+    Templates too, removed on 2026-09-29.
 
 ### Context switcher
 
@@ -1869,7 +1871,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- The account menu's "Dashboard" and "My Templates" open the same page.
 - My Runs' empty state "Browse Templates" opens My Templates; every other "Browse Templates"
   opens the public library.
 - The library is named three ways: "Templates" (header), "Discover" (sidebar), "Discover
