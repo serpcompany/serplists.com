@@ -175,3 +175,40 @@ test('library filters follow the URL and clearing the search keeps the page', as
   await page.goto('/templates?category=outdoor');
   await expect(page).toHaveURL(/\/categories\/outdoor$/);
 });
+
+test('a related category opens with no search or sort from the previous one', async ({
+  page,
+}) => {
+  const searchBox = page.getByPlaceholder('Search templates...');
+  const sortTrigger = page.getByRole('combobox');
+
+  await page.goto('/categories/outdoor');
+  await expect(
+    page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
+  ).toBeVisible();
+  await searchBox.fill('zzzz-no-such-template');
+  await expect(
+    page.getByText('No templates found matching your search.'),
+  ).toBeVisible();
+  await sortTrigger.click();
+  await page.getByRole('option', { name: 'Name A-Z' }).click();
+  await expect(sortTrigger).toHaveText('Name A-Z');
+
+  const relatedLink = page
+    .locator('section', {
+      has: page.getByRole('heading', { name: 'Related Categories' }),
+    })
+    .getByRole('link')
+    .first();
+  const relatedPath = await relatedLink.getAttribute('href');
+  expect(relatedPath).toMatch(/^\/categories\/[^/]+$/);
+  await relatedLink.click();
+
+  await expect(page).toHaveURL(new RegExp(`${relatedPath}$`));
+  await expect(searchBox).toHaveValue('');
+  await expect(sortTrigger).toHaveText('Most Popular');
+  await expect(
+    page.getByText('No templates found matching your search.'),
+  ).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Start' }).first()).toBeVisible();
+});

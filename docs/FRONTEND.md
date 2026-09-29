@@ -40,6 +40,12 @@ another path clears it (the boundary resets on a pathname change, so healthy pag
 never remounted). The `ErrorBoundary` around the providers in `App.tsx` is the last
 resort: its fallback uses plain links, and browser Back clears it.
 
+React Router keeps the same page instance when only a route param changes, so a page
+whose state belongs to one param is keyed by it. `CategoryDetailRoute` keys the category
+page by its normalized slug, so a Related Categories link or Back starts the next
+category with an empty search and the default sort; `TemplateEditorRoute` does the same
+for the editor (below).
+
 The router's history never resets the window's scroll, so `ScrollToTop`
 (`src/components/routing/`) is mounted once in `AppShell`, inside the router. When a
 navigation changes the pathname, it scrolls to the URL's `#anchor` if that element
