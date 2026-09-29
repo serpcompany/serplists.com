@@ -1,6 +1,6 @@
 # Data Persistence
 
-The persistence layer uses Cloudflare D1 for transactional data, Cloudflare Pages Functions for API access, Cloudflare R2 for uploads, and TanStack React Query for client-side caching.
+The persistence layer uses Cloudflare D1 for transactional data, the API in the app's Cloudflare Worker (`functions/api`, behind the route handler `src/app/api/[[...route]]/route.ts`) for access, Cloudflare R2 for uploads, and TanStack React Query for client-side caching.
 
 ## Related Files
 
@@ -80,9 +80,9 @@ Handlers must authorize Organization access before returning or mutating Organiz
 
 Client requests go through `src/lib/api.ts`, which uses:
 
-- `http://localhost:8788/api` in dev unless `VITE_API_URL` overrides it.
-- `/api` in deployed environments. `src/lib/apiBaseUrl.ts` resolves the base for
-  both `api.ts` and the Better Auth client, and ignores a loopback `VITE_API_URL`
+- `/api` on the page's own origin, in development and in deployed environments, unless
+  `NEXT_PUBLIC_API_URL` names another API. `src/lib/apiBaseUrl.ts` resolves the base for
+  both `api.ts` and the Better Auth client, and ignores a loopback `NEXT_PUBLIC_API_URL`
   unless the page is served from a loopback host.
 - Better Auth cookies for session state.
 

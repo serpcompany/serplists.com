@@ -1,7 +1,8 @@
 # AGENTS
 
 SERP Lists lets people and Organizations own reusable templates and execute them
-as runs. React SPA (`src/`) + Cloudflare Pages Functions API (`functions/`) + D1.
+as runs. Next.js app (`src/`) with its API (`functions/`) in one Cloudflare Worker
+(OpenNext) + D1.
 This file is a map: read the linked source of truth before changing an area.
 
 Using `rg` crashes VS Code because it spawns hundreds of processes. DO NOT USE IT.
@@ -27,13 +28,14 @@ Use `grep`/`find` instead.
 ## Commands
 
 ```bash
-pnpm install && pnpm run setup   # fresh clone or worktree: .dev.vars, local D1, browser, dist/
-pnpm run dev:all                 # app + API on a free port pair; logs in tmp/logs/dev-all.log
-pnpm run dev:stop                # stop them, including child processes (use this, not a kill)
-pnpm run ui:snap -- dashboard --login john@test.com   # screenshot + accessibility tree
+pnpm install && pnpm run setup   # fresh clone or worktree: .dev.vars, local D1, browser
+pnpm run dev:all                 # next dev (pages + API) on a free port; logs in tmp/logs/dev-all.log
+pnpm run dev:stop                # stop it, including child processes (use this, not a kill)
+pnpm run preview                 # the OpenNext build in workerd, as deployed
+pnpm run ui:snap -- dashboard --login john@test.com   # screenshot + accessibility tree of the dev:all app
 pnpm run verify                  # the pre-PR gate: env, lint, types, repo checks, unit tests
-pnpm run test:smoke              # browser smoke tests on an isolated local stack
-pnpm run test:e2e:full           # full browser suite (required for promotions to main)
+pnpm run test:smoke              # browser smoke tests: the OpenNext build on an isolated local stack
+pnpm run test:e2e:full           # full browser suite, same stack (required for promotions to main)
 ```
 
 Details: [development environment](docs/design-docs/development-environment.md).

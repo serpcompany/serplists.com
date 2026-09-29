@@ -86,12 +86,13 @@ The same as the approved reference:
 - **Trailing slashes.** zenbujapanese.com follows the SERP URL standard: pages end in `/`,
   files never do. Adopting it here means a 308 redirect from every current URL. It is
   cheapest to do during the port.
-- **Lint.** The reference uses Biome. This repo keeps ESLint, with `eslint-config-next`
-  added, for its guardrails (file-size caps, the suppressions file), unless Biome is required.
-- **Local Worker builds on Windows.** `pnpm run preview` fails on Windows (see the decision
-  log). Options: build in WSL; set pnpm's `node-linker=hoisted`, which drops the links; or a
-  build helper that repoints OpenNext's copied links at its patched copies (a local one
-  proved the build).
+- **Prefetching and caching on the Worker.** No incremental cache is configured
+  (`open-next.config.ts`), so the Worker renders every request, the prerendered static
+  pages included, and the app's links prefetch every route they show: a page view costs
+  about ten more Worker requests, each rendering a page. Locally, 30 concurrent RSC
+  requests took about 5 seconds on one workerd process. Before launch, decide between the
+  static-assets incremental cache (prerendered pages served from assets), a prefetch policy
+  on the app's `Link`, or both, and check the Workers request count on staging.
 
 ## Progress
 
@@ -110,9 +111,19 @@ The same as the approved reference:
     (`56f8a9e3`). `next build` and `opennextjs-cloudflare build` succeed; the preview in
     workerd serves the public pages, sign-in, the dashboard, the API and the sitemaps.
     Worker: 13,913 KiB, 2,808 KiB gzipped (Workers Free allows 3 MiB).
-  - [ ] Unit tests (mocking `next/navigation`) and the browser suite against the preview.
-  - [ ] Development scripts (`dev:all`, `setup`, `run-smoke`, `ui:snap`), `.dev.vars` and
-    the development environment docs.
+  - [x] Unit tests on Next.js navigation (`tests/support/nextNavigation.tsx`), route files
+    and metadata (`c3a83595`); the leave guard redesigned with them (`96cc0f1a`,
+    `b6c08987`).
+  - [x] ESLint with `eslint-config-next` (core web vitals and the React Compiler rules),
+    fixed without suppressions (`ed4aba10`, `5233f50b`).
+  - [x] Development scripts: `dev:all` runs one `next dev` on a free port; `setup`,
+    `ui:snap`, `d1:profile`, the Stripe listener, `.dev.vars.example` and
+    `cloudflare-env.d.ts` follow (`07054f13`).
+  - [x] Browser suite on the OpenNext build in workerd (`opennextjs-cloudflare preview`):
+    all 246 tests pass on one worker in 39 minutes (`89d31049`). CI builds with OpenNext
+    and tests that build; the Pages deploy is disconnected (`3f667692`). Worker now:
+    14,177 KiB, 2,883 KiB gzipped (`wrangler deploy --dry-run`), 189 KiB under the Workers
+    Free limit.
 
 ## Decision log
 
@@ -150,7 +161,50 @@ The same as the approved reference:
 - 2026-09-29: **Template packs:** Turbopack's `import.meta.glob` matched nothing for a
   `../` pattern, so the bundled library was empty in the foundation build; the glob now
   sits in `src/data/public-template-packs/index.ts`.
+- 2026-09-29: **Leave guard on Next.js navigation.** The page decides a navigation after
+  it renders its latest state (`leavePage` in `leaveGuard.ts`), so a page that saved and left
+  in the same step goes without a question. It holds one marked copy of its history entry
+  for its life: Back past it asks once, a navigation away replaces it, and a #fragment above
+  it is not a way out.
+- 2026-09-29: **Legacy category sitemap** is a route handler, not a `next.config.ts`
+  redirect, which dropped `?page=`: it redirects to the page's shard like
+  `/sitemaps/static.xml`.
+- 2026-09-29: **Lint.** ESLint stays (the file-size caps and the suppressions file), with
+  `eslint-config-next/core-web-vitals`. Its React Compiler rules were fixed, not suppressed:
+  state read from outside React goes through `useSyncExternalStore` with a server snapshot,
+  state reset by a changed input is adjusted while rendering, and refs are written in
+  effects. `next/link` and `useRouter` are restricted to the app's navigation code, and user
+  content keeps plain `<img>` elements.
+- 2026-09-29: **Head scripts.** In the App Router, `next/script`'s `beforeInteractive` only
+  queues an inline script for Next.js's runtime, after the first paint, so a dark-theme page
+  flashed light. The theme script and the Tag Manager bootstrap are plain scripts in the
+  root layout's `<head>`, as in `index.html` before.
+- 2026-09-29: **Local servers** (`localhost`, `127.0.0.1`) get the Content-Security-Policy
+  without `upgrade-insecure-requests`: over http, Chrome upgraded the redirects client
+  navigations follow (`/dashboard`) to https and the navigation stalled for about 15
+  seconds. Every host but `serplists.com` gets `X-Robots-Tag: noindex, nofollow`, as the old
+  app's host check did for every host (the page metadata cannot know the host).
+- 2026-09-29: **`dev:all`** runs one `next dev` on a free port from 3000. `next dev` reads
+  bindings only from `wrangler.toml` and `.dev.vars` (OpenNext passes no env files), so the
+  launcher hands the port-dependent vars (`FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, the auth
+  secret) to `next.config.ts` in `SERPLISTS_DEV_BINDINGS`, which sets them over the
+  bindings.
+- 2026-09-29: **Browser tests run the production build** in workerd: the runner builds with
+  OpenNext, seeds `.wrangler/smoke-state`, and `tests/e2e/preview-server.mjs` serves it with
+  `opennextjs-cloudflare preview` and `--var` overrides (passed through a shell, so only
+  plain values). They run on one Playwright worker (one workerd process renders every page
+  and prefetch), sign in by typing (no dev Fill buttons in production), and move inside the
+  app with Next.js's router (`window.next.router`), since a synthetic `pushState` only
+  changes the URL. Specs whose expectations were Vite-era implementation details were
+  updated: no `/link-preview/` route (every page's own tags are in its HTML), return paths
+  in `?next=`, `/dashboard` redirected by the server, OpenNext's own `Cache-Control` on
+  404s, and robots tags a page may repeat in the browser.
+- 2026-09-29: **Not-found metadata** for a missing template or profile names no canonical URL
+  (the address is not a page), as those pages had none before.
+- 2026-09-29: **Deploys.** `cloudflare-pages-deploy.yml` has no caller and fails at its first
+  step, since `pnpm run build` makes no `./dist` for Pages; the Workers deploy replaces it in
+  phase 4.
 - 2026-09-29: **Windows builds:** `opennextjs-cloudflare build` bundles the repo's real,
   unpatched Next.js on Windows, because pnpm's links there are absolute (the build fails on
-  `sharp`). OpenNext supports Linux and WSL; CI builds on Linux. How to build locally on
-  Windows is open (below).
+  `sharp`). OpenNext supports Linux and WSL; CI builds on Linux. `.npmrc` sets
+  `node-linker=hoisted`, so the Windows build works too (`02b0a62d`).

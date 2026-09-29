@@ -1,6 +1,7 @@
 # Authentication and Accounts
 
-Better Auth provides cookie-based (httpOnly) sessions on Cloudflare Pages Functions.
+Better Auth provides cookie-based (httpOnly) sessions from the API, which runs in the app's
+Cloudflare Worker (the route handler `src/app/api/[[...route]]/route.ts`).
 Security rules and required secrets are in [SECURITY.md](../SECURITY.md).
 
 ## Where it lives
@@ -184,10 +185,11 @@ router refuses form posts and cross-site requests before Better Auth runs
 
 ## Local development
 
-Vite (`localhost:8080`) and the API (`localhost:8788`) are different origins, so
-cookie sessions need `credentials: "include"` on the client and
-`Access-Control-Allow-Credentials: true` with a non-`*` origin from the API
-(`functions/api/utils/cors.ts` reflects the origin by default).
+`pnpm run dev:all` serves the pages and the API on one origin, as deployed, so the
+session cookie is first-party. The client still sends `credentials: "include"`, and the
+API answers another allowed origin with `Access-Control-Allow-Credentials: true` and a
+non-`*` origin (`functions/api/utils/cors.ts` reflects the origin when no allowlist is
+set).
 
 ## Database
 

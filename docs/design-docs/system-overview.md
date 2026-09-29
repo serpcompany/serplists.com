@@ -76,10 +76,9 @@ Organization scoping applies.
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
 - Health: `GET|HEAD /api/health`
 
-`functions/api/[[route]].ts` exports one catch-all `onRequest`, so every method,
-`HEAD` and `PATCH` included, reaches the API. Pages matches a verb export such as
-`onRequestGet` only on its exact method and sends any other method to the static
-assets, which would answer `200` with the SPA's `index.html`. A `HEAD` answer keeps
+The route handler `src/app/api/[[...route]]/route.ts` exports the same handler for every
+method Next.js routes, `HEAD`, `PATCH` and `OPTIONS` included, so every `/api/*` request
+reaches the API router (`functions/api/[[route]].ts`) instead of a page. A `HEAD` answer keeps
 the status and headers the route builds and drops the body; routes that only check
 for `GET` answer `HEAD` with their own `404` or `405`.
 
