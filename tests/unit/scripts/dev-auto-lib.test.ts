@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +13,7 @@ import {
   describeDevSessionConflict,
   findOpenPortPair,
   isOwnedDevProcess,
+  isPortAvailable,
   isProcessAlive,
   readDevSession,
   resolvePortPairForMode,
@@ -96,6 +99,65 @@ describe("findOpenPortPair", () => {
       frontendPort: 8082,
       apiPort: 8790,
     });
+  });
+});
+
+// The dev servers listen on one address each (Vite's `localhost` on ::1 or 127.0.0.1,
+// Wrangler on 127.0.0.1 on Windows), from another process. On Windows a bind to another
+// address of the same port still succeeds, so a probe that binds only the wildcard calls
+// such a port free.
+describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
+  const HOLDER = `
+    const server = require("node:net").createServer();
+    server.on("error", (error) => { console.log("error:" + error.code); });
+    server.listen({ ...JSON.parse(process.argv[1]), port: 0 }, () => console.log("port:" + server.address().port));
+    process.stdin.on("end", () => process.exit(0));
+    process.stdin.resume();
+  `;
+
+  // Holds a port on `listen` from another process; null when this machine lacks the address.
+  async function holdPort(listen: Record<string, unknown>) {
+    const child = spawn(process.execPath, ["-e", HOLDER, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
+    const line = await new Promise<string>((resolve) => {
+      child.stdout.once("data", (data) => resolve(String(data).trim()));
+      child.once("exit", () => resolve("exited"));
+    });
+    const release = () => new Promise<void>((resolve) => {
+      if (child.exitCode !== null) return resolve();
+      child.once("exit", () => resolve());
+      child.kill();
+    });
+    if (!line.startsWith("port:")) {
+      await release();
+      return null;
+    }
+    return { port: Number(line.slice("port:".length)), release };
+  }
+
+  it.each([
+    ["127.0.0.1", { host: "127.0.0.1" }],
+    ["::1", { host: "::1" }],
+    ["0.0.0.0", { host: "0.0.0.0" }],
+    [":: (dual-stack)", { host: "::", ipv6Only: false }],
+  ])("calls a port busy while another process listens on %s", async (_label, listen) => {
+    const holder = await holdPort(listen);
+    if (!holder) return; // No IPv6 on this machine.
+    try {
+      expect(await isPortAvailable(holder.port)).toBe(false);
+    } finally {
+      await holder.release();
+    }
+  });
+
+  it("calls a port nothing holds free", async () => {
+    const port = await new Promise<number>((resolve) => {
+      const server = net.createServer().listen({ host: "127.0.0.1", port: 0 }, () => {
+        const { port: freePort } = server.address() as net.AddressInfo;
+        server.close(() => resolve(freePort));
+      });
+    });
+
+    expect(await isPortAvailable(port)).toBe(true);
   });
 });
 

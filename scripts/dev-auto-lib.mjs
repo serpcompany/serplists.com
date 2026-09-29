@@ -181,25 +181,60 @@ export function buildDevCommands({
   };
 }
 
-export async function isPortAvailable(port) {
+// A dev server listens on one address: Vite's `localhost` is ::1 or 127.0.0.1 depending on
+// the resolver, Wrangler binds 127.0.0.1 on Windows and `localhost` elsewhere, and other
+// tools take a wildcard. On Windows a bind to one of these succeeds while another process
+// holds the port on a different one, so a port is free only if every one of them binds.
+const PORT_PROBE_BINDS = [
+  { host: "127.0.0.1" },
+  { host: "::1" },
+  { host: "0.0.0.0" },
+  { host: "::", ipv6Only: false },
+];
+const PORT_PROBE_CONNECT_HOSTS = ["127.0.0.1", "::1"];
+const PORT_PROBE_CONNECT_TIMEOUT_MS = 500;
+// The machine lacks that address (IPv6 disabled): the bind says nothing about the port.
+const MISSING_ADDRESS_CODES = new Set(["EADDRNOTAVAIL", "EAFNOSUPPORT", "ENETUNREACH", "EPROTONOSUPPORT"]);
+
+// Resolves only after the probe server has closed, so the probe never holds the port itself.
+function canBind(port, listenOptions) {
   return new Promise((resolve) => {
     const server = net.createServer();
-
-    server.once("error", () => {
-      resolve(false);
-    });
-
-    server.once("listening", () => {
-      server.close(() => resolve(true));
-    });
-
-    server.listen({
-      host: "::",
-      port,
-      exclusive: true,
-      ipv6Only: false,
-    });
+    server.once("error", (error) => resolve(MISSING_ADDRESS_CODES.has(error?.code)));
+    server.once("listening", () => server.close(() => resolve(true)));
+    server.listen({ ...listenOptions, port, exclusive: true });
   });
+}
+
+// True when something accepts a connection there. A refusal, a missing address, or no answer
+// in time leaves the answer to the binds: on some Windows setups a refused loopback
+// connection takes a second or more, and that must not make every port look busy.
+function acceptsConnection(port, host) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const finish = (accepted) => {
+      socket.destroy();
+      resolve(accepted);
+    };
+    socket.setTimeout(PORT_PROBE_CONNECT_TIMEOUT_MS, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+/**
+ * True when no server holds `port` on any address a dev server may use: nothing accepts a
+ * connection on either loopback address, and the port binds on 127.0.0.1, ::1, 0.0.0.0 and
+ * the dual-stack wildcard in turn. The dev launchers, the smoke runner and the Stripe
+ * listener's predicted target all pick ports with it (findOpenPortPair).
+ */
+export async function isPortAvailable(port) {
+  const accepted = await Promise.all(PORT_PROBE_CONNECT_HOSTS.map((host) => acceptsConnection(port, host)));
+  if (accepted.some(Boolean)) return false;
+  for (const listenOptions of PORT_PROBE_BINDS) {
+    if (!(await canBind(port, listenOptions))) return false;
+  }
+  return true;
 }
 
 // EPERM means the pid belongs to another user or an elevated process. The dev
