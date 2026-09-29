@@ -7,10 +7,8 @@ import type { KeyboardEvent } from "react";
 export const REORDER_KEYS_HINT = "Press the Up or Down arrow key to move it.";
 
 // Row actions (add, remove) that appear on hover must also appear when the keyboard
-// reaches the row or the action itself, and on touch screens, which cannot hover. An
-// invisible focused button hides its focus ring too, so Enter would act unseen.
-export const ROW_ACTIONS_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+// reaches the row or the action itself, and on touch screens, which cannot hover.
+export { HOVER_REVEAL_CLASS as ROW_ACTIONS_REVEAL_CLASS } from "@/components/ui/hover-reveal";
 
 export type ReorderKeyEvent = Pick<
   KeyboardEvent,

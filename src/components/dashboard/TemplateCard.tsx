@@ -19,7 +19,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 // Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
@@ -80,7 +82,8 @@ export function TemplateCard({
               <DropdownMenuTrigger asChild>
                 <Button
                   aria-label={actionsLabel}
-                  className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
+                  // The only way to these actions on a touch screen or from the keyboard.
+                  className={cn('h-7 w-7 data-[state=open]:opacity-100', HOVER_REVEAL_CLASS)}
                   size="icon"
                   variant="ghost"
                 >
@@ -164,12 +167,13 @@ export function TemplateCard({
         </div>
       </div>
 
-      {/* A pointer shortcut only: keyboard and screen reader users start runs from the
-          actions menu, so this hidden, clipped copy never takes focus. */}
+      {/* A pointer shortcut only: keyboard, screen reader and touch users start runs from the
+          actions menu, so this hidden, clipped copy never takes focus, and touch screens,
+          where a tap can leave :hover stuck, never show it over the card. */}
       {onStartRun ? (
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100"
+          className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:hidden"
         >
           <Button
             className="w-full"

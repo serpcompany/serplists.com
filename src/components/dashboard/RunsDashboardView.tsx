@@ -315,7 +315,8 @@ export function RunsDashboardView({
                   </div>
 
                   <div
-                    className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
+                    // Hidden until hover only on devices that can hover: touch screens always show them.
+                    className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:[@media(hover:hover)]:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
                     data-run-actions="true"
                   >
                     {actions.canRevalidate && onRevalidateRun ? (
