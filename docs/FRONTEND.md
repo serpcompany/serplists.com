@@ -142,7 +142,10 @@ let it ask, so the user is asked once.
   or moved to an Organization) is dropped.
 - Context values and helpers (`getTemplate`, the lists) keep their identity until their
   data changes, but never key a fetch on them: providers still re-render for unrelated
-  reasons.
+  reasons. Actions (`updateRun`, `deleteRun`, `createTemplate`, ...) keep theirs for the
+  life of the provider. The run page loads its run only when the run id or share token
+  changes, and reads callbacks when it uses them, since a load clears unsaved task
+  notes and the selected task.
 - Template detail pages never show a copy from a list: a list is refetched after an
   edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
   public template page loads its template from the API on every visit (bundled library
