@@ -180,7 +180,7 @@ export function PublicTemplateView({
   return (
     <DetailPageLayout
       breadcrumbs={[
-        { href: buildPublicTemplatesPath(), label: 'Templates' },
+        { href: buildPublicTemplatesPath(), label: 'Template Library' },
         { label: template.title },
       ]}
       notice={

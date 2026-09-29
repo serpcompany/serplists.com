@@ -37,7 +37,7 @@ test('a public template page has one description, its own', async ({ page }) => 
 
 test('leaving an SEO page restores the site defaults once', async ({ page }) => {
   await page.goto('/templates/');
-  await expect(page).toHaveTitle('Discover Templates | SERP Lists');
+  await expect(page).toHaveTitle('Template Library | SERP Lists');
   await expectOneOfEachTag(page);
 
   // A header link navigates client-side; page.goto would load the page from the server.

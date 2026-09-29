@@ -49,7 +49,7 @@ import {
 import {
   buildConsoleRunPath,
   buildConsoleTemplatePath,
-  buildConsoleTemplatesPath,
+  buildPublicTemplatesPath,
 } from '@/lib/routes';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import { cn } from '@/lib/utils';
@@ -237,9 +237,9 @@ export function RunsDashboardView({
             action={
               !searchQuery ? (
               <Link
-                href={buildConsoleTemplatesPath()}
+                href={buildPublicTemplatesPath()}
                 className={buttonVariants()}
-              >Browse Templates</Link>
+              >Browse the Template Library</Link>
               ) : null
             }
           />

@@ -9,7 +9,7 @@ export type TemplateListReadiness = {
   ready: boolean;
   // The session is known. The catalog is the same for everyone and its key has no user or
   // context, so it does not wait for the Organizations: a failed or slow teams request must
-  // not hide the community templates on the public library, category and search pages.
+  // not hide the community templates on the Template Library, category and search pages.
   catalogReady: boolean;
 };
 

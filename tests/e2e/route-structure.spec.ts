@@ -121,7 +121,7 @@ test.describe('route structure', () => {
     await page.goto('/templates/');
     await expect(
       page.getByRole('heading', {
-        name: 'Discover Templates',
+        name: 'Template Library',
       }),
     ).toBeVisible();
 

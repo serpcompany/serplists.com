@@ -149,7 +149,7 @@ describe('App public route parity', () => {
     const html = renderAppAt('/', <HomePage />);
 
     expect(html).toContain('Build the checklist once. Run it every time.');
-    expect(html).toContain('Template library');
+    expect(html).toContain('Template Library');
     expect(html).toContain('Live run tracking');
     expect(html).toContain('Shareable proof');
     expect(html).toContain('data-app-shell="public"');
@@ -177,7 +177,7 @@ describe('App public route parity', () => {
   it('renders /templates inside the shared public shell with detail-card href semantics', async () => {
     const html = renderAppAt('/templates/', <TemplatesPage />);
 
-    expect(html).toContain('Discover Templates');
+    expect(html).toContain('Template Library');
     expect(html).toContain('Browse by Category');
     expect(html).toContain('href="/templates/"');
     expect(html).toContain('href="/features/"');

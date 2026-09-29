@@ -29,7 +29,7 @@ describe('Index layout', () => {
     );
 
     expect(html).toContain('Build the checklist once. Run it every time.');
-    expect(html).toContain('Template library');
+    expect(html).toContain('Template Library');
     expect(html).toContain('Live run tracking');
     expect(html).toContain('Shareable proof');
     expect(html).toContain('1');

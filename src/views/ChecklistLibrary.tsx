@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { TEMPLATE_LIBRARY_PAGE_TEXT } from '@/lib/publicPageMeta';
 import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 type ChecklistLibraryProps = {
@@ -215,7 +216,7 @@ const ChecklistLibrary = ({
               value={syncedSearchDraft.draft}
             />
           }
-          title={title ?? 'Discover Templates'}
+          title={title ?? TEMPLATE_LIBRARY_PAGE_TEXT.title}
         />
       </PageSection>
 

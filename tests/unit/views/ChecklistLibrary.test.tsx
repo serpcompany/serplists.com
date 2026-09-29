@@ -84,7 +84,7 @@ describe('ChecklistLibrary route behavior', () => {
       <ChecklistLibrary />,
     );
 
-    expect(markup).toContain('Discover Templates');
+    expect(markup).toContain('Template Library');
     expect(markup).toContain(
       'Browse hundreds of ready-to-use checklists created by the community',
     );
@@ -97,7 +97,7 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).not.toContain('Template library');
     expect(markup).not.toContain('Browse all templates');
     // The route's own title and canonical URL, rendered on the server.
-    expect(libraryMetadata.title).toEqual({ absolute: 'Discover Templates | SERP Lists' });
+    expect(libraryMetadata.title).toEqual({ absolute: 'Template Library | SERP Lists' });
     expect(libraryMetadata.alternates?.canonical).toBe('https://serplists.com/templates/');
   });
 
@@ -347,14 +347,14 @@ describe('Discovery pages while the catalog loads', () => {
     // Clearing the search on ?category=moving&search=box writes ?category=moving, marking
     // the entry as written here.
     const selfWritten = await mountLibrary('/templates/?category=moving', LIBRARY_FILTER_UPDATE_STATE);
-    expect(selfWritten).toContain('Discover Templates');
+    expect(selfWritten).toContain('Template Library');
     expect(selfWritten).toContain('Moving Day');
     expect(selfWritten).not.toContain('Camping Checklist');
     expect(navigation.url()).toBe('/templates/?category=moving');
 
     // A link from elsewhere still lands on the category page.
     const incoming = await mountLibrary('/templates/?category=moving');
-    expect(incoming).not.toContain('Discover Templates');
+    expect(incoming).not.toContain('Template Library');
     expect(navigation.url()).toBe('/categories/moving/');
   });
 

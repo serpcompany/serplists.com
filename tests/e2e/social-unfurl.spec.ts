@@ -49,7 +49,7 @@ test('category and library links unfurl with their own titles', async ({ request
   expect((await fetchHead(request, '/categories/outdoor/')).title).toBe('outdoor Templates | SERP Lists');
   expect((await fetchHead(request, '/categories/business/')).title).toBe('Business &amp; Operations Templates | SERP Lists');
   expect((await fetchHead(request, '/categories/')).title).toBe('Browse Template Categories | SERP Lists');
-  expect((await fetchHead(request, '/templates/')).title).toBe('Discover Templates | SERP Lists');
+  expect((await fetchHead(request, '/templates/')).title).toBe('Template Library | SERP Lists');
 });
 
 // The server answers what the page shows: not found, out of search, and no canonical URL,

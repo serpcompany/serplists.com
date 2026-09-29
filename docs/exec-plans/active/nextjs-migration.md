@@ -391,3 +391,10 @@ Each of these needs the user's approval, or happens with the domain move:
 - 2026-09-29: **Account menu without "Dashboard".** Its "Dashboard" and "My Templates" both
   opened `/dashboard/templates/`. The user kept "My Templates", the name the spec uses with
   My Runs.
+- 2026-09-29: **One name for the library: Template Library.** The `/templates/` page was
+  "Discover Templates", "Discover" in the sidebar and "Browse Templates" on buttons. The user
+  added **Template Library** to the glossary and asked for it everywhere the page is named:
+  its heading and metadata, the sidebar, the breadcrumb, the empty states and the calls to
+  action ("Browse the Template Library"). My Runs' empty-state button, which opened My
+  Templates under that label, now opens the library its label names. The header's
+  "Templates" stays. ESLint's vocabulary rule flags the old names in UI code.

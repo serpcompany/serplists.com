@@ -42,7 +42,7 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 
 ## Main areas
 
-- **Public site:** Home, the template library, Categories, Features, Pricing, About, Contact.
+- **Public site:** Home, the Template Library, Categories, Features, Pricing, About, Contact.
 - **Auth:** Log in, Register, Forgot password, Reset password.
 - **Public Profiles and Public Templates:** `/profile/<user>/` and
   `/profile/<user>/<template>/`.
@@ -60,12 +60,12 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 
 Each step is a screen, and a quoted label is the control that moves the user on.
 
-- **First visit to a first Run:** Home → "Browse Templates" → Template library → template
-  card → Public template page → "Start Run" → Log in (the template page is the return path)
-  → "Sign up" → Register → "Create account" → Log in ("Verify your email first, then sign
-  in.") → verification email link → Log in ("Email verified. You can sign in now.") → "Sign
-  in" → Public template page → "Start Run" → Run page (`/dashboard/runs/<id>/`). When no
-  email verification is required, Register returns straight to the template page.
+- **First visit to a first Run:** Home → "Browse the Template Library" → Template Library →
+  template card → Public template page → "Start Run" → Log in (the template page is the return
+  path) → "Sign up" → Register → "Create account" → Log in ("Verify your email first, then sign
+  in.") → verification email link → Log in ("Email verified. You can sign in now.") → "Sign in"
+  → Public template page → "Start Run" → Run page (`/dashboard/runs/<id>/`). When no email
+  verification is required, Register returns straight to the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
   My Templates (a sign-in with no return path opens the console home).
@@ -89,7 +89,7 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   "Name Your Checklist Run" dialog → "Start Checklist" → Run page. Share: Run page "Share"
   (or My Runs → "Run options" → "Share Run") → Share run dialog → copy the link. Guest:
   Shared run → tick tasks, add notes → "Complete run" → "Checklist Completed!" → "Return to
-  Public Runs" → Template library.
+  Public Runs" → Template Library.
 - **Duplicate a Template:** Template detail → "Template actions" → "Duplicate" → Template
   detail of the copy ("Template duplicated"). Someone else's Public Template: "Copy to My
   Templates" (or "Copy to Organization") → Template detail of the copy.
@@ -121,13 +121,13 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 - **Delete and restore:** My Templates → card actions menu → "Delete" → "Delete template"
   dialog → "Delete" → sidebar "Archive" → Archive → "Restore" → back in My Templates. Runs:
   My Runs → "Run options" → "Delete" → "Delete run" dialog → Archive → "Restore".
-- **Browse by category:** Template library → a category chip or a "Browse by Category"
+- **Browse by category:** Template Library → a category chip or a "Browse by Category"
   tile → Category page → template card → Public template page. Or Categories → a tile or
   row → Category page.
 - **Public Profile:** Public template page → owner name → Public Profile → template card →
   Public template page. Signed in: account menu → "Profile" (opens a new tab).
-- **Features:** header "Features" → Features → feature card → Feature page → "Browse
-  Templates" or "See Pricing".
+- **Features:** header "Features" → Features → feature card → Feature page → "Browse the
+  Template Library" or "See Pricing".
 - **Upgrade and billing:** Pricing → "Upgrade — $9/month" → Stripe Checkout → back →
   Account Settings → Billing → "Manage subscription" → Stripe Customer Portal. Or Account
   Settings → "Upgrade to Pro — $9/month".
@@ -154,7 +154,7 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
 | `/` | [Home](ui-screen-inventory.md#home) | Root section (brand link) | Shell overlays | Primary button: "Get Started" signed out, "Open Dashboard" signed in |
-| `/templates/` | [Template library](ui-screen-inventory.md#template-library) | Root section (header "Templates", sidebar "Discover") | Shell overlays | Search, category filter and sort (Popular, Trending, Recent) kept in the URL; skeleton; empty; catalog error |
+| `/templates/` | [Template Library](ui-screen-inventory.md#template-library) | Root section (header "Templates", sidebar "Template Library") | Shell overlays | Search, category filter and sort (Popular, Trending, Recent) kept in the URL; skeleton; empty; catalog error |
 | `/categories/` | [Categories](ui-screen-inventory.md#categories) | Child page (a category page's "All Categories"; the console's "Categories") | Shell overlays | Category search; skeletons; catalog error |
 | `/categories/<slug>/` | [Category page](ui-screen-inventory.md#category-page) | Child page of the library and Categories | Shell overlays; sort select | Grid or list; search; sort; skeleton; empty; catalog error; an unknown category shows the 404 view |
 | `/features/` | [Features](ui-screen-inventory.md#features) | Root section (header "Features") | Shell overlays | None |
@@ -195,8 +195,8 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
 | `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal or Organization context; manager-only Organization controls; created Run Key panel |
 
-The sidebar's "Discover" and "Categories" open `/templates/` and `/categories/`, which leave
-the console shell for the public shell.
+The sidebar's "Template Library" and "Categories" open `/templates/` and `/categories/`, which
+leave the console shell for the public shell.
 
 ### System
 

@@ -56,7 +56,7 @@ const TARGET_CLASS = 'h-11';
 const mainItems: NavItem[] = [
   { href: buildConsoleTemplatesPath(), icon: FileText, label: 'Templates' },
   { href: buildConsoleRunsPath(), icon: Play, label: 'Runs' },
-  { href: buildPublicTemplatesPath(), icon: Globe, label: 'Discover' },
+  { href: buildPublicTemplatesPath(), icon: Globe, label: 'Template Library' },
   { href: buildPublicCategoriesPath(), icon: FolderOpen, label: 'Categories' },
 ];
 

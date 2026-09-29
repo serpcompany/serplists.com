@@ -87,6 +87,10 @@ _Avoid_: Run, task
 The Resource Owner that currently controls a Template.
 _Avoid_: Creator
 
+**Template Library**:
+The public discovery surface at `/templates/` that lists Public Templates.
+_Avoid_: Discover, Discover Templates, Browse Templates
+
 **Run**:
 An execution snapshot created from a Template, with progress and history independent from the source Template.
 _Avoid_: Template
@@ -113,4 +117,5 @@ _Avoid_: Unpublished draft
 
 - Capitalize Personal and Organization when naming an Ownership Context: "Switch to Personal", "Organization settings", "Create Organization".
 - Label a paid Organization's plan "Paid". The stored plan value `team` is a legacy implementation detail.
+- Call `/templates/` the Template Library: "Template Library" where it is a navigation label or a heading, "Browse the Template Library" on buttons. ESLint flags its old names in UI code.
 - Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code.

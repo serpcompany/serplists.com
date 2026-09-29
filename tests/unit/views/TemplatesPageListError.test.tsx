@@ -7,8 +7,9 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 // In Personal, My Templates merges the cached public catalog with the user's own list. When
 // the Personal list fails on its first load, the merged list still holds the user's public
-// templates from the catalog (cached after a visit to Runs, Import or Discover), so a check on
-// the merged list's length hid the error and silently dropped the private templates.
+// templates from the catalog (cached after a visit to Runs, Import or the Template Library),
+// so a check on the merged list's length hid the error and silently dropped the private
+// templates.
 
 vi.mock('@/lib/api', () => ({ api: {} }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({

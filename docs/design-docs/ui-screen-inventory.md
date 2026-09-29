@@ -6,7 +6,7 @@ https://aiuxplayground.com/. Its screenshots are named by file below (for exampl
 home-1.png): 1440×900 slices of the site and one 390px phone shot (home-mobile.png). They
 are kept outside the repository.
 
-Step 1 restyled the public shell, the signed-in shell, Home, the template library and the
+Step 1 restyled the public shell, the signed-in shell, Home, the Template Library and the
 public template page with the shared blocks (listed in
 [DESIGN.md](../DESIGN.md#shells-and-layout-blocks)); step 2 restyles the rest.
 
@@ -63,7 +63,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **COMPONENT TYPES:** heading; muted paragraph; search input with a leading search icon;
   chip (filled, muted, rounded); tile row.
 - **DATA FIELDS:** title; subtitle; search placeholder; chip labels.
-- **USED BY:** [Home](#home), [Template library](#template-library) (decided);
+- **USED BY:** [Home](#home), [Template Library](#template-library) (decided);
   [Categories](#categories), [Features](#features), [Pricing](#pricing), [About](#about),
   [Contact](#contact), [404 page](#404-page) (proposed).
 
@@ -74,7 +74,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **COMPONENT TYPES:** bordered rounded tile, a link: a small tinted round icon tile at the
   top left, the name at the bottom left, the count at the bottom right.
 - **DATA FIELDS:** icon; name; item count.
-- **USED BY:** [Template library](#template-library) "Browse by Category" (decided, 4
+- **USED BY:** [Template Library](#template-library) "Browse by Category" (decided, 4
   columns); [Categories](#categories) "Popular Categories" (proposed).
 
 ### Section row over a card grid
@@ -91,7 +91,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   and name, home-2.png); title (1–2 lines); muted description (2 lines) or muted meta
   ("Updated Sep 1", "12 min read · Jul 14").
 - **USED BY:** [Home](#home) workflow steps and "Starter library", [Template
-  library](#template-library) cards (decided); [Features](#features), [About](#about),
+  Library](#template-library) cards (decided); [Features](#features), [About](#about),
   [Public Profile](#public-profile), [My Templates](#my-templates) (proposed).
 
 ### Bordered list cards
@@ -121,7 +121,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   category label with a trailing arrow icon, a title, a muted description clamped to 2 lines.
 - **DATA FIELDS:** title; search placeholder; chip labels and the selected chip; per card:
   category, title, description.
-- **USED BY:** [Template library](#template-library) (decided, with search and chips in the
+- **USED BY:** [Template Library](#template-library) (decided, with search and chips in the
   hero); [Category page](#category-page), [My Templates](#my-templates) (proposed).
 
 ### List rows with thumbnail
@@ -319,7 +319,7 @@ existing content, invent nothing):
   - Left: the sidebar (full height). Header: the brand link and the [context
     switcher](#context-switcher) ("Switch context"). Content, in the "Dashboard" navigation
     landmark: "New Template" (primary; only for roles that can edit Templates); "Templates",
-    "Runs", "Discover", "Categories"; at the bottom "Import Templates", "Archive",
+    "Runs", "Template Library", "Categories"; at the bottom "Import Templates", "Archive",
     "Settings". Footer: the theme toggle with its label ("Light mode" or "Dark mode") and the
     [account menu](#account-menu) row (initial, name or "Account settings", "@username" or
     email). The current section is highlighted and marked as the current page. It collapses
@@ -343,8 +343,8 @@ existing content, invent nothing):
 - **NAVIGATION TYPE:** shell; sidebar items are root sections.
 - **PATTERN CHOICE (decided):** a shadcn Sidebar block, collapsible to icons.
   - Header: brand link and the context switcher ("Switch context").
-  - Content: "New Template" (when the role can edit Templates), "Templates", "Runs",
-    "Discover", "Import Templates", "Archive", "Settings", and the "Categories" link the phone
+  - Content: "New Template" (when the role can edit Templates), "Templates", "Runs", "Template
+    Library", "Import Templates", "Archive", "Settings", and the "Categories" link the phone
     menu had.
   - Footer: the theme toggle and the account menu ("My Templates", "My Runs", "Settings",
     "Profile", "Sign out").
@@ -420,11 +420,11 @@ existing content, invent nothing):
     Run it every time."; description "SERP Lists turns repeatable work into a reusable
     template, a focused execution run, and a shareable record. It is for teams that need the
     same process done cleanly more than once."; "Get Started" (signed out) or "Open
-    Dashboard" (signed in); "Browse Templates" (outline).
+    Dashboard" (signed in); "Browse the Template Library" (outline).
   - Workflow steps, 3 media cards: the step's icon in a muted area with the step number
     (1 to 3) as a corner badge, then a title ("Make a template", "Run the workflow", "Share
     the result") and a description.
-  - Product surfaces, 3 bordered list cards: an icon tile, a title ("Template library",
+  - Product surfaces, 3 bordered list cards: an icon tile, a title ("Template Library",
     "Live run tracking", "Shareable proof") and a description.
   - Starter library: eyebrow "Starter library", heading "Start with a real checklist, then
     make it yours.", link "View all templates"; 3 cards of the bundled starter Templates
@@ -436,8 +436,8 @@ existing content, invent nothing):
     (outline).
 - **PRIMARY ACTION:** "Get Started" → [Register](#register); signed in, "Open Dashboard" →
   [My Templates](#my-templates).
-- **SECONDARY ACTIONS:** "Browse Templates" and "View all templates" → [Template
-  library](#template-library); a starter card → [Public template page](#public-template-page);
+- **SECONDARY ACTIONS:** "Browse the Template Library" and "View all templates" → [Template
+  Library](#template-library); a starter card → [Public template page](#public-template-page);
   "Explore Features" → [Features](#features).
 - **STATES:**
   - Signed out or signed in (the primary button's label and target).
@@ -465,7 +465,7 @@ existing content, invent nothing):
     - Step card: a muted top area with the step icon in a centered icon tile and the step
       number as a corner badge; title; muted description.
     - Surface card: bordered card with an icon tile, title and muted description.
-    - Template card: the shared block the [Template library](#template-library) uses.
+    - Template card: the shared block the [Template Library](#template-library) uses.
     - Banner: a bordered card with a title, a description, a primary and an outline button.
   - DATA FIELDS: hero (eyebrow, title, description, button labels); step (number, icon,
     title, description); surface (icon, title, description); template card (as in the
@@ -486,16 +486,16 @@ existing content, invent nothing):
   - The starter card keeps its "N items in M sections" line; the library card keeps "N
     sections" and "N tasks".
 
-### Template library
+### Template Library
 
-- **SCREEN NAME:** Template library ("Discover Templates", `/templates/`)
+- **SCREEN NAME:** Template Library (`/templates/`)
 - **PURPOSE:** Browse, search and filter every Public Template, then open one.
-- **HOW USER GETS HERE:** header "Templates"; sidebar "Discover"; Home "Browse Templates" and
-  "View all templates"; "Browse templates" on a missing or failed template page; "Browse Public
-  Templates" on a shared run; after a guest completes a shared Run; the breadcrumb's
-  "Templates" on a template page.
+- **HOW USER GETS HERE:** header "Templates"; sidebar "Template Library"; "Browse the Template
+  Library" on Home, Features, feature pages, My Runs' empty state, a missing or failed
+  template page and a shared run; Home "View all templates"; after a guest completes a shared
+  Run; the breadcrumb's "Template Library" on a template page.
 - **WHAT'S ON THE SCREEN:**
-  - Hero: title "Discover Templates", "Browse hundreds of ready-to-use checklists created by
+  - Hero: title "Template Library", "Browse hundreds of ready-to-use checklists created by
     the community", the search input "Search templates...", and the category chips: "All" and
     one per category (a category chip links to its category page).
   - A toolbar: the result count ("N templates", or "N templates in <category>") and the sort
@@ -571,7 +571,7 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** a template card (library, category page, Public Profile, Home); a
   shared link (this is the Template's only public URL); the "Share Template" dialog's link.
 - **WHAT'S ON THE SCREEN:**
-  - A breadcrumb: Home (an icon) › "Templates" (the library) › the Template's title.
+  - A breadcrumb: Home (an icon) › "Template Library" › the Template's title.
   - Signed in, when the Organizations failed to load: "Couldn't load your Organizations",
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
@@ -595,10 +595,10 @@ existing content, invent nothing):
   section.
 - **STATES:**
   - Loading: "Loading template…".
-  - Load error: "Unable to load template", the message, "Try again", "Browse templates" (stays
-    indexable).
+  - Load error: "Unable to load template", the message, "Try again", "Browse the Template
+    Library" (stays indexable).
   - Not found: "Template not found", "The template you are looking for does not exist or is no
-    longer public.", "Browse templates" (noindex).
+    longer public.", "Browse the Template Library" (noindex).
   - Save labels: "Save" and "Copy to Library"; "Saving..." and "Copying..."; "Checking
     plan..." (footer button); Free in Personal: "Upgrade to save" and "Upgrade to copy
     template"; after a save: "Saved".
@@ -764,12 +764,12 @@ existing content, invent nothing):
   Features".
 - **WHAT'S ON THE SCREEN:** hero: eyebrow "Features", title "Features that keep work
   consistent.", "Build checklists once, then run them repeatedly with confidence. SERP Lists
-  focuses on clarity, repeatability, and simple sharing.", "See Pricing" (primary), "Browse
-  Templates" (outline); 4 linked feature cards in 2 columns (icon, title, description, "View
-  the feature details and related workflows."): "Template Builder", "Checklist Runs", "Public
-  Sharing", "Import + Export".
+  focuses on clarity, repeatability, and simple sharing.", "See Pricing" (primary), "Browse the
+  Template Library" (outline); 4 linked feature cards in 2 columns (icon, title, description,
+  "View the feature details and related workflows."): "Template Builder", "Checklist Runs",
+  "Public Sharing", "Import + Export".
 - **PRIMARY ACTION:** a feature card → [Feature page](#feature-page).
-- **SECONDARY ACTIONS:** "See Pricing"; "Browse Templates".
+- **SECONDARY ACTIONS:** "See Pricing"; "Browse the Template Library".
 - **STATES:** static.
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (proposal):** [Page hero](#page-hero); [Section row over a card
@@ -791,8 +791,8 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** a card on Features. The slugs are `template-builder`,
   `checklist-runs`, `public-sharing` and `import-export`.
 - **WHAT'S ON THE SCREEN:** "Back to Features" (ghost); a card: large icon badge, title,
-  description, 3 bullets, "Browse Templates" (primary), "See Pricing" (outline).
-- **PRIMARY ACTION:** "Browse Templates" → [Template library](#template-library).
+  description, 3 bullets, "Browse the Template Library" (primary), "See Pricing" (outline).
+- **PRIMARY ACTION:** "Browse the Template Library" → [Template Library](#template-library).
 - **SECONDARY ACTIONS:** "See Pricing"; "Back to Features".
 - **STATES:** an unknown slug shows the [404 page](#404-page) view (titled "Page not found",
   noindex, HTTP 200).
@@ -1062,11 +1062,11 @@ existing content, invent nothing):
     checkboxes), "Task notes" (placeholder "Add links, outcomes, or context for this
     run...", "Save notes", "Saved to this run").
   - Closing card: "Want to run your own checklist?", "Browse public templates and start a fresh
-    run from a template that matches your workflow.", "Browse Public Templates".
+    run from a template that matches your workflow.", "Browse the Template Library".
 - **PRIMARY ACTION:** tick a task.
 - **SECONDARY ACTIONS:** "Copy Link"; notes; "Complete run" → the [Run complete
-  dialog](#run-complete-dialog); "Browse Public Templates".
-- **STATES:** loading (spinner); not found (toast "Run not found", then the Template library);
+  dialog](#run-complete-dialog); "Browse the Template Library".
+- **STATES:** loading (spinner); not found (toast "Run not found", then the Template Library);
   load error ("Unable to load run", the message, "Back"); completed (checkboxes frozen; notes
   stay editable); always noindex.
 - **NAVIGATION TYPE:** standalone page.
@@ -1252,8 +1252,8 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Runs", "N in progress, M completed".
   - Toolbar: search "Search runs..."; status select ("All Runs", "In Progress", "Completed").
-  - Rows: a status icon; the title (a link to `/dashboard/runs/<id>/`); meta ("From <template>" as a link,
-    "Started <date>", "Completed <date>"); a progress bar with "x/y"; a status chip
+  - Rows: a status icon; the title (a link to `/dashboard/runs/<id>/`); meta ("From <template>"
+    as a link, "Started <date>", "Completed <date>"); a progress bar with "x/y"; a status chip
     ("Completed" or "In Progress"); a "Needs revalidation", "Shared snapshot is out of date" or
     "Shared" chip; actions: "Revalidate", "Stop sharing to update", "Continue" (primary) or
     "View" (outline), and "Run options".
@@ -1261,9 +1261,10 @@ existing content, invent nothing):
 - **SECONDARY ACTIONS:** "View"; "Revalidate"; "Stop sharing to update"; "Run options" →
   "Share Run", "Stop sharing", "Delete" ([Action menus](#action-menus)); search; filter.
 - **STATES:** loading (5 skeleton rows); a load error ("Couldn't load your runs", "Retry" or
-  "Sign in"); empty ("No runs found", "Start a run from one of your templates", "Browse
-  Templates" → My Templates); no matches ("Try adjusting your search or filters");
-  "Revalidating...", "Stopping..."; actions follow the role in the Run's Organization.
+  "Sign in"); empty ("No runs found", "Start a run from one of your templates", "Browse the
+  Template Library" → [Template Library](#template-library)); no matches ("Try adjusting your
+  search or filters"); "Revalidating...", "Stopping..."; actions follow the role in the Run's
+  Organization.
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (proposal):** shadcn page header and toolbar; rows as [List rows with
   thumbnail](#list-rows-with-thumbnail) with the status icon in the thumbnail's place, or a
@@ -1551,7 +1552,8 @@ replaced.
 - **PROOF PASS:** Pass (step 1): console-menu-mobile-light-signed-in.png,
   console-menu-mobile-dark-signed-in.png. Every link the phone menu had is in the sidebar:
   Home through the brand, Dashboard and Templates (the same page), Import Templates, Runs,
-  Browse Templates as "Discover", Categories, Archive, Settings, and the account row.
+  Browse Templates as "Template Library" (named "Discover" until 2026-09-29), Categories,
+  Archive, Settings, and the account row.
 - **NOTES:** The old search icon link and round "New" link, which had no accessible name,
   are gone with it.
 
@@ -1695,7 +1697,7 @@ replaced.
   items in this checklist.", a large check icon, one button: "Return to Dashboard" (private
   Run) or "Return to Public Runs" (shared Run).
 - **PRIMARY ACTION:** the button: it completes the Run (toast "Checklist completed!", with an
-  emoji) and leaves for [My Runs](#my-runs), or the [Template library](#template-library) for
+  emoji) and leaves for [My Runs](#my-runs), or the [Template Library](#template-library) for
   a shared Run.
 - **SECONDARY ACTIONS:** dismiss; the Run stays in progress and "Complete run" stays.
 - **STATES:** a save failure shows a toast and keeps the dialog.
@@ -1871,10 +1873,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- My Runs' empty state "Browse Templates" opens My Templates; every other "Browse Templates"
-  opens the public library.
-- The library is named three ways: "Templates" (header), "Discover" (sidebar), "Discover
-  Templates" (its title), plus "Browse Templates" on buttons.
 - Starting a Run: My Templates' dialog says "Start Run", Template detail's says "Name Your
   Checklist Run" and "Start Checklist", and the public template page asks nothing.
 - The Run complete dialog's only button reads "Return to Dashboard" or "Return to Public Runs"

@@ -51,7 +51,7 @@ describe('link preview image', () => {
   });
 
   it('is the same absolute PNG on every page with its own metadata', () => {
-    const metadata = buildPageMetadata({ title: 'Discover Templates', path: '/templates' });
+    const metadata = buildPageMetadata({ title: 'Template Library', path: '/templates' });
     const ogImage = String(firstImage(metadata.openGraph?.images).url);
 
     expectShippedCardImage(ogImage);

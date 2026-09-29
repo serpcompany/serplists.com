@@ -60,7 +60,7 @@ const Features = () => {
                 <Link
                   href={buildPublicTemplatesPath()}
                   className={buttonVariants()}
-                >Browse Templates</Link>
+                >Browse the Template Library</Link>
                 <Link
                   href={buildPricingPath()}
                   className={buttonVariants({ variant: 'outline' })}
@@ -83,7 +83,7 @@ const Features = () => {
               <Link
                 href={buildPublicTemplatesPath()}
                 className={buttonVariants({ variant: 'outline' })}
-              >Browse Templates</Link>
+              >Browse the Template Library</Link>
             </>
           }
           align="center"

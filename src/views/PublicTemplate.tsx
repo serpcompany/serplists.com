@@ -218,7 +218,7 @@ const PublicTemplate = () => {
           <EmptyContent className="flex-row justify-center">
             <Button onClick={reload}>Try again</Button>
             <Link href={buildPublicTemplatesPath()} className={buttonVariants({ variant: 'outline' })}>
-              Browse templates
+              Browse the Template Library
             </Link>
           </EmptyContent>
         </Empty>
@@ -246,7 +246,7 @@ const PublicTemplate = () => {
           <EmptyContent>
             <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
               <ArrowLeft data-icon="inline-start" />
-              Browse templates
+              Browse the Template Library
             </Link>
           </EmptyContent>
         </Empty>

@@ -6,7 +6,7 @@ import { APP_BRAND_NAME, buildPageTitle } from '@/lib/brand';
 
 describe('buildPageTitle', () => {
   it('adds the brand to a page title', () => {
-    expect(buildPageTitle('Discover Templates')).toBe(`Discover Templates | ${APP_BRAND_NAME}`);
+    expect(buildPageTitle('Template Library')).toBe(`Template Library | ${APP_BRAND_NAME}`);
   });
 
   it('does not add the brand twice', () => {

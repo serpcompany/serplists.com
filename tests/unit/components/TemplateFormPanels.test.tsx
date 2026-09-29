@@ -166,7 +166,7 @@ describe('Template form panels name every control', () => {
     const publicSwitch = getByAccessibleName(html, 'Public Template');
     expect(publicSwitch?.attrs.role).toBe('switch');
     expect(accessibleDescription(html, publicSwitch!)).toBe(
-      'Make this template visible in the public library',
+      'Make this template visible in the Template Library',
     );
   });
 

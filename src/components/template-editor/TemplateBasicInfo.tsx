@@ -195,7 +195,7 @@ export const TemplateBasicInfo = ({
                 Public Template
               </FieldLabel>
               <p className="mt-1 text-xs text-muted-foreground" id={ids.isPublicHint}>
-                Make this template visible in the public library
+                Make this template visible in the Template Library
               </p>
             </div>
             <Switch

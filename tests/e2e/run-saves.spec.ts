@@ -753,7 +753,7 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
     await (acceptDialogs ? dialog.accept() : dialog.dismiss());
   });
   const sharedUrl = new RegExp(`/share/${shareToken}/$`);
-  const browse = guest.getByRole('link', { name: 'Browse Public Templates' });
+  const browse = guest.getByRole('link', { name: 'Browse the Template Library' });
   const notes = guest.getByRole('textbox', { name: 'Task notes' }).first();
 
   await guest.goto(`/share/${shareToken}/`);

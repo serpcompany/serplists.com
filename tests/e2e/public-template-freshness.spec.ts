@@ -33,7 +33,7 @@ test('shows edits and unpublishing on a public template page after the catalog l
   try {
     // Loads the public catalog into memory for the rest of the tab session.
     await page.goto('/templates/');
-    await expect(page.getByRole('heading', { name: 'Discover Templates' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Template Library' })).toBeVisible();
 
     // A content edit names the version it was based on; a new template is version 1.
     await callApi(page, 'PUT', `/templates/${templateId}`, { title: `Freshness Edited ${stamp}`, expected_version: 1 });

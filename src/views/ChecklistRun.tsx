@@ -562,7 +562,7 @@ const ChecklistRunPage = () => {
                 <Link
                   href={buildPublicTemplatesPath()}
                   className={cn(buttonVariants(), 'mt-4 bg-foreground text-background hover:bg-foreground/90')}
-                >Browse Public Templates</Link>
+                >Browse the Template Library</Link>
               </Surface>
               </div>
             </PageContainer>

@@ -78,7 +78,7 @@ describe('ChecklistLibrary layout', () => {
   it('uses the deployed public-library hero copy instead of the local migration copy', () => {
     const html = renderChecklistLibrary();
 
-    expect(html).toContain('Discover Templates');
+    expect(html).toContain('Template Library');
     expect(html).toContain(
       'Browse hundreds of ready-to-use checklists created by the community',
     );

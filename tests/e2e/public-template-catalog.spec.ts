@@ -26,7 +26,7 @@ test('repo-backed public templates render in the checklist library', async ({
 
   await expect(
     page.getByRole('heading', {
-      name: 'Discover Templates',
+      name: 'Template Library',
     }),
   ).toBeVisible();
   await expect(
@@ -49,10 +49,10 @@ test('repo-backed public templates render in the checklist library', async ({
   ).toBeVisible();
   await expect(page.getByText('Pack the tent setup')).toBeVisible();
 
-  // The breadcrumb's Templates link goes back to the library.
+  // The breadcrumb's Template Library link goes back to the library.
   const backToTemplatesLink = page
     .getByRole('navigation', { name: 'breadcrumb' })
-    .getByRole('link', { name: 'Templates', exact: true });
+    .getByRole('link', { name: 'Template Library', exact: true });
   await expect(backToTemplatesLink).toHaveAttribute('href', '/templates/');
   const shareButton = page.getByRole('button', { name: 'Share' });
   const ctaPanel = page
@@ -166,7 +166,7 @@ test('library filters follow the URL and clearing the search keeps the page', as
   await searchBox.fill('');
   await expect(page).toHaveURL(/\/templates\/\?category=outdoor$/);
   await expect(
-    page.getByRole('heading', { name: 'Discover Templates' }),
+    page.getByRole('heading', { name: 'Template Library' }),
   ).toBeVisible();
   await expect(searchBox).toBeFocused();
   await expect(campingCard).toBeVisible();

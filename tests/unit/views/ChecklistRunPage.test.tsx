@@ -211,7 +211,7 @@ describe('ChecklistRunPage layout', () => {
     const html = renderPageAt('/share/abc123', { '/share/[shareToken]': <ChecklistRunPage /> });
 
     expect(html).toContain('Copy Link');
-    expect(html).toContain('Browse Public Templates');
+    expect(html).toContain('Browse the Template Library');
     expect(html).toContain('Shared run snapshot');
     expect(html).toContain('Run progress');
     expect(html).toContain('whitespace-pre-line');

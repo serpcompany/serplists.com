@@ -37,16 +37,16 @@ describe('page metadata URL', () => {
 
 describe('page metadata branding', () => {
   it('titles pages and social cards with the product brand, once', () => {
-    const metadata = buildPageMetadata({ title: 'Discover Templates' });
+    const metadata = buildPageMetadata({ title: 'Template Library' });
 
-    expect(metadata.title).toEqual({ absolute: `Discover Templates | ${APP_BRAND_NAME}` });
-    expect(metadata.openGraph?.title).toBe(`Discover Templates | ${APP_BRAND_NAME}`);
+    expect(metadata.title).toEqual({ absolute: `Template Library | ${APP_BRAND_NAME}` });
+    expect(metadata.openGraph?.title).toBe(`Template Library | ${APP_BRAND_NAME}`);
     expect(metadata.openGraph?.siteName).toBe(APP_BRAND_NAME);
-    expect(metadata.twitter?.title).toBe(`Discover Templates | ${APP_BRAND_NAME}`);
+    expect(metadata.twitter?.title).toBe(`Template Library | ${APP_BRAND_NAME}`);
     expect(buildPageMetadata({ title: `Pricing | ${APP_BRAND_NAME}` }).title).toEqual({
       absolute: `Pricing | ${APP_BRAND_NAME}`,
     });
-    expect(allText({ title: 'Discover Templates' })).not.toContain('Checklist App');
+    expect(allText({ title: 'Template Library' })).not.toContain('Checklist App');
   });
 
   it('keeps a blank shared run title from producing an empty page title', () => {

@@ -15,8 +15,9 @@ export const SITE_SOCIAL_IMAGE = {
   alt: APP_BRAND_NAME,
 } as const;
 
+// The Template Library (docs/PRODUCT_SENSE.md): its page heading says the same.
 export const TEMPLATE_LIBRARY_PAGE_TEXT = {
-  title: 'Discover Templates',
+  title: 'Template Library',
   description: 'Browse hundreds of ready-to-use checklist templates created by the community.',
 } as const;
 

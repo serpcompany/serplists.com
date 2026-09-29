@@ -33,7 +33,7 @@ export const FEATURES = [
   {
     slug: "public-sharing",
     title: "Public Sharing",
-    description: "Publish templates to the community library and share links with anyone.",
+    description: "Publish templates to the Template Library and share links with anyone.",
     icon: Share2,
     bullets: [
       "Publish templates to a public profile.",

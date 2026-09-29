@@ -63,7 +63,7 @@ describe('Layout shell selection', () => {
       ['New Template', '/dashboard/templates/new/'],
       ['Templates', '/dashboard/templates/'],
       ['Runs', '/dashboard/runs/'],
-      ['Discover', '/templates/'],
+      ['Template Library', '/templates/'],
       ['Categories', '/categories/'],
       ['Import Templates', '/dashboard/import-templates/'],
       ['Archive', '/dashboard/archive/'],

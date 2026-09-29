@@ -8,12 +8,12 @@ test.use({ viewport: { width: 1280, height: 800 } });
 test('titles discovery pages with the brand', async ({ page }) => {
   await page.goto('/templates/');
 
-  await expect(page).toHaveTitle('Discover Templates | SERP Lists');
+  await expect(page).toHaveTitle('Template Library | SERP Lists');
 });
 
 test('resets the title when navigating to a page without its own title', async ({ page }) => {
   await page.goto('/templates/');
-  await expect(page).toHaveTitle('Discover Templates | SERP Lists');
+  await expect(page).toHaveTitle('Template Library | SERP Lists');
 
   // A header link navigates client-side; page.goto would load the page from the server and
   // hide the bug.

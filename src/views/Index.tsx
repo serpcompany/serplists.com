@@ -64,7 +64,7 @@ const workflowSteps = [
 
 const productSurfaces = [
   {
-    title: 'Template library',
+    title: 'Template Library',
     description:
       'Reusable SOPs, audits, launches, onboarding flows, and field checklists live in one browsable library.',
     icon: Library,
@@ -120,7 +120,7 @@ const Index = () => {
                 className={buttonVariants({ variant: 'outline', size: 'lg' })}
               >
                 <Globe data-icon="inline-start" />
-                Browse Templates
+                Browse the Template Library
               </Link>
             </>
           }

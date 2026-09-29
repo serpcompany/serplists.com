@@ -76,6 +76,13 @@ const VOCABULARY_MESSAGE =
 // ("helps teams ship"), but lowercase "workspace" in prose is the retired product term.
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
 const LEGACY_TERM_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
+// The /templates/ page is the Template Library. Its old names were the sidebar's "Discover",
+// the heading "Discover Templates" and "Browse Templates" buttons; prose such as "browse
+// public templates" is fine.
+const LIBRARY_MESSAGE =
+  "The /templates/ page is the Template Library (docs/PRODUCT_SENSE.md): label it 'Template Library' and " +
+  "its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
+const LIBRARY_OLD_NAME = "/^\\s*Discover\\s*$|\\bDiscover Templates\\b|\\bBrowse (?:Public )?Templates\\b|\\bBrowse templates\\b/";
 // A direct clipboard write can reject (Safari after an awaited request, denied permission,
 // lost focus) and lose what it was copying, so all copies go through one helper.
 const CLIPBOARD_RESTRICTION = {
@@ -215,6 +222,9 @@ export default tseslint.config(
         { selector: `Literal[value=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_CAPITALIZED}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
+        { selector: `JSXText[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
+        { selector: `Literal[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
+        { selector: `TemplateElement[value.raw=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
         CLIPBOARD_RESTRICTION,
       ],
     },
