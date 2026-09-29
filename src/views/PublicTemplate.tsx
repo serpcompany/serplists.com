@@ -9,6 +9,7 @@ import { PageSection } from '@/components/layout/page-shell';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import {
   Empty,
   EmptyContent,
@@ -39,7 +40,6 @@ import {
   buildPublicTemplatesPath,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
-import { buildDefaultRunName } from '@/lib/runs/runName';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -68,6 +68,7 @@ const PublicTemplate = () => {
     workspaceStatus,
   } = useWorkspace();
   const { createRun, createTemplate } = useTemplates();
+  const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   // Set synchronously, so a second click before the re-render cannot create a second run.
   const startRunInFlight = useRef(false);
@@ -124,17 +125,31 @@ const PublicTemplate = () => {
     upgradeRequired: handleUpgrade,
   };
 
-  const handleStartRun = async () => {
+  // Start Run asks for the Run's name in the dialog the other Start Run entry points use. A
+  // visitor who is not signed in goes to sign in first, and comes back to this page.
+  const handleStartRunClick = () => {
     // Until the stored Organization is restored, a click would land in Personal.
+    if (!template || isWorkspaceLoading || !canRunTemplates) return;
+    if (!isAuthenticated) {
+      navigateToLoginWithReturnPath(router.push);
+      return;
+    }
+    setRunDialogOpen(true);
+  };
+
+  // The dialog's name, or the default it showed when left blank.
+  const handleStartRun = async (runName: string) => {
     if (!template || isWorkspaceLoading || !canRunTemplates || startRunInFlight.current) return;
 
     const visit = beginVisit();
     startRunInFlight.current = true;
     setIsCreatingRun(true);
     try {
-      // This page has no name field: it uses the default name the other Start Run entry
-      // points give, which always fits the run title limit.
-      const result = await startRun(buildDefaultRunName(template.title));
+      const result = await startRun(runName);
+      if (result.kind === 'ok' && result.runId) {
+        // The run exists, whether or not the user is still here to open it.
+        setRunDialogOpen(false);
+      }
       await followTemplateActionResult(result, visit, {
         ...followResult,
         succeeded: ({ runId }) => {
@@ -282,8 +297,15 @@ const PublicTemplate = () => {
               }
             : null
         }
-        onStartRun={handleStartRun}
+        onStartRun={handleStartRunClick}
         onSaveTemplate={handleSaveTemplate}
+      />
+      <RunNameDialog
+        open={runDialogOpen}
+        onOpenChange={setRunDialogOpen}
+        templateTitle={displayTemplate.title}
+        onConfirm={handleStartRun}
+        loading={isCreatingRun}
       />
     </div>
   );

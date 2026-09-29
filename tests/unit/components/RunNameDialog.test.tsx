@@ -59,7 +59,7 @@ const mountDialog = (initial: Partial<DialogProps> = {}) => {
       tree = (RunNameDialog as (props: DialogProps) => unknown)(props);
       hooks.state.rendering = false;
     } while (hooks.state.setDuringRender);
-    const input = findElement(tree, (element) => element.props.id === 'runName');
+    const input = findElement(tree, (element) => element.props.id === 'run-name');
     const form = findElement(tree, (element) => element.type === 'form');
     return {
       input,

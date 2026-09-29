@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
 
@@ -13,10 +14,9 @@ import {
   resolvePublicTemplateOwnerSlug,
   SITE_ORIGIN,
 } from '@/lib/routes';
-import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
-
 import { CANONICAL_ORIGIN } from '../../../functions/sitemap/shared';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -25,6 +25,7 @@ vi.mock('next/link', async () => (await import('../../support/nextNavigation')).
 const {
   authState,
   mockCreateBillingCheckout,
+  mockDialogProps,
   mockToastError,
   mockToastSuccess,
   mockUseTemplateDetailModel,
@@ -36,6 +37,7 @@ const {
     user: null as { id: string } | null,
   },
   mockCreateBillingCheckout: vi.fn(),
+  mockDialogProps: vi.fn(),
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockUseTemplateDetailModel: vi.fn(),
@@ -118,6 +120,15 @@ vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
     },
   };
 });
+
+// The Start a Run dialog (tested in tests/unit/components/RunNameDialog.test.tsx): these tests
+// read what the page gives it and call its confirm as the dialog would.
+vi.mock('@/components/ui/run-name-dialog', () => ({
+  RunNameDialog: (props: Record<string, unknown>) => {
+    mockDialogProps(props);
+    return null;
+  },
+}));
 
 const mockTemplates: ChecklistTemplate[] = [
   {
@@ -357,6 +368,17 @@ type CapturedViewProps = {
 const lastViewProps = (): CapturedViewProps =>
   mockViewProps.mock.calls[mockViewProps.mock.calls.length - 1]?.[0] as CapturedViewProps;
 
+type CapturedDialogProps = {
+  loading: boolean;
+  onConfirm: (name: string) => Promise<void>;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  templateTitle: string;
+};
+
+const lastDialogProps = (): CapturedDialogProps =>
+  mockDialogProps.mock.calls[mockDialogProps.mock.calls.length - 1]?.[0] as CapturedDialogProps;
+
 const ORGANIZATION_UPGRADE_MESSAGE =
   'This Organization needs a paid plan before using this feature.';
 
@@ -416,7 +438,7 @@ describe('PublicTemplate ownership context', () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'upgrade_required' });
     renderPublishedRoute(publishedClipyTemplate, { startRun });
 
-    await lastViewProps().onStartRun();
+    await lastDialogProps().onConfirm('Launch run');
 
     expect(startRun).toHaveBeenCalledTimes(1);
     expect(mockCreateBillingCheckout).not.toHaveBeenCalled();
@@ -440,7 +462,7 @@ describe('PublicTemplate ownership context', () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'upgrade_required' });
     renderPublishedRoute(publishedClipyTemplate, { startRun });
 
-    await lastViewProps().onStartRun();
+    await lastDialogProps().onConfirm('Launch run');
 
     expect(mockCreateBillingCheckout).toHaveBeenCalledTimes(1);
     expect(mockToastError).not.toHaveBeenCalledWith(ORGANIZATION_UPGRADE_MESSAGE);
@@ -531,6 +553,7 @@ describe('PublicTemplate ownership context', () => {
     expect(lastViewProps().canStartRun).toBe(false);
     expect(html).not.toContain('Start Run');
     await lastViewProps().onStartRun();
+    await lastDialogProps().onConfirm('Launch run');
     expect(startRun).not.toHaveBeenCalled();
     expect(mockToastError).not.toHaveBeenCalled();
   });
@@ -544,6 +567,7 @@ describe('PublicTemplate ownership context', () => {
     const { html } = renderPublishedRoute(publishedClipyTemplate, { saveTemplate, startRun });
 
     await lastViewProps().onStartRun();
+    await lastDialogProps().onConfirm('Launch run');
     await lastViewProps().onSaveTemplate();
 
     expect(startRun).not.toHaveBeenCalled();
@@ -610,22 +634,23 @@ describe('PublicTemplate Start Run', () => {
     workspaceState.isWorkspaceLoading = false;
   });
 
-  it('creates one run when Start Run is clicked twice before the first finishes', async () => {
+  it('creates one run when the dialog is confirmed twice before the first finishes', async () => {
     const pending = deferred<{ kind: 'ok'; runId: string }>();
     const startRun = vi.fn().mockReturnValue(pending.promise);
     renderPublishedRoute(publishedClipyTemplate, { startRun });
-    const { onStartRun } = lastViewProps();
+    const { onConfirm } = lastDialogProps();
 
-    const first = onStartRun();
-    const second = onStartRun();
+    const first = onConfirm('Launch run');
+    const second = onConfirm('Launch run');
     pending.resolve({ kind: 'ok', runId: 'run-1' });
     await Promise.all([first, second]);
 
     expect(startRun).toHaveBeenCalledTimes(1);
     expect(navigation.router.push).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/dashboard/runs/run-1/');
 
     startRun.mockResolvedValue({ kind: 'ok', runId: 'run-2' });
-    await onStartRun();
+    await onConfirm('Launch run');
     expect(startRun).toHaveBeenCalledTimes(2);
   });
 
@@ -636,11 +661,11 @@ describe('PublicTemplate Start Run', () => {
       .mockRejectedValueOnce(new Error('network down'))
       .mockResolvedValueOnce({ kind: 'ok', runId: 'run-1' });
     renderPublishedRoute(publishedClipyTemplate, { startRun });
-    const { onStartRun } = lastViewProps();
+    const { onConfirm } = lastDialogProps();
 
-    await onStartRun();
-    await expect(onStartRun()).rejects.toThrow('network down');
-    await onStartRun();
+    await onConfirm('Launch run');
+    await expect(onConfirm('Launch run')).rejects.toThrow('network down');
+    await onConfirm('Launch run');
 
     expect(startRun).toHaveBeenCalledTimes(3);
     expect(navigation.router.push).toHaveBeenCalledTimes(1);
@@ -758,48 +783,81 @@ describe('PublicTemplate load failures', () => {
   });
 });
 
-describe('PublicTemplate default run name', () => {
+// Start Run asks for the Run's name in the Start a Run dialog that My Templates and template
+// detail use; a visitor who is not signed in signs in first, as before.
+describe('PublicTemplate Start a Run dialog', () => {
   beforeEach(() => {
     mockUseTemplateDetailModel.mockReset();
     mockViewProps.mockReset();
+    mockDialogProps.mockReset();
     authState.isAuthenticated = true;
     authState.user = { id: 'user-1' };
+    workspaceState.activeTeamId = undefined;
+    workspaceState.canRunTemplates = true;
+    workspaceState.isTeamWorkspace = false;
     workspaceState.isWorkspaceLoading = false;
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+  it('gives the dialog the template title for its default name, closed until Start Run', () => {
+    renderPublishedRoute(publishedClipyTemplate);
 
-  it('names the run within the API limit for a template title at the limit', async () => {
-    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
-    renderPublishedRoute(
-      { ...publishedClipyTemplate, title: 'T'.repeat(RUN_TITLE_MAX_LENGTH) },
-      { startRun },
+    expect(lastDialogProps()).toEqual(
+      expect.objectContaining({ loading: false, open: false, templateTitle: publishedClipyTemplate.title }),
     );
-
-    await lastViewProps().onStartRun();
-
-    const runName = startRun.mock.calls[0]?.[0] as string;
-    expect(runName.length).toBeLessThanOrEqual(RUN_TITLE_MAX_LENGTH);
-    expect(runName.startsWith('TTT')).toBe(true);
   });
 
-  it('names the run with the default My Templates and template detail give', async () => {
-    const now = new Date('2026-09-28T10:15:00.000Z');
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(now);
+  it('opens the dialog on Start Run instead of starting a run', async () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    mockUseTemplateDetailModel.mockReturnValue({
+      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      loading: false,
+      notFound: false,
+      saveTemplate: vi.fn(),
+      startRun,
+      template: publishedClipyTemplate,
+      totalItems: 0,
+    });
+    navigation.reset(`${CLEAN_VISIT.origin}${CLEAN_VISIT.path}`, { routes: ['/profile/[username]/[templateSlug]'] });
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    try {
+      await act(async () => root.render(<PublicTemplate />));
+      expect(lastDialogProps().open).toBe(false);
+
+      await act(async () => {
+        lastViewProps().onStartRun();
+      });
+
+      expect(lastDialogProps().open).toBe(true);
+      expect(startRun).not.toHaveBeenCalled();
+      expect(navigation.router.push).not.toHaveBeenCalled();
+    } finally {
+      act(() => root.unmount());
+      restoreGlobals();
+    }
+  });
+
+  it('starts the run with the name the dialog sends', async () => {
+    const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    renderPublishedRoute(publishedClipyTemplate, { startRun });
+
+    await lastDialogProps().onConfirm('Camping weekend');
+
+    expect(startRun).toHaveBeenCalledWith('Camping weekend');
+  });
+
+  it('sends a visitor who is not signed in to sign in, and back here after', async () => {
+    authState.isAuthenticated = false;
+    authState.user = null;
+    const startRun = vi.fn();
     renderPublishedRoute(publishedClipyTemplate, { startRun });
 
     await lastViewProps().onStartRun();
 
-    expect(startRun).toHaveBeenCalledWith(
-      buildDefaultRunName(publishedClipyTemplate.title, now),
-    );
-    expect(startRun.mock.calls[0]?.[0]).toBe(
-      `${publishedClipyTemplate.title} - ${now.toLocaleString()}`,
-    );
+    expect(startRun).not.toHaveBeenCalled();
+    expect(lastDialogProps().open).toBe(false);
+    expect(navigation.pathname()).toBe('/login/');
+    expect(new URLSearchParams(navigation.search()).get('next')).toBe(CLEAN_VISIT.path);
   });
 });
 

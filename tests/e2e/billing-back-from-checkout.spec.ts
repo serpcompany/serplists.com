@@ -85,7 +85,7 @@ test('Back from checkout leaves the Start Run dialog usable on My Templates', as
   await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start Run' });
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
   await dialog.getByRole('button', { name: 'Start Run' }).click();
 
   await expect(page).toHaveURL(/#checkout-stubbed$/);

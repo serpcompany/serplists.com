@@ -180,7 +180,7 @@ const HANDLERS: Array<[string, string[]]> = [
   ['src/views/PublicTemplate.tsx', ['handleStartRun', 'handleSaveTemplate']],
   // The model opens a new run; the page reports a failure (sign-in or checkout).
   ['src/features/dashboard-templates/useDashboardTemplatesModel.ts', ['createRunFromTemplate']],
-  ['src/views/Templates.tsx', ['handleRunSubmit']],
+  ['src/views/Templates.tsx', ['handleRunConfirm']],
   ['src/components/TemplateBackup.tsx', ['exportAll', 'handleConfirmImport']],
   ['src/views/ChecklistRun.tsx', ['handleCompleteRun']],
 ];

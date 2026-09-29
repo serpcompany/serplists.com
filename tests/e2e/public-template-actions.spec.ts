@@ -22,7 +22,10 @@ async function openPublicTemplate(page: Page) {
   ).toBeVisible();
 }
 
-test('a double click on the header Start Run creates one run', async ({ page }) => {
+// Start Run asks for the Run's name in the Start a Run dialog, as on My Templates and template
+// detail. The rest of the double click that opened it leaves it open, and a double click on
+// its Start Run creates one run.
+test('a double click on the header Start Run opens the dialog, and one on its Start Run creates one run', async ({ page }) => {
   await loginAsAdmin(page);
   const runCreates: string[] = [];
   page.on('request', (request) => {
@@ -34,11 +37,29 @@ test('a double click on the header Start Run creates one run', async ({ page }) 
   await openPublicTemplate(page);
   // The header button comes first in the page; the bottom call-to-action is second.
   await page.getByRole('button', { name: 'Start Run' }).first().dblclick();
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Run name', exact: true })).toHaveAttribute(
+    'placeholder',
+    /^Ultimate Camping Checklist - /,
+  );
+  expect(runCreates).toHaveLength(0);
+
+  await dialog.getByRole('button', { name: 'Start Run' }).dblclick();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   expect(runCreates).toHaveLength(1);
 
   const runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+});
+
+// A visitor who is not signed in signs in first, and is not asked for a name.
+test('Start Run sends a visitor who is not signed in to sign in', async ({ page }) => {
+  await openPublicTemplate(page);
+  await page.getByRole('button', { name: 'Start Run' }).first().click();
+
+  await expect(page).toHaveURL(/\/login\/\?next=%2Fprofile%2Fserp%2Fultimate-camping-checklist%2F$/);
+  await expect(page.getByRole('dialog', { name: 'Start a Run' })).toHaveCount(0);
 });
 
 test('a failed Save keeps the Save button instead of showing Saved', async ({ page }) => {

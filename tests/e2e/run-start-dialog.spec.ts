@@ -3,9 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// The Start Run dialog used to clear the run name as soon as it was submitted, so a start
+// The Start a Run dialog used to clear the run name as soon as it was submitted, so a start
 // that failed (network, 429, 5xx, an Organization plan limit) left the dialog open with the
 // name gone, and a retry silently used the generated default (src/components/ui/run-name-dialog.tsx).
+// It is the one Start Run dialog: My Templates, template detail and the public template page.
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -46,16 +47,16 @@ test('a failed start keeps the typed run name, and the retry uses it', async ({ 
 
   await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Name Your Checklist Run' });
-  const nameField = dialog.getByRole('textbox', { name: 'Run Name' });
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
+  const nameField = dialog.getByRole('textbox', { name: 'Run name', exact: true });
   await nameField.fill(runName);
-  await dialog.getByRole('button', { name: 'Start Checklist' }).click();
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
 
   await expect.poll(() => refuseNextStart).toBe(false);
   await expect(dialog).toBeVisible();
   await expect(nameField).toHaveValue(runName);
 
-  await dialog.getByRole('button', { name: 'Start Checklist' }).click();
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
   const { title } = await apiJson<{ title: string }>(page, `/checklists/${runId}`);
@@ -70,14 +71,14 @@ test('a cancelled Start Run dialog opens empty next time', async ({ page }) => {
   const templateId = await createTemplate(page, `Start dialog cancel QA ${Date.now()}`);
 
   await page.goto(`/dashboard/templates/${templateId}/`);
-  const dialog = page.getByRole('dialog', { name: 'Name Your Checklist Run' });
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await dialog.getByRole('textbox', { name: 'Run Name' }).fill('Not this one');
+  await dialog.getByRole('textbox', { name: 'Run name', exact: true }).fill('Not this one');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await expect(dialog.getByRole('textbox', { name: 'Run Name' })).toHaveValue('');
+  await expect(dialog.getByRole('textbox', { name: 'Run name', exact: true })).toHaveValue('');
 
   await deleteResource(page, `/templates/${templateId}`);
 });

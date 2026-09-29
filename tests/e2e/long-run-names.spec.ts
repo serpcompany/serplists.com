@@ -33,6 +33,8 @@ test('Start Run on a public template with a 160-character title creates the run'
   try {
     await page.goto(`/profile/admin/${String(created.slug)}/`);
     await page.getByRole('button', { name: 'Start Run' }).first().click();
+    // A blank name gets the default, which shortens the title to fit the limit.
+    await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
     await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
     runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
 

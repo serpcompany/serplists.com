@@ -414,3 +414,12 @@ Each of these needs the user's approval, or happens with the domain move:
   (`PUBLIC_TEMPLATE_FIELDS`), so nothing changed in the API or its D1 reads; the page formats it
   like template detail's "Last updated" (`formatLocalDate`, in the viewer's zone). The page
   loads its template in the browser, so the server never renders a date in another zone.
+- 2026-09-29: **One Start a Run dialog.** My Templates had its own dialog ("Start Run", a
+  Template select, unlabelled fields), Template detail asked "Name Your Checklist Run" with
+  "Start Checklist", and the public template page started a Run without asking. All three now
+  open `RunNameDialog`: "Start a Run", a labelled "Run name" field suggesting the default name,
+  "Start Run" ("Starting…" while pending) and Cancel. My Templates' Template select is gone,
+  since every Start Run there comes from a Template's card or row. The public template page
+  still sends a visitor who is not signed in to sign in first. The dialog ignores the rest of
+  the double click that opened it, as the Run complete dialog does, and a double click on its
+  Start Run submits once.

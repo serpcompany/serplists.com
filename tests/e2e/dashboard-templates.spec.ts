@@ -19,7 +19,7 @@ async function openStartRunDialog(page: Page) {
   await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  return page.getByRole('dialog', { name: 'Start Run' });
+  return page.getByRole('dialog', { name: 'Start a Run' });
 }
 
 test('Start Run at the run limit opens checkout instead of only toasting', async ({ page }) => {
@@ -58,7 +58,8 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   await loginAsAdmin(page);
 
   const dialog = await openStartRunDialog(page);
-  const placeholder = (await dialog.locator('#run-name').getAttribute('placeholder')) ?? '';
+  const placeholder =
+    (await dialog.getByRole('textbox', { name: 'Run name', exact: true }).getAttribute('placeholder')) ?? '';
   const templateTitle = placeholder.split(' - ')[0];
   expect(templateTitle.length).toBeGreaterThan(0);
 

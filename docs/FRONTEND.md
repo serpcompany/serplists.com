@@ -312,7 +312,7 @@ let it ask, so the user is asked once.
   so a second click cannot open a second session. Back can restore the page from the
   back/forward cache with its React state intact, so the hook clears the flag on that
   restore, and Billing, Pricing and the template editor refetch billing status too.
-  Every checkout entry point uses it, including the Start Run dialog on My Templates
+  Every checkout entry point uses it, including the Start a Run dialog on My Templates
   and the editor's Upgrade to Pro; `tests/unit/components/billing-redirect-pending.test.ts`
   scans `src/` for pending flags next to a checkout or portal call.
 

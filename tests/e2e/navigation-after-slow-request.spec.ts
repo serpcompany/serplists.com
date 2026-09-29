@@ -65,6 +65,9 @@ test('stays on the page the user went Back to when a public Start Run finishes',
   await page.goto('/templates/');
   await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
   await page.getByRole('button', { name: 'Start Run' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/templates\/$/);
 
@@ -85,8 +88,9 @@ test('stays on the page the user went Back to when a template Start Run finishes
   await page.goto('/dashboard/templates/');
   await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('button', { name: 'Start Checklist' }).click();
-  await expect(page.getByRole('button', { name: 'Creating...' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 
@@ -105,7 +109,7 @@ test('opens the new run when the user waits on the template page', async ({ page
 
   await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('button', { name: 'Start Checklist' }).click();
+  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
 
   await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
@@ -151,9 +155,9 @@ test('does not start checkout from the page the user went Back to when a My Temp
   await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start Run' });
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
   await dialog.getByRole('button', { name: 'Start Run' }).click();
-  await expect(dialog.getByRole('button', { name: 'Creating...' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Starting…' })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 

@@ -33,7 +33,7 @@ describe('RunNameDialog', () => {
         templateTitle={'T'.repeat(160)}
       />,
     );
-    const input = /<input[^>]*id="runName"[^>]*>/.exec(html)?.[0] ?? '';
+    const input = /<input[^>]*id="run-name"[^>]*>/.exec(html)?.[0] ?? '';
     const placeholder = decodeAttribute(/placeholder="([^"]*)"/.exec(input)?.[1] ?? '');
 
     expect(placeholder.startsWith('TTT')).toBe(true);
@@ -51,7 +51,46 @@ describe('RunNameDialog', () => {
       />,
     );
 
-    const input = html.match(/<input[^>]*id="runName"[^>]*>/)?.[0] ?? '';
+    const input = html.match(/<input[^>]*id="run-name"[^>]*>/)?.[0] ?? '';
     expect(input).toMatch(new RegExp(`maxlength="${RUN_TITLE_MAX_LENGTH}"`, 'i'));
+  });
+});
+
+// One dialog and one wording wherever a Run starts: My Templates, template detail and the
+// public template page.
+describe('RunNameDialog wording', () => {
+  const render = (loading = false) =>
+    renderToStaticMarkup(
+      <RunNameDialog
+        open
+        onOpenChange={vi.fn()}
+        onConfirm={vi.fn()}
+        templateTitle="Launch checklist"
+        loading={loading}
+      />,
+    );
+  const buttons = (html: string) =>
+    [...html.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map(([, attributes, label]) => ({
+      disabled: attributes.includes('disabled=""'),
+      label,
+    }));
+
+  it('asks "Start a Run" with a visibly labelled Run name field, Cancel and Start Run', () => {
+    const html = render();
+
+    expect(html).toContain('Start a Run');
+    expect(html).toMatch(/<label[^>]*for="run-name"[^>]*>Run name<\/label>/);
+    expect(html).toMatch(/<input[^>]*id="run-name"/);
+    expect(buttons(html)).toEqual([
+      { disabled: false, label: 'Cancel' },
+      { disabled: false, label: 'Start Run' },
+    ]);
+  });
+
+  it('says Starting… and locks its buttons while the run starts', () => {
+    expect(buttons(render(true))).toEqual([
+      { disabled: true, label: 'Cancel' },
+      { disabled: true, label: 'Starting…' },
+    ]);
   });
 });

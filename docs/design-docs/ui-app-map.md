@@ -16,10 +16,10 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 
 - **Public shell:** site header and site footer. Every page in the `(site)` route group, and
   the 404 page on public paths.
-- **Console shell:** the console sidebar (shadcn's Sidebar block, a sheet on phones), a top
-  bar with the sidebar trigger and the public header's navigation, and the site footer. Every page under
-  `/dashboard/`. These pages sit in the `(app)` route group, which checks the session first:
-  a signed-out visitor goes to `/login/?next=<path>`.
+- **Console shell:** the console sidebar (shadcn's Sidebar block, a sheet on phones), a top bar
+  with the sidebar trigger and the public header's navigation, and the site footer. Every page
+  under `/dashboard/`. These pages sit in the `(app)` route group, which checks the session
+  first: a signed-out visitor goes to `/login/?next=<path>`.
 - **No shell:** the shared run page, `/share/<token>/`. A guest may have no account, so it
   has its own small header and no footer.
 
@@ -64,8 +64,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   template card → Public template page → "Start Run" → Log in (the template page is the return
   path) → "Sign up" → Register → "Create account" → Log in ("Verify your email first, then sign
   in.") → verification email link → Log in ("Email verified. You can sign in now.") → "Sign in"
-  → Public template page → "Start Run" → Run page (`/dashboard/runs/<id>/`). When no email
-  verification is required, Register returns straight to the template page.
+  → Public template page → "Start Run" → Start a Run dialog → "Start Run" → Run page
+  (`/dashboard/runs/<id>/`). When no email verification is required, Register returns
+  straight to the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
   My Templates (a sign-in with no return path opens the console home).
@@ -83,10 +84,11 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   detail page: My Templates → title → Template detail → "Edit" → Template editor. Another
   save came first: "Save" → "Error" alert → "Load latest version".
 - **Run a checklist, complete it, share it:** My Templates → "Start Run" (card hover, card
-  actions menu or list row) → Start Run dialog → "Start Run" → Run page → task checkbox or
+  actions menu or list row) → Start a Run dialog → "Start Run" → Run page → task checkbox or
   "Mark Complete" → "Next Task" → … → last task done → "Checklist Completed!" dialog →
-  "Return to Dashboard" (completes the Run) → My Runs. From Template detail: "Start Run" →
-  "Name Your Checklist Run" dialog → "Start Checklist" → Run page. Share: Run page "Share"
+  "Return to Dashboard" (completes the Run) → My Runs. From Template detail or a public
+  template page: "Start Run" → the same Start a Run dialog → "Start Run" → Run page. Share:
+  Run page "Share"
   (or My Runs → "Run options" → "Share Run") → Share run dialog → copy the link. Guest:
   Shared run → tick tasks, add notes → "Complete run" → "Checklist Completed!" → "Return to
   Public Runs" → Template Library.
@@ -146,8 +148,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 Every page route in `src/app`. The screen names link to their cards.
 
 Shell overlays on every public page: the header's "Templates" and "Features" menus (from `md`
-up), the menu sheet below `md` and, signed in, the account menu. On every console page: the context switcher and the account menu, both in the sidebar,
-which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
+up), the menu sheet below `md` and, signed in, the account menu. On every console page: the
+context switcher and the account menu, both in the sidebar, which opens as a sheet below `md`.
+Toasts (sonner) report results everywhere.
 
 ### Public site
 
@@ -163,7 +166,7 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |
 | `/profile/<user>/` | [Public Profile](ui-screen-inventory.md#public-profile) | Child page (owner links, account menu "Profile") | Shell overlays | Loading; error; not found; no public Templates |
-| `/profile/<user>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page) | Child page (the library, category pages, Public Profiles, Home) | Shell overlays | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
+| `/profile/<user>/<template>/` | [Public template page](ui-screen-inventory.md#public-template-page) | Child page (the library, category pages, Public Profiles, Home) | Shell overlays; Start a Run dialog | Collapsible section previews (all open at first); "Save" becomes "Saved"; role-limited actions; Organization error notice |
 
 ### Auth and invites
 
@@ -185,9 +188,9 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
-| `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
+| `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start a Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
 | `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block popover; More actions menu; browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
-| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Run name dialog; Share link dialog; Delete template dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
+| `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs") | Share link dialog; Delete run dialog; Run options menu; status select | Status filter; search |
 | `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |

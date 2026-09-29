@@ -38,7 +38,7 @@ for (const signedIn of [false, true]) {
   });
 }
 
-test('the Start Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
+test('the Start a Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
   await login(page, 'john');
   const { id: templateId } = await apiJson<{ id: string }>(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`);
 
@@ -47,7 +47,7 @@ test('the Start Run dialog keeps its typed name when the app refreshes data in t
   await page.clock.install();
   await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).click();
-  await page.getByLabel('Run Name').fill('Kept run name');
+  await page.getByLabel('Run name', { exact: true }).fill('Kept run name');
 
   // Returning to the tab after a minute refetches the Organization list (60s staleTime).
   const teamsRefetched = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/teams'));
@@ -55,7 +55,7 @@ test('the Start Run dialog keeps its typed name when the app refreshes data in t
   await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
   await teamsRefetched;
 
-  await expect(page.getByLabel('Run Name')).toHaveValue('Kept run name');
+  await expect(page.getByLabel('Run name', { exact: true })).toHaveValue('Kept run name');
   await expect(page.getByText('Loading template...')).toHaveCount(0);
   expect(requests).toHaveLength(1);
 });

@@ -56,6 +56,7 @@ test('a user who signs in after another on the same tab never sees the other use
   const johnRunIds = [await createRun(page, johnRunTitle)];
   await navigateInApp(page, '/profile/admin/sample-technical-seo-audit-checklist/');
   await page.getByRole('button', { name: 'Start Run' }).first().click();
+  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/, { timeout: 15_000 });
   johnRunIds.push(decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
   await navigateInApp(page, '/dashboard/runs/');

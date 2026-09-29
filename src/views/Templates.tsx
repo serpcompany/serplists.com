@@ -30,6 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import {
   Select,
   SelectContent,
@@ -45,7 +46,6 @@ import { usePageVisit } from '@/hooks/usePageVisit';
 import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { isStaleRecordError } from '@/lib/editConflicts';
-import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import {
   handleUpgradeRequiredForContext,
@@ -72,7 +72,6 @@ const Templates = () => {
   const model = useDashboardTemplatesModel();
   const router = useAppRouter();
   const beginVisit = usePageVisit();
-  const [runName, setRunName] = useState('');
   // Set until the browser leaves for checkout; Back from Stripe clears it, so the
   // restored dialog can be closed or submitted again.
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
@@ -87,11 +86,6 @@ const Templates = () => {
     useState<VisibilityFilter>('all');
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
-
-  // A blank name submits this same default (see resolveRunName).
-  const defaultRunName = model.selectedTemplate
-    ? buildDefaultRunName(model.selectedTemplate.title)
-    : '';
 
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -138,7 +132,6 @@ const Templates = () => {
       return;
     }
 
-    setRunName('');
     model.closeRunLauncher();
   };
 
@@ -158,8 +151,8 @@ const Templates = () => {
     return redirecting;
   };
 
-  const handleRunSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // The dialog's name, or the default it showed when left blank.
+  const handleRunConfirm = async (runName: string) => {
     if (isLaunchingRun) {
       return;
     }
@@ -171,7 +164,6 @@ const Templates = () => {
 
     if (result.kind === 'ok') {
       toast.success('Checklist run created');
-      setRunName('');
       return;
     }
 
@@ -346,72 +338,13 @@ const Templates = () => {
         </div>
       </DashboardScrollArea>
 
-      <Dialog open={model.runLauncherOpen} onOpenChange={handleRunDialogChange}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Start Run</DialogTitle>
-            <DialogDescription>
-              Pick one of your templates and launch a new run.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleRunSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Select
-                items={model.templates.map((template) => ({
-                  label: template.title,
-                  value: template.id,
-                }))}
-                value={model.selectedTemplateId}
-                onValueChange={(templateId) => {
-                  if (templateId) model.selectRunTemplate(templateId);
-                }}
-              >
-                <SelectTrigger id="run-template" className="rounded-md">
-                  <SelectValue placeholder="Select a template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {model.templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Input
-                id="run-name"
-                value={runName}
-                onChange={(event) => setRunName(event.target.value)}
-                placeholder={defaultRunName}
-                maxLength={RUN_TITLE_MAX_LENGTH}
-                className="rounded-md"
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleRunDialogChange(false)}
-                disabled={isLaunchingRun}
-                className="rounded-md"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={!model.selectedTemplateId || isLaunchingRun}
-                className="rounded-md"
-              >
-                {isLaunchingRun ? 'Creating...' : 'Start Run'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <RunNameDialog
+        open={model.runLauncherOpen}
+        onOpenChange={handleRunDialogChange}
+        templateTitle={model.selectedTemplate?.title ?? ''}
+        onConfirm={handleRunConfirm}
+        loading={isLaunchingRun}
+      />
 
       <Dialog
         open={templateToDelete !== null}

@@ -309,10 +309,6 @@ export const useDashboardTemplatesModel = (
     setRunLauncherOpen(false);
   };
 
-  const selectRunTemplate = (templateId: string) => {
-    setSelectedTemplateId(templateId);
-  };
-
   const createRunFromTemplate = async (
     runName?: string,
   ): Promise<DashboardTemplateRunResult> => {
@@ -375,7 +371,6 @@ export const useDashboardTemplatesModel = (
     runLauncherOpen,
     selectedTemplate,
     selectedTemplateId,
-    selectRunTemplate,
     preferenceOwnerId: dependencies?.userId ?? user?.id,
   };
 };

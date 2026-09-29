@@ -206,15 +206,12 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('href="/categories/%F0');
   });
 
+  // The Start a Run dialog says "Starting…"; the page's buttons wait.
   it('disables every Start Run button while a run is being created', () => {
-    const buttons = findButtons(
-      renderView({ isCreatingRun: true }),
-      /^(Start Run|Starting\.\.\.)$/,
-    );
+    const buttons = findButtons(renderView({ isCreatingRun: true }), /^Start Run$/);
 
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
-      expect(button).toContain('Starting...');
       expect(button).toMatch(/<button[^>]*disabled=""/);
     }
   });

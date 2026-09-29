@@ -613,8 +613,8 @@ existing content, invent nothing):
   - Tags ("#tag").
   - "Ready to use this template?": text that says what the viewer's role allows; "Copy to
     Library" (outline) and "Start Run" (primary).
-- **PRIMARY ACTION:** "Start Run" → [Run page](#run-page). Signed out → [Log in](#log-in),
-  then back.
+- **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog) → [Run
+  page](#run-page). Signed out → [Log in](#log-in), then back.
 - **SECONDARY ACTIONS:** "Share" (copies the page's address: "Link copied to clipboard");
   "Save" or "Copy to Library" (copies the Template into the active context, then opens the
   copy's [Template detail](#template-detail)); a category chip; the owner link; open or close a
@@ -628,7 +628,8 @@ existing content, invent nothing):
   - Save labels: "Save" and "Copy to Library"; "Saving..." and "Copying..."; "Checking
     plan..." (footer button); Free in Personal: "Upgrade to save" and "Upgrade to copy
     template"; after a save: "Saved".
-  - Start Run: "Starting..."; disabled while the context loads.
+  - Start Run: disabled while the context loads or while a Run starts ("Starting…" in the
+    dialog).
   - Organization role limits: runners and viewers get no Save, viewers no Start Run; the
     card's text names what the role cannot do.
   - The Organization error notice above.
@@ -657,9 +658,9 @@ existing content, invent nothing):
     (number, title, description, content blocks); tag list; call-to-action card (title, text,
     two buttons); alert.
   - DATA FIELDS: title; description; type; categories (name, category URL); owner (name,
-    initial, Public Profile URL); last update (`updatedAt`, else `createdAt`); section count; task count; sections (title, task count;
-    tasks with title, description, content blocks); tags; Save and Start Run labels; the
-    role-aware call-to-action text.
+    initial, Public Profile URL); last update (`updatedAt`, else `createdAt`); section count;
+    task count; sections (title, task count; tasks with title, description, content blocks);
+    tags; Save and Start Run labels; the role-aware call-to-action text.
 - **PROOF PASS:** Pass (step 1): template-desktop-light-signed-out.png,
   template-desktop-dark-signed-out.png, template-mobile-light-signed-out.png,
   template-mobile-dark-signed-out.png and the four signed-in shots, against
@@ -1138,7 +1139,7 @@ existing content, invent nothing):
     "Private", and "Start Run", "Edit", "Delete".
 - **PRIMARY ACTION:** open a Template → [Template detail](#template-detail).
 - **SECONDARY ACTIONS:** "New Template" → [Template editor](#template-editor); "Start Run" →
-  [Start Run dialog](#start-run-dialog); "Edit"; "Delete" → [Delete
+  [Start a Run dialog](#start-a-run-dialog); "Edit"; "Delete" → [Delete
   confirmations](#delete-confirmations); search; filter; sort; grid or list.
 - **STATES:** "Loading templates..."; a load error ("Couldn't load your templates",
   "Something went wrong while loading. Check your connection and try again.", "Retry"; or
@@ -1185,7 +1186,7 @@ existing content, invent nothing):
   - "Changelog" (roles that may see history): entries (label, who, date and time), or
     "Loading template history...", "Template history is unavailable right now.", "No template
     history has been recorded yet."
-- **PRIMARY ACTION:** "Start Run" → [Run name dialog](#run-name-dialog).
+- **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog).
 - **SECONDARY ACTIONS:** "Share" → [Share link dialog](#share-link-dialog); "Edit" →
   [Template editor](#template-editor); the copy button; the visibility switch; "Template
   actions" → "Duplicate", "Export JSON" (or "Upgrade to export"), "Delete" ([Action
@@ -1653,51 +1654,43 @@ replaced.
   sidebar block (no reference screenshot).
 - **NOTES:** A switch reloads the page's lists in the new context and is remembered per tab.
 
-### Start Run dialog
+### Start a Run dialog
 
-- **SCREEN NAME:** Start Run dialog
-- **PURPOSE:** Pick a Template and name a new Run.
-- **HOW USER GETS HERE:** "Start Run" on a My Templates card (hover bar or actions menu) or list
-  row.
-- **WHAT'S ON THE SCREEN:** "Start Run", "Pick one of your templates and launch a new run.";
-  a Template select ("Select a template"); a name field whose placeholder is the default name
-  ("<template title> - <date and time>"); "Cancel", "Start Run".
-- **PRIMARY ACTION:** "Start Run" → [Run page](#run-page) (toast "Checklist run created").
-- **SECONDARY ACTIONS:** "Cancel".
-- **STATES:** "Creating..."; a plan limit starts checkout (the dialog stays busy); an ended
-  session goes to Log in; a failure keeps the typed name.
+- **SCREEN NAME:** Start a Run dialog ("Start a Run")
+- **PURPOSE:** Name a new Run of a Template: the one way to start a Run.
+- **HOW USER GETS HERE:** "Start Run" on a My Templates card (hover bar or actions menu) or
+  list row, on Template detail, and on the public template page (signed in; a visitor who is
+  not signed in goes to Log in first and comes back to the template page).
+- **WHAT'S ON THE SCREEN:** "Start a Run"; "Run name", a labelled field whose placeholder is
+  the default name ("<template title> - <date and time>"); "Cancel", "Start Run"; the close
+  button.
+- **PRIMARY ACTION:** "Start Run" → [Run page](#run-page) (toast "Checklist run created", or
+  "Run started in <Organization>" for another Organization's Template on Template detail).
+- **SECONDARY ACTIONS:** "Cancel", Escape or the close button.
+- **STATES:** "Starting…" (the field and both buttons disabled); a blank name gets the default;
+  a plan limit starts checkout (on My Templates the dialog stays busy until the browser leaves);
+  an ended session goes to Log in; a failure keeps the dialog open with the typed name; the
+  rest of the double click that opened it neither closes it nor starts a second Run.
 - **NAVIGATION TYPE:** modal dialog.
-- **PATTERN CHOICE (proposal):** shadcn Dialog with labeled Fields.
-- **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header (title, description); form (select, input); footer (two buttons).
-  - COMPONENT TYPES: select; input; outline and primary buttons.
-  - DATA FIELDS: Templates (id, title); run name; default name.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** The select and the name field have no visible labels.
-
-### Run name dialog
-
-- **SCREEN NAME:** Run name dialog ("Name Your Checklist Run")
-- **PURPOSE:** Name a new Run of the open Template.
-- **HOW USER GETS HERE:** "Start Run" on Template detail.
-- **WHAT'S ON THE SCREEN:** "Name Your Checklist Run", "Give your new checklist run a
-  descriptive name to help you track progress."; "Run Name" (placeholder: the default name);
-  "Cancel", "Start Checklist".
-- **PRIMARY ACTION:** "Start Checklist" → [Run page](#run-page).
-- **SECONDARY ACTIONS:** "Cancel".
-- **STATES:** "Creating..." (field disabled); a failure keeps the dialog and the typed name.
-- **NAVIGATION TYPE:** modal dialog.
-- **PATTERN CHOICE (proposal):** shadcn Dialog, the same block as the [Start Run
-  dialog](#start-run-dialog).
-- **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; one labeled field; footer.
+- **PATTERN CHOICE (decided):** a shadcn Dialog with one labelled Field, the same on every page
+  (the user's decision of 2026-09-29).
+- **REFERENCE IMAGES:** none (the reference has no dialogs).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, close button); one labelled field; footer (two buttons,
+    stacked on phones).
   - COMPONENT TYPES: label; input; outline and primary buttons.
-  - DATA FIELDS: run name; default name.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Its wording differs from the Start Run dialog's; the public template page starts a
-  Run with no dialog.
+  - DATA FIELDS: run name; default name (from the Template's title).
+- **PROOF PASS:** Pass, against shadcn's Dialog (no reference screenshot):
+  `tmp/design-review/decisions/start-run-dialog-public-template-desktop-signed-in.png`,
+  `start-run-dialog-public-template-mobile-signed-in.png`,
+  `start-run-dialog-my-templates-desktop-signed-in.png` and
+  `start-run-dialog-my-templates-mobile-signed-in.png`: title, labelled field, footer buttons.
+- **NOTES:**
+  - Code: `src/components/ui/run-name-dialog.tsx`.
+  - Until 2026-09-29, My Templates had its own "Start Run" dialog with a Template select and
+    unlabelled fields, Template detail asked "Name Your Checklist Run" with "Start Checklist",
+    and the public template page started a Run with the default name without asking. My
+    Templates' dialog has no Template select now: the card's Start Run picks the Template.
 
 ### Share link dialog
 
@@ -1910,8 +1903,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- Starting a Run: My Templates' dialog says "Start Run", Template detail's says "Name Your
-  Checklist Run" and "Start Checklist", and the public template page asks nothing.
 - The Run complete dialog's only button reads "Return to Dashboard" or "Return to Public Runs"
   but completes the Run; there is no Public Runs page.
 - The shared run page calls itself "A read-only checklist run", yet guests can tick tasks, add
@@ -1920,7 +1911,6 @@ Found while reading the code; none is decided here.
   a signed-out visitor: `src/app/not-found.tsx` renders the shell without the session check.
 - Categories shows nothing (no message) when a search matches no category.
 - The Template editor's outline has a fixed width and no phone layout.
-- The Start Run dialog's fields have no visible labels.
 - The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
   category page already has a color per built-in category that the tiles could use.
 - On phones the console's context switcher sits in the sidebar sheet, so the active context

@@ -30,6 +30,7 @@ test('starts a run from a public template page opened directly', async ({ page }
   await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
 
   await page.getByRole('button', { name: 'Start Run' }).first().click();
+  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
 
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));

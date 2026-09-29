@@ -52,6 +52,7 @@ interface PublicTemplateViewProps {
   isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
+  // Start Run stays disabled while a run is starting (the Start a Run dialog says so).
   isCreatingRun: boolean;
   isSaving: boolean;
   // Save copies into the active context; only Personal copying needs a Pro plan.
@@ -170,7 +171,7 @@ export function PublicTemplateView({
       aria-describedby={actionDescribedBy}
     >
       <Play data-icon="inline-start" />
-      {isCreatingRun ? 'Starting...' : 'Start Run'}
+      Start Run
     </Button>
   );
 

@@ -21,6 +21,16 @@ vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (impo
 
 const viewModeState = vi.hoisted(() => ({ mode: 'grid' as 'grid' | 'list' }));
 
+// The shared Start a Run dialog (tests/unit/components/RunNameDialog.test.tsx): the page's
+// part is what it gives the dialog.
+const runDialog = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
+vi.mock('@/components/ui/run-name-dialog', () => ({
+  RunNameDialog: (props: Record<string, unknown>) => {
+    runDialog.props = props;
+    return null;
+  },
+}));
+
 vi.mock('@/hooks/useViewModePreference', () => ({
   useViewModePreference: () => [viewModeState.mode, vi.fn()],
 }));
@@ -271,3 +281,39 @@ describe('Templates page', () => {
   });
 });
 
+describe('Templates page Start Run', () => {
+  it('asks for the name in the Start a Run dialog the other pages use, for the chosen template', async () => {
+    const createRunFromTemplate = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
+    mockUseDashboardTemplatesModel.mockReturnValue({
+      templates: [template(), template({ id: 'template-2', title: 'Vendor onboarding' })],
+      loading: false,
+      isEmpty: false,
+      canCreateRun: true,
+      canCreateTemplate: true,
+      canEditTemplate: true,
+      canRunTemplate: true,
+      totalTemplateItems: 4,
+      selectedTemplate: template({ id: 'template-2', title: 'Vendor onboarding' }),
+      selectedTemplateId: 'template-2',
+      runLauncherOpen: true,
+      isCreatingRun: false,
+      openCreateTemplate: vi.fn(),
+      openRunLauncher: vi.fn(),
+      openTemplate: vi.fn(),
+      removeTemplate: vi.fn(),
+      closeRunLauncher: vi.fn(),
+      createRunFromTemplate,
+    });
+
+    navigation.reset('/dashboard/templates/');
+    const html = renderToStaticMarkup(<Templates />);
+
+    // No template picker of its own: the card's Start Run chose the template.
+    expect(html).not.toContain('Select a template');
+    expect(runDialog.props).toEqual(
+      expect.objectContaining({ loading: false, open: true, templateTitle: 'Vendor onboarding' }),
+    );
+    await (runDialog.props?.onConfirm as (name: string) => Promise<void>)('Q3 vendor onboarding');
+    expect(createRunFromTemplate).toHaveBeenCalledWith('Q3 vendor onboarding');
+  });
+});
