@@ -114,12 +114,10 @@ export const mergeAccountTemplateCollections = (
   const ownedTemplates = apiCollection.filter(
     (template) => template.userId === currentUserId,
   );
-  const merged = new Map<string, ChecklistTemplate>();
-
-  [...publicCollection, ...ownedTemplates].forEach((template) => {
-    if (merged.has(template.id)) return;
-    merged.set(template.id, template);
-  });
+  // The catalog can be up to 5 minutes old (edge cache), so the user's own copy wins;
+  // Map.set keeps each template's original position.
+  const merged = new Map(publicCollection.map((template) => [template.id, template]));
+  ownedTemplates.forEach((template) => merged.set(template.id, template));
 
   return Array.from(merged.values());
 };

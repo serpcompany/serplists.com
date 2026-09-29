@@ -90,7 +90,7 @@ const getRunHistoryActorName = (entry: TemplateHistoryEvent): string => {
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const navigate = useNavigate();
-  const { getRun, updateRun } = useTemplates();
+  const { updateRun } = useTemplates();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -115,7 +115,8 @@ const ChecklistRunPage = () => {
     toggleItem,
     toggleSubItem,
   } = useRunExecutionModel({
-    getCachedRun: getRun,
+    // No getCachedRun: the run list loads only on the runs dashboard and is not refreshed
+    // after this page saves, so the page always loads its own run by id.
     runId: id,
     shareToken,
     updateRun,
@@ -183,6 +184,7 @@ const ChecklistRunPage = () => {
   const handleItemNotesSave = async (itemId: string, notes: string) => {
     const result = await saveItemNotes(itemId, notes);
     if (result.kind === 'ok') return true;
+    if (result.kind === 'ignored') return false;
     toast.error(result.kind === 'error' ? result.message : 'Unable to save task notes.');
     return false;
   };

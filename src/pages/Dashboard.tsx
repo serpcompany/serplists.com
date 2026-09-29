@@ -34,7 +34,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates, type ChecklistRun } from '@/contexts/TemplatesContext';
+import { useTemplateLists, type ChecklistRun } from '@/contexts/TemplatesContext';
 import {
   resolveConsoleSection,
   buildConsoleRunPath,
@@ -56,7 +56,7 @@ const Dashboard = () => {
     updateRun,
     revalidateRun,
     deleteRun,
-  } = useTemplates();
+  } = useTemplateLists({ catalog: true, runs: true });
   const [searchParams, setSearchParams] = useSearchParams();
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);

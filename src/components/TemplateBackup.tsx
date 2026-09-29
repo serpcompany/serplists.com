@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Upload, FileText, AlertCircle, CheckCircle } from "lucide-react";
-import { useTemplates } from "@/contexts/TemplatesContext";
+import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
@@ -56,7 +56,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     allTemplates,
     templates,
     importTemplates
-  } = useTemplates();
+  } = useTemplateLists({ catalog: true });
   const {
     user
   } = useAuth();

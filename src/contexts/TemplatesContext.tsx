@@ -2,7 +2,7 @@ import React, { createContext, useContext, useMemo } from "react";
 import { useAuth } from "./CloudflareAuthContext";
 import { useWorkspace } from "./WorkspaceContext";
 import { toast } from "sonner";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { 
@@ -36,6 +36,35 @@ import {
 
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
+
+type TemplateListQuery = UseQueryOptions<ChecklistTemplate[]>;
+type TemplateListRequest = { teamId?: string; scope?: 'public' | 'personal' };
+type TemplateListQueries = { catalog: TemplateListQuery; workspace: TemplateListQuery; ready: boolean };
+const TemplateListQueriesContext = createContext<
+  (TemplateListQueries & { runs: UseQueryOptions<ChecklistRun[]> }) | undefined
+>(undefined);
+
+// Lists load only on pages that call useTemplateLists(), because a catalog miss reads every
+// public Template from D1. The catalog (?scope=public) is identical for everyone and
+// edge-cached, so its key has no user. The workspace list is the user's own Personal
+// templates (?scope=personal) or the active Organization's. Nothing loads until the session
+// and active workspace are known, or a page would also fetch a list it does not need.
+export const buildTemplateListQueries = (params: {
+  ready: boolean;
+  userId?: string;
+  activeTeamId?: string;
+  workspaceScopeId: string;
+  fetchList: (request: TemplateListRequest) => () => Promise<ChecklistTemplate[]>;
+}): TemplateListQueries => ({
+  catalog: { queryKey: ['templates', 'catalog'], queryFn: params.fetchList({ scope: 'public' }), staleTime: 5 * 60 * 1000 },
+  workspace: {
+    queryKey: ['templates', params.userId ?? 'visitor', params.workspaceScopeId],
+    queryFn: params.fetchList(params.activeTeamId ? { teamId: params.activeTeamId } : { scope: 'personal' }),
+    staleTime: 5 * 60 * 1000,
+    enabled: params.ready && Boolean(params.userId),
+  },
+  ready: params.ready,
+});
 
 type CreateRunRequest = {
   apiPayload: {
@@ -93,9 +122,28 @@ export const useTemplates = () => {
   return context;
 };
 
+// Loads data for pages that read `templates` (the catalog), `allTemplates` (the active
+// workspace, merged with the catalog in Personal), or `runs`. See buildTemplateListQueries.
+export const useTemplateLists = (options: { catalog?: boolean; workspace?: boolean; runs?: boolean } = {}) => {
+  const queries = useContext(TemplateListQueriesContext);
+  if (!queries) {
+    throw new Error("useTemplateLists must be used within a TemplatesProvider");
+  }
+  const catalog = useQuery({ ...queries.catalog, enabled: queries.ready && options.catalog === true });
+  const workspace = useQuery({ ...queries.workspace, enabled: queries.workspace.enabled !== false && options.workspace !== false });
+  const runs = useQuery({ ...queries.runs, enabled: queries.runs.enabled !== false && options.runs === true });
+  // Use this page's queries for loading: the provider's observers hear of fetches a tick late.
+  const context = useTemplates();
+  return {
+    ...context,
+    templatesLoading: !queries.ready || catalog.isLoading || workspace.isLoading,
+    runsLoading: !queries.ready || runs.isLoading,
+  };
+};
+
 export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const { activeTeamId, workspaceScopeId } = useWorkspace();
+  const { activeTeamId, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
   const queryClient = useQueryClient();
 
   const mapApiTemplate = (template: Record<string, unknown>): ChecklistTemplate => ({
@@ -147,40 +195,23 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         : undefined,
   });
 
-  // Fetch catalog templates for public-facing pages. The merge step keeps only public templates.
-  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({
-    queryKey: ['catalog-templates', user?.id],
-    queryFn: async (): Promise<ChecklistTemplate[]> => {
-      try {
-        const templatesData = await api.getTemplates();
-        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
-      } catch (error) {
-        console.error('Error fetching templates:', error);
-        return [];
-      }
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+  const fetchTemplateList = (request: TemplateListRequest) => async (): Promise<ChecklistTemplate[]> => {
+    try {
+      const templatesData = await api.getTemplates(request);
+      return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      return [];
+    }
+  };
 
-  // Fetch the templates owned by the active console workspace.
-  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({
-    queryKey: ['templates', user?.id ?? 'visitor', workspaceScopeId],
-    queryFn: async (): Promise<ChecklistTemplate[]> => {
-      try {
-        const templatesData = await api.getTemplates(
-          activeTeamId ? { teamId: activeTeamId } : undefined,
-        );
-        return templatesData.map((template: Record<string, unknown>) => mapApiTemplate(template));
-      } catch (error) {
-        console.error('Error fetching workspace templates:', error);
-        return [];
-      }
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  // These observers read whatever useTemplateLists() has loaded, without fetching.
+  const listQueries = buildTemplateListQueries({ ready: !isWorkspaceLoading, userId: user?.id, activeTeamId, workspaceScopeId, fetchList: fetchTemplateList });
+  const { data: catalogApiTemplates = [], isLoading: catalogTemplatesLoading } = useQuery({ ...listQueries.catalog, enabled: false });
+  const { data: workspaceTemplates = [], isLoading: workspaceTemplatesLoading } = useQuery({ ...listQueries.workspace, enabled: false });
 
-  // Fetch user's runs (only if logged in)
-  const { data: runs = [], isLoading: runsLoading } = useQuery({
+  // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
+  const runsQuery: UseQueryOptions<ChecklistRun[]> = {
     queryKey: ['runs', user?.id, workspaceScopeId],
     queryFn: async (): Promise<ChecklistRun[]> => {
       if (!user) return [];
@@ -223,9 +254,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return [];
       }
     },
-    enabled: !!user,
+    enabled: listQueries.ready && !!user,
     staleTime: 5 * 60 * 1000,
-  });
+  };
+  const { data: runs = [], isLoading: runsLoading } = useQuery({ ...runsQuery, enabled: false });
 
   const publicTemplates = useMemo(
     () => mergePublicTemplateCollections(repoTemplates, catalogApiTemplates),
@@ -341,10 +373,11 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const createRunMutation = useMutation({
-    mutationFn: async ({ templateId, runName }: { templateId: string; runName?: string }) => {
+    mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string; template?: ChecklistTemplate }) => {
       if (!user) throw new Error("User must be logged in to create a run");
       
-      const template =
+      // Pages that loaded the template pass it, since lists load only on demand.
+      const template = loadedTemplate ??
         allTemplates.find((t: { id: unknown }) => t.id === templateId) ??
         publicTemplates.find((t: { id: unknown }) => t.id === templateId);
       if (!template) throw new Error("Template not found");
@@ -558,7 +591,9 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   return (
     <TemplatesContext.Provider value={value}>
-      {children}
+      <TemplateListQueriesContext.Provider value={{ ...listQueries, runs: runsQuery }}>
+        {children}
+      </TemplateListQueriesContext.Provider>
     </TemplatesContext.Provider>
   );
 };

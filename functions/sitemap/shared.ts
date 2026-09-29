@@ -214,9 +214,9 @@ export function buildInMemoryShardIndex(
   });
 }
 
-export async function loadSitemapRevisions(
-  env: Env,
-): Promise<Map<(typeof sitemap_revisions.$inferSelect)['kind'], string>> {
+export type SitemapRevisions = Map<(typeof sitemap_revisions.$inferSelect)['kind'], string>;
+
+export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> {
   const rows = await createDb(env)
     .select({ kind: sitemap_revisions.kind, revised_at: sitemap_revisions.revised_at })
     .from(sitemap_revisions);
@@ -227,6 +227,37 @@ async function contentHash(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+const bundledCatalogVersion = JSON.stringify(bundledTemplateCatalog);
+
+type SitemapContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env' | 'waitUntil'>;
+
+// Building a database sitemap scans every public Template or User, and D1 bills every
+// row scanned. Cache each response in the data center under a key that changes when the
+// sitemap triggers bump `sitemap_revisions` or a deploy changes the bundled catalog, so a
+// repeat request reads only the revision rows (docs/design-docs/d1-cost.md). The key drops
+// the query string and leading zeros in page numbers, so variants cannot bypass it.
+export async function cachedSitemap(
+  context: SitemapContext,
+  build: (request: Request, revisions: SitemapRevisions) => Promise<Response>,
+): Promise<Response> {
+  const { request } = context;
+  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
+  const revisions = await loadSitemapRevisions(context.env);
+  const url = new URL(request.url);
+  const version = await contentHash(JSON.stringify([[...revisions].sort(), bundledCatalogVersion]));
+  const path = url.pathname.replace(/\/0+(?=\d)/g, '/');
+  const key = new Request(`${url.origin}${path}?v=${version}`);
+  const cache = typeof caches === 'undefined' ? undefined : caches.default;
+
+  let response = await cache?.match(key);
+  if (!response) {
+    // Always build the GET body so a HEAD request never caches an empty sitemap.
+    response = await build(new Request(request.url), revisions);
+    if (cache) context.waitUntil(cache.put(key, response.clone()));
+  }
+  return request.method === 'HEAD' ? new Response(null, response) : response;
 }
 
 type ExistingShardRevision = {

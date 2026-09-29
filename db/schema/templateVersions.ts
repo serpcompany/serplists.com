@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { templates } from "./templates";
 import { users } from "./users";
 
@@ -16,5 +16,4 @@ export const template_versions = sqliteTable("template_versions", {
 }, (table) => [
   primaryKey({ columns: [table.id] }),
   uniqueIndex("idx_template_versions_template_version_unique").on(table.template_id, table.version),
-  index("idx_template_versions_subject").on(table.subject_type, table.subject_id, table.created_at),
 ]);

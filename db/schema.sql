@@ -123,11 +123,8 @@ CREATE TABLE templates (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_templates_user_id ON templates(user_id);
-CREATE INDEX idx_templates_public ON templates(is_public);
-CREATE INDEX idx_templates_category ON templates(category);
-CREATE INDEX idx_templates_slug ON templates(slug);
 CREATE UNIQUE INDEX idx_templates_slug_unique ON templates(slug);
+CREATE INDEX idx_templates_public_created_at ON templates(is_public, created_at);
 CREATE INDEX idx_templates_owner ON templates(owner_type, user_id, team_id);
 CREATE INDEX idx_templates_team_id ON templates(team_id);
 
@@ -162,10 +159,8 @@ CREATE TABLE checklist_runs (
 );
 
 CREATE INDEX idx_checklist_runs_user_id ON checklist_runs(user_id);
-CREATE INDEX idx_checklist_runs_template_id ON checklist_runs(template_id);
-CREATE INDEX idx_checklist_runs_status ON checklist_runs(status);
+CREATE INDEX idx_checklist_runs_template_owner ON checklist_runs(template_id, team_id, user_id);
 CREATE INDEX idx_checklist_runs_team_id ON checklist_runs(team_id);
-CREATE INDEX idx_checklist_runs_assigned_to_user_id ON checklist_runs(assigned_to_user_id);
 
 -- Template likes
 CREATE TABLE template_likes (
@@ -327,7 +322,6 @@ CREATE TABLE audit_events (
 
 CREATE INDEX idx_audit_events_subject ON audit_events(subject_type, subject_id, created_at);
 CREATE INDEX idx_audit_events_resource ON audit_events(resource_type, resource_id, created_at);
-CREATE INDEX idx_audit_events_actor ON audit_events(actor_user_id, created_at);
 
 CREATE TABLE template_versions (
   id TEXT PRIMARY KEY,
@@ -345,4 +339,3 @@ CREATE TABLE template_versions (
 );
 
 CREATE UNIQUE INDEX idx_template_versions_template_version_unique ON template_versions(template_id, version);
-CREATE INDEX idx_template_versions_subject ON template_versions(subject_type, subject_id, created_at);

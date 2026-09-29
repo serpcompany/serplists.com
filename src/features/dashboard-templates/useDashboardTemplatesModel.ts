@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { useTemplates } from '@/contexts/TemplatesContext';
+import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import {
   buildConsoleRunPath,
@@ -169,7 +169,7 @@ export const useDashboardTemplatesModel = (
   const navigate = useNavigate();
   const { user } = useAuth();
   const { activeTeamId } = useWorkspace();
-  const templateContext = useTemplates();
+  const templateContext = useTemplateLists();
   const model = buildDashboardTemplatesState({
     allTemplates: dependencies?.allTemplates ?? templateContext.allTemplates,
     templatesLoading:

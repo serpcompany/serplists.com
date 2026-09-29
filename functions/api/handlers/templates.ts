@@ -4,6 +4,7 @@ import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle
 import { createDb, schema } from '../db';
 import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray, templatePayloadSchema } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
+import { withEdgeCache } from '../utils/edge-cache';
 import { log } from '../utils/logger';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
@@ -761,7 +762,9 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
               eq(templates.owner_type, 'user'),
               eq(templates.user_id, targetUserId),
               isNull(templates.team_id),
-              eq(templates.is_public, true),
+              // Unary + stops SQLite using an index for this term, which keeps the planner on
+              // idx_templates_owner instead of scanning every public Template (see the D1 cost doc).
+              sql`+${templates.is_public} = 1`,
               isNull(templates.deleted_at),
             ),
           )
@@ -964,23 +967,32 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
     }
 
-    const whereClause = userId
-      ? and(
-          or(
-            eq(templates.is_public, true),
-            and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id)),
-          ),
-          isNull(templates.deleted_at),
-        )
-      : and(eq(templates.is_public, true), isNull(templates.deleted_at));
-
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(whereClause)
-        .orderBy(desc(templates.created_at)),
+    // ?scope=public is the catalog, identical for everyone. ?scope=personal is the user's
+    // own Personal templates (idx_templates_owner). No scope returns public OR mine for
+    // clients loaded before scopes existed (see the D1 cost plan).
+    const scope = url.searchParams.get('scope');
+    if (scope === 'personal' && !userId) return jsonError('Unauthorized', 401);
+    const ownClause = userId
+      ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id))
+      : undefined;
+    const publicCatalog = !ownClause || scope === 'public';
+    const whereClause = and(
+      publicCatalog ? eq(templates.is_public, true) : scope === 'personal' ? ownClause : or(eq(templates.is_public, true), ownClause),
+      isNull(templates.deleted_at),
     );
 
-    return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+    const listTemplates = async () => {
+      const rows = await withRulesColumnFallback((includeRules) =>
+        selectTemplatesWithOwner(env, includeRules)
+          .where(whereClause)
+          .orderBy(desc(templates.created_at)),
+      );
+      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+    };
+
+    // The public catalog reads every public Template, so serve it from the edge for up to
+    // 5 minutes (the app's client staleTime).
+    return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public', 5 * 60, listTemplates) : listTemplates();
   }
 
   if (request.method === 'POST') {

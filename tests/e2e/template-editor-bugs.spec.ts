@@ -34,7 +34,7 @@ async function loginAsSeedUser(page: Page) {
 
 async function findTemplateByTitle(page: Page, title: string) {
   return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, { credentials: "include" });
+    const response = await fetch(`${apiBaseUrl}/templates?scope=personal`, { credentials: "include" });
     if (!response.ok) {
       throw new Error(`Failed to load templates: ${response.status}`);
     }

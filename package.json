@@ -29,6 +29,7 @@
     "schema:portable:check": "tsx scripts/generate-portable-template-json-schema.ts --check",
     "db:schema:generate": "tsx scripts/generate-db-schema-doc.ts",
     "db:schema:check": "tsx scripts/generate-db-schema-doc.ts --check",
+    "d1:profile": "tsx scripts/d1-profile.ts",
     "sitemap:generate": "tsx scripts/generate-sitemap-catalog.ts",
     "sitemap:check": "tsx scripts/generate-sitemap-catalog.ts --check",
     "templates:check": "tsx scripts/check-template-sources.ts",

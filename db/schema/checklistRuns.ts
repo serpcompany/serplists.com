@@ -32,9 +32,7 @@ export const checklist_runs = sqliteTable("checklist_runs", {
 }, (table) => [
   primaryKey({ columns: [table.id] }),
   index("idx_checklist_runs_user_id").on(table.user_id),
-  index("idx_checklist_runs_template_id").on(table.template_id),
-  index("idx_checklist_runs_status").on(table.status),
+  index("idx_checklist_runs_template_owner").on(table.template_id, table.team_id, table.user_id),
   index("idx_checklist_runs_share_token").on(table.share_token),
   index("idx_checklist_runs_team_id").on(table.team_id),
-  index("idx_checklist_runs_assigned_to_user_id").on(table.assigned_to_user_id),
 ]);
