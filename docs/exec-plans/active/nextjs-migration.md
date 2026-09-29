@@ -86,13 +86,9 @@ The same as the approved reference:
 - **Trailing slashes.** zenbujapanese.com follows the SERP URL standard: pages end in `/`,
   files never do. Adopting it here means a 308 redirect from every current URL. It is
   cheapest to do during the port.
-- **Prefetching and caching on the Worker.** No incremental cache is configured
-  (`open-next.config.ts`), so the Worker renders every request, the prerendered static
-  pages included, and the app's links prefetch every route they show: a page view costs
-  about ten more Worker requests, each rendering a page. Locally, 30 concurrent RSC
-  requests took about 5 seconds on one workerd process. Before launch, decide between the
-  static-assets incremental cache (prerendered pages served from assets), a prefetch policy
-  on the app's `Link`, or both, and check the Workers request count on staging.
+- **Workers plan.** The Worker is 2,883 KiB gzipped: 189 KiB under the Workers Free limit
+  of 3 MiB. Free also caps each request at 10 ms of CPU, which server-rendered pages can
+  exceed. Workers Paid ($5/month) raises the limit to 10 MiB. Waiting on the user.
 
 ## Progress
 
@@ -208,3 +204,13 @@ The same as the approved reference:
   unpatched Next.js on Windows, because pnpm's links there are absolute (the build fails on
   `sharp`). OpenNext supports Linux and WSL; CI builds on Linux. `.npmrc` sets
   `node-linker=hoisted`, so the Windows build works too (`02b0a62d`).
+- 2026-09-29: **Prefetching and caching.**
+  - The app's `Link` prefetches on intent only: pointer, focus or touch, following Next.js's
+    hover-triggered prefetch pattern (`c8ae52cb`). Before that, a page view cost about ten
+    prefetch requests to the Worker.
+  - `open-next.config.ts` uses OpenNext's read-only static assets cache with cache
+    interception, so prerendered pages are answered without loading the Next.js server
+    (`c81a500f`; the preview sends `x-opennext-cache: HIT`). The app never revalidates on a
+    timer, which that cache cannot do.
+  - A page view now costs one Worker request (the HTML, or the RSC payload of a client-side
+    navigation) plus the API calls the page makes, as before.
