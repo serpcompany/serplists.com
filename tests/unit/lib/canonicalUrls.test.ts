@@ -30,21 +30,14 @@ vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
 
 const { redirects } = await loadBuiltRoutes('production');
 
-// The one alias: the dashboard's home. /dashboard/ answers 307 with the page that is the home
-// for now (My Templates, next.config.ts), in one hop, so its links follow the home if it moves.
-const ALIASES = new Map([['/dashboard/', '/dashboard/templates/']]);
-
 const pathOf = (url: string) => new URL(url, 'https://serplists.com').pathname;
 
 async function expectServedAsIs(url: string) {
   const pathname = pathOf(url);
   expect(canonicalPath(pathname), url).toBe(pathname);
   const absolute = new URL(url, 'https://serplists.com').href;
-  const alias = ALIASES.get(pathname);
-  const expected = alias ? { status: 307, location: `${alias}${new URL(absolute).search}` } : null;
-  expect(await workerRedirect(redirects, absolute), url).toEqual(expected);
-  expect(nextServerRedirect(redirects, absolute), url).toEqual(expected);
-  if (alias) await expectServedAsIs(alias);
+  expect(await workerRedirect(redirects, absolute), url).toBeNull();
+  expect(nextServerRedirect(redirects, absolute), url).toBeNull();
 }
 
 const template = { id: 'tpl-1', slug: 'weekly-review', userId: 'user-1', ownerProfile: { username: 'john.doe' } };
@@ -132,7 +125,8 @@ describe('sitemap entries', () => {
 });
 
 // Hard-coded page links in the app: JSX hrefs and the paths handed to the router and the
-// sign-in links. Builders cover the rest; this catches a new literal written without its slash.
+// sign-in links. Builders cover the rest; this catches a new literal written without its slash,
+// or one that only redirects (a legacy path such as /account/, or /dashboard/).
 describe('hard-coded links in src', () => {
   const sourceFiles = (directory: string): string[] =>
     readdirSync(directory).flatMap((name) => {
@@ -148,15 +142,21 @@ describe('hard-coded links in src', () => {
     /\bhref:\s*["'`](\/[^"'`$]*)["'`]/g,
   ];
 
-  const nonCanonicalLinks = (source: string): string[] =>
-    LINK_PATTERNS.flatMap((pattern) =>
-      Array.from(source.matchAll(pattern), (match) => match[1]).filter((link) => {
-        const pathname = link.split(/[?#]/)[0];
-        return canonicalPath(pathname) !== pathname;
-      }),
-    );
+  const linksIn = (source: string): string[] =>
+    LINK_PATTERNS.flatMap((pattern) => Array.from(source.matchAll(pattern), (match) => match[1]));
 
-  it('finds a link written without its slash', () => {
+  /** The links that are not in canonical form, or that the production build redirects. */
+  const badLinks = async (source: string): Promise<string[]> => {
+    const bad: string[] = [];
+    for (const link of linksIn(source)) {
+      const pathname = pathOf(link);
+      const redirect = await workerRedirect(redirects, new URL(link, 'https://serplists.com').href);
+      if (canonicalPath(pathname) !== pathname || redirect) bad.push(link);
+    }
+    return bad;
+  };
+
+  it('finds a link written without its slash, or one that redirects', async () => {
     const source = [
       '<Link href="/login">Log in</Link>',
       "<Link href={'/pricing?x=1'}>Pricing</Link>",
@@ -165,14 +165,25 @@ describe('hard-coded links in src', () => {
       "{ href: '/about', label: 'About' }",
       '<Link href="/about/">About</Link>',
       '<a href="/og-default.png">Image</a>',
+      "router.replace('/dashboard/');",
+      '<Link href="/account/">Account</Link>',
     ].join('\n');
-    expect(nonCanonicalLinks(source)).toEqual(['/login', '/pricing?x=1', '/dashboard/runs', '/login', '/about']);
+    expect(await badLinks(source)).toEqual([
+      '/login',
+      '/account/',
+      '/pricing?x=1',
+      '/dashboard/runs',
+      '/login',
+      '/dashboard/',
+      '/about',
+    ]);
   });
 
-  it('links only to canonical URLs', () => {
-    const found = sourceFiles('src').flatMap((file) =>
-      nonCanonicalLinks(readFileSync(file, 'utf8')).map((link) => `${file}: ${link}`),
-    );
+  it('links only to canonical URLs, which answer without a redirect', async () => {
+    const found: string[] = [];
+    for (const file of sourceFiles('src')) {
+      for (const link of await badLinks(readFileSync(file, 'utf8'))) found.push(`${file}: ${link}`);
+    }
     expect(found).toEqual([]);
   });
 });

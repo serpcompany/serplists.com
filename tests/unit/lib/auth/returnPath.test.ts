@@ -181,7 +181,7 @@ describe('getPostRegisterDestination', () => {
   });
 
   it('falls back to the console without a return path', () => {
-    expect(getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })).toBe('/dashboard/');
+    expect(getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })).toBe('/dashboard/templates/');
   });
 
   it('sends an account that must verify to login with the return path kept', () => {

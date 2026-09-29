@@ -72,7 +72,8 @@ describe('routes', () => {
   });
 
   it('builds the canonical console routes', () => {
-    expect(buildConsoleHomePath()).toBe('/dashboard/');
+    // Links go straight to the dashboard's home; /dashboard/ only redirects there.
+    expect(buildConsoleHomePath()).toBe('/dashboard/templates/');
     expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates/');
     expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new/');
     expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates/');

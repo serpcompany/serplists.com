@@ -38,6 +38,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicCategoriesPath,
   buildPublicTemplatesPath,
+  DASHBOARD_PATH,
   isPathWithin,
 } from '@/lib/routes';
 import { APP_BRAND_NAME } from '@/lib/brand';
@@ -47,7 +48,8 @@ import { Link } from '@/components/navigation/Link';
 
 const navItems = [
   { href: '/', icon: Home, title: 'Home' },
-  { href: buildConsoleHomePath(), icon: LayoutGrid, title: 'Dashboard' },
+  // Opens the dashboard's home, and holds every dashboard page.
+  { href: buildConsoleHomePath(), activeWithin: DASHBOARD_PATH, icon: LayoutGrid, title: 'Dashboard' },
   { href: buildConsoleTemplatesPath(), icon: FileText, title: 'Templates' },
   {
     href: buildConsoleTemplateImportPath(),
@@ -128,11 +130,11 @@ export function MobileNav() {
 
         <nav className="flex-1 overflow-y-auto p-2">
           {navItems.map((item) => {
-            const active = isActivePath(pathname, item.href);
+            const active = isActivePath(pathname, item.activeWithin ?? item.href);
 
             return (
               <Link
-                key={item.href}
+                key={item.title}
                 href={item.href}
                 onClick={() => setOpen(false)}
                 className={cn(

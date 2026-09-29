@@ -199,11 +199,15 @@ export const hasCanonicalPublicTemplatePath = (
   template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
 ): boolean => buildCanonicalPublicTemplatePath(template) !== null;
 
-// The dashboard's home. /dashboard/ redirects (307) to the page that is its home for now,
-// My Templates (next.config.ts), so a link here follows the home if it changes.
-export const buildConsoleHomePath = (): string => '/dashboard/';
+// Every dashboard page sits under this path. /dashboard/ itself is not a page: a typed or
+// bookmarked /dashboard/ redirects (307, next.config.ts) to the dashboard's home.
+export const DASHBOARD_PATH = '/dashboard/';
 
 export const buildConsoleTemplatesPath = (): string => '/dashboard/templates/';
+
+// The dashboard's home, My Templates for now. Links go straight to it, since no link may
+// depend on a redirect; if the home moves, change it here and in next.config.ts.
+export const buildConsoleHomePath = (): string => buildConsoleTemplatesPath();
 
 export const buildConsoleTemplateCreatePath = (): string =>
   '/dashboard/templates/new/';
@@ -248,7 +252,7 @@ export const resolveRouteShell = (pathname: string): AppShell => {
   if (
     path === routeKey(LEGACY_ACCOUNT_PATH) ||
     path.startsWith('/run/') ||
-    path.startsWith(buildConsoleHomePath()) ||
+    path.startsWith(DASHBOARD_PATH) ||
     path.startsWith(routeKey(LEGACY_CONSOLE_HOME_PATH))
   ) {
     return 'console';
@@ -299,7 +303,7 @@ export const resolveConsoleSection = (
     return 'account';
   }
 
-  if (path === buildConsoleHomePath() || path === routeKey(LEGACY_CONSOLE_HOME_PATH)) {
+  if (path === DASHBOARD_PATH || path === routeKey(LEGACY_CONSOLE_HOME_PATH)) {
     return 'home';
   }
 

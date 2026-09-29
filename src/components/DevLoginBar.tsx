@@ -18,6 +18,7 @@ import {
   buildConsoleHomePath,
   buildHomePath,
   buildPublicCategoriesPath,
+  DASHBOARD_PATH,
   isBlankTemplateEditorRoute,
   isPathWithin,
   isPublicTemplatesDiscoveryPath,
@@ -55,7 +56,7 @@ export function DevLoginBar(): JSX.Element | null {
   }
 
   if (
-    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/run/', '/share/', buildConsoleHomePath()].some(
+    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/run/', '/share/', DASHBOARD_PATH].some(
       (section) => isPathWithin(pathname, section),
     )
   ) {

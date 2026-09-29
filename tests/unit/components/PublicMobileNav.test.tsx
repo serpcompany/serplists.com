@@ -34,7 +34,7 @@ describe('PublicMobileMenu', () => {
   it('gives signed-in users the dashboard instead of the sign-in actions', () => {
     const html = renderMenu('/templates/', true);
 
-    expect(html).toContain('href="/dashboard/"');
+    expect(html).toContain('href="/dashboard/templates/"');
     expect(html).toContain('>Dashboard</a>');
     expect(html).not.toContain('href="/login');
     expect(html).not.toContain('href="/register');

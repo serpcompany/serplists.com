@@ -72,7 +72,8 @@ const nextConfig: NextConfig = {
       // A source matches with or without its trailing slash.
       { source: '/checklists', destination: '/templates/', permanent: true },
       { source: '/console', destination: '/dashboard/templates/', permanent: true },
-      // The dashboard's home is My Templates for now, which may change.
+      // /dashboard/ is not a page: it opens the dashboard's home, My Templates for now, which
+      // may change (buildConsoleHomePath in src/lib/routes.ts, which links use instead).
       { source: '/dashboard', destination: '/dashboard/templates/', permanent: false },
       { source: '/account', destination: '/dashboard/settings/', permanent: true },
       { source: '/dashboard/profile', destination: '/dashboard/settings/', permanent: true },
