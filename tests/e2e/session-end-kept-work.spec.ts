@@ -163,6 +163,7 @@ test("a new template's draft kept in an Organization is offered after signing in
     name: `Kept draft Org ${Date.now()}`,
   });
   await page.evaluate((teamId) => window.localStorage.setItem('serplists.activeWorkspaceId', teamId), organization.id);
+  const editorRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/dashboard/templates/new');
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name, {
     timeout: 30_000,
@@ -170,6 +171,9 @@ test("a new template's draft kept in an Organization is offered after signing in
   const title = `Org kept draft QA ${Date.now()}`;
   const titleField = page.getByPlaceholder('Enter template name...');
   await titleField.fill(title);
+  // The editor still loads the Organization's plan and Templates after the switcher shows
+  // it. Let it finish, so Save is the request that meets the ended session.
+  await editorRequests.settled();
 
   // The session ends on the server; Save gets a 401 and the tab signs out.
   await context.clearCookies();

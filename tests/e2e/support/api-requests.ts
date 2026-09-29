@@ -4,25 +4,35 @@ import { errors, expect, type APIRequestContext, type Page, type Request } from 
 export const API_BASE_URL =
   process.env.PLAYWRIGHT_API_URL ?? process.env.VITE_API_URL ?? 'http://localhost:8788/api';
 
+// A page often sends its next request only once an earlier one has answered, so the
+// page's requests count as settled once none has started or ended for this long.
+const QUIET_MS = 300;
+
 /**
  * Counts the page's requests to the API that are still in flight, from the moment it is
- * called. `settled()` waits until none are left and stops counting.
+ * called. `settled()` waits until none are left and none has started or ended for a
+ * moment, and stops counting.
  *
  * The local API runs behind wrangler's dev proxy, which now and then drops a request that
  * arrives while the page has several of its own in flight. It answers 503 "Your worker
  * restarted mid-request" without CORS headers (a GET is held instead and never answered),
  * so a test's page.evaluate(fetch) fails with "TypeError: Failed to fetch". Signing in
  * lands on Account Settings, which loads its sections all at once, so a spec that calls
- * the API from the page right after signing in waits for those requests first.
+ * the API right after signing in waits for those requests first. A spec also waits here
+ * when the next step must be the page's only request, such as a save meant to meet an
+ * ended session.
  */
 export function trackApiRequests(page: Page, apiBaseUrl: string) {
   const apiOrigin = new URL(apiBaseUrl).origin;
   const inFlight = new Set<Request>();
+  let lastChange = Date.now();
   const onRequest = (request: Request) => {
-    if (new URL(request.url()).origin === apiOrigin) inFlight.add(request);
+    if (new URL(request.url()).origin !== apiOrigin) return;
+    inFlight.add(request);
+    lastChange = Date.now();
   };
   const onDone = (request: Request) => {
-    inFlight.delete(request);
+    if (inFlight.delete(request)) lastChange = Date.now();
   };
   page.on('request', onRequest);
   page.on('requestfinished', onDone);
@@ -30,7 +40,11 @@ export function trackApiRequests(page: Page, apiBaseUrl: string) {
 
   return {
     async settled() {
-      await expect.poll(() => inFlight.size, { message: 'API requests still in flight' }).toBe(0);
+      await expect
+        .poll(() => ({ inFlight: inFlight.size, quiet: Date.now() - lastChange >= QUIET_MS }), {
+          message: 'API requests still in flight',
+        })
+        .toEqual({ inFlight: 0, quiet: true });
       page.off('request', onRequest);
       page.off('requestfinished', onDone);
       page.off('requestfailed', onDone);
