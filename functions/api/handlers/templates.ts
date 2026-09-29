@@ -60,6 +60,7 @@ import {
   summarizeRetiredEntries,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
+import { withStableItemsColumn, withStableTemplateIdentities } from '../utils/template-identities';
 import {
   omitUnchangedTemplateColumns,
   requestsContentChange,
@@ -220,7 +221,8 @@ function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
     if (normalized.error) {
       log('warn', 'template_items_parse_failed', { templateId: template.id });
     } else {
-      sections = normalized.sections;
+      // Entries stored without ids get the ones a save would store, so the editor resends them.
+      sections = withStableTemplateIdentities(normalized.sections);
     }
   }
 
@@ -1052,7 +1054,8 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
           seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
           rules: typeof source.rules === 'string' ? source.rules : null,
-          items: source.items,
+          // A source stored without ids gives its copy the ids its editor and runs use.
+          items: withStableItemsColumn(source.items),
           // A copy is a new template: its edit counter and content version start at 1, like
           // create and import. The source's counters are provenance, kept in the audit event.
           version: 1,

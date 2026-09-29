@@ -17,7 +17,7 @@ export type RetiredRunEntry =
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const getId = (value: unknown): string | null => {
+export const getId = (value: unknown): string | null => {
   if (!isRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {
     return null;
   }

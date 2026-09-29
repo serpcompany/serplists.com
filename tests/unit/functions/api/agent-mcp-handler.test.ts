@@ -45,7 +45,12 @@ import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from "../../../fixtures/runStartFixtures";
+import {
+  LEGACY_ID_RUN_SECTIONS,
+  LEGACY_ID_TEMPLATE_SECTIONS,
+  TICKED_TEMPLATE_SECTIONS,
+  UNTICKED_RUN_SECTIONS,
+} from "../../../fixtures/runStartFixtures";
 
 const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
 const env = { DB: {} } as any;
@@ -469,7 +474,10 @@ describe("personal run MCP handler", () => {
     }));
   });
 
-  it("starts a run with every task and Sub-task unticked, exactly as a web start stores it", async () => {
+  it.each([
+    ["", TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS],
+    [" and the ids its Template's next save stores", LEGACY_ID_TEMPLATE_SECTIONS, LEGACY_ID_RUN_SECTIONS],
+  ])("starts a run with every task and Sub-task unticked%s, exactly as a web start stores it", async (_ids, templateSections, runSections) => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{
       id: "template-1",
       user_id: "user-1",
@@ -477,7 +485,7 @@ describe("personal run MCP handler", () => {
       team_id: null,
       deleted_at: null,
       title: "Release SOP",
-      items: JSON.stringify(TICKED_TEMPLATE_SECTIONS),
+      items: JSON.stringify(templateSections),
       content_version: 2,
     }]);
 
@@ -486,7 +494,7 @@ describe("personal run MCP handler", () => {
 
     expect(body.result.isError).toBeUndefined();
     // Same fixture and expectation as the web create test in checklists-handler.test.ts.
-    expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(UNTICKED_RUN_SECTIONS);
+    expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(runSections);
   });
 
   describe("Free plan active run limit", () => {

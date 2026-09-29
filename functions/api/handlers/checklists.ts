@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { calculateRunProgress, reconcileRunSections, resetRunCompletionState, summarizeRetiredEntries } from '../utils/template-reconciliation';
 import { auditedRunUpdate, batchUpdateMissed, checklistRunSelectFor, getRunSubject, serializeChecklistRun } from '../utils/checklist-runs';
 import { canUseTemplateAsRunSource } from '../utils/template-access';
+import { withStableTemplateIdentities } from '../utils/template-identities';
 import {
   activeRunCapacityAvailableSql,
   activeRunLimitResponse,
@@ -108,7 +109,8 @@ async function resolveTemplateRunSource(
   return {
     source: {
       effectiveTeamId,
-      sections: resetRunCompletionState(sanitizeStoredSections(normalizedSections.sections)),
+      // A run starts with the ids its Template's editor and later saves use (see template-identities.ts).
+      sections: resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalizedSections.sections))),
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
     },

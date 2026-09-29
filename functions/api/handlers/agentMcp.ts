@@ -21,6 +21,7 @@ import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
+import { withStableTemplateIdentities } from "../utils/template-identities";
 import {
   applyRunOperation,
   assertRunContentFits,
@@ -237,7 +238,7 @@ async function startRun(
     team_id: null,
     template_id: template.id,
     title: args.title ?? template.title,
-    items: JSON.stringify(resetRunCompletionState(sanitizeStoredSections(normalized.sections))),
+    items: JSON.stringify(resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)))),
     status: "in_progress",
     progress: 0,
     started_at: now,
