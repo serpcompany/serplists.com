@@ -26,3 +26,9 @@ export function checkRateLimit(key: string, opts: { windowMs: number; max: numbe
   return { allowed: true, remaining: Math.max(0, opts.max - existing.count), resetAt: existing.resetAt };
 }
 
+
+// Reports whether a key is already at its limit, without counting a request.
+export function isRateLimited(key: string, max: number): boolean {
+  const existing = store.get(key);
+  return existing !== undefined && existing.resetAt > Date.now() && existing.count >= max;
+}

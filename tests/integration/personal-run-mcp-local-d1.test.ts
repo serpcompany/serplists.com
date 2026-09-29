@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
-import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
+import {
+  createPersonalRunKeySecret,
+  insertPersonalRunKeyWithinCap,
+} from "../../functions/api/utils/personal-run-key";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -416,5 +419,34 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(await rows("SELECT id FROM personal_run_keys WHERE id = 'constraint-key'")).toEqual([{ id: "constraint-key" }]);
     expect(await rows("SELECT id FROM users WHERE id = 'user-b'")).toEqual([{ id: "user-b" }]);
     expect(await rows("PRAGMA foreign_key_check")).toEqual([]);
+  });
+
+  it("caps active keys per user atomically and ignores revoked keys", async () => {
+    await env.DB.prepare(`
+      INSERT INTO users (id, email, name, email_verified, created_at)
+      VALUES ('cap-user', 'cap@example.test', 'Cap User', 1, '2026-09-19T04:00:00.000Z')
+    `).run();
+    const record = (index: number) => ({
+      id: `cap-key-${index}`,
+      user_id: "cap-user",
+      name: `Cap key ${index}`,
+      key_prefix: "slrk_cap",
+      key_hash: `cap-hash-${index}`,
+      created_at: "2026-09-19T04:00:00.000Z",
+    });
+
+    // Twelve parallel creates: exactly ten may succeed.
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
+    );
+    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(await rows("SELECT id FROM personal_run_keys WHERE user_id = 'cap-user' AND revoked_at IS NULL"))
+      .toHaveLength(10);
+
+    await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
+      .bind("2026-09-19T05:00:00.000Z", "cap-key-0")
+      .run();
+    expect(await insertPersonalRunKeyWithinCap(env as never, record(20))).toBe(true);
+    expect(await insertPersonalRunKeyWithinCap(env as never, record(21))).toBe(false);
   });
 });
