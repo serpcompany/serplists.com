@@ -11,6 +11,7 @@ vi.mock('sonner', () => ({ toast: toastMocks }));
 
 import {
   ORGANIZATION_UPGRADE_MESSAGE,
+  handleAccessFailure,
   handleUpgradeRequiredForContext,
   startBillingCheckout,
 } from '@/lib/access-flow';
@@ -146,5 +147,70 @@ describe('handleUpgradeRequiredForContext', () => {
     expect(toastMocks.error).toHaveBeenCalledTimes(1);
     expect(toastMocks.error).toHaveBeenCalledWith(BILLING_UNAVAILABLE_MESSAGE);
     expect(redirecting).toBe(false);
+  });
+});
+
+// Template import and export await a request and then handle its failure. A checkout
+// or sign-in redirect for that failure ran even after the user had left the page.
+describe('handleAccessFailure', () => {
+  const location = { pathname: '/dashboard/templates/import', search: '', hash: '' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('window', { location: { href: 'http://localhost/dashboard/runs' } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('starts checkout for a plan gate while the user is still on the page', async () => {
+    apiMocks.createBillingCheckout.mockResolvedValueOnce({ url: 'https://checkout.example/session' });
+
+    await handleAccessFailure(createApiError(403, { error: 'Upgrade required', code: 'upgrade_required' }), {
+      fallbackMessage: 'Failed to import templates',
+      isCurrent: () => true,
+    });
+
+    expect(apiMocks.createBillingCheckout).toHaveBeenCalledTimes(1);
+    expect(window.location.href).toBe('https://checkout.example/session');
+  });
+
+  it('does not start checkout once the user has left the page', async () => {
+    await handleAccessFailure(createApiError(403, { error: 'Upgrade required', code: 'upgrade_required' }), {
+      fallbackMessage: 'Failed to import templates',
+      isCurrent: () => false,
+    });
+
+    expect(apiMocks.createBillingCheckout).not.toHaveBeenCalled();
+    expect(window.location.href).toBe('http://localhost/dashboard/runs');
+    expect(toastMocks.error).toHaveBeenCalledWith('Upgrade required');
+  });
+
+  it('does not go to sign-in once the user has left the page', async () => {
+    const navigate = vi.fn();
+
+    await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
+      fallbackMessage: 'Failed to export templates',
+      isCurrent: () => false,
+      location,
+      navigate,
+    });
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes to sign-in while the user is still on the page', async () => {
+    const navigate = vi.fn();
+
+    await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
+      fallbackMessage: 'Failed to export templates',
+      isCurrent: () => true,
+      location,
+      navigate,
+    });
+
+    expect(navigate).toHaveBeenCalledWith('/login', expect.anything());
   });
 });

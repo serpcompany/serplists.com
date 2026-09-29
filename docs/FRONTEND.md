@@ -184,7 +184,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   `visit.isCurrent()` after the request; it is false once the page unmounts or its
   location changes (Back, a link, another id on the same page). The request's own
   result stands: cache updates still happen. The template pages route Start Run,
-  Copy/Save and Share results through `followTemplateActionResult`.
+  Copy/Save and Share results through `followTemplateActionResult`; My Templates
+  passes the visit to `reportDashboardTemplateRunFailure`, and template import and
+  export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
+  after the user has left. `tests/unit/pages/navigateAfterAwait.test.ts` fails when a
+  file uses a sign-in or checkout helper without `usePageVisit()`.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with

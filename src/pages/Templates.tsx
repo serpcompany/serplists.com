@@ -40,6 +40,7 @@ import {
   reportDashboardTemplateRunFailure,
   useDashboardTemplatesModel,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { usePageVisit } from '@/hooks/usePageVisit';
 import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
@@ -56,6 +57,7 @@ const Templates = () => {
   const model = useDashboardTemplatesModel();
   const navigate = useNavigate();
   const location = useLocation();
+  const beginVisit = usePageVisit();
   const [runName, setRunName] = useState('');
   // Set until the browser leaves for checkout; Back from Stripe clears it, so the
   // restored dialog can be closed or submitted again.
@@ -148,6 +150,9 @@ const Templates = () => {
       return;
     }
 
+    // Started before the request: a failure that arrives after the user has left
+    // (Escape and a sidebar link, or Back) must not send them to sign-in or checkout.
+    const visit = beginVisit();
     const result = await model.createRunFromTemplate(runName);
 
     if (result.kind === 'ok') {
@@ -156,7 +161,7 @@ const Templates = () => {
       return;
     }
 
-    await reportDashboardTemplateRunFailure(result, {
+    await reportDashboardTemplateRunFailure(result, visit, {
       navigateToLogin: () => navigateToLoginWithReturnPath(navigate, location),
       showError: (message) => toast.error(message),
       upgrade: startUpgrade,

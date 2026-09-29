@@ -119,3 +119,56 @@ test('opens the new run when the user waits on the template page', async ({ page
   await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? ''));
   await deleteTemplate(page, templateId);
 });
+
+// A Start Run from My Templates that fails after the user has left must not send them
+// to Stripe Checkout (or sign-in) from the page they moved to.
+test('does not start checkout from the page the user went Back to when a My Templates run hits the limit', async ({ page }) => {
+  await loginAsAdmin(page);
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let answered = false;
+  await page.route('**/api/checklists', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    await held;
+    await route.fulfill({
+      body: JSON.stringify({
+        code: 'limit_reached',
+        error: 'Active run limit reached. Upgrade to Pro to create more checklist runs.',
+      }),
+      contentType: 'application/json',
+      status: 403,
+    });
+    answered = true;
+  });
+  let checkoutRequests = 0;
+  await page.route('**/api/billing/checkout', async (route) => {
+    checkoutRequests += 1;
+    await route.fulfill({
+      body: JSON.stringify({ url: '/pricing?checkout=stubbed' }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+
+  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/templates');
+  await page.getByRole('button', { name: 'Show templates in list view' }).click();
+  await page.getByRole('button', { name: 'Start Run' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Start Run' });
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  await expect(dialog.getByRole('button', { name: 'Creating...' })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+
+  release();
+  await expect.poll(() => answered).toBe(true);
+  // Give a late checkout the chance to start before checking it did not.
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  expect(checkoutRequests).toBe(0);
+});

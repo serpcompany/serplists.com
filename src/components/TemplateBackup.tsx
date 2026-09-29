@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { downloadBackupFile, exportPortableTemplatesToJSON, parseTemplatesFromFile } from "@/lib/utils/templateBackup";
 import type { ImportVisibility } from "@/lib/utils/templateBackup";
 import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
+import type { PageVisit } from "@/lib/navigation/pageVisit";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
 import { usePublicCatalogLoader } from "@/features/template-backup/publicCatalogLoader";
 import { selectImportFile } from "@/features/template-backup/importFileSelection";
@@ -22,6 +23,7 @@ import type { ImportPreview } from "@/features/template-backup/importFileSelecti
 import { handleAccessFailure, startBillingCheckout } from "@/lib/access-flow";
 import { getAccessFailure } from "@/lib/api-errors";
 import { useBillingStatus } from "@/hooks/useBillingStatus";
+import { usePageVisit } from "@/hooks/usePageVisit";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import {
   formatExportSummaryMessage, formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError,
@@ -61,6 +63,9 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   } = useWorkspace();
   const billing = useBillingStatus({ enabled: !!user, teamId: activeTeamId, userId: user?.id });
   const loadPublicCatalog = usePublicCatalogLoader();
+  // Export and import await a request; a checkout for its failure starts only while the
+  // user is still on this page.
+  const beginVisit = usePageVisit();
   const billingEnabled = billing.status === "known" ? billing.billingEnabled : true;
   // Only a plan the server reported as Free is gated here. When the status check
   // failed, actions go through and the server's 403 upgrade_required decides.
@@ -96,7 +101,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     await startBillingCheckout(billingEnabled);
   };
 
-  const handleBackupFailure = async (error: unknown, fallbackMessage: string) => {
+  const handleBackupFailure = async (error: unknown, fallbackMessage: string, visit: PageVisit) => {
     if (isTeamWorkspace) {
       const failure = getAccessFailure(error, fallbackMessage);
       toast.error(
@@ -110,6 +115,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     await handleAccessFailure(error, {
       billingEnabled,
       fallbackMessage,
+      isCurrent: visit.isCurrent,
     });
   };
 
@@ -130,6 +136,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
+    const visit = beginVisit();
     try {
       const summary = await exportTemplatePack(
         {
@@ -145,7 +152,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       toast[kind](message, summary.skipped.length > 0 ? { duration: 15000 } : undefined);
     } catch (error) {
       console.error("Export error:", error);
-      await handleBackupFailure(error, "Failed to export templates");
+      await handleBackupFailure(error, "Failed to export templates", visit);
     }
   };
   const handleExportAll = () => void exportFlight.run(exportAll);
@@ -181,6 +188,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       return;
     }
 
+    const visit = beginVisit();
     setLastImportSummary(null);
     setIsImporting(true);
     try {
@@ -200,7 +208,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         setLastImportSummary(summary);
         toast.error(formatImportSummaryMessage(summary).message);
       } else {
-        await handleBackupFailure(error, "Failed to import templates");
+        await handleBackupFailure(error, "Failed to import templates", visit);
       }
     } finally {
       setIsImporting(false);

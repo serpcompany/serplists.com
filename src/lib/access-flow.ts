@@ -95,16 +95,20 @@ export const handleAccessFailure = async (
     billingEnabled?: boolean;
     navigate?: NavigateFunction;
     location?: ReturnLocation;
+    // The page visit that sent the request (see usePageVisit). Once the user has left
+    // that page, the failure is only shown: no sign-in or checkout redirect.
+    isCurrent?: () => boolean;
   }
 ): Promise<void> => {
   const failure = getAccessFailure(error, options.fallbackMessage);
+  const stillHere = options.isCurrent?.() ?? true;
 
-  if (failure.kind === "auth_required" && options.navigate && options.location) {
+  if (failure.kind === "auth_required" && options.navigate && options.location && stillHere) {
     navigateToLoginWithReturnPath(options.navigate, options.location);
     return;
   }
 
-  if (failure.kind === "upgrade_required") {
+  if (failure.kind === "upgrade_required" && stillHere) {
     await startBillingCheckout(options.billingEnabled ?? true);
     return;
   }

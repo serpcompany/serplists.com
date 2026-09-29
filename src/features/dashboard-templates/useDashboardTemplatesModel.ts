@@ -191,23 +191,30 @@ export const createDashboardTemplateRun = async (
 /**
  * Reports a failed Start Run exactly once: login for an expired session, the
  * context's upgrade flow for a plan limit, and one error message otherwise.
- * Resolves true while a checkout redirect is starting.
+ * Sign-in and the upgrade flow run only while the user is still on the page that
+ * started the run (visit); an error is reported either way, as on the template pages
+ * (followTemplateActionResult). Resolves true while a checkout redirect is starting.
  */
 export const reportDashboardTemplateRunFailure = async (
   result: DashboardTemplateRunFailure,
+  visit: PageVisit,
   actions: DashboardTemplateRunFailureActions,
 ): Promise<boolean> => {
+  if (result.kind === 'error') {
+    actions.showError(result.message);
+    return false;
+  }
+
+  if (!visit.isCurrent()) {
+    return false;
+  }
+
   if (result.kind === 'login_required') {
     actions.navigateToLogin();
     return false;
   }
 
-  if (result.kind === 'upgrade_required') {
-    return actions.upgrade();
-  }
-
-  actions.showError(result.message);
-  return false;
+  return actions.upgrade();
 };
 
 export const deleteDashboardTemplate = async (

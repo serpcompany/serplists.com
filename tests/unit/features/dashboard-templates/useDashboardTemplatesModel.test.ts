@@ -512,6 +512,8 @@ describe('createDashboardTemplateRun access failures', () => {
 });
 
 describe('reportDashboardTemplateRunFailure', () => {
+  const current = { isCurrent: () => true };
+  const left = { isCurrent: () => false };
   const buildActions = (upgradeResult = true) => ({
     navigateToLogin: vi.fn(),
     showError: vi.fn(),
@@ -523,6 +525,7 @@ describe('reportDashboardTemplateRunFailure', () => {
 
     const redirecting = await reportDashboardTemplateRunFailure(
       { kind: 'upgrade_required', message: 'Active run limit reached.' },
+      current,
       actions,
     );
 
@@ -537,6 +540,7 @@ describe('reportDashboardTemplateRunFailure', () => {
 
     const redirecting = await reportDashboardTemplateRunFailure(
       { kind: 'upgrade_required', message: 'Active run limit reached.' },
+      current,
       actions,
     );
 
@@ -548,6 +552,7 @@ describe('reportDashboardTemplateRunFailure', () => {
 
     const redirecting = await reportDashboardTemplateRunFailure(
       { kind: 'login_required' },
+      current,
       actions,
     );
 
@@ -562,11 +567,55 @@ describe('reportDashboardTemplateRunFailure', () => {
 
     await reportDashboardTemplateRunFailure(
       { kind: 'error', message: 'Failed to create checklist run.' },
+      current,
       actions,
     );
 
     expect(actions.showError).toHaveBeenCalledTimes(1);
     expect(actions.showError).toHaveBeenCalledWith('Failed to create checklist run.');
     expect(actions.upgrade).not.toHaveBeenCalled();
+  });
+
+  // Start Run failed after the user had left My Templates (Escape, then a sidebar link,
+  // or Back): the checkout redirect and the stale sign-in navigate still ran, pulling
+  // them from the page they had moved to.
+  it('does not start checkout once the user has left the page', async () => {
+    const actions = buildActions(true);
+
+    const redirecting = await reportDashboardTemplateRunFailure(
+      { kind: 'upgrade_required', message: 'Active run limit reached.' },
+      left,
+      actions,
+    );
+
+    expect(actions.upgrade).not.toHaveBeenCalled();
+    expect(actions.navigateToLogin).not.toHaveBeenCalled();
+    expect(redirecting).toBe(false);
+  });
+
+  it('does not go to sign-in once the user has left the page', async () => {
+    const actions = buildActions();
+
+    const redirecting = await reportDashboardTemplateRunFailure(
+      { kind: 'login_required' },
+      left,
+      actions,
+    );
+
+    expect(actions.navigateToLogin).not.toHaveBeenCalled();
+    expect(actions.upgrade).not.toHaveBeenCalled();
+    expect(redirecting).toBe(false);
+  });
+
+  it('still reports a plain error after the user has left the page', async () => {
+    const actions = buildActions();
+
+    await reportDashboardTemplateRunFailure(
+      { kind: 'error', message: 'Failed to create checklist run.' },
+      left,
+      actions,
+    );
+
+    expect(actions.showError).toHaveBeenCalledWith('Failed to create checklist run.');
   });
 });
