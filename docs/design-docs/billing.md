@@ -92,6 +92,12 @@ pnpm run stripe:local:scrub-live
 The helper then configures `.dev.vars` with only the test product, price, and
 Portal configuration.
 
+Every local Stripe script reads the test key from `STRIPE_SECRET_KEY=sk_test_...`
+in `.dev.vars`, as `.dev.vars.example` lays it out; `STRIPE_TEST_SECRET_KEY` (or
+`STRIPE_SECRET_KEY_TEST`) overrides it. They resolve it with
+`resolveTestSecretKey()` in `scripts/stripe/_env.mjs` and never accept a key that
+does not start with `sk_test_`.
+
 ```bash
 # Idempotently create/confirm test resources.
 node scripts/stripe/bootstrap.mjs --mode test --currency usd --monthly 900

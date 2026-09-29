@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { readDevSession } from "../dev-auto-lib.mjs";
-import { loadLocalEnv, updateEnvFile } from "./_env.mjs";
+import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT, updateEnvFile } from "./_env.mjs";
 import { resolveWebhookForwardTarget, retargetForDevSession } from "./_listen-target.mjs";
 
 const SESSION_POLL_MS = 2_000;
@@ -14,9 +14,9 @@ const EVENTS = [
 ];
 
 const env = loadLocalEnv();
-const testKey = env.STRIPE_TEST_SECRET_KEY ?? env.STRIPE_SECRET_KEY_TEST ?? env.STRIPE_SECRET_KEY;
-if (!testKey?.startsWith("sk_test_")) {
-  throw new Error("Stripe local listener requires a test secret key.");
+const testKey = resolveTestSecretKey(env);
+if (!testKey) {
+  throw new Error(`Stripe local listener requires a test secret key. ${TEST_SECRET_KEY_HINT}`);
 }
 
 // Each checkout runs its own dev stack on a free port pair, so forward to this

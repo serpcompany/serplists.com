@@ -15,11 +15,11 @@ product, and matches the requested amount, currency, and interval. Otherwise the
 fails: Stripe prices cannot change (see "Changing the Pro price" in
 docs/design-docs/billing.md).
 
-Reads keys from .env / .env.local / .dev.vars:
-  STRIPE_TEST_SECRET_KEY=sk_test_...
-  STRIPE_LIVE_SECRET_KEY=sk_live_...
+Reads the test key from .env / .env.local / .dev.vars:
+  STRIPE_SECRET_KEY=sk_test_...   (STRIPE_TEST_SECRET_KEY overrides it)
 
-Or a single STRIPE_SECRET_KEY (sk_test_... or sk_live_...) for single-mode runs.
+Reads the live key only from the process environment, never from a file:
+  STRIPE_LIVE_SECRET_KEY=sk_live_...   (or STRIPE_SECRET_KEY=sk_live_...)
 `;
 }
 

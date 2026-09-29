@@ -1,4 +1,4 @@
-import { loadLocalEnv, parseEnvFile, updateEnvFile } from "./_env.mjs";
+import { loadLocalEnv, parseEnvFile, resolveTestSecretKey, TEST_SECRET_KEY_HINT, updateEnvFile } from "./_env.mjs";
 import { describePriceMismatch, PRO_CURRENCY, PRO_MONTHLY_CENTS } from "./_price.mjs";
 
 const localEnv = parseEnvFile(".dev.vars");
@@ -13,9 +13,9 @@ if (forbiddenLocalKeys.length > 0 || containsLiveStripeKey) {
   );
 }
 
-const testKey = env.STRIPE_TEST_SECRET_KEY ?? env.STRIPE_SECRET_KEY_TEST;
-if (!testKey?.startsWith("sk_test_")) {
-  throw new Error("Missing STRIPE_TEST_SECRET_KEY or STRIPE_SECRET_KEY_TEST in .dev.vars.");
+const testKey = resolveTestSecretKey(env);
+if (!testKey) {
+  throw new Error(`Missing Stripe test secret key. ${TEST_SECRET_KEY_HINT}`);
 }
 
 async function stripeGet(path) {
