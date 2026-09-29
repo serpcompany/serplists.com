@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
+import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { TaskHeaderReveal } from '@/components/run-execution/TaskHeaderReveal';
 import type { PrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import type { ChecklistItem } from '@/types/checklist';
@@ -219,5 +220,34 @@ describe('TaskExecutionPanel reveals the task it moves to', () => {
     expect(html).toMatch(/<h2[^>]*tabindex="-1"[^>]*>Review all page content<\/h2>/);
     // 3.5rem site header, plus the 3.5rem context header below md.
     expect(html).toMatch(/class="[^"]*scroll-mt-28 md:scroll-mt-14[^"]*"/);
+  });
+});
+
+// Blocks are keyed by position, so without a key per task the next task's block at the same
+// position reused this one's element: a video kept playing the previous task's file.
+describe('TaskExecutionPanel gives every task its own content blocks', () => {
+  const video = { type: 'video' as const, value: 'https://cdn.example.com/a.mp4' };
+  const renderTask = (id: string) => renderPanel({ ...openTask, id, contents: [video] }, { kind: 'complete_task' }).tree;
+  const isRenderer = (node: unknown) => React.isValidElement(node) && node.type === ContentRenderer;
+
+  it('keys the task content on the task id', () => {
+    const renderers = findElements(renderTask('task-7'), isRenderer);
+
+    expect(renderers).toHaveLength(1);
+    expect(renderers[0]?.key).toContain('task-7');
+    expect(findElements(renderTask('task-8'), isRenderer)[0]?.key).not.toBe(renderers[0]?.key);
+  });
+
+  // The task notes next to it are keyed on the task too. A key shared by two siblings left
+  // the previous task's blocks on the page next to the new ones.
+  it('gives the task content a key no sibling has', () => {
+    const [parent] = findElements(renderTask('task-7'), (element) =>
+      Array.isArray(element.props.children) && element.props.children.some(isRenderer));
+    const keys = (parent?.props.children as unknown[])
+      .filter((child): child is AnyElement => React.isValidElement(child))
+      .flatMap((child) => (child.key === null ? [] : [child.key]));
+
+    expect(keys.length).toBeGreaterThan(1);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });

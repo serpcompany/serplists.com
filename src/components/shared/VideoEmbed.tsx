@@ -56,9 +56,10 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
   }
 
   if (source?.kind === 'video') {
+    // The URL goes on the player itself and keys it: a player reads a <source> child only
+    // once, so a new URL there (the next task's video, a URL being typed) would never load.
     return (
-      <video className={className} controls preload="metadata">
-        <source src={source.url} />
+      <video key={source.url} src={source.url} className={className} controls preload="metadata">
         Your browser does not support embedded video.
       </video>
     );

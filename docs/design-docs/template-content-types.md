@@ -16,7 +16,11 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
 - Clipy watch and embed links become a Clipy iframe.
 - Pasted `<iframe>` code is framed only when its origin is in `EMBED_FRAME_ORIGINS`
   (`src/lib/utils/embedOrigins.ts`); any other origin is shown as a link.
-- Any other http(s) URL plays in the native `<video>` player.
+- Any other http(s) URL plays in the native `<video>` player. The URL is the player's
+  own `src` and its key, so a new URL (the next task's video, a URL being typed in the
+  editor) always gets a new player: a player reads a `<source>` child only once. The run
+  page also keys each task's blocks on the task, so no block carries over to the next task.
+  `tests/e2e/run-task-videos.spec.ts` checks this.
 
 Every iframe origin the helper can produce must be listed in `frame-src` in
 `public/_headers`; `tests/unit/security/headers.test.ts` checks this.

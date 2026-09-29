@@ -33,4 +33,21 @@ describe('VideoEmbed', () => {
       'Invalid video URL or embed code',
     );
   });
+
+  // Changing the src of a <source> already in a player loads nothing, and React reuses the
+  // player when only the URL changes: it kept playing the first file it loaded.
+  it('loads a direct video URL on the player itself, with a new player for each URL', () => {
+    const markup = renderToStaticMarkup(<VideoEmbed url="https://cdn.example.com/a.mp4" />);
+
+    expect(markup).toMatch(/<video[^>]* src="https:\/\/cdn\.example\.com\/a\.mp4"/);
+    expect(markup).not.toContain('<source');
+    expect(markup).toContain('Your browser does not support embedded video.');
+
+    const first = VideoEmbed({ url: 'https://cdn.example.com/a.mp4' }) as React.ReactElement;
+    const second = VideoEmbed({ url: ' https://cdn.example.com/b.mp4 ' }) as React.ReactElement;
+    expect(first.type).toBe('video');
+    expect(first.key).toBe('https://cdn.example.com/a.mp4');
+    expect(second.key).toBe('https://cdn.example.com/b.mp4');
+  });
 });
+

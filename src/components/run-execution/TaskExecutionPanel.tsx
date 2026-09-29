@@ -128,7 +128,11 @@ export function TaskExecutionPanel({
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="mx-auto max-w-2xl space-y-4">
           {task.contents?.length ? (
+            // Keyed per task: blocks are keyed by position, so the next task's blocks would
+            // otherwise reuse this task's elements (and a video player its file). The key
+            // differs from the notes editor's, its sibling.
             <ContentRenderer
+              key={`contents-${task.id}`}
               contents={task.contents}
               disabled={!canTick}
               onSubItemToggle={onToggleSubItem}
