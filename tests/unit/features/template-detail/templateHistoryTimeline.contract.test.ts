@@ -73,7 +73,7 @@ describe('template history API to Changelog', () => {
 
     expect(buildTemplateHistoryTimeline(history).map((entry) => entry.label)).toEqual([
       'Restored template',
-      'Archived template',
+      'Deleted template',
       'Made template public',
       'Created template v1',
     ]);

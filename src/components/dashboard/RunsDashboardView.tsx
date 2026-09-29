@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Archive,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -12,6 +11,7 @@ import {
   RefreshCw,
   Search,
   Share2,
+  Trash2,
 } from 'lucide-react';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
@@ -145,13 +145,13 @@ export function RunsDashboardView({
     setIsDeletingRun(true);
     try {
       await onDeleteRun(runToDelete);
-      toast.success('Run archived');
+      toast.success('Run deleted');
       setRunToDelete(null);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to archive run.',
+        error instanceof Error ? error.message : 'Failed to delete run.',
       );
-      // Archived elsewhere: the list reloaded without it, so a retry could only fail again.
+      // Deleted elsewhere: the list reloaded without it, so a retry could only fail again.
       if (isStaleRecordError(error)) setRunToDelete(null);
     } finally {
       setIsDeletingRun(false);
@@ -397,8 +397,8 @@ export function RunsDashboardView({
                               onClick={() => setRunToDelete(run.id)}
                               className="text-destructive"
                             >
-                              <Archive className="mr-2 h-4 w-4" />
-                              Archive
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
                             </DropdownMenuItem>
                           ) : null}
                         </DropdownMenuContent>
@@ -422,11 +422,11 @@ export function RunsDashboardView({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archive run</DialogTitle>
-            {/* DELETE archives it and ends its share link; /dashboard/archive restores it. */}
+            <DialogTitle>Delete run</DialogTitle>
+            {/* Users see a delete. The API archives the run (ending its share link), and
+                /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
             <DialogDescription>
-              The run moves to Archive, where it can be restored. Any share
-              link stops working.
+              Are you sure you want to delete this run?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -442,7 +442,7 @@ export function RunsDashboardView({
               disabled={isDeletingRun}
               onClick={() => void confirmDeleteRun()}
             >
-              {isDeletingRun ? 'Archiving...' : 'Archive'}
+              {isDeletingRun ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>

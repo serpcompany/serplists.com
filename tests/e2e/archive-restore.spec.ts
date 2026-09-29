@@ -111,25 +111,26 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   const runRow = page.locator('div').filter({ hasText: runTitle }).filter({ has: page.getByRole('button', { name: 'Run options' }) }).last();
   await expect(runRow).toBeVisible({ timeout: 15_000 });
   await runRow.getByRole('button', { name: 'Run options' }).click();
-  await page.getByRole('menuitem', { name: 'Archive' }).click();
-  // The run is restorable from the archive, so the dialog says so rather than "cannot be undone".
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  // Users see a delete; the run stays restorable from the archive, so the dialog never says
+  // "cannot be undone".
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Archive run' })).toBeVisible();
-  await expect(dialog).toContainText('moves to Archive, where it can be restored');
+  await expect(dialog.getByRole('heading', { name: 'Delete run' })).toBeVisible();
+  await expect(dialog).toContainText('Are you sure you want to delete this run?');
   await expect(dialog).not.toContainText('cannot be undone');
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'DELETE',
   );
-  await dialog.getByRole('button', { name: 'Archive' }).click();
+  await dialog.getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
-  await expect(page.getByText('Run archived')).toBeVisible();
+  await expect(page.getByText('Run deleted')).toBeVisible();
 
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
   await expect(archiveRow(page, runTitle)).toHaveCount(1, { timeout: 15_000 });
 });
 
 // My Templates said a deleted template "cannot be undone", though it only moves to the archive.
-test('a template archived from My Templates says it moves to Archive and restores from there', async ({ page }) => {
+test('a template deleted from My Templates never says it cannot be undone and restores from the archive', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive from list template ${Date.now()}`;
   const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
@@ -145,18 +146,18 @@ test('a template archived from My Templates says it moves to Archive and restore
   const row = page.locator('div.group').filter({ has: page.getByRole('link', { name: title, exact: true }) });
   await expect(row).toHaveCount(1, { timeout: 15_000 });
   await row.hover();
-  await row.getByRole('button', { name: 'Archive' }).click();
+  await row.getByRole('button', { name: 'Delete' }).click();
 
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Archive template' })).toBeVisible();
-  await expect(dialog).toContainText('moves to Archive, where it can be restored');
+  await expect(dialog.getByRole('heading', { name: 'Delete template' })).toBeVisible();
+  await expect(dialog).toContainText('Are you sure you want to delete this template?');
   await expect(dialog).not.toContainText('cannot be undone');
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
   );
-  await dialog.getByRole('button', { name: 'Archive' }).click();
+  await dialog.getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
-  await expect(page.getByText('Template archived')).toBeVisible();
+  await expect(page.getByText('Template deleted')).toBeVisible();
 
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
   const archived = archiveRow(page, title);
@@ -168,10 +169,10 @@ test('a template archived from My Templates says it moves to Archive and restore
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
 });
 
-// Archiving from the template's own page refetched it while the page was still open: a
+// Deleting from the template's own page refetched it while the page was still open: a
 // GET that could only 404, whose "gone" answer stayed cached, so the restored template
 // first opened as "Template Not Found".
-test('a template archived from its page opens normally once restored', async ({ page }) => {
+test('a template deleted from its page opens normally once restored', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive detail template ${Date.now()}`;
   const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
@@ -191,11 +192,11 @@ test('a template archived from its page opens normally once restored', async ({ 
     if (isDetailRead(new URL(request.url()), request.method())) readsAfterArchive.push(request.url());
   });
   await page.getByRole('button', { name: 'Template actions' }).click();
-  await page.getByRole('menuitem', { name: 'Archive' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
   );
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Archive' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
   await expect(page).toHaveURL(/\/dashboard\/templates$/);
   await page.waitForTimeout(500);

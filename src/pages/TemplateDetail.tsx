@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  Archive,
   ArrowLeft,
   Calendar,
   ChevronRight,
@@ -18,6 +17,7 @@ import {
   PlayCircle,
   Share2,
   Tag,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -325,7 +325,7 @@ const TemplateDetail = () => {
     setIsDeleting(true);
     try {
       await deleteTemplate(displayTemplate.id);
-      toast.success('Template archived');
+      toast.success('Template deleted');
       if (visit.isCurrent()) {
         navigate(buildConsoleTemplatesPath());
       } else {
@@ -334,7 +334,7 @@ const TemplateDetail = () => {
       }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to archive template';
+        error instanceof Error ? error.message : 'Failed to delete template';
       toast.error(message);
       setIsDeleting(false);
     }
@@ -503,8 +503,8 @@ const TemplateDetail = () => {
               className="text-destructive focus:text-destructive"
               onClick={() => setArchiveDialogOpen(true)}
             >
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -762,17 +762,17 @@ const TemplateDetail = () => {
       <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Archive Template</AlertDialogTitle>
+            <AlertDialogTitle>Delete template</AlertDialogTitle>
+            {/* Users see a delete. The API archives the template (making it private), and
+                /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
             <AlertDialogDescription>
-              Are you sure you want to archive &quot;{displayTemplate.title}&quot;?
-              This removes the template and its future visibility from your
-              account.
+              Are you sure you want to delete &quot;{displayTemplate.title}&quot;?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting ? 'Archiving...' : 'Archive'}
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -11,7 +11,7 @@ import type {
 export const RUN_HISTORY_LABELS: Record<RunAuditAction, string> = {
   'checklist_run.created': 'Created run',
   'checklist_run.updated': 'Updated run',
-  'checklist_run.deleted': 'Archived run',
+  'checklist_run.deleted': 'Deleted run',
   'checklist_run.restored': 'Restored run',
   'checklist_run.revalidated': 'Revalidated run',
   'checklist_run.reconciled': 'Updated from Template',
@@ -25,7 +25,7 @@ export const TEMPLATE_HISTORY_LABELS: Record<TemplateHistoryAction, string> = {
   'template.updated': 'Updated template',
   'template.imported': 'Imported template',
   'template.cloned': 'Copied template',
-  'template.deleted': 'Archived template',
+  'template.deleted': 'Deleted template',
   'template.restored': 'Restored template',
   'template.versioned': 'Saved template version',
 };
@@ -33,7 +33,7 @@ export const TEMPLATE_HISTORY_LABELS: Record<TemplateHistoryAction, string> = {
 // Organization activity lists every event whose subject is the Organization.
 export const ORGANIZATION_ACTIVITY_LABELS: Record<AuditAction, string> = {
   'checklist_run.created': 'Run created',
-  'checklist_run.deleted': 'Run archived',
+  'checklist_run.deleted': 'Run deleted',
   'checklist_run.restored': 'Run restored',
   'checklist_run.revalidated': 'Run revalidated',
   'checklist_run.reconciled': 'Run updated from Template',
@@ -53,7 +53,7 @@ export const ORGANIZATION_ACTIVITY_LABELS: Record<AuditAction, string> = {
   'team_member.updated': 'Member updated',
   'template.cloned': 'Template cloned',
   'template.created': 'Template created',
-  'template.deleted': 'Template archived',
+  'template.deleted': 'Template deleted',
   'template.imported': 'Template imported',
   'template.restored': 'Template restored',
   'template.updated': 'Template updated',

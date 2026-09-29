@@ -160,7 +160,7 @@ test('an Organization runner can run but not edit or delete', async ({ page }) =
   await page.goto('/dashboard/runs');
   await page.getByRole('button', { name: 'Run options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Share Run' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Archive' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0);
 
   await page.goto('/dashboard/runs/run-org');
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();

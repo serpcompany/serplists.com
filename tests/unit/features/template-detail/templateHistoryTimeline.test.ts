@@ -66,7 +66,7 @@ describe('buildTemplateHistoryTimeline', () => {
 
     expect(timeline.map((entry) => entry.label)).toEqual([
       'Restored template',
-      'Archived template',
+      'Deleted template',
       'Updated template v2',
       'Made template public',
       'Created template v1',

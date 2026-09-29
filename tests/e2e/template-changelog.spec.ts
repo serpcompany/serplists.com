@@ -41,7 +41,7 @@ test('the Changelog shows Share, archive and restore next to versions', async ({
     await page.reload();
 
     await expect(page.getByText('Restored template')).toBeVisible();
-    await expect(page.getByText('Archived template')).toBeVisible();
+    await expect(page.getByText('Deleted template')).toBeVisible();
     await expect(page.getByText('Made template public')).toBeVisible();
     await expect(page.getByText('Created template v1')).toBeVisible();
     await expect(page.getByText(/^Created template/)).toHaveCount(1);

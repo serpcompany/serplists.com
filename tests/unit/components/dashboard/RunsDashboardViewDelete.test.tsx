@@ -102,63 +102,64 @@ const buttonIn = (node: FakeNode, label: string) => {
   return button;
 };
 
-describe('RunsDashboardView archive', () => {
-  it('names the action Archive and says where the run goes, not that it cannot be undone', async () => {
+describe('RunsDashboardView delete', () => {
+  // Users see a delete; the API archives the run and /dashboard/archive can restore it, so
+  // the confirmation must never claim the delete is permanent.
+  it('names the action Delete and never says it cannot be undone', async () => {
     const onDeleteRun = vi.fn(async () => undefined);
     const container = await renderRuns(onDeleteRun);
 
-    expect(byRole(container, 'menuitem').map((item) => item.textContent)).toContain('Archive');
+    expect(byRole(container, 'menuitem').map((item) => item.textContent)).toContain('Delete');
     expect(byRole(container, 'dialog')).toHaveLength(0);
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
 
     const [dialog] = byRole(container, 'dialog');
     expect(dialog).toBeDefined();
     const [title] = findAll(dialog, (node) => node.nodeName === 'H2');
     const [description] = findAll(dialog, (node) => node.nodeName === 'P');
-    expect(title?.textContent).toBe('Archive run');
-    expect(description?.textContent).toContain('moves to Archive');
-    expect(description?.textContent).toContain('can be restored');
-    expect(dialog.textContent).not.toMatch(/cannot be undone|delete/i);
+    expect(title?.textContent).toBe('Delete run');
+    expect(description?.textContent).toBe('Are you sure you want to delete this run?');
+    expect(dialog.textContent).not.toMatch(/cannot be undone|archiv/i);
 
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
     expect(onDeleteRun).toHaveBeenCalledWith('run-1');
-    expect(toast.success).toHaveBeenCalledWith('Run archived');
+    expect(toast.success).toHaveBeenCalledWith('Run deleted');
     expect(byRole(container, 'dialog')).toHaveLength(0);
   });
 
-  it('says the run could not be archived when the request fails without a message', async () => {
+  it('says the run could not be deleted when the request fails without a message', async () => {
     const container = await renderRuns(vi.fn(async () => Promise.reject('offline')));
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
     const [dialog] = byRole(container, 'dialog');
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
-    expect(toast.error).toHaveBeenCalledWith('Failed to archive run.');
+    expect(toast.error).toHaveBeenCalledWith('Failed to delete run.');
     expect(byRole(container, 'dialog')).toHaveLength(1);
   });
 
-  // Archived in another tab: the runs list reloads (deleteRun's onError) and the run leaves
+  // Deleted in another tab: the runs list reloads (deleteRun's onError) and the run leaves
   // it, so the dialog for it closes instead of offering a retry that fails the same way.
-  it('closes the dialog when the run was already archived elsewhere', async () => {
+  it('closes the dialog when the run was already deleted elsewhere', async () => {
     const error = createApiError(404, { error: 'Checklist not found or unauthorized' });
     const container = await renderRuns(vi.fn(async () => Promise.reject(error)));
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
     const [dialog] = byRole(container, 'dialog');
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
     expect(toast.error).toHaveBeenCalledWith('Checklist not found or unauthorized');

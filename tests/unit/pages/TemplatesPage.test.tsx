@@ -200,7 +200,7 @@ describe('Templates page', () => {
     expect(order).toEqual([...order].sort((left, right) => left - right));
   });
 
-  it.each(['grid', 'list'] as const)('offers an Organization viewer no create, run, edit or archive actions (%s view)', (viewMode) => {
+  it.each(['grid', 'list'] as const)('offers an Organization viewer no create, run, edit or delete actions (%s view)', (viewMode) => {
     viewModeState.mode = viewMode;
     mockUseDashboardTemplatesModel.mockReturnValue({
       templates: [template({ teamId: 'team-1' })],
@@ -236,7 +236,7 @@ describe('Templates page', () => {
     expect(html).not.toContain('New Template');
     expect(html).not.toContain('Start Run');
     expect(html).not.toContain('/edit"');
-    expect(html).not.toContain('Archive');
+    expect(html).not.toContain('Delete');
   });
 
   it('hides Create Template in the empty state for members who cannot create Templates', () => {

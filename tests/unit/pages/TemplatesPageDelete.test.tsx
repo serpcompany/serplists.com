@@ -126,62 +126,63 @@ const buttonIn = (node: FakeNode, label: string) => {
   return button;
 };
 
-describe('My Templates archive', () => {
-  it('names the action Archive and says where the Template goes, not that it cannot be undone', async () => {
+describe('My Templates delete', () => {
+  // Users see a delete; the API archives the Template and /dashboard/archive can restore it,
+  // so the confirmation must never claim the delete is permanent.
+  it('names the action Delete and never says it cannot be undone', async () => {
     const removeTemplate = vi.fn(async () => undefined);
     const container = await renderTemplates(removeTemplate);
     expect(dialogs(container)).toHaveLength(0);
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
 
     const [dialog] = dialogs(container);
     expect(dialog).toBeDefined();
     const [title] = findAll(dialog, (node) => node.nodeName === 'H2');
     const [description] = findAll(dialog, (node) => node.nodeName === 'P');
-    expect(title?.textContent).toBe('Archive template');
-    expect(description?.textContent).toContain('moves to Archive');
-    expect(description?.textContent).toContain('can be restored');
-    expect(dialog.textContent).not.toMatch(/cannot be undone|your library|delete/i);
+    expect(title?.textContent).toBe('Delete template');
+    expect(description?.textContent).toBe('Are you sure you want to delete this template?');
+    expect(dialog.textContent).not.toMatch(/cannot be undone|your library|archiv/i);
 
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
     expect(removeTemplate).toHaveBeenCalledWith('template-1');
-    expect(toast.success).toHaveBeenCalledWith('Template archived');
+    expect(toast.success).toHaveBeenCalledWith('Template deleted');
     expect(dialogs(container)).toHaveLength(0);
   });
 
-  it('says the Template could not be archived when the request fails without a message', async () => {
+  it('says the Template could not be deleted when the request fails without a message', async () => {
     const container = await renderTemplates(vi.fn(async () => Promise.reject('offline')));
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
     const [dialog] = dialogs(container);
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
-    expect(toast.error).toHaveBeenCalledWith('Failed to archive template.');
+    expect(toast.error).toHaveBeenCalledWith('Failed to delete template.');
     expect(dialogs(container)).toHaveLength(1);
   });
 
-  // Archived by a teammate or in another tab: the Template lists reload (deleteTemplate's
+  // Deleted by a teammate or in another tab: the Template lists reload (deleteTemplate's
   // onError) and it leaves them, so its dialog closes instead of offering a retry that fails
   // the same way.
-  it('closes the dialog when the Template was already archived elsewhere', async () => {
+  it('closes the dialog when the Template was already deleted elsewhere', async () => {
     const error = createApiError(404, { error: 'Template not found or unauthorized' });
     const container = await renderTemplates(vi.fn(async () => Promise.reject(error)));
 
     await act(async () => {
-      click(container, buttonIn(container, 'Archive'));
+      click(container, buttonIn(container, 'Delete'));
     });
     const [dialog] = dialogs(container);
     await act(async () => {
-      click(container, buttonIn(dialog, 'Archive'));
+      click(container, buttonIn(dialog, 'Delete'));
     });
 
     expect(toast.error).toHaveBeenCalledWith('Template not found or unauthorized');
