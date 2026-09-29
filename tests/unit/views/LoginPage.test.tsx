@@ -11,10 +11,12 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
+const authState = vi.hoisted(() => ({ isAuthenticated: false }));
+
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
     login: vi.fn(),
-    isAuthenticated: false,
+    isAuthenticated: authState.isAuthenticated,
     isLoading: false,
   }),
 }));
@@ -76,6 +78,43 @@ describe('Login page', () => {
 
   it('does not offer a resend after a successful verification', () => {
     expect(renderAt('/login/?verified=1')).not.toContain('Resend verification email');
+  });
+});
+
+// A signed-in visitor leaves the login page: for the return path, or with none for the console
+// home (My Templates), never Account Settings. Verification and password reset end here too.
+describe('Login once signed in', () => {
+  let restoreGlobals: () => void = () => {};
+  let root: Root | null = null;
+  beforeAll(() => {
+    restoreGlobals = installFakeDomGlobals(navigation.window);
+    authState.isAuthenticated = true;
+  });
+  afterAll(() => {
+    authState.isAuthenticated = false;
+    restoreGlobals();
+  });
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+  });
+
+  // Where the page first sends the user. (This test keeps the page mounted after it leaves,
+  // which the app never does, so only the first navigation counts.)
+  const destinationFrom = async (url: string) => {
+    navigation.reset(url);
+    vi.mocked(navigation.router.replace).mockClear();
+    root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    await act(async () => root?.render(<Login />));
+    return vi.mocked(navigation.router.replace).mock.calls[0]?.[0];
+  };
+
+  it.each(['/login/', '/login/?verified=1'])('opens the console home from %s', async (url) => {
+    expect(await destinationFrom(url)).toBe('/dashboard/templates/');
+  });
+
+  it('opens the page the user was headed to', async () => {
+    expect(await destinationFrom('/login/?next=%2Fdashboard%2Fruns%2F')).toBe('/dashboard/runs/');
   });
 });
 

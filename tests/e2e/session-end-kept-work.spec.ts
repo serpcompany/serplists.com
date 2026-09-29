@@ -13,7 +13,7 @@ async function signIn(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible({ timeout: 30_000 });
   // Let the landing page's requests finish before the test calls the API, which the local
   // dev proxy can drop in a burst (see support/api-requests.ts).
   await apiRequests.settled();

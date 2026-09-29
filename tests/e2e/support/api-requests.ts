@@ -14,8 +14,8 @@ const QUIET_MS = 300;
  * called. `settled()` waits until none are left and none has started or ended for a
  * moment, and stops counting.
  *
- * Signing in lands on Account Settings, which loads its sections all at once, so a spec
- * that calls the API right after signing in lets those requests finish first. A spec also
+ * Signing in lands on My Templates, which loads its lists and the Ownership Context at
+ * once, so a spec that calls the API right after signing in lets those requests finish first. A spec also
  * waits here when the next step must be the page's only request, such as a save meant to
  * meet an ended session.
  */

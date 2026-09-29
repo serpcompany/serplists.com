@@ -384,3 +384,7 @@ Each of these needs the user's approval, or happens with the domain move:
   Run's URL, keeping the query, next to the other legacy paths in `next.config.ts`.
   `buildRunPath` and the unused `buildRunUrl` went with it; the MCP endpoint and Run Keys
   return no page URLs, so nothing else changed.
+- 2026-09-29: **Sign-in opens the console home.** With no return path, sign-in went to
+  Account Settings. The user chose the console home (`buildConsoleHomePath()`, My Templates):
+  `getPostSignInDestination` in `src/lib/auth/returnPath.ts` gives it to the login page, which
+  email verification and password reset end on, and sign-up without verification uses it too.

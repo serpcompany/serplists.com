@@ -104,7 +104,8 @@ async function signInAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard\/settings\/$/, { timeout: 30_000 });
+  // With no return path, signing in opens the console home, My Templates.
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
 }
 
 test.describe('route structure', () => {

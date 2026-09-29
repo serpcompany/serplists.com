@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getPostRegisterDestination,
+  getPostSignInDestination,
   getReturnPath,
   sanitizeReturnPath,
   toSameOriginPath,
@@ -121,7 +122,7 @@ describe('getReturnPath', () => {
     );
   });
 
-  it('returns null without a return path, so Login falls back to settings', () => {
+  it('returns null without a return path, so Login falls back to the console home', () => {
     expect(getReturnPath('')).toBeNull();
     expect(getReturnPath('?verified=1')).toBeNull();
     expect(getReturnPath('?next=')).toBeNull();
@@ -170,6 +171,17 @@ describe('withReturnPath', () => {
 
   it('leaves the path alone without a return path', () => {
     expect(withReturnPath('/register/', null)).toBe('/register/');
+  });
+});
+
+describe('getPostSignInDestination', () => {
+  it('returns someone to where they were headed', () => {
+    expect(getPostSignInDestination('/team-invites/abc/?x=1#h')).toBe('/team-invites/abc/?x=1#h');
+  });
+
+  // Not Account Settings: a sign-in with nowhere to go opens the console home, My Templates.
+  it('opens the console home without a return path', () => {
+    expect(getPostSignInDestination(null)).toBe('/dashboard/templates/');
   });
 });
 

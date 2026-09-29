@@ -35,10 +35,15 @@ import {
   getLoginNotice,
   stripLoginNoticeParams,
 } from "@/lib/auth/loginNotice";
-import { getReturnPath, toSameOriginPath, withReturnPath } from "@/lib/auth/returnPath";
+import {
+  getPostSignInDestination,
+  getReturnPath,
+  toSameOriginPath,
+  withReturnPath,
+} from "@/lib/auth/returnPath";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
-import { buildConsoleSettingsPath, buildForgotPasswordPath, buildRegisterPath } from "@/lib/routes";
+import { buildForgotPasswordPath, buildRegisterPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
@@ -93,9 +98,9 @@ const Login = () => {
     }
   }
   // Where the user was headed (with its query and hash): the `next` parameter, which
-  // also survives the email verification link.
+  // also survives the email verification link. With none, the console home.
   const returnPath = getReturnPath(searchParams);
-  const from = returnPath ?? buildConsoleSettingsPath();
+  const from = getPostSignInDestination(returnPath);
   const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
   // Runs again whenever the query changes; `search` is only its trigger, the effect reads
@@ -139,7 +144,7 @@ const Login = () => {
       // load the invite as a new page so they never see its token. The return path
       // keeps its query and hash, so check both parts. Only a path on this origin is
       // followed, never the raw value.
-      const destination = toSameOriginPath(from, window.location.origin) ?? buildConsoleSettingsPath();
+      const destination = toSameOriginPath(from, window.location.origin) ?? getPostSignInDestination(null);
       const target = new URL(destination, window.location.origin);
       if (needsFullPageLoad(target.pathname, target.search, window)) {
         window.location.replace(destination);

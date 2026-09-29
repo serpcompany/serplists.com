@@ -13,7 +13,7 @@ import {
 import { publicSiteLinks } from '@/components/layout/publicSiteLinks';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
 import { VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
-import { getPostRegisterDestination, withReturnPath } from '@/lib/auth/returnPath';
+import { getPostRegisterDestination, getPostSignInDestination, withReturnPath } from '@/lib/auth/returnPath';
 import { canonicalPath } from '@/lib/http/urlStandard';
 import * as routes from '@/lib/routes';
 
@@ -80,6 +80,7 @@ const BUILT_PATHS: Array<[string, string]> = [
   ['VERIFY_EMAIL_LOGIN_PATH', VERIFY_EMAIL_LOGIN_PATH],
   ['withReturnPath', withReturnPath(routes.buildLoginPath(), '/dashboard/templates/')],
   ['getPostRegisterDestination', getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })],
+  ['getPostSignInDestination', getPostSignInDestination(null)],
   ['buildTeamInvitePath (API)', buildTeamInvitePath('invite-token')],
   ...publicSiteLinks.filter((link) => !link.external).map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]),
 ];

@@ -904,8 +904,8 @@ existing content, invent nothing):
   failed); "Email" ("you@example.com"); "Password" with "Forgot password?" and a show or hide
   button ("Show password", "Hide password"); "Resend verification email" when needed; "Sign
   in"; footer "Don't have an account? Sign up".
-- **PRIMARY ACTION:** "Sign in" → the `next` path, or [Account
-  Settings](#account-settings) when there is none.
+- **PRIMARY ACTION:** "Sign in" → the `next` path, or [My Templates](#my-templates) (the
+  console home) when there is none.
 - **SECONDARY ACTIONS:** "Forgot password?"; "Sign up"; "Resend verification email"; show or
   hide the password.
 - **STATES:** default; "Signing in..."; wrong credentials (toast "Invalid email or password",
@@ -913,7 +913,7 @@ existing content, invent nothing):
   resend verification.", the notice, the resend button); "Resending verification…"; a failed
   verification link (notice and toast); verified (toast "Email verified. You can sign in
   now."); `?verify_email=1` (toast "Verify your email first, then sign in."); the email
-  prefilled after sign-up; already signed in (redirects to `next` or Account Settings).
+  prefilled after sign-up; already signed in (redirects to `next` or My Templates).
 - **NAVIGATION TYPE:** child page (auth flow).
 - **PATTERN CHOICE (proposal):** centered card form ([auth card frame](#auth-card-frame)).
 - **REFERENCE IMAGES:** none (the reference has no auth pages).
@@ -1090,8 +1090,9 @@ existing content, invent nothing):
 - **SCREEN NAME:** My Templates (`/dashboard/templates/`)
 - **PURPOSE:** List the active context's Templates and start work from them.
 - **HOW USER GETS HERE:** sidebar "Templates"; account menu "Dashboard" or "My Templates";
-  `/dashboard/` (redirect); Home "Open Dashboard"; after creating a Template; "Back to
-  Templates" and the editor's back arrow; "Switch to <Organization>" on an invite.
+  `/dashboard/` (redirect); Home "Open Dashboard"; a sign-in with no return path; after
+  creating a Template; "Back to Templates" and the editor's back arrow; "Switch to
+  <Organization>" on an invite.
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Templates", "N templates in your library", "New Template" (role-limited).
   - Toolbar: search "Search templates..."; a visibility select ("All", "Public", "Private"); a
@@ -1414,8 +1415,8 @@ existing content, invent nothing):
 - **SCREEN NAME:** Account Settings (`/dashboard/settings/`)
 - **PURPOSE:** Manage the profile, billing, Run Keys, Organizations and security.
 - **HOW USER GETS HERE:** sidebar "Settings"; account menu "Settings"; the context switcher's
-  "Settings"; a sign-in with no return path; "Organization settings" and "Open settings" on
-  an invite; "Manage Pro" or "Manage subscription" on Pricing.
+  "Settings"; "Organization settings" and "Open settings" on an invite; "Manage Pro" or
+  "Manage subscription" on Pricing.
 - **WHAT'S ON THE SCREEN:** page header "Account Settings", "Manage your profile, billing, and
   security settings."; stacked cards:
   - "Profile Information": "Profile Picture" (avatar upload and remove); "Email" (disabled,
@@ -1868,7 +1869,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- A sign-in with no return path lands on Account Settings, not the console home.
 - The account menu's "Dashboard" and "My Templates" open the same page.
 - My Runs' empty state "Browse Templates" opens My Templates; every other "Browse Templates"
   opens the public library.

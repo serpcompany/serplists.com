@@ -112,6 +112,15 @@ export function withReturnPath(path: string, returnPath: string | null): string 
 }
 
 /**
+ * Where signing in sends someone: back to where they were headed, or with no return path
+ * to the console home (My Templates for now). Email verification and password reset end
+ * on the login page, so they follow the same rule.
+ */
+export function getPostSignInDestination(returnPath: string | null): string {
+  return returnPath ?? buildConsoleHomePath();
+}
+
+/**
  * Where sign-up sends a new account. An account that must verify its email goes to the
  * login page, which asks for that first; sign-up hands the address over in
  * sessionStorage, never in the URL (src/lib/auth/loginPrefill.ts).
@@ -127,5 +136,5 @@ export function getPostRegisterDestination({
     return withReturnPath(VERIFY_EMAIL_LOGIN_PATH, returnPath);
   }
 
-  return returnPath ?? buildConsoleHomePath();
+  return getPostSignInDestination(returnPath);
 }

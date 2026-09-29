@@ -68,9 +68,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   email verification is required, Register returns straight to the template page.
 - **First visit from the header:** any public page → "Get started" → Register → "Create
   account" → My Templates. With email verification: → Log in → email link → "Sign in" →
-  Account Settings (a sign-in with no return path lands there).
-- **Returning user:** Home → "Log in" → Log in → "Sign in" → Account Settings → sidebar
-  "Templates" → My Templates. Signed in: Home → "Open Dashboard" → My Templates, or account
+  My Templates (a sign-in with no return path opens the console home).
+- **Returning user:** Home → "Log in" → Log in → "Sign in" → My Templates. Signed in: Home → "Open Dashboard" → My Templates, or account
   menu → "Dashboard" → My Templates. A bookmarked `/dashboard/` redirects to My Templates.
   A console link opened while signed out → Log in (`?next=<path>`) → "Sign in" → that page.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template

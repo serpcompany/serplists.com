@@ -5,7 +5,7 @@
 
 - Better Auth is the canonical session layer for email sign-up, sign-in, sign-out, password changes, password reset, email verification, session lookup, and session revocation.
 - Browser auth state uses Better Auth httpOnly cookies. The client does not store auth tokens.
-- Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to `/dashboard/settings`.
+- Protected routes preserve the originally requested destination, including its query string and hash, and return users there after sign-in. With no saved destination, sign-in goes to the console home, `/dashboard/templates` (My Templates); email verification and password reset end on the login page, so they follow the same rule, and sign-up without email verification goes there too (`getPostSignInDestination` in `src/lib/auth/returnPath.ts`).
 - Password strength rules are enforced for registration and password changes.
 - `/dashboard/settings` is the canonical settings/account page.
 - `/account` and `/dashboard/profile` redirect to `/dashboard/settings`, keeping the

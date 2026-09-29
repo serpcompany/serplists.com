@@ -12,9 +12,9 @@ async function loginAsAdmin(page: Page) {
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  // Signing in lands on Account Settings: let its requests finish before the test calls
+  // Signing in lands on My Templates: let its requests finish before the test calls
   // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
-  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
   await apiRequests.settled();
 }
 

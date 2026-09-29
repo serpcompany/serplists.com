@@ -39,7 +39,8 @@ test.describe('sign-in return path', () => {
     await page.goto(`/login/?next=${encodeURIComponent(OFFSITE_RETURN_PATH)}`);
     await signInAsJohn(page);
 
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    // A refused return path counts as none: the console home, My Templates.
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
     expect(new URL(page.url()).origin).toBe(appOrigin);
     expect(offsite).toEqual([]);
   });
@@ -50,7 +51,7 @@ test.describe('sign-in return path', () => {
 
     await page.goto('/login/');
     await signInAsJohn(page);
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
 
     await page.goto(`/login/?next=${OFFSITE_RETURN_PATH}`);
 
