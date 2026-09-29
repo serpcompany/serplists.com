@@ -168,6 +168,23 @@ describe('template detail export', () => {
     );
   });
 
+  // The pack would be empty: say which template was left out and why, and download nothing.
+  it('reports a template the export had to leave out instead of downloading an empty pack', () => {
+    const download = vi.fn();
+
+    const result = exportTemplateFile({
+      billingState: billing(),
+      download,
+      template: buildTemplate({ sections: [] }),
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'No templates exported. Not exported: Launch Checklist (Template has no sections with tasks)',
+    });
+    expect(download).not.toHaveBeenCalled();
+  });
+
   it('counts uploaded files the export leaves out', () => {
     const result = exportTemplateFile({
       billingState: billing(),

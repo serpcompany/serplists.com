@@ -1,4 +1,5 @@
 import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
+import { formatExportSummaryMessage } from '@/lib/templates/templateImportSummary';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
@@ -64,6 +65,11 @@ export const exportTemplateFile = (params: {
   }
 
   const { filename, pack } = buildTemplateExportFile(params.template);
+  // A template the portable format cannot hold is left out: say why, never download an empty pack.
+  if (pack.templates.length === 0) {
+    const skipped = pack.manifest?.skippedTemplates ?? [];
+    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped }).message };
+  }
   (params.download ?? downloadBackupFile)(pack, filename);
 
   return { kind: 'ok', assetWarnings: pack.manifest?.assetWarnings ?? 0 };

@@ -442,6 +442,61 @@ describe('portable template import/export API', () => {
     expect((await reimport.json()).imported).toBe(1);
   });
 
+  // A lenient JSON import stores content blocks with a numeric id and null file details.
+  // The export must include the template, cleaned to the portable format, not skip it.
+  it('exports content blocks with a numeric id or null file details instead of skipping the template', async () => {
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      {
+        id: 'template-1',
+        title: 'Launch',
+        description: '',
+        items: JSON.stringify([
+          {
+            id: 's-1',
+            title: 'Prep',
+            items: [
+              {
+                id: 'i-1',
+                title: 'Write copy',
+                contents: [
+                  { id: 1, type: 'file', value: 'https://example.com/a.pdf', fileName: null, fileSize: null, uploadType: null },
+                  { id: 'c-2', type: 'image', value: 'https://example.com/b.png', uploadType: 'link' },
+                ],
+              },
+            ],
+          },
+        ]),
+        rules: null,
+        category: '[]',
+        tags: '[]',
+        user_id: 'user-123',
+        is_public: 0,
+        slug: 'launch',
+        seo_title: '',
+        seo_description: '',
+        created_at: new Date().toISOString(),
+        updated_at: null,
+        version: 1,
+      },
+    ]);
+
+    const response = await handleTemplates(
+      new Request('http://localhost/api/templates/backup', { method: 'GET' }),
+      mockEnv as never,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.manifest.skippedTemplates).toBeUndefined();
+    expect(data.templates).toHaveLength(1);
+    expect(data.templates[0].sections[0].items[0].contents).toEqual([
+      { id: '1', type: 'file', value: 'https://example.com/a.pdf' },
+      { id: 'c-2', type: 'image', value: 'https://example.com/b.png' },
+    ]);
+    const validate = new Ajv({ strict: false }).compile(buildPortableTemplatePackJsonSchema());
+    expect(validate(data), JSON.stringify(validate.errors)).toBe(true);
+  });
+
   describe('templates saved the way the editor saves them', () => {
     const editorRows = () => [
       {

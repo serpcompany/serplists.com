@@ -51,12 +51,14 @@ fixes what the editor can save but the strict schema rejects:
 - a blank section title becomes `Section N` and a blank task title `Task N` (N is the position, as the editor outline shows it)
 - blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
 - sections without tasks are dropped, and an unknown `type` becomes `checklist`
+- on content blocks and sub-tasks, a numeric `id` becomes a string and any other non-string `id` is dropped; on content blocks, a `fileName` that is not a string, a `fileSize` that is not a finite number, and an `uploadType` other than `url` or `upload` (including `null`, which a lenient JSON import can store) are dropped, and so are blank sub-tasks on any block
 
 A template that still fails (for example one with no tasks) is left out of an export
 and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the
 templates written. The export page then shows a warning that names each left-out
 template and its reason instead of the success message, or an error with no download
-when nothing could be exported. On import, it becomes a per-template failure instead
+when nothing could be exported. The template detail page's Export JSON does the same:
+it shows the error and downloads nothing. On import, it becomes a per-template failure instead
 of rejecting the whole file.
 
 `GET /api/templates/backup` exports the active context's own templates (Personal or
