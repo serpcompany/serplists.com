@@ -241,7 +241,9 @@ const ChecklistLibrary = ({
               <EmptyMedia variant="icon">
                 <Filter />
               </EmptyMedia>
-              <EmptyTitle>No templates found</EmptyTitle>
+              <EmptyTitle>
+                <h3>No templates found</h3>
+              </EmptyTitle>
               <EmptyDescription>Try adjusting your search or filters</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
