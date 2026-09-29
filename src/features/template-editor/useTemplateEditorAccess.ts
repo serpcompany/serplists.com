@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -21,10 +21,11 @@ import {
   shouldLoadTemplateCountForLimit,
   type TemplateEditorAccessNotice,
 } from "@/features/template-editor/templateEditorAccess";
+import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import { api } from "@/lib/api";
-import { getBillingStatusQueryKey } from "@/lib/billing";
+import { BILLING_STATUS_QUERY_PREFIX, getBillingStatusQueryKey } from "@/lib/billing";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type TemplateEditorAccessOptions = {
@@ -55,6 +56,11 @@ export const useTemplateEditorAccess = ({
     enabled: Boolean(user) && isCreate,
     retry: false,
   });
+  const queryClient = useQueryClient();
+  // The plan may have changed at Stripe (or in another tab) before the user pressed Back.
+  usePageRestoredFromCache(useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
+  }, [queryClient]));
   // The editor loads its template by id; the workspace list is read only for the count.
   const { allTemplates, templatesLoading } = useTemplateLists({
     workspace: shouldLoadTemplateCountForLimit({
@@ -64,7 +70,9 @@ export const useTemplateEditorAccess = ({
   });
   const [saveNotice, setSaveNotice] = useState<TemplateEditorAccessNotice | null>(null);
   const [draft, setDraft] = useState<StoredTemplateDraft | null>(null);
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  // Set until the browser leaves for checkout; Back from Stripe clears it (the leave
+  // guard re-arms itself on the same restore).
+  const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const userId = user?.id;
   const owner = userId ? { userId, teamId: activeTeamId } : null;
   const context = {

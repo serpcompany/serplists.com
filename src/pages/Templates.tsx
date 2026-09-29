@@ -40,6 +40,7 @@ import {
   reportDashboardTemplateRunFailure,
   useDashboardTemplatesModel,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
@@ -56,7 +57,9 @@ const Templates = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [runName, setRunName] = useState('');
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  // Set until the browser leaves for checkout; Back from Stripe clears it, so the
+  // restored dialog can be closed or submitted again.
+  const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const isLaunchingRun = model.isCreatingRun || isStartingCheckout;
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useViewModePreference({

@@ -7,6 +7,7 @@ import {
   EDITOR_UNSAVED_CHANGES_MESSAGE,
   shouldBlockTemplateEditorTransition,
 } from "@/features/template-editor/navigationGuards";
+import { usePageRestoredFromCache } from "@/hooks/useRedirectPending";
 import { registerLeaveGuard } from "@/lib/navigation/leaveGuard";
 
 // Asks before unsaved template edits are lost, whichever way the user leaves:
@@ -91,6 +92,9 @@ export const useTemplateEditorLeaveGuard = (
   const guardLeave = useCallback(() => {
     leaveAllowedRef.current = false;
   }, []);
+  // Back from that redirect can restore this page from the back/forward cache with the
+  // exit still allowed. The user is here again, so edits made now must ask again.
+  usePageRestoredFromCache(guardLeave);
 
   return { allowLeave, guardLeave };
 };

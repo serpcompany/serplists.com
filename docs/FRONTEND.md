@@ -73,7 +73,9 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   before leaving with a message that says a file is still uploading.
 - A navigation the page starts after it has nothing left to lose (a create that
   saved, or a checkout or sign-in redirect after the draft was kept) is allowed
-  without asking.
+  without asking. Back from checkout can restore the page from the back/forward
+  cache with that exit still allowed, so the guard re-arms on that restore: edits
+  made after coming back are not in the kept draft.
 - An action on the page that replaces the whole form asks the same way. Generating a
   Clipy draft asks before the request when the form has unsaved changes
   (`confirmReplaceTemplateDraft`), locks the editor and Save while it runs so nothing
@@ -207,7 +209,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   (`src/hooks/useRedirectPending.ts`). The flag stays set after the redirect starts,
   so a second click cannot open a second session. Back can restore the page from the
   back/forward cache with its React state intact, so the hook clears the flag on that
-  restore, and Billing and Pricing refetch billing status too.
+  restore, and Billing, Pricing and the template editor refetch billing status too.
+  Every checkout entry point uses it, including the Start Run dialog on My Templates
+  and the editor's Upgrade to Pro; `tests/unit/components/billing-redirect-pending.test.ts`
+  scans `src/` for pending flags next to a checkout or portal call.
 
 ## Template editor forms
 
