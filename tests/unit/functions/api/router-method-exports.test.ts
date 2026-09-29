@@ -1,21 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const HOST = 'http://localhost:8788';
+import { serverContext } from '../../../support/nextServerContext';
+
+vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
+
+// Every /api/* request reaches the API router, whatever its method: HEAD requests once fell
+// through to the static SPA page and answered 200 with HTML. The Next.js route handler
+// src/app/api/[[...route]]/route.ts exports each method Next.js routes, all to the router.
+
+const HOST = 'http://localhost:3000';
 const FILE_KEY = 'template-images/user-1/photo.png';
 const FILE_SIZE = 42;
+const METHODS = ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'] as const;
 
-const PAGES_VERB_EXPORTS: Record<string, string> = {
-  GET: 'onRequestGet',
-  HEAD: 'onRequestHead',
-  POST: 'onRequestPost',
-  PUT: 'onRequestPut',
-  PATCH: 'onRequestPatch',
-  DELETE: 'onRequestDelete',
-  OPTIONS: 'onRequestOptions',
-};
-
-type PagesHandler = (context: { request: Request; env: unknown }) => Promise<Response>;
-type RouterModule = Record<string, unknown> & { default: { fetch: (request: Request, env: unknown) => Promise<Response> } };
+type RouteHandler = (request: Request) => Promise<Response>;
+type RouteModule = Record<(typeof METHODS)[number], RouteHandler>;
 
 function fakeR2Bucket() {
   return {
@@ -36,54 +35,44 @@ function fakeR2Bucket() {
   };
 }
 
-function buildEnv() {
-  return {
+function useEnv() {
+  const env = {
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     R2_UPLOADS: fakeR2Bucket(),
-  } as any;
+  };
+  serverContext.env = env;
+  return env;
 }
 
-async function loadRouter(): Promise<RouterModule> {
-  return (await import('../../../../functions/api/[[route]].ts')) as unknown as RouterModule;
+async function loadRoute(): Promise<RouteModule> {
+  return (await import('../../../../src/app/api/[[...route]]/route')) as unknown as RouteModule;
 }
 
-// Mirrors the router wrangler builds for Pages (templates/pages-template-worker.ts):
-// a verb export matches only its exact method, `onRequest` matches any method, and
-// with neither the request falls through to static assets, whose SPA fallback
-// answers 200 with index.html.
-function pagesHandlerFor(router: RouterModule, method: string): PagesHandler | undefined {
-  const verbExport = router[PAGES_VERB_EXPORTS[method]];
-  const handler = typeof verbExport === 'function' ? verbExport : router.onRequest;
-  return typeof handler === 'function' ? (handler as PagesHandler) : undefined;
-}
-
-async function pagesFetch(router: RouterModule, request: Request, env: unknown): Promise<Response> {
-  const handler = pagesHandlerFor(router, request.method);
-  if (!handler) {
-    return new Response(request.method === 'HEAD' ? null : '<!doctype html>', {
-      headers: { 'Content-Type': 'text/html' },
-    });
-  }
-  return handler({ request, env });
+// As Next.js calls the route: the handler exported for the request's method.
+async function send(request: Request): Promise<Response> {
+  const route = await loadRoute();
+  return route[request.method as (typeof METHODS)[number]](request);
 }
 
 // Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router Pages exports', { timeout: 30_000 }, () => {
+describe('API route handler methods', { timeout: 30_000 }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
   });
 
-  it.each(Object.keys(PAGES_VERB_EXPORTS))('routes %s requests to the API, not the SPA fallback', async (method) => {
-    const router = await loadRouter();
-    expect(pagesHandlerFor(router, method)).toBeTypeOf('function');
+  it('exports every method Next.js routes, all to the same handler', async () => {
+    const route = await loadRoute();
+
+    expect(Object.keys(route).sort()).toEqual([...METHODS]);
+    for (const method of METHODS) expect(route[method]).toBe(route.GET);
   });
 
   it('answers HEAD /api/health from the API with no body', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const router = await loadRouter();
+    useEnv();
 
-    const response = await pagesFetch(router, new Request(`${HOST}/api/health`, { method: 'HEAD' }), buildEnv());
+    const response = await send(new Request(`${HOST}/api/health`, { method: 'HEAD' }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('application/json');
@@ -91,16 +80,14 @@ describe('API router Pages exports', { timeout: 30_000 }, () => {
     expect(await response.text()).toBe('');
   });
 
-  it('answers HEAD for a missing upload with a JSON 404, not the SPA page', async () => {
+  it('answers HEAD for a missing upload with a JSON 404, not a page', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const router = await loadRouter();
+    useEnv();
 
-    const response = await pagesFetch(
-      router,
+    const response = await send(
       new Request(`${HOST}/api/uploads/file?key=${encodeURIComponent('template-images/user-1/missing.png')}`, {
         method: 'HEAD',
       }),
-      buildEnv(),
     );
 
     expect(response.status).toBe(404);
@@ -110,13 +97,10 @@ describe('API router Pages exports', { timeout: 30_000 }, () => {
 
   it("answers HEAD for an upload with the file's headers and without reading it", async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const router = await loadRouter();
-    const env = buildEnv();
+    const env = useEnv();
 
-    const response = await pagesFetch(
-      router,
+    const response = await send(
       new Request(`${HOST}/api/uploads/file?key=${encodeURIComponent(FILE_KEY)}`, { method: 'HEAD' }),
-      env,
     );
 
     expect(response.status).toBe(200);
@@ -126,29 +110,13 @@ describe('API router Pages exports', { timeout: 30_000 }, () => {
     expect(env.R2_UPLOADS.get).not.toHaveBeenCalled();
   });
 
-  it('answers PATCH from the API instead of the SPA page', async () => {
+  it('answers PATCH from the API instead of a page', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const router = await loadRouter();
+    useEnv();
 
-    const response = await pagesFetch(
-      router,
-      new Request(`${HOST}/api/nothing-here`, { method: 'PATCH' }),
-      buildEnv(),
-    );
+    const response = await send(new Request(`${HOST}/api/nothing-here`, { method: 'PATCH' }));
 
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type') ?? '').not.toContain('text/html');
-  });
-
-  it('dispatches the default export the same way as the Pages export', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
-    const router = await loadRouter();
-
-    for (const method of ['HEAD', 'OPTIONS']) {
-      const viaPages = await pagesFetch(router, new Request(`${HOST}/api/health`, { method }), buildEnv());
-      const viaDefault = await router.default.fetch(new Request(`${HOST}/api/health`, { method }), buildEnv());
-      expect(viaDefault.status).toBe(viaPages.status);
-      expect(await viaDefault.text()).toBe(await viaPages.text());
-    }
   });
 });

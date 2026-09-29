@@ -28,11 +28,7 @@ import { authJsonError, jsonError } from './utils/response';
 import { isPersonalRunMcpEnabled, isPersonalRunMcpPath } from './utils/personal-run-mcp-feature';
 
 function isLocalRequest(url: URL): boolean {
-  return (
-    url.hostname === 'localhost' ||
-    url.hostname === '127.0.0.1' ||
-    url.port === '8788'
-  );
+  return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
 }
 
 function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: boolean): boolean {
@@ -48,18 +44,15 @@ function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: bo
   );
 }
 
-// Pages matches a verb export (onRequestGet, ...) on the exact method only and
-// sends any other method, HEAD included, to the static assets, whose SPA fallback
-// answers 200 with index.html. One catch-all keeps every /api/* method on the API.
-export const onRequest = dispatch;
-
-// Default export for module workers (required for tests). It shares the Pages
-// dispatcher, so tests exercise the routing production uses.
-export default {
+// The API router. The Next.js route handler src/app/api/[[...route]]/route.ts hands it every
+// /api/* request, whatever the method (HEAD and OPTIONS included), with the Worker's bindings.
+const api = {
   fetch(request: Request, env: Env): Promise<Response> {
     return dispatch({ request, env });
-  }
+  },
 };
+
+export default api;
 
 function dispatch(context: { request: Request; env: Env }): Promise<Response> {
   if (context.request.method === 'OPTIONS') {
