@@ -315,7 +315,7 @@ const TemplateDetail = () => {
     setIsDeleting(true);
     try {
       await deleteTemplate(displayTemplate.id);
-      toast.success('Template deleted');
+      toast.success('Template archived');
       if (visit.isCurrent()) {
         navigate(buildConsoleTemplatesPath());
       } else {

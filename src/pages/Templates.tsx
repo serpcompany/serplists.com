@@ -176,11 +176,11 @@ const Templates = () => {
     setIsDeletingTemplate(true);
     try {
       await model.removeTemplate(templateToDelete);
-      toast.success('Template deleted');
+      toast.success('Template archived');
       setTemplateToDelete(null);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to delete template.',
+        error instanceof Error ? error.message : 'Failed to archive template.',
       );
     } finally {
       setIsDeletingTemplate(false);
@@ -395,10 +395,11 @@ const Templates = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete template</DialogTitle>
+            <DialogTitle>Archive template</DialogTitle>
+            {/* DELETE archives it and makes it private; /dashboard/archive restores it. */}
             <DialogDescription>
-              Are you sure you want to delete this template? This removes it
-              from your library and cannot be undone.
+              The template moves to Archive, where it can be restored. A public
+              template becomes private.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -416,7 +417,7 @@ const Templates = () => {
               disabled={isDeletingTemplate}
               onClick={() => void handleDeleteTemplate()}
             >
-              {isDeletingTemplate ? 'Deleting...' : 'Delete'}
+              {isDeletingTemplate ? 'Archiving...' : 'Archive'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
+  Archive,
   Copy,
   Edit3,
   FileText,
@@ -8,7 +9,6 @@ import {
   Lock,
   MoreHorizontal,
   Play,
-  Trash2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -115,8 +115,8 @@ export function TemplateCard({
                       className="text-destructive"
                       onClick={() => onDelete(template.id)}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
+                      <Archive className="mr-2 h-4 w-4" />
+                      Archive
                     </DropdownMenuItem>
                   </>
                 ) : null}
