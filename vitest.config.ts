@@ -1,6 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
+// Date rendering depends on the local timezone. Pin it so tests pass the same way on every
+// machine and in CI. Workers inherit this environment.
+process.env.TZ = 'UTC';
+
 export default defineConfig({
   test: {
     globals: true,

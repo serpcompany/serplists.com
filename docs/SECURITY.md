@@ -14,7 +14,11 @@
 - **Production blocks known test-email domains** at sign-up and sign-in.
 - **Agents act through Run Keys**, revocable credentials limited to reading
   Personal templates and listing, starting, reading, and updating Personal runs.
-  Keys are stored hashed. The MCP routes are off on remote hosts unless
+  Keys are stored hashed, and each user can hold at most 10 active keys (enforced in
+  one insert statement, so parallel requests cannot exceed it). Every authenticated
+  MCP request logs `mcp_request` with its request ID and key ID, and tool calls also
+  log `mcp_tool_call` with the tool name (never the secret), so a key being abused
+  can be found and revoked. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.
@@ -79,7 +83,12 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
   requests per 5 minutes on deployed hosts; 300 per hour locally for testing.
 - Sensitive writes (`POST`/`PUT`/`DELETE` under templates, checklists, uploads, the
   legacy Organization routes `teams`, and Run Key/MCP writes): 120 per minute.
-- MCP also limits each authenticated Run Key to 120 requests per minute.
+- MCP also limits each authenticated Run Key to 120 requests per minute, and refuses an
+  IP after 10 failed authentications in a minute, before the D1 key lookup.
+- Cloudflare WAF rate-limiting rule `MCP rate limit` (zone `serplists.com`, Free plan,
+  the zone's only rate-limiting slot): `http.host eq "serplists.com" and
+  starts_with(http.request.uri.path, "/api/mcp")`, 20 requests per 10 seconds per IP,
+  then Block for 10 seconds. Unlike the in-memory limits, it applies across all edges.
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is
