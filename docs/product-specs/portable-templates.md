@@ -56,7 +56,8 @@ A template that still fails (for example one with no tasks) is left out of an ex
 and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the
 templates written. The export page then shows a warning that names each left-out
 template and its reason instead of the success message, or an error with no download
-when nothing could be exported. On import, it becomes a per-template failure instead
+when nothing could be exported. The template detail page's Export JSON does the same
+for its one template: an error naming the reason, and no download. On import, it becomes a per-template failure instead
 of rejecting the whole file.
 
 `GET /api/templates/backup` exports the active context's own templates (Personal or
