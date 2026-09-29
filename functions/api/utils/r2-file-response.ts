@@ -40,12 +40,18 @@ export function parseRangeHeader(value: string | null): RangeRequest {
   return { kind: 'partial', range: { offset, length: end - offset + 1 } };
 }
 
-/** First and last byte served for `range` of an object of `size` bytes, or null when unsatisfiable. */
+/**
+ * First and last byte served for `range` of an object of `size` bytes, or null when
+ * unsatisfiable. The range an R2 object reports can list every field, with the ones that
+ * do not apply undefined (workerd's local R2 does: `{ offset: 0, length: 2, suffix: undefined }`),
+ * so a suffix range is one whose `suffix` is a number.
+ */
 export function resolveByteRange(range: R2Range, size: number): { start: number; end: number } | null {
-  if ('suffix' in range) {
+  if ('suffix' in range && typeof range.suffix === 'number') {
     if (range.suffix <= 0 || size === 0) return null;
     return { start: Math.max(0, size - range.suffix), end: size - 1 };
   }
+  if (!('offset' in range) && !('length' in range)) return null;
   const start = range.offset ?? 0;
   if (start >= size) return null;
   const end = range.length === undefined ? size - 1 : Math.min(start + range.length, size) - 1;
