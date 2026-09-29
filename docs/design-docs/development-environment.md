@@ -144,7 +144,7 @@ commands and the staging/production model are in
 ```bash
 pnpm run verify           # pre-PR gate
 pnpm run test:run         # unit tests (pnpm run test for watch mode)
-pnpm run test:local-d1    # local D1 fixture integration
+pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
 pnpm run test:e2e:full    # every browser spec on the same stack
 pnpm run test:coverage
