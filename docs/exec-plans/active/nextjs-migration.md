@@ -30,7 +30,7 @@ The same as the approved reference:
 
 ## Architecture decisions
 
-- **Pages Router conflict:** `src/pages/` moves to `src/views/`, so Next.js does not treat it
+- **Pages Router conflict:** the old src/pages folder moves to `src/views/`, so Next.js does not treat it
   as the Pages Router.
 - **Public pages** render on the server, with their metadata from the Metadata API
   (`generateMetadata` for the template, profile, category and shared-run pages). Every page
