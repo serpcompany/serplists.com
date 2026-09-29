@@ -132,8 +132,10 @@ template only when both the owner and the slug match (an official `serp` copy of
 starter, where the repo entry wins); another owner's template with the same slug
 stays listed. The API also treats every bundled starter slug as taken
 (`functions/api/utils/reserved-template-slugs.ts`, read from the generated sitemap
-catalog): create, import, clone and a slug change get the `-<id8>` suffix instead,
-while a Template that already holds such a slug keeps it. Repo templates are dated
+catalog), and every UUID, since the template page and its link preview read
+`/profile/<owner>/<uuid>` as a template id first: create, import, clone and a slug
+change get the `-<id8>` suffix instead, while a Template that already holds such a
+slug keeps it (a UUID the id lookup does not match is then tried as a slug). Repo templates are dated
 by their pack's `exportedAt` (a fixed fallback date when it is missing or invalid,
 never the page-load time), which drives the library's Recent sort and their
 published date, so bump `exportedAt` when a pack's content changes. Saving a repo

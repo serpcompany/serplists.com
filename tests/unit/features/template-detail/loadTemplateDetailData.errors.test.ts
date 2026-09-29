@@ -159,3 +159,87 @@ describe('public template detail load failures', () => {
     expect(otherOwner).toEqual({ kind: 'not_found' });
   });
 });
+
+// Templates saved before UUID slugs were refused can have a slug that looks like an id, and
+// their public URL (Share, sitemap, canonical) is built from it.
+describe('public template with a UUID-shaped slug', () => {
+  const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+
+  it('loads it by slug after the id lookup finds nothing', async () => {
+    const apiClient = buildApiClient({
+      getTemplateById: vi.fn().mockRejectedValue(createApiError(404)),
+      getTemplateBySlug: vi.fn().mockResolvedValue(serverRow({ slug: UUID_SLUG })),
+    });
+
+    const result = await loadTemplateDetailData(publicOptions(UUID_SLUG), { apiClient });
+
+    expect(apiClient.getTemplateById).toHaveBeenCalledWith(UUID_SLUG);
+    expect(apiClient.getTemplateBySlug).toHaveBeenCalledWith(UUID_SLUG);
+    expect(result.kind === 'ok' ? result.template.id : result).toBe(TEMPLATE_UUID);
+  });
+
+  it.each([
+    ['owned by someone else', { owner_username: 'bob' }],
+    ['private', { is_public: false }],
+  ])('loads it by slug when the template with that id is %s', async (_label, idRow) => {
+    const apiClient = buildApiClient({
+      getTemplateById: vi.fn().mockResolvedValue(serverRow({ id: UUID_SLUG, title: 'Other', ...idRow })),
+      getTemplateBySlug: vi.fn().mockResolvedValue(serverRow({ slug: UUID_SLUG })),
+    });
+
+    const result = await loadTemplateDetailData(publicOptions(UUID_SLUG), { apiClient });
+
+    expect(result.kind === 'ok' ? result.template.title : result).toBe('Camping Checklist');
+  });
+
+  it('still prefers the template with that id', async () => {
+    const apiClient = buildApiClient({
+      getTemplateById: vi.fn().mockResolvedValue(serverRow()),
+    });
+
+    const result = await loadTemplateDetailData(publicOptions(TEMPLATE_UUID), { apiClient });
+
+    expect(result.kind).toBe('ok');
+    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
+  });
+
+  it('is not found when neither lookup finds a public template of this owner', async () => {
+    const missing = await loadTemplateDetailData(publicOptions(UUID_SLUG), {
+      apiClient: buildApiClient({
+        getTemplateById: vi.fn().mockRejectedValue(createApiError(404)),
+        getTemplateBySlug: vi.fn().mockRejectedValue(createApiError(404)),
+      }),
+    });
+    const otherOwner = await loadTemplateDetailData(publicOptions(UUID_SLUG), {
+      apiClient: buildApiClient({
+        getTemplateById: vi.fn().mockResolvedValue(serverRow({ owner_username: 'bob' })),
+        getTemplateBySlug: vi.fn().mockResolvedValue(serverRow({ owner_username: 'bob' })),
+      }),
+    });
+
+    expect(missing).toEqual({ kind: 'not_found' });
+    expect(otherOwner).toEqual({ kind: 'not_found' });
+  });
+
+  it('reports a server error from the id lookup without a slug lookup', async () => {
+    const apiClient = buildApiClient({
+      getTemplateById: vi.fn().mockRejectedValue(createApiError(503, { error: 'Service unavailable' })),
+    });
+
+    const result = await loadTemplateDetailData(publicOptions(UUID_SLUG), { apiClient });
+
+    expect(result).toEqual({ kind: 'error', message: 'Service unavailable' });
+    expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
+  });
+
+  it('reports a server error from the slug lookup as an error', async () => {
+    const result = await loadTemplateDetailData(publicOptions(UUID_SLUG), {
+      apiClient: buildApiClient({
+        getTemplateById: vi.fn().mockRejectedValue(createApiError(404)),
+        getTemplateBySlug: vi.fn().mockRejectedValue(createApiError(500)),
+      }),
+    });
+
+    expect(result.kind).toBe('error');
+  });
+});

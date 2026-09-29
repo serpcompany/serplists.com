@@ -1,8 +1,8 @@
-import { generateSlug } from '../../../src/lib/utils/slug';
+import { generateSlug, looksLikeTemplateId } from '../../../src/lib/utils/slug';
 import { TEMPLATE_SLUG_MAX } from '../../../src/lib/schemas/templateLimits';
 
 // The slug rule itself is shared with the page and the sitemap, so their URLs match.
-export { generateSlug };
+export { generateSlug, looksLikeTemplateId };
 
 /** Cuts a slug to `max` characters without leaving a trailing hyphen. */
 export function truncateSlug(slug: string, max: number): string {

@@ -1,20 +1,19 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { templates, users } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
 import { withEdgeCache } from '../api/utils/edge-cache';
+import { looksLikeTemplateId } from '../api/utils/slug';
 import type { PublicTemplateRecord } from './public-page-meta';
 
-// Humans and crawlers both open template pages, so each lookup is one indexed row
-// (idx_templates_slug_unique, or the primary key for an id), and a found template is
-// cached in the data center for 5 minutes like the public catalog
-// (docs/design-docs/d1-cost.md). A template made private can keep its preview for that long.
+// Humans and crawlers both open template pages, so each lookup reads one indexed row
+// (idx_templates_slug_unique, or the primary key for an id; a UUID no id matches reads a
+// second one by slug), and a found template is cached in the data center for 5 minutes
+// like the public catalog (docs/design-docs/d1-cost.md). A template made private can keep
+// its preview for that long.
 const CACHE_TTL_SECONDS = 5 * 60;
-
-// The page treats a UUID as a template id and anything else as a slug.
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const recordSchema = z.object({
   id: z.string(),
@@ -26,8 +25,7 @@ const recordSchema = z.object({
   ownerUsername: z.string().nullable(),
 });
 
-async function queryPublicTemplate(env: Env, identifier: string): Promise<PublicTemplateRecord | null> {
-  const match = UUID_PATTERN.test(identifier) ? eq(templates.id, identifier) : eq(templates.slug, identifier);
+async function selectPublicTemplate(env: Env, match: SQL): Promise<PublicTemplateRecord | null> {
   const [row] = await createDb(env)
     .select({
       id: templates.id,
@@ -45,6 +43,16 @@ async function queryPublicTemplate(env: Env, identifier: string): Promise<Public
     .where(and(match, sql`+${templates.is_public} = 1`, isNull(templates.deleted_at)))
     .limit(1);
   return row?.id ? recordSchema.parse(row) : null;
+}
+
+// Like the page: a UUID is read as a template id first, then as a slug, since a slug saved
+// before the API refused UUID slugs can look like an id. Anything else is a slug.
+async function queryPublicTemplate(env: Env, identifier: string): Promise<PublicTemplateRecord | null> {
+  if (looksLikeTemplateId(identifier)) {
+    const byId = await selectPublicTemplate(env, eq(templates.id, identifier));
+    if (byId) return byId;
+  }
+  return selectPublicTemplate(env, eq(templates.slug, identifier));
 }
 
 /** The public, not deleted template with this slug or id, or null. */

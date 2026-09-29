@@ -33,3 +33,12 @@ export function generateSlug(text: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
+
+const TEMPLATE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * True for a UUID, the shape of a template id. The public template page and its link
+ * preview read one after /profile/<user>/ as an id before trying it as a slug, so the API
+ * never gives a template a slug of this shape.
+ */
+export const looksLikeTemplateId = (value: string): boolean => TEMPLATE_ID_PATTERN.test(value);

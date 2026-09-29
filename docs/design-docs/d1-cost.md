@@ -80,7 +80,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So does
      the template lookup behind a template page's link-preview tags
-     (`functions/seo/public-template-lookup.ts`), a single-row read by slug or id.
+     (`functions/seo/public-template-lookup.ts`), a single-row read by slug or id (a
+     UUID that matches no public id reads one more row, by slug).
 
    Locally the cache persists in `.wrangler/state/v3/cache`; delete it to see
    uncommitted changes to cached responses.

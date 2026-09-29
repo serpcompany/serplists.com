@@ -5,6 +5,7 @@ import {
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import { looksLikeTemplateId } from '@/lib/utils/slug';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -36,17 +37,13 @@ export type TemplateDetailDependencies = {
   apiClient?: TemplateDetailApiClient;
 };
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
-
 const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
   isNotFoundError(error)
     ? { kind: 'not_found' }
     : { kind: 'error', message: getAccessFailure(error, 'Unable to load template.').message };
 
-// A slug never looks like an id, so only a 404 for another identifier is worth a slug lookup.
+// The app links a private template by its id, and the API never hands out a slug that
+// looks like one, so only a 404 for another identifier is worth a slug lookup.
 const fetchPrivateTemplate = async (
   identifier: string,
   apiClient: TemplateDetailApiClient,
@@ -54,12 +51,47 @@ const fetchPrivateTemplate = async (
   try {
     return await apiClient.getTemplateById(identifier);
   } catch (error) {
-    if (isUuidLike(identifier) || !isNotFoundError(error)) {
+    if (looksLikeTemplateId(identifier) || !isNotFoundError(error)) {
       throw error;
     }
   }
 
   return apiClient.getTemplateBySlug(identifier);
+};
+
+// The template with this id, or null when there is none (404).
+const findTemplateById = async (
+  identifier: string,
+  apiClient: TemplateDetailApiClient,
+): Promise<unknown> => {
+  try {
+    return await apiClient.getTemplateById(identifier);
+  } catch (error) {
+    if (isNotFoundError(error)) return null;
+    throw error;
+  }
+};
+
+// The template as the public page shows it, or null when it is not public or another
+// user owns it.
+const toOwnedPublicTemplate = async (
+  rawTemplate: unknown,
+  options: { identifier: string; ownerUsername: string },
+  apiClient: TemplateDetailApiClient,
+): Promise<ChecklistTemplate | null> => {
+  const mappedTemplate = await hydrateTemplateOwner(
+    mapApiTemplateToChecklistTemplate(
+      rawTemplate as Record<string, unknown>,
+      options.identifier,
+    ),
+    apiClient,
+  );
+  const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
+
+  return mappedTemplate.isPublic &&
+    ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()
+    ? mappedTemplate
+    : null;
 };
 
 export const loadTemplateDetailData = async (
@@ -90,27 +122,30 @@ export const loadTemplateDetailData = async (
       return { kind: 'ok', template: libraryTemplate };
     }
 
+    const publicOptions = {
+      identifier: options.identifier,
+      ownerUsername: options.ownerUsername,
+    };
     try {
-      const rawTemplate = isUuidLike(options.identifier)
-        ? await apiClient.getTemplateById(options.identifier)
-        : await apiClient.getTemplateBySlug(options.identifier);
-      const mappedTemplate = await hydrateTemplateOwner(
-        mapApiTemplateToChecklistTemplate(
-          rawTemplate as Record<string, unknown>,
-          options.identifier,
-        ),
-        apiClient,
-      );
-      const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
-
-      if (
-        !mappedTemplate.isPublic ||
-        ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
-      ) {
-        return { kind: 'not_found' };
+      // A UUID is read as an id first. A slug saved before the API refused UUID slugs can
+      // look like one too, so when the id finds nothing this owner shares, try the slug.
+      if (looksLikeTemplateId(publicOptions.identifier)) {
+        const byId = await findTemplateById(publicOptions.identifier, apiClient);
+        const template =
+          byId === null
+            ? null
+            : await toOwnedPublicTemplate(byId, publicOptions, apiClient);
+        if (template) {
+          return { kind: 'ok', template };
+        }
       }
 
-      return { kind: 'ok', template: mappedTemplate };
+      const template = await toOwnedPublicTemplate(
+        await apiClient.getTemplateBySlug(publicOptions.identifier),
+        publicOptions,
+        apiClient,
+      );
+      return template ? { kind: 'ok', template } : { kind: 'not_found' };
     } catch (error) {
       return classifyLoadFailure(error);
     }
