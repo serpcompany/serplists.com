@@ -4,6 +4,7 @@ import {
   buildTemplateCopyPayload,
   mapApiTemplateToChecklistTemplate,
 } from '@/features/template-detail/templateDetailMappers';
+import { toPublicTemplate } from '@functions/api/utils/template-public';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 const template = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
@@ -29,6 +30,16 @@ describe('mapApiTemplateToChecklistTemplate', () => {
     );
 
     expect(mapped.teamId).toBe('team-b');
+  });
+
+  // The public template page's "Updated <date>" reads the public response's updated_at, which
+  // the API already sends (PUBLIC_TEMPLATE_FIELDS), so the page costs no extra read.
+  it('keeps the last update of a public template response, falling back to its creation', () => {
+    const row = { id: 'template-1', title: 'Launch', user_id: 'user-1', is_public: 1, created_at: '2026-01-05 12:00:00' };
+
+    expect(mapApiTemplateToChecklistTemplate(toPublicTemplate({ ...row, updated_at: '2026-09-02 12:00:00' }), 'launch').updatedAt)
+      .toBe('2026-09-02 12:00:00');
+    expect(mapApiTemplateToChecklistTemplate(toPublicTemplate(row), 'launch').updatedAt).toBe('2026-01-05 12:00:00');
   });
 
   it.each([null, '', undefined])('leaves a Personal template without an Organization (team_id %s)', (teamId) => {

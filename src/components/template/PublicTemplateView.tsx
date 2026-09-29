@@ -31,6 +31,7 @@ import {
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
@@ -113,6 +114,11 @@ export function PublicTemplateView({
   const ownerName =
     template.ownerProfile?.full_name || template.ownerProfile?.username || 'Template Library';
   const TypeIcon = template.type === 'recipe' ? List : FileText;
+  // When the Template last changed, as the template detail page's "Last updated" shows it (in
+  // the viewer's zone: the page loads its template in the browser, so the server never renders
+  // it). Nothing when the date is unreadable.
+  const lastUpdated = template.updatedAt || template.createdAt;
+  const updatedDate = formatLocalDate(lastUpdated);
 
   const setSectionOpen = (sectionId: string, open: boolean) => {
     setExpandedSections((current) => {
@@ -204,6 +210,11 @@ export function PublicTemplateView({
           ) : (
             <div className="flex items-center gap-2">{owner}</div>
           )}
+          {updatedDate ? (
+            <p>
+              Updated <time dateTime={normalizeDbTimestamp(lastUpdated) ?? undefined}>{updatedDate}</time>
+            </p>
+          ) : null}
           {template.categories?.length ? (
             <div className="flex flex-wrap gap-1.5">
               {template.categories.map((category) => {

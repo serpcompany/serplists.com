@@ -72,6 +72,31 @@ const template: ChecklistTemplate = {
   updatedAt: '2026-03-24T00:00:00.000Z',
 };
 
+// "Updated <date>" under the description, as the reference's detail pages and the private
+// template page ("Last updated") show it. Midday UTC, so the date is the same in any zone.
+describe('PublicTemplateView updated date', () => {
+  it('says when the Template was last updated', () => {
+    const html = renderView({
+      template: { ...template, createdAt: '2026-01-05T12:00:00.000Z', updatedAt: '2026-09-02T12:00:00.000Z' },
+    });
+
+    expect(html).toContain('<p>Updated <time dateTime="2026-09-02T12:00:00.000Z">9/2/2026</time></p>');
+  });
+
+  it('reads a database timestamp and falls back to the created date', () => {
+    const html = renderView({ template: { ...template, createdAt: '2026-01-05 12:00:00', updatedAt: '' } });
+
+    expect(html).toContain('Updated <time dateTime="2026-01-05T12:00:00.000Z">1/5/2026</time>');
+  });
+
+  it('shows no date it cannot read', () => {
+    const html = renderView({ template: { ...template, createdAt: '', updatedAt: 'not a date' } });
+
+    expect(html).not.toContain('Updated');
+    expect(html).not.toContain('Invalid Date');
+  });
+});
+
 describe('PublicTemplateView', () => {
   it('renders the v0-style public template detail surface', () => {
     navigation.reset('/');

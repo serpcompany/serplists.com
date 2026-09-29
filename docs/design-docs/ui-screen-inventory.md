@@ -235,9 +235,10 @@ existing content, invent nothing):
 - Preview images: card media show the item's icon in a muted area instead.
 - The featured carousel, the right rail, the FAQ accordion and the "Recently published" list.
 - Category tiles on Home (they need the public catalog, which Home must not load).
-- On detail pages: the "Updated <date>" line, the LinkedIn and X share buttons, and the
-  section nav. The public template page shows no date today, and its old section nav was
-  removed on purpose (`tests/unit/components/PublicTemplateView.test.tsx`).
+- On detail pages: the LinkedIn and X share buttons, and the section nav (the public template
+  page's old section nav was removed on purpose,
+  `tests/unit/components/PublicTemplateView.test.tsx`). The "Updated <date>" line is copied
+  on the public template page since 2026-09-29.
 - The reference's tinted icon tiles: icon tiles use the neutral muted token (no custom
   colors).
 
@@ -600,9 +601,10 @@ existing content, invent nothing):
     "Start Run and Save wait until they load. Check your connection and try again, or continue
     in Personal.", "Retry", "Continue in Personal".
   - The header: an icon tile by template type, the title, the description, the owner's
-    avatar and name (a link to the Public Profile), the category badges (links to category
-    pages; plain for a category with no page), and "Share" (outline), "Save" (outline) and
-    "Start Run" (primary).
+    avatar and name (a link to the Public Profile), "Updated <date>" (the Template's last
+    update in the viewer's date format, as template detail's "Last updated"; left out when
+    unreadable), the category badges (links to category pages; plain for a category with no
+    page), and "Share" (outline), "Save" (outline) and "Start Run" (primary).
   - Beside it (below it on phones), a panel: "Sections", "Tasks", "Type" (checklist or
     recipe).
   - "What's included": one collapsible card per section (number, title, "N tasks",
@@ -632,12 +634,12 @@ existing content, invent nothing):
   - The Organization error notice above.
 - **NAVIGATION TYPE:** child page (push from the discovery pages).
 - **PATTERN CHOICE (decided):** [Detail page](#detail-page).
-  - Breadcrumb: Home › Templates › the Template's title. The Templates link replaces "Back"
-    and goes to the same place.
-  - Header: an icon tile by template type, the big title, the description, the category
-    chips, the owner's avatar and name link, and the actions "Share" (outline), "Save"
-    (outline) and "Start Run" (primary) with their existing labels and states. A panel on the
-    right holds the Sections, Tasks and Type stats.
+  - Breadcrumb: Home › Template Library › the Template's title. The Template Library link
+    replaces "Back" and goes to the same place.
+  - Header: an icon tile by template type, the big title, the description, the category chips,
+    the owner's avatar and name link, "Updated <date>", and the actions "Share" (outline),
+    "Save" (outline) and "Start Run" (primary) with their existing labels and states. A panel
+    on the right holds the Sections, Tasks and Type stats.
   - Below: "What's included" (the collapsible section previews), the tags, and the "Ready to
     use this template?" card with Save and Start Run.
 - **REFERENCE IMAGES:** pattern-detail-1.png (breadcrumb, header, right panel);
@@ -646,8 +648,8 @@ existing content, invent nothing):
   - LAYOUT ZONES:
     - Breadcrumb row.
     - The Organization error notice, when shown.
-    - Header, two columns: left: icon tile, title, description, category chips, owner, action
-      row; right: stats panel.
+    - Header, two columns: left: icon tile, title, description, a meta row (owner, updated
+      date, category chips), action row; right: stats panel.
     - Body: "What's included" (section cards), a tags row, the call-to-action card.
   - COMPONENT TYPES: breadcrumb; icon tile; heading; muted paragraph; chip link; avatar with a
     name link; outline and primary buttons; stats panel (3 rows: icon, value, label);
@@ -655,7 +657,7 @@ existing content, invent nothing):
     (number, title, description, content blocks); tag list; call-to-action card (title, text,
     two buttons); alert.
   - DATA FIELDS: title; description; type; categories (name, category URL); owner (name,
-    initial, Public Profile URL); section count; task count; sections (title, task count;
+    initial, Public Profile URL); last update (`updatedAt`, else `createdAt`); section count; task count; sections (title, task count;
     tasks with title, description, content blocks); tags; Save and Start Run labels; the
     role-aware call-to-action text.
 - **PROOF PASS:** Pass (step 1): template-desktop-light-signed-out.png,
@@ -665,7 +667,10 @@ existing content, invent nothing):
   reference's order: breadcrumb (home icon › section › item); a two-column header (icon
   tile, big title, description, meta, a row of outline buttons with the primary action;
   a panel on the right); a divider; the content. Left out on purpose ([Not
-  copied](#not-copied)): the "Updated" date, the LinkedIn and X buttons, the section nav.
+  copied](#not-copied)): the LinkedIn and X buttons, the section nav. The "Updated" date,
+  added on 2026-09-29, sits in the meta row as in pattern-detail-1.png:
+  `tmp/design-review/decisions/public-template-updated-desktop-signed-out.png` and
+  `public-template-updated-mobile-signed-out.png`.
 - **NOTES:**
   - Code: `src/views/PublicTemplate.tsx` (loading, error and not-found states, on the Empty
     block) and `src/components/template/PublicTemplateView.tsx` (the page, on
@@ -1916,9 +1921,6 @@ Found while reading the code; none is decided here.
 - Categories shows nothing (no message) when a search matches no category.
 - The Template editor's outline has a fixed width and no phone layout.
 - The Start Run dialog's fields have no visible labels.
-- The reference shows an "Updated <date>" line on detail pages. The public template page
-  could show the Template's last update (the private detail page already says "Last
-  updated").
 - The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
   category page already has a color per built-in category that the tiles could use.
 - On phones the console's context switcher sits in the sidebar sheet, so the active context

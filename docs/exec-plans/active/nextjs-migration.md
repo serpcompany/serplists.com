@@ -409,3 +409,8 @@ Each of these needs the user's approval, or happens with the domain move:
   Features" reach it); the Features menu shows as current there. Closed menus stay in the HTML,
   hidden (`keepMounted`), so crawlers keep finding the pages they link. A link closes its menu
   (`closeOnClick`), because the header stays mounted across client navigations.
+- 2026-09-29: **"Updated <date>" on the public template page**, as the reference's detail
+  pages show it. The public template response already carries `updated_at`
+  (`PUBLIC_TEMPLATE_FIELDS`), so nothing changed in the API or its D1 reads; the page formats it
+  like template detail's "Last updated" (`formatLocalDate`, in the viewer's zone). The page
+  loads its template in the browser, so the server never renders a date in another zone.
