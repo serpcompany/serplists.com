@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
@@ -13,7 +13,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { publicHeaderLinks } from '@/components/layout/publicSiteLinks';
+import { publicHeaderItems, type PublicSiteLink } from '@/components/layout/publicSiteLinks';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { APP_BRAND_NAME } from '@/lib/brand';
@@ -22,8 +22,43 @@ import { cn } from '@/lib/utils';
 
 import { Link } from '@/components/navigation/Link';
 
-// The menu body: the same header links as the desktop nav (so a new header link shows up
-// on phones too), the theme switch, and the account actions.
+type MenuLinkProps = { link: PublicSiteLink; onNavigate: () => void; pathname: string };
+
+function MobileMenuLink({ link, onNavigate, pathname }: MenuLinkProps) {
+  const active = isPathWithin(pathname, link.href);
+  return (
+    <Link
+      href={link.href}
+      onClick={onNavigate}
+      aria-current={active ? 'page' : undefined}
+      className={cn(buttonVariants({ variant: active ? 'secondary' : 'ghost' }), 'justify-start')}
+    >
+      {link.label}
+    </Link>
+  );
+}
+
+// A header menu's links under its label, as a named group.
+function MobileMenuGroup({
+  label,
+  links,
+  ...linkProps
+}: { label: string; links: readonly PublicSiteLink[] } & Omit<MenuLinkProps, 'link'>) {
+  const labelId = useId();
+  return (
+    <div role="group" aria-labelledby={labelId} className="flex flex-col gap-1">
+      <p id={labelId} className="px-2.5 text-xs font-medium text-muted-foreground">
+        {label}
+      </p>
+      {links.map((link) => (
+        <MobileMenuLink key={link.href} link={link} {...linkProps} />
+      ))}
+    </div>
+  );
+}
+
+// The menu body: the desktop header's navigation, its menus as groups (so a new header link
+// shows up on phones too), the theme switch, and the account actions.
 export const PublicMobileMenu = ({
   onNavigate,
   pathname,
@@ -33,25 +68,21 @@ export const PublicMobileMenu = ({
   pathname: string;
   signedIn: boolean;
 }) => (
-  <div className="flex flex-col gap-4 px-4 pb-4">
-    <nav aria-label="Site" className="flex flex-col gap-1">
-      {publicHeaderLinks.map((item) => {
-        const active = isPathWithin(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            aria-current={active ? 'page' : undefined}
-            className={cn(
-              buttonVariants({ variant: active ? 'secondary' : 'ghost' }),
-              'justify-start',
-            )}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+  <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+    <nav aria-label="Site" className="flex flex-col gap-4">
+      {publicHeaderItems.map((item) =>
+        item.kind === 'menu' ? (
+          <MobileMenuGroup
+            key={item.label}
+            label={item.label}
+            links={item.links}
+            onNavigate={onNavigate}
+            pathname={pathname}
+          />
+        ) : (
+          <MobileMenuLink key={item.link.href} link={item.link} onNavigate={onNavigate} pathname={pathname} />
+        ),
+      )}
     </nav>
 
     <Separator />

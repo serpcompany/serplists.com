@@ -48,10 +48,11 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
   `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New
   console screens compose these instead of new page chrome.
-- **Public header on phones:** below `md` the public shell hides its nav links, Log in
+- **Public header on phones:** below `md` the public shell hides its navigation, Log in
   and the theme switch, and `src/components/layout/PublicMobileNav.tsx` shows them in a
-  sheet built from `publicHeaderLinks`, so a new header link reaches phones too. Its
-  button sits before the brand. The console shell opens its sidebar as a sheet instead.
+  sheet built from `publicHeaderItems` (each header menu becomes a labelled group of its
+  links), so a new header link reaches phones too. Its button sits before the brand. The
+  console shell opens its sidebar as a sheet instead.
 
 ## Shells and layout blocks
 
@@ -61,9 +62,10 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | Block | File | What it is |
 | --- | --- | --- |
 | Shell switch | `src/components/Layout.tsx` | Picks the console shell or the public shell from the path |
-| `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the site links in a `NavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
-| `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` |
-| `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and the site links), the page and the site footer |
+| `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the `SiteNavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
+| `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (a title and a muted description per link), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links |
+| `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` (Templates, Company, Support) |
+| `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and, from `md` up, the `SiteNavigationMenu` aligned right), the page and the site footer |
 | `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. Its rows are 44px tall, full-size targets (32px squares when collapsed). On phones it opens as its own sheet |
 | `AccountMenu`, `SidebarAccountMenu` | `AccountMenu.tsx` | The signed-in user's `DropdownMenu` (console pages, Profile, Sign out), from an avatar button in the header or the sidebar footer row; both are named "Account menu" |
 | `PageContainer`, `PageSection` | `page-shell.tsx` | The page width (`max-w-6xl`, `px-4 md:px-6`) and a band of vertical spacing |

@@ -398,3 +398,14 @@ Each of these needs the user's approval, or happens with the domain move:
   action ("Browse the Template Library"). My Runs' empty-state button, which opened My
   Templates under that label, now opens the library its label names. The header's
   "Templates" stays. ESLint's vocabulary rule flags the old names in UI code.
+- 2026-09-29: **Header menus.** The user asked for the reference's dropdowns (this supersedes
+  "Header links without dropdowns" above): "Templates" lists the Template Library and
+  Categories, "Features" the four feature pages, and "Pricing" stays a link
+  (`SiteNavigationMenu`, shadcn's NavigationMenu on Base UI). Each link carries its page's own
+  description, so the menus add no new copy. The phone sheet shows the same menus as labelled
+  groups, the console's top bar uses the same component, and the footer gains a "Templates"
+  column with the same two links, so `/categories/` is linked from the header and the footer.
+  The `/features/` overview is no longer in the header (Home's "Explore Features" and "Back to
+  Features" reach it); the Features menu shows as current there. Closed menus stay in the HTML,
+  hidden (`keepMounted`), so crawlers keep finding the pages they link. A link closes its menu
+  (`closeOnClick`), because the header stays mounted across client navigations.

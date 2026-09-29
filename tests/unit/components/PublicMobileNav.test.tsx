@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PublicMobileMenu } from '@/components/layout/PublicMobileNav';
-import { publicHeaderLinks } from '@/components/layout/publicSiteLinks';
+import { publicHeaderItems } from '@/components/layout/publicSiteLinks';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -17,13 +17,25 @@ const renderMenu = (pathname: string, signedIn: boolean) => {
 };
 
 describe('PublicMobileMenu', () => {
-  it('gives visitors every header link plus Log in and Get started', () => {
+  it('gives visitors every header link, grouped like the header menus, plus Log in and Get started', () => {
     const html = renderMenu('/', false);
 
-    publicHeaderLinks.forEach((link) => {
-      expect(html).toContain(`href="${link.href}"`);
-      expect(html).toContain(`>${link.label}</a>`);
-    });
+    for (const item of publicHeaderItems) {
+      const links = item.kind === 'menu' ? item.links : [item.link];
+      for (const link of links) {
+        expect(html).toContain(`href="${link.href}"`);
+        expect(html).toContain(`>${link.label}</a>`);
+      }
+      if (item.kind === 'menu') {
+        // A named group: role="group", labelled by the menu's label, around its links.
+        const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${item.label}</p>`))?.[1];
+        expect(labelId, item.label).toBeTruthy();
+        const start = html.indexOf(`<div role="group" aria-labelledby="${labelId}"`);
+        expect(start, item.label).toBeGreaterThanOrEqual(0);
+        const group = html.slice(start, html.indexOf('</div>', start));
+        for (const link of item.links) expect(group, `${item.label}: ${link.label}`).toContain(`href="${link.href}"`);
+      }
+    }
     expect(html).toContain('href="/login/"');
     expect(html).toContain('>Log in</a>');
     expect(html).toContain('href="/register/"');

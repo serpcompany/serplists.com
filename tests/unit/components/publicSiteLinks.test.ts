@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   publicFooterGroups,
-  publicHeaderLinks,
+  publicHeaderItems,
   publicSiteLinks,
 } from '@/components/layout/publicSiteLinks';
 
@@ -34,15 +34,45 @@ describe('public site links', () => {
     }
   });
 
-  it('renders no empty footer column and keeps the header links', () => {
+  it('renders no empty footer column', () => {
     expect(publicFooterGroups.length).toBeGreaterThan(0);
     for (const group of publicFooterGroups) {
       expect(group.items.length, group.title).toBeGreaterThan(0);
     }
-    expect(publicHeaderLinks.map((link) => link.label)).toEqual([
-      'Templates',
-      'Features',
-      'Pricing',
+  });
+
+  // The header: "Templates" and "Features" menus, then Pricing as one link.
+  it('groups the header into the Templates and Features menus and the Pricing link', () => {
+    expect(
+      publicHeaderItems.map((item) =>
+        item.kind === 'menu'
+          ? { menu: item.label, links: item.links.map((link) => `${link.label} ${link.href}`) }
+          : { link: `${item.link.label} ${item.link.href}` },
+      ),
+    ).toEqual([
+      { menu: 'Templates', links: ['Template Library /templates/', 'Categories /categories/'] },
+      {
+        menu: 'Features',
+        links: [
+          'Template Builder /features/template-builder/',
+          'Checklist Runs /features/checklist-runs/',
+          'Public Sharing /features/public-sharing/',
+          'Import + Export /features/import-export/',
+        ],
+      },
+      { link: 'Pricing /pricing/' },
+    ]);
+    // Each menu link says what the page is, in the page's own words.
+    for (const item of publicHeaderItems) {
+      if (item.kind === 'menu') for (const link of item.links) expect(link.description, link.label).toBeTruthy();
+    }
+  });
+
+  it('links the Template Library and Categories from the footer too', () => {
+    expect(publicFooterGroups.map((group) => [group.title, group.items.map((item) => item.href)])).toEqual([
+      ['Templates', ['/templates/', '/categories/']],
+      ['Company', ['/about/']],
+      ['Support', ['/contact/']],
     ]);
   });
 });

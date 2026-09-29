@@ -17,7 +17,7 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
 - **Public shell:** site header and site footer. Every page in the `(site)` route group, and
   the 404 page on public paths.
 - **Console shell:** the console sidebar (shadcn's Sidebar block, a sheet on phones), a top
-  bar with the sidebar trigger and the site links, and the site footer. Every page under
+  bar with the sidebar trigger and the public header's navigation, and the site footer. Every page under
   `/dashboard/`. These pages sit in the `(app)` route group, which checks the session first:
   a signed-out visitor goes to `/login/?next=<path>`.
 - **No shell:** the shared run page, `/share/<token>/`. A guest may have no account, so it
@@ -126,8 +126,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   row → Category page.
 - **Public Profile:** Public template page → owner name → Public Profile → template card →
   Public template page. Signed in: account menu → "Profile" (opens a new tab).
-- **Features:** header "Features" → Features → feature card → Feature page → "Browse the
-  Template Library" or "See Pricing".
+- **Features:** header "Features" menu → a Feature page → "Browse the Template Library" or
+  "See Pricing". Or Home "Explore Features" → Features → a feature card → Feature page.
 - **Upgrade and billing:** Pricing → "Upgrade — $9/month" → Stripe Checkout → back →
   Account Settings → Billing → "Manage subscription" → Stripe Customer Portal. Or Account
   Settings → "Upgrade to Pro — $9/month".
@@ -145,8 +145,8 @@ Each step is a screen, and a quoted label is the control that moves the user on.
 
 Every page route in `src/app`. The screen names link to their cards.
 
-Shell overlays on every public page: the menu sheet below `md` and, signed in, the account
-menu. On every console page: the context switcher and the account menu, both in the sidebar,
+Shell overlays on every public page: the header's "Templates" and "Features" menus (from `md`
+up), the menu sheet below `md` and, signed in, the account menu. On every console page: the context switcher and the account menu, both in the sidebar,
 which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 
 ### Public site
@@ -154,11 +154,11 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
 | `/` | [Home](ui-screen-inventory.md#home) | Root section (brand link) | Shell overlays | Primary button: "Get Started" signed out, "Open Dashboard" signed in |
-| `/templates/` | [Template Library](ui-screen-inventory.md#template-library) | Root section (header "Templates", sidebar "Template Library") | Shell overlays | Search, category filter and sort (Popular, Trending, Recent) kept in the URL; skeleton; empty; catalog error |
-| `/categories/` | [Categories](ui-screen-inventory.md#categories) | Child page (a category page's "All Categories"; the console's "Categories") | Shell overlays | Category search; skeletons; catalog error |
+| `/templates/` | [Template Library](ui-screen-inventory.md#template-library) | Root section (header "Templates" menu and footer "Templates" column: "Template Library"; sidebar "Template Library") | Shell overlays | Search, category filter and sort (Popular, Trending, Recent) kept in the URL; skeleton; empty; catalog error |
+| `/categories/` | [Categories](ui-screen-inventory.md#categories) | Root section (header "Templates" menu and footer "Templates" column: "Categories"; sidebar "Categories"; a category page's "All Categories") | Shell overlays | Category search; skeletons; catalog error |
 | `/categories/<slug>/` | [Category page](ui-screen-inventory.md#category-page) | Child page of the library and Categories | Shell overlays; sort select | Grid or list; search; sort; skeleton; empty; catalog error; an unknown category shows the 404 view |
-| `/features/` | [Features](ui-screen-inventory.md#features) | Root section (header "Features") | Shell overlays | None |
-| `/features/<slug>/` | [Feature page](ui-screen-inventory.md#feature-page) | Child page of Features | Shell overlays | An unknown slug shows the 404 view |
+| `/features/` | [Features](ui-screen-inventory.md#features) | Child page (Home "Explore Features", a feature page's "Back to Features"; the header's "Features" menu marks it) | Shell overlays | None |
+| `/features/<slug>/` | [Feature page](ui-screen-inventory.md#feature-page) | Root section (header "Features" menu) and child page of Features | Shell overlays | An unknown slug shows the 404 view |
 | `/pricing/` | [Pricing](ui-screen-inventory.md#pricing) | Root section (header "Pricing") | Shell overlays | The Pro card's action follows the plan state |
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
 | `/contact/` | [Contact](ui-screen-inventory.md#contact) | Root section (footer "Contact") | Shell overlays | None |

@@ -180,7 +180,8 @@ describe('App public route parity', () => {
     expect(html).toContain('Template Library');
     expect(html).toContain('Browse by Category');
     expect(html).toContain('href="/templates/"');
-    expect(html).toContain('href="/features/"');
+    expect(html).toContain('href="/categories/"');
+    expect(html).toContain('href="/features/template-builder/"');
     expect(html).toContain('href="/pricing/"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist/"');
     expect(html).not.toContain('href="/dashboard/runs/');

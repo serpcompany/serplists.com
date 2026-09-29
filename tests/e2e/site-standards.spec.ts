@@ -95,16 +95,24 @@ test.describe('URL form', () => {
     });
     await page.goto('/');
     const header = page.getByRole('banner');
-    for (const [name, path] of [
-      ['Templates', '/templates/'],
-      ['Features', '/features/'],
-      ['Pricing', '/pricing/'],
+    // "Templates" and "Features" open menus of their pages (in a popup outside the header).
+    const openMenu = page.locator('[data-slot="navigation-menu-content"][data-open]');
+    for (const [menu, name, path] of [
+      ['Templates', 'Template Library', '/templates/'],
+      ['Templates', 'Categories', '/categories/'],
+      ['Features', 'Template Builder', '/features/template-builder/'],
+      ['Features', 'Import + Export', '/features/import-export/'],
     ] as const) {
-      await header.getByRole('link', { name, exact: true }).click();
+      await header.getByRole('button', { name: menu, exact: true }).click();
+      await openMenu.getByRole('link', { name, exact: true }).click();
       await expect(page).toHaveURL(`${APP_URL}${path}`);
     }
+    await header.getByRole('link', { name: 'Pricing', exact: true }).click();
+    await expect(page).toHaveURL(`${APP_URL}/pricing/`);
     const footer = page.getByRole('contentinfo');
     for (const [name, path] of [
+      ['Template Library', '/templates/'],
+      ['Categories', '/categories/'],
       ['About', '/about/'],
       ['Contact', '/contact/'],
     ] as const) {

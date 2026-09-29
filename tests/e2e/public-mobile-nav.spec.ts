@@ -1,8 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 // Below the md breakpoint the public header hides its nav links and Log in; the menu
-// button is how phone visitors reach them.
-const MENU_LINKS = ['Templates', 'Features', 'Pricing', 'Log in', 'Get started'];
+// button is how phone visitors reach them. The header's menus are groups in the sheet.
+const MENU_GROUPS = {
+  Templates: ['Template Library', 'Categories'],
+  Features: ['Template Builder', 'Checklist Runs', 'Public Sharing', 'Import + Export'],
+};
+const MENU_LINKS = ['Pricing', 'Log in', 'Get started'];
 
 test.describe('public navigation on phones', () => {
   test.use({ viewport: { width: 390, height: 844 } });
@@ -16,6 +20,12 @@ test.describe('public navigation on phones', () => {
       await menuButton.click();
 
       const menu = page.getByRole('dialog');
+      for (const [group, labels] of Object.entries(MENU_GROUPS)) {
+        const links = menu.getByRole('group', { name: group });
+        for (const label of labels) {
+          await expect(links.getByRole('link', { name: label, exact: true })).toBeVisible();
+        }
+      }
       for (const label of MENU_LINKS) {
         await expect(menu.getByRole('link', { name: label, exact: true })).toBeVisible();
       }
@@ -33,6 +43,18 @@ test.describe('public navigation on phones', () => {
 
     await expect(page).toHaveURL(/\/pricing\/$/);
     await expect(page.getByRole('dialog')).toBeHidden();
+  });
+
+  test('opens Categories from the Templates group and marks it there next time', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Open menu' }).click();
+    const templates = page.getByRole('dialog').getByRole('group', { name: 'Templates' });
+    await templates.getByRole('link', { name: 'Categories', exact: true }).click();
+
+    await expect(page).toHaveURL(/\/categories\/$/);
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await page.getByRole('button', { name: 'Open menu' }).click();
+    await expect(templates.getByRole('link', { name: 'Categories', exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
   test('fits the header on a 320px screen', async ({ page }) => {

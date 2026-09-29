@@ -227,9 +227,9 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 Left out because the app has no such feature, content or copy (the brief: rearrange the
 existing content, invent nothing):
 
-- The header's search button, "Newsletter" button and dropdown menus. The header's three
-  links are single destinations; a dropdown would take away a one-click link or add links the
-  header does not have ([open questions](#open-questions)).
+- The header's search button and "Newsletter" button. Its dropdown menus are copied since
+  2026-09-29: "Templates" (the Template Library and Categories) and "Features" (the four
+  feature pages).
 - The floating "Feedback" widget, social links ("Subscribe to newsletter", "Follow on
   LinkedIn"), the copyright line and the footer's dark band.
 - Preview images: card media show the item's icon in a muted area instead.
@@ -252,19 +252,25 @@ existing content, invent nothing):
   paths.
 - **WHAT'S ON THE SCREEN:**
   - Sticky header: brand link (the grid mark on the primary color and "SERP Lists") on the
-    left; in the middle a NavigationMenu with "Templates", "Features", "Pricing" (the current
-    one highlighted and marked as the current page); on the right a theme toggle (outline
+    left; in the middle the "Site" NavigationMenu: "Templates" and "Features" open dropdowns
+    (each link with its page's description: "Template Library" and "Categories"; "Template
+    Builder", "Checklist Runs", "Public Sharing" and "Import + Export" in 2 columns), and
+    "Pricing" is a link. The current page's link is highlighted and marked as the current
+    page, and so is the menu that holds it (Features also on `/features/`). On the right a
+    theme toggle (outline
     icon button named "Switch to dark mode" or "Switch to light mode"), then "Log in" (ghost)
     and "Get started" (primary) signed out, or the [account menu](#account-menu) (avatar with
     the user's initial) signed in.
-  - Below `md`: the links, "Log in" and the theme toggle hide; "Get started" or the avatar
-    stays; a menu button ("Open menu") before the brand opens the [public menu
+  - Below `md`: the navigation, "Log in" and the theme toggle hide; "Get started" or the
+    avatar stays; a menu button ("Open menu") before the brand opens the [public menu
     sheet](#public-menu-sheet).
   - The page, inside the route error boundary.
   - Footer: brand link and "Build repeatable checklists, publish them cleanly, and run them
-    like operations."; columns "Company" ("About") and "Support" ("Contact").
+    like operations."; columns "Templates" ("Template Library", "Categories"), "Company"
+    ("About") and "Support" ("Contact").
 - **PRIMARY ACTION:** "Get started" → [Register](#register) (signed out).
-- **SECONDARY ACTIONS:** header links; "Log in"; theme toggle; account menu; footer links.
+- **SECONDARY ACTIONS:** the header's menus and links; "Log in"; theme toggle; account menu;
+  footer links.
 - **STATES:**
   - Signed out, or signed in (the account menu replaces "Log in" and "Get started").
   - A page that crashes: a "Something went wrong" card ("This page could not be shown. Try
@@ -273,40 +279,56 @@ existing content, invent nothing):
 - **NAVIGATION TYPE:** shell; its links are root sections.
 - **PATTERN CHOICE (decided):** [Site header](#site-header) and [Multi-column
   footer](#multi-column-footer).
-  - Header: brand link on the left; a centered shadcn NavigationMenu with the three existing
-    links as plain links (no dropdowns: each is one destination); on the right the theme
-    toggle icon button, then "Log in" (ghost) and "Get started" (primary) signed out, or the
-    account menu (avatar dropdown) signed in. Below `md` a menu button opens the same links,
-    the theme switch and the account actions in a Sheet.
-  - Footer: brand and the existing blurb, then the existing columns "Company" (About) and
-    "Support" (Contact).
+  - Header: brand link on the left; a centered shadcn NavigationMenu: "Templates" and
+    "Features" as dropdowns of their pages (the user's decision of 2026-09-29), "Pricing" as
+    a link; on the right the theme toggle icon button, then "Log in" (ghost) and "Get started"
+    (primary) signed out, or the account menu (avatar dropdown) signed in. Below `md` a menu
+    button opens the same menus as labelled groups, the theme switch and the account actions
+    in a Sheet.
+  - Footer: brand and the existing blurb, then the columns "Templates" (the header's
+    Templates menu: Template Library and Categories), "Company" (About) and "Support"
+    (Contact).
   - Not copied: the search button, the Newsletter button, the feedback widget, social links,
     the copyright line.
 - **REFERENCE IMAGES:** home-1.png, home-2.png, home-mobile.png (header); home-8.png,
   home-9.png (footer).
 - **STRUCTURE (built):**
   - LAYOUT ZONES: top: sticky header (full width, content in the page container, hairline
-    bottom border). Header zones: brand left; navigation menu center (3 items); actions right.
+    bottom border). Header zones: brand left; navigation menu center (2 dropdowns and a link);
+    actions right.
     Phone: menu button, brand, primary button or avatar. Middle: the page. Bottom: footer
     band: brand column (brand link, blurb), link columns (heading, links).
-  - COMPONENT TYPES: navigation menu link (active state); icon button; ghost button; primary
-    button; avatar dropdown trigger; sheet; footer column.
-  - DATA FIELDS: brand name; navigation item (label, href, active); user initial; blurb;
-    footer column title; footer link (label, href).
+  - COMPONENT TYPES: navigation menu trigger (a dropdown with titled links and their
+    descriptions; active state); navigation menu link (active state); icon button; ghost
+    button; primary button; avatar dropdown trigger; sheet; footer column.
+  - DATA FIELDS: brand name; navigation item (label, href or menu links, active); menu link
+    (label, description, href, active); user initial; blurb; footer column title; footer link
+    (label, href).
 - **PROOF PASS:** Pass (step 1). Checked on the header and footer of every step 1
   screenshot, and on public-menu-mobile-light-signed-out.png, against home-1.png,
   home-2.png, home-mobile.png, home-8.png and home-9.png. Zones, order and component types
   match: brand left, centered navigation, an icon button and a primary button right; on
   phones the menu button, the brand and the primary button; a footer with a brand column and
   link columns. The first pass had the phone menu button after the actions; it moved before
-  the brand. Left out on purpose ([Not copied](#not-copied)): the navigation dropdowns, the
-  search and Newsletter buttons, social links, the copyright row.
+  the brand. Left out on purpose ([Not copied](#not-copied)): the search and Newsletter
+  buttons, social links, the copyright row. The navigation dropdowns the reference has were
+  added on 2026-09-29 and checked against home-1.png on
+  `tmp/design-review/decisions/header-templates-menu-desktop-signed-out.png`,
+  `header-features-menu-desktop-signed-out.png` (and the signed-in pair) and
+  `phone-menu-sheet-mobile-signed-out.png`: a trigger with a chevron opens a panel of links
+  under the header, as there.
 - **NOTES:**
   - Code: `src/components/Layout.tsx` picks the shell. The header is
     `src/components/layout/SiteHeader.tsx`, the phone sheet
     `src/components/layout/PublicMobileNav.tsx` and the footer
-    `src/components/layout/SiteFooter.tsx`. The header links come from one list
-    (`src/components/layout/publicSiteLinks.ts`), so a new link reaches the phone menu too.
+    `src/components/layout/SiteFooter.tsx`. The header's navigation is
+    `src/components/layout/SiteNavigationMenu.tsx`, and its menus and links come from one
+    list (`publicHeaderItems` in `src/components/layout/publicSiteLinks.ts`), so a new link
+    reaches the phone menu and the console's top bar too. Closed menus stay in the HTML,
+    hidden, so crawlers find every page they link.
+  - Base UI's navigation menu keeps an empty "navigation" landmark (its popup) at the end of
+    the page while a menu is open; the menu's links are read inside the header's "Site"
+    navigation.
   - The footer's empty "Network" column is left out.
 
 ### Signed-in console shell
@@ -325,7 +347,8 @@ existing content, invent nothing):
     email). The current section is highlighted and marked as the current page. It collapses
     to an icon rail (the trigger, Ctrl or Cmd+B, or its rail), with tooltips for the labels.
   - Right: a sticky top bar with the sidebar trigger ("Toggle Sidebar") and, from `md` up,
-    the site links "Templates", "Features", "Pricing"; the page; the site footer.
+    the public header's navigation (the "Templates" and "Features" menus, "Pricing"),
+    aligned right; the page; the site footer.
   - Below `md`: the sidebar opens as a sheet from the top bar's trigger.
 - **PRIMARY ACTION:** "New Template" → [Template editor](#template-editor).
 - **SECONDARY ACTIONS:** sidebar links; context switcher; account menu; theme toggle; the site
@@ -490,7 +513,8 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Template Library (`/templates/`)
 - **PURPOSE:** Browse, search and filter every Public Template, then open one.
-- **HOW USER GETS HERE:** header "Templates"; sidebar "Template Library"; "Browse the Template
+- **HOW USER GETS HERE:** "Template Library" in the header's "Templates" menu, the phone menu
+  sheet and the footer's "Templates" column; sidebar "Template Library"; "Browse the Template
   Library" on Home, Features, feature pages, My Runs' empty state, a missing or failed
   template page and a shared run; Home "View all templates"; after a guest completes a shared
   Run; the breadcrumb's "Template Library" on a template page.
@@ -657,8 +681,9 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Categories ("Browse Categories", `/categories/`)
 - **PURPOSE:** List the template categories with their counts.
-- **HOW USER GETS HERE:** "All Categories" on a category page; the console sidebar's
-  "Categories"; the address.
+- **HOW USER GETS HERE:** "Categories" in the header's "Templates" menu, the phone menu
+  sheet and the footer's "Templates" column; "All Categories" on a category page; the console
+  sidebar's "Categories".
 - **WHAT'S ON THE SCREEN:** title "Browse Categories" and "Explore templates organized by
   category to find exactly what you need."; search "Search categories..."; "Popular
   Categories": 4 tiles (colored icon tile, name, "N templates"); "All Categories": rows (icon
@@ -760,8 +785,9 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Features (`/features/`)
 - **PURPOSE:** Summarize what the product does.
-- **HOW USER GETS HERE:** header "Features"; "Explore Features" on Home and About; "Back to
-  Features".
+- **HOW USER GETS HERE:** "Explore Features" on Home and About; "Back to Features" on a
+  feature page. The header's "Features" menu lists the feature pages, not this overview, and
+  shows as the current section here.
 - **WHAT'S ON THE SCREEN:** hero: eyebrow "Features", title "Features that keep work
   consistent.", "Build checklists once, then run them repeatedly with confidence. SERP Lists
   focuses on clarity, repeatability, and simple sharing.", "See Pricing" (primary), "Browse the
@@ -788,8 +814,9 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Feature page (`/features/<slug>/`)
 - **PURPOSE:** Describe one feature.
-- **HOW USER GETS HERE:** a card on Features. The slugs are `template-builder`,
-  `checklist-runs`, `public-sharing` and `import-export`.
+- **HOW USER GETS HERE:** the header's "Features" menu (and its group in the phone menu
+  sheet); a card on Features. The slugs are `template-builder`, `checklist-runs`,
+  `public-sharing` and `import-export`.
 - **WHAT'S ON THE SCREEN:** "Back to Features" (ghost); a card: large icon badge, title,
   description, 3 bullets, "Browse the Template Library" (primary), "See Pricing" (outline).
 - **PRIMARY ACTION:** "Browse the Template Library" → [Template Library](#template-library).
@@ -1504,24 +1531,29 @@ existing content, invent nothing):
 - **SCREEN NAME:** Public menu sheet
 - **PURPOSE:** Give phones the header's links and actions.
 - **HOW USER GETS HERE:** the public header's menu button ("Open menu"), below `md`.
-- **WHAT'S ON THE SCREEN:** a sheet from the left titled "SERP Lists"; the "Site" links
-  "Templates", "Features", "Pricing" (the current one marked); a separator; the theme toggle
+- **WHAT'S ON THE SCREEN:** a sheet from the left titled "SERP Lists"; the "Site" navigation,
+  with the header's menus as labelled groups: "Templates" ("Template Library",
+  "Categories"), "Features" ("Template Builder", "Checklist Runs", "Public Sharing", "Import
+  + Export"), then "Pricing" (the current page's link marked); a separator; the theme toggle
   with its label; signed out "Log in" (outline) and "Get started" (primary); signed in
-  "Dashboard" (primary).
+  "Dashboard" (primary). The list scrolls when the screen is too short.
 - **PRIMARY ACTION:** a link.
 - **SECONDARY ACTIONS:** theme toggle; "Log in"; "Get started"; "Dashboard".
 - **STATES:** signed out or signed in; it closes on any navigation, Back and Forward included.
 - **NAVIGATION TYPE:** sheet.
-- **PATTERN CHOICE (decided):** a shadcn Sheet with the same links, the theme switch and the
-  account actions ([Public shell](#public-shell)).
+- **PATTERN CHOICE (decided):** a shadcn Sheet with the header's menus as groups of links,
+  the theme switch and the account actions ([Public shell](#public-shell)).
 - **REFERENCE IMAGES:** home-mobile.png (the menu button).
 - **STRUCTURE (built):**
-  - LAYOUT ZONES: header (brand); link list; divider; theme toggle; action buttons.
-  - COMPONENT TYPES: sheet; navigation link with an active state; toggle; buttons.
-  - DATA FIELDS: link (label, href, active); signed-in flag.
+  - LAYOUT ZONES: header (brand); link groups (a muted label over its links), then a link;
+    divider; theme toggle; action buttons.
+  - COMPONENT TYPES: sheet; group label; navigation link with an active state; toggle;
+    buttons.
+  - DATA FIELDS: group (label, links); link (label, href, active); signed-in flag.
 - **PROOF PASS:** Pass (step 1): public-menu-mobile-light-signed-out.png,
   public-menu-mobile-dark-signed-out.png; the reference shows only the button
-  (home-mobile.png), which now sits before the brand as there.
+  (home-mobile.png), which now sits before the brand as there. The groups (2026-09-29):
+  `tmp/design-review/decisions/phone-menu-sheet-mobile-signed-out.png`.
 - **NOTES:** TBD which account actions the sheet lists when signed in (today only
   "Dashboard").
 
@@ -1882,13 +1914,8 @@ Found while reading the code; none is decided here.
 - A missing path under `/dashboard/` renders the 404 page inside the console shell, also for
   a signed-out visitor: `src/app/not-found.tsx` renders the shell without the session check.
 - Categories shows nothing (no message) when a search matches no category.
-- `/categories/` has no link in the public header or footer; only a category page's "All
-  Categories" and the console sidebar's "Categories" reach it.
 - The Template editor's outline has a fixed width and no phone layout.
 - The Start Run dialog's fields have no visible labels.
-- Header dropdowns: the reference groups its navigation in dropdown menus. The header's
-  three links are single destinations, so step 1 keeps them as links. Candidates if wanted:
-  "Features" with the four feature pages, "Templates" with the library and Categories.
 - The reference shows an "Updated <date>" line on detail pages. The public template page
   could show the Template's last update (the private detail page already says "Last
   updated").

@@ -140,15 +140,16 @@ test('library filters follow the URL and clearing the search keeps the page', as
     name: 'Ultimate Camping Checklist',
   });
 
-  // The header link to a plain /templates resets a search typed on the page.
+  // The header's link to a plain /templates resets a search typed on the page.
   await page.goto('/templates/');
   await expect(campingCard).toBeVisible();
   await searchBox.fill('zzzz-no-such-template');
   await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
   await expect(campingCard).toHaveCount(0);
+  await page.getByRole('banner').getByRole('button', { name: 'Templates', exact: true }).click();
   await page
-    .locator('header nav')
-    .getByRole('link', { name: 'Templates', exact: true })
+    .locator('[data-slot="navigation-menu-content"][data-open]')
+    .getByRole('link', { name: 'Template Library', exact: true })
     .click();
   await expect(page).toHaveURL(/\/templates\/$/);
   await expect(searchBox).toHaveValue('');

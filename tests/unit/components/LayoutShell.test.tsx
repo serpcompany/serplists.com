@@ -77,9 +77,11 @@ describe('Layout shell selection', () => {
     expect(html).not.toContain('>Profile<');
     expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Light mode');
-    // The top bar: the sidebar trigger and the site links.
+    // The top bar: the sidebar trigger and the site navigation (its menus and Pricing).
     expect(html).toContain('Toggle Sidebar');
-    expect(html).toContain('href="/features/"');
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Templates/);
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Features/);
+    expect(html).toContain('href="/features/template-builder/"');
     expect(html).toContain('href="/pricing/"');
     expect(html).toContain('Build repeatable checklists');
   });
