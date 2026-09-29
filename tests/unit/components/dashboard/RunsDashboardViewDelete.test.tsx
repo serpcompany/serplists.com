@@ -1,6 +1,5 @@
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
@@ -17,6 +16,10 @@ import {
   installFakeDomGlobals,
   type FakeNode,
 } from '../../../fixtures/fakeDom';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 // The API's DELETE only archives a run: /dashboard/archive lists it and restores it. The
 // runs list must say so, not that the action "cannot be undone". Drives the real view; only
@@ -84,10 +87,9 @@ async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
   const container = createFakeContainer();
   root = createRoot(container as unknown as Element);
   await act(async () => {
+    navigation.reset('/');
     root?.render(
-      <MemoryRouter>
-        <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} />
-      </MemoryRouter>,
+      <RunsDashboardView runs={[run]} getRunPermissions={() => PERSONAL_PERMISSIONS} onDeleteRun={onDeleteRun} />,
     );
   });
   return container;

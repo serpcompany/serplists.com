@@ -1,7 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -12,6 +11,10 @@ import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { normalizeTemplateEditorDetailsForSave } from '@/lib/forms/templateEditorDetailsForm';
 import { parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // A template listing one category twice, as "SEO" and "seo" or "QA" and "Q&A" (same slug),
 // counted twice: /categories said "SEO - 2 templates" while the SEO page listed one. Imports
@@ -102,10 +105,9 @@ describe('category lists at the write boundary', () => {
 
 describe('template card category pills', () => {
   it('show each category once, without duplicate keys', () => {
+    navigation.reset('/templates');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/templates">
-        <TemplateCard template={template('pills', ['SEO', 'SEO', 'seo', 'Ops'])} />
-      </StaticRouter>,
+      <TemplateCard template={template('pills', ['SEO', 'SEO', 'seo', 'Ops'])} />,
     );
 
     const pills = [...html.matchAll(/rounded-full bg-secondary[^>]*>([^<]*)</g)].map((match) => match[1]);

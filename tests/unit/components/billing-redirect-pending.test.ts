@@ -20,9 +20,10 @@ const listSourceFiles = (dir: string): string[] =>
     return /\.tsx?$/.test(entry.name) ? [relative] : [];
   });
 
-// A call that can send the browser to Stripe Checkout or the Customer Portal.
+// A call that can send the browser to Stripe Checkout or the Customer Portal (Pricing's
+// goes through src/features/billing/pricingBilling.ts).
 const REDIRECT_CALL =
-  /\b(?:startBillingCheckout|handleUpgradeRequiredForContext|createBillingCheckout|createBillingPortal)\s*\(/;
+  /\b(?:startBillingCheckout|handleUpgradeRequiredForContext|createBillingCheckout|createBillingPortal|createPersonalCheckoutUrl)\s*\(/;
 // A pending flag that stays set while the browser leaves.
 const REDIRECT_FLAG = /^is\w*(?:Checkout|Portal|Redirect)\w*$/;
 const STATE_PAIR = /\[\s*(\w+)\s*,\s*\w+\s*\]\s*=\s*(\w+)\s*(?:<[^>]*>)?\s*\(/g;

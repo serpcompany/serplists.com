@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // A Personal context never waits on the teams request, but when it failed the switcher must
@@ -41,13 +40,17 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
 });
 
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
+import { navigation } from '../../../support/nextNavigation';
 
-const renderSwitcher = () =>
-  renderToStaticMarkup(
-    <StaticRouter location="/dashboard/settings">
-      <WorkspaceSwitcher />
-    </StaticRouter>,
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
+
+const renderSwitcher = () => {
+  navigation.reset('/dashboard/settings');
+  return renderToStaticMarkup(
+    <WorkspaceSwitcher />,
   );
+};
 
 const count = (html: string, text: string) => html.split(text).length - 1;
 

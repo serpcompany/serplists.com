@@ -1,12 +1,47 @@
 import { readFileSync } from 'node:fs';
+import { PHASE_PRODUCTION_SERVER } from 'next/constants';
+import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
+import { matchHas } from 'next/dist/shared/lib/router/utils/prepare-destination';
 import { describe, expect, it } from 'vitest';
 
+import nextConfigFor from '../../../next.config';
 import { buildCanonicalUrl, CANONICAL_ORIGIN, isIndexableHost } from '@/lib/seo/siteOrigin';
 
-type HeaderRule = { pattern: string; headers: Array<[string, string]> };
+// Only https://serplists.com may be indexed. The Worker's pages and API responses get their
+// headers from next.config.ts; the static files Workers Static Assets serves without running
+// the Worker get theirs from public/_headers. Both must mark staging and every *.workers.dev
+// host noindex, and neither may touch production.
 
-const parseHeadersFile = (source: string): HeaderRule[] => {
-  const rules: HeaderRule[] = [];
+type Header = { key: string; value: string };
+type HeaderRule = {
+  source: string;
+  headers: Header[];
+  has?: Parameters<typeof matchHas>[2];
+  missing?: Parameters<typeof matchHas>[3];
+};
+
+const nextHeaderRules = (await nextConfigFor(PHASE_PRODUCTION_SERVER).headers?.()) as HeaderRule[];
+
+// Matched the way the built routes manifest does (a path-to-regexp source with an optional
+// trailing slash, so '/:path*' also covers '/'; a host `has` value is an anchored regex).
+const workerHeadersFor = (url: string): Map<string, string[]> => {
+  const { host, pathname, searchParams } = new URL(url);
+  const applied = new Map<string, string[]>();
+  for (const rule of nextHeaderRules) {
+    if (getPathMatch(rule.source, { removeUnnamedParams: true })(pathname) === false) continue;
+    const request = { headers: { host } } as unknown as Parameters<typeof matchHas>[0];
+    if (matchHas(request, Object.fromEntries(searchParams), rule.has, rule.missing) === false) continue;
+    for (const { key, value } of rule.headers) {
+      applied.set(key.toLowerCase(), [...(applied.get(key.toLowerCase()) ?? []), value]);
+    }
+  }
+  return applied;
+};
+
+type StaticRule = { pattern: string; headers: Array<[string, string]> };
+
+const parseHeadersFile = (source: string): StaticRule[] => {
+  const rules: StaticRule[] = [];
   for (const line of source.split(/\r?\n/)) {
     if (!line.trim() || line.trim().startsWith('#')) continue;
     if (/^\s/.test(line)) {
@@ -22,7 +57,7 @@ const parseHeadersFile = (source: string): HeaderRule[] => {
   return rules;
 };
 
-// Cloudflare Pages matching: `*` matches greedily, and a `:placeholder` matches
+// Cloudflare's _headers matching: `*` matches greedily, and a `:placeholder` matches
 // anything except `.` or `/` in the host and anything except `/` in the path.
 const toMatcher = (pattern: string): RegExp => {
   const absolute = pattern.match(/^https:\/\/([^/]+)(\/.*)$/);
@@ -40,12 +75,12 @@ const toMatcher = (pattern: string): RegExp => {
     : new RegExp(`^[^/]+${convert(pattern, '[^/]+')}$`);
 };
 
-const rules = parseHeadersFile(readFileSync('public/_headers', 'utf8'));
+const staticRules = parseHeadersFile(readFileSync('public/_headers', 'utf8'));
 
-const headersFor = (url: string): Map<string, string[]> => {
+const staticHeadersFor = (url: string): Map<string, string[]> => {
   const { hostname, pathname } = new URL(url);
   const applied = new Map<string, string[]>();
-  for (const rule of rules) {
+  for (const rule of staticRules) {
     if (!toMatcher(rule.pattern).test(`${hostname}${pathname}`)) continue;
     for (const [name, value] of rule.headers) {
       applied.set(name, [...(applied.get(name) ?? []), value]);
@@ -54,38 +89,68 @@ const headersFor = (url: string): Map<string, string[]> => {
   return applied;
 };
 
-const robotsFor = (url: string) => (headersFor(url).get('x-robots-tag') ?? []).join(', ');
+const robots = (headers: Map<string, string[]>) => (headers.get('x-robots-tag') ?? []).join(', ');
 
-describe('host-dependent indexing headers', () => {
-  it.each([
-    'https://staging.serplists.com/',
-    'https://staging.serplists.com/templates',
-    'https://staging.serplists.com/profile/test/some-template',
-    'https://serp-checklists.pages.dev/',
-    'https://serp-checklists.pages.dev/profile/serp/ultimate-camping-checklist',
-    'https://staging.serp-checklists.pages.dev/templates',
-    'https://1a2b3c4d.serp-checklists.pages.dev/',
-  ])('marks %s noindex', (url) => {
-    expect(robotsFor(url)).toContain('noindex');
+const NON_PRODUCTION = [
+  'https://staging.serplists.com/',
+  'https://staging.serplists.com/templates',
+  'https://staging.serplists.com/profile/test/some-template',
+  'https://serp-checklists-preview.serp.workers.dev/',
+  'https://serp-checklists-production.serp.workers.dev/profile/serp/ultimate-camping-checklist',
+  'https://serp-checklists-preview.serp.workers.dev/api/templates',
+];
+
+const PRODUCTION = [
+  'https://serplists.com/',
+  'https://serplists.com/templates',
+  'https://serplists.com/profile/serp/ultimate-camping-checklist',
+  'https://serplists.com/api/templates',
+];
+
+describe('host-dependent indexing headers on pages and API responses (next.config.ts)', () => {
+  it.each(NON_PRODUCTION)('marks %s noindex', (url) => {
+    expect(robots(workerHeadersFor(url))).toContain('noindex');
   });
 
-  it.each([
-    'https://serplists.com/',
-    'https://serplists.com/templates',
-    'https://serplists.com/profile/serp/ultimate-camping-checklist',
-    'https://serplists.com/robots.txt',
-  ])('keeps production page %s indexable', (url) => {
-    expect(robotsFor(url)).not.toContain('noindex');
+  it.each(PRODUCTION)('keeps production %s indexable', (url) => {
+    expect(robots(workerHeadersFor(url))).not.toContain('noindex');
   });
 
   it('still keeps share pages out of the index on production', () => {
-    expect(robotsFor('https://serplists.com/share/abc')).toContain('noindex');
+    expect(robots(workerHeadersFor('https://serplists.com/share/abc'))).toContain('noindex');
   });
 
-  it('keeps the security headers on non-production hosts', () => {
-    const headers = headersFor('https://staging.serplists.com/templates');
-    expect(headers.get('content-security-policy')?.length).toBe(1);
-    expect(headers.get('strict-transport-security')?.length).toBe(1);
+  it('sends the security headers once on every host', () => {
+    for (const url of ['https://serplists.com/templates', 'https://staging.serplists.com/api/health']) {
+      const headers = workerHeadersFor(url);
+      expect(headers.get('content-security-policy')?.length).toBe(1);
+      expect(headers.get('strict-transport-security')?.length).toBe(1);
+    }
+  });
+});
+
+describe('host-dependent indexing headers on static files (public/_headers)', () => {
+  it.each([
+    'https://staging.serplists.com/og-default.png',
+    'https://serp-checklists-preview.serp.workers.dev/_next/static/chunks/app.js',
+    'https://serp-checklists-production.serp.workers.dev/robots.txt',
+  ])('marks %s noindex', (url) => {
+    expect(robots(staticHeadersFor(url))).toContain('noindex');
+  });
+
+  it.each(['https://serplists.com/og-default.png', 'https://serplists.com/robots.txt'])(
+    'keeps production file %s indexable',
+    (url) => {
+      expect(robots(staticHeadersFor(url))).not.toContain('noindex');
+    },
+  );
+
+  it('keeps the security headers on every host, the same as the Worker sends', () => {
+    const staticHeaders = staticHeadersFor('https://staging.serplists.com/og-default.png');
+    const workerHeaders = workerHeadersFor('https://staging.serplists.com/templates');
+    for (const name of ['content-security-policy', 'strict-transport-security', 'x-frame-options', 'permissions-policy']) {
+      expect(staticHeaders.get(name), name).toEqual(workerHeaders.get(name));
+    }
   });
 });
 
@@ -94,7 +159,7 @@ describe('site origin helpers', () => {
     expect(isIndexableHost('serplists.com')).toBe(true);
     expect(isIndexableHost('SERPLISTS.com')).toBe(true);
     expect(isIndexableHost('staging.serplists.com')).toBe(false);
-    expect(isIndexableHost('serp-checklists.pages.dev')).toBe(false);
+    expect(isIndexableHost('serp-checklists-preview.serp.workers.dev')).toBe(false);
     expect(isIndexableHost('localhost')).toBe(false);
     expect(isIndexableHost(undefined)).toBe(false);
   });

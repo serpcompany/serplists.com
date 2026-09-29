@@ -1,7 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -13,6 +12,10 @@ import {
   selfAndAncestors,
   textOf,
 } from '../focusVisibility';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 // The discovery card on /templates and the category pages shows a 'View Template' button
 // over its icon on hover only. Keyboard focus must never land on it while it is invisible.
@@ -30,12 +33,12 @@ const template: ChecklistTemplate = {
 };
 const TEMPLATE_PATH = '/profile/designops/website-launch-checklist';
 
-const renderCard = () =>
-  renderToStaticMarkup(
-    <StaticRouter location="/templates">
-      <TemplateCard template={template} />
-    </StaticRouter>,
+const renderCard = () => {
+  navigation.reset('/templates');
+  return renderToStaticMarkup(
+    <TemplateCard template={template} />,
   );
+};
 
 describe('TemplateCard (discovery) keyboard focus', () => {
   it('never lets a keyboard-reachable link take focus while hidden', () => {

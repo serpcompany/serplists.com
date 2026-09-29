@@ -1,9 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import ResetPassword from '@/views/ResetPassword';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: { resetPassword: vi.fn() },
@@ -17,12 +20,12 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-const render = (location: string) =>
-  renderToStaticMarkup(
-    <StaticRouter location={location}>
-      <ResetPassword />
-    </StaticRouter>,
+const render = (location: string) => {
+  navigation.reset(location);
+  return renderToStaticMarkup(
+    <ResetPassword />,
   );
+};
 
 describe('Reset password page', () => {
   it('shows the new password form for a link with a token', () => {

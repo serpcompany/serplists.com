@@ -1,6 +1,5 @@
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateDetail from '@/views/TemplateDetail';
@@ -14,6 +13,10 @@ import {
   installFakeDomGlobals,
   type FakeNode,
 } from '../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // Duplicate creates a Template (POST /api/templates has no idempotency). The actions menu
 // closes on the first click and a slow request shows nothing, so the user can choose
@@ -96,7 +99,9 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     ),
   };
 });
-vi.mock('@/components/ui/switch', () => ({ Switch: () => <button type="button" role="switch" /> }));
+vi.mock('@/components/ui/switch', () => ({
+  Switch: ({ checked }: { checked?: boolean }) => <button type="button" role="switch" aria-checked={Boolean(checked)} />,
+}));
 vi.mock('@/hooks/usePageVisit', () => ({ usePageVisit: () => () => ({ isCurrent: () => true }) }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/access-flow', () => ({
@@ -106,7 +111,7 @@ vi.mock('@/lib/access-flow', () => ({
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
 afterAll(() => restoreGlobals());
 
@@ -123,15 +128,9 @@ beforeEach(() => {
 async function renderTemplateDetail() {
   const container = createFakeContainer();
   root = createRoot(container as unknown as Element);
+  navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
   await act(async () => {
-    root?.render(
-      <MemoryRouter initialEntries={['/dashboard/templates/tpl-1']}>
-        <Routes>
-          <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
-          <Route path="*" element={null} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    root?.render(<RoutedPages pages={{ '/dashboard/templates/[id]': <TemplateDetail /> }} />);
   });
   return container;
 }

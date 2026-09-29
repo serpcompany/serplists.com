@@ -1,12 +1,15 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider, type UseQueryOptions } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PLAN_UNKNOWN_MESSAGE, shouldRetryBillingStatus } from '@/lib/billing';
 import Pricing from '@/views/Pricing';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const queryOptionsSeen = vi.fn();
 
@@ -34,25 +37,24 @@ vi.mock('@/lib/api', () => ({
 
 const BILLING_STATUS_KEY = ['billing', 'status', 'user-1', 'personal'];
 
-const renderWithClient = (queryClient: QueryClient) =>
-  renderToStaticMarkup(
-    <MemoryRouter>
-      <QueryClientProvider client={queryClient}>
-        <Pricing />
-      </QueryClientProvider>
-    </MemoryRouter>,
+const renderWithClient = (queryClient: QueryClient) => {
+  navigation.reset('/pricing');
+  return renderToStaticMarkup(
+    <QueryClientProvider client={queryClient}>
+      <Pricing />
+    </QueryClientProvider>,
   );
+};
 
 const renderPricing = (billingData: Record<string, unknown>) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(BILLING_STATUS_KEY, billingData);
 
+  navigation.reset('/pricing');
   return renderToStaticMarkup(
-    <MemoryRouter>
-      <QueryClientProvider client={queryClient}>
-        <Pricing />
-      </QueryClientProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <Pricing />
+    </QueryClientProvider>,
   );
 };
 

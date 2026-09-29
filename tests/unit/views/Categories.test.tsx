@@ -1,11 +1,14 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Categories from '@/views/Categories';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // /categories counts templates from useTemplateLibrary, whose list always holds the bundled
 // starter templates. Until the public catalog has loaded, and for as long as it failed, those
@@ -69,12 +72,12 @@ const libraryState = (overrides: Record<string, unknown>) => ({
   ...overrides,
 });
 
-const renderCategories = () =>
-  renderToStaticMarkup(
-    <StaticRouter location="/categories">
-      <Categories />
-    </StaticRouter>,
+const renderCategories = () => {
+  navigation.reset('/categories');
+  return renderToStaticMarkup(
+    <Categories />,
   );
+};
 
 beforeEach(() => {
   mockUseTemplateLibrary.mockReset();

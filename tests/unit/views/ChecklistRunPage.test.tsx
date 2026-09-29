@@ -5,7 +5,10 @@ import { countRunExecutionItems } from '@/features/run-execution/runExecutionMap
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
 
-import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import { renderPageAt } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseRunExecutionModel = vi.fn();
 
@@ -47,10 +50,6 @@ vi.mock('sonner', () => ({
     error: vi.fn(),
     success: vi.fn(),
   },
-}));
-
-vi.mock('@/components/shared/SEOHead', () => ({
-  SEOHead: () => null,
 }));
 
 const baseRun: ChecklistRun = {
@@ -135,10 +134,7 @@ describe('ChecklistRunPage layout', () => {
       toggleSubItem: vi.fn(),
     });
 
-    const html = await renderDataRoutes(
-      [{ path: '/dashboard/runs/:id', element: <ChecklistRunPage /> }],
-      '/dashboard/runs/run-1',
-    );
+    const html = renderPageAt('/dashboard/runs/run-1', { '/dashboard/runs/[id]': <ChecklistRunPage /> });
 
     expect(html).toContain('Progress');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -211,10 +207,7 @@ describe('ChecklistRunPage layout', () => {
       toggleSubItem: vi.fn(),
     });
 
-    const html = await renderDataRoutes(
-      [{ path: '/share/:shareToken', element: <ChecklistRunPage /> }],
-      '/share/abc123',
-    );
+    const html = renderPageAt('/share/abc123', { '/share/[shareToken]': <ChecklistRunPage /> });
 
     expect(html).toContain('Copy Link');
     expect(html).toContain('Browse Public Templates');
@@ -277,14 +270,10 @@ const renderRunPage = (
     toggleSubItem: vi.fn(),
   });
 
-  // A data router, as in the app: the page guards unsaved notes with useBlocker.
-  return renderDataRoutes(
-    [
-      { path: '/dashboard/runs/:id', element: <ChecklistRunPage /> },
-      { path: '/share/:shareToken', element: <ChecklistRunPage /> },
-    ],
-    options.shared ? '/share/abc123' : '/dashboard/runs/run-1',
-  );
+  return renderPageAt(options.shared ? '/share/abc123' : '/dashboard/runs/run-1', {
+    '/dashboard/runs/[id]': <ChecklistRunPage />,
+    '/share/[shareToken]': <ChecklistRunPage />,
+  });
 };
 
 describe('ChecklistRunPage completion', () => {
@@ -405,7 +394,7 @@ describe('ChecklistRunPage Organization roles', () => {
     expect(html).not.toContain('Rename');
     expect(html).not.toMatch(/>Share</);
     expect(html).not.toContain('Save notes');
-    expect(html).toContain('readonly=""');
+    expect(html).toContain('readOnly=""');
   });
 
   it('treats a run of an Organization the user is not (yet) known to belong to as read-only', async () => {

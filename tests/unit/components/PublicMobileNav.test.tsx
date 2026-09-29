@@ -1,17 +1,20 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { PublicMobileMenu } from '@/components/layout/PublicMobileNav';
 import { publicHeaderLinks } from '@/components/layout/publicSiteLinks';
+import { navigation } from '../../support/nextNavigation';
 
-const renderMenu = (pathname: string, signedIn: boolean) =>
-  renderToStaticMarkup(
-    <StaticRouter location={pathname}>
-      <PublicMobileMenu onNavigate={() => undefined} pathname={pathname} signedIn={signedIn} />
-    </StaticRouter>,
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+
+const renderMenu = (pathname: string, signedIn: boolean) => {
+  navigation.reset(pathname);
+  return renderToStaticMarkup(
+    <PublicMobileMenu onNavigate={() => undefined} pathname={pathname} signedIn={signedIn} />,
   );
+};
 
 describe('PublicMobileMenu', () => {
   it('gives visitors every header link plus Log in and Get started', () => {

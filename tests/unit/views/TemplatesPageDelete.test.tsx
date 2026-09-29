@@ -1,6 +1,5 @@
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
@@ -16,6 +15,10 @@ import {
   installFakeDomGlobals,
   type FakeNode,
 } from '../../fixtures/fakeDom';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // The API's DELETE only archives a Template: /dashboard/archive lists it and restores it.
 // My Templates must say so, not that it "cannot be undone" or leaves "your library" (an
@@ -108,10 +111,9 @@ async function renderTemplates(removeTemplate: (id: string) => Promise<void>) {
   const container = createFakeContainer();
   root = createRoot(container as unknown as Element);
   await act(async () => {
+    navigation.reset('/');
     root?.render(
-      <MemoryRouter>
-        <Templates />
-      </MemoryRouter>,
+      <Templates />,
     );
   });
   return container;

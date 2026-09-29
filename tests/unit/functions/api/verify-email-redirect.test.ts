@@ -29,7 +29,7 @@ function buildEnv() {
 
 async function visitVerificationLink(token: string) {
   // Better Auth 1.3.4 builds the email link without encoding callbackURL.
-  const url = `http://localhost:8788/api/auth/verify-email?token=${token}&callbackURL=${EMAIL_VERIFIED_CALLBACK_URL}`;
+  const url = `http://localhost:3000/api/auth/verify-email?token=${token}&callbackURL=${EMAIL_VERIFIED_CALLBACK_URL}`;
   const request = new Request(url);
   const auth = createBetterAuth(buildEnv(), request);
   const response = await auth.handler(request);
@@ -70,8 +70,8 @@ describe("verification return path round trip", () => {
     const sentLinks: string[] = [];
     const auth = betterAuth({
       secret: SECRET,
-      baseURL: "http://localhost:8788",
-      trustedOrigins: ["http://localhost:8788"],
+      baseURL: "http://localhost:3000",
+      trustedOrigins: ["http://localhost:3000"],
       database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
       emailAndPassword: { enabled: true, requireEmailVerification: true },
       emailVerification: {
@@ -83,9 +83,9 @@ describe("verification return path round trip", () => {
     });
 
     const signUp = await auth.handler(
-      new Request("http://localhost:8788/api/auth/sign-up/email", {
+      new Request("http://localhost:3000/api/auth/sign-up/email", {
         method: "POST",
-        headers: { "content-type": "application/json", origin: "http://localhost:8788" },
+        headers: { "content-type": "application/json", origin: "http://localhost:3000" },
         body: JSON.stringify({
           name: "New Invitee",
           email: "new-invitee@example.com",
@@ -111,6 +111,6 @@ describe("verification return path round trip", () => {
     expect(status).toBe(302);
     const search = new URL(location!, "http://x").search;
     expect(getLoginNotice(search)?.kind).toBe("verified");
-    expect(getReturnPath({ search })).toBe(returnPath);
+    expect(getReturnPath(search)).toBe(returnPath);
   });
 });

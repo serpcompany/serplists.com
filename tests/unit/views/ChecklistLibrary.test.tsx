@@ -1,10 +1,9 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { metadata as libraryMetadata } from '@/app/(site)/templates/page';
 import ChecklistLibrary from '@/views/ChecklistLibrary';
 import Categories from '@/views/Categories';
 import CategoryDetail from '@/views/CategoryDetail';
@@ -20,9 +19,13 @@ import {
   hasCanonicalPublicTemplatePath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseTemplateLibrary = vi.fn();
-const mockSeoHead = vi.fn();
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
@@ -32,26 +35,12 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
 
-vi.mock('@/components/shared/SEOHead', () => ({
-  SEOHead: (props: Record<string, unknown>) => {
-    mockSeoHead(props);
-    return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
-  },
-}));
-
-// NotFound writes its robots tag through Helmet; SEOHead is mocked above.
+// A category page adds a robots tag to the server's metadata once it knows it has nothing to
+// index (NoIndexMeta); React hoists it into <head>.
 const renderCategoryPage = (location: string) => {
-  const context: { helmet?: { meta: { toString(): string } } } = {};
-  const markup = renderToStaticMarkup(
-    <HelmetProvider context={context}>
-      <StaticRouter location={location}>
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>
-    </HelmetProvider>,
-  );
-  return { markup, robots: context.helmet!.meta.toString() };
+  navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
+  const markup = renderToStaticMarkup(<CategoryDetail />);
+  return { markup, robots: markup.match(/<meta name="robots"[^>]*>/)?.[0] ?? '' };
 };
 
 const baseTemplate: ChecklistTemplate = {
@@ -90,10 +79,9 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Launch', 'Web Development'],
     });
 
+    navigation.reset('/templates');
     const markup = renderToStaticMarkup(
-      <StaticRouter location="/templates">
-        <ChecklistLibrary />
-      </StaticRouter>,
+      <ChecklistLibrary />,
     );
 
     expect(markup).toContain('Discover Templates');
@@ -107,12 +95,9 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).not.toContain('href="/templates?category=launch"');
     expect(markup).not.toContain('Template library');
     expect(markup).not.toContain('Browse all templates');
-    expect(mockSeoHead).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Discover Templates',
-        url: 'https://serplists.com/templates',
-      }),
-    );
+    // The route's own title and canonical URL, rendered on the server.
+    expect(libraryMetadata.title).toEqual({ absolute: 'Discover Templates | SERP Lists' });
+    expect(libraryMetadata.alternates?.canonical).toBe('https://serplists.com/templates');
   });
 
   it('navigates to the owner/template path when the owner username is known', () => {
@@ -185,10 +170,9 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Business & Operations', 'Launch'],
     });
 
+    navigation.reset('/categories');
     const markup = renderToStaticMarkup(
-      <StaticRouter location="/categories">
-        <Categories />
-      </StaticRouter>,
+      <Categories />,
     );
 
     expect(markup).toContain('Browse Categories');
@@ -219,13 +203,9 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Business & Operations', 'Launch'],
     });
 
-    const markup = renderToStaticMarkup(
-      <StaticRouter location="/categories/business-operations">
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>,
-    );
+    // The category's title and canonical URL come from its server metadata
+    // (tests/unit/server/pageMeta/categoryPage.test.ts).
+    const { markup } = renderCategoryPage('/categories/business-operations');
 
     expect(markup).toContain('All Categories');
     expect(markup).toContain('Business &amp; Operations');
@@ -233,12 +213,7 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('Most Popular');
     expect(markup).toContain('Related Categories');
-    expect(mockSeoHead).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Business & Operations Templates',
-        url: 'https://serplists.com/categories/business-operations',
-      }),
-    );
+    expect(markup).not.toContain('noindex');
   });
 
   it('renders not-found UI for an unknown category slug instead of a fake empty category', () => {
@@ -290,12 +265,12 @@ describe('Discovery pages while the catalog loads', () => {
     ...overrides,
   });
   const renderCategory = (location: string) => renderCategoryPage(location).markup;
-  const renderLibrary = (location: string) =>
-    renderToStaticMarkup(
-      <StaticRouter location={location}>
-        <ChecklistLibrary />
-      </StaticRouter>,
+  const renderLibrary = (location: string) => {
+    navigation.reset(location);
+    return renderToStaticMarkup(
+      <ChecklistLibrary />,
     );
+  };
 
   it('shows a loading category page, not the 404 page, for a database-only category', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
@@ -346,30 +321,39 @@ describe('Discovery pages while the catalog loads', () => {
     expect(registry).toContain('aria-busy="true"');
   });
 
-  it('stays on the library when its own edit leaves only a category in the URL', () => {
+  // Only the browser has the entry's state, so these mount the page as the browser does; the
+  // library is the page at /templates only.
+  const mountLibrary = async (location: string, state: unknown = null) => {
+    navigation.reset(location, { state });
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    const container = createFakeContainer();
+    const root = createRoot(container as unknown as HTMLElement);
+    try {
+      await act(async () => root.render(<RoutedPages pages={{ '/templates': <ChecklistLibrary /> }} />));
+      return container.textContent;
+    } finally {
+      act(() => root.unmount());
+      restoreGlobals();
+    }
+  };
+
+  it('stays on the library when its own edit leaves only a category in the URL', async () => {
     mockUseTemplateLibrary.mockReturnValue(
       libraryState({ templates: [bundledTemplate, movingTemplate] }),
     );
 
-    // Clearing the search on ?category=moving&search=box writes ?category=moving.
-    const selfWritten = renderToStaticMarkup(
-      <StaticRouter
-        location={{
-          pathname: '/templates',
-          search: '?category=moving',
-          state: LIBRARY_FILTER_UPDATE_STATE,
-        }}
-      >
-        <ChecklistLibrary />
-      </StaticRouter>,
-    );
+    // Clearing the search on ?category=moving&search=box writes ?category=moving, marking
+    // the entry as written here.
+    const selfWritten = await mountLibrary('/templates?category=moving', LIBRARY_FILTER_UPDATE_STATE);
     expect(selfWritten).toContain('Discover Templates');
     expect(selfWritten).toContain('Moving Day');
     expect(selfWritten).not.toContain('Camping Checklist');
+    expect(navigation.url()).toBe('/templates?category=moving');
 
     // A link from elsewhere still lands on the category page.
-    const incoming = renderLibrary('/templates?category=moving');
+    const incoming = await mountLibrary('/templates?category=moving');
     expect(incoming).not.toContain('Discover Templates');
+    expect(navigation.url()).toBe('/categories/moving');
   });
 
   it('shows the search from the URL in the search box and filters by it', () => {

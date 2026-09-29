@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // When the teams request fails before the stored Organization is confirmed, console pages
@@ -23,6 +22,10 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const renderGate = () =>
   renderToStaticMarkup(
@@ -31,12 +34,12 @@ const renderGate = () =>
     </WorkspaceGate>,
   );
 
-const renderSwitcher = () =>
-  renderToStaticMarkup(
-    <StaticRouter location="/dashboard/templates">
-      <WorkspaceSwitcher />
-    </StaticRouter>,
+const renderSwitcher = () => {
+  navigation.reset('/dashboard/templates');
+  return renderToStaticMarkup(
+    <WorkspaceSwitcher />,
   );
+};
 
 describe('WorkspaceGate', () => {
   beforeEach(() => {

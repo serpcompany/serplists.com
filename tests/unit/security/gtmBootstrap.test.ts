@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
+import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
 import { isSensitiveAnalyticsLocation, isTagManagerLoaded } from '@/lib/analyticsUrl';
 
 import {
@@ -11,16 +12,10 @@ import {
 
 // Tags in the Google Tag Manager container read location.href at load (GA4 sends it as
 // page_location), so a document whose URL carries a share or invite token, a password
-// reset token or an email address must never load the container.
+// reset token or an email address must never load the container. The root layout renders
+// the bootstrap into every page before it is interactive.
 
-const indexHtml = readFileSync('index.html', 'utf8');
-
-function extractTagManagerBootstrap(html: string): string {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
-  const bootstrap = scripts.filter((script) => script.includes('googletagmanager.com/gtm.js'));
-  expect(bootstrap).toHaveLength(1);
-  return bootstrap[0];
-}
+const layout = readFileSync('src/app/layout.tsx', 'utf8');
 
 interface BootstrapResult {
   insertedSources: string[];
@@ -44,7 +39,7 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
     createElement: () => ({}),
   };
 
-  vm.runInNewContext(extractTagManagerBootstrap(indexHtml), {
+  vm.runInNewContext(TAG_MANAGER_BOOTSTRAP_SCRIPT, {
     window,
     document,
     URLSearchParams,
@@ -54,7 +49,14 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
   return { insertedSources, dataLayer: window.dataLayer as unknown[] | undefined };
 }
 
-describe('index.html Google Tag Manager bootstrap', () => {
+describe('Google Tag Manager bootstrap', () => {
+  it('runs from the root layout on every page, before the page is interactive', () => {
+    expect(layout).toMatch(/<Script id="tag-manager" strategy="beforeInteractive">\s*\{TAG_MANAGER_BOOTSTRAP_SCRIPT\}/);
+    // The script and the noscript fallback name the same container.
+    expect(layout).toContain('https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}');
+    expect(TAG_MANAGER_BOOTSTRAP_SCRIPT).toContain(`'${TAG_MANAGER_ID}'`);
+  });
+
   it.each(SENSITIVE_ANALYTICS_LOCATIONS)('does not load the container on %s%s', (pathname, search) => {
     const result = runBootstrap(pathname, search);
 
@@ -85,7 +87,7 @@ describe('index.html Google Tag Manager bootstrap', () => {
   });
 
   it('fails closed when the location cannot be read', () => {
-    const script = extractTagManagerBootstrap(indexHtml);
+    const script = TAG_MANAGER_BOOTSTRAP_SCRIPT;
     const insertedSources: string[] = [];
     const window = {};
     Object.defineProperty(window, 'location', {

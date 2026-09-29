@@ -1,18 +1,23 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { Link } from '@/components/navigation/Link';
 import type { TemplateEditorSaveResult } from '@/features/template-editor/useTemplateEditorModel';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import TemplateEditor from '@/views/TemplateEditor';
 
 import { click, createFakeContainer, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // A create leaves the editor for My Templates when it finishes. The sidebar's New Template
 // link sits outside the locked editor, and clicking it on the new-template page is a
-// same-path navigation: the editor stays mounted, and the location gets a new key. Drives
-// the real page, page visit and leave guard under a memory data router; only the model,
+// same-path navigation: the editor stays mounted, and only the app's navigation signal
+// tells a page visit that the user navigated. Drives the real page, page visit, Link and
+// leave guard under Next.js navigation (tests/support/nextNavigation.tsx); only the model,
 // the access hook, the contexts and the heavy editor panels are faked.
 
 const mocks = vi.hoisted(() => ({
@@ -102,7 +107,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
 afterAll(() => restoreGlobals());
 
@@ -130,39 +135,42 @@ const created = (): TemplateEditorSaveResult => ({
 });
 
 async function renderNewTemplateEditor() {
-  const router = createMemoryRouter(
-    [
-      { path: '/dashboard/templates/new', element: <TemplateEditor /> },
-      { path: '/dashboard/templates', element: null },
-      { path: '/dashboard/runs', element: null },
-    ],
-    { initialEntries: ['/dashboard/templates/new'] },
-  );
+  navigation.reset('/dashboard/templates/new', {
+    routes: ['/dashboard/templates/new', '/dashboard/templates', '/dashboard/runs'],
+  });
   const container = createFakeContainer();
   root = createRoot(container as unknown as Element);
   await act(async () => {
-    // As in the app, which does not opt in to v7_startTransition.
-    root?.render(<RouterProvider future={{ v7_startTransition: false }} router={router} />);
+    // The sidebar stays mounted across pages, as in the console layout.
+    root?.render(
+      <>
+        <nav>
+          <Link href="/dashboard/templates/new">New Template</Link>
+          <Link href="/dashboard/runs">Runs</Link>
+        </nav>
+        <RoutedPages pages={{ '/dashboard/templates/new': <TemplateEditor /> }} />
+      </>,
+    );
   });
-  return { container, router };
+  return { container };
 }
 
 describe('TemplateEditor create after a same-path navigation', () => {
   it('still goes to My Templates when New Template is clicked while the create saves', async () => {
     const request = deferred<TemplateEditorSaveResult>();
     mocks.save.mockReturnValueOnce(request.promise);
-    const { container, router } = await renderNewTemplateEditor();
+    const { container } = await renderNewTemplateEditor();
 
     await act(async () => {
       click(container, findByText(container, 'BUTTON', 'Save'));
     });
-    const firstKey = router.state.location.key;
-    // The sidebar's New Template link: the same path with a new location key.
+    // The sidebar's New Template link: the same path, a navigation nonetheless.
     await act(async () => {
-      await router.navigate('/dashboard/templates/new');
+      click(container, findByText(container, 'A', 'New Template'));
     });
-    expect(router.state.location.pathname).toBe('/dashboard/templates/new');
-    expect(router.state.location.key).not.toBe(firstKey);
+    expect(navigation.pathname()).toBe('/dashboard/templates/new');
+    expect(navigation.log.at(-1)).toMatchObject({ href: '/dashboard/templates/new', via: 'link' });
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
 
     await act(async () => {
       request.resolve(created());
@@ -171,26 +179,27 @@ describe('TemplateEditor create after a same-path navigation', () => {
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(mocks.settleDraft).toHaveBeenCalledTimes(1);
     // The saved template does not stay in the editor as unsaved work.
-    expect(router.state.location.pathname).toBe('/dashboard/templates');
+    expect(navigation.pathname()).toBe('/dashboard/templates');
   });
 
   it('does not pull the user back when they went to another page while it saved', async () => {
     const request = deferred<TemplateEditorSaveResult>();
     mocks.save.mockReturnValueOnce(request.promise);
-    const { container, router } = await renderNewTemplateEditor();
+    const { container } = await renderNewTemplateEditor();
 
     await act(async () => {
       click(container, findByText(container, 'BUTTON', 'Save'));
     });
     await act(async () => {
-      await router.navigate('/dashboard/runs');
+      click(container, findByText(container, 'A', 'Runs'));
     });
+    expect(navigation.pathname()).toBe('/dashboard/runs');
     await act(async () => {
       request.resolve(created());
     });
 
     // The draft is still settled, but the user stays where they went.
     expect(mocks.settleDraft).toHaveBeenCalledTimes(1);
-    expect(router.state.location.pathname).toBe('/dashboard/runs');
+    expect(navigation.pathname()).toBe('/dashboard/runs');
   });
 });

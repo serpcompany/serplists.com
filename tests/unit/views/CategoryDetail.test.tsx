@@ -1,9 +1,6 @@
 import { FileText } from 'lucide-react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
@@ -12,9 +9,12 @@ import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { buildPublicCategoryPath } from '@/lib/routes';
 import CategoryDetail from '@/views/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseTemplateLibrary = vi.fn();
-const mockSeoHead = vi.fn();
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
@@ -24,23 +24,14 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
 
-vi.mock('@/components/shared/SEOHead', () => ({
-  SEOHead: (props: Record<string, unknown>) => {
-    mockSeoHead(props);
-    return <div data-seo-head={String(props.url)}>{String(props.title)}</div>;
-  },
-}));
+const renderCategoryPage = (location: string) => {
+  navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
+  return renderToStaticMarkup(<CategoryDetail />);
+};
 
-const renderCategoryPage = (location: string) =>
-  renderToStaticMarkup(
-    <HelmetProvider context={{}}>
-      <StaticRouter location={location}>
-        <Routes>
-          <Route path="/categories/:categorySlug" element={<CategoryDetail />} />
-        </Routes>
-      </StaticRouter>
-    </HelmetProvider>,
-  );
+// The robots tag the page adds to the server's metadata once it knows the category is
+// missing or empty (React hoists it into <head>).
+const robotsIn = (markup: string) => markup.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 
 const template = (id: string, title: string, categories: string[]): ChecklistTemplate => ({
   categories,
@@ -89,6 +80,7 @@ describe('CategoryDetail with slugs that are Object.prototype keys', () => {
     const markup = renderCategoryPage(`/categories/${slug}`);
 
     expect(markup).toContain('That page does not exist');
+    expect(robotsIn(markup)).toBe('noindex, follow');
   });
 
   it('renders a real category named Constructor with a generic icon', () => {
@@ -165,7 +157,7 @@ describe('CategoryDetail for categories in other scripts', () => {
   it('sends an old ASCII-only slug to the category instead of the 404 page', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState([template('guide', 'Guide Checklist', ['Café Culture'])]));
 
-    // <Navigate> renders nothing on the server; the redirect itself runs in the browser.
+    // The page moves to the current slug in an effect, which static rendering does not run.
     const markup = renderCategoryPage('/categories/caf-culture');
 
     expect(markup).not.toContain('That page does not exist');
@@ -195,13 +187,7 @@ const campingTemplate: ChecklistTemplate = {
 
 const renderCategory = (slug: string) => renderCategoryPage(`/categories/${slug}`);
 
-const robots = () => mockSeoHead.mock.calls.at(-1)?.[0].robots;
-
 describe('CategoryDetail empty categories', () => {
-  beforeEach(() => {
-    mockSeoHead.mockClear();
-  });
-
   it('keeps a loaded category with no public Templates out of search results', () => {
     mockUseTemplateLibrary.mockReturnValue({ templates: [campingTemplate], loading: false, allCategories: ['outdoor'] });
     const markup = renderCategory('engineering');
@@ -209,7 +195,7 @@ describe('CategoryDetail empty categories', () => {
     expect(markup).toContain('Engineering &amp; Development');
     expect(markup).toContain('No public templates in this category yet.');
     expect(markup).not.toContain('matching your search');
-    expect(robots()).toBe('noindex, follow');
+    expect(robotsIn(markup)).toBe('noindex, follow');
   });
 
   it('does not mark a category empty or noindex while the catalog is loading', () => {
@@ -227,7 +213,7 @@ describe('CategoryDetail empty categories', () => {
     expect(markup).not.toContain('No public templates in this category yet.');
     expect(markup).not.toContain('matching your search');
     expect(markup).not.toContain('0 templates');
-    expect(robots()).not.toBe('noindex, follow');
+    expect(robotsIn(markup)).toBeUndefined();
   });
 
   it('waits for the catalog before treating an unregistered category as missing', () => {
@@ -255,6 +241,6 @@ describe('CategoryDetail empty categories', () => {
 
     expect(markup).toContain('Code Review Checklist');
     expect(markup).toContain('1 templates');
-    expect(robots()).not.toBe('noindex, follow');
+    expect(robotsIn(markup)).toBeUndefined();
   });
 });

@@ -9,7 +9,8 @@ import {
 } from "@/features/template-editor/useTemplateEditorModel";
 
 // /dashboard/templates/:id/edit and /dashboard/templates/new rendered the same unkeyed
-// <TemplateEditor />, so React kept one instance across them. A failed save's error and the
+// <TemplateEditor />, so React kept one instance across them (the legacy
+// /console/templates/:id/edit now redirects to the first, in next.config.ts). A failed save's error and the
 // selection carried over to the blank form, and a save of A that finished after the user
 // clicked "New Template" filled the new form with A (Save then created a copy of A).
 
@@ -22,19 +23,15 @@ describe("template editor route identity", () => {
   });
 
   it("renders every editor route through the keyed route wrapper", () => {
-    const app = readFileSync(path.resolve(__dirname, "../../../../src/appRoutes.tsx"), "utf8");
-    const editorRoutes = [
-      "path={buildConsoleTemplateCreatePath()}",
-      'path="/dashboard/templates/:id/edit"',
-      'path="/console/templates/:id/edit"',
+    const editorPages = [
+      "src/app/(app)/dashboard/templates/new/page.tsx",
+      "src/app/(app)/dashboard/templates/[id]/edit/page.tsx",
     ];
 
-    expect(app).not.toMatch(/element=\{<TemplateEditor\s*\/>\}/);
-    for (const route of editorRoutes) {
-      const start = app.indexOf(route);
-      expect(start, route).toBeGreaterThan(-1);
-      const next = app.indexOf("<Route", start);
-      expect(app.slice(start, next === -1 ? undefined : next), route).toContain("element={<TemplateEditorRoute />}");
+    for (const page of editorPages) {
+      const source = readFileSync(path.resolve(__dirname, "../../../..", page), "utf8");
+      expect(source, page).toContain("<TemplateEditorRoute />");
+      expect(source, page).not.toMatch(/<TemplateEditor\s*\/>/);
     }
   });
 });

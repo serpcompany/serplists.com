@@ -1,7 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   PublicPageBackLink,
@@ -9,24 +8,27 @@ import {
   PublicPageSplitLayout,
   PublicSidebarSection,
 } from '@/components/layout/PublicPageLayout';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 describe('PublicPageLayout', () => {
   it('renders a reusable public detail-page frame with a tighter docs-style sidebar rail', () => {
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicPageContainer>
-          <PublicPageBackLink to="/templates">Back to templates</PublicPageBackLink>
-          <PublicPageSplitLayout
-            asidePosition="end"
-            main={<div>Main content</div>}
-            aside={
-              <PublicSidebarSection title="Template details">
-                Sidebar content
-              </PublicSidebarSection>
-            }
-          />
-        </PublicPageContainer>
-      </StaticRouter>,
+      <PublicPageContainer>
+        <PublicPageBackLink to="/templates">Back to templates</PublicPageBackLink>
+        <PublicPageSplitLayout
+          asidePosition="end"
+          main={<div>Main content</div>}
+          aside={
+            <PublicSidebarSection title="Template details">
+              Sidebar content
+            </PublicSidebarSection>
+          }
+        />
+      </PublicPageContainer>,
     );
 
     expect(html).toContain('Back to templates');

@@ -1,57 +1,34 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
-import { StaticRouter } from 'react-router-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LoadUserProfileResult } from '@/features/profile/loadUserProfile';
 import { UserProfileContent } from '@/views/UserProfile';
+import { navigation } from '../../support/nextNavigation';
 
-type HelmetOutput = {
-  meta: { toString(): string };
-  title: { toString(): string };
-};
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+
+// The profile's title and description come from the server
+// (tests/unit/server/pageMeta/profilePage.test.ts); the page adds a noindex tag only once it
+// learns in the browser that the profile does not exist.
 
 const renderProfile = (result: LoadUserProfileResult | null) => {
-  const helmetContext: { helmet?: HelmetOutput } = {};
-  const html = renderToStaticMarkup(
-    <HelmetProvider context={helmetContext}>
-      <StaticRouter location="/profile/alice">
-        <UserProfileContent result={result} onRetry={vi.fn()} />
-      </StaticRouter>
-    </HelmetProvider>,
-  );
-
-  return {
-    html,
-    meta: helmetContext.helmet?.meta.toString() ?? '',
-    title: helmetContext.helmet?.title.toString() ?? '',
-  };
+  navigation.reset('/profile/alice', { params: { username: 'alice' } });
+  const html = renderToStaticMarkup(<UserProfileContent result={result} onRetry={vi.fn()} />);
+  return { html, robots: html.match(/<meta name="robots" content="([^"]*)"/)?.[1] };
 };
 
 describe('UserProfile search engine tags', () => {
-  beforeEach(() => {
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: {
-        location: {
-          href: 'https://serplists.com/profile/alice',
-          origin: 'https://serplists.com',
-        },
-      },
-    });
-  });
-
   it('tells search engines to drop a profile that does not exist', () => {
-    const { html, meta, title } = renderProfile({ kind: 'not_found' });
+    const { html, robots } = renderProfile({ kind: 'not_found' });
 
     expect(html).toContain('User not found');
-    expect(meta).toContain('name="robots" content="noindex, nofollow"');
-    expect(title).toContain('Profile not found');
+    expect(robots).toBe('noindex, nofollow');
   });
 
   it('keeps a profile that failed to load indexable, since the failure may be temporary', () => {
-    const { html, meta, title } = renderProfile({
+    const { html, robots } = renderProfile({
       kind: 'error',
       message: 'Unable to load this public profile.',
     });
@@ -59,13 +36,11 @@ describe('UserProfile search engine tags', () => {
     expect(html).toContain('Unable to load profile');
     expect(html).toContain('Try again');
     expect(html).not.toContain('User not found');
-    expect(meta).not.toContain('noindex');
-    expect(title).toContain('Unable to load profile');
-    expect(title).not.toContain('not found');
+    expect(robots).toBeUndefined();
   });
 
-  it('names a loaded profile and keeps it indexable', () => {
-    const { meta, title } = renderProfile({
+  it('shows a loaded profile and keeps it indexable', () => {
+    const { html, robots } = renderProfile({
       kind: 'ok',
       profile: {
         avatar_url: null,
@@ -77,15 +52,14 @@ describe('UserProfile search engine tags', () => {
       templates: [],
     });
 
-    expect(meta).toContain('name="robots" content="index, follow"');
-    expect(meta).not.toContain('noindex');
-    expect(title).toContain('Alice Example');
+    expect(html).toContain('Alice Example');
+    expect(robots).toBeUndefined();
   });
 
   it('adds no robots tag while the profile loads', () => {
-    const { html, meta } = renderProfile(null);
+    const { html, robots } = renderProfile(null);
 
     expect(html).toContain('Loading profile...');
-    expect(meta).not.toContain('robots');
+    expect(robots).toBeUndefined();
   });
 });

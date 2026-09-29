@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,6 +27,10 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 
 import { TemplatesProvider } from '@/contexts/TemplatesContext';
 import Templates from '@/views/Templates';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const template = (overrides: Partial<ChecklistTemplate>): ChecklistTemplate => ({
   id: 'template-1',
@@ -58,13 +61,12 @@ async function renderMyTemplates(seedPersonalList: (client: QueryClient) => Prom
   clients.push(client);
   client.setQueryData(['templates', 'catalog'], [myPublicTemplate]);
   await seedPersonalList(client);
+  navigation.reset('/dashboard/templates');
   return renderToStaticMarkup(
     <QueryClientProvider client={client}>
-      <StaticRouter location="/dashboard/templates">
-        <TemplatesProvider>
-          <Templates />
-        </TemplatesProvider>
-      </StaticRouter>
+      <TemplatesProvider>
+        <Templates />
+      </TemplatesProvider>
     </QueryClientProvider>,
   );
 }

@@ -1,7 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +8,10 @@ import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features
 import { createApiError } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseAuth = vi.fn();
 const mockUseTemplates = vi.fn();
@@ -179,16 +181,14 @@ const publicCatalogTemplate: ChecklistTemplate = {
 const templates: ChecklistTemplate[] = [publicCatalogTemplate];
 const allTemplates: ChecklistTemplate[] = [privateTemplate];
 
-const renderRunsPage = () =>
-  renderToStaticMarkup(
+const renderRunsPage = () => {
+  navigation.reset('/dashboard/runs');
+  return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
-      <StaticRouter location="/dashboard/runs">
-        <Routes>
-          <Route path="*" element={<Dashboard />} />
-        </Routes>
-      </StaticRouter>
+      <Dashboard />
     </QueryClientProvider>,
   );
+};
 
 describe('/dashboard/runs presentation', () => {
   beforeEach(() => {

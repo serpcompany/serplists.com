@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const template: ChecklistTemplate = {
   id: 'template-1',
@@ -84,14 +87,13 @@ function accessibleName(node: MarkupNode): string {
 }
 
 function renderCard(overrides: Partial<ChecklistTemplate> = {}) {
+  navigation.reset('/dashboard/templates');
   const html = renderToStaticMarkup(
-    <StaticRouter location="/dashboard/templates">
-      <TemplateCard
-        onDelete={vi.fn()}
-        onStartRun={vi.fn()}
-        template={{ ...template, ...overrides }}
-      />
-    </StaticRouter>,
+    <TemplateCard
+      onDelete={vi.fn()}
+      onStartRun={vi.fn()}
+      template={{ ...template, ...overrides }}
+    />,
   );
   return parseMarkup(html);
 }

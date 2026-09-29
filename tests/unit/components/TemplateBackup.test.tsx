@@ -1,9 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplateBackup } from '@/components/TemplateBackup';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 type BillingQueryResult = {
   data?: { billingEnabled?: boolean; plan: 'free' | 'pro' | 'team' };
@@ -122,7 +125,8 @@ describe('TemplateBackup billing gate', () => {
   it('does not treat a failed billing-status request as the Free plan', () => {
     mocks.billingQuery = failedBillingQuery();
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).not.toContain('Pro feature');
     expect(html).not.toContain('available on Pro');
@@ -138,7 +142,8 @@ describe('TemplateBackup billing gate', () => {
     mocks.workspace.activeTeamId = 'team-1';
     mocks.workspace.isTeamWorkspace = true;
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).not.toContain('Paid Organization feature');
     expect(html).not.toContain('requires a paid Organization plan');
@@ -147,7 +152,8 @@ describe('TemplateBackup billing gate', () => {
   it('still shows the upgrade banner when the plan is known to be Free', () => {
     mocks.billingQuery = knownBillingQuery('free');
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).toContain('Pro feature');
     expect(html).toContain('Upgrade to Pro');
@@ -159,7 +165,8 @@ describe('TemplateBackup billing gate', () => {
   it('enables import and export for a known Pro plan', () => {
     mocks.billingQuery = knownBillingQuery('pro');
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Couldn&#x27;t check your plan');
@@ -173,7 +180,8 @@ describe('TemplateBackup template lists', () => {
     mocks.billingQuery = knownBillingQuery('pro');
     mocks.templateListOptions.length = 0;
 
-    renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    renderToStaticMarkup(<TemplateBackup />);
 
     expect(mocks.templateListOptions.length).toBeGreaterThan(0);
     for (const options of mocks.templateListOptions) {
@@ -192,7 +200,8 @@ describe('TemplateBackup while the template list loads', () => {
     mocks.billingQuery = knownBillingQuery('pro');
     mocks.templateLists.templatesLoading = true;
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(statValues(html)).toHaveLength(3);
     expect(statValues(html)).not.toContain('0');
@@ -209,7 +218,8 @@ describe('TemplateBackup while the template list loads', () => {
       { id: 'other', isPublic: true, userId: 'user-2' },
     ];
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(statValues(html)).toEqual(['2', '1', '1']);
     expect(isDisabled(exportButton(html))).toBe(false);
@@ -228,7 +238,8 @@ describe('TemplateBackup when the template list failed to load', () => {
     mocks.billingQuery = knownBillingQuery('pro');
     mocks.templateLists.templatesError = new Error('HTTP 503');
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).toContain('Couldn&#x27;t load your templates');
     expect(html).toContain('Retry');
@@ -247,7 +258,8 @@ describe('TemplateBackup while an export runs', () => {
     mocks.billingQuery = knownBillingQuery('pro');
     mocks.exportRunning = true;
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(html).not.toContain('Export Portable Pack');
     expect(isDisabled(exportingButton(html))).toBe(true);
@@ -258,7 +270,8 @@ describe('TemplateBackup while an export runs', () => {
   it('enables Export again once the export has finished', () => {
     mocks.billingQuery = knownBillingQuery('pro');
 
-    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+    navigation.reset('/');
+    const html = renderToStaticMarkup(<TemplateBackup />);
 
     expect(exportingButton(html)).toBe('');
     expect(isDisabled(exportButton(html))).toBe(false);

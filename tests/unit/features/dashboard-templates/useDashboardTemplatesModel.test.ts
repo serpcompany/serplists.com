@@ -1,7 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
 import { Layout } from '@/components/Layout';
@@ -22,6 +20,10 @@ import {
   openDashboardTemplate,
   reportDashboardTemplateRunFailure,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const authState = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -102,23 +104,9 @@ describe('signed-in layout navigation', () => {
       username: 'alice',
     };
 
+    navigation.reset('/dashboard/templates');
     const html = renderToStaticMarkup(
-      React.createElement(
-        StaticRouter,
-        { location: '/dashboard/templates' },
-        React.createElement(
-          Routes,
-          null,
-          React.createElement(Route, {
-            path: '*',
-            element: React.createElement(
-              Layout,
-              null,
-              React.createElement('div', null, 'Authenticated page'),
-            ),
-          }),
-        ),
-      ),
+      React.createElement(Layout, null, React.createElement('div', null, 'Authenticated page')),
     );
 
     expect(html).toContain('href="/dashboard/templates"');

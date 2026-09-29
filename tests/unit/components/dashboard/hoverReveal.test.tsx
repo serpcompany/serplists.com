@@ -3,7 +3,6 @@ import path from 'node:path';
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
@@ -11,6 +10,10 @@ import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -64,8 +67,10 @@ const run: ChecklistRun = {
   isPublic: false,
 };
 
-const render = (element: React.ReactElement) =>
-  renderToStaticMarkup(<StaticRouter location="/dashboard">{element}</StaticRouter>);
+const render = (element: React.ReactElement) => {
+  navigation.reset('/dashboard');
+  return renderToStaticMarkup(element);
+};
 
 const rendered = {
   'the My Templates grid card': () =>

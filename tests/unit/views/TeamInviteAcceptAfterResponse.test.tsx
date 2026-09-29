@@ -1,13 +1,16 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
 
 import { click, createFakeContainer, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // The invite page after the invitee answers. The decline revokes the invite, so reading the
 // preview again answers 404; neither that nor a failed read after Accept may replace the
@@ -84,7 +87,7 @@ const NO_LONGER_AVAILABLE = 'This invite is no longer available';
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
 afterAll(() => restoreGlobals());
 
@@ -114,21 +117,15 @@ const deferred = <T,>() => {
 };
 
 async function openInvite() {
-  // The app's defaults (src/App.tsx); the page's query sets its own retry and staleTime.
+  // The app's defaults (src/app/providers.tsx); the page's query sets its own retry and staleTime.
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60 * 1000, retry: 1 } } });
-  const router = createMemoryRouter(
-    [
-      { path: '/team-invites/:token', element: <TeamInviteAccept /> },
-      { path: '*', element: null },
-    ],
-    { initialEntries: ['/team-invites/invite-token'] },
-  );
+  navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <RoutedPages pages={{ '/team-invites/[token]': <TeamInviteAccept /> }} />
       </QueryClientProvider>,
     );
   });

@@ -1,7 +1,10 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import { renderPageAt } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
@@ -51,15 +54,8 @@ const loadedModel = (ownership: Record<string, unknown> | undefined) => ({
 });
 
 const renderEdit = () =>
-  renderDataRoutes(
-    [{ path: '/dashboard/templates/:id/edit', element: <TemplateEditor /> }],
-    '/dashboard/templates/template-1/edit',
-  );
-const renderNew = () =>
-  renderDataRoutes(
-    [{ path: '/dashboard/templates/new', element: <TemplateEditor /> }],
-    '/dashboard/templates/new',
-  );
+  renderPageAt('/dashboard/templates/template-1/edit', { '/dashboard/templates/[id]/edit': <TemplateEditor /> });
+const renderNew = () => renderPageAt('/dashboard/templates/new', { '/dashboard/templates/new': <TemplateEditor /> });
 const hasSaveButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*Save(?:(?!<\/button>).)*<\/button>/.test(html);
 
 beforeEach(() => {

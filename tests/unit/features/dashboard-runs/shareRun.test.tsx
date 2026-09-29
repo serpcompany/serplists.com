@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +10,10 @@ import { getResourcePermissions } from '@/lib/organizationPermissions';
 import { markRunShared } from '@/lib/queryCache';
 import { createShareLinkAndCopy } from '@/lib/shareLink';
 import type { ChecklistRun } from '@/types/checklist';
+import { navigation } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -34,17 +37,17 @@ afterEach(() => {
   clients.splice(0).forEach((client) => client.clear());
 });
 
-const renderRuns = (runs: ChecklistRun[]) =>
-  renderToStaticMarkup(
-    <StaticRouter location="/dashboard/runs">
-      <RunsDashboardView
-        getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
-        onDeleteRun={vi.fn()}
-        onRevalidateRun={vi.fn()}
-        runs={runs}
-      />
-    </StaticRouter>,
+const renderRuns = (runs: ChecklistRun[]) => {
+  navigation.reset('/dashboard/runs');
+  return renderToStaticMarkup(
+    <RunsDashboardView
+      getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
+      onDeleteRun={vi.fn()}
+      onRevalidateRun={vi.fn()}
+      runs={runs}
+    />,
   );
+};
 
 const refuseCopy = async (): Promise<boolean> => {
   throw new Error('The request is not allowed by the user agent');

@@ -1,7 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
@@ -9,6 +8,10 @@ import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // Templates and runs saved before the editor defaulted blank titles still hold them.
 // Every page falls back to the label the editor showed, instead of an empty heading
@@ -104,22 +107,21 @@ describe('blank section and sub-task titles', () => {
       createdAt: '2026-03-24T00:00:00.000Z',
       updatedAt: '2026-03-24T00:00:00.000Z',
     };
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicTemplateView
-          template={template}
-          totalItems={2}
-          ownerSlug="owner"
-          ownerPath="/profile/owner"
-          isAuthenticated={false}
-          isBillingLoading={false}
-          isProUser={false}
-          isCreatingRun={false}
-          isSaving={false}
-          onStartRun={noop}
-          onSaveTemplate={noop}
-        />
-      </StaticRouter>,
+      <PublicTemplateView
+        template={template}
+        totalItems={2}
+        ownerSlug="owner"
+        ownerPath="/profile/owner"
+        isAuthenticated={false}
+        isBillingLoading={false}
+        isProUser={false}
+        isCreatingRun={false}
+        isSaving={false}
+        onStartRun={noop}
+        onSaveTemplate={noop}
+      />,
     );
 
     expect(html).toMatch(/<span class="truncate font-medium text-foreground">Section 2<\/span>/);

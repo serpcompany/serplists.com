@@ -1,10 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const logout = vi.fn().mockResolvedValue({ ok: true });
 
@@ -41,19 +43,11 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 
 describe('Layout shell selection', () => {
   it('uses the exact dashboard sidebar framing from the v0 reference for dashboard routes', () => {
+    navigation.reset('/dashboard/templates');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates">
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Console child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </StaticRouter>,
+      <Layout>
+        <div>Console child</div>
+      </Layout>,
     );
 
     expect(html).toContain('data-app-shell="console"');
@@ -72,19 +66,11 @@ describe('Layout shell selection', () => {
   it('hides New Template from members whose Organization role cannot create Templates', () => {
     workspaceState.canEditTemplates = false;
     try {
+      navigation.reset('/dashboard/templates');
       const html = renderToStaticMarkup(
-        <StaticRouter location="/dashboard/templates">
-          <Routes>
-            <Route
-              path="*"
-              element={
-                <Layout>
-                  <div>Console child</div>
-                </Layout>
-              }
-            />
-          </Routes>
-        </StaticRouter>,
+        <Layout>
+        <div>Console child</div>
+      </Layout>,
       );
 
       expect(html).toContain('data-app-shell="console"');
@@ -96,19 +82,11 @@ describe('Layout shell selection', () => {
   });
 
   it('uses the shared public shell for discovery routes', () => {
+    navigation.reset('/templates');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/templates">
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Discovery child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </StaticRouter>,
+      <Layout>
+        <div>Discovery child</div>
+      </Layout>,
     );
 
     expect(html).toContain('h-14');
@@ -119,19 +97,11 @@ describe('Layout shell selection', () => {
   });
 
   it('uses the shared public shell for profile routes with the same px-4 h-14 frame', () => {
+    navigation.reset('/profile/designops');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/profile/designops">
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Profile child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </StaticRouter>,
+      <Layout>
+        <div>Profile child</div>
+      </Layout>,
     );
 
     expect(html).toContain('data-app-shell="public"');
@@ -143,19 +113,11 @@ describe('Layout shell selection', () => {
   });
 
   it('makes theme switching available from the mobile console menu', () => {
+    navigation.reset('/dashboard/templates');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates">
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Console child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </StaticRouter>,
+      <Layout>
+        <div>Console child</div>
+      </Layout>,
     );
 
     expect(html).toContain('Toggle menu');
@@ -164,21 +126,14 @@ describe('Layout shell selection', () => {
 });
 
 describe('public shell on phones', () => {
-  const renderAt = (location: string) =>
-    renderToStaticMarkup(
-      <StaticRouter location={location}>
-        <Routes>
-          <Route
-            path="*"
-            element={
-              <Layout>
-                <div>Child</div>
-              </Layout>
-            }
-          />
-        </Routes>
-      </StaticRouter>,
+  const renderAt = (location: string) => {
+    navigation.reset(location);
+    return renderToStaticMarkup(
+      <Layout>
+        <div>Child</div>
+      </Layout>,
     );
+  };
 
   it.each(['/', '/templates', '/categories/business', '/features', '/pricing', '/profile/designops/launch', '/login'])(
     'offers a menu button below the md breakpoint on %s',

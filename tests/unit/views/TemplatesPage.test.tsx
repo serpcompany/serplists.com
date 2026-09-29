@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Templates from '@/views/Templates';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseDashboardTemplatesModel = vi.fn();
 
@@ -71,10 +74,9 @@ describe('Templates page', () => {
       createRunFromTemplate: vi.fn(),
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
 
     expect(html).toContain('My Templates');
@@ -114,10 +116,9 @@ describe('Templates page', () => {
       createRunFromTemplate: vi.fn(),
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
 
     expect(html).toContain('No templates found');
@@ -148,10 +149,9 @@ describe('Templates page', () => {
       createRunFromTemplate: vi.fn(),
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
 
     expect(html).toContain('Couldn&#x27;t load your templates');
@@ -187,10 +187,9 @@ describe('Templates page', () => {
       createRunFromTemplate: vi.fn(),
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
     const order = ['Twentieth Of September Edit', 'Imported Recently', 'Second Of September Edit', 'Untouched Plan'].map(
       (title) => html.indexOf(title),
@@ -226,10 +225,9 @@ describe('Templates page', () => {
       preferenceOwnerId: 'user-1',
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
 
     expect(html).toContain('Website Launch Checklist');
@@ -263,10 +261,9 @@ describe('Templates page', () => {
       createRunFromTemplate: vi.fn(),
     });
 
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Templates />
-      </StaticRouter>,
+      <Templates />,
     );
 
     expect(html).toContain('No templates found');

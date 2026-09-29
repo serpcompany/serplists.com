@@ -1,10 +1,14 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import { navigation } from '../../support/nextNavigation';
 
-// Renders the real App route table, so this fails if no signed-in route mounts the
-// archive (it once lived only in a Dashboard branch that no route reached).
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+
+// Renders the real App Router pages in the signed-in layout, so this fails if no signed-in
+// route mounts the archive (it once lived only in a Dashboard branch that no route reached).
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({
@@ -83,19 +87,28 @@ vi.mock('@/lib/analytics', () => ({
   },
 }));
 
-import { AppProviders } from '@/App';
-import { appRoutes } from '@/appRoutes';
+import AppLayout from '@/app/(app)/layout';
+import ArchivePage from '@/app/(app)/dashboard/archive/page';
+import RunsPage from '@/app/(app)/dashboard/runs/page';
+import { Providers } from '@/app/providers';
 
-// The app's providers and routes under a data router, as App renders them in the browser.
-const renderAppAt = (pathname: string): Promise<string> =>
-  renderDataRoutes(appRoutes, pathname, (router) => <AppProviders>{router}</AppProviders>);
+// A signed-in page as the root layout renders it: the app's providers, then the signed-in
+// layout (src/app/(app)/layout.tsx) around the route's page.
+const renderAppAt = (pathname: string, page: React.ReactNode): string => {
+  navigation.reset(pathname);
+  return renderToStaticMarkup(
+    <Providers>
+      <AppLayout>{page}</AppLayout>
+    </Providers>,
+  );
+};
 
 // Assert on booleans: a failed toContain would print the whole page.
 const has = (html: string, text: string) => html.includes(text);
 
 describe('archive route', () => {
   it('mounts the archive at /dashboard/archive in the signed-in console', async () => {
-    const html = await renderAppAt('/dashboard/archive');
+    const html = renderAppAt('/dashboard/archive', <ArchivePage />);
 
     expect(has(html, 'data-archive-recovery-section="true"')).toBe(true);
     expect(has(html, 'data-app-shell="console"')).toBe(true);
@@ -105,7 +118,7 @@ describe('archive route', () => {
   });
 
   it('links the archive from the console navigation and keeps /dashboard/runs on the runs list', async () => {
-    const html = await renderAppAt('/dashboard/runs');
+    const html = renderAppAt('/dashboard/runs', <RunsPage />);
 
     expect(has(html, 'href="/dashboard/archive"')).toBe(true);
     expect(has(html, 'My Runs')).toBe(true);

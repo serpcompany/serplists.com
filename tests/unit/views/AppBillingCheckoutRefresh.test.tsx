@@ -1,7 +1,14 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { Providers } from '@/app/providers';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // Checkout can find a plan the cached billing status lacks (access-flow.ts). The app's own
 // QueryClient, the one every page reads, must be the one whose billing status is reloaded.
@@ -32,30 +39,43 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 vi.mock('@/components/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
 }));
-vi.mock('@/lib/analytics', () => ({
-  analytics: { track: vi.fn(), trackPageView: vi.fn(), trackTemplateView: vi.fn() },
-}));
+vi.mock('@/components/DevLoginBar', () => ({ DevLoginBar: () => null }));
+vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
 vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
+// The theme sync writes to the document, which this test has no need for.
+vi.mock('@/lib/theme', () => ({
+  applyStoredTheme: vi.fn(),
+  subscribeToThemeChanges: () => () => undefined,
+}));
 
-import { AppProviders } from '@/App';
+let restoreGlobals: () => void = () => {};
+beforeAll(() => {
+  restoreGlobals = installFakeDomGlobals(navigation.window);
+});
+afterAll(() => restoreGlobals());
 
 describe('App billing status refresh', () => {
-  it("reloads billing status in the QueryClient the app's pages read", () => {
+  it("reloads billing status in the QueryClient the app's pages read", async () => {
     let pageClient: QueryClient | undefined;
     const Probe = () => {
       pageClient = useQueryClient();
       return null;
     };
+    navigation.reset('/pricing');
+    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
 
-    renderToStaticMarkup(
-      <AppProviders>
-        <Probe />
-      </AppProviders>,
-    );
+    await act(async () => {
+      root.render(
+        <Providers>
+          <Probe />
+        </Providers>,
+      );
+    });
 
     expect(registered.clients).toHaveLength(1);
     expect(registered.clients[0]).toBe(pageClient);
+    act(() => root.unmount());
   });
 });

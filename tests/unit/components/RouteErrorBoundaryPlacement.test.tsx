@@ -1,10 +1,21 @@
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import AppLayout from '@/app/(app)/layout';
+import SiteLayout from '@/app/(site)/layout';
+import NotFoundPage from '@/app/not-found';
+import SharePage from '@/app/share/[shareToken]/page';
+import { navigation } from '../../support/nextNavigation';
 
-// Every page renders inside a route-level error boundary, below the Router and the site
-// header, so a page that crashes leaves the navigation usable and clears on navigation.
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+vi.mock('server-only', () => ({}));
+
+// Every page renders inside a route-level error boundary, below the site header, so a page
+// that crashes leaves the navigation usable and clears on navigation: the site and signed-in
+// layouts wrap their page in it (Layout), and so do the 404 page and the shared run page,
+// which renders outside Layout.
 
 vi.mock('@/components/RouteErrorBoundary', () => ({
   RouteErrorBoundary: ({ children }: { children: React.ReactNode }) => (
@@ -14,61 +25,80 @@ vi.mock('@/components/RouteErrorBoundary', () => ({
 
 vi.mock('@/views/ChecklistRun', () => ({ default: () => <p>Shared run page</p> }));
 vi.mock('@/views/NotFound', () => ({ default: () => <p>Missing page</p> }));
+// The share page's JSON-LD and its lookup run only on the server.
+vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
+vi.mock('@/server/pageMeta/sharedRunPage', () => ({ loadSharedRunPageSeo: async () => null }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-  useAuth: () => ({ logout: vi.fn(), user: null }),
+  useAuth: () => ({ isAuthenticated: true, isLoading: false, logout: vi.fn(), user: null }),
+}));
+
+vi.mock('@/components/RequireAuth', () => ({
+  default: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock('@/contexts/TemplatesContext', () => ({
-  TemplatesProvider: ({ children }: { children: React.ReactNode }) => children,
   useTemplates: () => ({ templates: [], templatesLoading: false }),
 }));
 
 vi.mock('@/contexts/WorkspaceContext', () => {
   const personal = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
   return {
-    WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
     useWorkspace: () => ({
       activeWorkspace: personal,
       isWorkspaceLoading: false,
       selectWorkspace: vi.fn(),
       workspaces: [personal],
+      workspaceStatus: 'ready',
     }),
   };
 });
 
-vi.mock('@/components/ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock('@/components/DevLoginBar', () => ({ DevLoginBar: () => null }));
 vi.mock('@/lib/analytics', () => ({
   analytics: new Proxy({}, { get: () => vi.fn(() => []) }),
 }));
-vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
-vi.mock('@/components/ui/tooltip', () => ({
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-import { AppProviders } from '@/App';
-import { appRoutes } from '@/appRoutes';
-
-// The app's providers and routes under a data router, as App renders them in the browser.
-const renderAppAt = (pathname: string): Promise<string> =>
-  renderDataRoutes(appRoutes, pathname, (router) => <AppProviders>{router}</AppProviders>);
 
 describe('route-level error boundary placement', () => {
-  it('wraps only the page inside Layout, leaving the header outside', async () => {
-    const html = await renderAppAt('/no-such-page');
+  it('wraps only the page inside the site layout, leaving the header outside', () => {
+    navigation.reset('/pricing');
+    const html = renderToStaticMarkup(
+      <SiteLayout>
+        <p>Pricing page</p>
+      </SiteLayout>,
+    );
 
-    expect(html).toContain('<div data-route-boundary="true"><p>Missing page</p></div>');
+    expect(html).toContain('<div data-route-boundary="true"><p>Pricing page</p></div>');
     expect(html.indexOf('<header')).toBeGreaterThan(-1);
     expect(html.indexOf('<header')).toBeLessThan(html.indexOf('data-route-boundary'));
   });
 
-  it('wraps the shared run page, which renders outside Layout', async () => {
-    const html = await renderAppAt('/share/share-token');
+  it('wraps the signed-in pages inside the app layout', () => {
+    navigation.reset('/dashboard/templates');
+    const html = renderToStaticMarkup(
+      <AppLayout>
+        <p>My Templates</p>
+      </AppLayout>,
+    );
 
-    expect(html).toContain('<div data-route-boundary="true"><p>Shared run page</p></div>');
+    expect(html).toContain('<div data-route-boundary="true"><p>My Templates</p></div>');
+  });
+
+  it('wraps the 404 page, which renders for unknown paths', () => {
+    navigation.reset('/no-such-page');
+    const html = renderToStaticMarkup(<NotFoundPage />);
+
+    expect(html).toContain('<div data-route-boundary="true"><p>Missing page</p></div>');
+    expect(html.indexOf('<header')).toBeLessThan(html.indexOf('data-route-boundary'));
+  });
+
+  it('wraps the shared run page, which renders outside Layout', () => {
+    navigation.reset('/share/share-token', { params: { shareToken: 'share-token' } });
+    const html = renderToStaticMarkup(
+      <SharePage params={Promise.resolve({ shareToken: 'share-token' })} />,
+    );
+
+    expect(html).toContain('<p>Shared run page</p>');
+    expect(html).toMatch(/<div data-route-boundary="true">.*<p>Shared run page<\/p><\/div>/);
+    expect(html).not.toContain('<header');
   });
 });

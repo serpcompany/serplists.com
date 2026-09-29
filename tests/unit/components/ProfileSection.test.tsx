@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' }, refreshProfile: vi.fn() }),
@@ -15,34 +18,33 @@ vi.mock('@/lib/auth-client', () => ({ authClient: { updateUser: vi.fn() } }));
 
 describe('ProfileSection', () => {
   it('limits the full name to the length the API accepts', () => {
+    navigation.reset('/dashboard/settings');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/settings">
-        <ProfileSection
-          profileData={{ email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' }}
-          loading={false}
-          onProfileDataChange={vi.fn()}
-          onProfileUpdate={vi.fn()}
-          onAvatarUpdate={vi.fn()}
-        />
-      </StaticRouter>,
+      <ProfileSection
+        profileData={{ email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' }}
+        loading={false}
+        onProfileDataChange={vi.fn()}
+        onProfileUpdate={vi.fn()}
+        onAvatarUpdate={vi.fn()}
+      />,
     );
 
     expect(html).toMatch(new RegExp(`<input[^>]*id="fullName"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
 
-  const renderSection = (username: string, savedUsername: string | undefined) =>
-    renderToStaticMarkup(
-      <StaticRouter location="/dashboard/settings">
-        <ProfileSection
-          profileData={{ email: 'john@test.com', fullName: 'John', username, avatar_url: '' }}
-          savedUsername={savedUsername}
-          loading={false}
-          onProfileDataChange={vi.fn()}
-          onProfileUpdate={vi.fn()}
-          onAvatarUpdate={vi.fn()}
-        />
-      </StaticRouter>,
+  const renderSection = (username: string, savedUsername: string | undefined) => {
+    navigation.reset('/dashboard/settings');
+    return renderToStaticMarkup(
+      <ProfileSection
+        profileData={{ email: 'john@test.com', fullName: 'John', username, avatar_url: '' }}
+        savedUsername={savedUsername}
+        loading={false}
+        onProfileDataChange={vi.fn()}
+        onProfileUpdate={vi.fn()}
+        onAvatarUpdate={vi.fn()}
+      />,
     );
+  };
 
   it('previews the lowercase profile URL an edited username will have', () => {
     for (const savedUsername of ['john', undefined]) {

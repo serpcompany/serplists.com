@@ -1,6 +1,9 @@
 import React from 'react';
 
-import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import { renderPageAt } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/views/TemplateEditor';
@@ -76,9 +79,9 @@ beforeEach(() => {
   }));
 });
 
-// The editor's leave guard (useBlocker) needs a data router, as in the app.
-const renderEditorAt = (location: string, path: string): Promise<string> =>
-  renderDataRoutes([{ path, element: <TemplateEditor /> }], location);
+// `path` is the route's pattern, React Router style (':id'), as the App Router names it ('[id]').
+const renderEditorAt = (location: string, path: string): string =>
+  renderPageAt(location, { [path.replace(/:(\w+)/g, '[$1]')]: <TemplateEditor /> });
 
 describe('TemplateEditor page', () => {
   it('uses the v0-style split editor shell instead of the old wide content canvas', async () => {

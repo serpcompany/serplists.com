@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import RequireAuth from '@/components/RequireAuth';
 import type { SessionStatus } from '@/contexts/authSession';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const authState = vi.hoisted(() => ({ sessionStatus: 'loading' as SessionStatus }));
 
@@ -14,12 +17,11 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 const renderAt = (sessionStatus: SessionStatus) => {
   authState.sessionStatus = sessionStatus;
+  navigation.reset('/dashboard/runs');
   return renderToStaticMarkup(
-    <StaticRouter location="/dashboard/runs">
-      <RequireAuth>
-        <div>Protected page</div>
-      </RequireAuth>
-    </StaticRouter>,
+    <RequireAuth>
+      <div>Protected page</div>
+    </RequireAuth>,
   );
 };
 

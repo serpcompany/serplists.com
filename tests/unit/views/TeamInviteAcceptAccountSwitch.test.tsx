@@ -1,11 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // Opening an invite while signed in to another account must offer a way to
 // switch accounts that keeps the invite link, instead of a dead end.
@@ -57,12 +59,9 @@ const emailMismatch = () =>
   });
 
 function renderInvitePage() {
+  navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
   return renderToStaticMarkup(
-    <StaticRouter location="/team-invites/invite-token">
-      <Routes>
-        <Route path="/team-invites/:token" element={<TeamInviteAccept />} />
-      </Routes>
-    </StaticRouter>,
+    <TeamInviteAccept />,
   );
 }
 

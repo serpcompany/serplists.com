@@ -1,26 +1,32 @@
 import React, { act } from 'react';
+import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
-import { createMemoryRouter, RouterProvider, type RouteObject } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { appRoutes } from '@/appRoutes';
+import CategoryDetailRoute from '@/views/CategoryDetailRoute';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 // Every category page is the same route, so an unkeyed page stayed mounted when a Related
 // Categories link (or Back) moved to another category, and its search text and sort kept
-// filtering the new category. The real route config must give each category its own page.
+// filtering the new category. The category route gives each category its own page, keyed by
+// the category, while another spelling of the same category keeps it.
 
 type PageRender = { param: string | undefined; state: string | undefined };
 
 const probe = vi.hoisted(() => ({ mounts: 0, renders: [] as PageRender[] }));
 
 // Stands in for the page: its state is set once per mounted instance, like the page's
-// search box and sort, and it renders nothing, so React DOM needs no real document.
+// search box and sort, and it renders nothing.
 vi.mock('@/views/CategoryDetail', async () => {
   const { useEffect, useState } = await import('react');
-  const { useParams } = await import('react-router-dom');
+  const { useParams } = await import('next/navigation');
   return {
     default: function CategoryDetailProbe() {
-      const { categorySlug } = useParams();
+      const { categorySlug } = useParams<{ categorySlug: string }>();
       const [mountedFor] = useState(categorySlug);
       probe.renders.push({ param: categorySlug, state: mountedFor });
       useEffect(() => {
@@ -31,33 +37,11 @@ vi.mock('@/views/CategoryDetail', async () => {
   };
 });
 
-// Other pages in the route config track page views on import, which needs a browser.
-vi.mock('@/lib/analytics', () => ({
-  analytics: new Proxy({}, { get: () => vi.fn(() => []) }),
-}));
-
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 beforeEach(() => {
@@ -69,46 +53,48 @@ afterEach(() => {
   root = null;
 });
 
-const findRoute = (routes: RouteObject[], path: string): RouteObject | undefined => {
-  for (const route of routes) {
-    if (route.path === path) return route;
-    const child = route.children ? findRoute(route.children, path) : undefined;
-    if (child) return child;
-  }
-  return undefined;
-};
-
+// The route component stays mounted while the params change, so its own key decides.
 const mountCategoryRoute = (initialPath: string) => {
-  const categoryRoute = findRoute(appRoutes, '/categories/:categorySlug');
-  expect(categoryRoute?.element).toBeTruthy();
-  const router = createMemoryRouter(
-    [{ path: '/categories/:categorySlug', element: categoryRoute?.element }],
-    { initialEntries: [initialPath] },
-  );
-  root = createRoot(fakeContainer as unknown as HTMLElement);
-  act(() => root!.render(<RouterProvider router={router} />));
-  return router;
+  navigation.reset(initialPath, { routes: ['/categories/[categorySlug]'] });
+  root = createRoot(createFakeContainer() as unknown as HTMLElement);
+  act(() => root!.render(<CategoryDetailRoute />));
 };
 
 const lastRender = () => probe.renders[probe.renders.length - 1];
 
 describe('category page route', () => {
+  it('is the page the category route renders', () => {
+    const page = readFileSync(
+      new URL('../../../src/app/(site)/categories/[categorySlug]/page.tsx', import.meta.url),
+      'utf8',
+    );
+
+    expect(page).toContain('<CategoryDetailRoute />');
+  });
+
   it('starts a fresh page, with no search or sort, for each category', async () => {
-    const router = mountCategoryRoute('/categories/business');
+    mountCategoryRoute('/categories/business');
     expect(lastRender()).toEqual({ param: 'business', state: 'business' });
 
-    await act(() => router.navigate('/categories/hr'));
+    await act(async () => {
+      navigation.router.push('/categories/hr');
+    });
     expect(lastRender()).toEqual({ param: 'hr', state: 'hr' });
     expect(probe.mounts).toBe(2);
 
-    await act(() => router.navigate(-1));
+    await act(async () => {
+      navigation.router.back();
+      await navigation.settle();
+    });
     expect(lastRender()).toEqual({ param: 'business', state: 'business' });
   });
 
   it('keeps the page for another spelling of the same category', async () => {
-    const router = mountCategoryRoute('/categories/hr');
+    mountCategoryRoute('/categories/hr');
 
-    await act(() => router.navigate('/categories/HR'));
+    await act(async () => {
+      navigation.router.push('/categories/HR');
+    });
     expect(lastRender()).toEqual({ param: 'HR', state: 'hr' });
     expect(probe.mounts).toBe(1);
   });

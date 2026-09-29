@@ -1,10 +1,13 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import DashboardSettings from '@/views/DashboardSettings';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const refreshProfile = vi.fn();
 const updateUser = vi.fn();
@@ -77,12 +80,11 @@ describe('DashboardSettings page', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    navigation.reset('/dashboard/settings');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/settings">
-        <QueryClientProvider client={queryClient}>
-          <DashboardSettings />
-        </QueryClientProvider>
-      </StaticRouter>,
+      <QueryClientProvider client={queryClient}>
+        <DashboardSettings />
+      </QueryClientProvider>,
     );
 
     expect(html).toContain('Account Settings');

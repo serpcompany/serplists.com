@@ -1,9 +1,12 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Index from '@/views/Index';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
@@ -20,10 +23,9 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 
 describe('Index layout', () => {
   it('explains the actual template to run to share workflow instead of generic marketing cards', () => {
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <Index />
-      </StaticRouter>,
+      <Index />,
     );
 
     expect(html).toContain('Build the checklist once. Run it every time.');

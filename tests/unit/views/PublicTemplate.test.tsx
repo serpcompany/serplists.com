@@ -1,9 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
 
@@ -20,11 +17,14 @@ import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 
 import { CANONICAL_ORIGIN } from '../../../functions/sitemap/shared';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const {
   authState,
   mockCreateBillingCheckout,
-  mockNavigate,
   mockToastError,
   mockToastSuccess,
   mockUseTemplateDetailModel,
@@ -36,7 +36,6 @@ const {
     user: null as { id: string } | null,
   },
   mockCreateBillingCheckout: vi.fn(),
-  mockNavigate: vi.fn(),
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockUseTemplateDetailModel: vi.fn(),
@@ -103,11 +102,6 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('sonner', () => ({
   toast: { error: mockToastError, success: mockToastSuccess },
-}));
-
-vi.mock('react-router-dom', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react-router-dom')>()),
-  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
@@ -290,6 +284,18 @@ const CLEAN_VISIT: RouteVisit = {
   origin: 'https://serplists.com',
 };
 
+// Sign-in and checkout read the page's own URL, as in the browser.
+let restoreWindow: () => void = () => {};
+beforeAll(() => {
+  restoreWindow = navigation.installWindow();
+});
+afterAll(() => restoreWindow());
+
+// The page's title, description, canonical URL and robots come from the server
+// (tests/unit/server/pageMeta/templatePage.test.ts); the page adds a noindex tag only when
+// it learns in the browser that the template is gone.
+const robotsIn = (html: string) => html.match(/<meta name="robots" content="([^"]*)"/)?.[1];
+
 function renderPublishedRoute(
   template: ChecklistTemplate,
   modelOverrides: Record<string, unknown> = {},
@@ -305,51 +311,17 @@ function renderPublishedRoute(
     totalItems: 0,
     ...modelOverrides,
   });
-  const search = visit.search ?? '';
-  const hash = visit.hash ?? '';
-  Object.defineProperty(globalThis, 'window', {
-    configurable: true,
-    value: {
-      location: {
-        href: `${visit.origin}${visit.path}${search}${hash}`,
-        origin: visit.origin,
-        pathname: visit.path,
-        search,
-        hash,
-      },
-    },
+  navigation.reset(`${visit.origin}${visit.path}${visit.search ?? ''}${visit.hash ?? ''}`, {
+    routes: ['/profile/[username]/[templateSlug]'],
   });
-  const helmetContext: Record<string, unknown> = {};
-  const html = renderToStaticMarkup(
-    <HelmetProvider context={helmetContext}>
-      <StaticRouter location={`${visit.path}${search}${hash}`}>
-        <Routes>
-          <Route path="/profile/:username/:templateSlug" element={<PublicTemplate />} />
-        </Routes>
-      </StaticRouter>
-    </HelmetProvider>,
-  );
-
-  return {
-    helmet: helmetContext.helmet as {
-      link: { toString(): string };
-      meta: { toString(): string };
-      script: { toString(): string };
-      title: { toString(): string };
-    },
-    html,
-  };
+  return { html: renderToStaticMarkup(<PublicTemplate />) };
 }
 
 describe('PublicTemplate rendered route', () => {
-  it('uses the SEO title and description saved with a published template', () => {
-    const { helmet, html } = renderPublishedRoute(publishedClipyTemplate);
+  it('renders the published template with its reviewed content and embeds', () => {
+    const { html } = renderPublishedRoute(publishedClipyTemplate);
 
     expect(html).toContain('Reviewed Clipy Checklist');
-    expect(helmet.title.toString()).toContain('Saved Clipy Search Title');
-    expect(helmet.meta.toString()).toContain(
-      'content="Saved Clipy search description with five actionable steps."',
-    );
     expect(html).toContain('Recording summary');
     expect(html).toContain('Persisted summary.');
     expect(html).toContain('Transcript');
@@ -361,35 +333,14 @@ describe('PublicTemplate rendered route', () => {
     expect(html).toContain('rel="nofollow noopener noreferrer"');
   });
 
-  it('falls back to the ordinary title and description when saved SEO fields are empty', () => {
-    const { helmet } = renderPublishedRoute({
-      ...publishedClipyTemplate,
-      seoTitle: '',
-      seoDescription: '',
-    });
-
-    expect(helmet.title.toString()).toContain('Reviewed Clipy Checklist');
-    expect(helmet.meta.toString()).toContain('content="Persisted Clipy summary."');
-  });
-
-  it('points the canonical at the production template path from any host', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
+  it('adds no robots rule of its own to a template that loaded, on any host', () => {
+    expect(robotsIn(renderPublishedRoute(publishedClipyTemplate).html)).toBeUndefined();
+    const staging = renderPublishedRoute(publishedClipyTemplate, {}, {
       path: '/profile/Alice/reviewed-clipy-checklist',
       origin: 'https://staging.serplists.com',
       search: '?ref=x',
     });
-
-    expect(helmet.link.toString()).toContain(
-      'href="https://serplists.com/profile/alice/reviewed-clipy-checklist"',
-    );
-    expect(helmet.meta.toString()).toContain('name="robots" content="noindex, nofollow"');
-    expect(helmet.meta.toString()).not.toContain('staging.serplists.com');
-  });
-
-  it('keeps the production template page indexable', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
-
-    expect(helmet.meta.toString()).toContain('name="robots" content="index, follow"');
+    expect(robotsIn(staging.html)).toBeUndefined();
   });
 });
 
@@ -413,7 +364,6 @@ describe('PublicTemplate ownership context', () => {
   beforeEach(() => {
     mockCreateBillingCheckout.mockReset();
     mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
-    mockNavigate.mockReset();
     mockToastError.mockReset();
     mockToastSuccess.mockReset();
     mockUseTemplateDetailModel.mockReset();
@@ -502,7 +452,8 @@ describe('PublicTemplate ownership context', () => {
 
     await lastViewProps().onSaveTemplate();
 
-    expect(mockNavigate).toHaveBeenCalledWith(buildConsoleTemplatePath('clone-1'));
+    expect(navigation.router.push).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe(buildConsoleTemplatePath('clone-1'));
   });
 
   it('labels Save as an upgrade for a Free Personal user, never in an Organization', () => {
@@ -647,7 +598,6 @@ const deferred = <T,>() => {
 
 describe('PublicTemplate Start Run', () => {
   beforeEach(() => {
-    mockNavigate.mockReset();
     mockToastError.mockReset();
     mockUseTemplateDetailModel.mockReset();
     mockViewProps.mockReset();
@@ -672,7 +622,7 @@ describe('PublicTemplate Start Run', () => {
     await Promise.all([first, second]);
 
     expect(startRun).toHaveBeenCalledTimes(1);
-    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(navigation.router.push).toHaveBeenCalledTimes(1);
 
     startRun.mockResolvedValue({ kind: 'ok', runId: 'run-2' });
     await onStartRun();
@@ -693,7 +643,7 @@ describe('PublicTemplate Start Run', () => {
     await onStartRun();
 
     expect(startRun).toHaveBeenCalledTimes(3);
-    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(navigation.router.push).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -701,7 +651,6 @@ describe('PublicTemplate Save', () => {
   beforeEach(() => {
     mockCreateBillingCheckout.mockReset();
     mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
-    mockNavigate.mockReset();
     mockToastError.mockReset();
     mockUseTemplateDetailModel.mockReset();
     mockViewProps.mockReset();
@@ -781,33 +730,31 @@ describe('PublicTemplate load failures', () => {
   });
 
   it('tells search engines to drop a template that is gone', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {
+    const { html } = renderPublishedRoute(publishedClipyTemplate, {
       loadError: null,
       notFound: true,
       reload: vi.fn(),
       template: null,
     });
 
-    expect(helmet.meta.toString()).toContain('name="robots" content="noindex, nofollow"');
-    expect(helmet.title.toString()).toContain('Template not found');
+    expect(robotsIn(html)).toBe('noindex, nofollow');
   });
 
   it('keeps a template that failed to load indexable, since the failure may be temporary', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {
+    const { html } = renderPublishedRoute(publishedClipyTemplate, {
       loadError: 'HTTP 503',
       reload: vi.fn(),
       template: null,
     });
 
-    expect(helmet.meta.toString()).not.toContain('noindex');
-    expect(helmet.title.toString()).toContain('Unable to load template');
-    expect(helmet.title.toString()).not.toContain('not found');
+    expect(robotsIn(html)).toBeUndefined();
+    expect(html).not.toContain('noindex');
   });
 
   it('keeps a template that loaded indexable', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate);
+    const { html } = renderPublishedRoute(publishedClipyTemplate);
 
-    expect(helmet.meta.toString()).toContain('name="robots" content="index, follow"');
+    expect(html).not.toContain('noindex');
   });
 });
 
@@ -856,77 +803,9 @@ describe('PublicTemplate default run name', () => {
   });
 });
 
+// The canonical URL comes from the server (tests/unit/server/pageMeta/templatePage.test.ts),
+// which names the production site, as the sitemap does.
 describe('PublicTemplate canonical URL', () => {
-  const expectCanonical = (
-    helmet: ReturnType<typeof renderPublishedRoute>['helmet'],
-    expected: string,
-  ) => {
-    expect(helmet.link.toString()).toContain(`rel="canonical" href="${expected}"`);
-    expect(helmet.meta.toString()).toContain(`property="og:url" content="${expected}"`);
-    expect(helmet.script.toString()).toContain(`"url":"${expected}"`);
-    for (const output of [helmet.link, helmet.meta, helmet.script]) {
-      expect(output.toString()).not.toMatch(/utm_source=twitter|fbclid|#frag/);
-    }
-  };
-
-  it('ignores tracking parameters, the hash and the owner casing of the visited URL', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
-      path: '/profile/ALICE/reviewed-clipy-checklist',
-      origin: 'https://serplists.com',
-      search: '?utm_source=twitter',
-      hash: '#frag',
-    });
-
-    expectCanonical(helmet, 'https://serplists.com/profile/alice/reviewed-clipy-checklist');
-  });
-
-  it('points a visit by template id at the slug URL', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
-      path: '/profile/alice/clipy-template-1',
-      origin: 'https://serplists.com',
-      search: '?fbclid=1',
-    });
-
-    expectCanonical(helmet, 'https://serplists.com/profile/alice/reviewed-clipy-checklist');
-  });
-
-  it('names the production site on staging and preview hosts, as the sitemap does', () => {
-    const { helmet } = renderPublishedRoute(publishedClipyTemplate, {}, {
-      path: '/profile/alice/reviewed-clipy-checklist',
-      origin: 'https://staging.serplists.pages.dev',
-    });
-
-    expectCanonical(helmet, `${CANONICAL_ORIGIN}/profile/alice/reviewed-clipy-checklist`);
-  });
-
-  it('uses the template id for a template without a slug', () => {
-    const { helmet } = renderPublishedRoute({ ...publishedClipyTemplate, slug: undefined });
-
-    expectCanonical(helmet, 'https://serplists.com/profile/alice/clipy-template-1');
-  });
-
-  it('uses the official owner for repo templates', () => {
-    const { helmet } = renderPublishedRoute(
-      {
-        ...publishedClipyTemplate,
-        id: 'repo:ultimate-camping-checklist',
-        slug: 'ultimate-camping-checklist',
-        userId: REPO_TEMPLATE_USER_ID,
-        ownerProfile: undefined,
-      },
-      {},
-      {
-        path: `/profile/${REPO_TEMPLATE_OWNER_SLUG}/ultimate-camping-checklist`,
-        origin: 'https://serplists.com',
-      },
-    );
-
-    expectCanonical(
-      helmet,
-      `https://serplists.com/profile/${REPO_TEMPLATE_OWNER_SLUG}/ultimate-camping-checklist`,
-    );
-  });
-
   it('shares its origin with the sitemap', () => {
     expect(SITE_ORIGIN).toBe(CANONICAL_ORIGIN);
   });

@@ -14,11 +14,12 @@ const sourceFiles = (dir: string): string[] =>
 const importsOf = (file: string): string[] =>
   [...readFileSync(file, 'utf8').matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)].map((match) => match[1]);
 
-// The app shell (AppShell.tsx) mounts only the sonner Toaster. A toast sent through any other store is
-// never rendered, so a failed upload would give the user no feedback at all.
+// The app's providers (src/app/providers.tsx, around every page) mount only the sonner
+// Toaster. A toast sent through any other store is never rendered, so a failed upload would
+// give the user no feedback at all.
 describe('toast rendering', () => {
-  it('mounts the sonner Toaster in the app shell', () => {
-    const app = readFileSync(path.join(SRC, 'components/AppShell.tsx'), 'utf8');
+  it('mounts the sonner Toaster in the app providers', () => {
+    const app = readFileSync(path.join(SRC, 'app/providers.tsx'), 'utf8');
     expect(app).toMatch(/import \{ Toaster \} from '@\/components\/ui\/sonner'/);
     expect(app).toContain('<Toaster />');
   });

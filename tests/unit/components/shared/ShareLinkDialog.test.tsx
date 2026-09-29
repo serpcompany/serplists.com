@@ -11,7 +11,7 @@ describe('ShareLinkField', () => {
     );
 
     expect(html).toContain('value="https://serplists.com/share/token-1"');
-    expect(html).toContain('readonly=""');
+    expect(html).toContain('readOnly=""');
     expect(html).toContain('aria-label="Copy share link"');
   });
 });

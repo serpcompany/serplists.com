@@ -1,7 +1,5 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
@@ -11,6 +9,10 @@ import { toast } from 'sonner';
 import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseTemplateDetailModel = vi.fn();
 const {
@@ -170,14 +172,12 @@ vi.mock('@/lib/access-flow', () => ({
   navigateToLoginWithReturnPath: vi.fn(),
 }));
 
-const renderTemplateDetail = () =>
-  renderToStaticMarkup(
-    <StaticRouter location="/dashboard/templates/tpl-1">
-      <Routes>
-        <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
-      </Routes>
-    </StaticRouter>,
+const renderTemplateDetail = () => {
+  navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
+  return renderToStaticMarkup(
+    <TemplateDetail />,
   );
+};
 
 const baseModel = () => ({
   billingState: { billingEnabled: true, isLoading: false, isPro: true },
@@ -519,28 +519,23 @@ describe('TemplateDetail export of a template the portable format cannot hold', 
 });
 
 describe('TemplateDetail opened by slug', () => {
-  // The page resolves a slug through the API, but the editor loads by id only.
-  const renderAt = (location: string) =>
-    renderToStaticMarkup(
-      <StaticRouter location={location}>
-        <Routes>
-          <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
-          <Route path="/console/templates/:id" element={<TemplateDetail />} />
-        </Routes>
-      </StaticRouter>,
+  // The page resolves a slug through the API, but the editor loads by id only. The legacy
+  // /console/templates/:id path redirects to this page (next.config.ts).
+  const renderAt = (location: string) => {
+    navigation.reset(location, { routes: ['/dashboard/templates/[id]'] });
+    return renderToStaticMarkup(
+      <TemplateDetail />,
     );
+  };
 
-  it.each(['/dashboard/templates/product-launch-checklist', '/console/templates/product-launch-checklist'])(
-    'links Edit on %s to the loaded template id',
-    (location) => {
-      mockUseTemplateDetailModel.mockReturnValue(baseModel());
+  it('links Edit on a page opened by slug to the loaded template id', () => {
+    mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
-      const html = renderAt(location);
+    const html = renderAt('/dashboard/templates/product-launch-checklist');
 
-      expect(hasEditLink(html)).toBe(true);
-      expect(html).not.toContain('/product-launch-checklist/edit');
-    },
-  );
+    expect(hasEditLink(html)).toBe(true);
+    expect(html).not.toContain('/product-launch-checklist/edit');
+  });
 
   it('keeps the id link when the page was opened by id', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
@@ -844,15 +839,9 @@ describe('TemplateDetail page', () => {
       template: buildV0DemoPrivateTemplate(),
     });
 
+    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates/tpl-1">
-        <Routes>
-          <Route
-            path="/dashboard/templates/:id"
-            element={<TemplateDetail />}
-          />
-        </Routes>
-      </StaticRouter>,
+      <TemplateDetail />,
     );
 
     expect(html).toContain('Product Launch Checklist');
@@ -892,15 +881,9 @@ describe('TemplateDetail page', () => {
       template: { ...buildV0DemoPrivateTemplate(), userId: 'someone-else' },
     });
 
+    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
     const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates/tpl-1">
-        <Routes>
-          <Route
-            path="/dashboard/templates/:id"
-            element={<TemplateDetail />}
-          />
-        </Routes>
-      </StaticRouter>,
+      <TemplateDetail />,
     );
 
     expect(html).not.toContain('Upgrade to copy template');
@@ -923,12 +906,9 @@ describe('TemplateDetail page', () => {
       template: { ...buildV0DemoPrivateTemplate(), ...templateOverrides },
     });
 
+    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
     return renderToStaticMarkup(
-      <StaticRouter location="/dashboard/templates/tpl-1">
-        <Routes>
-          <Route path="/dashboard/templates/:id" element={<TemplateDetail />} />
-        </Routes>
-      </StaticRouter>,
+      <TemplateDetail />,
     );
   };
 

@@ -1,10 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import Register from '@/views/Register';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ register: vi.fn() }),
@@ -18,44 +21,37 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-describe('Register page', () => {
-  it('keeps the return path on the Sign in link so switching pages does not lose it', () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location={{ pathname: '/register', state: { from: '/team-invites/abc' } }}>
-        <Register />
-      </StaticRouter>,
-    );
+const renderAt = (url: string) => {
+  navigation.reset(url);
+  return renderToStaticMarkup(<Register />);
+};
 
-    expect(html).toContain('href="/login?next=%2Fteam-invites%2Fabc"');
+describe('Register page', () => {
+  // Return paths travel only in ?next=, with their own query and hash.
+  it('keeps the return path on the Sign in link so switching pages does not lose it', () => {
+    const html = renderAt('/register?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h');
+
+    expect(html).toContain('href="/login?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h"');
   });
 
-  it('reads the return path from next when router state is gone', () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/register?next=%2Fteam-invites%2Fabc">
-        <Register />
-      </StaticRouter>,
-    );
+  it('reads the return path from next', () => {
+    const html = renderAt('/register?next=%2Fteam-invites%2Fabc');
 
     expect(html).toContain('href="/login?next=%2Fteam-invites%2Fabc"');
   });
 
   it('links plainly to sign in without a return path', () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/register">
-        <Register />
-      </StaticRouter>,
-    );
+    expect(renderAt('/register')).toContain('href="/login"');
+  });
+
+  it('never carries a return path to another origin', () => {
+    const html = renderAt('/register?next=https%3A%2F%2Fevil.example%2Fsteal');
 
     expect(html).toContain('href="/login"');
+    expect(html).not.toContain('evil.example');
   });
 
   it('limits the name to the length the API accepts', () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/register">
-        <Register />
-      </StaticRouter>,
-    );
-
-    expect(html).toMatch(new RegExp(`<input[^>]*id="name"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
+    expect(renderAt('/register')).toMatch(new RegExp(`<input[^>]*id="name"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
 });

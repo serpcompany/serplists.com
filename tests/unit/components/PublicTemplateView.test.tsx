@@ -1,37 +1,40 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 type ViewProps = React.ComponentProps<typeof PublicTemplateView>;
 
-const renderView = (overrides: Partial<ViewProps> = {}) =>
-  renderToStaticMarkup(
-    <StaticRouter location="/">
-      <PublicTemplateView
-        template={template}
-        totalItems={1}
-        ownerSlug="devinschumacher"
-        ownerPath="/profile/devinschumacher"
-        isAuthenticated
-        canSaveTemplate
-        canStartRun
-        isBillingError={false}
-        isBillingLoading={false}
-        isProUser={false}
-        isCreatingRun={false}
-        isSaving={false}
-        isTeamWorkspace={false}
-        isWorkspaceLoading={false}
-        onStartRun={() => undefined}
-        onSaveTemplate={async () => false}
-        {...overrides}
-      />
-    </StaticRouter>,
+const renderView = (overrides: Partial<ViewProps> = {}) => {
+  navigation.reset('/');
+  return renderToStaticMarkup(
+    <PublicTemplateView
+      template={template}
+      totalItems={1}
+      ownerSlug="devinschumacher"
+      ownerPath="/profile/devinschumacher"
+      isAuthenticated
+      canSaveTemplate
+      canStartRun
+      isBillingError={false}
+      isBillingLoading={false}
+      isProUser={false}
+      isCreatingRun={false}
+      isSaving={false}
+      isTeamWorkspace={false}
+      isWorkspaceLoading={false}
+      onStartRun={() => undefined}
+      onSaveTemplate={async () => false}
+      {...overrides}
+    />,
   );
+};
 
 // Every rendered <button> whose label matches, with its opening tag.
 const findButtons = (html: string, label: RegExp): string[] =>
@@ -71,27 +74,26 @@ const template: ChecklistTemplate = {
 
 describe('PublicTemplateView', () => {
   it('renders the v0-style public template detail surface', () => {
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicTemplateView
-          template={template}
-          totalItems={1}
-          ownerSlug="devinschumacher"
-          ownerPath="/profile/devinschumacher"
-          isAuthenticated={false}
-          canSaveTemplate
-          canStartRun
-          isBillingError={false}
-          isBillingLoading={false}
-          isProUser={false}
-          isCreatingRun={false}
-          isSaving={false}
-          isTeamWorkspace={false}
-          isWorkspaceLoading={false}
-          onStartRun={() => undefined}
-          onSaveTemplate={async () => false}
-        />
-      </StaticRouter>,
+      <PublicTemplateView
+        template={template}
+        totalItems={1}
+        ownerSlug="devinschumacher"
+        ownerPath="/profile/devinschumacher"
+        isAuthenticated={false}
+        canSaveTemplate
+        canStartRun
+        isBillingError={false}
+        isBillingLoading={false}
+        isProUser={false}
+        isCreatingRun={false}
+        isSaving={false}
+        isTeamWorkspace={false}
+        isWorkspaceLoading={false}
+        onStartRun={() => undefined}
+        onSaveTemplate={async () => false}
+      />,
     );
 
     expect(html).toContain('What&#x27;s included');
@@ -109,45 +111,44 @@ describe('PublicTemplateView', () => {
   });
 
   it('shows template and task descriptions exactly as saved, line breaks and backslashes alike', () => {
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicTemplateView
-          template={{
-            ...template,
-            description:
-              'Template description line one\nSave exports to C:\\new_folder\nTemplate description line three',
-            sections: [
-              {
-                id: 'section-1',
-                title: 'Early Planning',
-                items: [
-                  {
-                    id: 'item-1',
-                    title: 'Set the budget and guest count',
-                    description: 'Run printf(hi\\n) and save to C:\\new_folder',
-                    contents: [],
-                  },
-                ],
-              },
-            ],
-          }}
-          totalItems={1}
-          ownerSlug="devinschumacher"
-          ownerPath="/profile/devinschumacher"
-          isAuthenticated={false}
-          canSaveTemplate
-          canStartRun
-          isBillingError={false}
-          isBillingLoading={false}
-          isProUser={false}
-          isCreatingRun={false}
-          isSaving={false}
-          isTeamWorkspace={false}
-          isWorkspaceLoading={false}
-          onStartRun={() => undefined}
-          onSaveTemplate={async () => false}
-        />
-      </StaticRouter>,
+      <PublicTemplateView
+        template={{
+          ...template,
+          description:
+            'Template description line one\nSave exports to C:\\new_folder\nTemplate description line three',
+          sections: [
+            {
+              id: 'section-1',
+              title: 'Early Planning',
+              items: [
+                {
+                  id: 'item-1',
+                  title: 'Set the budget and guest count',
+                  description: 'Run printf(hi\\n) and save to C:\\new_folder',
+                  contents: [],
+                },
+              ],
+            },
+          ],
+        }}
+        totalItems={1}
+        ownerSlug="devinschumacher"
+        ownerPath="/profile/devinschumacher"
+        isAuthenticated={false}
+        canSaveTemplate
+        canStartRun
+        isBillingError={false}
+        isBillingLoading={false}
+        isProUser={false}
+        isCreatingRun={false}
+        isSaving={false}
+        isTeamWorkspace={false}
+        isWorkspaceLoading={false}
+        onStartRun={() => undefined}
+        onSaveTemplate={async () => false}
+      />,
     );
 
     expect(html).toContain('whitespace-pre-line');
@@ -158,22 +159,21 @@ describe('PublicTemplateView', () => {
   });
 
   it('links each category to its page and leaves one with no letters or digits unlinked', () => {
+    navigation.reset('/');
     const html = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <PublicTemplateView
-          template={{ ...template, categories: ['日本語', '🚀'] }}
-          totalItems={1}
-          ownerSlug="devinschumacher"
-          ownerPath="/profile/devinschumacher"
-          isAuthenticated={false}
-          isBillingLoading={false}
-          isProUser={false}
-          isCreatingRun={false}
-          isSaving={false}
-          onStartRun={() => undefined}
-          onSaveTemplate={() => undefined}
-        />
-      </StaticRouter>,
+      <PublicTemplateView
+        template={{ ...template, categories: ['日本語', '🚀'] }}
+        totalItems={1}
+        ownerSlug="devinschumacher"
+        ownerPath="/profile/devinschumacher"
+        isAuthenticated={false}
+        isBillingLoading={false}
+        isProUser={false}
+        isCreatingRun={false}
+        isSaving={false}
+        onStartRun={() => undefined}
+        onSaveTemplate={() => undefined}
+      />,
     );
 
     expect(html).toContain('href="/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E"');

@@ -1,12 +1,13 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChecklistLibrary from '@/views/ChecklistLibrary';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseTemplateLibrary = vi.fn();
 
@@ -43,16 +44,10 @@ const template: ChecklistTemplate = {
   updatedAt: '2026-03-24T00:00:00.000Z',
 };
 
-const renderChecklistLibrary = () =>
-  renderToStaticMarkup(
-    <HelmetProvider>
-      <StaticRouter location="/templates">
-        <Routes>
-          <Route path="*" element={<ChecklistLibrary />} />
-        </Routes>
-      </StaticRouter>
-    </HelmetProvider>,
-  );
+const renderChecklistLibrary = () => {
+  navigation.reset('/templates');
+  return renderToStaticMarkup(<ChecklistLibrary />);
+};
 
 describe('ChecklistLibrary layout', () => {
   beforeEach(() => {

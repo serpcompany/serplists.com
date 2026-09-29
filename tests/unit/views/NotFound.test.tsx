@@ -1,35 +1,24 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { HelmetProvider } from 'react-helmet-async';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import Features from '@/views/Features';
-import NotFound from '@/views/NotFound';
+import FeaturePage, { generateMetadata as generateFeatureMetadata } from '@/app/(site)/features/[featureSlug]/page';
+import NotFoundPage, { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { navigation } from '../../support/nextNavigation';
 
-// Cloudflare Pages answers unknown paths with index.html and a 200, so the 404 page has to
-// tell crawlers itself that it is not a page to index (a soft 404 otherwise).
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+// The route files read their params through src/server, which only the server may import.
+vi.mock('server-only', () => ({}));
 
-interface HelmetOutput {
-  link: { toString(): string };
-  meta: { toString(): string };
-  script: { toString(): string };
-  title: { toString(): string };
-}
+// A 404 must tell crawlers itself that it is not a page to index (a soft 404 otherwise):
+// unknown paths render src/app/not-found.tsx, and a feature page with an unknown slug shows
+// the same page with the same head.
 
-const renderWithHead = (location: string, routes: React.ReactNode) => {
-  const context: { helmet?: HelmetOutput } = {};
-  const html = renderToStaticMarkup(
-    <HelmetProvider context={context}>
-      <StaticRouter location={location}>
-        <Routes>{routes}</Routes>
-      </StaticRouter>
-    </HelmetProvider>,
-  );
-  return { helmet: context.helmet!, html };
-};
+vi.mock('@/components/Layout', () => ({
+  Layout: ({ children }: { children: React.ReactNode }) => <div data-layout="">{children}</div>,
+}));
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -39,44 +28,47 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const params = (featureSlug: string) => ({ params: Promise.resolve({ featureSlug }) });
+
 describe('NotFound page head', () => {
   it('tells crawlers not to index an unknown route', () => {
-    const { helmet, html } = renderWithHead(
-      '/definitely-missing',
-      <Route path="*" element={<NotFound />} />,
-    );
+    navigation.reset('/definitely-missing');
+    const html = renderToStaticMarkup(<NotFoundPage />);
 
     expect(html).toContain('That page does not exist');
-    expect(helmet.meta.toString()).toMatch(/name="robots" content="noindex[^"]*"/);
-    expect(helmet.title.toString()).toContain(`>Page not found | ${APP_BRAND_NAME}</title>`);
+    expect(html).toContain('The route /definitely-missing could not be found.');
+    expect(notFoundMetadata.robots).toMatch(/^noindex/);
+    expect(notFoundMetadata.title).toEqual({ absolute: `Page not found | ${APP_BRAND_NAME}` });
   });
 
   it('declares no canonical URL for the missing address', () => {
-    const { helmet } = renderWithHead(
-      '/definitely-missing',
-      <Route path="*" element={<NotFound />} />,
-    );
+    navigation.reset('/definitely-missing');
+    const html = renderToStaticMarkup(<NotFoundPage />);
 
-    expect(helmet.link.toString()).not.toContain('canonical');
-    expect(helmet.meta.toString()).not.toContain('og:url');
-    expect(helmet.script.toString()).not.toContain('ld+json');
+    expect(notFoundMetadata.alternates).toBeUndefined();
+    expect(notFoundMetadata.openGraph).toBeUndefined();
+    expect(html).not.toContain('ld+json');
   });
 });
 
 describe('Feature pages', () => {
-  const featureRoutes = <Route path="/features/:featureSlug" element={<Features />} />;
-
-  it('noindexes an unknown feature slug', () => {
-    const { helmet, html } = renderWithHead('/features/definitely-missing', featureRoutes);
+  it('noindexes an unknown feature slug', async () => {
+    navigation.reset('/features/definitely-missing', { routes: ['/features/[featureSlug]'] });
+    const html = renderToStaticMarkup(await FeaturePage(params('definitely-missing')));
+    const metadata = await generateFeatureMetadata(params('definitely-missing'));
 
     expect(html).toContain('That page does not exist');
-    expect(helmet.meta.toString()).toMatch(/name="robots" content="noindex/);
+    expect(metadata.robots).toMatch(/^noindex/);
+    expect(metadata.title).toEqual({ absolute: `Page not found | ${APP_BRAND_NAME}` });
   });
 
-  it('leaves a real feature page indexable', () => {
-    const { helmet, html } = renderWithHead('/features/template-builder', featureRoutes);
+  it('leaves a real feature page indexable', async () => {
+    navigation.reset('/features/template-builder', { routes: ['/features/[featureSlug]'] });
+    const html = renderToStaticMarkup(await FeaturePage(params('template-builder')));
+    const metadata = await generateFeatureMetadata(params('template-builder'));
 
     expect(html).toContain('Template Builder');
-    expect(helmet.meta.toString()).not.toContain('noindex');
+    expect(html).not.toContain('That page does not exist');
+    expect(metadata.robots).toBeUndefined();
   });
 });
