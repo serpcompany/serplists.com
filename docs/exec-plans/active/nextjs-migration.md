@@ -160,9 +160,10 @@ Each of these needs the user's approval, or happens with the domain move:
     308 with the environment's host, and the `x-serplists-smoke-test` header exempts
     workers.dev (`1e0d7588`).
   - [x] Browser tests on canonical URLs, with `tests/e2e/site-standards.spec.ts`, and
-    `scripts/check-site-standards.mjs` for a running site (`89a433b5`). Production and
-    staging builds, served in workerd with `opennextjs-cloudflare preview --env production`
-    and `--env preview`, pass all 45 of its checks.
+    `scripts/check-site-standards.mjs` for a running site (`89a433b5`, `a6a95c6a`). Production
+    and staging builds, served in workerd with `opennextjs-cloudflare preview --env production`
+    and `--env preview`, pass all 45 of its checks. The full browser suite passes on the
+    production build: 253 tests on one worker in 29 minutes.
 
 ## Decision log
 
