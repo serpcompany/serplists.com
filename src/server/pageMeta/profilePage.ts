@@ -53,13 +53,10 @@ export type ProfilePageSeo =
  * other letter cases to.
  */
 export const loadProfilePageSeo = cache(async (username: string): Promise<ProfilePageSeo> => {
+  // No canonical URL: the address is not a page.
   const notFound: ProfilePageSeo = {
     kind: 'not_found',
-    seo: {
-      ...PROFILE_NOT_FOUND_PAGE_TEXT,
-      robots: 'noindex, nofollow',
-      path: buildPublicProfilePath(username),
-    },
+    seo: { ...PROFILE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
   };
   if (!username.trim()) return notFound;
 

@@ -96,6 +96,9 @@ describe('profile page metadata for a profile that is not there', () => {
 
     expect(metadata.robots).toBe('noindex, nofollow');
     expect(metadata.title).toEqual({ absolute: `Profile not found | ${APP_BRAND_NAME}` });
+    // The address is not a page, so it names no canonical URL.
+    expect(metadata.alternates?.canonical).toBeUndefined();
+    expect(metadata.openGraph?.url).toBeUndefined();
   });
 
   it('keeps a blank username out of search without asking the API', async () => {

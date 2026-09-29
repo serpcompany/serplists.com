@@ -60,14 +60,10 @@ export const loadTemplatePageSeo = cache(
   async (username: string, identifier: string): Promise<TemplatePageSeo> => {
     const owner = username.trim().toLowerCase();
     const id = identifier.trim();
-    const requestedPath = buildPublicTemplatePath(username, identifier);
+    // No canonical URL: the address is not a page.
     const notFound: TemplatePageSeo = {
       kind: 'not_found',
-      seo: {
-        ...TEMPLATE_NOT_FOUND_PAGE_TEXT,
-        robots: 'noindex, nofollow',
-        path: requestedPath,
-      },
+      seo: { ...TEMPLATE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
     };
     if (!owner || !id) return notFound;
 

@@ -140,6 +140,9 @@ describe('template page metadata for a template that is not there', () => {
 
     expect(metadata.robots).toBe('noindex, nofollow');
     expect(metadata.title).toEqual({ absolute: `Template not found | ${APP_BRAND_NAME}` });
+    // The address is not a page, so it names no canonical URL.
+    expect(metadata.alternates?.canonical).toBeUndefined();
+    expect(metadata.openGraph?.url).toBeUndefined();
   };
 
   it('keeps a missing template out of search', async () => {
