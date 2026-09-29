@@ -30,12 +30,17 @@ service = "serp-checklists-production"
 [vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
+# SITE_ENV marks production explicitly: anything else is kept out of search engines and loads
+# no analytics (src/lib/seo/siteOrigin.ts). The build reads it too (next.config.ts headers and
+# redirects, public/_headers, static pages), so each environment's build sets the same value.
 [env.preview.vars]
+SITE_ENV = "staging"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 PERSONAL_RUN_MCP_ENABLED = "true"
 CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://staging.serp-checklists.pages.dev"
 
 [env.production.vars]
+SITE_ENV = "production"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
 PERSONAL_RUN_MCP_ENABLED = "false"
 CORS_ALLOWED_ORIGINS = "https://serplists.com"

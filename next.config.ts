@@ -10,13 +10,9 @@ import {
   LOCAL_HOSTS,
   SECURITY_HEADERS,
 } from './src/lib/http/securityHeaders';
+import { isProductionSite } from './src/lib/seo/siteOrigin';
 
-// Only https://serplists.com may be indexed. Every other host serves the same app (staging
-// with test data, each Worker's workers.dev URL, a local server), so it is kept out of search
-// results, whatever a page's own robots tag says. Never add noindex to a rule that matches
-// serplists.com.
 const NOINDEX = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
-const PRODUCTION_HOST = 'serplists\\.com';
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -40,7 +36,10 @@ const nextConfig: NextConfig = {
       },
       // A share link's page shows one person's run: never indexed.
       { source: '/share/:path*', headers: NOINDEX },
-      { source: '/:path*', missing: [{ type: 'host', value: PRODUCTION_HOST }], headers: NOINDEX },
+      // Only a build made with SITE_ENV=production may be indexed (public/_headers does the same
+      // for static files, and src/app/robots.ts for crawlers). Everything else, staging and local
+      // builds included, answers noindex.
+      ...(isProductionSite() ? [] : [{ source: '/:path*', headers: NOINDEX }]),
     ];
   },
   async redirects() {

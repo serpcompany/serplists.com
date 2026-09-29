@@ -63,6 +63,9 @@ createEnv({
   server: {
     JWT_SECRET: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1).optional(),
+    // Only "production" marks the production site (src/lib/seo/siteOrigin.ts); a misspelled
+    // value would quietly hide production from search engines.
+    SITE_ENV: z.enum(["production", "staging"]).optional(),
     AUTH_EMAIL_VERIFICATION_REQUIRED: z.enum(["true", "false"]).optional(),
     PERSONAL_RUN_MCP_ENABLED: z.enum(["true", "false"]).optional(),
     NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED: z.enum(["true", "false"]).optional(),

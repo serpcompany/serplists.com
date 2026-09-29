@@ -2,13 +2,16 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { renderStaticHeaders } from '@/lib/http/securityHeaders';
 import { EMBED_FRAME_ORIGINS } from '@/lib/utils/embedOrigins';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
 
 import { CLIPY_VIDEO_LINKS, YOUTUBE_VIDEO_LINKS } from '../../fixtures/videoLinks';
 
+// public/_headers as a production build writes it (scripts/generate-static-headers.ts), the
+// same policy next.config.ts sends with pages.
 const readContentSecurityPolicy = (): Map<string, string[]> => {
-  const headers = readFileSync('public/_headers', 'utf8');
+  const headers = renderStaticHeaders({ production: true });
   const line = headers.split('\n').find((entry) => entry.includes('Content-Security-Policy:'));
   if (!line) throw new Error('public/_headers has no Content-Security-Policy line');
 

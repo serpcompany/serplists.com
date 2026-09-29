@@ -68,7 +68,11 @@ jobs:
         run: pnpm run test:local-d1
 
       # The OpenNext build (next build, then the Worker bundle) that the browser tests serve.
+      # They run the production configuration (tests/e2e/run-smoke-lib.mjs E2E_SITE_ENV), which
+      # the build bakes into its headers, redirects and static pages.
       - name: Build
+        env:
+          SITE_ENV: production
         run: pnpm run build:worker
 
       - name: Install Playwright browsers

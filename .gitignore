@@ -60,3 +60,5 @@ tmp/
 # Next.js and OpenNext build output
 .open-next
 next-env.d.ts
+# Written by each build for its SITE_ENV (scripts/generate-static-headers.ts)
+public/_headers

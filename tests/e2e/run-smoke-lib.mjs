@@ -9,6 +9,11 @@ export const DEFAULT_E2E_PORT = 4173;
 export const SMOKE_PERSIST_PATH = ".wrangler/smoke-state";
 // The auth secret the preview runs with unless the shell sets one.
 export const E2E_AUTH_SECRET = "playwright-local-better-auth-secret-32-chars";
+// The browser tests run the production configuration (SITE_ENV=production for the build and in
+// the preview's vars), so they see the pages users get: indexable, with Tag Manager, whose
+// hosts the analytics tests stub. Staging's noindex is checked by the unit tests and by
+// scripts/check-site-standards.mjs against a staging build.
+export const E2E_SITE_ENV = "production";
 
 const PRESET_STACK_VARIABLES = ["PLAYWRIGHT_BASE_URL", "PLAYWRIGHT_PORT", "PLAYWRIGHT_API_URL"];
 
@@ -121,6 +126,7 @@ export function buildPreviewArgs(env) {
     FRONTEND_URL: appUrl.origin,
     CORS_ALLOWED_ORIGINS: buildCorsAllowedOrigins(env.CORS_ALLOWED_ORIGINS, appUrl.origin),
     BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET || env.JWT_SECRET || E2E_AUTH_SECRET,
+    SITE_ENV: E2E_SITE_ENV,
   };
 
   for (const [name, value] of Object.entries({ ...vars, PLAYWRIGHT_WRANGLER_PERSIST_TO: env.PLAYWRIGHT_WRANGLER_PERSIST_TO ?? "" })) {
@@ -138,4 +144,14 @@ export function buildPreviewArgs(env) {
     ...(env.PLAYWRIGHT_WRANGLER_PERSIST_TO ? ["--persist-to", env.PLAYWRIGHT_WRANGLER_PERSIST_TO] : []),
     ...Object.entries(vars).flatMap(([name, value]) => ["--var", `${name}:${value}`]),
   ];
+}
+
+/**
+ * Which configuration a build was made for, from the static headers it ships
+ * (.open-next/assets/_headers, written by scripts/generate-static-headers.ts): a build that is
+ * not production marks every file noindex. Null when there is no such file.
+ */
+export function describeBuiltSiteEnv(staticHeaders) {
+  if (staticHeaders == null) return null;
+  return /^\s*X-Robots-Tag:\s*noindex/im.test(staticHeaders) ? "non-production" : "production";
 }

@@ -1,9 +1,10 @@
 /**
  * Origins that video blocks may load in an iframe.
  *
- * The production Content-Security-Policy in public/_headers must list every one
- * of these in its frame-src directive, or the browser refuses the frame. Keep the
- * two in sync: tests/unit/security/headers.test.ts fails when they drift.
+ * The Content-Security-Policy in src/lib/http/securityHeaders.ts (which next.config.ts
+ * sends and each build writes to public/_headers) must list every one of these in its
+ * frame-src directive, or the browser refuses the frame. Keep the two in sync:
+ * tests/unit/security/headers.test.ts fails when they drift.
  */
 export const EMBED_FRAME_ORIGINS = [
   'https://www.youtube.com',

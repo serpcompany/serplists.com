@@ -1,10 +1,14 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { renderStaticHeaders } from '@/lib/http/securityHeaders';
+
 import {
   assertSmokePersistPath,
   buildPreviewArgs,
+  describeBuiltSiteEnv,
   E2E_AUTH_SECRET,
+  E2E_SITE_ENV,
   needsOpenPort,
   resolveSmokeEnv,
   SMOKE_PERSIST_PATH,
@@ -127,7 +131,16 @@ describe('buildPreviewArgs', () => {
       'CORS_ALLOWED_ORIGINS:https://tools.example.com,http://localhost:4180',
       '--var',
       `BETTER_AUTH_SECRET:${E2E_AUTH_SECRET}`,
+      '--var',
+      `SITE_ENV:${E2E_SITE_ENV}`,
     ]);
+  });
+
+  // The browser tests run the production configuration, which the build bakes into its
+  // headers and static pages: the preview gets the same SITE_ENV the runner builds with.
+  it('runs the preview with the production SITE_ENV the build was made with', () => {
+    expect(E2E_SITE_ENV).toBe('production');
+    expect(buildPreviewArgs({})).toEqual(expect.arrayContaining(['--var', 'SITE_ENV:production']));
   });
 
   it("uses the shell's auth secret when it sets one", () => {
@@ -145,6 +158,21 @@ describe('buildPreviewArgs', () => {
     } catch (error) {
       expect(String(error)).not.toContain('cret');
     }
+  });
+});
+
+describe('describeBuiltSiteEnv', () => {
+  it('reads the configuration a build was made for from the static headers it ships', () => {
+    expect(describeBuiltSiteEnv('/*\n  X-Frame-Options: DENY\n')).toBe('production');
+    expect(describeBuiltSiteEnv('/*\n  X-Frame-Options: DENY\n  X-Robots-Tag: noindex, nofollow\n')).toBe(
+      'non-production',
+    );
+    expect(describeBuiltSiteEnv(null)).toBeNull();
+  });
+
+  it('recognizes what scripts/generate-static-headers.ts writes for each build', () => {
+    expect(describeBuiltSiteEnv(renderStaticHeaders({ production: true }))).toBe('production');
+    expect(describeBuiltSiteEnv(renderStaticHeaders({ production: false }))).toBe('non-production');
   });
 });
 

@@ -3,8 +3,11 @@
 // build with `opennextjs-cloudflare preview` on a free port (tests/e2e/preview-server.mjs).
 //   pnpm run test:smoke                  # the @smoke tests
 //   pnpm run test:e2e:full               # every test, one worker
-//   ... -- --skip-build                  # reuse .open-next from `pnpm run build:worker`
-import { rmSync } from "node:fs";
+//   ... -- --skip-build                  # reuse a production build in .open-next (see below)
+// The tests run the production configuration (E2E_SITE_ENV): the runner builds with
+// SITE_ENV=production and the preview gets the same var. A build it reuses must be one too:
+// `SITE_ENV=production pnpm run build:worker`, as CI builds it.
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findOpenPort } from "../../scripts/dev-auto-lib.mjs";
@@ -12,6 +15,8 @@ import { execTool, spawnTool } from "../../scripts/lib/run-tool.mjs";
 import {
   assertSmokePersistPath,
   DEFAULT_E2E_PORT,
+  describeBuiltSiteEnv,
+  E2E_SITE_ENV,
   needsOpenPort,
   resolveSmokeEnv,
 } from "./run-smoke-lib.mjs";
@@ -64,6 +69,20 @@ function prepareSmokeD1(smokePersistPath) {
   );
 }
 
+// SITE_ENV decides headers, redirects and static pages at build time, so the preview's var
+// alone cannot make a staging build production.
+function assertProductionBuild() {
+  const headersPath = path.join(repoRoot, ".open-next", "assets", "_headers");
+  const builtFor = describeBuiltSiteEnv(existsSync(headersPath) ? readFileSync(headersPath, "utf8") : null);
+  if (builtFor !== E2E_SITE_ENV) {
+    console.error(
+      `The build in .open-next is ${builtFor ?? "missing"}, and the browser tests run the ${E2E_SITE_ENV} build. ` +
+        "Build it with SITE_ENV=production (`SITE_ENV=production pnpm run build:worker`), or run without --skip-build.",
+    );
+    process.exit(1);
+  }
+}
+
 const RUNNER_FLAGS = new Set(["--all", "--skip-build"]);
 // `--all` runs the full e2e suite through the same isolated local stack.
 const runAll = process.argv.includes("--all");
@@ -76,7 +95,8 @@ notes.forEach((note) => console.log(note));
 
 if (seedPath) {
   // The build bundles the pages and the API, so an older one would test older code.
-  if (!skipBuild) run("opennextjs-cloudflare", ["build"]);
+  if (!skipBuild) run("opennextjs-cloudflare", ["build"], { env: { SITE_ENV: E2E_SITE_ENV } });
+  assertProductionBuild();
   prepareSmokeD1(seedPath);
 }
 

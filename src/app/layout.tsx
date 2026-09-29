@@ -5,6 +5,7 @@ import '@/index.css';
 import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { SITE_SOCIAL_IMAGE } from '@/lib/publicPageMeta';
+import { isProductionSite } from '@/lib/seo/siteOrigin';
 import { THEME_BOOT_SCRIPT } from '@/lib/themeBootScript';
 
 import { Providers } from './providers';
@@ -26,6 +27,9 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  // Analytics run only on the production site (SITE_ENV=production). Read while rendering: at
+  // build time for the static pages, and from the Worker's vars for the others.
+  const loadAnalytics = isProductionSite();
   return (
     // The theme script sets the html class before React hydrates.
     <html lang="en" suppressHydrationWarning>
@@ -35,17 +39,19 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             the theme, so a dark page never flashes light, and Tag Manager, as early as its own
             snippet runs and only on pages whose URL carries nothing sensitive. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
-        <script dangerouslySetInnerHTML={{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT }} />
+        {loadAnalytics ? <script dangerouslySetInnerHTML={{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT }} /> : null}
       </head>
       <body>
-        <noscript>
-          <iframe
-            src={`https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}`}
-            height="0"
-            width="0"
-            style={{ display: 'none', visibility: 'hidden' }}
-          />
-        </noscript>
+        {loadAnalytics ? (
+          <noscript>
+            <iframe
+              src={`https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}`}
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+            />
+          </noscript>
+        ) : null}
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -1,18 +1,21 @@
 /**
  * The production origin. Canonical links, og:url, and sitemap entries always point
- * here, whichever host (staging, a *.pages.dev alias, localhost) served the page.
+ * here, whichever environment (staging, a local server) served the page.
  * Shared with the API (functions/sitemap/shared.ts), so keep this module pure.
  */
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 
-const CANONICAL_HOSTNAME = new URL(CANONICAL_ORIGIN).hostname;
+type SiteEnvSource = Readonly<Record<string, string | undefined>>;
 
 /**
- * Only the production host may be indexed. Staging, the *.pages.dev aliases, and
- * local hosts serve the same app and must stay out of search results.
+ * True only where SITE_ENV=production: the production Worker's vars, for what renders on
+ * request, and the production build, for what renders at build time (static pages, the
+ * next.config.ts headers and redirects, public/_headers). Anything else is not production:
+ * it is kept out of search engines and loads no analytics. Read it where it is used, never
+ * at module load, where a Worker's vars are not set yet.
  */
-export const isIndexableHost = (hostname: string | null | undefined): boolean =>
-  (hostname ?? '').toLowerCase() === CANONICAL_HOSTNAME;
+export const isProductionSite = (env: SiteEnvSource = process.env): boolean =>
+  env.SITE_ENV === 'production';
 
 /**
  * The production URL for a path or URL on any host, without its query string or
