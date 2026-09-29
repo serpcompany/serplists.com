@@ -77,6 +77,39 @@ test.describe("template limit upgrade path", () => {
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("Second template");
   });
 
+  // Restore draft replaces the whole form, so a template typed since needs a yes first.
+  test("Restore draft asks before replacing a template typed since", async ({ page }) => {
+    await registerFreeAccount(page);
+    await createTemplateViaApi(page, "First template");
+    await stubCheckout(page);
+
+    await page.goto("/dashboard/templates/new");
+    const title = page.getByPlaceholder("Enter template name...");
+    await title.fill("Second template");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
+    await page.getByRole("button", { name: "Upgrade to Pro" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/settings/);
+    await page.getByRole("link", { name: "Resume template draft" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+
+    await title.fill("Another template");
+    let confirmMessage: string | null = null;
+    page.once("dialog", async (dialog) => {
+      confirmMessage = dialog.message();
+      await dialog.dismiss();
+    });
+    await page.getByRole("button", { name: "Restore draft" }).click();
+
+    await expect.poll(() => confirmMessage).toContain("kept draft");
+    await expect(title).toHaveValue("Another template");
+    await expect(page.getByRole("button", { name: "Restore draft" })).toBeVisible();
+
+    page.once("dialog", (dialog) => void dialog.accept());
+    await page.getByRole("button", { name: "Restore draft" }).click();
+    await expect(title).toHaveValue("Second template");
+  });
+
   test("Duplicate on a template offers the upgrade", async ({ page }) => {
     await registerFreeAccount(page);
     const templateId = await createTemplateViaApi(page, "Only template");

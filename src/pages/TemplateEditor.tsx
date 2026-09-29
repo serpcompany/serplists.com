@@ -42,6 +42,7 @@ import {
   EDITOR_LOAD_LATEST_MESSAGE,
   confirmReplaceTemplateDraft,
   getTemplateEditorLeaveMessage,
+  restoreKeptTemplateDraft,
   shouldBlockTemplateEditorNavigation,
 } from "@/features/template-editor/navigationGuards";
 import {
@@ -239,16 +240,26 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 
       <TemplateEditorAccessNotices
         draft={access.draft}
+        // The notices sit outside the locked fieldset: a restore during a create would be
+        // wiped when it finishes, and a Clipy draft arriving later would replace it.
+        draftActionsDisabled={
+          shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) ||
+          isGeneratingDraft
+        }
         isStartingCheckout={access.isStartingCheckout}
         notice={access.notice}
         onDiscardDraft={access.discardDraft}
         onRestoreDraft={() => {
-          const draftValues = access.restoreDraft();
-          if (draftValues) {
-            // Against the blank defaults, so the restored draft counts as unsaved.
-            templateForm.reset(draftValues, { keepDefaultValues: true });
-            handleSelectTemplateInfo();
-          }
+          // Work typed since the page opened is replaced only on a yes.
+          restoreKeptTemplateDraft({
+            hasUnsavedWork: templateForm.formState.isDirty || uploads.count() > 0,
+            takeDraft: access.restoreDraft,
+            apply: (draftValues) => {
+              // Against the blank defaults, so the restored draft counts as unsaved.
+              templateForm.reset(draftValues, { keepDefaultValues: true });
+              handleSelectTemplateInfo();
+            },
+          });
         }}
         onSignIn={access.signIn}
         onUpgrade={() => void access.startUpgrade()}

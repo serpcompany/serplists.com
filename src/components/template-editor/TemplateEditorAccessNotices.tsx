@@ -7,6 +7,8 @@ import type { TemplateEditorAccessNotice } from "@/features/template-editor/temp
 
 type TemplateEditorAccessNoticesProps = {
   draft: StoredTemplateDraft | null;
+  // Restore draft and Discard wait while a create saves or a Clipy draft generates.
+  draftActionsDisabled?: boolean;
   isStartingCheckout: boolean;
   notice: TemplateEditorAccessNotice | null;
   onDiscardDraft: () => void;
@@ -17,6 +19,7 @@ type TemplateEditorAccessNoticesProps = {
 
 export function TemplateEditorAccessNotices({
   draft,
+  draftActionsDisabled = false,
   isStartingCheckout,
   notice,
   onDiscardDraft,
@@ -42,10 +45,16 @@ export function TemplateEditorAccessNotices({
               Restore it to keep working.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={onRestoreDraft} size="sm" type="button">
+              <Button disabled={draftActionsDisabled} onClick={onRestoreDraft} size="sm" type="button">
                 Restore draft
               </Button>
-              <Button onClick={onDiscardDraft} size="sm" type="button" variant="outline">
+              <Button
+                disabled={draftActionsDisabled}
+                onClick={onDiscardDraft}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
                 Discard
               </Button>
             </div>

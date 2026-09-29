@@ -239,6 +239,24 @@ describe('TemplateEditor page', () => {
     expect(html).toMatch(/<button[^>]*>Discard<\/button>/);
   });
 
+  // A draft restored now would be wiped when the create finishes (the kept draft is
+  // cleared and the page moves on), so Restore and Discard wait for it.
+  it('disables Restore draft and Discard while a new template is being created', async () => {
+    mockUseTemplateEditorAccess.mockReturnValue(
+      buildAccess({
+        draft: {
+          savedAt: '2026-09-28T10:00:00.000Z',
+          values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
+        },
+      }),
+    );
+
+    const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Restore draft<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Discard<\/button>/);
+  });
+
   // Saving now would store the block without the file.
   it('disables Save while a file is still uploading', async () => {
     mockUsePendingTemplateEditorUploads.mockImplementation(() => ({

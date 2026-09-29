@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   EDITOR_REPLACE_DRAFT_MESSAGE,
+  EDITOR_RESTORE_DRAFT_MESSAGE,
   EDITOR_SAVE_IN_PROGRESS_MESSAGE,
   EDITOR_UNSAVED_CHANGES_MESSAGE,
   EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
@@ -9,6 +10,7 @@ import {
   confirmReplaceTemplateDraft,
   confirmTemplateEditorNavigation,
   getTemplateEditorLeaveMessage,
+  restoreKeptTemplateDraft,
   shouldBlockTemplateEditorNavigation,
   shouldBlockTemplateEditorTransition,
 } from '@/features/template-editor/navigationGuards';
@@ -201,5 +203,54 @@ describe('confirmReplaceTemplateDraft', () => {
     expect(confirmReplaceTemplateDraft(true, accept)).toBe(true);
     expect(decline).toHaveBeenCalledWith(EDITOR_REPLACE_DRAFT_MESSAGE);
     expect(EDITOR_REPLACE_DRAFT_MESSAGE).toMatch(/unsaved changes will be lost/);
+  });
+});
+
+// Restore draft replaces the whole form too. The answer comes before the draft is taken,
+// so a no keeps the notice (and the kept draft) in place.
+describe('restoreKeptTemplateDraft', () => {
+  const kept = { title: 'Kept draft A' };
+
+  it('restores into a clean form without asking', () => {
+    const confirmDialog = vi.fn(() => false);
+    const takeDraft = vi.fn(() => kept);
+    const apply = vi.fn();
+
+    expect(restoreKeptTemplateDraft({ hasUnsavedWork: false, takeDraft, apply, confirmDialog })).toBe(true);
+    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(apply).toHaveBeenCalledWith(kept);
+  });
+
+  it('keeps unsaved work, and the draft, when the user says no', () => {
+    const confirmDialog = vi.fn(() => false);
+    const takeDraft = vi.fn(() => kept);
+    const apply = vi.fn();
+
+    expect(restoreKeptTemplateDraft({ hasUnsavedWork: true, takeDraft, apply, confirmDialog })).toBe(false);
+    expect(confirmDialog).toHaveBeenCalledWith(EDITOR_RESTORE_DRAFT_MESSAGE);
+    expect(EDITOR_RESTORE_DRAFT_MESSAGE).toMatch(/unsaved changes will be lost/);
+    expect(takeDraft).not.toHaveBeenCalled();
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('replaces unsaved work after a yes', () => {
+    const apply = vi.fn();
+
+    expect(
+      restoreKeptTemplateDraft({
+        hasUnsavedWork: true,
+        takeDraft: () => kept,
+        apply,
+        confirmDialog: () => true,
+      }),
+    ).toBe(true);
+    expect(apply).toHaveBeenCalledWith(kept);
+  });
+
+  it('does nothing when no draft is left to take', () => {
+    const apply = vi.fn();
+
+    expect(restoreKeptTemplateDraft({ hasUnsavedWork: false, takeDraft: () => null, apply })).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
   });
 });

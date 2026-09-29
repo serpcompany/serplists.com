@@ -80,6 +80,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   Clipy draft asks before the request when the form has unsaved changes
   (`confirmReplaceTemplateDraft`), locks the editor and Save while it runs so nothing
   typed meanwhile is replaced, and drops a draft that arrives after the editor closed.
+  Restore draft (the new-template draft kept across checkout or sign-in) asks first
+  when the form has unsaved changes or a file still uploading
+  (`restoreKeptTemplateDraft`); a no leaves the form and the draft notice as they were.
+  Restore draft and Discard are disabled while a create saves or a Clipy draft
+  generates.
 
 ## Data and state
 
