@@ -64,7 +64,7 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the site links in a `NavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
 | `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` |
 | `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and the site links), the page and the site footer |
-| `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. On phones it opens as its own sheet |
+| `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. Its rows are 44px tall, full-size targets (32px squares when collapsed). On phones it opens as its own sheet |
 | `AccountMenu`, `SidebarAccountMenu` | `AccountMenu.tsx` | The signed-in user's `DropdownMenu` (console pages, Profile, Sign out), from an avatar button in the header or the sidebar footer row; both are named "Account menu" |
 | `PageContainer`, `PageSection` | `page-shell.tsx` | The page width (`max-w-6xl`, `px-4 md:px-6`) and a band of vertical spacing |
 | `PageHero` | `PageHero.tsx` | Eyebrow (a `Badge`), large title, muted description, then actions, a `SearchField` and a row of chips |
@@ -88,6 +88,14 @@ Template.
   the component is purely presentational (no app state, features, or API calls;
   enforced by `deps:check`). Add shadcn components with the CLI
   (`npx shadcn@latest add <name>`) and keep them as generated.
+- Three generated components carry a change; keep it when you regenerate them.
+  `CardTitle` (`card.tsx`) renders an `h3`, as it did before the move to base-nova, so card
+  titles stay in the page's outline. The sonner `Toaster` (`sonner.tsx`) follows the app's
+  theme (`useDocumentTheme`), not next-themes. `SelectTrigger`'s icon (`select.tsx`) has
+  empty children: Base UI's default "▼" would render inside the lucide icon as text and
+  join the trigger's text (`tests/unit/components/ui/select.test.tsx`). `EmptyTitle` and
+  `AlertTitle` render a `div`: put a heading inside when the page needs one, as the
+  library's empty state does.
 - Base UI, not Radix: compose with the `render` prop (`<DropdownMenuTrigger
   render={<Button variant="ghost" />}>`, `<DropdownMenuItem render={<Link href=... />}>`).
   A link that looks like a button stays a link: `<Link className={buttonVariants(...)}>`

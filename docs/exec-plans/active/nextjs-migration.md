@@ -164,6 +164,39 @@ Each of these needs the user's approval, or happens with the domain move:
     and staging builds, served in workerd with `opennextjs-cloudflare preview --env production`
     and `--env preview`, pass all 45 of its checks. The full browser suite passes on the
     production build: 253 tests on one worker in 29 minutes.
+- [ ] Phase 3: restyle, in two steps. Step 1 builds the foundation, the shared blocks, both
+  shells, Home, the template library and the public template page; step 2 moves the other
+  screens onto the same blocks.
+  - [x] Tailwind CSS 4 through the official upgrade tool, with `@tailwindcss/postcss`,
+    `tw-animate-css` and `shadcn/tailwind.css` loaded by `src/app/globals.css`, which holds
+    the shadcn neutral theme unchanged. Geist and Geist Mono through `next/font/google`. The
+    old color tokens, gradients, shadows, radii and decorative classes are gone
+    (`838795d6`).
+  - [x] Every ui component in use regenerated with the shadcn CLI (`base-nova` on Base UI)
+    and its call sites moved off Radix; the app's own tags, embed field, file upload and run
+    name dialog rebuilt on them; 19 unused components removed with their packages (every
+    `@radix-ui/*`, `clsx`, `tailwind-merge`, `next-themes`, `vaul`, `recharts` and others)
+    (`7c113bd0`).
+  - [x] Layout blocks in `src/components/layout/` ([DESIGN.md](../../DESIGN.md#shells-and-layout-blocks)),
+    the public shell (header on a `NavigationMenu`, a menu sheet on phones, footer) and the
+    console shell on shadcn's Sidebar block (`6ec8bf6c`).
+  - [x] Home, the template library and the public template page rebuilt from the blocks,
+    with the same behavior, states, links and wording (`47b56087`).
+  - [x] SERP's UI runbook: the [UI app map](../../design-docs/ui-app-map.md) and the [screen
+    inventory](../../design-docs/ui-screen-inventory.md), with a proof pass for every step 1
+    screen on screenshots at 1440x900 and 390x844, light and dark, signed out and in
+    (kept locally in `tmp/design-review/step1/`) (`92a7f0e4`).
+  - [x] Card and empty-state titles are headings again, and the browser specs follow the
+    new shells (`9109323d`, `28eeb89d`).
+  - [x] The full browser suite on one worker: 250 of 253 passed in 29 minutes. Two failures
+    were regressions, now fixed: a Select trigger read its value plus Base UI's default "▼"
+    (`1e90eaed`), and the sidebar's rows were shadcn's 32px instead of the console's 44px
+    targets (`dbfe9435`). The third, a phone menu test whose page stalled for 5 seconds after
+    the click, did not recur. The three specs then passed three times each (24 of 24).
+  - [x] Gates on the final code: `pnpm run verify` (5,157 unit tests); `pnpm run
+    build:worker` (Worker 14,576 KiB, 2,997 KiB gzipped, 114 KiB over the phase 2
+    measurement); `pnpm run test:smoke` (24 of 24).
+  - [ ] Step 2: the screens the inventory marks "Not restyled yet (step 2)".
 
 ## Decision log
 
@@ -297,3 +330,51 @@ Each of these needs the user's approval, or happens with the domain move:
   skips the workers.dev redirect, so CI can test a deployment before the domains move. Host
   rules were checked in workerd with `opennextjs-cloudflare preview --env <env>` and a `Host`
   header, which Wrangler keeps as long as the environment has no custom-domain routes.
+- 2026-09-29: **Restyle foundation as in the reference.** `src/app/globals.css` is the
+  reference's file (Tailwind 4, `tw-animate-css`, `shadcn/tailwind.css`, the neutral theme)
+  plus `@tailwindcss/typography` for Markdown, whose colors point at the theme tokens in
+  unlayered rules (a layered rule loses to the plugin's defaults). `cn` comes from the `cn`
+  package, as in the reference, instead of `clsx` and `tailwind-merge`. Vitest aliases
+  `next/font/google` to a stub (`tests/support/nextFontGoogle.ts`), because only the
+  Next.js compiler implements it. The app keeps its own theme code (`src/lib/theme.ts` and
+  the boot script) rather than next-themes, and the sonner `Toaster` follows it.
+- 2026-09-29: **Base UI, not Radix.** `asChild` became `render`; a link that looks like a
+  button is a `Link` with `buttonVariants` (Base UI's `Button` gives what it renders button
+  semantics); menu items render the `Link` and keep their menuitem role. The props that
+  changed meaning are in [DESIGN.md](../../DESIGN.md#conventions): `Select` labels,
+  `DropdownMenuLabel` inside a group, `AlertDialogAction` that does not close, and a
+  `Switch` or `Checkbox` named by a sibling label. A dialog's outside press comes with a
+  reason, which the Run complete dialog's repeat-click guard reads.
+- 2026-09-29: **Unused components deleted, not regenerated:** accordion, aspect ratio,
+  calendar, carousel, chart, context menu, drawer, form, hover card, input OTP, menubar,
+  multi-select, pagination, radio group, resizable, slider, table, toggle and toggle
+  group. The template editor uses react-hook-form's `FormProvider` directly. `FileUpload`
+  takes the user's id as a prop, because a ui component may not read app state
+  (`deps:check`).
+- 2026-09-29: **Card titles are headings.** base-nova's `CardTitle` is a `div`; ours renders
+  the `h3` it rendered before, so account sections and dashboard cards stay in the page's
+  outline (the browser specs find them by it). `EmptyTitle` and `AlertTitle` stay `div`s,
+  with a heading inside where the page needs one.
+- 2026-09-29: **Header links without dropdowns.** The reference groups its links under
+  menus. The header has three single-destination links (Templates, Features, Pricing), so
+  a menu would either hide a one-click link or add links the header does not have. It is
+  an open question for the design owner in the screen inventory.
+- 2026-09-29: **Console shell on shadcn's Sidebar block.** It replaces the dashboard
+  sidebar, the site header over console pages, the phone menu and the bottom bar. The
+  sidebar holds the brand, the context switcher, the console links (Categories joins them
+  from the old phone menu), the theme toggle and the account menu; the top bar holds the
+  sidebar trigger and, from `md` up, the site links. On phones the sidebar is a sheet, so
+  the context switcher is one tap away instead of always on screen.
+- 2026-09-29: **Sidebar state lasts until a full page load.** shadcn's block reads the
+  collapsed state from a cookie on the server, which would render every console page per
+  request instead of from the static cache.
+- 2026-09-29: **Home without category tiles.** The reference's category tiles would need
+  the public catalog, which Home must not load
+  (`tests/unit/contexts/catalogConsumers.test.ts`).
+- 2026-09-29: **Public template page as a detail page.** A breadcrumb replaces "Back" (the
+  same destination). The sticky header with the actions is gone: the actions sit in the page
+  header, and the closing banner keeps Save and Start Run.
+- 2026-09-29: **Console targets stay full-size.** shadcn's sidebar rows are 32px tall; the
+  old console's links were 44px (`min-h-11`), and a browser test holds them to it. The
+  sidebar's rows take 44px (`h-11`), the one sizing change to the block; collapsed to icons
+  they keep shadcn's 32px squares.

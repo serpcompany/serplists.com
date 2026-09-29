@@ -377,6 +377,9 @@ existing content, invent nothing):
     the switcher, the theme toggle and the account menu, and the top bar the site links.
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
     would render every console page per request.
+  - The rows are 44px tall, the old sidebar's full-size targets
+    (`tests/e2e/template-editor-bugs.spec.ts`), where shadcn's are 32px; collapsed to icons
+    they are shadcn's 32px squares.
 
 ### Auth card frame
 
@@ -1894,3 +1897,6 @@ Found while reading the code; none is decided here.
   updated").
 - The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
   category page already has a color per built-in category that the tiles could use.
+- On phones the console's context switcher sits in the sidebar sheet, so the active context
+  (Personal or an Organization) is no longer on screen at a glance, as it was in the old
+  phone bar. The phone top bar has room to show it.
