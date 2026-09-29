@@ -41,6 +41,13 @@ async function deleteRun(page: Page, runId: string) {
 // The sticky site header, plus the context header below md (768px).
 const stickyHeight = (width: number) => (width < 768 ? 112 : 56);
 
+// The task footer stays in view at the bottom of the window, so scrolling it into view
+// moves nothing. Scroll to the end of the task, as someone reading it does.
+async function scrollToTaskEnd(page: Page, title: string) {
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(page.getByRole('heading', { level: 2, name: title })).not.toBeInViewport();
+}
+
 async function expectRevealed(page: Page, title: string, width: number) {
   const heading = page.getByRole('heading', { level: 2, name: title });
   await expect(heading).toBeInViewport();
@@ -62,10 +69,8 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect(taskA).not.toBeFocused();
 
-    const markComplete = page.getByRole('button', { name: 'Mark Complete' });
-    await markComplete.scrollIntoViewIfNeeded();
-    await expect(taskA).not.toBeInViewport();
-    await markComplete.click();
+    await scrollToTaskEnd(page, 'Task A');
+    await page.getByRole('button', { name: 'Mark Complete' }).click();
     await expectRevealed(page, 'Task B', viewport.width);
 
     // Ticking a sub-task keeps the task, so the page stays where it is.
@@ -79,14 +84,12 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     await expect(subTask).toBeChecked();
     expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeTick);
 
-    const next = page.getByRole('button', { name: 'Next', exact: true });
-    await next.scrollIntoViewIfNeeded();
-    await next.click();
+    await scrollToTaskEnd(page, 'Task B');
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expectRevealed(page, 'Task C', viewport.width);
 
-    const previous = page.getByRole('button', { name: 'Previous' });
-    await previous.scrollIntoViewIfNeeded();
-    await previous.click();
+    await scrollToTaskEnd(page, 'Task C');
+    await page.getByRole('button', { name: 'Previous' }).click();
     await expectRevealed(page, 'Task B', viewport.width);
 
     await deleteRun(page, runId);
