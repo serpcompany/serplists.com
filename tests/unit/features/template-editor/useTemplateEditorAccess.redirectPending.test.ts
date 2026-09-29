@@ -40,7 +40,14 @@ vi.mock("react-router-dom", () => ({
 }));
 vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
 vi.mock("@/contexts/WorkspaceContext", () => ({
-  useWorkspace: () => ({ activeTeamId: null, isTeamWorkspace: false }),
+  useWorkspace: () => ({
+    activeTeamId: null,
+    getPermissions: () => ({ canEditTemplates: true }),
+    isTeamWorkspace: false,
+    isWorkspaceLoading: false,
+    selectWorkspace: vi.fn(),
+    teams: [],
+  }),
 }));
 vi.mock("@/contexts/TemplatesContext", () => ({
   useTemplateLists: () => ({ allTemplates: [{ id: "t1", userId: "user-1", teamId: null }], templatesLoading: false }),
@@ -48,6 +55,8 @@ vi.mock("@/contexts/TemplatesContext", () => ({
 vi.mock("@/lib/api", () => ({ api: { getBillingStatus: vi.fn() } }));
 vi.mock("@/features/template-editor/templateDraftStore", () => ({
   clearTemplateDraft: vi.fn(),
+  // No draft kept in another context (useOtherContextTemplateDraft).
+  listTemplateDraftContexts: () => [],
   readTemplateDraft: () => null,
   saveTemplateDraft: () => true,
   settleTemplateDraftAfterSave: vi.fn(),
