@@ -3,7 +3,12 @@ import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 import { assertProductionApiUrl } from './scripts/lib/buildEnv';
-import { SECURITY_HEADERS } from './src/lib/http/securityHeaders';
+import {
+  CONTENT_SECURITY_POLICY,
+  LOCAL_CONTENT_SECURITY_POLICY,
+  LOCAL_HOSTS,
+  SECURITY_HEADERS,
+} from './src/lib/http/securityHeaders';
 
 // Only https://serplists.com may be indexed. Staging and each Worker's workers.dev URL serve
 // the same app (staging with test data), so they are kept out of search results. Never add
@@ -17,8 +22,20 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   async headers() {
+    const localHost = { type: 'host' as const, value: LOCAL_HOSTS };
     return [
       { source: '/:path*', headers: SECURITY_HEADERS },
+      {
+        source: '/:path*',
+        missing: [localHost],
+        headers: [{ key: 'Content-Security-Policy', value: CONTENT_SECURITY_POLICY }],
+      },
+      // Local servers run on http, where upgrade-insecure-requests breaks redirects.
+      {
+        source: '/:path*',
+        has: [localHost],
+        headers: [{ key: 'Content-Security-Policy', value: LOCAL_CONTENT_SECURITY_POLICY }],
+      },
       // A share link's page shows one person's run: never indexed.
       { source: '/share/:path*', headers: NOINDEX },
       ...NON_PRODUCTION_HOSTS.map((host) => ({

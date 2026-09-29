@@ -205,7 +205,9 @@ tags read the full page URL (GA4 sends it as `page_location`). So:
 page and API response (`src/lib/http/securityHeaders.ts`). Static files are served without
 running the Worker, so `public/_headers` repeats the same headers for them; keep the two
 in step. `next dev` applies only `next.config.ts`, so check asset headers on
-`pnpm run preview` or a deployed host.
+`pnpm run preview` or a deployed host. On `localhost` and `127.0.0.1` the policy leaves
+out `upgrade-insecure-requests`: over plain http the browser would upgrade the redirects
+the app's own navigations follow to https, which a local server does not serve.
 
 - `frame-src` must list every video player origin in `EMBED_FRAME_ORIGINS`
   (`src/lib/utils/embedOrigins.ts`): YouTube, youtube-nocookie, and Clipy.

@@ -121,10 +121,29 @@ describe('host-dependent indexing headers on pages and API responses (next.confi
   });
 
   it('sends the security headers once on every host', () => {
-    for (const url of ['https://serplists.com/templates', 'https://staging.serplists.com/api/health']) {
+    for (const url of [
+      'https://serplists.com/templates',
+      'https://staging.serplists.com/api/health',
+      'http://localhost:3000/dashboard',
+      'http://127.0.0.1:4173/',
+    ]) {
       const headers = workerHeadersFor(url);
-      expect(headers.get('content-security-policy')?.length).toBe(1);
-      expect(headers.get('strict-transport-security')?.length).toBe(1);
+      expect(headers.get('content-security-policy')?.length, url).toBe(1);
+      expect(headers.get('strict-transport-security')?.length, url).toBe(1);
+    }
+  });
+
+  // On http://localhost the browser applied upgrade-insecure-requests to the redirects the
+  // app's navigations follow (/dashboard to /dashboard/templates), asked for https, and the
+  // navigation stalled until Next.js gave up and reloaded the page.
+  it('upgrades insecure requests on the deployed hosts only', () => {
+    for (const url of ['https://serplists.com/', 'https://staging.serplists.com/dashboard', 'https://serp-checklists-preview.serp.workers.dev/']) {
+      expect(workerHeadersFor(url).get('content-security-policy')?.[0], url).toContain('upgrade-insecure-requests');
+    }
+    for (const url of ['http://localhost:3000/dashboard', 'http://127.0.0.1:4173/']) {
+      const [policy] = workerHeadersFor(url).get('content-security-policy') ?? [];
+      expect(policy, url).not.toContain('upgrade-insecure-requests');
+      expect(policy, url).toBe(workerHeadersFor('https://serplists.com/').get('content-security-policy')?.[0].replace(/; upgrade-insecure-requests$/, ''));
     }
   });
 });
