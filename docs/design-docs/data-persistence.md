@@ -170,7 +170,13 @@ as separate steps (`src/lib/shareLink.ts`). The created link is always shown in 
 dialog (`ShareLinkDialog`), copying is best effort through `copyTextToClipboard`
 (Safari refuses a clipboard write that follows a network request), and an error is
 reported only when the API call fails. Reopening the dialog for the same run reuses
-the link instead of minting another token. ESLint bans direct `navigator.clipboard`
+the link instead of minting another token, but only while the page shows the run
+shared. Once the runs list (after a refetch) or the run page (after it reloads the run)
+shows the run private or no longer lists it, the link is forgotten and the next Share
+mints a new one: another tab or an Organization teammate stopped sharing it, which
+killed the link. A Share made elsewhere replaces the token while the run stays shared,
+which the page cannot see because run reads never return share tokens; the reused link
+is then dead until the page is reloaded. ESLint bans direct `navigator.clipboard`
 access outside `src/lib/clipboard.ts`.
 
 ## Seeds

@@ -97,7 +97,7 @@ const ChecklistRunPage = () => {
   });
   const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
-  const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing });
+  const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
   const keepNoteDrafts = useKeptRunNoteDrafts({ run: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
   // Every way out of the page asks once while task notes are unsaved: its own Runs and
   // Back buttons, the app shell, browser Back/Forward, Sign out, and a reload or tab close.

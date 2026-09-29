@@ -118,7 +118,7 @@ export function RunsDashboardView({
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
-    useRunsDashboardSharing({ onRunShared, onStopSharingRun });
+    useRunsDashboardSharing({ runs, onRunShared, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
