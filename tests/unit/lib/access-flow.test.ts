@@ -1,3 +1,4 @@
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiMocks = vi.hoisted(() => ({
@@ -13,9 +14,11 @@ import {
   ORGANIZATION_UPGRADE_MESSAGE,
   handleAccessFailure,
   handleUpgradeRequiredForContext,
+  refreshBillingStatusOnCheckoutConflict,
   startBillingCheckout,
 } from '@/lib/access-flow';
 import { BILLING_UNAVAILABLE_MESSAGE, createApiError } from '@/lib/api-errors';
+import { getBillingStatusQueryKey } from '@/lib/billing';
 
 describe('startBillingCheckout', () => {
   beforeEach(() => {
@@ -212,5 +215,110 @@ describe('handleAccessFailure', () => {
     });
 
     expect(navigate).toHaveBeenCalledWith('/login', expect.anything());
+  });
+});
+
+// Checkout asks Stripe, so it can find a subscription (or a plan support manages) that the
+// cached billing status does not show yet. Every page that starts checkout through here
+// gates Pro features on that cached plan, so the plan must be reloaded, or each click asks
+// for checkout again.
+describe('refreshBillingStatusOnCheckoutConflict', () => {
+  const personalKey = getBillingStatusQueryKey('user-1', null);
+  const organizationKey = getBillingStatusQueryKey('user-1', 'team-1');
+  let client: QueryClient;
+  let stopRefreshing: () => void;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('window', { location: { href: 'http://localhost/dashboard/import-templates' } });
+    client = new QueryClient();
+    client.setQueryData(personalKey, { plan: 'free' });
+    client.setQueryData(organizationKey, { plan: 'team' });
+    stopRefreshing = refreshBillingStatusOnCheckoutConflict(client);
+  });
+
+  afterEach(() => {
+    stopRefreshing();
+    client.clear();
+    vi.unstubAllGlobals();
+  });
+
+  const conflict = (code: string, status = 409) =>
+    createApiError(status, { error: 'You already have Pro.', code });
+
+  it('reloads the plan a page shows when checkout finds an existing subscription', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('already_subscribed'));
+    const statusFetch = vi.fn().mockResolvedValue({ plan: 'pro' });
+    const observer = new QueryObserver(client, { queryKey: personalKey, queryFn: statusFetch, staleTime: 60_000 });
+    const unsubscribe = observer.subscribe(() => undefined);
+
+    await expect(startBillingCheckout(true)).resolves.toBe(false);
+
+    await vi.waitFor(() => expect(client.getQueryData(personalKey)).toEqual({ plan: 'pro' }));
+    expect(statusFetch).toHaveBeenCalledTimes(1);
+    expect(toastMocks.error).toHaveBeenCalledWith('You already have Pro.');
+    // Every cached plan is marked stale, whichever context a page shows next.
+    expect(client.getQueryState(organizationKey)?.isInvalidated).toBe(true);
+    unsubscribe();
+  });
+
+  it('reloads the plan when the subscription needs attention and the portal cannot open', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('subscription_needs_attention'));
+    apiMocks.createBillingPortal.mockRejectedValueOnce(new Error('No Stripe customer found for user'));
+
+    await expect(startBillingCheckout(true)).resolves.toBe(false);
+
+    expect(client.getQueryState(personalKey)?.isInvalidated).toBe(true);
+  });
+
+  it('reloads the plan when support manages it', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('plan_managed_by_support'));
+
+    await expect(startBillingCheckout(true)).resolves.toBe(false);
+
+    expect(client.getQueryState(personalKey)?.isInvalidated).toBe(true);
+  });
+
+  it('reloads the plan for a plan gate handled after an import or export fails', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('already_subscribed'));
+
+    await handleAccessFailure(createApiError(403, { error: 'Upgrade required', code: 'upgrade_required' }), {
+      fallbackMessage: 'Failed to export templates',
+      isCurrent: () => true,
+    });
+
+    expect(client.getQueryState(personalKey)?.isInvalidated).toBe(true);
+  });
+
+  it('keeps the cached plan when checkout fails for another reason', async () => {
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('checkout_incomplete'));
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(new Error('Failed to start checkout'));
+
+    await startBillingCheckout(true);
+    await startBillingCheckout(true);
+
+    expect(client.getQueryState(personalKey)?.isInvalidated).toBe(false);
+  });
+
+  it('reloads the plan once when a second click joined the same checkout', async () => {
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    let fail: (error: unknown) => void = () => {};
+    apiMocks.createBillingCheckout.mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+
+    const first = startBillingCheckout(true);
+    const second = startBillingCheckout(true);
+    fail(conflict('already_subscribed'));
+
+    await expect(Promise.all([first, second])).resolves.toEqual([false, false]);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops reloading once unsubscribed', async () => {
+    stopRefreshing();
+    apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('already_subscribed'));
+
+    await startBillingCheckout(true);
+
+    expect(client.getQueryState(personalKey)?.isInvalidated).toBe(false);
   });
 });

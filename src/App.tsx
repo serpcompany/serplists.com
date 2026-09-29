@@ -8,6 +8,7 @@ import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { appRoutes } from './appRoutes';
+import { refreshBillingStatusOnCheckoutConflict } from './lib/access-flow';
 import { applyStoredTheme, subscribeToThemeChanges } from './lib/theme';
 
 const queryClient = new QueryClient({
@@ -18,6 +19,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// A checkout started from any page can find a plan the cached billing status lacks.
+refreshBillingStatusOnCheckoutConflict(queryClient);
 
 // Applies the stored theme, and a theme chosen in another tab, on every route, including
 // those with no theme toggle.
