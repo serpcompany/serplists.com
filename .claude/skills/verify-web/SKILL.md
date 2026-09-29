@@ -18,7 +18,10 @@ from the root of your worktree. Every page tool takes a `pageId`, which `list_pa
   use that server.
 - **`pnpm run preview`** for redirects, headers, caching, and anything else only the production
   build does. It builds with OpenNext and serves the Worker in workerd at
-  `http://localhost:8787` (`pnpm run preview -- --port <n>` for another port).
+  `http://localhost:8787` (`pnpm run preview --port <n>` for another port; leave out the `--`
+  pnpm scripts usually take, since pnpm passes it on). Links the app builds from
+  `FRONTEND_URL` (emails, invites, checkout returns) still point at port 3000 unless you add
+  `--var FRONTEND_URL:http://localhost:8787`.
 
 Open `localhost`, not `127.0.0.1`: mixing the two drops the session cookie. A new worktree needs
 `pnpm install && pnpm run setup` first. Run one app at a time on this machine. Stop `dev:all`
