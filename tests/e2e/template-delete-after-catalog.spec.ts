@@ -93,7 +93,9 @@ test('a deleted public template stays off the library while the edge still serve
   const requestsBeforeDelete = catalogRequests;
 
   await navigateInApp(page, `/dashboard/templates/${templateId}`);
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  // The detail page offers Archive in its template actions menu.
+  await page.getByRole('button', { name: 'Template actions' }).click();
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
   );
