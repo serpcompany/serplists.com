@@ -32,15 +32,17 @@ The same as the approved reference:
 
 - **Pages Router conflict:** `src/pages/` moves to `src/views/`, so Next.js does not treat it
   as the Pages Router.
-- **Public pages** render on the server with `generateMetadata`. That covers landing,
-  pricing, features, the library, categories, template and profile pages, and the shared-run
-  page. Every page then has its own title and link preview, and `functions/link-preview/`,
-  `functions/seo/page-shell.ts` and the bot rewrite rule go away.
+- **Public pages** render on the server, with their metadata from the Metadata API
+  (`generateMetadata` for the template, profile, category and shared-run pages). Every page
+  then has its own title and link preview, so the link-preview functions, their page shell
+  and the bot rewrite rule are gone. Page data still loads in the browser with React Query.
 - **App pages** (dashboard, template editor, runs, settings, archive) stay client-rendered
   with React Query, behind an authenticated layout.
 - **Sitemaps** become route handlers built on `functions/sitemap/`.
 - **Security headers and redirects** move from `public/_headers` and `public/_redirects` into
   `next.config.ts`, because rendered pages come from the Worker, not static assets.
+  `public/_headers` keeps the rules for static files, which Workers Static Assets serves
+  without running the Worker.
 - **Unsaved-changes guard:** React Router's blocker is replaced by a navigation guard that
   covers links, router calls, Back/Forward, and reload or close.
 
@@ -86,6 +88,10 @@ The same as the approved reference:
   cheapest to do during the port.
 - **Lint.** The reference uses Biome. This repo keeps ESLint, with `eslint-config-next`
   added, for its guardrails (file-size caps, the suppressions file), unless Biome is required.
+- **Local Worker builds on Windows.** `pnpm run preview` fails on Windows (see the decision
+  log). Options: build in WSL; set pnpm's `node-linker=hoisted`, which drops the links; or a
+  build helper that repoints OpenNext's copied links at its patched copies (a local one
+  proved the build).
 
 ## Progress
 
@@ -93,7 +99,20 @@ The same as the approved reference:
   246 tests).
 - [x] Reviewed the reference stack and the aiuxplayground.com layouts (screenshots taken
   locally).
-- [ ] Phase 1: foundation.
+- [x] Phase 1: foundation (`b862f749`, `7fc1e59d`).
+- [ ] Phase 2: port with today's look.
+  - [x] Every view on Next.js navigation; React Router, its route table, `LegacyRedirect`
+    and `ScrollToTop` removed (`04eecc7d`).
+  - [x] Metadata API on every page, server lookups for the dynamic public pages;
+    react-helmet-async, `SEOHead` and the link-preview functions removed (`04eecc7d`).
+  - [x] Sitemaps as route handlers, with the same URLs and cache (`9ffb77ef`).
+  - [x] Vite removed; `build`, `preview` and `typecheck` on Next.js and OpenNext
+    (`56f8a9e3`). `next build` and `opennextjs-cloudflare build` succeed; the preview in
+    workerd serves the public pages, sign-in, the dashboard, the API and the sitemaps.
+    Worker: 13,913 KiB, 2,808 KiB gzipped (Workers Free allows 3 MiB).
+  - [ ] Unit tests (mocking `next/navigation`) and the browser suite against the preview.
+  - [ ] Development scripts (`dev:all`, `setup`, `run-smoke`, `ui:snap`), `.dev.vars` and
+    the development environment docs.
 
 ## Decision log
 
@@ -108,3 +127,30 @@ The same as the approved reference:
 - 2026-09-29: **Wrangler 4.143** (required by OpenNext) fixed the proxy's restart check
   and retries dropped GET/HEAD upstream, but not POST or PUT. `patches/wrangler@4.54.0.patch`
   is re-created for 4.143 only if the browser suite still shows dropped writes.
+- 2026-09-29: **No router state.** Return paths travel only in `?next=` (sanitized by
+  `getReturnPath`). Sign-up hands the new account's email to `/login` in sessionStorage,
+  and the login page keeps it in its own history entry, so it never enters a URL and a
+  reload of that page still fills the form.
+- 2026-09-29: **Query changes that are not navigations** (dropping a reset token or a
+  notice, the library's filters) rewrite the entry with the History API
+  (`replaceCurrentUrl`): `router.replace` would fetch the page from the server on every
+  keystroke. The library keeps its "written here" marker in the entry's state, as before.
+- 2026-09-29: **Page visits without location keys.** A link to the page already open changes
+  nothing a hook can read in Next.js, so the app's `Link` and `useAppRouter` report every
+  navigation (`navigationSignal.ts`), and popstate counts too.
+- 2026-09-29: **Metadata lookups.** The template page reads one D1 row (the existing lookup,
+  cached 5 minutes). The profile page and the category counts go through the API router
+  in the same Worker and the library's own functions, so they say exactly what the page
+  shows; their results are cached 5 minutes. A category the server cannot name keeps the
+  defaults and the page decides in the browser, adding noindex when it has nothing to show.
+- 2026-09-29: **Unknown feature slugs** show the 404 view with `noindex` (as before), not
+  `notFound()`: a page that throws `notFound()` renders through Next.js's error recovery
+  (an empty HTML body that the browser fills), and with OpenNext's default (dummy)
+  incremental cache a `dynamicParams = false` route answers 404 even for its own slugs.
+- 2026-09-29: **Template packs:** Turbopack's `import.meta.glob` matched nothing for a
+  `../` pattern, so the bundled library was empty in the foundation build; the glob now
+  sits in `src/data/public-template-packs/index.ts`.
+- 2026-09-29: **Windows builds:** `opennextjs-cloudflare build` bundles the repo's real,
+  unpatched Next.js on Windows, because pnpm's links there are absolute (the build fails on
+  `sharp`). OpenNext supports Linux and WSL; CI builds on Linux. How to build locally on
+  Windows is open (below).

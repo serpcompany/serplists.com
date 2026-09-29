@@ -1,16 +1,17 @@
 # Frontend
 
-A React 18 single-page app in `src/`, built with Vite and TypeScript (`strict`).
-Server state goes through TanStack Query, routing through React Router 6, and UI
-through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)). Path aliases: `@/*` maps to
-`src/*`, `@functions/*` to `functions/*`.
+A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`), running on
+Cloudflare Workers through OpenNext ([ARCHITECTURE.md](../ARCHITECTURE.md)). Server state
+goes through TanStack Query and UI through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)).
+Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
 
 ## Structure
 
 | Path | Role |
 | --- | --- |
-| `src/App.tsx`, `src/appRoutes.tsx`, `src/main.tsx` | Providers and the data router, the route tree, bootstrap |
-| `src/views/` | Route screens: compose components and feature models |
+| `src/app/` | Routes: layouts, pages (each renders a view and declares its metadata), route handlers (the API, the sitemaps), and the providers (`providers.tsx`) |
+| `src/server/` | Server-only code the route files use: the Worker's bindings, page metadata lookups |
+| `src/views/` | Route screens (client components): compose components and feature models |
 | `src/components/` | Feature UI; `components/ui/` holds presentational primitives |
 | `src/features/*/` | Headless feature models (`use*Model.ts`) and mappers from API shapes to domain types |
 | `src/contexts/` | Auth, Ownership Context (legacy `WorkspaceContext`), Templates and Runs |
@@ -20,40 +21,52 @@ through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)). Path aliases: `@/*` maps
 
 Enforced by `pnpm run deps:check` ([ARCHITECTURE.md](../ARCHITECTURE.md)): pages and
 components never call `src/lib/api.ts` at runtime (put the call in a feature model
-or context), `components/ui/` stays presentational, and every module must be
-reachable from `src/main.tsx`. Remaining legacy call sites are tracked in the
-[UI decoupling plan](exec-plans/active/ui-decoupling.md).
+or context), `components/ui/` stays presentational, only the route files in `src/app`
+and `src/server` import `functions/`, client code never imports `src/server`, and every
+module must be reachable from a route file in `src/app`. Remaining legacy call sites are
+tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 
 Canonical private routes live under `/dashboard/*`; the full route list is in
-[system overview](design-docs/system-overview.md#routes).
+[system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
+route group and signed-in pages in `(app)`, whose layout checks the session first
+(`RequireAuth` sends a signed-out visitor to `/login?next=<path>`). Both layouts render
+`Layout`, which picks the public or console shell from the pathname.
 
-Routes render through a data router (`createBrowserRouter` and `RouterProvider`), not
-`BrowserRouter`, so a page can block navigation with `useBlocker`. The route tree lives
-in `src/appRoutes.tsx` under a root `AppShell` route. Unit tests render routes with
-`tests/fixtures/renderDataRoutes.tsx` (a static data router).
+The views are client components, and the server renders them too. A view must render the
+same HTML on the server and in the browser's first render, or hydration fails: never read
+`window`, `document` or browser storage while rendering (read them in an effect, or with
+`useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
+visitor's data in module-level state, which the server would share with the next visitor.
+A view that reads the query with `useSearchParams` on a statically rendered page is
+wrapped in `<Suspense>` in its route file (`/templates`, `/login`, `/register`,
+`/reset-password`): the server sends the fallback and the browser renders the rest.
+
+In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
+`useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work
+first (below). A page that drops one-shot query parameters once it has read them (a reset
+token, the login notices, `?billing=`) or keeps its filters in the URL (the library) rewrites
+the current entry with `replaceCurrentUrl` (`src/lib/navigation/replaceCurrentUrl.ts`), the
+History API that Next.js follows: the page keeps its state and nothing is fetched. Return
+paths travel only in the `next` query parameter (`withReturnPath` and `getReturnPath` in
+`src/lib/auth/returnPath.ts`, which sanitizes them), never in history state.
 
 Every page renders inside `RouteErrorBoundary` (`src/components/RouteErrorBoundary.tsx`):
 `Layout` wraps its content, and routes outside `Layout` (the shared run page) wrap their
 element. A page that throws while rendering shows a "Something went wrong" card with Try
-again, Go back and a home link, the header and navigation keep working, and any
-navigation clears it, even a link to the page that crashed (the boundary resets when the
-location key changes, and only while it shows an error, so healthy pages are never
-remounted). The `ErrorBoundary` around the providers in `App.tsx` is the last
-resort: its fallback uses plain links, and browser Back clears it.
+again, Go back and a home link, the header and navigation keep working, and opening another
+page clears it, and so do the card's own buttons (the boundary resets when the pathname
+changes, and only while it shows an error, so healthy pages are never remounted). The
+`ErrorBoundary` around the providers in `src/app/providers.tsx` is the last resort: its
+fallback uses plain links, and browser Back clears it.
 
-React Router keeps the same page instance when only a route param changes, so a page
-whose state belongs to one param is keyed by it. `CategoryDetailRoute` keys the category
-page by its normalized slug, so a Related Categories link or Back starts the next
-category with an empty search and the default sort; `TemplateEditorRoute` does the same
-for the editor (below).
+Next.js gives each value of a dynamic segment its own page instance. `CategoryDetailRoute`
+also keys the category page by its normalized slug, so another category always starts with
+an empty search and the default sort; `TemplateEditorRoute` does the same for the editor
+(below).
 
-The router's history never resets the window's scroll, so `ScrollToTop`
-(`src/components/routing/`) is mounted once in `AppShell`, inside the router. When a
-navigation changes the pathname, it scrolls to the URL's `#anchor` if that element
-exists and otherwise to the top. Back and Forward (POP) keep the browser's own
-restoration, and search-only changes, such as the library search rewriting `?search=`,
-never scroll. Pages scroll the window, not an inner container; a shell that adds its own
-scroll container must reset that element too.
+Next.js scrolls to the top, or to the URL's `#anchor`, when a navigation opens another
+page, and Back and Forward restore the scroll position. Rewriting the query in place (the
+library's search) never scrolls. Pages scroll the window, not an inner container.
 
 ## Unsaved changes
 
@@ -63,8 +76,10 @@ first three points below); the template editor (`useTemplateEditorLeaveGuard`) a
 the run page (unsaved task notes) use it. A page's own back buttons just navigate and
 let it ask, so the user is asked once.
 
-- `useBlocker` covers every route change: sidebar, header, account menu, in-page
-  links, and browser Back/Forward. It asks only when the pathname changes.
+- The app's `Link` and `useAppRouter` ask before opening another page: sidebar, header,
+  account menu, in-page links and buttons. They ask only when the pathname changes.
+- Browser Back/Forward: the guard pushes a same-URL history entry above the page's own,
+  so Back lands on it first (the page stays) and the page asks there before going on.
 - Actions that leave the page without a navigation it can block first, such as Sign
   out (which unmounts the page), go through `src/lib/navigation/leaveGuard.ts`; the
   page registers with `registerLeaveGuard`. Sign out uses `leaveAfterConfirmed`: it
@@ -215,11 +230,13 @@ let it ask, so the user is asked once.
   a stored title can be longer than the API's 160-character limit, and resending it
   would fail every save on that run.
 - After an await, move the user (navigate, sign-in or checkout redirect, a dialog)
-  only if they are still on the page that started the action: React Router still runs
-  a `navigate()` from a page the user has left. Call `beginVisit()` from
+  only if they are still on the page that started the action: the router still runs
+  a navigation from a page the user has left. Call `beginVisit()` from
   `usePageVisit` (`src/hooks/usePageVisit.ts`) when the action starts and check
-  `visit.isCurrent()` after the request; it is false once the page unmounts or its
-  location changes (Back, a link, another id on the same page). The template editor
+  `visit.isCurrent()` after the request; it is false once the page unmounts or the
+  user navigates (Back, a link, even to the same page, another id on the same page).
+  Next.js has no location key, so the app's `Link` and `useAppRouter` report each
+  navigation they start (`src/lib/navigation/navigationSignal.ts`). The template editor
   passes `{ endOn: "pathname" }`: the sidebar's New Template link on the new-template
   page keeps the editor mounted at the same path, and a create in flight must still
   finish and leave for My Templates. The request's own
@@ -369,20 +386,29 @@ only module that imports `react-markdown`. It disables raw HTML and passes links
 
 ## Page titles and meta tags
 
-Pages set their title and social tags with `SEOHead`
-(`src/components/shared/SEOHead.tsx`), which titles them "Page | SERP Lists" through
-`buildPageTitle` in `src/lib/brand.ts`. `App.tsx` wraps everything in
-`DocumentHeadProvider`, whose default title is the brand alone, so a page without
-`SEOHead` never keeps the previous page's title. Do not add a `titleTemplate`: `SEOHead`
-already adds the suffix.
+Pages declare their `<head>` with the Next.js Metadata API, and the server renders it into
+the page's HTML. The root layout (`src/app/layout.tsx`) holds the defaults: the brand as the
+title, the site description, and the Open Graph and Twitter tags with the shared image. A
+page with tags of its own builds them with `buildPageMetadata`
+(`src/lib/seo/pageMetadata.ts`), which titles it "Page | SERP Lists" (`buildPageTitle` in
+`src/lib/brand.ts`, which never adds the suffix twice), points the canonical URL and
+`og:url` at the path on `https://serplists.com`, and sets robots to `index, follow` unless
+the page says otherwise. The route also renders the same text as JSON-LD (`JsonLd` and
+`PageJsonLd` in `src/components/seo/`). Staging and every workers.dev host also get
+`X-Robots-Tag: noindex, nofollow` from `next.config.ts`, which wins over the tag.
 
-`index.html` keeps a static description, Open Graph and Twitter tags for crawlers that do
-not run JavaScript. Each carries `data-rh="true"`, so react-helmet-async owns it: a page's
-`SEOHead` replaces it by name or property instead of adding a second copy. The same tags
-are the defaults in `DocumentHeadProvider`, which puts them back when a page without
-`SEOHead` opens. Keep the two identical, and give any new static SEO tag `data-rh` and a
-matching default (`tests/unit/components/documentHeadMeta.test.tsx` checks both). The
-viewport and charset tags are global: they stay in `index.html` only, without `data-rh`.
+- Static pages export `metadata` (`/templates`, `/categories`, the 404 page).
+- Dynamic public pages look their subject up in `generateMetadata`, the way the page itself
+  finds it (`src/server/pageMeta/`):
+  - a template page (`/profile/<user>/<slug>`): a bundled library template, or one D1 row
+    (`functions/seo/public-template-lookup.ts`), cached in the data center for 5 minutes;
+  - a profile: the profile and its public templates through the API router in the same
+    Worker (`src/server/api.ts`), cached for 5 minutes;
+  - a category: the public catalog counted with the library's own functions, cached for 5
+    minutes;
+  - a share link: the run's title from one D1 row, never cached, and always noindex.
+- The page text lives in `src/lib/publicPageMeta.ts`, which the views read too; change it
+  there, so the page and its tags agree.
 
 Every page shares one link-preview image, `public/og-default.png` (1200x630), named by
 its absolute URL on `https://serplists.com` (`SITE_SOCIAL_IMAGE` in
@@ -390,66 +416,33 @@ its absolute URL on `https://serplists.com` (`SITE_SOCIAL_IMAGE` in
 
 ### Link previews
 
-Link previews do not run JavaScript, so on their own a template, category, `/categories` or
-`/templates` link unfurls with `index.html`'s generic tags. The Pages Functions in
-`functions/link-preview/` serve `index.html` with that page's title, description,
-`og:type`, canonical link and `og:url` filled in (with `data-rh`, so `SEOHead` takes them
-over), at `/link-preview/<page path>`. They are not on the public paths. Cloudflare runs a
-Function for every request to a Function path and bills it as a Workers request, and a
-Function on `/profile/*` would run on every page load by a person, who gets the same tags
-from `SEOHead` anyway. `tests/unit/functions/function-routes.test.ts` fails if a Function is
-added on a public page path.
+Link-preview crawlers (Slack, X, Facebook, LinkedIn, Discord, iMessage) do not run
+JavaScript. Every page's HTML carries its own title, description, canonical URL and image,
+so a shared link unfurls with that page's card, with no bot-only route and no Cloudflare
+rewrite rule. A page whose metadata waits for a lookup may stream its tags to browsers after
+the first bytes; for the crawlers Next.js lists as HTML-limited, it waits and puts them in
+`<head>`.
 
-A Cloudflare URL rewrite sends only link-preview bots to `/link-preview/`; everyone else
-gets the public path as a static file, for free. It is a zone setting, not code: without it,
-every link unfurls with the generic tags and the default image. To add or restore it:
-Cloudflare dashboard > `serplists.com` > Rules > Transform Rules > URL Rewrite (free on
-every plan; try it on `staging.serplists.com` first), with:
+### Missing pages
 
-- **Custom filter expression:**
+A path no route matches answers 404 with `src/app/not-found.tsx`, titled "Page not found",
+with `noindex, follow` and no canonical URL. An unknown feature slug shows the same page.
 
-  ```
-  (http.host in {"serplists.com" "www.serplists.com"})
-  and (starts_with(http.request.uri.path, "/profile/")
-    or http.request.uri.path in {"/templates" "/categories"}
-    or (starts_with(http.request.uri.path, "/categories/") and not ends_with(http.request.uri.path, ".xml")))
-  and (http.user_agent contains "Slackbot" or http.user_agent contains "Twitterbot"
-    or http.user_agent contains "facebookexternalhit" or http.user_agent contains "Facebot"
-    or http.user_agent contains "LinkedInBot" or http.user_agent contains "Discordbot"
-    or http.user_agent contains "WhatsApp" or http.user_agent contains "TelegramBot"
-    or http.user_agent contains "SkypeUriPreview" or http.user_agent contains "Pinterest"
-    or http.user_agent contains "redditbot" or http.user_agent contains "Embedly"
-    or http.user_agent contains "Iframely" or http.user_agent contains "Mastodon"
-    or http.user_agent contains "Bluesky")
-  ```
+A template or profile that does not exist answers with its own not-found message, and the
+server's lookup gives it a not-found title and `noindex, nofollow`. Only a settled answer
+counts: a lookup that failed keeps the site's defaults, and a page whose own load in the
+browser fails (a network failure, 5xx or rate limit may be brief) shows a retry state; both
+stay indexable. See `loadTemplateDetailData`
+(`src/features/template-detail/loadTemplateDetail.ts`) and `loadUserProfile`
+(`src/features/profile/loadUserProfile.ts`); only an API 404 (`isNotFoundError` in
+`src/lib/api-errors.ts`) is settled.
 
-- **Path:** Rewrite to, Dynamic: `concat("/link-preview", http.request.uri.path)`.
-- **Query:** Preserve.
-
-iMessage fetches previews as `facebookexternalhit` and `Twitterbot`, so it is covered.
-Search engines are left out on purpose: they run the app's JavaScript and read `SEOHead`.
-An app whose preview bot is not listed gets the generic card; add its user agent to the
-expression when that matters.
-
-The pages and the preview functions read their text from `src/lib/publicPageMeta.ts`;
-change it there, not in the page, so the preview and the page agree. A new public route
-with its own `SEOHead` text needs a matching function under `functions/link-preview/` and
-its path in the rewrite rule.
-
-Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
-(`src/views/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
-`NotFound` only once a lookup has settled: a page whose data is still loading, or failed
-to load, shows a loading or retry state instead, so a real page never sends `noindex`.
-Never render `NotFound` next to an `SEOHead`. Do not add a top-level `404.html`; it turns
-off the single-page app fallback.
-
-Pages with their own not-found message (a public template or profile) render `SEOHead`
-with `robots="noindex, nofollow"` and a not-found title in that state. Only an API 404
-(`isNotFoundError` in `src/lib/api-errors.ts`) counts as settled. A network failure, 5xx
-or rate limit may be transient, so it shows a retry state without `noindex`; see
-`loadTemplateDetailData` (`src/features/template-detail/loadTemplateDetail.ts`) and
-`loadUserProfile` (`src/features/profile/loadUserProfile.ts`). `NotFoundHead`
-(`src/components/shared/NotFoundHead.tsx`) is the 404 page's head.
+When the browser learns that a page has nothing to index after the server rendered it (a
+template made private within the 5-minute cache, a category with no public templates, a
+category that does not exist), the view renders `NoIndexMeta`
+(`src/components/seo/NoIndexMeta.tsx`); React hoists the tag into `<head>`, and search
+engines follow the more restrictive rule. Render `NotFound` or `NoIndexMeta` only once a
+lookup has settled, never while loading or after a failure.
 
 ## Verifying UI changes
 

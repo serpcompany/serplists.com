@@ -1,8 +1,9 @@
 # Architecture
 
-SERP Lists is a React single-page app (`src/`) served by Cloudflare Pages, with a
-Pages Functions API (`functions/`) backed by D1 (SQL) and R2 (files). This page is
-the top-level map. Request flow, routes, and the data model are in the
+SERP Lists is a Next.js app (`src/`) that runs on Cloudflare Workers through OpenNext.
+The same Worker serves the pages and the API (`functions/api/`, run by the route handler
+`src/app/api/[[...route]]/route.ts`), backed by D1 (SQL) and R2 (files). This page is the
+top-level map. Request flow, routes, and the data model are in the
 [system overview](docs/design-docs/system-overview.md); product terms are defined in
 [PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md); the current tables are in
 [generated/db-schema.md](docs/generated/db-schema.md).
@@ -15,9 +16,9 @@ the top-level map. Request flow, routes, and the data model are in the
 | Personal and Organization ownership | `handlers/teams.ts`, `handlers/team-create.ts`, `handlers/team-membership.ts`, `utils/team-access.ts` | `contexts/WorkspaceContext.tsx`, `features/teams/` |
 | Templates | `handlers/templates.ts`, `utils/payloads.ts`, `utils/template-reconciliation.ts`, `utils/template-identities.ts`, `utils/template-changes.ts`, `utils/template-portable.ts`, `utils/template-writes.ts`, `utils/history-queries.ts` | `contexts/TemplatesContext.tsx`, `features/template-*`, `lib/templates/` |
 | Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
-| Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `pages/Pricing.tsx` |
+| Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `views/Pricing.tsx` |
 | Agent access (Run Keys, MCP) | `handlers/agent-keys.ts`, `handlers/agentMcp.ts`, `utils/agent-mcp-host.ts`, `utils/personal-run-key.ts` | `components/account/AgentAccessSection.tsx` |
-| Public discovery and SEO | `functions/sitemap*`, `functions/categories/`, `functions/seo/` (link-preview tags served by `functions/link-preview/`, which only link-preview bots reach through a Cloudflare URL rewrite; see docs/FRONTEND.md) | public `pages/`, `data/`, `lib/publicPageMeta.ts` |
+| Public discovery and SEO | `functions/sitemap/` (served by the route handlers in `src/app/sitemap.xml` and `src/app/sitemaps`), `functions/seo/` (lookups for page metadata) | public `views/`, `data/`, `lib/publicPageMeta.ts`, `lib/seo/`, `server/pageMeta/` (each page's metadata, rendered on the server; see docs/FRONTEND.md) |
 | Imports and uploads | `handlers/clipy.ts`, `handlers/uploads.ts` | `lib/schemas/portableTemplate*`, `components/TemplateBackup.tsx` |
 
 Legacy `team`/`workspace` identifiers in code mean Organization; see
@@ -35,8 +36,9 @@ API (functions/)
    id, logging)     respond)        audit, logger)
 
 App (src/)
-  pages/*  ->  components/*  ->  features/*, contexts/*, hooks/*  ->  lib/api.ts  ->  HTTP
-                  components/ui/* (presentational primitives only)
+  app/* (routes)  ->  views/*  ->  components/*  ->  features/*, contexts/*, hooks/*  ->  lib/api.ts  ->  HTTP
+                                     components/ui/* (presentational primitives only)
+  app/* (server side: metadata, route handlers)  ->  server/*  ->  functions/ (the API, sitemaps, lookups)
 
 Shared (imported by both sides)
   src/lib/schemas/*, src/types/*, and the modules allowlisted in .dependency-cruiser.cjs
@@ -49,8 +51,9 @@ Shared (imported by both sides)
 
 - `functions/` importing anything from `src/` except allowlisted framework-free modules
 - shared modules importing React, UI, contexts, hooks, or the browser API client
-- `src/` importing from `functions/`
-- pages and components calling `src/lib/api.ts` directly (type-only imports are allowed)
+- `src/` importing from `functions/`, except the route files in `src/app` and `src/server`
+- client code (views, components, hooks, contexts, features) importing `src/server`
+- views and components calling `src/lib/api.ts` directly (type-only imports are allowed)
 - `src/components/ui/` depending on app state, features, pages, or the API client
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
 - runtime code importing tests or devDependencies; circular imports
@@ -71,14 +74,14 @@ versioned links below rather than relying on memory.
 
 | Layer | Choice (version) | Reference |
 | --- | --- | --- |
-| UI | React 18, Vite 5, React Router 6, TanStack Query 5 | [React Router 6.28 docs](https://reactrouter.com/6.28.0/start/overview) |
+| UI | Next.js 16 (App Router, Turbopack), React 19, TanStack Query 5 | `node_modules/next/dist/docs/` (the docs for the installed version) |
 | Components and styling | shadcn/ui (Radix), Tailwind CSS 3 | [shadcn-ui-llms.txt](docs/references/shadcn-ui-llms.txt), [Tailwind v3](https://v3.tailwindcss.com/docs) |
 | Validation | Zod 3 (not 4), `@t3-oss/env-core` | [v3.zod.dev](https://v3.zod.dev/) |
-| API runtime | Cloudflare Pages Functions, Wrangler 4 | [cloudflare-pages-llms.txt](docs/references/cloudflare-pages-llms.txt) |
+| Runtime | Cloudflare Workers through OpenNext (`@opennextjs/cloudflare`), Wrangler 4; the API runs in the same Worker | [OpenNext for Cloudflare](https://opennext.js.org/cloudflare) |
 | Data | Cloudflare D1 with Drizzle ORM 0.45 / Kit 0.31; R2 for uploads | [cloudflare-d1-llms.txt](docs/references/cloudflare-d1-llms.txt), [drizzle-llms.txt](docs/references/drizzle-llms.txt) |
 | Auth | Better Auth 1.3.4 (exact pin; current docs describe newer releases) | [authentication](docs/design-docs/authentication.md) |
 | Billing | Stripe REST API via `fetch` (no SDK) | [stripe-llms.txt](docs/references/stripe-llms.txt), [billing](docs/design-docs/billing.md) |
-| SEO | XML sitemaps and link-preview tags (HTMLRewriter) from Pages Functions | [xml-sitemap-standards.md](docs/references/xml-sitemap-standards.md) |
+| SEO | Page metadata from the Next.js Metadata API, XML sitemaps from route handlers | [xml-sitemap-standards.md](docs/references/xml-sitemap-standards.md) |
 | Tests | Vitest 3, Playwright | [vitest-llms.txt](docs/references/vitest-llms.txt) |
 | Tooling | pnpm 9, ESLint 9, dependency-cruiser, Lefthook | |
 

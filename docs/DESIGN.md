@@ -21,14 +21,14 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   as the `dark` class on `<html>` (`src/lib/theme.ts`). A change in one tab applies to
   the page in every open tab. Components follow the theme with `subscribeToThemeChanges`,
   which applies another tab's change to the document before telling them, so a label
-  never disagrees with the page; do not add your own `storage` listener. Before the app
-  loads, an inline script in `index.html` sets the class from the same key, and the boot
-  splash has `html.dark` colors (hex copies of the `.dark` `--background` and
-  `--foreground` tokens), so a dark-theme page never starts white. Keep those in step with
-  `src/index.css` and `src/lib/theme.ts` (`tests/unit/boot/bootSplashTheme.test.ts`).
+  never disagrees with the page; do not add your own `storage` listener. Before the page
+  paints, an inline script the root layout renders (`src/lib/themeBootScript.ts`) sets the
+  class from the same key, so a dark-theme page never starts white; keep it in step with
+  `src/lib/theme.ts`. The server cannot read the stored theme, so a component that shows
+  the theme (a toggle's label) renders light first and follows the stored theme on mount.
 - **Icons:** `lucide-react`.
-- **Feedback:** `sonner` toasts for results of user actions. The app shell
-  (`src/components/AppShell.tsx`) mounts only the sonner `Toaster`, so import `toast`
+- **Feedback:** `sonner` toasts for results of user actions. The app's providers
+  (`src/app/providers.tsx`) mount only the sonner `Toaster`, so import `toast`
   from `sonner`; ESLint blocks the shadcn toast store, which has no renderer. The
   `Toaster` is mounted before the pages because it drops toasts sent before its own
   effect runs, such as a page's first-effect notice on a full page load

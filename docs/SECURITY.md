@@ -186,11 +186,13 @@ URL (GA4 sends it as `page_location`). So:
   `email`, `code` or `state` parameter, or a `next` return path
   (`src/lib/auth/returnPath.ts`) that points at one of those. The verification email
   returns a new invitee to `/login?verified=1&next=%2Fteam-invites%2F<token>`. The rule
-  lives in `src/lib/analyticsUrl.ts`; `index.html` inlines a copy, and
+  lives in `src/lib/analyticsUrl.ts`; the root layout inlines a copy
+  (`src/lib/analytics/tagManagerBootstrap.ts`), and
   `tests/unit/security/gtmBootstrap.test.ts` checks that both agree.
 - The app never puts an email address into a URL it navigates to, and puts a secret
   there only inside a `next` return path, which the rule above covers. Sign-up
-  passes the new account's email to `/login` in router state; the reset page reads its
+  hands the new account's email to `/login` in sessionStorage, and the login page keeps
+  it in its own history entry (`src/lib/auth/loginPrefill.ts`); the reset page reads its
   token once and removes it from the address bar (a reload offers a new link). When
   sign-in returns to an invite link in a document where the tags run, it loads the
   invite as a new page instead of navigating client-side.
@@ -199,9 +201,11 @@ URL (GA4 sends it as `page_location`). So:
 
 ## Response headers
 
-`public/_headers` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on
-static responses (every SPA page). The Vite dev server never applies that file, so
-check policy changes on `wrangler pages dev` or a deployed host.
+`next.config.ts` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on every
+page and API response (`src/lib/http/securityHeaders.ts`). Static files are served without
+running the Worker, so `public/_headers` repeats the same headers for them; keep the two
+in step. `next dev` applies only `next.config.ts`, so check asset headers on
+`pnpm run preview` or a deployed host.
 
 - `frame-src` must list every video player origin in `EMBED_FRAME_ORIGINS`
   (`src/lib/utils/embedOrigins.ts`): YouTube, youtube-nocookie, and Clipy.

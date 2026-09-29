@@ -2,12 +2,12 @@
 
 ## Summary
 
-SERP Lists is a React single-page app backed by Cloudflare Pages Functions. D1 is the transactional source of truth for auth, Templates, Runs, Organizations, entitlements, and audit history. R2 stores uploaded files.
+SERP Lists is a Next.js app on Cloudflare Workers (through OpenNext); the same Worker serves the pages and the API. D1 is the transactional source of truth for auth, Templates, Runs, Organizations, entitlements, and audit history. R2 stores uploaded files.
 
 ## High-Level Components
 
-- Frontend: React + Vite app in `src/`.
-- API: Cloudflare Pages Functions router in `functions/api/[[route]].ts`.
+- Frontend: Next.js App Router in `src/app` (routes, layouts, page metadata), with the screens in `src/views`.
+- API: the router in `functions/api/[[route]].ts`, run for every `/api/*` request by the route handler `src/app/api/[[...route]]/route.ts`.
 - Database: Cloudflare D1 through the `DB` binding, queried with Drizzle in `functions/api/db.ts`.
 - Object storage: Cloudflare R2 bucket bound as `R2_UPLOADS`.
 - Auth: Better Auth mounted under `/api/auth/*` with D1-backed users, accounts, sessions, and verification records.

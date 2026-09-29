@@ -72,17 +72,20 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      must be bounded before the cache, or every new value is a miss: shard pages above
      1 that the index never published (no `sitemap_shard_revisions` row) get an uncached
      404 after a 1-row primary-key read, and page numbers above 50,000 read nothing.
-     Build the key from the parsed route values, never the request path: Pages
-     Functions match routes ignoring case and allow a trailing slash, so `1.XML`,
-     `1.xml/` and `01.xml` reach the same shard, and `cachedSitemap()` keys all of them
-     as `/sitemaps/<kind>/1.xml`.
+     Build the key from the parsed route values, never the request path: the shard
+     routes accept the page file in any letter case and with leading zeros, so `1.XML`
+     and `01.xml` reach the same shard, and `cachedSitemap()` keys both as
+     `/sitemaps/<kind>/1.xml`.
    - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
      rate. The anonymous catalog uses `withEdgeCache()`
-     (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So does
-     the template lookup behind a template's link preview
-     (`functions/seo/public-template-lookup.ts`, reached only by link-preview bots; see
-     docs/FRONTEND.md), a single-row read by slug or id (a UUID that matches no public
-     id reads one more row, by slug).
+     (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So do the
+     lookups behind the public pages' server-rendered metadata (docs/FRONTEND.md), which
+     run on every visit: the template page's single-row read by slug or id
+     (`functions/seo/public-template-lookup.ts`; a UUID that matches no public id reads
+     one more row, by slug), a found profile's name and summary, and the category
+     counts, which are computed from the cached catalog (`src/server/pageMeta/`). Only a
+     found template or profile is cached, so a new one is named at once. The share
+     page's title is one indexed read (`functions/seo/shared-run-lookup.ts`), not cached.
 
    Locally the cache persists in `.wrangler/state/v3/cache`; delete it to see
    uncommitted changes to cached responses.

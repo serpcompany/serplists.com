@@ -60,11 +60,12 @@ Cloudflare Pages settings:
 - Project name `serplists-com`, set directly in the workflow. Do not use the
   `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
 - Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
-- Only `serplists.com` may be indexed. `public/_headers` sends
-  `X-Robots-Tag: noindex, nofollow` on `staging.serplists.com` and every `*.pages.dev`
-  host, and `SEOHead` points canonical links at `https://serplists.com` and defaults
-  robots to noindex on any other host (`src/lib/seo/siteOrigin.ts`). Leave robots.txt
-  crawlable on those hosts: a `Disallow` would hide the noindex from crawlers.
+- Only `serplists.com` may be indexed. `next.config.ts` sends
+  `X-Robots-Tag: noindex, nofollow` with every page and API response on
+  `staging.serplists.com` and every `*.workers.dev` host, and `public/_headers` does the
+  same for their static files. Page metadata points canonical links at
+  `https://serplists.com` (`src/lib/seo/pageMetadata.ts`). Leave robots.txt crawlable on
+  those hosts: a `Disallow` would hide the noindex from crawlers.
 - GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
   The workflow uses email plus global key because the repo's legacy
   `CLOUDFLARE_API_TOKEN` could not read the Pages project.
@@ -159,7 +160,8 @@ Common failures:
   other than `.wrangler/state`. It stops if a local `VITE_API_URL` or
   `PLAYWRIGHT_API_URL` uses another port than `PLAYWRIGHT_API_PORT`, and seeds
   nothing for a remote API or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
-- The local stack is a non-production host, so `SEOHead` noindexes every page there.
+- Pages on the local stack carry the production robots tags: the `X-Robots-Tag` noindex
+  covers only staging and `*.workers.dev` hosts.
   A spec that checks a page's own robots rule loads the page as
   `https://serplists.com` with `serveLocalAppAsProduction` in
   `tests/e2e/route-structure.spec.ts`: Playwright answers that origin from the local

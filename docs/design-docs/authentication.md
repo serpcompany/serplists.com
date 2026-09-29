@@ -53,10 +53,9 @@ and user-facing failure states when a supporting service is unavailable.
   ([rate limits](../SECURITY.md#rate-limits)).
 - Protected routes preserve the requested destination (path, query, and hash)
   through login and sign-up (`src/lib/auth/returnPath.ts`), so a signed-out
-  return from Stripe keeps `?billing=success`. It travels as router state `from`
-  and as a `next` query parameter, which Login, Register, and the verification
-  callback carry forward so a new account returns to the page that sent it, such
-  as an Organization invite. Only same-origin, non-auth paths are accepted (one
+  return from Stripe keeps `?billing=success`. It travels as the `next` query
+  parameter, which Login, Register, and the verification callback carry forward so
+  a new account returns to the page that sent it, such as an Organization invite. Only same-origin, non-auth paths are accepted (one
   leading `/`, not `//`, checked again after dot segments are removed, so
   `/.//host` is rejected too); without one, Login goes to `/dashboard/settings`.
 - A password reset revokes every session for the account, including the one in
