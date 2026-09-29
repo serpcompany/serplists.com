@@ -692,16 +692,18 @@ existing content, invent nothing):
   sheet and the footer's "Templates" column; "All Categories" on a category page; the console
   sidebar's "Categories".
 - **WHAT'S ON THE SCREEN:** title "Browse Categories" and "Explore templates organized by
-  category to find exactly what you need."; search "Search categories..."; "Popular
+  category to find exactly what you need."; search "Search categories..." (named "Search
+  categories"); "Popular
   Categories": 4 tiles (colored icon tile, name, "N templates"); "All Categories": rows (icon
   tile, name, description, a "N templates" badge, chevron); a closing card "Can't find what
   you're looking for?", "Create your own template from scratch and share it with the
   community.", "Create Template" (→ `/dashboard/templates/new/`).
 - **PRIMARY ACTION:** a category → [Category page](#category-page).
-- **SECONDARY ACTIONS:** search; "Create Template".
+- **SECONDARY ACTIONS:** search; "Clear search"; "Create Template".
 - **STATES:** loading (4 tile and 6 row skeletons, "Loading categories…" for screen readers);
   catalog error ("Could not load templates", "Try again") in place of both lists; a search with
-  no match shows an empty list with no message.
+  no match: the shared empty state in place of "All Categories"' rows ('No categories match
+  "<query>"', "Clear search", which brings back every category and the search field's focus).
 - **NAVIGATION TYPE:** child page.
 - **PATTERN CHOICE (proposal):** [Page hero](#page-hero) with the search input; [Category
   tiles](#category-tiles) for "Popular Categories"; [Bordered list
@@ -714,7 +716,9 @@ existing content, invent nothing):
   - COMPONENT TYPES: search input; tile card; list row card with a badge and chevron;
     call-to-action card.
   - DATA FIELDS: category (icon, name, description, template count).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Not restyled yet (step 2). The empty search of 2026-09-29:
+  `tmp/design-review/decisions/categories-empty-search-desktop-signed-out.png` and
+  `categories-empty-search-mobile-signed-out.png`.
 - **NOTES:** Code: `src/views/Categories.tsx`. "Create Template" sends a signed-out visitor to
   Log in. Built-in categories have descriptions; others read "Community templates for this
   workflow area".
@@ -1928,7 +1932,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- Categories shows nothing (no message) when a search matches no category.
 - The Template editor's outline has a fixed width and no phone layout.
 - The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
   category page already has a color per built-in category that the tiles could use.

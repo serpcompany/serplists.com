@@ -439,3 +439,7 @@ Each of these needs the user's approval, or happens with the domain move:
   client render there. `NotFoundLayout` renders the public shell in the HTML and until the
   session check answers, then gives a signed-in user on a missing console path the console
   shell, following the useIsClient pattern of the 404 hydration fix (`91dac1ae`).
+- 2026-09-29: **Categories' empty search.** A category search that matched nothing showed an
+  empty list. It now shows the shared empty state ('No categories match "<query>"') with Clear
+  search, which restores the list and the search field's focus. The rest of the page waits for
+  step 2 of the restyle.

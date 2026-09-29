@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Categories from '@/views/Categories';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -133,5 +135,77 @@ describe('Categories page catalog states', () => {
     expect(markup).toContain('1 templates');
     expect(markup).not.toContain('aria-busy="true"');
     expect(markup).not.toContain('Could not load templates');
+  });
+});
+
+// A search that matches no category says so with the shared empty state, and Clear search
+// brings the whole list back.
+describe('Categories page search', () => {
+  let root: Root | null = null;
+  let restoreGlobals: () => void = () => {};
+  afterEach(() => {
+    act(() => root?.unmount());
+    root = null;
+    restoreGlobals();
+  });
+
+  const mount = async () => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState({ templates: [bundledTemplate, movingTemplate] }));
+    navigation.reset('/categories/');
+    restoreGlobals = installFakeDomGlobals(navigation.window);
+    const container = createFakeContainer();
+    root = createRoot(container as unknown as HTMLElement);
+    await act(async () => root?.render(<Categories />));
+    const [search] = findAll(
+      container,
+      (node) => node instanceof FakeElement && node.getAttribute('aria-label') === 'Search categories',
+    ) as FakeElement[];
+    // React DOM loaded without a DOM listens for the old IE input events, so call the field's
+    // own onChange (the props React keeps on the node) with the typed value.
+    const type = async (value: string) => {
+      const propsKey = Object.keys(search).find((key) => key.startsWith('__reactProps$'));
+      const props = (search as unknown as Record<string, { onChange: (event: unknown) => void }>)[propsKey ?? ''];
+      await act(async () => props.onChange({ target: { value }, currentTarget: { value } }));
+    };
+    // The rows of "All Categories" (Popular Categories above it does not follow the search).
+    const categoryLinks = () => {
+      const [allCategories] = findAll(
+        container,
+        (node) =>
+          node.nodeName === 'SECTION' &&
+          findAll(node, (child) => child.nodeName === 'H2' && child.textContent === 'All Categories').length > 0,
+      );
+      return findAll(allCategories, (node) => node instanceof FakeElement && node.nodeName === 'A').map((node) =>
+        (node as FakeElement).getAttribute('href'),
+      );
+    };
+    return { container, categoryLinks, type };
+  };
+
+  it('says no category matches and offers Clear search, which lists every category again', async () => {
+    const page = await mount();
+    expect(page.categoryLinks()).toContain('/categories/moving/');
+
+    await page.type('  zzz no such category ');
+    expect(page.categoryLinks()).toEqual([]);
+    expect(page.container.textContent).toContain('No categories match "zzz no such category"');
+    const [heading] = findAll(page.container, (node) => node.nodeName === 'H3' && node.textContent.startsWith('No categories match'));
+    expect(heading).toBeDefined();
+    const [clear] = findAll(page.container, (node) => node.nodeName === 'BUTTON' && node.textContent === 'Clear search');
+    expect(clear).toBeDefined();
+
+    act(() => click(page.container, clear));
+
+    expect(page.container.textContent).not.toContain('No categories match');
+    expect(page.categoryLinks()).toEqual(['/categories/moving/', '/categories/outdoor/']);
+  });
+
+  it('shows no empty state while the search matches a category', async () => {
+    const page = await mount();
+
+    await page.type('mov');
+
+    expect(page.container.textContent).not.toContain('No categories match');
+    expect(page.categoryLinks()).toEqual(['/categories/moving/']);
   });
 });

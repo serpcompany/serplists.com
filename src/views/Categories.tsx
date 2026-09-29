@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   Briefcase,
@@ -19,9 +19,16 @@ import {
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { buildDiscoveryCategories } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Empty,
+  EmptyContent,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
@@ -74,6 +81,7 @@ const allCategoriesSkeleton = Array.from({ length: 6 }).map((_, index) => (
 
 const Categories = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const searchField = useRef<HTMLInputElement>(null);
   const { allCategories, templates, loading, catalogError, retryCatalog } =
     useTemplateLibrary();
   const categories = useMemo(
@@ -96,6 +104,14 @@ const Categories = () => {
           .includes(normalizedQuery),
     );
   }, [categories, searchQuery]);
+  const trimmedQuery = searchQuery.trim();
+  // A search that matches nothing says so, and Clear search brings back every category (and
+  // the search field's focus, where the user was typing).
+  const noMatches = !loading && trimmedQuery !== '' && filteredCategories.length === 0;
+  const clearSearch = () => {
+    setSearchQuery('');
+    searchField.current?.focus();
+  };
 
   return (
     <div className="bg-background">
@@ -114,8 +130,10 @@ const Categories = () => {
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              aria-label="Search categories"
               placeholder="Search categories..."
               className="border-border bg-card pl-10"
+              ref={searchField}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -165,6 +183,23 @@ const Categories = () => {
               <h2 className="mb-4 text-lg font-semibold text-foreground">
                 All Categories
               </h2>
+              {noMatches ? (
+                <Empty className="border">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Search />
+                    </EmptyMedia>
+                    <EmptyTitle>
+                      <h3>No categories match &quot;{trimmedQuery}&quot;</h3>
+                    </EmptyTitle>
+                  </EmptyHeader>
+                  <EmptyContent>
+                    <Button onClick={clearSearch} type="button" variant="outline">
+                      Clear search
+                    </Button>
+                  </EmptyContent>
+                </Empty>
+              ) : null}
               <div className="space-y-3">
                 {loading ? allCategoriesSkeleton : filteredCategories.map((category) => {
                   const meta = getCategoryMeta(category.slug);
