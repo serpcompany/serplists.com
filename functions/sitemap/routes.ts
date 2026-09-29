@@ -209,14 +209,15 @@ export const serveTemplatesSitemap = (context: SitemapContext, page: string): Pr
 };
 
 /**
- * /sitemaps/static.xml, from before the static pages moved into /sitemaps/pages/: a
- * permanent redirect to that page (`?page=`, 1 by default) on the production site.
+ * The sitemaps from before the shards: /sitemaps/static.xml (the static pages) and
+ * /categories/sitemap.xml. A permanent redirect to the shard's page (`?page=`, 1 by default)
+ * on the production site.
  */
-export const redirectLegacyStaticSitemap = (request: Request): Response => {
+export const redirectLegacySitemap = (request: Request, shard: 'pages' | 'categories'): Response => {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const legacyPage = new URL(request.url).searchParams.get('page');
   const page = legacyPage && /^\d+$/.test(legacyPage) && Number(legacyPage) >= 1
     ? legacyPage
     : '1';
-  return Response.redirect(`https://serplists.com/sitemaps/pages/${page}.xml`, 308);
+  return Response.redirect(`https://serplists.com/sitemaps/${shard}/${page}.xml`, 308);
 };

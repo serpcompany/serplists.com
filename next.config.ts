@@ -43,12 +43,6 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: '/console/runs/:id', destination: '/dashboard/runs/:id', permanent: true },
-      // The category sitemap moved into the sitemap index's shards.
-      {
-        source: '/categories/sitemap.xml',
-        destination: 'https://serplists.com/sitemaps/categories/1.xml',
-        permanent: true,
-      },
     ];
   },
 };

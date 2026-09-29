@@ -1,13 +1,37 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
-import { onRequest as categoriesShard } from '../../../functions/sitemaps/categories/[page].xml';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
+import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
+import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
+import { serverContext } from '../../support/nextServerContext';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
+
+// A sitemap route handler, given the Worker's bindings and waitUntil through
+// getCloudflareContext, and the page's file name as Next.js passes it (`1.xml`).
+type RouteGet = (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response>;
+type SitemapRequest = {
+  request: Request;
+  env: unknown;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  params?: { page?: string };
+};
+const sitemapRoute = (GET: RouteGet) => async ({ request, env, waitUntil, params }: SitemapRequest) => {
+  serverContext.env = env as Record<string, unknown>;
+  serverContext.waitUntil = [];
+  const response = await GET(request, { params: Promise.resolve({ page: `${params?.page ?? ''}.xml` }) });
+  serverContext.waitUntil.forEach((promise) => waitUntil?.(promise));
+  return response;
+};
+
+const sitemapIndex = sitemapRoute(sitemapIndexGet);
+const categoriesShard = sitemapRoute(categoriesShardGet);
 
 // The sitemap index hashes each shard's rendering to decide when that shard's <lastmod>
 // moves. These tests run the real index and categories shard handlers against SQLite
@@ -32,20 +56,19 @@ function d1(database: DatabaseSync) {
   };
 }
 
-async function get(handler: PagesFunction, path: string, params: Record<string, string> = {}) {
+async function get(handler: typeof sitemapIndex, path: string, params: { page?: string } = {}) {
   const response = await handler({
     request: new Request(`https://serplists.com${path}`),
     env: { DB: d1(db) },
     params,
-    waitUntil() {},
-  } as never);
+  });
   expect(response.status, path).toBe(200);
   return response.text();
 }
 
 async function buildBoth() {
-  const index = await get(sitemapIndex as PagesFunction, '/sitemap.xml');
-  const shard = await get(categoriesShard as PagesFunction, '/sitemaps/categories/1.xml', { page: '1' });
+  const index = await get(sitemapIndex, '/sitemap.xml');
+  const shard = await get(categoriesShard, '/sitemaps/categories/1.xml', { page: '1' });
   const indexLastmod = index.match(
     /<loc>https:\/\/serplists\.com\/sitemaps\/categories\/1\.xml<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
   )?.[1];

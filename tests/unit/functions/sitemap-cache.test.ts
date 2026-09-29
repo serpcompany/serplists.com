@@ -2,11 +2,38 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cachedSitemap } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
-import { onRequest as sitemapIndex } from '../../../functions/sitemap.xml';
-import { onRequest as categoriesShard } from '../../../functions/sitemaps/categories/[page].xml';
-import { onRequest as profilesShard } from '../../../functions/sitemaps/profiles/[page].xml';
-import { onRequest as templatesShard } from '../../../functions/sitemaps/templates/[page].xml';
 import type { Env } from '../../../functions/api/types';
+import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
+import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
+import { GET as profilesShardGet } from '@/app/sitemaps/profiles/[page]/route';
+import { GET as templatesShardGet } from '@/app/sitemaps/templates/[page]/route';
+import { serverContext } from '../../support/nextServerContext';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
+
+// A sitemap route handler, given the Worker's bindings and waitUntil through
+// getCloudflareContext, and the page's file name as Next.js passes it (`1.xml`).
+type RouteGet = (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response>;
+type SitemapRequest = {
+  request: Request;
+  env: unknown;
+  waitUntil?: (promise: Promise<unknown>) => void;
+  params?: { page?: string };
+};
+const sitemapRoute = (GET: RouteGet) => async ({ request, env, waitUntil, params }: SitemapRequest) => {
+  serverContext.env = env as Record<string, unknown>;
+  serverContext.waitUntil = [];
+  const response = await GET(request, { params: Promise.resolve({ page: `${params?.page ?? ''}.xml` }) });
+  serverContext.waitUntil.forEach((promise) => waitUntil?.(promise));
+  return response;
+};
+
+const sitemapIndex = sitemapRoute(sitemapIndexGet);
+const categoriesShard = sitemapRoute(categoriesShardGet);
+const profilesShard = sitemapRoute(profilesShardGet);
+const templatesShard = sitemapRoute(templatesShardGet);
+type SitemapHandler = typeof sitemapIndex;
 
 let revisions: Array<[string, string]>;
 let publishedShards: Array<[string, number]>;
@@ -65,8 +92,8 @@ const allKinds = ['categories', 'profiles', 'templates'] as const;
 type RevisionKind = (typeof allKinds)[number];
 
 // Each family, the route that serves it, and the revision kinds its output depends on.
-const families: Array<{ name: string; handler: PagesFunction<Env>; path: string; deps: readonly RevisionKind[] }> = [
-  { name: 'index', handler: sitemapIndex as PagesFunction<Env>, path: '/sitemap.xml', deps: allKinds },
+const families: Array<{ name: string; handler: SitemapHandler; path: string; deps: readonly RevisionKind[] }> = [
+  { name: 'index', handler: sitemapIndex, path: '/sitemap.xml', deps: allKinds },
   { name: 'categories', handler: categoriesShard, path: '/sitemaps/categories/1.xml', deps: ['categories'] },
   { name: 'profiles', handler: profilesShard, path: '/sitemaps/profiles/1.xml', deps: ['profiles'] },
   { name: 'templates', handler: templatesShard, path: '/sitemaps/templates/1.xml', deps: ['templates'] },
@@ -77,7 +104,7 @@ const families: Array<{ name: string; handler: PagesFunction<Env>; path: string;
 async function rebuilds(family: (typeof families)[number]): Promise<boolean> {
   statements = [];
   const { ctx, settled } = context(`https://serplists.com${family.path}`);
-  await family.handler({ ...ctx, params: { page: '1' } } as never);
+  await family.handler({ ...ctx, params: { page: '1' } });
   await settled();
   return statements.some((sql) => /from "(users|templates)"/.test(sql));
 }
@@ -86,9 +113,9 @@ function setRevision(kind: RevisionKind, revisedAt: string) {
   revisions = [...revisions.filter(([existing]) => existing !== kind), [kind, revisedAt]];
 }
 
-async function serveRoute(handler: PagesFunction<Env>, kind: string, page: string, method = 'GET') {
+async function serveRoute(handler: SitemapHandler, kind: string, page: string, method = 'GET') {
   const { ctx, settled } = context(`https://serplists.com/sitemaps/${kind}/${page}.xml`, method);
-  const response = await handler({ ...ctx, params: { page } } as never);
+  const response = await handler({ ...ctx, params: { page } });
   await settled();
   return response;
 }
