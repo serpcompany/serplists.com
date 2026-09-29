@@ -138,7 +138,7 @@ export function BillingSection() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
       setIsOpeningPortal(false);
-      // Stripe no longer had the billing account and the API replaced it: Upgrade replaces Manage.
+      // Stripe no longer had the billing account. When the API replaced it, Upgrade replaces Manage.
       if (isBillingCustomerMissingError(err)) {
         void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(userId, null) });
       }

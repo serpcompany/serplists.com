@@ -1,4 +1,4 @@
-import { and, eq, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
@@ -84,6 +84,26 @@ export async function getPersonalSubscriptionSummary(env: Env, userId: string): 
     openStatus: mostUrgentOpenStatus(counted.map((subscription) => subscription.status)),
     hasCustomer: customers.length > 0,
   };
+}
+
+/**
+ * The most urgent status among the user's open stored subscriptions on one of
+ * `priceIds`, on any customer, or null.
+ */
+export async function openStoredStatusOnPrices(db: Db, userId: string, priceIds: string[]): Promise<string | null> {
+  const { stripe_subscriptions } = schema;
+  const rows = await db
+    .select({ status: stripe_subscriptions.status })
+    .from(stripe_subscriptions)
+    .where(
+      and(
+        eq(stripe_subscriptions.user_id, userId),
+        inArray(stripe_subscriptions.price_id, priceIds),
+        notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
+      ),
+    )
+    .limit(10);
+  return mostUrgentOpenStatus(rows.map((row) => row.status));
 }
 
 /** The most urgent open (non-terminal) status among `statuses`, or null. */

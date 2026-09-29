@@ -208,6 +208,15 @@ Authenticated:
   replace the customer. Subscriptions stored for the missing customer keep their
   rows (no webhook will update them); they stop blocking checkout and stop showing
   in billing status because they are no longer on the stored customer.
+  The customer is never replaced while the user has an open stored subscription
+  on a price in `proPriceIds`, on any customer: only the current keys' mode sells
+  those prices, so "missing" then means the deployed keys are wrong (the other
+  mode's secret key, say), and a replacement would move a paying subscriber to an
+  empty customer. Checkout then answers from the stored status (`409
+  already_subscribed`, `subscription_needs_attention` or `checkout_incomplete`),
+  the portal answers `409 billing_customer_missing` asking the user to contact
+  support, the mapping is left alone, and the API logs
+  `stripe_customer_missing_with_subscription` (ids and status only).
   A first checkout creates the customer with the idempotency key
   `customer-<userId>-<email digest>`, so concurrent or retried first checkouts
   share one customer, and stores the mapping with `ON CONFLICT DO NOTHING`: a
@@ -223,7 +232,9 @@ Authenticated:
   granted by an override), or `409 billing_customer_missing` when Stripe no
   longer has the stored customer. That response first replaces the customer the
   way checkout does, so billing status stops showing the missing customer's stored
-  subscriptions; Billing refetches status on it and offers Upgrade.
+  subscriptions; Billing refetches status on it and offers Upgrade. While an open
+  subscription on a current Pro price is stored, it keeps the customer and asks
+  the user to contact support instead (see checkout above).
 - Stripe returns the user to `/dashboard/settings?billing=success` or
   `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
   Billing reads `billing=success` and polls Personal status (whichever context is

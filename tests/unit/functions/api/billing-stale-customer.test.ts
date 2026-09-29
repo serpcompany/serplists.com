@@ -329,6 +329,77 @@ describe("the Customer Portal with a Stripe customer that no longer exists", () 
   });
 });
 
+describe("a missing customer with a stored subscription on a current Pro price", () => {
+  // Only the current keys' mode sells a price in proPriceIds, so Stripe calling that
+  // subscription's customer missing points at wrong keys (the other mode's secret key
+  // deployed by mistake), not at a customer left from the other mode. Replacing the
+  // customer would move a paying subscriber to an empty one the portal cannot manage.
+
+  const CONTACT_SUPPORT = "Your billing account could not be found. Contact support.";
+
+  it("keeps the customer at the portal and says to contact support", async () => {
+    storeSubscription("sub_pro", "cus_stale", "active", "price_pro");
+
+    const portal = await post("portal");
+
+    expect(portal.status).toBe(409);
+    expect(portal.body).toMatchObject({ code: "billing_customer_missing", error: CONTACT_SUPPORT });
+    expect(customerCreates()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
+    expect(storedSubscriptionStatuses()).toEqual({ sub_pro: "active" });
+    expect(await billingStatus()).toMatchObject({ plan: "pro", subscriptionStatus: "active" });
+  });
+
+  it("keeps the customer at the portal while Pro comes from a subscription on another customer", async () => {
+    storeSubscription("sub_pro", "cus_live", "active", "price_pro");
+
+    const portal = await post("portal");
+
+    expect(portal.body).toMatchObject({ code: "billing_customer_missing", error: CONTACT_SUPPORT });
+    expect(customerCreates()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
+  });
+
+  it("refuses checkout for a Pro subscriber, creating no customer", async () => {
+    storeSubscription("sub_pro", "cus_stale", "active", "price_pro");
+
+    const result = await post("checkout");
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("already_subscribed");
+    expect(customerCreates()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
+  });
+
+  it.each([
+    ["past_due", "subscription_needs_attention"],
+    ["incomplete", "checkout_incomplete"],
+  ])("refuses checkout past a stored %s subscription, creating no customer", async (status, code) => {
+    storeSubscription("sub_pro", "cus_stale", status, "price_pro");
+
+    const result = await post("checkout");
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe(code);
+    expect(customerCreates()).toEqual([]);
+    expect(sessionCalls()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
+    expect(storedSubscriptionStatuses()).toEqual({ sub_pro: status });
+  });
+
+  it("refuses checkout when only the Checkout Session says the customer is missing", async () => {
+    staleListResponse = "empty";
+    storeSubscription("sub_pro", "cus_stale", "past_due", "price_pro");
+
+    const result = await post("checkout");
+
+    expect(result.status).toBe(409);
+    expect(result.body.code).toBe("subscription_needs_attention");
+    expect(customerCreates()).toEqual([]);
+    expect(storedCustomer()).toBe("cus_stale");
+  });
+});
+
 describe("webhooks after a customer was replaced", () => {
   it("does not map the user back to the old customer when its subscription ends", async () => {
     d1.sqlite.prepare("UPDATE stripe_customers SET stripe_customer_id = 'cus_new' WHERE user_id = ?").run(USER_ID);

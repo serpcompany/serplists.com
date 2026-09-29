@@ -21,12 +21,14 @@ import {
   isPaidSubscriptionStatus,
   listOpenStoredSubscriptions,
   mostUrgentOpenStatus,
+  openStoredStatusOnPrices,
   refreshStoredSubscriptions,
   syncCustomerSubscriptions,
   type SubscriptionSnapshot,
 } from "../utils/stripe-subscriptions";
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
+type Db = ReturnType<typeof createDb>;
 type StripeCheckoutSession = { id: string; url: string | null };
 type StripePortalSession = { id: string; url: string };
 
@@ -87,6 +89,36 @@ function openSubscriptionConflict(openStatus: string | null): Response | null {
   );
 }
 
+/** The checkout answer from a stored open status alone, when Stripe cannot decide. */
+function storedSubscriptionConflict(openStatus: string): Response {
+  if (openStatus === "incomplete") return checkoutIncomplete();
+  return openSubscriptionConflict(openStatus) ?? alreadySubscribed();
+}
+
+/**
+ * Returns the stored status that keeps a customer Stripe reports missing, or null when
+ * it may be replaced. Only the current keys' mode sells a price in proPriceIds, so an
+ * open subscription stored on one means the deployed keys are wrong (the other mode's
+ * secret key, say), not that the customer was left by the other mode. Replacing it
+ * then would move a paying subscriber to an empty customer, so it is kept.
+ */
+async function statusKeepingMissingCustomer(
+  db: Db,
+  userId: string,
+  missingCustomerId: string,
+  proPriceIds: string[],
+): Promise<string | null> {
+  const status = await openStoredStatusOnPrices(db, userId, proPriceIds);
+  if (status) {
+    log("error", "stripe_customer_missing_with_subscription", {
+      userId,
+      stripeCustomerId: missingCustomerId,
+      subscriptionStatus: status,
+    });
+  }
+  return status;
+}
+
 /**
  * The checkout decision from the subscriptions Stripe lists as open. An `incomplete` one
  * is a Checkout first payment that did not go through (a declined card or an abandoned
@@ -110,7 +142,7 @@ function stripeSubscriptionConflict(
 async function startCheckout(env: Env, userId: string, origin: string): Promise<Response> {
   const stripe = getStripeBillingConfig(env);
   if (!stripe) return billingUnavailable();
-  const { secretKey, proPriceId } = stripe;
+  const { secretKey, proPriceId, proPriceIds } = stripe;
   const entitlements = await getEntitlementsForUser(env, userId);
   if (entitlements.plan === "pro") return alreadySubscribed();
   // A manual override outranks Stripe, so a subscription bought under a Free
@@ -136,8 +168,7 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     // with no customer to ask Stripe about, stored rows decide, rather than risk a
     // second subscription.
     const openStatus = mostUrgentOpenStatus(storedOpen.map((subscription) => subscription.status));
-    const storedConflict = openStatus === "incomplete" ? checkoutIncomplete() : openSubscriptionConflict(openStatus);
-    if (storedConflict) return storedConflict;
+    if (openStatus) return storedSubscriptionConflict(openStatus);
   }
 
   const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
@@ -193,6 +224,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
         return billingUnavailable();
       }
       // A customer Stripe does not have holds no subscription in this mode.
+      const keptStatus = await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds);
+      if (keptStatus) return storedSubscriptionConflict(keptStatus);
       stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
       canReplaceCustomer = false;
       reusableSessionUrl = null;
@@ -264,6 +297,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   } catch (error) {
     // A deleted customer can still list subscriptions (none) but cannot check out.
     if (!canReplaceCustomer || !isMissingStripeCustomer(error)) throw error;
+    const keptStatus = await statusKeepingMissingCustomer(db, userId, stripeCustomerId, proPriceIds);
+    if (keptStatus) return storedSubscriptionConflict(keptStatus);
     stripeCustomerId = await replaceMissingStripeCustomer(db, secretKey, userId, stripeCustomerId);
     session = await createSession(stripeCustomerId);
   }
@@ -335,7 +370,7 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
   if (request.method === "POST" && billingSubpath[0] === "portal") {
     const stripe = getStripeBillingConfig(env);
     if (!stripe) return billingUnavailable();
-    const { secretKey } = stripe;
+    const { secretKey, proPriceIds } = stripe;
     const db = createDb(env);
     const { stripe_customers } = schema;
 
@@ -362,11 +397,17 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       });
     } catch (error) {
       if (!isMissingStripeCustomer(error)) throw error;
+      const missingCustomerId = existingCustomer.stripe_customer_id;
+      log("warn", "stripe_customer_missing", { userId, stripeCustomerId: missingCustomerId });
+      if (await statusKeepingMissingCustomer(db, userId, missingCustomerId, proPriceIds)) {
+        return jsonError("Your billing account could not be found. Contact support.", 409, {
+          code: "billing_customer_missing",
+        });
+      }
       // The portal has nothing to show for a customer Stripe does not have. Replace it as
       // checkout would, so Billing stops showing that customer's stored subscriptions
       // (which only the other mode's keys can see) and offers Upgrade instead.
-      log("warn", "stripe_customer_missing", { userId, stripeCustomerId: existingCustomer.stripe_customer_id });
-      await replaceMissingStripeCustomer(db, secretKey, userId, existingCustomer.stripe_customer_id);
+      await replaceMissingStripeCustomer(db, secretKey, userId, missingCustomerId);
       return jsonError("Your billing account could not be found. Choose Upgrade to start a new subscription.", 409, {
         code: "billing_customer_missing",
       });
