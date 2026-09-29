@@ -22,7 +22,8 @@ Canonical private routes:
 - Template editor: `/dashboard/templates/:id/edit`
 - Import/export: `/dashboard/import-templates`
 - Runs: `/dashboard/runs`
-- Run detail: `/dashboard/runs/:id`
+- Run detail: `/dashboard/runs/:id`, a Run's one URL. The runs list and Start Run both open
+  it, and the older `/run/:id` answers 308 with it, keeping the query string.
 - Settings: `/dashboard/settings`
 - Archive: `/dashboard/archive`, linked from the console sidebar (a sheet on phones)
 

@@ -163,6 +163,16 @@ test.describe('route structure', () => {
     await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
   });
 
+  // A Run's page answered at /run/<id>/ as well; /dashboard/runs/<id>/ is its one URL.
+  test("a Run's old address answers one 308 with its one URL, keeping the query", async ({ request }) => {
+    for (const path of ['/run/run-1?from=email', '/run/run-1/?from=email']) {
+      const response = await request.get(path, { maxRedirects: 0 });
+      expect(response.status(), path).toBe(308);
+      const location = new URL(response.headers().location ?? '', API_BASE_URL);
+      expect(`${location.pathname}${location.search}`, path).toBe('/dashboard/runs/run-1/?from=email');
+    }
+  });
+
   test('legacy redirects keep the query string and hash', async ({ page }) => {
     await mockAuthenticatedRouteApi(page);
 

@@ -18,8 +18,8 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
   the 404 page on public paths.
 - **Console shell:** the console sidebar (shadcn's Sidebar block, a sheet on phones), a top
   bar with the sidebar trigger and the site links, and the site footer. Every page under
-  `/dashboard/` and `/run/`. These pages sit in the `(app)` route group, which checks the
-  session first: a signed-out visitor goes to `/login/?next=<path>`.
+  `/dashboard/`. These pages sit in the `(app)` route group, which checks the session first:
+  a signed-out visitor goes to `/login/?next=<path>`.
 - **No shell:** the shared run page, `/share/<token>/`. A guest may have no account, so it
   has its own small header and no footer.
 
@@ -190,8 +190,7 @@ which opens as a sheet below `md`. Toasts (sonner) report results everywhere.
 | `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Run name dialog; Share link dialog; Delete template dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs") | Share link dialog; Delete run dialog; Run options menu; status select | Status filter; search |
-| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
-| `/run/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (the runs list links here) | As above | As above |
+| `/dashboard/runs/<id>/` | [Run page](ui-screen-inventory.md#run-page) | Child page of My Runs (its rows link here, and Start Run lands here) | Share link dialog; Run complete dialog; Run tasks sheet; browser confirm | Rename in place; selected task; completed (frozen); view only; task list column at `xl` |
 | `/dashboard/import-templates/` | [Import Templates](ui-screen-inventory.md#import-templates) | Root section (sidebar "Import Templates") | Visibility select | Import preview; last import result; plan and role notices |
 | `/dashboard/archive/` | [Archive](ui-screen-inventory.md#archive) | Root section (sidebar "Archive") | None | Per-list loading, error and empty states; Restore only for roles that may restore |
 | `/dashboard/settings/` | [Account Settings](ui-screen-inventory.md#account-settings) | Root section (sidebar "Settings", account menu "Settings") | Revoke Run Key dialog; browser confirm; selects | Personal or Organization context; manager-only Organization controls; created Run Key panel |
@@ -216,7 +215,7 @@ path (see the inventory's [open questions](ui-screen-inventory.md#open-questions
   `/dashboard/templates/`; `/account` and `/dashboard/profile` with `/dashboard/settings/`;
   `/console/templates/<id>` with `/dashboard/templates/<id>/`;
   `/console/templates/<id>/edit` with `/dashboard/templates/<id>/edit/`; `/console/runs/<id>`
-  with `/dashboard/runs/<id>/`.
+  and `/run/<id>` (a Run's second address until 2026-09-29) with `/dashboard/runs/<id>/`.
 - A page path without its trailing slash, or a file path with one, answers 308 with the
   canonical form. `www.serplists.com` and `*.workers.dev` hosts redirect to the
   environment's one host.

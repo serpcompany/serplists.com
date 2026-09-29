@@ -98,7 +98,7 @@ describe('Layout shell selection', () => {
   });
 
   it('marks Runs as the current section on a run page', () => {
-    const html = renderLayout('/run/run-1/', 'Run child');
+    const html = renderLayout('/dashboard/runs/run-1/', 'Run child');
 
     expect(html).toMatch(/<a[^>]*href="\/dashboard\/runs\/"[^>]*aria-current="page"/);
   });

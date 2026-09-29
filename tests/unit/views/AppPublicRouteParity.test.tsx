@@ -183,7 +183,7 @@ describe('App public route parity', () => {
     expect(html).toContain('href="/features/"');
     expect(html).toContain('href="/pricing/"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist/"');
-    expect(html).not.toContain('href="/run/website-launch');
+    expect(html).not.toContain('href="/dashboard/runs/');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
@@ -215,14 +215,14 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('keeps private /run/:id in the authenticated dashboard layout and shared runs public', () => {
+  it('keeps a private Run at its one URL in the authenticated dashboard layout and shared runs public', () => {
     // src/app/(app) renders its pages behind RequireAuth in the console Layout; src/app/share
-    // sits outside both layouts.
+    // sits outside both layouts. /run/<id> only redirects to /dashboard/runs/<id>/ (next.config.ts).
     const appLayout = readFileSync(appFile('(app)/layout.tsx'), 'utf8');
     expect(appLayout).toMatch(/<RequireAuth>\s*<Layout>\{children\}<\/Layout>\s*<\/RequireAuth>/);
 
-    expect(existsSync(appFile('(app)/run/[id]/page.tsx'))).toBe(true);
     expect(existsSync(appFile('(app)/dashboard/runs/[id]/page.tsx'))).toBe(true);
+    expect(existsSync(appFile('(app)/run'))).toBe(false);
     expect(existsSync(appFile('(site)/run'))).toBe(false);
     expect(existsSync(appFile('share/[shareToken]/page.tsx'))).toBe(true);
   });

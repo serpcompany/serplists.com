@@ -378,3 +378,9 @@ Each of these needs the user's approval, or happens with the domain move:
   old console's links were 44px (`min-h-11`), and a browser test holds them to it. The
   sidebar's rows take 44px (`h-11`), the one sizing change to the block; collapsed to icons
   they keep shadcn's 32px squares.
+- 2026-09-29: **One Run URL.** A Run's page answered at `/run/<id>/` (the runs list's links)
+  and at `/dashboard/runs/<id>/` (where Start Run went). The user chose
+  `/dashboard/runs/<id>/`: the `/run/[id]` page is gone, and `/run/<id>` answers 308 with the
+  Run's URL, keeping the query, next to the other legacy paths in `next.config.ts`.
+  `buildRunPath` and the unused `buildRunUrl` went with it; the MCP endpoint and Run Keys
+  return no page URLs, so nothing else changed.

@@ -47,9 +47,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  buildConsoleRunPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
-  buildRunPath,
 } from '@/lib/routes';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import { cn } from '@/lib/utils';
@@ -271,7 +271,7 @@ export function RunsDashboardView({
 
                   <div className="min-w-0 flex-1">
                     <Link
-                      href={buildRunPath(run.id)}
+                      href={buildConsoleRunPath(run.id)}
                       className="text-left text-sm font-medium text-foreground hover:underline"
                     >
                       {run.title}
@@ -357,13 +357,13 @@ export function RunsDashboardView({
                       </Button>
                     ) : null}
                     {!isCompleted ? (
-                      <Link href={buildRunPath(run.id)} className={buttonVariants({ size: 'sm' })}>
+                      <Link href={buildConsoleRunPath(run.id)} className={buttonVariants({ size: 'sm' })}>
                           <Play className="mr-1.5 h-3.5 w-3.5" />
                           Continue
                         </Link>
                     ) : (
                       <Link
-                        href={buildRunPath(run.id)}
+                        href={buildConsoleRunPath(run.id)}
                         className={buttonVariants({ variant: 'outline', size: 'sm' })}
                       >
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />

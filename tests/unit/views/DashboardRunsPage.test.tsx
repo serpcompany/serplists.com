@@ -229,8 +229,10 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('Completed');
     expect(html).toContain('Needs revalidation');
     expect(html).toContain('Revalidate');
-    expect(html).toContain('href="/run/run-5/"');
-    expect(html).toContain('href="/run/run-2/"');
+    // Each row opens the Run at its one URL.
+    expect(html).toContain('href="/dashboard/runs/run-5/"');
+    expect(html).toContain('href="/dashboard/runs/run-2/"');
+    expect(html).not.toContain('href="/run/');
     expect(html).toContain('data-run-actions="true"');
     expect(html).toContain('focus-within:opacity-100');
     expect(html).not.toContain('Track active checklist runs');

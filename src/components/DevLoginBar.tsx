@@ -56,7 +56,7 @@ export function DevLoginBar(): JSX.Element | null {
   }
 
   if (
-    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/run/', '/share/', DASHBOARD_PATH].some(
+    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/share/', DASHBOARD_PATH].some(
       (section) => isPathWithin(pathname, section),
     )
   ) {

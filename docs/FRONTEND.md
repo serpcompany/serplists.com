@@ -89,9 +89,10 @@ and agents (MCP) call them directly and do not follow redirects.
   Graph URLs) get their slash, and `skipTrailingSlashRedirect: true`: Next.js's own
   trailing-slash redirect would move the API too, and OpenNext skips its redirect for files.
   `redirects()` does that work instead (`trailingSlashRedirects()`), after sending the legacy
-  paths (`/account`, `/console/*`, `/checklists`, `/dashboard/profile`) straight to their page's
-  canonical URL. `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's
-  server and OpenNext's routing, and `tests/e2e/site-standards.spec.ts` checks them in workerd.
+  paths (`/account`, `/console/*`, `/checklists`, `/dashboard/profile`, and `/run/<id>`, a
+  Run's old second address) straight to their page's canonical URL.
+  `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's server and
+  OpenNext's routing, and `tests/e2e/site-standards.spec.ts` checks them in workerd.
 - `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
   My Templates for now. Links use `buildConsoleHomePath()`, which returns the home itself.
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens

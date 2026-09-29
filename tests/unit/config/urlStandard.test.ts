@@ -72,7 +72,6 @@ const CANONICAL_PAGES = [
   '/dashboard/templates/tpl-1/edit/',
   '/dashboard/runs/run-1/',
   '/dashboard/settings/',
-  '/run/run-1/',
 ];
 
 const CANONICAL_FILES = [
@@ -269,6 +268,8 @@ describe('legacy paths', () => {
     ['/console/templates/tpl-1', '/dashboard/templates/tpl-1/', 308],
     ['/console/templates/tpl-1/edit', '/dashboard/templates/tpl-1/edit/', 308],
     ['/console/runs/run-1', '/dashboard/runs/run-1/', 308],
+    // A Run's one URL is under /dashboard/runs/.
+    ['/run/run-1', '/dashboard/runs/run-1/', 308],
     // The dashboard home is My Templates for now, which may change.
     ['/dashboard', '/dashboard/templates/', 307],
   ])('sends %s, with or without its slash, straight to %s', async (from, to, status) => {

@@ -33,6 +33,9 @@ describe('legacy redirects', () => {
     ['/console/templates/tpl-1', '/dashboard/templates/tpl-1/', 308],
     ['/console/templates/tpl-1/edit', '/dashboard/templates/tpl-1/edit/', 308],
     ['/console/runs/run-1', '/dashboard/runs/run-1/', 308],
+    // A Run's page answered at /run/<id>/ too; /dashboard/runs/<id>/ is its one URL now.
+    ['/run/run-1', '/dashboard/runs/run-1/', 308],
+    ['/run/84fd6800-2309-496f-a0c8-be1c8c01d9bc', '/dashboard/runs/84fd6800-2309-496f-a0c8-be1c8c01d9bc/', 308],
     // The dashboard home is My Templates for now, which may change.
     ['/dashboard', '/dashboard/templates/', 307],
   ])('sends %s to %s', async (from, to, status) => {
@@ -49,10 +52,16 @@ describe('legacy redirects', () => {
       status: 308,
       location: '/dashboard/settings/?billing=success',
     });
+    for (const path of ['/run/run-1?from=email', '/run/run-1/?from=email']) {
+      expect(await redirectFor(path), path).toEqual({
+        status: 308,
+        location: '/dashboard/runs/run-1/?from=email',
+      });
+    }
   });
 
   it('leaves the live pages alone', async () => {
-    for (const path of ['/dashboard/settings/', '/dashboard/templates/', '/templates/', '/account-settings/']) {
+    for (const path of ['/dashboard/settings/', '/dashboard/templates/', '/dashboard/runs/run-1/', '/templates/', '/account-settings/']) {
       expect(await redirectFor(path), path).toBeNull();
     }
     // Their other form only gains its slash.

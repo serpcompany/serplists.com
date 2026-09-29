@@ -314,7 +314,7 @@ existing content, invent nothing):
 - **SCREEN NAME:** Signed-in console shell
 - **PURPOSE:** Frame every console page: move between console sections, see and switch the
   Ownership Context, reach the account.
-- **HOW USER GETS HERE:** any page under `/dashboard/` or `/run/`, after the session check.
+- **HOW USER GETS HERE:** any page under `/dashboard/`, after the session check.
 - **WHAT'S ON THE SCREEN:**
   - Left: the sidebar (full height). Header: the brand link and the [context
     switcher](#context-switcher) ("Switch context"). Content, in the "Dashboard" navigation
@@ -372,7 +372,7 @@ existing content, invent nothing):
   present.
 - **NOTES:**
   - Code: `src/components/layout/AppShell.tsx` and `src/components/layout/AppSidebar.tsx`.
-  - A Run's own page (`/run/<id>/`) highlights "Runs".
+  - A Run's page (`/dashboard/runs/<id>/`) highlights "Runs".
   - The public site header no longer sits above console pages: the sidebar holds the brand,
     the switcher, the theme toggle and the account menu, and the top bar the site links.
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
@@ -1251,7 +1251,7 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Runs", "N in progress, M completed".
   - Toolbar: search "Search runs..."; status select ("All Runs", "In Progress", "Completed").
-  - Rows: a status icon; the title (a link to `/run/<id>/`); meta ("From <template>" as a link,
+  - Rows: a status icon; the title (a link to `/dashboard/runs/<id>/`); meta ("From <template>" as a link,
     "Started <date>", "Completed <date>"); a progress bar with "x/y"; a status chip
     ("Completed" or "In Progress"); a "Needs revalidation", "Shared snapshot is out of date" or
     "Shared" chip; actions: "Revalidate", "Stop sharing to update", "Continue" (primary) or
@@ -1276,14 +1276,14 @@ existing content, invent nothing):
     shared, stale); source Template (title, link); permissions.
 - **PROOF PASS:** Not restyled yet (step 2)
 - **NOTES:** Code: `src/views/Dashboard.tsx` (the list view is RunsDashboardView). Rows link to
-  `/run/<id>/`, while Start Run opens `/dashboard/runs/<id>/`.
+  a Run's one URL, `/dashboard/runs/<id>/`, which Start Run opens too.
 
 ### Run page
 
-- **SCREEN NAME:** Run page (`/dashboard/runs/<id>/` and `/run/<id>/`)
+- **SCREEN NAME:** Run page (`/dashboard/runs/<id>/`)
 - **PURPOSE:** Work through a Run task by task, add notes, complete it, share it.
-- **HOW USER GETS HERE:** Start Run (lands on `/dashboard/runs/<id>/`); "Continue" or "View" on
-  My Runs (`/run/<id>/`).
+- **HOW USER GETS HERE:** Start Run; the title, "Continue" or "View" on My Runs. The older
+  `/run/<id>` address answers 308 with this one.
 - **WHAT'S ON THE SCREEN:**
   - Page header: the title (an inline field while renaming); "X of Y tasks finished";
     actions: "Runs" (back), "Rename" (or "Save title" and "Cancel"), a "Completed" or "In
@@ -1868,8 +1868,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- Two addresses show a Run: My Runs rows link to `/run/<id>/`, and Start Run opens
-  `/dashboard/runs/<id>/`. Which one should links use?
 - A sign-in with no return path lands on Account Settings, not the console home.
 - The account menu's "Dashboard" and "My Templates" open the same page.
 - My Runs' empty state "Browse Templates" opens My Templates; every other "Browse Templates"

@@ -223,14 +223,9 @@ export const buildConsoleTemplateEditPath = (templateId: string): string =>
 
 export const buildConsoleRunsPath = (): string => '/dashboard/runs/';
 
+// A Run's one page. The old /run/<id> address redirects here (308, next.config.ts).
 export const buildConsoleRunPath = (runId: string): string =>
   `/dashboard/runs/${encodeURIComponent(runId)}/`;
-
-export const buildRunPath = (runId: string): string =>
-  `/run/${encodeURIComponent(runId)}/`;
-
-export const buildRunUrl = (runId: string, origin: string): string =>
-  new URL(buildRunPath(runId), origin).toString();
 
 export const buildConsoleSettingsPath = (): string => '/dashboard/settings/';
 
@@ -251,7 +246,6 @@ export const resolveRouteShell = (pathname: string): AppShell => {
 
   if (
     path === routeKey(LEGACY_ACCOUNT_PATH) ||
-    path.startsWith('/run/') ||
     path.startsWith(DASHBOARD_PATH) ||
     path.startsWith(routeKey(LEGACY_CONSOLE_HOME_PATH))
   ) {
@@ -321,7 +315,6 @@ export const resolveConsoleSection = (
 
   if (
     path.startsWith(buildConsoleRunsPath()) ||
-    path.startsWith('/run/') ||
     path.startsWith(routeKey(LEGACY_CONSOLE_RUNS_PATH))
   ) {
     return 'runs';

@@ -19,8 +19,6 @@ import {
   buildConsoleTemplateImportPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
-  buildRunPath,
-  buildRunUrl,
   buildPublicCategoriesPath,
   buildPublicCategoryPath,
   buildPublicFeaturePath,
@@ -85,10 +83,6 @@ describe('routes', () => {
     );
     expect(buildConsoleRunsPath()).toBe('/dashboard/runs/');
     expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1/');
-    expect(buildRunPath('run-1')).toBe('/run/run-1/');
-    expect(buildRunUrl('run-1', 'https://serplists.com')).toBe(
-      'https://serplists.com/run/run-1/',
-    );
     expect(buildConsoleSettingsPath()).toBe('/dashboard/settings/');
     expect(LEGACY_ACCOUNT_PATH).toBe('/account');
     expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
@@ -167,7 +161,6 @@ describe('routes', () => {
     expect(resolveRouteShell('/profile/alice/ultimate-camping-checklist/')).toBe('public');
     expect(resolveRouteShell('/dashboard/templates/')).toBe('console');
     expect(resolveRouteShell('/dashboard/runs/run-1/')).toBe('console');
-    expect(resolveRouteShell('/run/run-1/')).toBe('console');
   });
 
   it('labels public routes by discovery emphasis', () => {
@@ -218,7 +211,7 @@ describe('routes', () => {
     expect(resolveConsoleSection('/dashboard/templates/template-1/edit/')).toBe('templates');
     expect(resolveConsoleSection('/dashboard/import-templates/')).toBe('templates');
     expect(resolveConsoleSection('/dashboard/runs/')).toBe('runs');
-    expect(resolveConsoleSection('/run/run-1/')).toBe('runs');
+    expect(resolveConsoleSection('/dashboard/runs/run-1/')).toBe('runs');
     expect(resolveConsoleSection('/dashboard/settings/')).toBe('account');
     expect(resolveConsoleSection('/dashboard/archive/')).toBe('archive');
     expect(resolveConsoleSection('/templates/')).toBeNull();

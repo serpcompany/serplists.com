@@ -66,16 +66,12 @@ const secondaryItems: NavItem[] = [
   { href: buildConsoleSettingsPath(), icon: Settings, label: 'Settings' },
 ];
 
-// A run's own page (/run/<id>/) belongs to Runs.
-const isActivePath = (pathname: string, href: string) =>
-  isPathWithin(pathname, href) ||
-  (href === buildConsoleRunsPath() && isPathWithin(pathname, '/run/'));
-
+// A page under an item's path belongs to it: a Run's page (/dashboard/runs/<id>/) to Runs.
 function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <SidebarMenu>
       {items.map((item) => {
-        const active = isActivePath(pathname, item.href);
+        const active = isPathWithin(pathname, item.href);
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton

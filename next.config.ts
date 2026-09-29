@@ -84,6 +84,8 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       { source: '/console/runs/:id', destination: '/dashboard/runs/:id/', permanent: true },
+      // A Run's page used to answer at /run/<id>/ as well; /dashboard/runs/<id>/ is its one URL.
+      { source: '/run/:id', destination: '/dashboard/runs/:id/', permanent: true },
       // Every other path in its canonical form: /about to /about/, /robots.txt/ to /robots.txt.
       ...trailingSlashRedirects(),
     ];

@@ -73,8 +73,6 @@ const BUILT_PATHS: Array<[string, string]> = [
   ['buildConsoleTemplateEditPath', routes.buildConsoleTemplateEditPath('tpl-1')],
   ['buildConsoleRunsPath', routes.buildConsoleRunsPath()],
   ['buildConsoleRunPath', routes.buildConsoleRunPath('run-1')],
-  ['buildRunPath', routes.buildRunPath('run-1')],
-  ['buildRunUrl', routes.buildRunUrl('run-1', 'https://serplists.com')],
   ['buildConsoleSettingsPath', routes.buildConsoleSettingsPath()],
   ['buildConsoleArchivePath', routes.buildConsoleArchivePath()],
   // Links and callbacks the auth pages and the API write.
@@ -92,7 +90,7 @@ describe('route builders and the URLs the app writes', () => {
   });
 
   it('checks every route builder routes.ts exports', () => {
-    const builders = Object.keys(routes).filter((name) => /^build\w*Path$|^buildRunUrl$/.test(name));
+    const builders = Object.keys(routes).filter((name) => /^build\w*Path$/.test(name));
     const checked = new Set(BUILT_PATHS.map(([name]) => name.split(' ')[0]));
     expect(builders.filter((name) => !checked.has(name))).toEqual([]);
   });

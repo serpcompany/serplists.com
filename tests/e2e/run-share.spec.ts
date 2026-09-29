@@ -89,7 +89,7 @@ test('the runs list shows the share link when the clipboard refuses the copy', a
   const runId = await createRun(page, title);
 
   await page.goto('/dashboard/runs/');
-  const row = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}/"]`) });
+  const row = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/dashboard/runs/${runId}/"]`) });
   await row.getByRole('button', { name: 'Run options' }).click();
   await page.getByRole('menuitem', { name: 'Share Run' }).click();
 
@@ -126,7 +126,7 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   const { id: templateId } = template;
 
   await page.goto('/dashboard/runs/');
-  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}/"]`) });
+  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/dashboard/runs/${runId}/"]`) });
   const row = actions.locator('..');
   await expect(row.getByText('Needs revalidation')).toBeVisible();
   await expect(actions.getByRole('button', { name: 'Revalidate' })).toBeVisible();

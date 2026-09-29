@@ -652,8 +652,8 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
   await loginAsAdmin(page);
   const title = `Notes leave guard QA ${Date.now()}`;
   const runId = await createRun(page, title);
-  // The runs list opens a run at /run/<id>.
-  const runUrl = new RegExp(`/runs?/${runId}/$`);
+  // The runs list opens a run at its one URL.
+  const runUrl = new RegExp(`/dashboard/runs/${runId}/$`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
   const accountMenu = page.getByRole('button', { name: 'Account menu' });
   const sidebarTemplates = page.getByRole('navigation', { name: 'Dashboard' }).getByRole('link', { name: 'Templates', exact: true });
