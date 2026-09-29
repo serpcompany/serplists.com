@@ -373,9 +373,10 @@ existing content, invent nothing):
     menu had.
   - Footer: the theme toggle and the account menu ("My Templates", "My Runs", "Settings",
     "Profile", "Sign out").
-  - A top bar in the inset holds the sidebar trigger, and from `md` up the site links the
-    console header had. On phones the sidebar opens as its own sheet and the bottom bar goes
-    away. The site footer stays under console pages.
+  - A top bar in the inset holds the sidebar trigger, and from `md` up the public header's
+    navigation (`SiteNavigationMenu`, with its "Templates" and "Features" menus). On phones the
+    sidebar opens as its own sheet and the bottom bar goes away. The site footer stays under
+    console pages.
   - The reference has no console, so the sidebar follows shadcn's block, not a screenshot.
 - **REFERENCE IMAGES:** none for the console. The sidebar list echoes the left nav in
   patterns-2.png.
@@ -399,7 +400,7 @@ existing content, invent nothing):
   - Code: `src/components/layout/AppShell.tsx` and `src/components/layout/AppSidebar.tsx`.
   - A Run's page (`/dashboard/runs/<id>/`) highlights "Runs".
   - The public site header no longer sits above console pages: the sidebar holds the brand,
-    the switcher, the theme toggle and the account menu, and the top bar the site links.
+    the switcher, the theme toggle and the account menu, and the top bar the site navigation.
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
     would render every console page per request.
   - The rows are 44px tall, the old sidebar's full-size targets
