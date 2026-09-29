@@ -9,6 +9,7 @@ import {
   listPublicTemplates,
   parseTemplatePack,
   resolveLastmod,
+  SITEMAP_IMPLEMENTATION_SOURCES,
   type SourceSnapshot,
   type TemplatePack,
 } from './lib/sitemapLastmod';
@@ -196,15 +197,8 @@ const categoriesLastmod = resolveLastmod({
   },
   now,
 });
-const implementationLastmod = await gitLastmod([
-  'functions/sitemap.xml.ts',
-  'functions/sitemap/shared.ts',
-  'functions/sitemap/cache.ts',
-  'functions/sitemaps/pages/[page].xml.ts',
-  'functions/sitemaps/categories/[page].xml.ts',
-  'functions/sitemaps/profiles/[page].xml.ts',
-  'functions/sitemaps/templates/[page].xml.ts',
-]) ?? normalizeDate(previousCatalog.inventory?.implementationLastmod);
+const implementationLastmod = await gitLastmod(SITEMAP_IMPLEMENTATION_SOURCES)
+  ?? normalizeDate(previousCatalog.inventory?.implementationLastmod);
 if (!implementationLastmod) throw new Error('Unable to determine sitemap implementation date');
 const output = `${JSON.stringify({
   staticPages,

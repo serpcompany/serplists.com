@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execTool } from '../../../scripts/lib/run-tool.mjs';
+import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
 
 // Runs the real generator in a throwaway git repository whose commits have known dates.
 
@@ -23,17 +24,12 @@ const sourceFiles = [
   'src/pages/ChecklistLibrary.tsx',
   'src/pages/Categories.tsx',
   'src/data/publicCategories.ts',
-  'functions/sitemap.xml.ts',
-  'functions/sitemap/shared.ts',
-  'functions/sitemaps/pages/[page].xml.ts',
-  'functions/sitemaps/categories/[page].xml.ts',
-  'functions/sitemaps/profiles/[page].xml.ts',
-  'functions/sitemaps/templates/[page].xml.ts',
+  ...SITEMAP_IMPLEMENTATION_SOURCES,
 ];
 
 type Catalog = {
   templates: Array<{ slug: string; lastmod: string }>;
-  inventory: { templatesLastmod: string; categoriesLastmod: string };
+  inventory: { templatesLastmod: string; categoriesLastmod: string; implementationLastmod: string };
 };
 
 function write(relativePath: string, content: string) {
@@ -126,6 +122,13 @@ describe('generate-sitemap-catalog', { timeout: 120_000 }, () => {
     expect(clean.inventory.templatesLastmod).toBe('2026-04-01T00:00:00.000Z');
     expect(clean.inventory.categoriesLastmod).toBe('2026-04-01T00:00:00.000Z');
     expect(lastmodOf(clean, 'alpha')).toBe('2026-02-01T00:00:00.000Z');
+  });
+
+  it('advances the implementation date when the category slug rule changes', () => {
+    write('src/lib/utils/slug.ts', '// slug rule, edited\n');
+    commitAll('Fold another letter', '2026-05-01T00:00:00Z');
+
+    expect(generate().inventory.implementationLastmod).toBe('2026-05-01T00:00:00.000Z');
   });
 
   it('writes the same catalog on every clean run', () => {

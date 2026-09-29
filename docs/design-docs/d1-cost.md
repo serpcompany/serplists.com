@@ -60,9 +60,12 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    - **Rarely, relative to reads:** key by a revision. Sitemaps use `cachedSitemap()`
      (`functions/sitemap/cache.ts`), keyed by the bundled catalog and the
      trigger-maintained `sitemap_revisions` kinds each sitemap depends on, so a hit reads
-     3 rows and a deploy or a change to what that sitemap lists misses. Each shard
-     depends only on its own kind (a sign-up or avatar change bumps only `profiles`, so
-     the templates and categories shards stay cached); the index depends on all three.
+     3 rows and a change to what that sitemap lists misses, as does a deploy that changes
+     sitemap code (the files in `SITEMAP_IMPLEMENTATION_SOURCES`,
+     `scripts/lib/sitemapLastmod.ts`, which a unit test keeps in step with the sitemap
+     imports). Each shard depends only on its own kind (a sign-up or avatar change bumps
+     only `profiles`, so the templates and categories shards stay cached); the index
+     depends on all three.
      The triggers must bump a family's kind whenever its inputs change: the dependency
      list beside `cachedSitemap()` and `tests/unit/functions/sitemap-migrations.test.ts`
      record which. A key that the caller controls (such as a page number)

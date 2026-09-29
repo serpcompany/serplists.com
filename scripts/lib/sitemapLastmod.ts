@@ -127,3 +127,24 @@ export function resolveLastmod({
   if (previous?.hash === hash && previous.lastmod) return previous.lastmod;
   return now;
 }
+
+/**
+ * The code that shapes sitemap output. The newest commit to any of these files is the
+ * catalog's `implementationLastmod`, which is part of every sitemap cache key and
+ * family revision, so a deploy that changes one misses the cache and advances lastmod.
+ * tests/unit/scripts/sitemap-implementation-sources.test.ts walks the sitemap imports
+ * and fails when a module they reach is missing here.
+ */
+export const SITEMAP_IMPLEMENTATION_SOURCES = [
+  'functions/sitemap.xml.ts',
+  'functions/sitemap/shared.ts',
+  'functions/sitemap/cache.ts',
+  'functions/sitemaps/pages/[page].xml.ts',
+  'functions/sitemaps/categories/[page].xml.ts',
+  'functions/sitemaps/profiles/[page].xml.ts',
+  'functions/sitemaps/templates/[page].xml.ts',
+  // Category slugs (/categories/<slug>) and the origin every <loc> starts with.
+  'src/lib/categorySlug.ts',
+  'src/lib/utils/slug.ts',
+  'src/lib/seo/siteOrigin.ts',
+] as const;
