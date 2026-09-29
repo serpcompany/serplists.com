@@ -85,7 +85,9 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   addresses (the router keeps the IP in memory for rate limits only). As a backstop,
   `log()` writes any field named `ip`, `email`, `password`, `token`,
   `authorization`, or `cookie` as `"[redacted]"`, and a field cannot replace the
-  `level` or `message` (event name) of the line.
+  `level` or `message` (event name) of the line. It also writes an `Error`-valued
+  field as `describeErrorForLog()` output and cuts any string field before
+  Drizzle's `\nparams:` section.
 - Better Auth's own logs go through `log()` as `better_auth` lines
   (`functions/api/utils/better-auth-logger.ts`), because its default logger prints
   raw emails (`User not found { email }` on every unknown sign-in or reset). The
@@ -100,11 +102,15 @@ To deploy by hand (rarely needed): `pnpm run build`, then
   route with a secret in its path there. Cloudflare's own request metadata still
   records the full URL, so limit who can read the runtime logs.
 - Handlers that catch their own errors must log them: the router's `api_error`
-  line only sees errors that reach it. Log errors with `describeErrorForLog()`,
-  which drops the bound parameters (user content) that Drizzle puts in a failed
-  query's message. The MCP endpoint (`/api/mcp`) answers tool failures with an
-  HTTP 200 JSON-RPC error, so look for its `mcp_tool_error`, `mcp_tool_invariant`,
-  and `mcp_auth_error` lines rather than a 5xx status.
+  line only sees errors that reach it. Log errors with `...describeErrorForLog(error)`
+  (fields `errorName` and `errorMessage`), which drops the bound parameters (user
+  content, emails, share and reset tokens) that Drizzle puts in a failed query's
+  message and logs the D1 error it wraps instead. The router's `api_error` and
+  `env_validation_error` lines, the auth email throttle, and the Stripe webhook
+  (which also stores that message in `stripe_webhook_events.error`) do this. The
+  MCP endpoint (`/api/mcp`) answers tool failures with an HTTP 200 JSON-RPC error,
+  so look for its `mcp_tool_error`, `mcp_tool_invariant`, and `mcp_auth_error`
+  lines rather than a 5xx status.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for

@@ -1,7 +1,7 @@
 import { Env } from './types';
 import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
-import { getClientIp, log } from './utils/logger';
+import { describeErrorForLog, getClientIp, log } from './utils/logger';
 import { sanitizeLogPath } from './utils/log-path';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { checkRouteRateLimit, routeRateLimitResponse } from './utils/route-rate-limit';
@@ -124,7 +124,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       log('error', 'env_validation_error', {
         requestId,
         path: logPath,
-        error: error instanceof Error ? error.message : String(error),
+        ...describeErrorForLog(error),
       });
       response = errorResponse('Server configuration error', 500);
       return finalize(response);
@@ -251,7 +251,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         requestId,
         method: request.method,
         path: logPath,
-        error: error instanceof Error ? error.message : String(error),
+        ...describeErrorForLog(error),
       });
       response = errorResponse('Internal Server Error', 500);
     }

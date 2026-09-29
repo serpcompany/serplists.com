@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
 
@@ -40,6 +41,27 @@ describe('log', () => {
     expect(JSON.parse(line)).toMatchObject({ userId: 'user-1', ip: '[redacted]', Email: '[redacted]' });
   });
 
+  it('drops Drizzle query parameters from any field, as an error or as its message', () => {
+    const lines = capture('error');
+    const drizzleError = new DrizzleQueryError(
+      'select "id" from "users" where lower("email") = ?',
+      ['alice@example.com'],
+      new Error('D1_ERROR: overloaded'),
+    );
+
+    log('error', 'x', { error: drizzleError });
+    log('error', 'x', { error: drizzleError.message });
+    log('error', 'x', { reason: `wrapped: ${drizzleError.message}`, userId: 'user-1' });
+
+    for (const line of lines) {
+      expect(line).not.toContain('alice@example.com');
+      expect(line).not.toContain('params:');
+    }
+    expect(JSON.parse(lines[0]).error).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: overloaded' });
+    expect(JSON.parse(lines[1]).error).toBe('Failed query: select "id" from "users" where lower("email") = ?');
+    expect(JSON.parse(lines[2])).toMatchObject({ userId: 'user-1' });
+  });
+
   it('never lets a field overwrite the level, event name or timestamp', () => {
     const lines = capture('error');
 
@@ -61,6 +83,12 @@ describe('describeErrorForLog', () => {
 
     expect(described).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: no such column: retired_items' });
     expect(JSON.stringify(described)).not.toContain('jane@example.com');
+  });
+
+  it('recognizes a Drizzle query error by its class', () => {
+    const error = new DrizzleQueryError('delete from "verification" where "identifier" = ?', ['reset-password:secret']);
+
+    expect(describeErrorForLog(error)).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'no cause' });
   });
 
   it('drops a params section from any other error message', () => {

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import type { Env } from '../types';
 import { createDb, schema } from '../db';
-import { log } from './logger';
+import { describeErrorForLog, log } from './logger';
 
 export type AuthEmailKind = 'password-reset' | 'email-verification';
 
@@ -75,7 +75,7 @@ export async function shouldSendAuthEmail(env: Env, kind: AuthEmailKind, userId:
     log('error', 'auth_email_throttle_failed', {
       kind,
       userId,
-      error: error instanceof Error ? error.message : String(error),
+      ...describeErrorForLog(error),
     });
     return true;
   }
@@ -99,7 +99,7 @@ export async function releaseAuthEmailSend(env: Env, kind: AuthEmailKind, userId
     log('warn', 'auth_email_throttle_release_failed', {
       kind,
       userId,
-      error: error instanceof Error ? error.message : String(error),
+      ...describeErrorForLog(error),
     });
   }
 }
@@ -135,7 +135,7 @@ export async function discardUnsentPasswordResetToken(env: Env, token: string): 
     await createDb(env).delete(verification).where(eq(verification.identifier, `reset-password:${token}`));
   } catch (error) {
     log('warn', 'auth_email_reset_token_cleanup_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      ...describeErrorForLog(error),
     });
   }
 }

@@ -156,8 +156,12 @@ describe("Stripe webhook handler", () => {
 
     expect(response.status).toBe(500);
     expect(data.error).toBe("Stripe webhook processing failed");
-    expect(d1.rows<{ error: string }>("SELECT error FROM stripe_webhook_events WHERE id = ?", "evt_retry")[0]?.error)
-      .toContain("from \"stripe_customers\"");
+    const stored = d1.rows<{ error: string }>("SELECT error FROM stripe_webhook_events WHERE id = ?", "evt_retry")[0]
+      ?.error;
+    // The D1 error, never Drizzle's bound parameters (customer and user ids, emails).
+    expect(stored).toContain("no such table: stripe_customers");
+    expect(stored).not.toContain("params:");
+    expect(stored).not.toContain("cus_123");
   });
 
   it("stores the subscription a completed Checkout created, without waiting for its own event", async () => {

@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SECRET = 'SECRETTOKEN123';
@@ -73,6 +74,31 @@ describe('API router log path redaction', { timeout: 30_000 }, () => {
     expect(response.status).toBe(500);
     expect(lines.some((line) => line.includes('api_error'))).toBe(true);
     expect(lines.join('\n')).not.toContain(SECRET);
+  });
+
+  it.each([
+    ['a shared Run query', 'handleChecklists', `checklists/shared/${SECRET}`, 'PUT'],
+    ['an invite member lookup', 'handleTeams', 'teams/team-1/invites', 'POST'],
+  ] as const)('keeps the bound parameters of %s out of the api_error log', async (_label, handler, path, method) => {
+    const email = 'alice@example.com';
+    handlers[handler].mockRejectedValueOnce(
+      new DrizzleQueryError(
+        'select "id" from "checklist_runs" where "share_token" = ? and lower("email") = ?',
+        [SECRET, email, 1],
+        new Error('D1_ERROR: Network connection lost'),
+      ),
+    );
+
+    const response = await send(path, { method, body: '{}' });
+
+    expect(response.status).toBe(500);
+    const logged = lines.join('\n');
+    for (const value of [SECRET, email, 'params:']) expect(logged).not.toContain(value);
+    const apiError = lines.map((line) => JSON.parse(line)).find((entry) => entry.message === 'api_error');
+    expect(apiError).toMatchObject({
+      errorName: 'DrizzleQueryError',
+      errorMessage: 'D1_ERROR: Network connection lost',
+    });
   });
 
   it('keeps the token out of the env_validation_error log', async () => {

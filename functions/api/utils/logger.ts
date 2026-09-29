@@ -1,3 +1,5 @@
+import { DrizzleQueryError } from 'drizzle-orm';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export function getClientIp(request: Request): string | null {
@@ -16,9 +18,23 @@ const REDACTED_FIELDS = new Set(['ip', 'email', 'password', 'token', 'authorizat
 function redact(data: Record<string, unknown> | undefined): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data ?? {})) {
-    fields[key] = REDACTED_FIELDS.has(key.toLowerCase()) && value !== undefined ? '[redacted]' : value;
+    fields[key] = REDACTED_FIELDS.has(key.toLowerCase()) && value !== undefined ? '[redacted]' : withoutQueryParams(value);
   }
   return fields;
+}
+
+// Drizzle appends a failed query's bound values (user content: emails, tokens,
+// run notes) to its message after this marker.
+const QUERY_PARAMS_MARKER = '\nparams:';
+
+// A backstop for call sites that log an error, or its message, directly: an Error
+// is described (JSON would print a DrizzleQueryError's params), and a string loses
+// its params section.
+function withoutQueryParams(value: unknown): unknown {
+  if (value instanceof Error) return describeErrorForLog(value);
+  if (typeof value !== 'string') return value;
+  const paramsIndex = value.indexOf(QUERY_PARAMS_MARKER);
+  return paramsIndex === -1 ? value : value.slice(0, paramsIndex);
 }
 
 const MAX_LOGGED_ERROR_LENGTH = 300;
@@ -34,13 +50,13 @@ export function describeErrorForLog(error: unknown): { errorName: string; errorM
     return { errorName: typeof error, errorMessage: truncateForLog(String(error)) };
   }
 
-  if (error.message.startsWith('Failed query: ')) {
+  if (error instanceof DrizzleQueryError || error.message.startsWith('Failed query: ')) {
     const cause = error.cause;
     const causeMessage = cause instanceof Error ? cause.message : cause === undefined ? 'no cause' : String(cause);
     return { errorName: 'DrizzleQueryError', errorMessage: truncateForLog(causeMessage) };
   }
 
-  const paramsIndex = error.message.indexOf('\nparams:');
+  const paramsIndex = error.message.indexOf(QUERY_PARAMS_MARKER);
   const message = paramsIndex === -1 ? error.message : error.message.slice(0, paramsIndex);
   return { errorName: error.name, errorMessage: truncateForLog(message) };
 }

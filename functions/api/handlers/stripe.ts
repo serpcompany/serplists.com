@@ -2,7 +2,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { eq } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import { log } from "../utils/logger";
+import { describeErrorForLog, log } from "../utils/logger";
 import { json, jsonError } from "../utils/response";
 import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
 import {
@@ -189,10 +189,11 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
       await db.batch([markStripeEventHandled(db, record), ...writes]);
       return json({ received: true });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log("error", "stripe_webhook_failed", { eventId: event.id, type: event.type, error: message });
+      // Never the bound values of a failed Drizzle query: they would reach the log and D1.
+      const described = describeErrorForLog(err);
+      log("error", "stripe_webhook_failed", { eventId: event.id, type: event.type, ...described });
       try {
-        await recordStripeEventFailure(db, record, message);
+        await recordStripeEventFailure(db, record, described.errorMessage);
       } catch {
         // Without an error row the event is still unhandled, so Stripe's retry reprocesses it.
         log("warn", "stripe_webhook_failure_not_recorded", { eventId: event.id, type: event.type });

@@ -15,7 +15,7 @@ import { getSessionUserId } from "../utils/session";
 import { checkRateLimit } from "../utils/rate-limit";
 import { ROUTE_RATE_LIMIT_MESSAGES } from "../utils/route-rate-limit";
 import { getEntitlementsForContext, getEntitlementsForUser } from "../utils/entitlements";
-import { log } from "../utils/logger";
+import { describeErrorForLog, log } from "../utils/logger";
 import {
   getPersonalSubscriptionSummary,
   isPaidSubscriptionStatus,
@@ -167,7 +167,7 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     } catch (error) {
       log("error", "stripe_open_checkout_check_failed", {
         userId,
-        error: error instanceof Error ? error.message : String(error),
+        ...describeErrorForLog(error),
       });
       return billingUnavailable();
     }
@@ -180,7 +180,7 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       if (!isMissingStripeCustomer(error)) {
         log("error", "stripe_subscription_check_failed", {
           userId,
-          error: error instanceof Error ? error.message : String(error),
+          ...describeErrorForLog(error),
         });
         return billingUnavailable();
       }

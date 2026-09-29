@@ -1,6 +1,6 @@
 import { buildPageTitle } from '../../src/lib/brand';
 import type { Env } from '../api/types';
-import { log } from '../api/utils/logger';
+import { describeErrorForLog, log } from '../api/utils/logger';
 import { canonicalUrl } from '../sitemap/shared';
 import type { PublicPageMeta } from './public-page-meta';
 
@@ -112,7 +112,7 @@ export async function servePublicPage(
   try {
     meta = await resolve();
   } catch (error) {
-    log('error', 'public_page_meta_failed', { route, error: error instanceof Error ? error.message : String(error) });
+    log('error', 'public_page_meta_failed', { route, ...describeErrorForLog(error) });
   }
   return meta ? applySocialTags(shell, buildSocialTags(meta)) : shell;
 }

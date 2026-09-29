@@ -16,7 +16,7 @@ import {
 } from '../utils/payloads';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
-import { log } from '../utils/logger';
+import { describeErrorForLog, log } from '../utils/logger';
 import { getSessionUserId } from '../utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/entitlements';
 import {
@@ -683,7 +683,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           log('error', 'template_import_insert_failed', {
             userId,
             index,
-            error: err instanceof Error ? err.message : String(err),
+            ...describeErrorForLog(err),
           });
           summary.failed.push({
             index,
