@@ -10,7 +10,11 @@ import {
 } from '@/lib/schemas/checklistSchema';
 import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
 import { normalizeSections } from '@/lib/utils/checklistSections';
-import { exportPortableTemplatesToJSON, prepareTemplatesForImport } from '@/lib/utils/templateBackup';
+import {
+  exportPortableTemplatesToJSON,
+  parseTemplatesFromData,
+  prepareTemplatesForImport,
+} from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 // docs/generated/portable-template-pack.schema.json is the published contract for AI and
@@ -160,5 +164,43 @@ describe('portable export', () => {
         ],
       },
     ]);
+  });
+});
+
+// A plain JSON import is lenient: content blocks keep a numeric id and null or ill-typed
+// file details, which the app reads as absent. The export used to copy them as they were,
+// and the strict portable schema then left the whole template out of the pack.
+describe('portable export of content blocks a lenient import stored', () => {
+  const importedTemplate = (contents: unknown[]) => {
+    const { templates } = parseTemplatesFromData([
+      { title: 'Launch', sections: [{ id: 's1', title: 'Prep', items: [{ id: 'i1', title: 'Write copy', contents }] }] },
+    ]);
+    return prepareTemplatesForImport(templates, 'u1');
+  };
+  const exportedContents = (contents: unknown[]) => {
+    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(importedTemplate(contents))));
+    expect(exported.manifest.skippedTemplates).toBeUndefined();
+    expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
+    return exported.templates[0].sections[0].items[0].contents;
+  };
+
+  it('exports a numeric id as a string and leaves out null file details', () => {
+    expect(
+      exportedContents([
+        { id: 1, type: 'file', value: 'https://example.com/a.pdf', fileName: null, fileSize: null, uploadType: null },
+      ]),
+    ).toEqual([{ id: '1', type: 'file', value: 'https://example.com/a.pdf' }]);
+  });
+
+  it('exports a block whose only problem is a null file detail', () => {
+    expect(
+      exportedContents([{ id: 'c1', type: 'file', value: 'https://example.com/a.pdf', fileName: null, fileSize: 2048 }]),
+    ).toEqual([{ id: 'c1', type: 'file', value: 'https://example.com/a.pdf', fileSize: 2048 }]);
+  });
+
+  it('leaves out an upload type the portable format does not define', () => {
+    expect(
+      exportedContents([{ id: 'c1', type: 'image', value: 'https://example.com/a.png', uploadType: 'link', fileName: 'a.png' }]),
+    ).toEqual([{ id: 'c1', type: 'image', value: 'https://example.com/a.png', fileName: 'a.png' }]);
   });
 });

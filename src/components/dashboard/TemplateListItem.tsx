@@ -58,7 +58,8 @@ export function TemplateListItem({
         <span>{template.isPublic ? 'Public' : 'Private'}</span>
       </div>
 
-      <div className="flex items-center gap-2 md:opacity-0 md:transition-opacity md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+      {/* Hidden until hover only on devices that can hover: touch screens always show them. */}
+      <div className="flex items-center gap-2 md:transition-opacity md:[@media(hover:hover)]:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
         {onStartRun ? (
           <Button
             variant="outline"

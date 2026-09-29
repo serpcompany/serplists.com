@@ -25,7 +25,7 @@ import { useTeamSettingsForm } from '@/features/teams/useTeamSettingsForm';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
 import { TeamActivityList } from '@/components/account/TeamActivityList';
-import { QueryListState } from '@/components/shared/QueryListState';
+import { QueryErrorNotice, QueryListState } from '@/components/shared/QueryListState';
 import {
   assignableRoles,
   describeMemberForControls,
@@ -62,8 +62,10 @@ export function TeamSettingsSection() {
     patchTeam,
     refreshTeams,
     rememberTeam,
+    retryWorkspace,
     selectWorkspace,
     teams = [],
+    teamsUnavailable,
   } = useWorkspace();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
@@ -336,6 +338,11 @@ export function TeamSettingsSection() {
           </div>
         </form>
 
+        {/* Not "no Organizations": the user could otherwise create a duplicate. */}
+        {teamsUnavailable ? (
+          <QueryErrorNotice message="Couldn't load your Organizations." onRetry={retryWorkspace} />
+        ) : null}
+
         {teams.length > 0 ? (
           <div className="space-y-3">
             <div className="text-sm font-medium text-foreground">Your Organizations</div>
@@ -538,7 +545,7 @@ export function TeamSettingsSection() {
               <TeamActivityList query={activityQuery} onRetry={() => void reload.activity()} />
             ) : null}
           </div>
-        ) : (
+        ) : teamsUnavailable ? null : (
           <div className="text-sm text-muted-foreground">
             Create or select an Organization to share templates and runs.
           </div>

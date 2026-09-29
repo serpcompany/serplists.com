@@ -19,24 +19,52 @@ const isBlank = (value: unknown): boolean => typeof value !== "string" || value.
 const CONTENT_TYPES = new Set(["text", "image", "video", "file", "embed", "subItems"]);
 const VALUE_CONTENT_TYPES = new Set(["image", "video", "file", "embed"]);
 
-const withoutNonString = (record: JsonRecord, key: string): JsonRecord => {
-  if (typeof record[key] === "string" || !(key in record)) return record;
+const withoutKey = (record: JsonRecord, key: string): JsonRecord => {
   const { [key]: _dropped, ...rest } = record;
   return rest;
 };
 
+const withoutNonString = (record: JsonRecord, key: string): JsonRecord =>
+  typeof record[key] === "string" || !(key in record) ? record : withoutKey(record, key);
+
+// Ids are optional. A lenient JSON import can store a numeric one: keep it as a string.
+const withPortableId = (record: JsonRecord): JsonRecord =>
+  typeof record.id === "number" && Number.isFinite(record.id)
+    ? { ...record, id: String(record.id) }
+    : withoutNonString(record, "id");
+
+const UPLOAD_TYPES = new Set(["url", "upload"]);
+
+// Stored blocks can hold null (read as absent) or ill-typed file details and ids. Only keys
+// that are present and invalid change, so a valid block comes out exactly as it went in.
+function withPortableContentKeys(content: JsonRecord): JsonRecord {
+  let cleaned = withoutNonString(withPortableId(content), "fileName");
+  if ("fileSize" in cleaned && !(typeof cleaned.fileSize === "number" && Number.isFinite(cleaned.fileSize))) {
+    cleaned = withoutKey(cleaned, "fileSize");
+  }
+  if ("uploadType" in cleaned && !UPLOAD_TYPES.has(cleaned.uploadType as string)) {
+    cleaned = withoutKey(cleaned, "uploadType");
+  }
+  if (!("subItems" in cleaned)) return cleaned;
+  if (!Array.isArray(cleaned.subItems)) return withoutKey(cleaned, "subItems");
+  const subItems = cleaned.subItems
+    .filter((subItem): subItem is JsonRecord => isRecord(subItem) && !isBlank(subItem.title))
+    .map(withPortableId);
+  return { ...cleaned, subItems };
+}
+
 function normalizeContents(contents: unknown[]): JsonRecord[] {
-  return contents.filter(isRecord).flatMap((content) => {
-    if (typeof content.type !== "string" || !CONTENT_TYPES.has(content.type)) return [];
+  return contents.filter(isRecord).flatMap((record) => {
+    if (typeof record.type !== "string" || !CONTENT_TYPES.has(record.type)) return [];
+    const content = withPortableContentKeys(record);
     const value = typeof content.value === "string" ? content.value : "";
 
-    if (content.type === "subItems") {
-      const subItems = (Array.isArray(content.subItems) ? content.subItems : [])
-        .filter((subItem): subItem is JsonRecord => isRecord(subItem) && !isBlank(subItem.title));
+    if (record.type === "subItems") {
+      const subItems = Array.isArray(content.subItems) ? content.subItems : [];
       return subItems.length > 0 ? [{ ...content, value, subItems }] : [];
     }
 
-    if (VALUE_CONTENT_TYPES.has(content.type) && isBlank(value)) return [];
+    if (VALUE_CONTENT_TYPES.has(record.type) && isBlank(value)) return [];
     // Only a Sub-tasks block's sub-items are Sub-tasks; the app never shows any other block's.
     const { subItems: _notSubTasks, ...block } = content;
     return [{ ...block, value }];
@@ -47,7 +75,10 @@ function normalizeContents(contents: unknown[]): JsonRecord[] {
  * Makes stored or imported sections valid for the portable schema: blank section titles
  * become "Section N" and blank task titles "Task N" (N is the position, as the editor shows
  * it); blank sub-tasks, empty sub-task blocks, sub-items on any other block, and media or
- * embed blocks without a value are dropped; sections left without tasks are dropped.
+ * embed blocks without a value are dropped; sections left without tasks are dropped. On
+ * content blocks and Sub-tasks a numeric id becomes a string and any other non-string id is
+ * dropped, and a fileName that is not a string, a fileSize that is not a finite number, or an
+ * uploadType other than "url" or "upload" (null included) is dropped.
  */
 export function normalizePortableSections(sections: unknown): JsonRecord[] {
   if (!Array.isArray(sections)) return [];

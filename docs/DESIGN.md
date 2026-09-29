@@ -51,13 +51,15 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
   is the reference.
 - A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
-  keyboard focus (`group-focus-within:opacity-100`) and on touch screens: in the
-  template editor use `ROW_ACTIONS_REVEAL_CLASS`
-  (`src/components/template-editor/reorder.ts`), and a unit test fails on any
-  hover-only class string there. A hover-only duplicate of an action that is
-  reachable elsewhere leaves the tab order instead (`tabIndex={-1}` inside an
-  `aria-hidden` wrapper), like the Start Run overlay in
-  `src/components/dashboard/TemplateCard.tsx` and the View Template overlay in
+  keyboard focus (`group-focus-within:opacity-100`) and on touch screens: use
+  `HOVER_REVEAL_CLASS` (`src/components/ui/hover-reveal.ts`; the template editor's
+  `ROW_ACTIONS_REVEAL_CLASS`), or hide a group only where the device can hover
+  (`md:[@media(hover:hover)]:opacity-0`, as the My Templates list and Runs list rows do).
+  Unit tests fail on any hover-only class string in the template editor and the
+  dashboard. A hover-only duplicate of an action that is reachable elsewhere leaves
+  the tab order instead (`tabIndex={-1}` inside an `aria-hidden` wrapper), like the
+  Start Run overlay in `src/components/dashboard/TemplateCard.tsx` (which touch screens
+  never show: `[@media(hover:none)]:hidden`) and the View Template overlay in
   `src/components/checklist-library/TemplateCard.tsx`
   (`tests/unit/components/focusVisibility.ts` finds focusable elements hidden this way).
 - Anything that reorders by drag also reorders from the keyboard. The template

@@ -11,14 +11,21 @@ export type WorkspaceErrorActions = {
 
 // The inline form of WorkspaceGate, for a page outside the console that acts in the
 // active context: the teams request failed before the stored Organization was confirmed,
-// so the page's actions wait, and this says why and offers the gate's way out.
+// so the page's actions wait, and this says why and offers the gate's way out. A page about
+// an Organization's own resource (a run or Template) leaves out Continue in Personal, which
+// would not change that resource's Organization.
 export function WorkspaceErrorNotice({
   className,
   id,
   message,
   onContinueInPersonal,
   onRetry,
-}: WorkspaceErrorActions & { className?: string; id: string; message: string }) {
+}: Pick<WorkspaceErrorActions, 'onRetry'> &
+  Partial<Pick<WorkspaceErrorActions, 'onContinueInPersonal'>> & {
+    className?: string;
+    id: string;
+    message: string;
+  }) {
   return (
     <Alert
       className={cn('border-destructive/40 bg-card shadow-none', className)}
@@ -34,9 +41,11 @@ export function WorkspaceErrorNotice({
           <Button onClick={onRetry} size="sm" type="button">
             Retry
           </Button>
-          <Button onClick={onContinueInPersonal} size="sm" type="button" variant="outline">
-            Continue in Personal
-          </Button>
+          {onContinueInPersonal ? (
+            <Button onClick={onContinueInPersonal} size="sm" type="button" variant="outline">
+              Continue in Personal
+            </Button>
+          ) : null}
         </div>
       </AlertDescription>
     </Alert>

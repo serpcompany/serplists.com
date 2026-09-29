@@ -59,6 +59,7 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
+import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
@@ -92,8 +93,10 @@ const TemplateDetail = () => {
   // Actions below await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
-  const { activeTeamId, canEditTemplates, getPermissions, isTeamWorkspace, teams, workspaceStatus } =
-    useWorkspace();
+  const {
+    activeTeamId, canEditTemplates, getPermissions, isRoleUnavailable, isTeamWorkspace, retryWorkspace, teams,
+    workspaceStatus,
+  } = useWorkspace();
   // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -161,6 +164,9 @@ const TemplateDetail = () => {
     template: displayTemplate ?? { isPublic: false, userId: '' },
     userId: user?.id,
   });
+  // A private Organization Template runs there; with the teams request failed that role is unknown.
+  const startRunRoleUnavailable = Boolean(displayTemplate && !displayTemplate.isPublic) &&
+    isRoleUnavailable(displayTemplate?.teamId);
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
@@ -518,6 +524,9 @@ const TemplateDetail = () => {
       />
       <DashboardScrollArea>
         <div className="mx-auto max-w-6xl space-y-8">
+        {startRunRoleUnavailable ? (
+          <WorkspaceErrorNotice id="template-workspace-error" message="Start Run waits until they load. Check your connection and try again." onRetry={retryWorkspace} />
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-border bg-card">
             <CardContent className="p-4">

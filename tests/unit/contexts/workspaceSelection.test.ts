@@ -98,6 +98,15 @@ describe('workspace selection', () => {
     expect(tab.render()).toBe('acme');
   });
 
+  // A failed request leaves its older list in place (or one the app wrote itself), so that
+  // list cannot rule the stored Organization out.
+  it('keeps the stored Organization when the last teams request failed over a list that lacks it', () => {
+    const tab = createTab({ stored: 'acme' });
+
+    expect(tab.render({ teamIds: ['joined'], teamsFailed: true })).toBe('acme');
+    expect(tab.render({ teamIds: ['joined', 'acme'] })).toBe('acme');
+  });
+
   it('keeps the stored Organization while teams are still loading', () => {
     const tab = createTab({ stored: 'acme' });
 

@@ -67,6 +67,9 @@ type WorkspaceContextValue = {
   // Permissions on a resource owned by this Organization (Personal when teamId is empty),
   // from the user's role there, whichever context is active.
   getPermissions: (teamId?: string) => ResourcePermissions;
+  // True for an Organization's resource when the role there is unknown only because the
+  // teams request failed with no list: pages say so with Retry instead of going read-only.
+  isRoleUnavailable: (teamId?: string) => boolean;
   isTeamWorkspace: boolean;
   // True until the session and the active context are known, including while the stored
   // Organization is unconfirmed ('loading' or 'error' status). Lists wait for it.
@@ -74,11 +77,16 @@ type WorkspaceContextValue = {
   /** Applies a confirmed change to one cached Organization without refetching. */
   patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;
   refreshTeams: () => Promise<TeamSummary[]>;
+  // Shows a created or joined Organization at once. Call refreshTeams() after it: when no
+  // list was loaded yet, only that request confirms the stored Organization.
   rememberTeam: (team: TeamSummary) => void;
-  // Retries the teams request after it failed ('error' status).
+  // Retries the teams request after it failed, in any context.
   retryWorkspace: () => void;
   selectWorkspace: (workspaceId: string) => void;
   teams: TeamSummary[];
+  // The teams request failed and there is no list, in any context. Personal work still goes
+  // ahead ('ready'), but the switcher and Settings say the Organizations could not load.
+  teamsUnavailable: boolean;
   workspaces: Workspace[];
   workspaceScopeId: string;
   // 'loading' or 'error' while the stored Organization is not confirmed by the teams query.
@@ -127,6 +135,8 @@ export function WorkspaceProvider({
 
   const queriedTeams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const { teamsFailed, teamsLoaded, teamsSettled } = describeTeamsQuery(teamsQuery);
+  // A failed refetch keeps the last list, which stays valid; only a failure with no list is.
+  const teamsUnavailable = teamsFailed && !teamsLoaded;
 
   const teams = useMemo(() => {
     const mergedTeams = new Map<string, TeamSummary>();
@@ -201,6 +211,7 @@ export function WorkspaceProvider({
       teamIds: teams.map((team) => team.id),
       teamsSettled,
       teamsLoaded,
+      teamsFailed,
     });
     if (nextWorkspaceId !== activeWorkspaceId) {
       setActiveWorkspaceId(nextWorkspaceId);
@@ -210,6 +221,7 @@ export function WorkspaceProvider({
     isAuthLoading,
     sessionStatus,
     teams,
+    teamsFailed,
     teamsLoaded,
     teamsSettled,
     user,
@@ -253,12 +265,14 @@ export function WorkspaceProvider({
         // drop the team when it lands. Cancelling reverts the query to its last data,
         // and the write below is kept as that data.
         void queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
-        queryClient.setQueryData<TeamSummary[]>(
-          ['teams', user.id],
-          (currentTeams = []) => [
-            team,
-            ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id),
-          ],
+        // Only added to a list the server sent. With none (the first load failed or was
+        // cancelled), a one-team list would read as a settled server list without the
+        // stored Organization and move the tab to Personal; optimisticTeams shows the team
+        // until the caller's refreshTeams() loads the list.
+        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+          currentTeams
+            ? [team, ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id)]
+            : currentTeams,
         );
       }
     },
@@ -318,6 +332,11 @@ export function WorkspaceProvider({
       getResourcePermissions(teamId, (id) => teams.find((team) => team.id === id)?.role),
     [teams],
   );
+  const isRoleUnavailable = useCallback(
+    (teamId?: string) =>
+      Boolean(teamId) && teamsUnavailable && !teams.some((team) => team.id === teamId),
+    [teams, teamsUnavailable],
+  );
 
   // Memoized so a background teams refetch (isFetching toggles on window focus) does not
   // re-render every consumer.
@@ -334,6 +353,7 @@ export function WorkspaceProvider({
       canRunTemplates: teamRole ? activePermissions.canRun : true,
       createTeam,
       getPermissions,
+      isRoleUnavailable,
       isTeamWorkspace,
       isWorkspaceLoading,
       patchTeam,
@@ -342,13 +362,14 @@ export function WorkspaceProvider({
       retryWorkspace,
       selectWorkspace,
       teams,
+      teamsUnavailable,
       workspaces,
       workspaceScopeId: activeWorkspace.id,
       workspaceStatus,
     };
   }, [
-    activeWorkspace, createTeam, getPermissions, isWorkspaceLoading, patchTeam, refreshTeams, rememberTeam,
-    retryWorkspace, selectWorkspace, teams, workspaces, workspaceStatus,
+    activeWorkspace, createTeam, getPermissions, isRoleUnavailable, isWorkspaceLoading, patchTeam, refreshTeams,
+    rememberTeam, retryWorkspace, selectWorkspace, teams, teamsUnavailable, workspaces, workspaceStatus,
   ]);
 
   return (

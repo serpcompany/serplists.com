@@ -52,6 +52,7 @@ fixes what the editor can save but the strict schema rejects:
 - blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
 - `subItems` on a text, image, video, file or embed block are dropped: only a `subItems` block's rows are Sub-tasks, the ones the app shows
 - sections without tasks are dropped, and an unknown `type` becomes `checklist`
+- on content blocks and sub-tasks, a numeric `id` becomes a string and any other non-string `id` is dropped; on content blocks, a `fileName` that is not a string, a `fileSize` that is not a finite number, and an `uploadType` other than `url` or `upload` (including `null`, which a lenient JSON import can store) are dropped, and so are blank sub-tasks on any block
 
 A template that still fails (for example one with no tasks) is left out of an export
 and listed in `manifest.skippedTemplates`; `manifest.totalTemplates` counts only the

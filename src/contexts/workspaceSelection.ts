@@ -28,6 +28,9 @@ export type WorkspaceSelectionInput = {
   teamsSettled: boolean;
   // The teams query holds a list from the server.
   teamsLoaded: boolean;
+  // The last teams request failed. Its list (if any) is older, so it cannot rule anything
+  // out. Omitted counts as not failed.
+  teamsFailed?: boolean;
 };
 
 // Returns the context this tab should be in for a signed-in user.
@@ -57,13 +60,14 @@ export function reconcileWorkspaceSelection(
     return activeWorkspaceId;
   }
 
-  // Fall back to Personal (without writing storage) only when a settled teams list from the
-  // server leaves the Organization out: membership removed, or a stale stored id. A failed,
-  // paused or running request says nothing about membership, so the tab keeps the
-  // Organization and the context reports 'loading' or 'error' instead of acting in Personal.
+  // Fall back to Personal (without writing storage) only when a settled, successful teams
+  // list from the server leaves the Organization out: membership removed, or a stale stored
+  // id. A failed, paused or running request says nothing about membership, so the tab keeps
+  // the Organization and the context reports 'loading' or 'error' instead of acting in Personal.
   if (
     input.teamsLoaded &&
     input.teamsSettled &&
+    !input.teamsFailed &&
     memory.explicitSelectionId !== activeWorkspaceId
   ) {
     return PERSONAL_WORKSPACE_ID;

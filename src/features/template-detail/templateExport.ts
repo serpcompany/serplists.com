@@ -67,12 +67,10 @@ export const exportTemplateFile = (params: {
   // A template the portable format can't hold is left out of the pack and listed in the
   // manifest. A pack with nothing in it is no backup: name the reason, download nothing.
   const { filename, pack } = buildTemplateExportFile(params.template);
+  // A template the portable format cannot hold is left out: say why, never download an empty pack.
   if (pack.templates.length === 0) {
-    const { message } = formatExportSummaryMessage({
-      exported: 0,
-      skipped: pack.manifest?.skippedTemplates ?? [],
-    });
-    return { kind: 'error', message };
+    const skipped = pack.manifest?.skippedTemplates ?? [];
+    return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped }).message };
   }
   (params.download ?? downloadBackupFile)(pack, filename);
 

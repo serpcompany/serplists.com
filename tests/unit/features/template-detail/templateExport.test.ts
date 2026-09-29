@@ -168,6 +168,23 @@ describe('template detail export', () => {
     );
   });
 
+  // The pack would be empty: say which template was left out and why, and download nothing.
+  it('reports a template the export had to leave out instead of downloading an empty pack', () => {
+    const download = vi.fn();
+
+    const result = exportTemplateFile({
+      billingState: billing(),
+      download,
+      template: buildTemplate({ sections: [] }),
+    });
+
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'No templates exported. Not exported: Launch Checklist (Template has no sections with tasks)',
+    });
+    expect(download).not.toHaveBeenCalled();
+  });
+
   it('counts uploaded files the export leaves out', () => {
     const result = exportTemplateFile({
       billingState: billing(),
@@ -199,23 +216,12 @@ describe('template detail export', () => {
     expect(result).toEqual({ kind: 'ok', assetWarnings: 1 });
   });
 
-  // A template the portable format can't hold (imported with an empty section, or with a
-  // content block id that is not text) is left out of the pack, which would then hold
-  // nothing. The user gets an error naming the reason, and no file.
+  // A template the portable format can't hold (imported with an empty section) is left out
+  // of the pack, which would then hold nothing. The user gets an error naming the reason,
+  // and no file.
   it.each([
     ['has no sections', { sections: [] }, 'Template has no sections with tasks'],
     ['has a section with no tasks', { sections: [{ id: 'section-1', title: 'Prep', items: [] }] }, 'Template has no sections with tasks'],
-    [
-      'has a content block whose id is a number',
-      {
-        sections: [{
-          id: 'section-1',
-          title: 'Prep',
-          items: [{ id: 'item-1', title: 'Write', contents: [{ id: 7, type: 'text', value: 'Hi' }] }],
-        }],
-      } as unknown as Partial<ChecklistTemplate>,
-      'Expected string, received number',
-    ],
   ])('downloads nothing and names the reason when the template %s', (_label, overrides, reason) => {
     const download = vi.fn();
 
@@ -231,5 +237,28 @@ describe('template detail export', () => {
     expect(message).toContain('No templates exported.');
     expect(message).toContain('Launch plan (');
     expect(message).toContain(reason);
+  });
+
+  // A lenient import can store a numeric content-block id. Export turns it into text, so
+  // the template is exported instead of being left out of an empty pack.
+  it('exports a template whose content block id is a number', () => {
+    const download = vi.fn();
+
+    const result = exportTemplateFile({
+      billingState: billing(),
+      download,
+      template: buildTemplate({
+        title: 'Launch plan',
+        sections: [{
+          id: 'section-1',
+          title: 'Prep',
+          items: [{ id: 'item-1', title: 'Write', contents: [{ id: 7, type: 'text', value: 'Hi' }] }],
+        }],
+      } as unknown as Partial<ChecklistTemplate>),
+    });
+
+    expect(result.kind).toBe('ok');
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(download.mock.calls[0]?.[0])).toContain('"id":"7"');
   });
 });

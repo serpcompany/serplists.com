@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest';
 // them. Any hover-revealed class string in the editor must also reveal on keyboard focus
 // and when the device cannot hover.
 const EDITOR_DIR = path.resolve(__dirname, '../../../../src/components/template-editor');
+// The editor's reveal class (ROW_ACTIONS_REVEAL_CLASS) lives here, shared with the dashboard.
+const SHARED_REVEAL_FILE = path.resolve(__dirname, '../../../../src/components/ui/hover-reveal.ts');
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -19,7 +21,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 function hoverRevealedClassStrings(): Array<{ file: string; value: string }> {
-  return sourceFiles(EDITOR_DIR).flatMap((file) => {
+  return [...sourceFiles(EDITOR_DIR), SHARED_REVEAL_FILE].flatMap((file) => {
     const source = readFileSync(file, 'utf8');
     return [...source.matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)]
       .map((match) => match[2])

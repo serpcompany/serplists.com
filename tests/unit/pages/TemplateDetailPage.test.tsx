@@ -35,6 +35,8 @@ const {
     isTeamWorkspace: false,
     isWorkspaceLoading: false,
     roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
+    // The teams request failed with no list, as WorkspaceProvider reports it.
+    teamsUnavailable: false,
     workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
 }));
@@ -115,6 +117,9 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
             ? workspaceState.canEditTemplates ? 'editor' : 'runner'
             : undefined),
         ),
+      isRoleUnavailable: (teamId?: string) =>
+        Boolean(teamId) && workspaceState.teamsUnavailable && !(teamId! in workspaceState.roles),
+      retryWorkspace: vi.fn(),
     }),
   };
 });
@@ -198,6 +203,7 @@ beforeEach(() => {
   workspaceState.isTeamWorkspace = false;
   workspaceState.isWorkspaceLoading = false;
   workspaceState.roles = {};
+  workspaceState.teamsUnavailable = false;
   workspaceState.workspaceStatus = 'ready';
 });
 
@@ -401,6 +407,38 @@ describe('TemplateDetail copy of a private Organization template', () => {
     const html = renderTemplateDetail();
 
     expect(html).toContain('Copy to My Templates');
+  });
+});
+
+// Start Run on a private Organization template follows the role there. Opened from Personal
+// while the teams request failed, that role is unknown: say so instead of hiding Start Run.
+describe('TemplateDetail after the teams request failed', () => {
+  const privateOrganizationTemplate = () => ({
+    ...buildV0DemoPrivateTemplate(),
+    isPublic: false,
+    teamId: 'team-1',
+    userId: 'someone-else',
+  });
+
+  it('says the Organizations could not load, with Retry, on a private Organization template', () => {
+    workspaceState.teamsUnavailable = true;
+    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: privateOrganizationTemplate() });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Couldn&#x27;t load your Organizations');
+    expect(html).toMatch(/>Retry</);
+    expect(html).not.toMatch(/Start Run<\/button>/);
+  });
+
+  it('shows no error on a Personal template', () => {
+    workspaceState.teamsUnavailable = true;
+    mockUseTemplateDetailModel.mockReturnValue(baseModel());
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Couldn&#x27;t load your Organizations');
+    expect(html).toMatch(/Start Run<\/button>/);
   });
 });
 
