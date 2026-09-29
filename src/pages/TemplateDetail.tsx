@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   Archive,
@@ -101,6 +101,8 @@ const TemplateDetail = () => {
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isCloningTemplate, setIsCloningTemplate] = useState(false);
+  // Set synchronously, so a second Duplicate or copy before the re-render cannot create a second copy.
+  const cloneInFlight = useRef(false);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
@@ -230,10 +232,11 @@ const TemplateDetail = () => {
   // Duplicate (a template the user can edit) and copy (someone else's) both create a
   // template, so both can hit the plan's template limit and must offer the upgrade.
   const handleCloneTemplate = async () => {
-    if (!displayTemplate) {
+    if (!displayTemplate || cloneInFlight.current) {
       return;
     }
 
+    cloneInFlight.current = true;
     const visit = beginVisit();
     setIsCloningTemplate(true);
     try {
@@ -255,6 +258,7 @@ const TemplateDetail = () => {
         },
       });
     } finally {
+      cloneInFlight.current = false;
       setIsCloningTemplate(false);
     }
   };
@@ -479,9 +483,9 @@ const TemplateDetail = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
             {permissions.canDuplicate ? (
-              <DropdownMenuItem onClick={handleCloneTemplate}>
+              <DropdownMenuItem onClick={handleCloneTemplate} disabled={isCloningTemplate}>
                 <Copy className="mr-2 h-4 w-4" />
-                Duplicate
+                {isCloningTemplate ? 'Duplicating...' : 'Duplicate'}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem onClick={handleExport} disabled={billingState.isLoading}>
