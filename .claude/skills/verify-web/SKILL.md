@@ -62,8 +62,10 @@ For each page the change touches:
    and `hover` act on; `wait_for` the text that shows the result.
 3. Leaving a page with unsaved changes opens the browser's confirm dialog: answer it with
    `handle_dialog`.
-4. `take_screenshot` checks layout. Check a phone width too: `resize_page` to 390 × 844, or
-   `emulate`.
+4. `take_screenshot` checks layout, at desktop and phone widths. Set the width with `emulate`
+   (`viewport` `"1440x900x1"`, or `"390x844x3,mobile,touch"` for a phone), then reload the page.
+   Avoid `resize_page`: in a headless session, a tab it resized stopped receiving clicks and key
+   presses, while a script's `click()` still worked, which looks like an app bug but is not.
 5. `list_console_messages`: no errors. A hydration error (React error #418 or #423) means the
    server HTML differs from the first render in the browser, usually because something read
    `window`, the time, or storage while rendering (`src/hooks/useIsClient.ts` defers that).
