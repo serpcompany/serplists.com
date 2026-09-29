@@ -32,20 +32,17 @@ const outputPath = path.join(
 );
 const staticPageSources = [
   { path: '/', sources: ['src/views/Index.tsx'] },
-  { path: '/features', sources: ['src/views/Features.tsx'] },
-  { path: '/features/template-builder', sources: ['src/views/Features.tsx'] },
-  { path: '/features/checklist-runs', sources: ['src/views/Features.tsx'] },
-  { path: '/features/public-sharing', sources: ['src/views/Features.tsx'] },
-  { path: '/features/import-export', sources: ['src/views/Features.tsx'] },
+  { path: '/features', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/template-builder', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/checklist-runs', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/public-sharing', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/import-export', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
   { path: '/pricing', sources: ['src/views/Pricing.tsx'] },
   { path: '/about', sources: ['src/views/About.tsx'] },
   { path: '/contact', sources: ['src/views/Contact.tsx'] },
   { path: '/templates', sources: ['src/views/ChecklistLibrary.tsx'] },
   { path: '/categories', sources: ['src/views/Categories.tsx'] },
 ] as const;
-
-const optionalText = (value: unknown): string | undefined =>
-  typeof value === 'string' && value.trim() ? value : undefined;
 
 const normalizeDate = (value: unknown): string | null => {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -139,33 +136,12 @@ for (const fileName of files) {
   currentPacks.push(pack);
 }
 
-// Page text for link previews (functions/seo/public-page-meta.ts), read from the pack.
-const packTemplatesBySlug = new Map<string, Record<string, unknown>>();
-for (const pack of currentPacks) {
-  for (const template of pack.templates ?? []) {
-    const slug = typeof template.slug === 'string' ? template.slug.trim() : '';
-    if (slug && template.visibility === 'public') packTemplatesBySlug.set(slug, template);
-  }
-}
-const pageText = (slug: string) => {
-  const template = packTemplatesBySlug.get(slug);
-  const title = optionalText(template?.title);
-  if (!title) throw new Error(`Public template ${slug} has no title`);
-  return {
-    title,
-    description: optionalText(template?.description),
-    seoTitle: optionalText(template?.seoTitle),
-    seoDescription: optionalText(template?.seoDescription),
-  };
-};
-
 const committed = deriveCommittedDates(await readCommittedSnapshots());
 const now = new Date().toISOString();
 const templates = listPublicTemplates(currentPacks).map((template) => {
   const previous = previousCatalog.templates?.find((entry) => entry.slug === template.slug);
   return {
     slug: template.slug,
-    ...pageText(template.slug),
     categories: template.categories,
     contentHash: template.contentHash,
     lastmod: resolveLastmod({

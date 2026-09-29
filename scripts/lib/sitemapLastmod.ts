@@ -136,13 +136,16 @@ export function resolveLastmod({
  * and fails when a module they reach is missing here.
  */
 export const SITEMAP_IMPLEMENTATION_SOURCES = [
-  'functions/sitemap.xml.ts',
+  // The route handlers, and what they hand the sitemap code.
+  'src/app/sitemap.xml/route.ts',
+  'src/app/sitemaps/pages/[page]/route.ts',
+  'src/app/sitemaps/categories/[page]/route.ts',
+  'src/app/sitemaps/profiles/[page]/route.ts',
+  'src/app/sitemaps/templates/[page]/route.ts',
+  'src/server/sitemapContext.ts',
+  'functions/sitemap/routes.ts',
   'functions/sitemap/shared.ts',
   'functions/sitemap/cache.ts',
-  'functions/sitemaps/pages/[page].xml.ts',
-  'functions/sitemaps/categories/[page].xml.ts',
-  'functions/sitemaps/profiles/[page].xml.ts',
-  'functions/sitemaps/templates/[page].xml.ts',
   // Category slugs (/categories/<slug>) and the origin every <loc> starts with.
   'src/lib/categorySlug.ts',
   'src/lib/utils/slug.ts',

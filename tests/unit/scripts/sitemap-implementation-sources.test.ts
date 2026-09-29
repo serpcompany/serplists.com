@@ -25,7 +25,7 @@ const excluded = new Map([
   // the pages, profiles and templates lastmods on every registry edit.
   ['src/data/publicCategories.ts', 'covered by categoriesHash'],
   // A redirect to /sitemaps/pages/<page>.xml: never cached and lists nothing.
-  ['functions/sitemaps/static.xml.ts', 'a redirect'],
+  ['src/app/sitemaps/static.xml/route.ts', 'a redirect'],
 ]);
 
 const toRepoPath = (absolute: string) => path.relative(repoRoot, absolute).split(path.sep).join('/');
@@ -68,7 +68,8 @@ function reachableFiles(entries: string[]): Set<string> {
 }
 
 describe('SITEMAP_IMPLEMENTATION_SOURCES', () => {
-  const entries = ['functions/sitemap.xml.ts', ...listFiles('functions/sitemap'), ...listFiles('functions/sitemaps')];
+  // The sitemap route handlers (src/app/sitemap.xml, src/app/sitemaps) and the code they run.
+  const entries = [...listFiles('src/app/sitemap.xml'), ...listFiles('src/app/sitemaps'), ...listFiles('functions/sitemap')];
 
   it('names every module the sitemap functions reach', () => {
     const listed = new Set<string>(SITEMAP_IMPLEMENTATION_SOURCES);

@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { sitemap_revisions, sitemap_shard_revisions } from '../../db/schema/index';
 import { createDb } from '../api/db';
 import type { Env } from '../api/types';
+import { defaultEdgeCache } from '../api/utils/edge-cache';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import {
   contentHash,
@@ -24,7 +25,12 @@ export async function loadSitemapRevisions(env: Env): Promise<SitemapRevisions> 
 
 const bundledCatalogVersion = JSON.stringify(bundledTemplateCatalog);
 
-type SitemapContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env' | 'waitUntil'>;
+/** The request a sitemap route serves, the Worker's bindings, and its waitUntil. */
+export type SitemapContext = {
+  request: Request;
+  env: Env;
+  waitUntil: (promise: Promise<unknown>) => void;
+};
 
 /** A database shard route and its raw `[page]` parameter. */
 export type SitemapShard = {
@@ -80,9 +86,9 @@ async function publishedShardPage(env: Env, shard: SitemapShard): Promise<number
 // changes the bundled catalog, so a repeat request reads only the revision rows
 // (docs/design-docs/d1-cost.md). `build` receives only those kinds, so it cannot read one
 // its key ignores. The key's path comes from the sitemap and the parsed page number, never
-// from the request path: Pages Functions route ignoring case and allow a trailing slash
-// (`1.XML`, `1.xml/`), and the query string and leading zeros in the page vary too, so no
-// variant can bypass it. Shard routes pass their shard so pages the index never
+// from the request path: the shard routes accept the page file in any letter case
+// (`1.XML`), and the query string and leading zeros in the page vary too, so no variant
+// can bypass it. Shard routes pass their shard so pages the index never
 // published are refused before any build. That refusal is not cached anywhere, so a page
 // the index adds later is served.
 export async function cachedSitemap(
@@ -111,7 +117,7 @@ export async function cachedSitemap(
     bundledCatalogVersion,
   ]));
   const key = new Request(`${url.origin}${keyPath}?v=${version}`);
-  const cache = typeof caches === 'undefined' ? undefined : caches.default;
+  const cache = defaultEdgeCache();
 
   let response = await cache?.match(key);
   if (!response) {
