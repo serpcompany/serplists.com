@@ -23,3 +23,26 @@ export function getTeamSettingsUpdate(
 
   return Object.keys(update).length > 0 ? update : null;
 }
+
+export type TeamSettingsFormValues = { name: string; slug: string };
+
+/**
+ * Merges the Organization's saved settings into the settings form. A field that differs from
+ * `baseline` (the saved values the form last loaded or saved) holds the user's unsaved edit
+ * and is kept, a cleared slug included; a field that matches it follows the server. With no
+ * baseline (the first load, or another Organization) the form takes the server values.
+ */
+export function syncTeamSettingsForm(
+  current: TeamSettingsFormValues,
+  baseline: TeamSettingsFormValues | null,
+  server: TeamSettingsFormValues,
+): TeamSettingsFormValues {
+  if (!baseline) {
+    return server;
+  }
+
+  return {
+    name: current.name !== baseline.name ? current.name : server.name,
+    slug: current.slug !== baseline.slug ? current.slug : server.slug,
+  };
+}

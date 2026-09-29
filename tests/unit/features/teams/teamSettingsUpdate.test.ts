@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
+import { getTeamSettingsUpdate, syncTeamSettingsForm } from '@/features/teams/teamSettingsUpdate';
 
 const saved = { name: 'Acme', slug: 'acme' };
 
@@ -33,5 +33,49 @@ describe('getTeamSettingsUpdate', () => {
 
   it('reports an emptied name as a change so the form can say the name is required', () => {
     expect(getTeamSettingsUpdate({ name: '   ', slug: 'acme' }, saved)).toEqual({ name: '' });
+  });
+});
+
+// The active workspace is rebuilt whenever the Organizations list changes, so the form merges
+// the saved values instead of replacing what the user typed.
+describe('syncTeamSettingsForm', () => {
+  const baseline = { name: 'Acme', slug: 'acme' };
+
+  it('keeps a changed name and lets a clean slug follow the server', () => {
+    expect(
+      syncTeamSettingsForm({ name: 'Acme Marketing', slug: 'acme' }, baseline, { name: 'Acme', slug: 'acme-group' }),
+    ).toEqual({ name: 'Acme Marketing', slug: 'acme-group' });
+  });
+
+  it('keeps a changed slug, a cleared one included, when the saved name changes elsewhere', () => {
+    expect(syncTeamSettingsForm({ name: 'Acme', slug: '' }, baseline, { name: 'Acme Group', slug: 'acme' })).toEqual({
+      name: 'Acme Group',
+      slug: '',
+    });
+  });
+
+  it('compares the raw text, so typed spaces are still an edit', () => {
+    expect(syncTeamSettingsForm({ name: 'Acme ', slug: 'acme' }, baseline, baseline)).toEqual({
+      name: 'Acme ',
+      slug: 'acme',
+    });
+  });
+
+  it('takes the server values with no baseline (first load, another Organization)', () => {
+    expect(syncTeamSettingsForm({ name: 'Acme Marketing', slug: 'x' }, null, { name: 'Globex', slug: 'globex' })).toEqual({
+      name: 'Globex',
+      slug: 'globex',
+    });
+  });
+
+  it('after a save, shows what the server stored unless the user typed on meanwhile', () => {
+    const submitted = { name: ' Acme Marketing ', slug: 'acme-mkt' };
+    const stored = { name: 'Acme Marketing', slug: 'acme-mkt-2' };
+
+    expect(syncTeamSettingsForm(submitted, submitted, stored)).toEqual(stored);
+    expect(syncTeamSettingsForm({ ...submitted, name: 'Acme Marketing Ltd' }, submitted, stored)).toEqual({
+      name: 'Acme Marketing Ltd',
+      slug: 'acme-mkt-2',
+    });
   });
 });
