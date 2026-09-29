@@ -4,7 +4,6 @@ import { useWorkspace } from "./WorkspaceContext";
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { isStaleRecordError } from "@/lib/editConflicts";
-import { markRunShared } from "@/lib/queryCache";
 import { prepareTemplatesForImport } from "@/lib/utils/templateBackup";
 import { buildTemplateUpdateRequest, describeTemplateUpdate } from "@/lib/templates/templateUpdate";
 import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
@@ -41,6 +40,7 @@ import {
 import {
   refreshAfterRunDelete,
   refreshAfterRunRevalidated,
+  refreshAfterRunShared,
   refreshAfterTemplateDelete,
   refreshAfterTemplateSave,
   refreshRunLists,
@@ -438,6 +438,18 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { mutateAsync: revalidateRunAsync } = revalidateRunMutation;
   const { mutateAsync: deleteRunAsync } = deleteRunMutation;
   const { mutateAsync: importTemplatesAsync } = importTemplatesMutation;
+  // The actions built on them keep it too, whatever the lists hold: pages key effects on
+  // them (the run page reloads its run, and would lose unsaved notes, when updateRun changes).
+  const deleteTemplate = useCallback(async (id: string) => { await deleteTemplateAsync(id); }, [deleteTemplateAsync]);
+  const updateRun = useCallback((run: ChecklistRun, options?: RunUpdateOptions) => updateRunAsync({ run, options }), [updateRunAsync]);
+  const revalidateRun = useCallback(async (run: ChecklistRun) => { await revalidateRunAsync(run); }, [revalidateRunAsync]);
+  const markShared = useCallback((runId: string) => void refreshAfterRunShared(queryClient, runId), [queryClient]);
+  const deleteRun = useCallback(async (id: string) => { await deleteRunAsync(id); }, [deleteRunAsync]);
+  const importTemplates = useCallback(
+    (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> =>
+      importTemplatesAsync({ templatesData, options }),
+    [importTemplatesAsync],
+  );
 
   const value = useMemo<TemplatesContextProps>(() => ({
     templates: publicTemplates,
@@ -452,24 +464,17 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     getAllPublicTemplates,
     createTemplate,
     updateTemplate,
-    deleteTemplate: async (id: string) => {
-      await deleteTemplateAsync(id);
-    },
+    deleteTemplate,
     createRun,
-    updateRun: (run: ChecklistRun, options?: RunUpdateOptions) => updateRunAsync({ run, options }),
-    revalidateRun: async (run: ChecklistRun) => {
-      await revalidateRunAsync(run);
-    },
-    markRunShared: (runId: string) => void markRunShared(queryClient, runId),
-    deleteRun: async (id: string) => {
-      await deleteRunAsync(id);
-    },
-    importTemplates: (templatesData: ChecklistTemplate[], options?: TemplateImportOptions): Promise<TemplateImportSummary> =>
-      importTemplatesAsync({ templatesData, options }),
+    updateRun,
+    revalidateRun,
+    markRunShared: markShared,
+    deleteRun,
+    importTemplates,
   }), [
-    allTemplates, createRun, createTemplate, deleteRunAsync, deleteTemplateAsync, getAllPublicTemplates, getRun,
-    getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplatesAsync, publicTemplates, queryClient,
-    revalidateRunAsync, runs, runsLoading, templatesLoading, updateRunAsync, updateTemplate,
+    allTemplates, createRun, createTemplate, deleteRun, deleteTemplate, getAllPublicTemplates, getRun,
+    getRunsForTemplate, getTemplate, getTemplateBySlug, importTemplates, markShared, publicTemplates,
+    revalidateRun, runs, runsLoading, templatesLoading, updateRun, updateTemplate,
   ]);
 
   return (

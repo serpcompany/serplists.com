@@ -85,3 +85,40 @@ test('Continue in Personal leaves the error for Personal', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
 });
+
+// The public shell has no WorkspaceGate or switcher, so the public template page, which
+// starts runs and saves copies in the active context, shows the error next to its actions.
+const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
+
+async function openPublicTemplateWithFailedTeams(page: Page, state: { teamsFail: boolean }) {
+  await mockApi(page, state);
+  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
+  await page.goto(PUBLIC_TEMPLATE_PATH);
+  await expect(page.getByRole('heading', { level: 1, name: 'Ultimate Camping Checklist' })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeDisabled();
+}
+
+test('the public template page offers Retry when the teams request fails', async ({ page }) => {
+  const state = { teamsFail: true };
+  await openPublicTemplateWithFailedTeams(page, state);
+
+  state.teamsFail = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeEnabled();
+  expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('team-1');
+});
+
+test('the public template page can continue in Personal when the teams request fails', async ({ page }) => {
+  await openPublicTemplateWithFailedTeams(page, { teamsFail: true });
+
+  await page.getByRole('button', { name: 'Continue in Personal' }).click();
+
+  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start Run' }).first()).toBeEnabled();
+  expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('personal');
+});

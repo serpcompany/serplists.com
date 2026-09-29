@@ -17,7 +17,7 @@ export const queryKeys = {
 // fresh for 60s, so saves refresh them explicitly (the list refreshes in
 // src/contexts/templateListCache.ts call these).
 
-export const refreshRunHistory = (queryClient: QueryClient, runId: string) =>
+export const refreshRunHistory = (queryClient: Pick<QueryClient, 'invalidateQueries'>, runId: string) =>
   queryClient.invalidateQueries({ queryKey: queryKeys.runHistory(runId) });
 
 export const refreshTemplateHistory = (queryClient: QueryClient, templateId: string) =>
@@ -57,6 +57,8 @@ export const markArchivedTemplateStale = (queryClient: QueryClient, templateId: 
 
 // Sharing makes a run public on the server, and a public run cannot be revalidated. Mark it
 // in every cached runs list (Personal and each Organization) right away, then reload them.
+// The run page's Share calls this alone, since its saver refreshes the open Changelog; the
+// runs list's Share uses refreshAfterRunShared (src/contexts/templateListCache.ts).
 export const markRunShared = (queryClient: QueryClient, runId: string) => {
   queryClient.setQueriesData<Array<{ id: string; isPublic?: boolean }>>({ queryKey: queryKeys.runs }, (runs) =>
     runs?.map((run) => (run.id === runId ? { ...run, isPublic: true } : run)),

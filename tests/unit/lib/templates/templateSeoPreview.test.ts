@@ -45,7 +45,7 @@ describe('buildTemplateSeoPreview', () => {
     expect(resolveTemplatePreviewSlug({ seoUrl: '', title: 'Launch Checklist!' })).toBe(
       'launch-checklist',
     );
-    // A symbols-only slug sends nothing, so the name is used.
+    // A symbols-only slug cannot be saved, so the preview shows the slug from the name.
     expect(resolveTemplatePreviewSlug({ seoUrl: '!!!', title: 'Launch Checklist' })).toBe(
       'launch-checklist',
     );

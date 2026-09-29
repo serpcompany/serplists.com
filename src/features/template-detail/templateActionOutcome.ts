@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 
+import { WORKSPACE_NOT_READY_MESSAGE, type WorkspaceStatus } from "@/contexts/workspaceSelection";
 import { buildTemplateCopyPayload } from "@/features/template-detail/templateDetailMappers";
 import { api } from "@/lib/api";
 import type { PageVisit } from "@/lib/navigation/pageVisit";
@@ -81,6 +82,8 @@ export const saveTemplateToAccount = async (params: {
   teamId?: string;
   template: ChecklistTemplate | null;
   userId?: string;
+  // The copy goes to the active context; undefined counts as known, as in assertWorkspaceReady.
+  workspaceStatus?: WorkspaceStatus;
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
     return { kind: "error", message: "Template not found." };
@@ -94,6 +97,13 @@ export const saveTemplateToAccount = async (params: {
 
   if (!params.isAuthenticated || !params.userId) {
     return { kind: "login_required" };
+  }
+
+  // Until a stored Organization is confirmed the context shows Personal (no teamId), so
+  // a copy now would land in Personal, or the Personal plan would send a Free user to
+  // checkout. Checked before the plan for that reason.
+  if (params.workspaceStatus === "loading" || params.workspaceStatus === "error") {
+    return { kind: "error", message: WORKSPACE_NOT_READY_MESSAGE };
   }
 
   // Only Personal copying is a Pro feature. The API enforces an Organization's Template

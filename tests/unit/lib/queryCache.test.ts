@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   refreshAfterRunRevalidated,
+  refreshAfterRunShared,
   refreshAfterTemplateDelete,
   refreshAfterTemplateSave,
   refreshRunsAfterConflict,
@@ -93,6 +94,10 @@ describe('refreshing history after a save', () => {
 
     await refreshAfterRunRevalidated(client, 'r1');
     await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(3));
+
+    // Share and Stop sharing on the runs list write to the Changelog too.
+    await refreshAfterRunShared(client, 'r1');
+    await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(4));
   });
 });
 

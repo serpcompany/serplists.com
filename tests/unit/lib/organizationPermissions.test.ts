@@ -49,7 +49,9 @@ describe('getTemplateActionPermissions', () => {
   const roles: Record<string, OrganizationRole> = { acme: 'viewer', beta: 'runner', gamma: 'editor' };
   const permissionsFor = (teamId?: string): ResourcePermissions =>
     getResourcePermissions(teamId, (id) => roles[id]);
-  const template = (overrides: Partial<{ isPublic: boolean; teamId: string; userId: string }> = {}) => ({
+  const template = (
+    overrides: Partial<{ isPublic: boolean; ownerType: 'team' | 'user'; teamId: string; userId: string }> = {},
+  ) => ({
     isPublic: false,
     userId: 'user-1',
     ...overrides,
@@ -78,6 +80,19 @@ describe('getTemplateActionPermissions', () => {
 
     expect(permissions.isOwner).toBe(true);
     expect(permissions.canEdit).toBe(false);
+  });
+
+  // The API sends team_id only to active members of the Organization.
+  it('gives the Creator no Edit on a public Organization Template sent without its Organization', () => {
+    expect(
+      getTemplateActionPermissions({
+        activeTeamId: undefined,
+        isRepoTemplate: false,
+        permissionsFor,
+        template: template({ isPublic: true, ownerType: 'team', userId: 'user-1' }),
+        userId: 'user-1',
+      }),
+    ).toMatchObject({ canCopy: true, canEdit: false, canStartRun: true });
   });
 
   it('lets a runner start runs of the Organization Template but not copy or edit it', () => {

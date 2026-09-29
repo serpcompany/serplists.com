@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   confirmLeave,
+  keepGuardedWork,
   leaveAfterConfirmed,
   registerLeaveGuard,
 } from '@/lib/navigation/leaveGuard';
@@ -112,5 +113,62 @@ describe('leave guard', () => {
     await expect(leaveAfterConfirmed(() => Promise.resolve(true), () => true)).resolves.toBe(true);
     expect(leaveAllowed).toBe(true);
     expect(onLeaveCancelled).not.toHaveBeenCalled();
+  });
+});
+
+// A background sign-out unmounts the page without a question, so the page keeps its work
+// where it can offer it back after sign-in.
+describe('keeping work before the session ends', () => {
+  it('asks only the pages with unsaved work to keep it, without asking the user', () => {
+    const keepDirty = vi.fn(() => true);
+    const keepClean = vi.fn(() => true);
+    const confirmDialog = vi.fn(() => true);
+    register({ message: 'Unsaved', shouldConfirm: () => true, onLeaveConfirmed: vi.fn(), onSessionEnding: keepDirty });
+    register({ message: 'Unsaved', shouldConfirm: () => false, onLeaveConfirmed: vi.fn(), onSessionEnding: keepClean });
+
+    expect(keepGuardedWork()).toBe(true);
+    expect(keepDirty).toHaveBeenCalledTimes(1);
+    expect(keepClean).not.toHaveBeenCalled();
+    expect(confirmDialog).not.toHaveBeenCalled();
+  });
+
+  it('reports a page that could not keep its work, and still asks the others', () => {
+    const keepOther = vi.fn(() => true);
+    register({ message: 'Unsaved', shouldConfirm: () => true, onLeaveConfirmed: vi.fn(), onSessionEnding: () => false });
+    register({
+      message: 'Unsaved',
+      shouldConfirm: () => true,
+      onLeaveConfirmed: vi.fn(),
+      onSessionEnding: () => {
+        throw new Error('QuotaExceededError');
+      },
+    });
+    register({ message: 'Unsaved', shouldConfirm: () => true, onLeaveConfirmed: vi.fn(), onSessionEnding: keepOther });
+
+    expect(keepGuardedWork()).toBe(false);
+    expect(keepOther).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a page with unsaved work and no way to keep it as lost', () => {
+    register({ message: 'Unsaved', shouldConfirm: () => true, onLeaveConfirmed: vi.fn() });
+
+    expect(keepGuardedWork()).toBe(false);
+  });
+
+  it('keeps nothing for work the user already chose to leave', () => {
+    let leaveAllowed = false;
+    const onSessionEnding = vi.fn(() => true);
+    register({
+      message: 'Unsaved',
+      shouldConfirm: () => !leaveAllowed,
+      onLeaveConfirmed: () => {
+        leaveAllowed = true;
+      },
+      onSessionEnding,
+    });
+
+    expect(confirmLeave(() => true)).toBe(true);
+    expect(keepGuardedWork()).toBe(true);
+    expect(onSessionEnding).not.toHaveBeenCalled();
   });
 });

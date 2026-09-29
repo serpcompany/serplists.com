@@ -57,7 +57,9 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   hover-only class string there. A hover-only duplicate of an action that is
   reachable elsewhere leaves the tab order instead (`tabIndex={-1}` inside an
   `aria-hidden` wrapper), like the Start Run overlay in
-  `src/components/dashboard/TemplateCard.tsx`.
+  `src/components/dashboard/TemplateCard.tsx` and the View Template overlay in
+  `src/components/checklist-library/TemplateCard.tsx`
+  (`tests/unit/components/focusVisibility.ts` finds focusable elements hidden this way).
 - Anything that reorders by drag also reorders from the keyboard. The template
   editor's drag handles (`ReorderHandle`) move their section, task or content block
   one place with the Up and Down arrow keys, keep focus on the moved handle, and
@@ -74,3 +76,10 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 - A control hidden at one width needs a way to reach it at the others. The run page's
   task column shows only at `xl`; below it, the progress block's Tasks button opens the
   same list (`RunTaskList`) in a sheet (`src/components/run-execution/MobileRunProgress.tsx`).
+- Controls used again and again keep their place. The run page's task footer (Previous,
+  Mark Complete, Next) is sticky at the bottom of the window, above the phone navigation
+  bar, until the end of the task panel scrolls into view, so content that grows under
+  the panel (the Changelog, after every save) never moves it under the pointer. A sticky
+  element needs every box around it to clip (`overflow-clip`), not scroll: an
+  `overflow-auto` or `overflow-hidden` ancestor holds it instead of the window
+  (`src/components/run-execution/TaskExecutionPanel.tsx`).

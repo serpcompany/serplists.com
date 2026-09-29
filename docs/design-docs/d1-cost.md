@@ -92,8 +92,11 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    load on demand ([FRONTEND.md](../FRONTEND.md)). The same goes for columns and
    limits: the Changelog cards ask for `HISTORY_DISPLAY_LIMIT` (8) entries
    (`src/lib/history.ts`), history lists never return audit `diff_json` (a template or
-   run update diff holds the whole template or run), and template history orders by
-   `version` so the unique `(template_id, version)` index stops at `LIMIT`
+   run update diff holds the whole template or run), and template history reads the
+   newest `LIMIT` versions and the newest `LIMIT` audit events (archive, restore and a
+   Share's visibility are recorded only as events). Each read stops at `LIMIT` on its
+   index: versions order by `version` on the unique `(template_id, version)` index, and
+   events by `created_at` on `idx_audit_events_resource`
    (`functions/api/utils/history-queries.ts`, plans checked by
    `tests/unit/functions/api/history-query-plan.test.ts`).
 

@@ -2,6 +2,7 @@
 // (src/lib/forms/templateEditorDetailsForm.ts) and the API payload schema
 // (functions/api/utils/payloads.ts), so the editor never accepts what the API rejects.
 
+import { generateSlug } from "../utils/slug";
 import {
   TEMPLATE_DESCRIPTION_MAX,
   TEMPLATE_LIST_ITEM_MAX,
@@ -40,18 +41,12 @@ export function capTemplateSlug(slug: string, max: number = TEMPLATE_FIELD_LIMIT
   return slug.slice(0, max).replace(/-+$/, "");
 }
 
-// Turns typed text into a valid slug: accents dropped, lowercase, apostrophes removed,
-// every other run of non-alphanumerics one hyphen, no leading or trailing hyphen, capped.
-// Returns "" when nothing usable remains (for example "!!!" or non-Latin text).
+// Turns typed text into a valid slug with the one slug rule the API applies
+// (src/lib/utils/slug.ts): letters folded ('Straße' -> 'strasse'), punctuation dropped
+// ('Q&A' -> 'qa'), words joined by single hyphens, capped. A valid slug comes back
+// unchanged. Returns "" when nothing usable remains (for example "!!!" or non-Latin text).
 export function slugifyTemplateSlug(input: string): string {
-  const slug = input
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return capTemplateSlug(slug);
+  return capTemplateSlug(generateSlug(input));
 }
 
 // Appends a disambiguating suffix, shortening the base so the result stays within the limit.

@@ -119,7 +119,7 @@ export function RunsDashboardView({
   // Each run stays busy until its own Revalidate finishes.
   const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
-    useRunsDashboardSharing({ onRunShared, onStopSharingRun });
+    useRunsDashboardSharing({ runs, onRunShared, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;

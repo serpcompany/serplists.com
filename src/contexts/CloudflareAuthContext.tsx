@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
 import { getAuthErrorMessage, isEmailNotVerifiedError } from '@/lib/auth/authErrors';
 import { EMAIL_VERIFIED_CALLBACK_URL } from '@/lib/auth/loginNotice';
+import { keepGuardedWork } from '@/lib/navigation/leaveGuard';
 import { isUserSwitch, removeSignedOutUserQueries } from '@/lib/queryKeys';
 import {
   applySessionCheck,
@@ -18,10 +19,9 @@ import {
   type SessionStatus,
   type SessionUser,
 } from './authSession';
-import { browserSessionSyncEnvironment, createSessionSync } from './sessionSync';
+import { browserSessionSyncEnvironment, createSessionSync, startSessionKeepAlive } from './sessionSync';
 
-/** How often a visible, signed-in tab asks whether its session keep-alive read is due. */
-const SESSION_KEEPALIVE_TICK_MS = 15 * 60 * 1000;
+const UNSAVED_WORK_LOST_MESSAGE = 'Your unsaved changes could not be kept.';
 
 interface RegisterResult extends AuthActionResult {
   requiresEmailVerification?: boolean;
@@ -77,13 +77,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Follows sign-ins and sign-outs in other tabs, which share this tab's session cookie, and
   // orders session answers so a slower check started earlier cannot overwrite a newer one
-  // (see sessionSync.ts).
+  // (see sessionSync.ts). Before a background change unmounts the signed-in pages, pages
+  // with unsaved work keep it on this tab to offer it back after sign-in.
   const [sessionSync] = useState(() =>
     createSessionSync({
       readSession,
       getState: () => stateRef.current,
       setState,
       notify: (message) => toast(message),
+      beforeSessionLost: () => {
+        if (!keepGuardedWork()) toast.error(UNSAVED_WORK_LOST_MESSAGE);
+      },
     }),
   );
   useEffect(() => sessionSync.connect(browserSessionSyncEnvironment()), [sessionSync]);
@@ -151,16 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // keepAlive reads it at most once an hour (see sessionSync.ts). The answer is applied like
   // any re-check: a failure changes nothing, and a confirmed "no session" signs the tab out.
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const keepAliveIfVisible = () => {
-      if (document.visibilityState === 'visible') sessionSync.keepAlive();
-    };
-    window.addEventListener('focus', keepAliveIfVisible);
-    const tick = window.setInterval(keepAliveIfVisible, SESSION_KEEPALIVE_TICK_MS);
-    return () => {
-      window.removeEventListener('focus', keepAliveIfVisible);
-      window.clearInterval(tick);
-    };
+    if (!isAuthenticated) return undefined;
+    return startSessionKeepAlive(sessionSync.keepAlive);
   }, [isAuthenticated, sessionSync]);
 
   const login = async (email: string, password: string): Promise<AuthActionResult> => {
@@ -232,6 +228,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
     applyConfirmedSession(check);
+    // Other tabs showing this user re-read the session, so they show the new name,
+    // username or avatar (and build links from the new username).
+    if (check.kind === 'authenticated') sessionSync.announceProfileChange(check.user.id);
     return check.kind === 'authenticated';
   };
 

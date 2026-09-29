@@ -14,6 +14,7 @@ import {
   type TemplateEditorFormValues,
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
+import { findTemplateEditorSlugIssue } from "@/lib/forms/templateEditorDetailsForm";
 import { api } from "@/lib/api";
 import { resolvePublicTemplateOwnerSlug } from "@/lib/routes";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -164,8 +165,10 @@ export const resolveTemplateSaveFeedback = (params: {
 
 const buildLoadResult = (
   template?: Partial<ChecklistTemplate>,
+  // The sections as stored, when they differ from template.sections (see below).
+  storedSections: unknown = template?.sections,
 ): TemplateEditorLoadResult => ({
-  initialValues: buildTemplateEditorFormValues(template),
+  initialValues: buildTemplateEditorFormValues({ ...template, sections: storedSections }),
   loadError: null,
   templateSlug: template?.slug ?? template?.seoUrl,
   version: template?.version,
@@ -209,15 +212,17 @@ export const loadTemplateEditorData = async (
   }
 
   try {
-    const fetchedTemplate = await getApiClient(dependencies).getTemplateById(
+    const fetchedTemplate = (await getApiClient(dependencies).getTemplateById(
       options.id,
-    );
+    )) as Record<string, unknown>;
+    const template = mapApiTemplateToChecklistTemplate(fetchedTemplate, options.id);
 
+    // The mapper makes sections safe to display, which drops what no page renders (a
+    // block of unknown type, a value that is not text). The form reads the stored
+    // sections instead and keeps that content, so saving never deletes it.
     return buildLoadResult(
-      mapApiTemplateToChecklistTemplate(
-        fetchedTemplate as Record<string, unknown>,
-        options.id,
-      ),
+      template,
+      Array.isArray(fetchedTemplate.sections) ? fetchedTemplate.sections : template.sections,
     );
   } catch (error) {
     return {
@@ -236,7 +241,11 @@ export const saveTemplateEditorData = async (
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values, {
     storedSlug: options.storedSlug,
   });
-  const validationErrors = validateTemplateEditorFormForSave(normalizedForm);
+  const slugIssue = findTemplateEditorSlugIssue(options.values.seoUrl, options.storedSlug);
+  const validationErrors = [
+    ...validateTemplateEditorFormForSave(normalizedForm),
+    ...(slugIssue ? [{ type: "validation" as const, message: slugIssue }] : []),
+  ];
   if (validationErrors.length > 0) {
     return { success: false, errors: validationErrors };
   }
@@ -354,6 +363,13 @@ export const useTemplateEditorModel = (
     };
   }, [options.id, reloadCount]);
 
+  // The version saves send as expected_version. A restored draft saves against the version
+  // it was edited on, so a save made since then ends in a conflict, not an overwrite.
+  const getVersion = () => expectedVersionRef.current;
+  const setVersion = (version: number | undefined) => {
+    expectedVersionRef.current = version;
+  };
+
   // Loads the saved template again, replacing the form (the caller confirms first).
   const reload = () => {
     loadedTemplateIdRef.current = null;
@@ -410,11 +426,13 @@ export const useTemplateEditorModel = (
   };
 
   return {
+    getVersion,
     initialValues,
     loading,
     loadError,
     reload,
     save,
+    setVersion,
     isSaving,
     ownerSlug,
     ownership,

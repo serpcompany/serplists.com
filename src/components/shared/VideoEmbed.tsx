@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 
 import { getOutboundLinkProps } from '@/lib/utils/clipyUrl';
@@ -10,11 +10,67 @@ interface VideoEmbedProps {
   className?: string;
 }
 
+const DEFAULT_CLASS_NAME = "h-64 w-full rounded-md";
+
+const OpenVideoLink: React.FC<{ url: string }> = ({ url }) => (
+  <div className="p-4">
+    <a
+      {...getOutboundLinkProps(url)}
+      className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+    >
+      Open video
+      <ExternalLink aria-hidden="true" className="h-4 w-4" />
+    </a>
+  </div>
+);
+
+// HTMLMediaElement.HAVE_NOTHING: the player has not loaded anything of the video yet.
+const HAVE_NOTHING = 0;
+
+interface NativeVideoViewProps {
+  className?: string;
+  // The player could not load this URL.
+  failed: boolean;
+  onFail: () => void;
+  url: string;
+}
+
+// A URL the player cannot load (a video page such as Vimeo or Loom, a missing file)
+// becomes a link to it. An error after the video loaded (a dropped connection while it
+// plays) keeps the player. onError only reports the failure, as TaskImage's does.
+export const NativeVideoView: React.FC<NativeVideoViewProps> = ({
+  className = DEFAULT_CLASS_NAME,
+  failed,
+  onFail,
+  url,
+}) => {
+  if (failed) return <OpenVideoLink url={url} />;
+
+  // The URL goes on the player itself and keys it: a player reads a <source> child only
+  // once, so a new URL there (the next task's video, a URL being typed) would never load.
+  return (
+    <video
+      key={url}
+      src={url}
+      className={className}
+      controls
+      onError={(event) => {
+        if (event.currentTarget.readyState === HAVE_NOTHING) onFail();
+      }}
+      preload="metadata"
+    >
+      Your browser does not support embedded video.
+    </video>
+  );
+};
+
 export const VideoEmbed: React.FC<VideoEmbedProps> = ({ 
   url, 
   title = "Embedded video",
-  className = "h-64 w-full rounded-md"
+  className = DEFAULT_CLASS_NAME
 }) => {
+  // The URL whose native player failed; a new URL gets a player again.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const source = getVideoEmbedSource(url);
   
   if (source?.kind === 'iframe') {
@@ -42,25 +98,18 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
 
   if (source?.kind === 'link') {
     // Embed code from an origin the Content-Security-Policy does not frame.
-    return (
-      <div className="p-4">
-        <a
-          {...getOutboundLinkProps(source.url)}
-          className="inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline"
-        >
-          Open video
-          <ExternalLink aria-hidden="true" className="h-4 w-4" />
-        </a>
-      </div>
-    );
+    return <OpenVideoLink url={source.url} />;
   }
 
   if (source?.kind === 'video') {
+    const videoUrl = source.url;
     return (
-      <video className={className} controls preload="metadata">
-        <source src={source.url} />
-        Your browser does not support embedded video.
-      </video>
+      <NativeVideoView
+        className={className}
+        failed={failedUrl === videoUrl}
+        onFail={() => setFailedUrl(videoUrl)}
+        url={videoUrl}
+      />
     );
   }
   

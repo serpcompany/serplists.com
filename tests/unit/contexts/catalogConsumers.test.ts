@@ -29,3 +29,23 @@ describe('public catalog consumers', () => {
     expect(consumers).toEqual(CATALOG_CONSUMERS);
   });
 });
+
+// useTemplateLibrary always lists the bundled starter templates, so a page that shows its
+// list must wait for the catalog and offer a retry when it failed. Otherwise it presents the
+// bundled templates, their categories and their counts as the whole catalog.
+describe('public catalog pages', () => {
+  it('handle the catalog loading and failing on every page that uses the library', () => {
+    const pages = listSourceFiles(path.join(repoRoot, 'src'))
+      .filter((file) => !file.endsWith(path.join('hooks', 'useTemplateLibrary.ts')))
+      .filter((file) => /useTemplateLibrary\(/.test(readFileSync(file, 'utf8')));
+
+    expect(pages.length).toBeGreaterThan(0);
+    for (const file of pages) {
+      const source = readFileSync(file, 'utf8');
+      const name = path.relative(repoRoot, file).split(path.sep).join('/');
+      expect(source, name).toMatch(/\bloading\b/);
+      expect(source, name).toMatch(/\bcatalogError\b/);
+      expect(source, name).toMatch(/<CatalogLoadError\b[^>]*onRetry=\{retryCatalog\}/);
+    }
+  });
+});

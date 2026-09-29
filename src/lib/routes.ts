@@ -106,6 +106,23 @@ export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}`;
 
 /**
+ * The profile URL Account settings previews for the username field, or null while it is
+ * empty. The saved username is linked as stored: one saved before usernames were
+ * lowercased may be mixed case, and the lookup finds it only in that casing. An unsaved
+ * edit previews the lowercase form the save will store.
+ */
+export const buildProfilePreviewPath = (
+  formUsername: string,
+  savedUsername: string | null | undefined,
+): string | null => {
+  const username = formUsername.trim();
+  if (!username) {
+    return null;
+  }
+  return buildPublicProfilePath(username === savedUsername ? username : username.toLowerCase());
+};
+
+/**
  * Usernames are stored lowercase and profile lookups ignore case, so
  * /profile/JohnDoe loads @johndoe. Returns the path to replace the URL with
  * when its casing differs from the stored username, or null.

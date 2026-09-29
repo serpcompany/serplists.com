@@ -5,18 +5,22 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { QueryErrorNotice } from '@/components/shared/QueryListState';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
 import { api } from '@/lib/api';
-import { isOpenSubscriptionConflictError } from '@/lib/api-errors';
+import { isApiError, isOpenSubscriptionConflictError } from '@/lib/api-errors';
 import {
   BILLING_STATUS_QUERY_PREFIX,
+  getBillingPlanStatus,
   getBillingStatusQueryKey,
   getPersonalBillingAction,
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
+  PLAN_UNKNOWN_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
+  shouldRetryBillingStatus,
 } from '@/lib/billing';
 import { buildConsoleSettingsPath } from '@/lib/routes';
 
@@ -28,13 +32,16 @@ const Pricing = () => {
     queryKey: getBillingStatusQueryKey(user?.id),
     queryFn: () => api.getBillingStatus(),
     enabled: Boolean(user),
-    retry: false,
+    retry: shouldRetryBillingStatus,
   });
   const queryClient = useQueryClient();
   // The plan may have changed at Stripe before the user pressed Back.
   usePageRestoredFromCache(useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
   }, [queryClient]));
+  // A failed status is unknown, not Free: offer a retry, never the upgrade.
+  const planStatus = getBillingPlanStatus(billing);
+  const isCheckingPlan = planStatus === 'loading';
   const personalAction = getPersonalBillingAction(billing.data);
 
   const handleUpgrade = async () => {
@@ -45,8 +52,12 @@ const Pricing = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
       setIsStartingCheckout(false);
-      // Show the subscription checkout found, so Manage replaces Upgrade.
-      if (isOpenSubscriptionConflictError(error)) {
+      // Checkout found an open subscription or a support override: reload the plan so
+      // Manage or the support message replaces Upgrade.
+      if (
+        isOpenSubscriptionConflictError(error)
+        || (isApiError(error) && error.code === 'plan_managed_by_support')
+      ) {
         void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(user?.id) });
       }
     }
@@ -122,6 +133,11 @@ const Pricing = () => {
                   <Button asChild>
                     <Link to="/register">Get Started</Link>
                   </Button>
+                ) : planStatus === 'unknown' ? (
+                  <QueryErrorNotice
+                    message={PLAN_UNKNOWN_MESSAGE}
+                    onRetry={() => void billing.refetch()}
+                  />
                 ) : personalAction === 'support' ? (
                   <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
                 ) : personalAction === 'manage' ? (
@@ -131,9 +147,9 @@ const Pricing = () => {
                 ) : (
                   <Button
                     onClick={handleUpgrade}
-                    disabled={billing.isLoading || billing.data?.billingEnabled === false || isStartingCheckout}
+                    disabled={isCheckingPlan || billing.data?.billingEnabled === false || isStartingCheckout}
                   >
-                    {billing.isLoading
+                    {isCheckingPlan
                       ? 'Checking plan...'
                       : isStartingCheckout
                         ? 'Opening checkout...'

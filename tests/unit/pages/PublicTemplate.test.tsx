@@ -47,6 +47,9 @@ const {
     canRunTemplates: true,
     isTeamWorkspace: false,
     isWorkspaceLoading: false,
+    retryWorkspace: vi.fn(),
+    selectWorkspace: vi.fn(),
+    workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
 }));
 
@@ -397,6 +400,7 @@ type CapturedViewProps = {
   isSaving: boolean;
   onSaveTemplate: () => unknown;
   onStartRun: () => unknown;
+  workspaceError: { onContinueInPersonal: () => void; onRetry: () => void } | null;
 };
 
 const lastViewProps = (): CapturedViewProps =>
@@ -421,6 +425,9 @@ describe('PublicTemplate ownership context', () => {
     workspaceState.canRunTemplates = true;
     workspaceState.isTeamWorkspace = true;
     workspaceState.isWorkspaceLoading = false;
+    workspaceState.retryWorkspace.mockReset();
+    workspaceState.selectWorkspace.mockReset();
+    workspaceState.workspaceStatus = 'ready';
   });
 
   it('loads billing, clone and run targets for the active Organization', () => {
@@ -595,6 +602,36 @@ describe('PublicTemplate ownership context', () => {
     for (const button of actionButtons) {
       expect(button).toContain('disabled=""');
     }
+  });
+
+  // The public shell has no WorkspaceGate, so the page offers the gate's way out itself.
+  it('offers Retry and Continue in Personal when the Organizations failed to load', () => {
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    workspaceState.isWorkspaceLoading = true;
+    workspaceState.workspaceStatus = 'error';
+
+    const { html } = renderPublishedRoute(publishedClipyTemplate);
+
+    expect(html).toContain('Couldn&#x27;t load your Organizations');
+    const { workspaceError } = lastViewProps();
+    workspaceError?.onRetry();
+    expect(workspaceState.retryWorkspace).toHaveBeenCalledTimes(1);
+    workspaceError?.onContinueInPersonal();
+    expect(workspaceState.selectWorkspace).toHaveBeenCalledWith('personal');
+  });
+
+  it('shows no Organizations error while they load, or to a signed-out visitor', () => {
+    workspaceState.isWorkspaceLoading = true;
+    workspaceState.workspaceStatus = 'loading';
+    expect(renderPublishedRoute(publishedClipyTemplate).html).not.toContain('Couldn&#x27;t load your Organizations');
+    expect(lastViewProps().workspaceError).toBeNull();
+
+    authState.isAuthenticated = false;
+    authState.user = null;
+    workspaceState.workspaceStatus = 'error';
+    expect(renderPublishedRoute(publishedClipyTemplate).html).not.toContain('Couldn&#x27;t load your Organizations');
+    expect(lastViewProps().workspaceError).toBeNull();
   });
 });
 

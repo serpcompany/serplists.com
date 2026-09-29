@@ -150,3 +150,54 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
     await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
   }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
 });
+
+// Sharing marks the run public in the cached runs list. That must not reload the open run
+// page, which would clear unsaved task notes and move the selection back to the first task.
+test('sharing from the run page keeps unsaved task notes and the open task', async ({ page }) => {
+  await refuseClipboardWrites(page);
+  await loginAsAdmin(page);
+  const title = `Share keeps notes QA ${Date.now()}`;
+  const runId = await page.evaluate(async ({ apiBaseUrl, runTitle }) => {
+    const response = await fetch(`${apiBaseUrl}/checklists`, {
+      body: JSON.stringify({
+        title: runTitle,
+        sections: [{ id: 'keep', title: 'Section', items: [
+          { id: 'keep-a', title: 'Task A' },
+          { id: 'keep-b', title: 'Task B' },
+          { id: 'keep-c', title: 'Task C' },
+        ] }],
+      }),
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+    return ((await response.json()) as { id: string }).id;
+  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  const runLoads: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname.endsWith(`/checklists/${runId}`)) {
+      runLoads.push(request.url());
+    }
+  });
+  const notes = page.getByRole('textbox', { name: 'Task notes' });
+
+  // Opened from the runs list, so the list is cached when the share marks the run public.
+  await page.goto('/dashboard/runs');
+  await page.getByRole('link', { name: title }).click();
+  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await notes.fill('Checked the redirects');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Share' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share run' });
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(SHARE_URL);
+  await dialog.getByRole('button', { name: 'Close' }).first().click();
+
+  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await page.getByRole('button', { name: 'Previous' }).click();
+  await expect(notes).toHaveValue('Checked the redirects');
+  expect(runLoads).toHaveLength(1);
+
+  await deleteRun(page, runId);
+});

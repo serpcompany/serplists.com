@@ -8,6 +8,7 @@ import {
   saveTemplateEditorData,
   shouldLoadTemplateEditorRecord,
 } from "@/features/template-editor/useTemplateEditorModel";
+import { templateEditorFormSchema } from "@/lib/forms/templateEditorForm";
 import { shouldNavigateToTemplatesAfterSave } from "@/pages/TemplateEditor";
 
 const buildTemplate = (
@@ -175,6 +176,50 @@ describe("loadTemplateEditorData", () => {
         seoUrl: "api-template",
       }),
     );
+  });
+
+  // Rows stored before the API checked writes can hold content no page renders. The
+  // display mapper drops it; the form must keep it, or the next save deletes it.
+  it("keeps stored content the display mapper drops", async () => {
+    const apiClient = {
+      getTemplateById: vi.fn().mockResolvedValue({
+        id: "template-3",
+        title: "Legacy",
+        version: 4,
+        sections: [
+          {
+            id: "section-1",
+            title: "Prep",
+            items: [
+              {
+                id: "item-1",
+                title: "Task",
+                description: 12,
+                contents: [
+                  { id: "c1", type: "link", value: "https://example.com" },
+                  { id: 1, type: "text", value: 5 },
+                  "Just some text",
+                  { id: "c2", type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    };
+
+    const result = await loadTemplateEditorData({ id: "template-3" }, { apiClient });
+    const [item] = result.initialValues.sections[0].items;
+
+    expect(result.version).toBe(4);
+    expect(item.description).toBe("12");
+    expect(item.contents).toEqual([
+      expect.objectContaining({ id: "c1", type: "text", value: "https://example.com" }),
+      expect.objectContaining({ id: "1", type: "text", value: "5" }),
+      expect.objectContaining({ type: "text", value: "Just some text" }),
+      expect.objectContaining({ id: "c2", type: "file", value: "https://example.com/doc.pdf" }),
+    ]);
+    expect(templateEditorFormSchema.safeParse(result.initialValues).success).toBe(true);
   });
 });
 
@@ -454,6 +499,36 @@ describe("saveTemplateEditorData validation", () => {
     expect(saveTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ seoUrl: "my-launch-checklist" }),
     );
+  });
+
+  it.each([undefined, "launch-checklist"])(
+    "refuses a typed URL slug with no Latin letters or digits instead of dropping it (stored %j)",
+    async (storedSlug) => {
+      const saveTemplate = vi.fn();
+
+      const result = await saveTemplateEditorData(
+        { id: storedSlug && "template-1", expectedVersion: 2, storedSlug, values: { ...values, seoUrl: "Список" } },
+        { saveTemplate },
+      );
+
+      expect(saveTemplate).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: false,
+        errors: [{ type: "validation", message: "URL Slug: use Latin letters or numbers." }],
+      });
+    },
+  );
+
+  it("keeps saving a template whose unedited stored slug today's rule would not produce", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+
+    const result = await saveTemplateEditorData(
+      { id: "template-1", expectedVersion: 2, storedSlug: "список", values: { ...values, seoUrl: "список" } },
+      { saveTemplate },
+    );
+
+    expect(result.success).toBe(true);
+    expect(saveTemplate).toHaveBeenCalledWith(expect.objectContaining({ seoUrl: "список" }));
   });
 });
 

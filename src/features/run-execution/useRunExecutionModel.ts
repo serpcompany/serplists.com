@@ -451,16 +451,22 @@ export const useRunExecutionModel = (
 ) => {
   const mode = resolveMode(options);
   const queryClient = useQueryClient();
+  // Read when used: the page's updateRun (the Templates context's) and getCachedRun may
+  // change identity whenever the cached lists do, and that must never reload the open run.
+  const latestOptions = useRef(options);
+  latestOptions.current = options;
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
       apiClient: options.dependencies?.apiClient,
       onShared: (runId) => void markRunShared(queryClient, runId),
       origin: options.dependencies?.origin,
       refreshRuns: () => queryClient.invalidateQueries({ queryKey: ['runs'] }),
-      updateRun: options.updateRun,
+      updateRun: (run, updateOptions) => latestOptions.current.updateRun(run, updateOptions),
     }),
-    [options.dependencies?.apiClient, options.dependencies?.origin, options.updateRun, queryClient],
+    [options.dependencies?.apiClient, options.dependencies?.origin, queryClient],
   );
+  const latestDependencies = useRef(dependencies);
+  latestDependencies.current = dependencies;
   const [run, setRun] = useState<ChecklistRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -482,6 +488,8 @@ export const useRunExecutionModel = (
     setNoteDrafts(next);
   };
 
+  // Loads only when the page opens another run: a load clears the unsaved notes and the
+  // selection, so nothing else (a new callback or client) may start one.
   useEffect(() => {
     let cancelled = false;
 
@@ -494,11 +502,11 @@ export const useRunExecutionModel = (
 
       const result = await loadRunExecutionData(
         {
-          getCachedRun: options.getCachedRun,
+          getCachedRun: latestOptions.current.getCachedRun,
           runId: options.runId,
           shareToken: options.shareToken,
         },
-        dependencies,
+        latestDependencies.current,
       );
 
       if (cancelled) {
@@ -533,7 +541,7 @@ export const useRunExecutionModel = (
     return () => {
       cancelled = true;
     };
-  }, [dependencies, options.getCachedRun, options.runId, options.shareToken]);
+  }, [options.runId, options.shareToken]);
 
   const counts = countRunExecutionItems(run);
   const selectedData = getSelectedRunItem(run, selectedItemId);
@@ -581,6 +589,8 @@ export const useRunExecutionModel = (
       commitNoteDrafts(
         updateNoteDraft(latestNoteDrafts.current, itemId, value, getSelectedRunItem(latestRun.current, itemId)?.item.notes),
       ),
+    // Notes kept when the session ended (keptNoteDrafts.ts), back as unsaved drafts.
+    restoreNoteDrafts: (drafts: NoteDrafts) => commitNoteDrafts({ ...latestNoteDrafts.current, ...drafts }),
     createShare: () => enqueueSave(saves.share),
     history: {
       data: history.data ?? null,

@@ -166,7 +166,10 @@ guest marker). Never reuse a cached plan between accounts, and do not render a
 Free or Pro label as known while billing status is still loading. If billing
 status fails to load, the plan is unknown, not Free: show "Unavailable" with a
 Retry, and do not show upgrade prompts, plan gates, or subscription actions until
-it loads (`getBillingPlanStatus` in `src/lib/billing.ts`).
+it loads (`getBillingPlanStatus` in `src/lib/billing.ts`). The Pricing page's Pro
+card shows "Couldn't check your plan. Try again." with Retry in place of Upgrade.
+Status requests retry transient failures (`shouldRetryBillingStatus`) before the
+plan counts as unknown.
 
 Feature gates read the plan through `useBillingStatus` (`src/hooks/useBillingStatus.ts`),
 which reports `loading`, `error` or `known`. Only a `known` Free plan shows an

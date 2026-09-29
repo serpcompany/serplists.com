@@ -30,11 +30,12 @@ describe('ProfileSection', () => {
     expect(html).toMatch(new RegExp(`<input[^>]*id="fullName"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
 
-  it('previews the lowercase profile URL the saved username will have', () => {
-    const html = renderToStaticMarkup(
+  const renderSection = (username: string, savedUsername: string | undefined) =>
+    renderToStaticMarkup(
       <StaticRouter location="/dashboard/settings">
         <ProfileSection
-          profileData={{ email: 'john@test.com', fullName: 'John', username: 'JohnDoe', avatar_url: '' }}
+          profileData={{ email: 'john@test.com', fullName: 'John', username, avatar_url: '' }}
+          savedUsername={savedUsername}
           loading={false}
           onProfileDataChange={vi.fn()}
           onProfileUpdate={vi.fn()}
@@ -43,7 +44,35 @@ describe('ProfileSection', () => {
       </StaticRouter>,
     );
 
-    expect(html).toContain('href="/profile/johndoe"');
-    expect(html).not.toContain('/profile/JohnDoe');
+  it('previews the lowercase profile URL an edited username will have', () => {
+    for (const savedUsername of ['john', undefined]) {
+      const html = renderSection('JohnDoe', savedUsername);
+
+      expect(html).toContain('href="/profile/johndoe"');
+      expect(html).not.toContain('/profile/JohnDoe');
+    }
+  });
+
+  // Usernames saved before they were normalized may be mixed case, and the profile lookup
+  // finds them only as stored (a lowercase link may even open another user's profile).
+  it('links a saved legacy mixed-case username as stored', () => {
+    const html = renderSection('JaneDoe', 'JaneDoe');
+
+    expect(html).toContain('href="/profile/JaneDoe"');
+    expect(html).not.toContain('/profile/janedoe');
+  });
+
+  it('previews the lowercase URL a case-only edit of a legacy username will store', () => {
+    const html = renderSection('JANEDOE', 'JaneDoe');
+
+    expect(html).toContain('href="/profile/janedoe"');
+    expect(html).not.toContain('/profile/JaneDoe');
+  });
+
+  it('keeps the placeholder while the username is empty', () => {
+    const html = renderSection('', 'JaneDoe');
+
+    expect(html).not.toContain('href="/profile/');
+    expect(html).toContain('/profile/username');
   });
 });

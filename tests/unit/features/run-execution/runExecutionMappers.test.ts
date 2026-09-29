@@ -5,6 +5,7 @@ import {
   areAllRunItemsCompleted,
   areItemSubItemsCompleted,
   countRunExecutionItems,
+  getInitialSelectedItemId,
   getNextSelectedItemId,
   getSelectionAfterToggle,
   mapChecklistRuns,
@@ -35,6 +36,36 @@ describe('getNextSelectedItemId', () => {
 
   it('stays on the task when every task is done', () => {
     expect(getNextSelectedItemId(run(['a', 'b', 'c', 'd']), 'd')).toBe('d');
+  });
+});
+
+// A ticked task can still hold an open Sub-task (older runs, API writes). It is not done:
+// the run cannot be finished until it is, so opening the run and moving on both lead to it.
+describe('a ticked task with an open Sub-task', () => {
+  const withOpenSubTask = (): ChecklistRun => {
+    const legacy = run(['a', 'b', 'c', 'd']);
+    legacy.sections[0].items[1].contents = [
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Done', isCompleted: true }] },
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Open', isCompleted: false }] },
+    ];
+    return legacy;
+  };
+
+  it('is where the run opens', () => {
+    expect(getInitialSelectedItemId(withOpenSubTask())).toBe('b');
+  });
+
+  it('is the next unfinished task, also wrapping from a later task', () => {
+    expect(getNextSelectedItemId(withOpenSubTask(), 'a')).toBe('b');
+    expect(getNextSelectedItemId(withOpenSubTask(), 'd')).toBe('b');
+  });
+
+  it('is not skipped for an empty Sub-tasks block on a ticked task', () => {
+    const done = run(['a', 'b', 'c', 'd']);
+    done.sections[0].items[1].contents = [{ type: 'subItems', value: '', subItems: [] }];
+
+    expect(getNextSelectedItemId(done, 'd')).toBe('d');
+    expect(getInitialSelectedItemId(done)).toBe('a');
   });
 });
 

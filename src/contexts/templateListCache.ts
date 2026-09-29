@@ -4,6 +4,7 @@ import { isStaleRecordError } from '@/lib/editConflicts';
 import {
   isTemplatePageOf,
   markArchivedTemplateStale,
+  markRunShared,
   refreshRunHistory,
   refreshTemplateHistory,
 } from '@/lib/queryCache';
@@ -77,6 +78,12 @@ export const refreshAfterTemplateSave = (
 // Revalidating writes an audit event, so the run's Changelog refreshes with the lists.
 export const refreshAfterRunRevalidated = async (queryClient: QueryClient, runId: string): Promise<void> => {
   await Promise.all([refreshRunLists(queryClient), refreshRunHistory(queryClient, runId)]);
+};
+
+// Sharing from the runs list writes an audit event ("Created share link") too, so the run's
+// Changelog refreshes with the lists, as after a revalidate.
+export const refreshAfterRunShared = async (queryClient: QueryClient, runId: string): Promise<void> => {
+  await Promise.all([markRunShared(queryClient, runId), refreshRunHistory(queryClient, runId)]);
 };
 
 // A stale-record answer on revalidate means the cached list is out of date (the run was

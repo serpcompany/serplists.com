@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -132,18 +132,26 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
+  // Keeps the edits when the session ends in the background (set below, once access exists).
+  const keepWorkRef = useRef<() => boolean>(() => false);
   // Leaving during a save still asks: the save can fail, and the edits are only here.
   const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(
     shouldBlockNavigation,
     getTemplateEditorLeaveMessage({ hasPendingUploads, isSaving: model.isSaving }),
+    () => keepWorkRef.current(),
   );
   // Plan limits and an ended session: the upgrade or sign-in action, and the kept draft.
   const access = useTemplateEditorAccess({
     isCreate: !id,
+    templateId: id,
     getValues: templateForm.getValues,
+    getVersion: model.getVersion,
     allowLeave,
     guardLeave,
   });
+  // A file still uploading is lost with the session; only form edits are kept.
+  const isDirty = templateForm.formState.isDirty;
+  keepWorkRef.current = () => !isDirty || access.keepDraft();
 
   const handleSave = async () => {
     // Save is disabled meanwhile; this also covers a call that skips the button.
@@ -254,15 +262,22 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
           restoreKeptTemplateDraft({
             hasUnsavedWork: templateForm.formState.isDirty || uploads.count() > 0,
             takeDraft: access.restoreDraft,
-            apply: (draftValues) => {
-              // Against the blank defaults, so the restored draft counts as unsaved.
-              templateForm.reset(draftValues, { keepDefaultValues: true });
+            apply: (restored) => {
+              // Against the blank (or loaded) defaults, so the restored draft counts as unsaved.
+              templateForm.reset(restored.values, { keepDefaultValues: true });
+              // Edits to an existing template save against the version they were made on.
+              if (id && restored.baseVersion !== undefined) {
+                model.setVersion(restored.baseVersion);
+              }
               handleSelectTemplateInfo();
             },
           });
         }}
         onSignIn={access.signIn}
         onUpgrade={() => void access.startUpgrade()}
+        otherContextDraft={access.otherContextDraft}
+        onSwitchToDraftContext={access.switchToDraftContext}
+        onDiscardOtherContextDraft={access.discardOtherContextDraft}
       />
 
       {/* A create leaves the page when it finishes, so edits made meanwhile could not

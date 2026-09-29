@@ -4,6 +4,7 @@ import {
   areAllRunItemsCompleted,
   getNextSelectedItemId,
   getSelectedRunItem,
+  isRunItemFinished,
 } from './runExecutionMappers';
 
 // What the task panel's primary button does. Every action either calls a handler or
@@ -54,7 +55,9 @@ export const getPrimaryTaskAction = (
   if (!canUpdate) {
     return hasNext ? { kind: 'next_task' } : { kind: 'view_only' };
   }
-  if (!getSelectedRunItem(run, taskId)?.item.isCompleted) {
+  // A ticked task with an open Sub-task is not finished either: Mark Complete ticks the rest.
+  const selected = getSelectedRunItem(run, taskId)?.item;
+  if (!selected || !isRunItemFinished(selected)) {
     return { kind: 'complete_task' };
   }
   if (canFinishRun(run)) {
@@ -63,10 +66,12 @@ export const getPrimaryTaskAction = (
   if (hasNext) {
     return { kind: 'next_task' };
   }
+  // This task is finished and the run cannot be, so another task is not: lead to it. Only a
+  // completed run (above) reads "Run completed".
   const nextUnfinishedId = getNextSelectedItemId(run, taskId);
   return nextUnfinishedId !== taskId
     ? { kind: 'next_unfinished', itemId: nextUnfinishedId }
-    : { kind: 'run_completed' };
+    : { kind: 'complete_task' };
 };
 
 export const getPrimaryTaskButton = (

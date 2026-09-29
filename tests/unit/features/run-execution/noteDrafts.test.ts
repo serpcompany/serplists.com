@@ -1,13 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   applyNoteDrafts,
-  applyUnsavedNotesWarning,
-  confirmLeaveWithUnsavedNotes,
   draftedNotesChanged,
   hasNoteDraftFor,
   pruneNoteDrafts,
-  RUN_NOTES_UNSAVED_MESSAGE,
   updateNoteDraft,
 } from '@/features/run-execution/noteDrafts';
 import type { ChecklistRun } from '@/types/checklist';
@@ -87,31 +84,6 @@ describe('applyNoteDrafts', () => {
     expect(run.sections[0].items[0].notes).toBeUndefined();
   });
 });
-
-describe('applyUnsavedNotesWarning', () => {
-  it('asks the browser to confirm leaving only while notes are unsaved', () => {
-    const event = { preventDefault: vi.fn(), returnValue: 'unset' as unknown };
-
-    applyUnsavedNotesWarning(event, false);
-    expect(event.preventDefault).not.toHaveBeenCalled();
-
-    applyUnsavedNotesWarning(event, true);
-    expect(event.preventDefault).toHaveBeenCalledOnce();
-    expect(event.returnValue).toBe('');
-  });
-});
-
-describe('confirmLeaveWithUnsavedNotes', () => {
-  it('asks before leaving only while notes are unsaved', () => {
-    const confirmDialog = vi.fn(() => false);
-
-    expect(confirmLeaveWithUnsavedNotes(false, confirmDialog)).toBe(true);
-    expect(confirmDialog).not.toHaveBeenCalled();
-    expect(confirmLeaveWithUnsavedNotes(true, confirmDialog)).toBe(false);
-    expect(confirmDialog).toHaveBeenCalledWith(RUN_NOTES_UNSAVED_MESSAGE);
-  });
-});
-
 
 describe('draftedNotesChanged', () => {
   const before = buildRun({ a: 'old', b: undefined, c: 'same' });

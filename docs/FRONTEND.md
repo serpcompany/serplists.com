@@ -41,6 +41,12 @@ location key changes, and only while it shows an error, so healthy pages are nev
 remounted). The `ErrorBoundary` around the providers in `App.tsx` is the last
 resort: its fallback uses plain links, and browser Back clears it.
 
+React Router keeps the same page instance when only a route param changes, so a page
+whose state belongs to one param is keyed by it. `CategoryDetailRoute` keys the category
+page by its normalized slug, so a Related Categories link or Back starts the next
+category with an empty search and the default sort; `TemplateEditorRoute` does the same
+for the editor (below).
+
 The router's history never resets the window's scroll, so `ScrollToTop`
 (`src/components/routing/`) is mounted once in `AppShell`, inside the router. When a
 navigation changes the pathname, it scrolls to the URL's `#anchor` if that element
@@ -52,7 +58,10 @@ scroll container must reset that element too.
 ## Unsaved changes
 
 A page that holds unsaved edits must ask before they are lost, whichever way the user
-leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
+leaves. `src/lib/navigation/useUnsavedChangesGuard.ts` covers every way out (the
+first three points below); the template editor (`useTemplateEditorLeaveGuard`) and
+the run page (unsaved task notes) use it. A page's own back buttons just navigate and
+let it ask, so the user is asked once.
 
 - `useBlocker` covers every route change: sidebar, header, account menu, in-page
   links, and browser Back/Forward. It asks only when the pathname changes.
@@ -62,6 +71,16 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   asks first, and if the server refuses the sign-out the user stays and the page asks
   again next time.
 - `beforeunload` covers reloads, tab closes, and external links.
+- A session that ends in the background (a sign-out in another tab, an expired or
+  revoked session, another tab signing in as someone else) unmounts the page without
+  asking. Just before that, `keepGuardedWork` asks each page with unsaved work to keep
+  it on the tab (the guard's `onSessionEnding`), and the page offers it back after
+  sign-in. The template editor keeps a new template's draft, or its edits to an
+  existing template with the version they were made on, so a save made since then
+  ends in a conflict instead of an overwrite (`templateDraftStore.ts`). The run page
+  keeps unsaved task notes and restores those whose saved notes did not change
+  (`keptNoteDrafts.ts`). When storage is blocked or full, a toast says the changes
+  could not be kept.
 - A save in flight does not lift the guard: it can still fail (a conflict, a slug
   rule, a network error, or the unload aborting it), and until it succeeds the edits
   exist only in the form. Leaving during a save asks with a message that says the
@@ -73,10 +92,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   in `pendingUploads.ts`, disables Save ("Uploading...") until they finish, and asks
   before leaving with a message that says a file is still uploading.
 - A navigation the page starts after it has nothing left to lose (a create that
-  saved, or a checkout or sign-in redirect after the draft was kept) is allowed
-  without asking. Back from checkout can restore the page from the back/forward
-  cache with that exit still allowed, so the guard re-arms on that restore: edits
-  made after coming back are not in the kept draft.
+  saved, completing a run, which saves every note, or a checkout or sign-in redirect
+  after the draft was kept) is allowed without asking. Back from checkout can restore
+  the page from the back/forward cache with that exit still allowed, so the guard
+  re-arms on that restore: edits made after coming back are not in the kept draft.
 - An action on the page that replaces the whole form asks the same way. Generating a
   Clipy draft asks before the request when the form has unsaved changes
   (`confirmReplaceTemplateDraft`), locks the editor and Save while it runs so nothing
@@ -106,7 +125,9 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
   The archive lists load only on `/dashboard/archive`; deleting a Template or Run
-  marks them stale through `src/contexts/templateListCache.ts`.
+  marks them stale through `src/contexts/templateListCache.ts`. Each list reads as
+  loading until it has data or its request failed (`getArchiveListState`), including
+  while it waits, disabled, for the Organizations to load.
 - Sign-out and sign-in are SPA navigations, so the QueryClient outlives a session.
   When the signed-in user changes, `AuthProvider` removes every cached query no
   mounted page reads, except the public catalog. Never call `refetchQueries` without
@@ -137,7 +158,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   or moved to an Organization) is dropped.
 - Context values and helpers (`getTemplate`, the lists) keep their identity until their
   data changes, but never key a fetch on them: providers still re-render for unrelated
-  reasons.
+  reasons. Actions (`updateRun`, `deleteRun`, `createTemplate`, ...) keep theirs for the
+  life of the provider. The run page loads its run only when the run id or share token
+  changes, and reads callbacks when it uses them, since a load clears unsaved task
+  notes and the selected task.
 - Template detail pages never show a copy from a list: a list is refetched after an
   edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
   public template page loads its template from the API on every visit (bundled library
@@ -160,8 +184,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   mean the catalog loaded. Discovery pages read `catalogPending` and `catalogError` from
   `useTemplateLists` (`loading`, `catalogError`, and `retryCatalog` in
   `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
-  404 or "no templates" message only after the catalog loaded. A failed catalog request
-  stays an error; it is never cached as an empty catalog.
+  404 or "no templates" message only after the catalog loaded. That includes category
+  lists and counts (`/categories`), which would otherwise count only the bundled
+  templates; `tests/unit/contexts/catalogConsumers.test.ts` checks every page that uses
+  `useTemplateLibrary`. A failed catalog request stays an error; it is never cached as
+  an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
   blocks site data, even reading `window.localStorage` throws, and one unguarded read in
@@ -247,12 +274,14 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   collapsed, is keyed by section id and never seeded from the sections present at
   mount: a Clipy draft, a restored draft, or a save replaces the sections with
   `reset()`.
-- Stored content is not validated on import (TD-3), so `buildTemplateEditorFormValues`
-  coerces it into values the editor schema accepts: numeric ids and values become
-  strings, an unknown block type becomes a text block that keeps its value, invalid
-  file details are dropped, and every content block gets its own id (uploads find
-  their block by id). A loaded template can always be saved. Save validation errors
-  inside the outline name the section, task, and content block.
+- Content stored before the API checked every write can hold shapes the editor does
+  not use, so `buildTemplateEditorFormValues` coerces it into values the editor schema
+  accepts: numeric ids and values become strings, an unknown block type becomes a text
+  block that keeps its value, invalid file details are dropped, and every content block
+  gets its own id (uploads find their block by id). The editor builds the form from the
+  stored sections the API returns, not the display mapper's copy, which drops what no
+  page renders. A loaded template can always be saved without losing content. Save
+  validation errors inside the outline name the section, task, and content block.
 - An image, video, or file block's `fileName` and `fileSize` describe the file its
   value points to: an upload, or a linked file an author named (`uploadType: "url"`).
   Typing in the URL field writes the value with `withMediaValue`
@@ -269,7 +298,10 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
 - Field limits and slug rules live in `src/lib/schemas/templateFields.ts`, shared
   with the API payload schema. The editor schema applies them with messages that
   name the field, and saves are validated before the API call. The URL slug is
-  normalized (`slugifyTemplateSlug`) when the field loses focus and on save.
+  normalized (`slugifyTemplateSlug`, the API's one slug rule from
+  `src/lib/utils/slug.ts`) when the field loses focus and on save. Typed text with no
+  Latin letters or digits (`Список`, `!!!`) stays in the field and the save is refused
+  with "URL Slug: use Latin letters or numbers."; an empty field keeps the stored slug.
 - Keep category autocomplete triggers as real text inputs and use `onKeyDown` for
   tag entry.
 - Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save
@@ -313,7 +345,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   is kept in `sessionStorage` (`templateDraftStore.ts`, keyed by user and context)
   before any checkout or sign-in redirect, offered back on the new-template editor
   and from the billing section, and cleared only when a save succeeds (even one that
-  finishes after the user left the editor) or the user discards it.
+  finishes after the user left the editor) or the user discards it. A confirmed
+  sign-out returns the tab to Personal, so the new-template editor also offers a
+  draft kept in another context the user can still create templates in, with a
+  switch to that context (`useOtherContextTemplateDraft.ts`); the draft is restored,
+  and saved, only in the context it was written for.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

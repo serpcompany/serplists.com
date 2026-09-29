@@ -59,3 +59,58 @@ export const UNTICKED_RUN_SECTIONS = [
     ],
   },
 ];
+
+// A template stored without ids the API accepts (rows older than stable ids, or a numeric,
+// blank or whitespace id). A run starts with the ids the Template's editor shows and its next
+// save stores, so that save reconciles the run by id instead of retiring its work.
+export const LEGACY_ID_TEMPLATE_SECTIONS = [
+  {
+    id: '  ',
+    title: 'Release',
+    items: [
+      {
+        id: 1,
+        title: 'Verify',
+        isCompleted: true,
+        contents: [
+          {
+            type: 'subItems',
+            value: '',
+            subItems: [
+              { id: 7, title: 'Tests pass', isCompleted: true },
+              { title: 'Docs updated' },
+            ],
+          },
+        ],
+      },
+      { id: 'task-2', title: 'Plain task' },
+      { id: '', title: 'Legacy task', subItems: [{ id: 'sub-direct', title: 'Direct' }] },
+    ],
+  },
+];
+
+export const LEGACY_ID_RUN_SECTIONS = [
+  {
+    id: 'legacy-section-1',
+    title: 'Release',
+    items: [
+      {
+        id: 'legacy-item-1-1',
+        title: 'Verify',
+        isCompleted: false,
+        contents: [
+          {
+            type: 'subItems',
+            value: '',
+            subItems: [
+              { id: 'legacy-subitem-1-1-1', title: 'Tests pass', isCompleted: false },
+              { id: 'legacy-subitem-1-1-2', title: 'Docs updated', isCompleted: false },
+            ],
+          },
+        ],
+      },
+      { id: 'task-2', title: 'Plain task', isCompleted: false },
+      { id: 'legacy-item-1-3', title: 'Legacy task', isCompleted: false, subItems: [{ id: 'sub-direct', title: 'Direct', isCompleted: false }] },
+    ],
+  },
+];

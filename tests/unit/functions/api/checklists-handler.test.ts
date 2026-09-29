@@ -56,7 +56,12 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { calculateSectionsProgress, normalizeSections } from '@/lib/utils/checklistSections';
-import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from '../../../fixtures/runStartFixtures';
+import {
+  LEGACY_ID_RUN_SECTIONS,
+  LEGACY_ID_TEMPLATE_SECTIONS,
+  TICKED_TEMPLATE_SECTIONS,
+  UNTICKED_RUN_SECTIONS,
+} from '../../../fixtures/runStartFixtures';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
@@ -280,7 +285,11 @@ describe('Checklists Handlers', () => {
   // The web reset skipped Sub-tasks blocks (contents[].subItems) and the legacy `completed`
   // key, so a template carrying ticked state started web runs part done while MCP
   // start_run started the same template unticked.
-  it('starts web runs from a template with every task and Sub-task unticked', async () => {
+  // A template stored without accepted ids starts runs with the ids its editor saves.
+  it.each([
+    ['', TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS],
+    [' and the ids its next save stores', LEGACY_ID_TEMPLATE_SECTIONS, LEGACY_ID_RUN_SECTIONS],
+  ])('starts web runs from a template with every task and Sub-task unticked%s', async (_ids, templateSections, runSections) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([{
@@ -289,7 +298,7 @@ describe('Checklists Handlers', () => {
         owner_type: 'user',
         team_id: null,
         title: 'Server Template',
-        items: JSON.stringify(TICKED_TEMPLATE_SECTIONS),
+        items: JSON.stringify(templateSections),
         is_public: false,
         version: 2,
       }])
@@ -302,7 +311,7 @@ describe('Checklists Handlers', () => {
 
     expect(response.status).toBe(200);
     const storedItems = JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items);
-    expect(storedItems).toEqual(UNTICKED_RUN_SECTIONS);
+    expect(storedItems).toEqual(runSections);
     // What the run page shows: nothing done yet.
     expect(calculateSectionsProgress(normalizeSections(storedItems))).toBe(0);
   });

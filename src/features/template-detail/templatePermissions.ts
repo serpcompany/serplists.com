@@ -1,4 +1,5 @@
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
+import { isPersonalTemplateOf } from '@/lib/templates/templateOwnership';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 export type TemplateDetailPermissions = {
@@ -22,18 +23,24 @@ const NO_PERMISSIONS: TemplateDetailPermissions = {
  * governed by the viewer's role in that Organization, never by who created it
  * (PRODUCT_SENSE: Creator attribution does not determine current ownership), which is
  * how the API decides too. The page knows the role only for the active Organization, so
- * that Organization's Templates are read-only from any other context.
+ * that Organization's Templates are read-only from any other context. The API sends
+ * team_id only to active members, so an Organization Template without it (its Creator
+ * left, was removed or was disabled, or the Organization was archived) is read-only too.
  */
 export const getTemplateDetailPermissions = (params: {
   activeTeamId: string | undefined;
   // The viewer's role in the active context allows editing Templates (true in Personal).
   canEditTemplates: boolean;
-  template: Pick<ChecklistTemplate, 'id' | 'teamId' | 'userId'> | null;
+  template: Pick<ChecklistTemplate, 'id' | 'ownerType' | 'teamId' | 'userId'> | null;
   userId: string | undefined;
 }): TemplateDetailPermissions => {
   const { template, userId } = params;
 
   if (!template || !userId || isRepoTemplate(template)) {
+    return NO_PERMISSIONS;
+  }
+
+  if (template.ownerType === 'team' && !template.teamId) {
     return NO_PERMISSIONS;
   }
 
@@ -48,7 +55,7 @@ export const getTemplateDetailPermissions = (params: {
     };
   }
 
-  const isOwner = template.userId === userId;
+  const isOwner = isPersonalTemplateOf(template, userId);
   return {
     canDuplicate: isOwner && params.canEditTemplates,
     canEdit: isOwner,

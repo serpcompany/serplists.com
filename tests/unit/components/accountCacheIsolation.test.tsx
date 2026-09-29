@@ -21,6 +21,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     activeWorkspace: { id: 'team-1', memberId: 'member-1', name: 'Shared Org', role: 'admin', teamId: 'team-1', type: 'team' },
     canManageTeam: true,
     createTeam: vi.fn(),
+    getPermissions: () => ({ canRun: true, canEditTemplates: true, canManage: true }),
     isTeamWorkspace: true,
     rememberTeam: vi.fn(),
     refreshTeams: vi.fn(),

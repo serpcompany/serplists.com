@@ -18,6 +18,26 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
+const { announceProfileChange } = vi.hoisted(() => ({ announceProfileChange: vi.fn() }));
+
+// The real session sync, with its profile-change announcement observed.
+vi.mock('@/contexts/sessionSync', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/contexts/sessionSync')>();
+  return {
+    ...actual,
+    createSessionSync: (...args: Parameters<typeof actual.createSessionSync>) => {
+      const sync = actual.createSessionSync(...args);
+      return {
+        ...sync,
+        announceProfileChange: (userId: string) => {
+          announceProfileChange(userId);
+          sync.announceProfileChange(userId);
+        },
+      };
+    },
+  };
+});
+
 import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
 
 type AuthContextValue = ReturnType<typeof useAuth>;
@@ -52,6 +72,28 @@ describe('AuthProvider actions', () => {
     signInEmail.mockReset();
     signUpEmail.mockReset();
     getSession.mockReset();
+    announceProfileChange.mockReset();
+  });
+
+  // Other tabs of the same user re-read the session, so they show the new name or username
+  // instead of building links to a profile that no longer exists.
+  it('tells the other tabs after a profile refresh that found the user', async () => {
+    getSession.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'person@example.com', username: 'person2' }, session: {} },
+      error: null,
+    });
+
+    await expect(renderAuth().refreshProfile()).resolves.toBe(true);
+
+    expect(announceProfileChange).toHaveBeenCalledWith('user-1');
+  });
+
+  it('announces nothing when the profile refresh could not read the session', async () => {
+    getSession.mockResolvedValue({ data: null, error: { status: 503 } });
+
+    await expect(renderAuth().refreshProfile()).resolves.toBe(false);
+
+    expect(announceProfileChange).not.toHaveBeenCalled();
   });
 
   it('tells a rate-limited sign-in to wait instead of reporting a failed login', async () => {

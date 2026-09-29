@@ -79,6 +79,19 @@ async function createTemplateViaApi(page: Page, title: string) {
   }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
 }
 
+// A save leaves for the Templates list once the API answers. Wait for that answer, not
+// only the URL: under load a save can take longer than an assertion waits by default.
+async function saveAndReturnToTemplates(page: Page) {
+  const saved = page.waitForResponse((response) => {
+    const method = response.request().method();
+    const { pathname } = new URL(response.url());
+    return (method === "POST" || method === "PUT") && /\/api\/templates(\/[^/]+)?$/.test(pathname);
+  });
+  await page.getByRole("button", { name: "Save" }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+}
+
 function getTemplateSections(template: Record<string, unknown>) {
   const rawSections = template.sections ?? template.items ?? [];
   const parsedSections =
@@ -496,8 +509,7 @@ test.describe("template editor regressions", () => {
       secondTaskDescription,
     );
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -555,8 +567,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Enter text or markdown content")
       .fill(contentValue);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -638,8 +649,7 @@ test.describe("template editor regressions", () => {
     });
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -708,8 +718,7 @@ test.describe("template editor regressions", () => {
     await page.getByPlaceholder("Sub-task 1").press("Enter");
     await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -733,8 +742,12 @@ test.describe("template editor regressions", () => {
 
     await page.goto(`/dashboard/runs/${runId}`);
     await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
-    const checkboxes = page.getByRole("checkbox");
-    await expect(checkboxes).toHaveCount(1);
+    // The task has its own checkbox; the only other one is its single Sub-task's.
+    await expect(
+      page.getByRole("checkbox", { name: `Mark "Task with sub-tasks ${stamp}" complete` }),
+    ).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(2);
+    await expect(page.getByRole("checkbox", { name: "Check title", exact: true })).toBeVisible();
     await expect(page.getByText("Check title", { exact: true })).toBeVisible();
 
     await page.evaluate(async ({ id, apiBaseUrl }) => {
@@ -775,8 +788,7 @@ test.describe("template editor regressions", () => {
     await expect(field).toHaveValue(embedUrl);
     await expect(field).toBeFocused();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -829,8 +841,7 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("ArrowUp");
     await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -1146,8 +1157,7 @@ test.describe("template editor regressions", () => {
 
     await page.goto("/dashboard/templates/new");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
     expect(dialogs).toEqual([]);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
@@ -1274,8 +1284,7 @@ test.describe("template editor regressions", () => {
     await expect(page.getByText("report.pdf", { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     expect(savedTemplate).toBeTruthy();
@@ -1390,8 +1399,7 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByText(categoryName, { exact: true }).first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -1425,8 +1433,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Description shown in search results...")
       .fill(seoDescription);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -1467,10 +1474,9 @@ test.describe("template editor regressions", () => {
       // Another tab (or an Organization teammate) saves a new task meanwhile.
       await page.evaluate(async ({ id, apiBaseUrl }) => {
         const current = await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: "include" });
-        const template = (await current.json()) as { items: unknown; version: number };
-        const sections = (
-          typeof template.items === "string" ? JSON.parse(template.items) : template.items
-        ) as Array<{ items: unknown[] }>;
+        // Reads return the checklist as parsed `sections` (the raw items column is not sent).
+        const template = (await current.json()) as { sections: Array<{ items: unknown[] }>; version: number };
+        const { sections } = template;
         sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
         const response = await fetch(`${apiBaseUrl}/templates/${id}`, {
           method: "PUT",
@@ -1489,7 +1495,7 @@ test.describe("template editor regressions", () => {
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
 
       const saved = await findTemplateByTitle(page, `${title} edited`);
-      expect(JSON.stringify(saved?.items)).toContain("Added elsewhere");
+      expect(JSON.stringify(saved?.sections)).toContain("Added elsewhere");
     } finally {
       await deleteTemplate(page, templateId);
     }
@@ -1498,7 +1504,8 @@ test.describe("template editor regressions", () => {
   test("saves a template whose stored content came from a legacy import", async ({ page }) => {
     await loginAsSeedUser(page);
     const title = `Legacy content ${uniqueSuffix()}`;
-    // The API stores content as given (TD-3), as a lenient JSON import does.
+    // Writes still store ids and nulls as given, as a lenient JSON import did
+    // (src/lib/schemas/storedSections.ts passes them through).
     const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
       const response = await fetch(`${apiBaseUrl}/templates`, {
         method: "POST",
@@ -1518,7 +1525,6 @@ test.describe("template editor regressions", () => {
                   contents: [
                     { id: 1, type: "text", value: "Numeric id" },
                     { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
-                    { id: "c3", type: "link", value: "https://example.com" },
                   ],
                 },
               ],
@@ -1529,6 +1535,17 @@ test.describe("template editor regressions", () => {
       if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
       return ((await response.json()) as { id: string }).id;
     }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+    // Every write now refuses a block of unknown type, but rows stored before that check
+    // still hold them. The editor loads this template with one, as it would load such a row.
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      const template = (await response.json()) as {
+        sections: Array<{ items: Array<{ contents: unknown[] }> }>;
+      };
+      template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
+      await route.fulfill({ response, json: template });
+    });
 
     try {
       await page.goto(`/dashboard/templates/${templateId}/edit`);
@@ -1537,8 +1554,12 @@ test.describe("template editor regressions", () => {
 
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
       const saved = await findTemplateByTitle(page, `${title} saved`);
-      expect(JSON.stringify(saved?.items)).toContain("https://example.com/doc.pdf");
+      expect(JSON.stringify(saved?.sections)).toContain("https://example.com/doc.pdf");
+      // The block of unknown type is kept as a text block, not deleted by the save.
+      const contents = getTemplateSections(saved as Record<string, unknown>)[0]?.items[0]?.contents;
+      expect(contents).toContainEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
     } finally {
+      await page.unrouteAll({ behavior: "wait" });
       await deleteTemplate(page, templateId);
     }
   });

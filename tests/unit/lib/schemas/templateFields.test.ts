@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { templatePayloadSchema } from '@functions/api/utils/payloads';
+import { generateSlug, resolveRequestedSlug, truncateSlug } from '@functions/api/utils/slug';
+import { TEMPLATE_SLUG_MAX } from '@/lib/schemas/templateLimits';
 import {
   appendTemplateSlugSuffix,
   slugifyTemplateSlug,
@@ -45,3 +47,41 @@ describe('template slug helpers', () => {
     );
   });
 });
+
+// The editor's URL Slug field used its own rule, which dropped letters the shared rule
+// folds ('Straße' became 'stra-e'). It sends the slug already normalized, and the API
+// keeps a valid slug as it is, so the editor's rule was the one stored.
+describe('the URL Slug field follows the shared slug rule', () => {
+  const samples = [
+    'Straße Checkliste',
+    'Ørsted',
+    'Łódź guide',
+    'København',
+    'Kadıköy',
+    'Encyclopædia',
+    'Q&A Guide',
+    'my_template',
+    'Café',
+    'Don’t Forget',
+    'x'.repeat(400),
+    'a-'.repeat(200),
+    'Список',
+  ];
+
+  it.each(samples)('normalizes %j as the API does', (sample) => {
+    const slug = slugifyTemplateSlug(sample);
+
+    expect(slug).toBe(truncateSlug(generateSlug(sample), TEMPLATE_SLUG_MAX));
+    // Normalizing first never changes what the API stores for the typed text.
+    expect(resolveRequestedSlug(slug || undefined, undefined)).toEqual(
+      slug ? resolveRequestedSlug(sample, undefined) : { kind: 'unchanged' },
+    );
+  });
+
+  it('folds letters instead of dropping them', () => {
+    expect(slugifyTemplateSlug('Straße Checkliste')).toBe('strasse-checkliste');
+    expect(slugifyTemplateSlug('Łódź guide')).toBe('lodz-guide');
+    expect(slugifyTemplateSlug('Ørsted')).toBe('orsted');
+  });
+});
+

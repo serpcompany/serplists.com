@@ -20,7 +20,7 @@ import ChecklistRun from './pages/ChecklistRun';
 import PublicTemplate from './pages/PublicTemplate';
 import ChecklistLibrary from './pages/ChecklistLibrary';
 import Categories from './pages/Categories';
-import CategoryDetail from './pages/CategoryDetail';
+import CategoryDetailRoute from './pages/CategoryDetailRoute';
 import TeamInviteAccept from './pages/TeamInviteAccept';
 import UserProfile from './pages/UserProfile';
 import Features from './pages/Features';
@@ -119,7 +119,7 @@ export const appRoutes = createRoutesFromElements(
       />
       <Route
         path="/categories/:categorySlug"
-        element={<CategoryDetail />}
+        element={<CategoryDetailRoute />}
       />
       <Route
         path="/profile/:username/:templateSlug"

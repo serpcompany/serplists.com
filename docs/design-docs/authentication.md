@@ -70,7 +70,8 @@ and user-facing failure states when a supporting service is unavailable.
   while the new cookie is dropped, so the browser cookie would expire first. The app
   calls get-session on page load and on the re-checks below, and a signed-in tab
   that has not read it for an hour reads it when it regains focus or on a timer
-  while it stays visible (`keepAlive` in `src/contexts/sessionSync.ts`).
+  while it stays visible (`keepAlive` and `startSessionKeepAlive` in
+  `src/contexts/sessionSync.ts`, started by `AuthProvider` while a user is signed in).
 - A handler's session lookup (`getSessionUserId`) returns `null`, and the handler
   answers `401`, only when there is no valid session. If the lookup itself fails
   (a D1 outage, or Better Auth cannot be set up), it logs `session_lookup_failed`
@@ -118,8 +119,14 @@ and user-facing failure states when a supporting service is unavailable.
   cached queries are then dropped), a confirmed sign-out sends protected pages to
   `/login`, and a failed check changes nothing. A tab also re-reads the session when
   it comes back into view, at most once a minute, and after a back/forward cache
-  restore. Tabs never re-announce what they learned, so one change costs one session
-  read per other tab.
+  restore. A re-check that finds the same user with a changed profile (name,
+  username, avatar, email) shows the new one, and a tab that saves a profile change
+  announces it (`refreshProfile`), so the other tabs showing that user re-read the
+  session: share links and the Profile link are built from the session's username.
+  Tabs never re-announce what they learned, so one change costs one session
+  read per other tab. Before a background sign-out or switch to another user is
+  applied, pages with unsaved work keep it on the tab to offer it back after sign-in
+  (`beforeSessionLost`; see "Unsaved changes" in [FRONTEND.md](../FRONTEND.md)).
 - The server can end a session on its own: it expires, or the user signs out other
   sessions or changes their password on another device. The API client reports every
   `401` (`src/lib/unauthorizedResponses.ts`), and a signed-in tab re-reads the session:
@@ -143,7 +150,9 @@ and user-facing failure states when a supporting service is unavailable.
   given (usernames saved before Better Auth may be mixed case) or its lowercase
   form, preferring an exact match, with an `IN` list that stays on
   `idx_users_username`. `/profile/JohnDoe` then replaces the URL with the stored
-  `/profile/johndoe`, and Account settings previews the lowercase URL.
+  `/profile/johndoe`. Account settings links the saved username as stored (a legacy
+  mixed-case one is found only in that casing) and previews an unsaved edit as the
+  lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
   them on every user write (`functions/api/utils/user-profile-validation.ts`): the
   name is trimmed and must be 1-100 characters, and the avatar must be an upload

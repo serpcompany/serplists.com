@@ -257,6 +257,30 @@ describe('TemplateEditor page', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Discard<\/button>/);
   });
 
+  // A confirmed sign-out returns the tab to Personal: a draft kept in an Organization is
+  // offered from there, with a switch back to its Organization.
+  it('offers to switch to the Organization a kept draft belongs to', async () => {
+    mockUseTemplateEditorAccess.mockReturnValue(
+      buildAccess({
+        otherContextDraft: {
+          teamId: 'org-1',
+          name: 'Acme',
+          draft: {
+            savedAt: '2026-09-28T10:00:00.000Z',
+            values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
+          },
+        },
+      }),
+    );
+
+    const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
+
+    expect(html).toContain('Unsaved template draft in Acme');
+    expect(html).toContain('Launch checklist');
+    expect(html).toMatch(/<button[^>]*>Switch to Acme<\/button>/);
+    expect(html).not.toMatch(/<button[^>]*>Restore draft<\/button>/);
+  });
+
   // Saving now would store the block without the file.
   it('disables Save while a file is still uploading', async () => {
     mockUsePendingTemplateEditorUploads.mockImplementation(() => ({

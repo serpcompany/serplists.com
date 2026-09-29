@@ -18,6 +18,10 @@ import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
+import {
+  type WorkspaceErrorActions,
+  WorkspaceErrorNotice,
+} from '@/components/workspace/WorkspaceErrorNotice';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
@@ -45,10 +49,15 @@ interface PublicTemplateViewProps {
   isTeamWorkspace: boolean;
   // Save and Start Run wait until the active ownership context is known.
   isWorkspaceLoading: boolean;
+  // Set when the teams request failed for a signed-in user: this page has no WorkspaceGate,
+  // so it says why Save and Start Run wait and offers the gate's Retry and Personal.
+  workspaceError: WorkspaceErrorActions | null;
   onStartRun: () => void;
   // Resolves true only when the template was saved.
   onSaveTemplate: () => Promise<boolean>;
 }
+
+const WORKSPACE_ERROR_ID = 'public-template-workspace-error';
 
 const getInitials = (value: string) => value.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? 'U';
 
@@ -83,6 +92,7 @@ export function PublicTemplateView({
   isSaving,
   isTeamWorkspace,
   isWorkspaceLoading,
+  workspaceError,
   onStartRun,
   onSaveTemplate,
 }: PublicTemplateViewProps) {
@@ -132,7 +142,9 @@ export function PublicTemplateView({
     isProUser,
     isSaving,
     isTeamWorkspace,
+    isWorkspaceLoading,
   });
+  const actionDescribedBy = workspaceError ? WORKSPACE_ERROR_ID : undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -164,6 +176,7 @@ export function PublicTemplateView({
                 className="gap-2"
                 type="button"
                 disabled={isSaveDisabled}
+                aria-describedby={actionDescribedBy}
               >
                 {isSaved ? (
                   <>
@@ -185,6 +198,7 @@ export function PublicTemplateView({
                 className="gap-2"
                 type="button"
                 disabled={isCreatingRun || isWorkspaceLoading}
+                aria-describedby={actionDescribedBy}
               >
                 <Play className="h-3.5 w-3.5" />
                 {isCreatingRun ? 'Starting...' : 'Start Run'}
@@ -195,6 +209,15 @@ export function PublicTemplateView({
       </header>
 
       <main className="mx-auto max-w-4xl px-4 py-8">
+        {workspaceError ? (
+          <WorkspaceErrorNotice
+            {...workspaceError}
+            className="mb-6"
+            id={WORKSPACE_ERROR_ID}
+            message="Start Run and Save wait until they load. Check your connection and try again, or continue in Personal."
+          />
+        ) : null}
+
         <div className="mb-8">
           {template.categories?.length ? (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -336,6 +359,7 @@ export function PublicTemplateView({
                 variant="outline"
                 onClick={() => void handleSave()}
                 disabled={isSaveDisabled}
+                aria-describedby={actionDescribedBy}
                 type="button"
                 className="gap-2"
               >
@@ -347,6 +371,7 @@ export function PublicTemplateView({
               <Button
                 onClick={onStartRun}
                 disabled={isCreatingRun || isWorkspaceLoading}
+                aria-describedby={actionDescribedBy}
                 type="button"
                 className="gap-2"
               >

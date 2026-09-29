@@ -2,8 +2,6 @@ import { readFileSync } from 'node:fs';
 import { createMemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
-import { shouldBlockTemplateEditorTransition } from '@/features/template-editor/navigationGuards';
-
 const readSource = (path: string) =>
   readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8');
 
@@ -25,7 +23,17 @@ describe('App data router', () => {
     );
     expect(
       readSource('src/features/template-editor/useTemplateEditorLeaveGuard.ts'),
-    ).toContain('useBlocker(');
+    ).toContain('useUnsavedChangesGuard(');
+    expect(readSource('src/lib/navigation/useUnsavedChangesGuard.ts')).toContain('useBlocker(');
+  });
+
+  // Task notes are kept only on the page until Save notes: a sidebar link, browser Back,
+  // or Sign out must ask first, as the page's own Runs button does.
+  it('blocks every way out of a run page with unsaved task notes, asking once', () => {
+    const runPage = readSource('src/pages/ChecklistRun.tsx');
+
+    expect(runPage).toContain('useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE');
+    expect(runPage).not.toContain('confirmLeaveWithUnsavedNotes');
   });
 
   it('keeps the editor open on a blocked link or Back, and leaves once the user confirms', async () => {
@@ -38,12 +46,10 @@ describe('App data router', () => {
       { initialEntries: ['/dashboard/templates', '/dashboard/templates/t1/edit'], initialIndex: 1 },
     );
     const blocker = 'editor';
-    router.getBlocker(blocker, ({ currentLocation, nextLocation }) =>
-      shouldBlockTemplateEditorTransition({
-        shouldBlock: true,
-        currentPath: currentLocation.pathname,
-        nextPath: nextLocation.pathname,
-      }),
+    // As useUnsavedChangesGuard blocks: only a pathname change.
+    router.getBlocker(
+      blocker,
+      ({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname,
     );
 
     await router.navigate('/dashboard/runs');

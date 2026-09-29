@@ -49,6 +49,7 @@ export const getResourcePermissions = (
 
 type TemplateForActions = {
   isPublic: boolean;
+  ownerType?: 'user' | 'team';
   teamId?: string;
   userId: string;
 };
@@ -64,10 +65,11 @@ export const getTemplateActionPermissions = (params: {
   const isOwner = Boolean(params.userId) && params.userId === template.userId;
   const activeContext = params.permissionsFor(params.activeTeamId);
   // The API decides edits to an Organization Template by role alone, so a creator who
-  // was demoted loses Edit.
+  // was demoted loses Edit. One sent without team_id reached a viewer who is not an
+  // active member, so it is read-only.
   const canEdit = template.teamId
     ? params.permissionsFor(template.teamId).canEditTemplates
-    : isOwner;
+    : isOwner && template.ownerType !== 'team';
   // A private Organization Template's runs go to its own Organization from any context
   // (resolveTemplateDestinationTeamId in src/lib/templateDestination.ts), so the role there
   // decides; every other Template runs in the active context.

@@ -1,6 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
+import type { ResourcePermissions } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
 import { isTemplateDetailOf, isTemplateDetailQuery } from '@/lib/queryCache';
 import { refreshRunLists } from '@/contexts/templateListCache';
@@ -54,6 +56,39 @@ export function parseArchiveItems(rows: unknown, kind: ArchiveKind): ArchiveItem
       archivedAt: deletedAt || updatedAt || '',
     }];
   });
+}
+
+// What an archive list shows. A list with no data is loading until its request fails: while
+// the user or the Organizations load, the query waits disabled (React Query v5 then reports
+// isLoading false), then comes its first request, and a Retry loads again. A failed refresh
+// keeps the last loaded list. Only a loaded list may read as empty.
+export type ArchiveListState = 'loading' | 'error' | 'loaded';
+
+export const getArchiveListState = (query: {
+  data: readonly unknown[] | undefined;
+  isError: boolean;
+  isFetching: boolean;
+}): ArchiveListState => {
+  if (query.data !== undefined) return 'loaded';
+  return query.isError && !query.isFetching ? 'error' : 'loading';
+};
+
+// The API restores a Template for those who may edit it (editor and above in an
+// Organization, canEditTemplate) and a Run for admins and above (canRestoreRun). In Personal
+// the owner may restore both. Every archived row belongs to the active context.
+export const canRestoreArchiveItem = (permissions: ResourcePermissions, kind: ArchiveKind): boolean =>
+  kind === 'template' ? permissions.canEditTemplates : permissions.canManage;
+
+// Plan limits come back as a 403 with a code and the reason in the message. A 403 without a
+// code is a role refusal (the role changed since the page loaded), whose message is only
+// "Forbidden".
+export function describeRestoreError(error: unknown, kind: ArchiveKind): string {
+  if (isApiError(error) && error.status === 403 && !error.code) {
+    return kind === 'template'
+      ? 'Your role in this Organization cannot restore templates.'
+      : 'Your role in this Organization cannot restore runs.';
+  }
+  return getApiErrorMessage(error, kind === 'template' ? 'Failed to restore template.' : 'Failed to restore run.');
 }
 
 type RestoreDependencies = {

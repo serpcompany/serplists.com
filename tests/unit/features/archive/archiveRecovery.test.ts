@@ -1,8 +1,17 @@
 import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { parseArchiveItems, restoreArchiveItem } from '@/features/archive/archiveRecovery';
+import { canEditTeamTemplates, canManageTeam, teamRoles } from '@functions/api/utils/team-access';
+import {
+  canRestoreArchiveItem,
+  describeRestoreError,
+  getArchiveListState,
+  parseArchiveItems,
+  restoreArchiveItem,
+} from '@/features/archive/archiveRecovery';
 import { getTemplateDetailQueryKey } from '@/features/template-detail/templateDetailQuery';
+import { createApiError } from '@/lib/api-errors';
+import { getOrganizationPermissions, PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
 
 const clients: QueryClient[] = [];
@@ -120,5 +129,55 @@ describe('restoreArchiveItem and cached detail pages', () => {
     await restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' });
 
     expect(queryClient.getQueryData(getTemplateDetailQueryKey('template-1', 'user-1'))).toBeNull();
+  });
+});
+
+// POST /api/templates/:id/restore needs canEditTemplate (canEditTeamTemplates in an
+// Organization) and POST /api/checklists/:id/restore needs canRestoreRun (canManageTeam).
+describe('who may restore', () => {
+  it.each(teamRoles)('matches the API restore checks for an Organization %s', (role) => {
+    const permissions = getOrganizationPermissions(role);
+    expect(canRestoreArchiveItem(permissions, 'template')).toBe(canEditTeamTemplates(role));
+    expect(canRestoreArchiveItem(permissions, 'run')).toBe(canManageTeam(role));
+  });
+
+  it('lets the owner restore both in Personal, and nobody while the role is unknown', () => {
+    expect(canRestoreArchiveItem(PERSONAL_PERMISSIONS, 'template')).toBe(true);
+    expect(canRestoreArchiveItem(PERSONAL_PERMISSIONS, 'run')).toBe(true);
+    expect(canRestoreArchiveItem(getOrganizationPermissions(undefined), 'template')).toBe(false);
+    expect(canRestoreArchiveItem(getOrganizationPermissions(undefined), 'run')).toBe(false);
+  });
+});
+
+describe('describeRestoreError', () => {
+  it('explains a role refusal (a bare 403) instead of showing "Forbidden"', () => {
+    const forbidden = createApiError(403, { error: 'Forbidden' });
+    expect(describeRestoreError(forbidden, 'template')).toBe('Your role in this Organization cannot restore templates.');
+    expect(describeRestoreError(forbidden, 'run')).toBe('Your role in this Organization cannot restore runs.');
+  });
+
+  it("keeps the API's reason for a plan limit and other failures", () => {
+    const limit = createApiError(403, { code: 'limit_reached', error: 'Your plan allows 3 active runs.' });
+    expect(describeRestoreError(limit, 'run')).toBe('Your plan allows 3 active runs.');
+    expect(describeRestoreError(new Error(''), 'template')).toBe('Failed to restore template.');
+    expect(describeRestoreError(createApiError(500, {}), 'run')).toBe('HTTP 500');
+  });
+});
+
+describe('getArchiveListState', () => {
+  it('is loading with no data while the query waits disabled, fetches, or retries after a failure', () => {
+    expect(getArchiveListState({ data: undefined, isError: false, isFetching: false })).toBe('loading');
+    expect(getArchiveListState({ data: undefined, isError: false, isFetching: true })).toBe('loading');
+    expect(getArchiveListState({ data: undefined, isError: true, isFetching: true })).toBe('loading');
+  });
+
+  it('is an error only once a first load failed and nothing is loading', () => {
+    expect(getArchiveListState({ data: undefined, isError: true, isFetching: false })).toBe('error');
+  });
+
+  it('keeps a loaded list, even an empty one or one whose refresh failed', () => {
+    expect(getArchiveListState({ data: [], isError: false, isFetching: false })).toBe('loaded');
+    expect(getArchiveListState({ data: [{ id: 'run-1' }], isError: true, isFetching: false })).toBe('loaded');
+    expect(getArchiveListState({ data: [{ id: 'run-1' }], isError: false, isFetching: true })).toBe('loaded');
   });
 });

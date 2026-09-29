@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Dashboard from '@/pages/Dashboard';
 import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
 import { createApiError } from '@/lib/api-errors';
+import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const mockUseAuth = vi.fn();
@@ -371,7 +372,7 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('Stop sharing to update');
   });
 
-  it('stops sharing through the API and refreshes the runs list', async () => {
+  it('stops sharing through the API and refreshes the runs list and the run Changelog', async () => {
     const apiClient = {
       createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
       revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-5', isPublic: false }),
@@ -382,6 +383,8 @@ describe('/dashboard/runs presentation', () => {
     await actions.stopSharingRun('run-5');
     expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-5');
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs'] });
+    // The API wrote "Stopped sharing" to the run's Changelog, which stays fresh for 60s.
+    expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.runHistory('run-5') });
 
     // Sharing refreshes the list through onShared (markRunShared) once the run is public.
     const onShared = vi.fn();
