@@ -98,6 +98,10 @@ const NON_PRODUCTION = [
   'https://serp-checklists-preview.serp.workers.dev/',
   'https://serp-checklists-production.serp.workers.dev/profile/serp/ultimate-camping-checklist',
   'https://serp-checklists-preview.serp.workers.dev/api/templates',
+  // A local server, and any other host that reaches the Worker.
+  'http://localhost:3000/profile/serp/ultimate-camping-checklist',
+  'http://127.0.0.1:4173/templates',
+  'https://www.serplists.com/',
 ];
 
 const PRODUCTION = [

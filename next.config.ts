@@ -11,11 +11,12 @@ import {
   SECURITY_HEADERS,
 } from './src/lib/http/securityHeaders';
 
-// Only https://serplists.com may be indexed. Staging and each Worker's workers.dev URL serve
-// the same app (staging with test data), so they are kept out of search results. Never add
-// noindex to a rule that matches serplists.com.
+// Only https://serplists.com may be indexed. Every other host serves the same app (staging
+// with test data, each Worker's workers.dev URL, a local server), so it is kept out of search
+// results, whatever a page's own robots tag says. Never add noindex to a rule that matches
+// serplists.com.
 const NOINDEX = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
-const NON_PRODUCTION_HOSTS = ['staging\\.serplists\\.com', '(?<worker>.+)\\.workers\\.dev'];
+const PRODUCTION_HOST = 'serplists\\.com';
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -39,11 +40,7 @@ const nextConfig: NextConfig = {
       },
       // A share link's page shows one person's run: never indexed.
       { source: '/share/:path*', headers: NOINDEX },
-      ...NON_PRODUCTION_HOSTS.map((host) => ({
-        source: '/:path*',
-        has: [{ type: 'host' as const, value: host }],
-        headers: NOINDEX,
-      })),
+      { source: '/:path*', missing: [{ type: 'host', value: PRODUCTION_HOST }], headers: NOINDEX },
     ];
   },
   async redirects() {

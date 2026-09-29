@@ -394,8 +394,9 @@ page with tags of its own builds them with `buildPageMetadata`
 `src/lib/brand.ts`, which never adds the suffix twice), points the canonical URL and
 `og:url` at the path on `https://serplists.com`, and sets robots to `index, follow` unless
 the page says otherwise. The route also renders the same text as JSON-LD (`JsonLd` and
-`PageJsonLd` in `src/components/seo/`). Staging and every workers.dev host also get
-`X-Robots-Tag: noindex, nofollow` from `next.config.ts`, which wins over the tag.
+`PageJsonLd` in `src/components/seo/`). Every host but serplists.com (staging, every
+workers.dev host, a local server) also gets `X-Robots-Tag: noindex, nofollow` from
+`next.config.ts`, which wins over the tag.
 
 - Static pages export `metadata` (`/templates`, `/categories`, the 404 page).
 - Dynamic public pages look their subject up in `generateMetadata`, the way the page itself
