@@ -59,6 +59,12 @@ async function createTemplateViaApi(page: Page, title: string) {
   await apiJson(page, '/templates', { method: 'POST', body: { title, is_public: false, sections: [] } });
 }
 
+// The page a test ends on is often still loading its billing status through the stub.
+// Let that request finish, or closing the page fails the stub's route.fetch.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'wait' });
+});
+
 test('Back from checkout leaves the Start Run dialog usable on My Templates', async ({ page }) => {
   await loginAsAdmin(page);
   // Answer the run start the way a Free context at its active-run limit is answered.
