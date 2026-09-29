@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { toPublicTemplate } from '@functions/api/utils/template-public';
+import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
+import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import { getTemplateDetailPermissions } from '@/features/template-detail/templatePermissions';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 
@@ -100,5 +103,78 @@ describe('getTemplateDetailPermissions', () => {
         userId: 'alice',
       }),
     ).toEqual(none);
+  });
+
+  it('gives the Creator nothing on a public Organization template sent without its Organization', () => {
+    // The API sends team_id only to active members, so this is a Creator who left, was
+    // removed or was disabled, or an Organization that was archived.
+    const formerOrganizationTemplate = {
+      id: 'template-t',
+      isPublic: true,
+      ownerType: 'team' as const,
+      teamId: undefined,
+      userId: 'alice',
+    };
+    const none = { canDuplicate: false, canEdit: false, canShare: false, canViewHistory: false };
+
+    for (const activeTeamId of [undefined, 'team-2']) {
+      expect(
+        getTemplateDetailPermissions({
+          activeTeamId,
+          canEditTemplates: true,
+          template: formerOrganizationTemplate,
+          userId: 'alice',
+        }),
+      ).toEqual(none);
+    }
+  });
+
+  it('keeps owner permissions on a Personal template whatever owner type it reports', () => {
+    for (const ownerType of ['user' as const, undefined]) {
+      expect(
+        getTemplateDetailPermissions({
+          activeTeamId: undefined,
+          canEditTemplates: true,
+          template: { ...personalTemplate, ownerType },
+          userId: 'alice',
+        }),
+      ).toEqual({ canDuplicate: true, canEdit: true, canShare: true, canViewHistory: true });
+    }
+  });
+
+  it("offers the Creator of a public Organization template the API's public copy, not owner controls", () => {
+    // The shape GET /api/templates/:id sends a viewer who is not an active member.
+    const row = {
+      created_at: '2026-01-01T00:00:00Z',
+      id: 'template-t',
+      is_public: true,
+      owner_type: 'team',
+      sections: [],
+      slug: 'audit',
+      team_id: 'team-1',
+      title: 'Audit',
+      updated_at: '2026-01-01T00:00:00Z',
+      user_id: 'alice',
+      version: 3,
+    };
+    const template = mapApiTemplateToChecklistTemplate(toPublicTemplate(row), 'audit');
+
+    expect(
+      getTemplateDetailPermissions({
+        activeTeamId: undefined,
+        canEditTemplates: true,
+        template,
+        userId: 'alice',
+      }),
+    ).toEqual({ canDuplicate: false, canEdit: false, canShare: false, canViewHistory: false });
+    expect(
+      getCopyTemplateButton({
+        billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
+        canEditTemplates: true,
+        isCloning: false,
+        isTeamWorkspace: false,
+        template,
+      }),
+    ).toEqual({ disabled: false, label: 'Upgrade to copy template', visible: true });
   });
 });

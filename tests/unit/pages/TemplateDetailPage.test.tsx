@@ -230,6 +230,32 @@ describe('TemplateDetail Organization permissions', () => {
       expect.objectContaining({ canEditTemplates: false, teamId: 'team-1', userId: 'user-1' }),
     );
   });
+
+  it('gives the Creator of a public Organization template they left the public copy, not owner controls', () => {
+    // The API leaves team_id out for anyone who is not an active member of the Organization.
+    workspaceState.activeTeamId = undefined;
+    workspaceState.isTeamWorkspace = false;
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
+      template: {
+        ...buildV0DemoPrivateTemplate(),
+        isPublic: true,
+        ownerType: 'team',
+        teamId: undefined,
+        userId: 'user-1',
+      },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(hasShareButton(html)).toBe(false);
+    expect(hasEditLink(html)).toBe(false);
+    expect(html).not.toContain('aria-label="Template actions"');
+    expect(html).not.toContain('Changelog');
+    expect(isVisibilitySwitchDisabled(html)).toBe(true);
+    expect(html).toContain('Upgrade to copy template');
+  });
 });
 
 describe('TemplateDetail copy into an Organization', () => {
