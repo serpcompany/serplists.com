@@ -830,3 +830,47 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
   await guestContext.close();
   await deleteRun(page, runId);
 });
+
+// The task footer (Previous, Mark Complete, Next) stays at the bottom of the window: it is in
+// view without scrolling on a short task, and the Changelog, which grows by an entry after
+// every save, never moves it under the pointer. On phones it sits above the bottom navigation.
+for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390, height: 844, bottomNav: 65 }]) {
+  test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await loginAsAdmin(page);
+    const tasks = ['Check DNS', 'Check TLS', 'Check redirects', 'Check sitemap'];
+    const runId = await page.evaluate(async ({ apiBaseUrl, titles }) => {
+      const response = await fetch(`${apiBaseUrl}/checklists`, {
+        body: JSON.stringify({
+          title: `Footer QA ${Date.now()}`,
+          sections: [{ id: 'foot', title: 'Section', items: titles.map((title, index) => ({ id: `foot-${index}`, title })) }],
+        }),
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      return ((await response.json()) as { id: string }).id;
+    }, { apiBaseUrl: DEV_API_BASE_URL, titles: tasks });
+    const markComplete = page.getByRole('button', { name: 'Mark Complete' });
+    const changelogEntries = page
+      .locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) })
+      .locator('time');
+
+    await page.goto(`/dashboard/runs/${runId}`);
+    await expect(page.getByRole('heading', { name: tasks[0] })).toBeVisible();
+    await expect(changelogEntries).toHaveCount(1);
+    const first = await markComplete.boundingBox();
+    if (!first) throw new Error('Mark Complete is not shown');
+    expect(first.y + first.height).toBeLessThanOrEqual(viewport.height - viewport.bottomNav);
+
+    for (const [index, next] of tasks.slice(1).entries()) {
+      await markComplete.click();
+      await expect(page.getByRole('heading', { name: next })).toBeVisible();
+      await expect(changelogEntries).toHaveCount(index + 2);
+      const box = await markComplete.boundingBox();
+      expect(Math.abs((box?.y ?? Number.NaN) - first.y)).toBeLessThanOrEqual(1);
+    }
+
+    await deleteRun(page, runId);
+  });
+}

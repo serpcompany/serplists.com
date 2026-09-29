@@ -71,7 +71,9 @@ export function TaskExecutionPanel({
   });
 
   return (
-    <div className="flex h-full min-h-full flex-col">
+    // At least as tall as the window, whatever the Changelog under it holds, so the footer
+    // below starts past the bottom of the window and stays pinned there.
+    <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col">
       {/* This panel stays mounted while the task inside it changes, and the window is what
           scrolls: moving to another task scrolls its header into view and focuses the title. */}
       <TaskHeaderReveal className="border-b border-border bg-card px-8 py-6" taskId={task.id}>
@@ -152,7 +154,14 @@ export function TaskExecutionPanel({
         </div>
       </div>
 
-      <div className="border-t border-border bg-card px-8 py-4">
+      {/* Pinned to the bottom of the window (above the phone navigation bar) until the end
+          of the panel scrolls into view, so Mark Complete is in view on a short task and never
+          moves when the Changelog under the panel grows after a save. The page must not wrap
+          it in a scroll container (ChecklistRun.tsx). */}
+      <div
+        className="sticky bottom-16 z-10 border-t border-border bg-card px-8 py-4 md:bottom-0"
+        data-task-footer="true"
+      >
         <div className="mx-auto flex max-w-2xl items-center justify-between">
           <Button
             variant="outline"

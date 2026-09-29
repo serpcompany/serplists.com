@@ -576,13 +576,15 @@ const ChecklistRunPage = () => {
           </main>
         </>
       ) : (
-        <DashboardContentShell>
+        // Clip, not hidden or auto: a scroll container here would hold the task footer's
+        // sticky position to itself instead of the window.
+        <DashboardContentShell className="overflow-clip">
           <DashboardPageHeader
             title={privateRunTitle}
             description={privateRunDescription}
             actions={privateRunHeaderActions}
           />
-          <DashboardScrollArea className="p-0">
+          <DashboardScrollArea className="overflow-clip p-0">
           <MobileRunProgress
             completedTasks={counts.tasksCompleted}
             currentSectionId={currentSectionId}
