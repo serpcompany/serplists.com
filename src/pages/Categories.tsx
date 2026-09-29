@@ -15,11 +15,13 @@ import {
   Zap,
 } from 'lucide-react';
 
+import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { buildDiscoveryCategories } from '@/components/checklist-library/discovery-utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { SEOHead } from '@/components/shared/SEOHead';
 import { CATEGORY_INDEX_PAGE_TEXT } from '@/lib/publicPageMeta';
@@ -55,9 +57,24 @@ const getCategoryMeta = (slug: string) =>
   categoryMetadata.find((category) => category.slug === slug) ??
   defaultCategoryMeta;
 
+// The bundled starter templates are listed before the catalog loads, so their categories
+// and counts are not the catalog's: show placeholders until it has loaded.
+const featuredCategoriesSkeleton = (
+  <>
+    <span className="sr-only">Loading categories…</span>
+    {Array.from({ length: 4 }).map((_, index) => (
+      <Skeleton key={index} className="h-40 rounded-lg" />
+    ))}
+  </>
+);
+const allCategoriesSkeleton = Array.from({ length: 6 }).map((_, index) => (
+  <Skeleton key={index} className="h-20 rounded-lg" />
+));
+
 const Categories = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { allCategories, templates } = useTemplateLibrary();
+  const { allCategories, templates, loading, catalogError, retryCatalog } =
+    useTemplateLibrary();
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
     [allCategories, templates],
@@ -110,77 +127,85 @@ const Categories = () => {
           </div>
         </div>
 
-        <section className="mb-12">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">
-              Popular Categories
-            </h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {featuredCategories.map((category) => {
-              const meta = getCategoryMeta(category.slug);
-              const Icon = meta.icon;
-              return (
-                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
-                  <Card className="group h-full border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
-                    <CardContent className="p-6">
-                      <div
-                        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${meta.bgColor}`}
-                      >
-                        <Icon className={`h-6 w-6 ${meta.color}`} />
-                      </div>
-                      <h3 className="font-medium text-foreground group-hover:text-foreground/80">
-                        {category.name}
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {category.count} templates
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+        {/* Without the catalog only the bundled templates are known: never show their
+            categories and counts as the catalog's. */}
+        {catalogError ? (
+          <CatalogLoadError onRetry={retryCatalog} />
+        ) : (
+          <>
+            <section aria-busy={loading || undefined} className="mb-12">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-foreground">
+                  Popular Categories
+                </h2>
+              </div>
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                {loading ? featuredCategoriesSkeleton : featuredCategories.map((category) => {
+                  const meta = getCategoryMeta(category.slug);
+                  const Icon = meta.icon;
+                  return (
+                    <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
+                      <Card className="group h-full border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
+                        <CardContent className="p-6">
+                          <div
+                            className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${meta.bgColor}`}
+                          >
+                            <Icon className={`h-6 w-6 ${meta.color}`} />
+                          </div>
+                          <h3 className="font-medium text-foreground group-hover:text-foreground/80">
+                            {category.name}
+                          </h3>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {category.count} templates
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
 
-        <section>
-          <h2 className="mb-4 text-lg font-semibold text-foreground">
-            All Categories
-          </h2>
-          <div className="space-y-3">
-            {filteredCategories.map((category) => {
-              const meta = getCategoryMeta(category.slug);
-              const Icon = meta.icon;
-              return (
-                <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
-                  <Card className="group border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
-                    <CardContent className="flex items-center gap-4 p-4">
-                      <div
-                        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${meta.bgColor}`}
-                      >
-                        <Icon className={`h-6 w-6 ${meta.color}`} />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-medium text-foreground">
-                          {category.name}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {meta.description}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <Badge variant="secondary">
-                          {category.count} templates
-                        </Badge>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+            <section aria-busy={loading || undefined}>
+              <h2 className="mb-4 text-lg font-semibold text-foreground">
+                All Categories
+              </h2>
+              <div className="space-y-3">
+                {loading ? allCategoriesSkeleton : filteredCategories.map((category) => {
+                  const meta = getCategoryMeta(category.slug);
+                  const Icon = meta.icon;
+                  return (
+                    <Link key={category.slug} to={buildPublicCategoryPathForSlug(category.slug)}>
+                      <Card className="group border-border bg-card transition-all hover:border-muted-foreground/50 hover:bg-card/80">
+                        <CardContent className="flex items-center gap-4 p-4">
+                          <div
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${meta.bgColor}`}
+                          >
+                            <Icon className={`h-6 w-6 ${meta.color}`} />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-foreground">
+                              {category.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {meta.description}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <Badge variant="secondary">
+                              {category.count} templates
+                            </Badge>
+                            <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        )}
 
         <section className="mt-12 rounded-xl border border-border bg-card p-8 text-center">
           <h2 className="text-xl font-semibold text-foreground">

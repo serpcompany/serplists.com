@@ -164,8 +164,11 @@ let it ask, so the user is asked once.
   mean the catalog loaded. Discovery pages read `catalogPending` and `catalogError` from
   `useTemplateLists` (`loading`, `catalogError`, and `retryCatalog` in
   `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
-  404 or "no templates" message only after the catalog loaded. A failed catalog request
-  stays an error; it is never cached as an empty catalog.
+  404 or "no templates" message only after the catalog loaded. That includes category
+  lists and counts (`/categories`), which would otherwise count only the bundled
+  templates; `tests/unit/contexts/catalogConsumers.test.ts` checks every page that uses
+  `useTemplateLibrary`. A failed catalog request stays an error; it is never cached as
+  an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
   blocks site data, even reading `window.localStorage` throws, and one unguarded read in
