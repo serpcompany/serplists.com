@@ -1,6 +1,6 @@
 import js from "@eslint/js";
+import nextVitals from "eslint-config-next/core-web-vitals";
 import globals from "globals";
-import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
@@ -28,6 +28,42 @@ const LEGACY_MAX_LINES = {
 const TOAST_MESSAGE =
   "The app's providers (src/app/providers.tsx) mount only the sonner Toaster, so toasts from any other toast store are never shown. " +
   "Import { toast } from 'sonner' instead.";
+const TOAST_RESTRICTIONS = {
+  paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
+  patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
+};
+// A page with unsaved work is asked before any navigation leaves it (useUnsavedChangesGuard),
+// which only the app's Link and useAppRouter know to do.
+const NAVIGATION_RESTRICTIONS = [
+  {
+    name: "next/link",
+    message:
+      "Import { Link } from '@/components/navigation/Link': it asks a page with unsaved work before leaving it, " +
+      "and reports the navigation to page visits (src/lib/navigation).",
+  },
+  {
+    name: "next/navigation",
+    importNames: ["useRouter"],
+    message:
+      "Use useAppRouter from '@/lib/navigation/useAppRouter': it asks a page with unsaved work before leaving it, " +
+      "and reports the navigation to page visits (src/lib/navigation).",
+  },
+];
+// The navigation code itself, and RequireAuth, whose redirect of a signed-out visitor must
+// never wait on a page (the session ending already kept the page's work).
+const NAVIGATION_MODULES = [
+  "src/components/navigation/Link.tsx",
+  "src/lib/navigation/useAppRouter.ts",
+  "src/lib/navigation/leavesPage.ts",
+  "src/components/RequireAuth.tsx",
+];
+// User content (uploads and linked images from any host, of any size) is shown as it is;
+// next/image would need an image loader for every host.
+const USER_CONTENT_IMAGES = [
+  "src/components/shared/TaskImage.tsx",
+  "src/components/template/PublicTemplateContent.tsx",
+  "src/components/ui/file-upload.tsx",
+];
 
 const STORAGE_MESSAGE =
   "Reading window.localStorage throws when a browser blocks site data, which crashes the app. " +
@@ -51,21 +87,34 @@ const CLIPBOARD_RESTRICTION = {
 
 export default tseslint.config(
   {
-    ignores: ["dist", "coverage", "playwright-report", "test-results", ".wrangler", "tmp", ".next", ".open-next", "next-env.d.ts", "cloudflare-env.d.ts"],
+    ignores: [
+      "dist",
+      "coverage",
+      "playwright-report",
+      "test-results",
+      "tests/test-results",
+      ".wrangler",
+      "tmp",
+      ".next",
+      ".open-next",
+      "next-env.d.ts",
+      "cloudflare-env.d.ts",
+    ],
   },
+  // Next.js's own rules (React, React Hooks with the React Compiler checks, accessibility,
+  // imports, and @next/next with the Core Web Vitals rules as errors).
+  ...nextVitals,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ["**/*.{ts,tsx}"],
+    files: ["**/*.{ts,tsx,mts,cts}"],
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
     },
     plugins: {
-      "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
@@ -77,11 +126,23 @@ export default tseslint.config(
     },
   },
   {
-    // Disable fast refresh warnings for UI components, contexts, and Next.js route files (which
-    // export metadata, route segment config, and handlers by convention).
-    files: ["**/components/ui/*.{ts,tsx}", "**/contexts/*.{ts,tsx}", "src/app/**/*.{ts,tsx}"],
+    // Disable fast refresh warnings for UI components, contexts, Next.js route files (which
+    // export metadata, route segment config, and handlers by convention), and tests.
+    files: [
+      "**/components/ui/*.{ts,tsx}",
+      "**/contexts/*.{ts,tsx}",
+      "src/app/**/*.{ts,tsx}",
+      "tests/**/*.{ts,tsx}",
+      "**/*.test.{ts,tsx}",
+    ],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    files: USER_CONTENT_IMAGES,
+    rules: {
+      "@next/next/no-img-element": "off",
     },
   },
   {
@@ -97,14 +158,18 @@ export default tseslint.config(
   })),
   {
     files: ["src/**/*.{ts,tsx}"],
+    ignores: NAVIGATION_MODULES,
     rules: {
       "no-restricted-imports": [
         "error",
-        {
-          paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
-          patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
-        },
+        { paths: [...TOAST_RESTRICTIONS.paths, ...NAVIGATION_RESTRICTIONS], patterns: TOAST_RESTRICTIONS.patterns },
       ],
+    },
+  },
+  {
+    files: NAVIGATION_MODULES,
+    rules: {
+      "no-restricted-imports": ["error", TOAST_RESTRICTIONS],
     },
   },
   {

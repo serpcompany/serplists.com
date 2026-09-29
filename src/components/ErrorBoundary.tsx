@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
+import { Link } from './navigation/Link';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 type FallbackRender = (props: { error?: Error; reset: () => void }) => ReactNode;
@@ -97,7 +98,8 @@ export class ErrorBoundary extends Component<Props, State> {
         return fallback;
       }
 
-      // The Router may be unmounted here, so the links are plain anchors, not router Links.
+      // Something outside the pages crashed (a provider or a layout). Try Again and Go to home
+      // mount the app again from fresh state; Refresh Page reloads the document.
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
           <Card className="w-full max-w-md">
@@ -124,7 +126,9 @@ export class ErrorBoundary extends Component<Props, State> {
                     Go back
                   </Button>
                   <Button asChild variant="ghost">
-                    <a href="/">Go to home</a>
+                    <Link href="/" onClick={this.handleReset}>
+                      Go to home
+                    </Link>
                   </Button>
                 </div>
               </div>

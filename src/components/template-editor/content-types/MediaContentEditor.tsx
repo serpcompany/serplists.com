@@ -1,7 +1,7 @@
 import { Label } from "@/components/ui/label";
 import { FileUpload, type FileUploadChange } from "@/components/ui/file-upload";
 import type { UploadResult } from "@/lib/utils/fileUpload";
-import { Image, Video, File } from "lucide-react";
+import { File, ImageIcon, Video } from "lucide-react";
 
 interface MediaContentEditorProps {
   type: 'image' | 'video' | 'file';
@@ -22,7 +22,7 @@ export const MediaContentEditor = ({
 }: MediaContentEditorProps) => {
   const getIcon = () => {
     switch (type) {
-      case 'image': return <Image className="h-4 w-4" />;
+      case 'image': return <ImageIcon className="h-4 w-4" />;
       case 'video': return <Video className="h-4 w-4" />;
       case 'file': return <File className="h-4 w-4" />;
     }

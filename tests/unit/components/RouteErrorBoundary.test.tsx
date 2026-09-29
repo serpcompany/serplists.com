@@ -1,6 +1,6 @@
 import React, { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { createMemoryRouter, Outlet, RouterProvider, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'next/navigation';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
@@ -13,10 +13,14 @@ import {
   findByText,
   installFakeDomGlobals,
 } from '../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../support/nextNavigation';
 
-// Drives the page boundary under a real data router: a page crashes, the user clicks the
-// fallback's home link (a router Link), and the router navigates the way it does in the
-// browser. Only auth is faked.
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+
+// Drives the page boundary with the app's Link and Next.js navigation (the in-memory browser
+// of tests/support/nextNavigation.tsx): a page crashes, the user clicks the fallback's home
+// link, and the page at the new location renders. Only auth is faked.
 
 let authUser: { id: string } | null = null;
 
@@ -26,20 +30,19 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
 afterAll(() => restoreGlobals());
 
-// The page under test. It throws while `pageBroken` is set, as a page does on a bad row.
+// The page under test. It throws while `pageBroken` is set, as a page does on a bad row, and
+// reads its query as the library does.
 let pageBroken = false;
-let pageRenders = 0;
+const pageRendered = vi.fn();
 let pageMounts = 0;
-let changeSearch: ((value: string) => void) | null = null;
 
 function Page() {
-  pageRenders += 1;
-  const [, setSearchParams] = useSearchParams();
-  changeSearch = (value) => setSearchParams({ scope: value });
+  pageRendered();
+  useSearchParams();
   useEffect(() => {
     pageMounts += 1;
   }, []);
@@ -47,32 +50,23 @@ function Page() {
   return <main>Page ok</main>;
 }
 
-// As Layout does: the boundary wraps the Outlet, so it stays mounted across the page routes.
-const routes = [
-  {
-    element: (
-      <RouteErrorBoundary>
-        <Outlet />
-      </RouteErrorBoundary>
-    ),
-    children: [
-      { path: '/', element: <Page /> },
-      { path: '/dashboard/templates', element: <Page /> },
-    ],
-  },
-];
+// As Layout does: the boundary wraps the page, so it stays mounted across the pages.
+const app = (
+  <RouteErrorBoundary>
+    <RoutedPages pages={{ '/': <Page />, '/dashboard/templates': <Page /> }} />
+  </RouteErrorBoundary>
+);
 
 let root: Root | null = null;
 
 async function renderAt(entry: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [entry] });
+  navigation.reset(entry);
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
   await act(async () => {
-    root?.render(<RouterProvider router={router} />);
+    root?.render(app);
   });
   return {
-    router,
     container,
     text: () => container.textContent,
     hasAlert: () => findAll(container, (node) => node instanceof FakeElement && node.getAttribute('role') === 'alert').length > 0,
@@ -80,10 +74,10 @@ async function renderAt(entry: string) {
   };
 }
 
-// Lets the router finish the navigation and React commit it.
+// Lets the navigation finish and React commit it.
 const settle = () =>
   act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await navigation.settle();
   });
 
 describe('RouteErrorBoundary', () => {
@@ -92,9 +86,8 @@ describe('RouteErrorBoundary', () => {
     root = null;
     authUser = null;
     pageBroken = false;
-    pageRenders = 0;
+    pageRendered.mockClear();
     pageMounts = 0;
-    changeSearch = null;
     vi.restoreAllMocks();
   });
 
@@ -114,7 +107,7 @@ describe('RouteErrorBoundary', () => {
     });
     await settle();
 
-    expect(page.router.state.location.pathname).toBe('/dashboard/templates');
+    expect(navigation.pathname()).toBe('/dashboard/templates');
     expect(page.hasAlert()).toBe(false);
     expect(page.text()).toContain('Page ok');
   });
@@ -148,7 +141,7 @@ describe('RouteErrorBoundary', () => {
     });
     await settle();
 
-    expect(page.router.state.location.search).toBe('');
+    expect(navigation.search()).toBe('');
     expect(page.hasAlert()).toBe(false);
     expect(page.text()).toContain('Page ok');
   });
@@ -163,11 +156,11 @@ describe('RouteErrorBoundary', () => {
       click(page.container, page.link('Go to My Templates'));
     });
     await settle();
-    const rendersAfterRetry = pageRenders;
+    const rendersAfterRetry = pageRendered.mock.calls.length;
     await settle();
 
     expect(page.hasAlert()).toBe(true);
-    expect(pageRenders).toBe(rendersAfterRetry);
+    expect(pageRendered).toHaveBeenCalledTimes(rendersAfterRetry);
   });
 
   it('never remounts a healthy page when it navigates to itself or changes its query', async () => {
@@ -176,14 +169,14 @@ describe('RouteErrorBoundary', () => {
     expect(pageMounts).toBe(1);
 
     await act(async () => {
-      await page.router.navigate('/dashboard/templates', { replace: true });
+      navigation.router.replace('/dashboard/templates');
     });
     await act(async () => {
-      changeSearch?.('team');
+      navigation.router.replace('/dashboard/templates?scope=team');
     });
     await settle();
 
-    expect(page.router.state.location.search).toBe('?scope=team');
+    expect(navigation.search()).toBe('?scope=team');
     expect(pageMounts).toBe(1);
     expect(page.text()).toContain('Page ok');
   });

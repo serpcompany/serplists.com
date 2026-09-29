@@ -4,7 +4,7 @@ import { Button } from './button';
 import { Input } from './input';
 import { Textarea } from './textarea';
 import { Label } from './label';
-import { X, File, Image, Video } from 'lucide-react';
+import { X, File, ImageIcon, Video } from 'lucide-react';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
 import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
@@ -78,7 +78,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   const getIcon = () => {
     switch (type) {
-      case 'image': return <Image className="h-4 w-4" />;
+      case 'image': return <ImageIcon className="h-4 w-4" />;
       case 'video': return <Video className="h-4 w-4" />;
       case 'file': return <File className="h-4 w-4" />;
     }

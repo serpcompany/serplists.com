@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildConsoleTemplatesPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 // Wraps one page, below the site header. A page that crashes shows this card in its place while
 // the header and navigation keep working. Opening another page clears it (the reset key is the
@@ -28,7 +29,7 @@ export function RouteErrorBoundary({ children }: { children: ReactNode }) {
 
 export function RouteErrorFallback({ reset }: { reset: () => void }) {
   const { user } = useAuth();
-  const router = useRouter();
+  const router = useAppRouter();
   const home = user
     ? { to: buildConsoleTemplatesPath(), label: 'Go to My Templates' }
     : { to: '/', label: 'Go to home' };

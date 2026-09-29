@@ -112,7 +112,7 @@ export default function TeamInviteAccept() {
       <p className="text-sm text-muted-foreground">
         {user?.email ? (
           <>
-            You're signed in as <span className="font-medium text-foreground">{user.email}</span>.{' '}
+            You&apos;re signed in as <span className="font-medium text-foreground">{user.email}</span>.{' '}
           </>
         ) : null}
         This invite was sent to a different email address. Sign out, then log in or create an

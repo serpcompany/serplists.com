@@ -1,10 +1,16 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
+import { usePathname } from 'next/navigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorFallback } from '@/components/RouteErrorBoundary';
+import { click, createFakeContainer, FakeElement, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { navigation } from '../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 let authUser: { id: string } | null = null;
 
@@ -82,16 +88,47 @@ describe('ErrorBoundary', () => {
     expect(app.boundary.state.hasError).toBe(true);
   });
 
-  it('offers a plain link home in the last-resort fallback, which renders outside any Router', () => {
-    const app = mountBoundary({ children: <p>App</p> });
-    app.crash();
+  // Something outside the pages crashed (a provider or a layout). Next.js's router sits above
+  // this boundary, so the way home is a link that mounts the app again there.
+  it('offers a link home in the last-resort fallback that mounts the app again at home', async () => {
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let shellBroken = true;
+    function Shell() {
+      const pathname = usePathname();
+      if (shellBroken) throw new Error('provider failed');
+      return <p>App at {pathname}</p>;
+    }
+    navigation.reset('/dashboard/templates');
+    const container = createFakeContainer();
+    const root = createRoot(container as unknown as HTMLElement);
+    try {
+      await act(async () => {
+        root.render(
+          <ErrorBoundary>
+            <Shell />
+          </ErrorBoundary>,
+        );
+      });
+      expect(container.textContent).toContain('Something went wrong');
+      expect(container.textContent).toContain('Go back');
+      expect(container.textContent).toContain('Refresh Page');
+      const home = findByText(container, 'A', 'Go to home') as FakeElement;
+      expect(home.getAttribute('href')).toBe('/');
 
-    const html = app.html();
+      shellBroken = false;
+      await act(async () => {
+        click(container, home);
+        await navigation.settle();
+      });
 
-    expect(html).toContain('Something went wrong');
-    expect(html).toContain('href="/"');
-    expect(html).toContain('Go to home');
-    expect(html).toContain('Go back');
+      expect(navigation.pathname()).toBe('/');
+      expect(container.textContent).toBe('App at /');
+    } finally {
+      act(() => root.unmount());
+      silence.mockRestore();
+      restoreGlobals();
+    }
   });
 
   it('passes reset to a fallback render function', () => {
@@ -106,12 +143,12 @@ describe('ErrorBoundary', () => {
 });
 
 describe('RouteErrorFallback', () => {
-  const renderFallback = () =>
-    renderToStaticMarkup(
-      <StaticRouter location="/categories/broken">
-        <RouteErrorFallback reset={() => {}} />
-      </StaticRouter>,
+  const renderFallback = () => {
+    navigation.reset('/categories/broken');
+    return renderToStaticMarkup(
+      <RouteErrorFallback reset={() => {}} />,
     );
+  };
 
   it('keeps the visitor moving: try again, go back, or go home', () => {
     const html = renderFallback();

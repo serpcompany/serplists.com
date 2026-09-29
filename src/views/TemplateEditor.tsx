@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -121,6 +121,11 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     resolver: zodResolver(templateEditorFormSchema),
     defaultValues: model.initialValues,
   });
+  // The header and the preview show the draft as it is typed.
+  const [draftTitle, draftDescription, draftSections] = useWatch({
+    control: templateForm.control,
+    name: ["title", "description", "sections"],
+  });
   // A picked file reaches the form only when its upload finishes.
   const { uploads, pendingCount } = usePendingTemplateEditorUploads();
   const hasPendingUploads = pendingCount > 0;
@@ -156,7 +161,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   });
   // A file still uploading is lost with the session; only form edits are kept.
   const isDirty = templateForm.formState.isDirty;
-  keepWorkRef.current = () => !isDirty || access.keepDraft();
+  useEffect(() => {
+    keepWorkRef.current = () => !isDirty || access.keepDraft();
+  });
 
   const handleSave = async () => {
     // Save is disabled meanwhile; this also covers a call that skips the button.
@@ -226,7 +233,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         templateSlug={model.templateSlug}
-        title={templateForm.watch("title") || "New Template"}
+        title={draftTitle || "New Template"}
       />
 
       {/* Error Alert */}
@@ -349,18 +356,17 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
           <div className="rounded-lg border border-border bg-card px-6">
             <div className="border-b border-border py-6">
               <h2 className="text-2xl font-semibold text-foreground">
-                {templateForm.watch("title") || "Untitled Template"}
+                {draftTitle || "Untitled Template"}
               </h2>
-              {templateForm.watch("description") ? (
+              {draftDescription ? (
                 <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                  {templateForm.watch("description")}
+                  {draftDescription}
                 </p>
               ) : null}
             </div>
             <PublicTemplateContent
               initialExpandedItems={Object.fromEntries(
-                templateForm
-                  .watch("sections")
+                draftSections
                   .flatMap((section, sectionIndex) =>
                     section.items.map((_, itemIndex) => [
                       `${sectionIndex}-${itemIndex}`,
@@ -368,7 +374,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
                     ]),
                   ),
               )}
-              sections={templateForm.watch("sections")}
+              sections={draftSections}
             />
           </div>
         </DialogContent>

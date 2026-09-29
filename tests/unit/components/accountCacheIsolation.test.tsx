@@ -100,9 +100,9 @@ function renderAfterUserSwitch(element: React.ReactElement) {
 
 describe('private account data after a user switch in the same tab', () => {
   it.each([
-    ['Organization settings', <TeamSettingsSection />, ['Acme Corp', 'Disabled Member', 'pending-invitee@example.com']],
-    ['Run Keys', <AgentAccessSection />, ['Prod SOP bot']],
-    ['Archive', <ArchiveRecoverySection />, ['User A Archived Template', 'User A Archived Run']],
+    ['Organization settings', <TeamSettingsSection key="team" />, ['Acme Corp', 'Disabled Member', 'pending-invitee@example.com']],
+    ['Run Keys', <AgentAccessSection key="run-keys" />, ['Prod SOP bot']],
+    ['Archive', <ArchiveRecoverySection key="archive" />, ['User A Archived Template', 'User A Archived Run']],
   ])('does not show user A\'s cached %s to user B', (_name, element, userAVisible) => {
     const { userAHtml, userBHtml } = renderAfterUserSwitch(element);
 
