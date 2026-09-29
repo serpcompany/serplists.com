@@ -74,12 +74,27 @@ export const buildTemplateEditorDetailsFormValues = (
 
 // `storedSlug` is the slug the template has now. Left unedited it is kept as is, even
 // if it predates today's slug rules, so saving never moves a template's URL by itself.
+// Typed text with nothing to keep ('Список', '!!!') stays as typed, so the field still
+// shows it and the save refuses it (findTemplateEditorSlugIssue) instead of dropping it.
 export const normalizeTemplateEditorSlugForSave = (
   seoUrl: string,
   storedSlug?: string,
 ): string => {
   const typed = seoUrl.trim();
-  return storedSlug && typed === storedSlug ? storedSlug : slugifyTemplateSlug(typed);
+  return storedSlug && typed === storedSlug ? storedSlug : slugifyTemplateSlug(typed) || typed;
+};
+
+export const TEMPLATE_SLUG_UNUSABLE_MESSAGE = "URL Slug: use Latin letters or numbers.";
+
+// Why the typed URL slug cannot be saved, or null. A blank field keeps the stored slug
+// (or builds one from the name), and an unedited stored slug is always kept.
+export const findTemplateEditorSlugIssue = (
+  seoUrl: string,
+  storedSlug?: string,
+): string | null => {
+  const typed = seoUrl.trim();
+  if (!typed || (storedSlug && typed === storedSlug)) return null;
+  return slugifyTemplateSlug(typed) ? null : TEMPLATE_SLUG_UNUSABLE_MESSAGE;
 };
 
 export const normalizeTemplateEditorDetailsForSave = (

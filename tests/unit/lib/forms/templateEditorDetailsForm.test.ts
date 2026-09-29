@@ -4,6 +4,7 @@ import { templatePayloadSchema } from "@functions/api/utils/payloads";
 import type { ChecklistTemplate } from "@/types/checklist";
 import {
   buildTemplateEditorDetailsFormValues,
+  findTemplateEditorSlugIssue,
   normalizeTemplateEditorDetailsForSave,
   templateEditorDetailsSchema,
 } from "@/lib/forms/templateEditorDetailsForm";
@@ -110,10 +111,14 @@ describe("templateEditorDetailsForm", () => {
 
   it.each([
     ["My Launch Checklist", "my-launch-checklist"],
-    ["launch_checklist", "launch-checklist"],
+    ["launch_checklist", "launchchecklist"],
     ["launch-checklist-", "launch-checklist"],
     ["  --Café Opening!!  ", "cafe-opening"],
-    ["!!!", ""],
+    ["Straße Checkliste", "strasse-checkliste"],
+    ["   ", ""],
+    // Nothing to keep: the typed text stays, and the save refuses it (below).
+    ["!!!", "!!!"],
+    [" Список ", "Список"],
   ])("turns the typed URL slug %j into %j when saving", (typed, expected) => {
     expect(
       normalizeTemplateEditorDetailsForSave({ ...validDetails, seoUrl: typed }).seoUrl,
@@ -129,6 +134,23 @@ describe("templateEditorDetailsForm", () => {
     expect(seoUrl.length).toBeLessThanOrEqual(160);
     expect(seoUrl).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     expect(templatePayloadSchema.safeParse({ slug: seoUrl }).success).toBe(true);
+  });
+
+  // A typed slug with no Latin letters or digits used to be blanked and dropped, so the
+  // save kept the old slug without saying why.
+  it("refuses a typed URL slug with nothing to keep, naming the field", () => {
+    expect(findTemplateEditorSlugIssue("Список", "launch-checklist")).toBe(
+      "URL Slug: use Latin letters or numbers.",
+    );
+    expect(findTemplateEditorSlugIssue("!!!")).toBe("URL Slug: use Latin letters or numbers.");
+  });
+
+  it.each([
+    ["a blank field", "   ", undefined],
+    ["a valid slug", "Launch Checklist", "launch-checklist"],
+    ["an unedited stored slug today's rule would not produce", "список", "список"],
+  ])("accepts %s", (_label, typed, storedSlug) => {
+    expect(findTemplateEditorSlugIssue(typed, storedSlug)).toBeNull();
   });
 
   it("keeps the stored slug untouched when the field was not edited", () => {

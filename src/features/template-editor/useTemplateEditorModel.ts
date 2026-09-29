@@ -13,6 +13,7 @@ import {
   type TemplateEditorFormValues,
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
+import { findTemplateEditorSlugIssue } from "@/lib/forms/templateEditorDetailsForm";
 import { api } from "@/lib/api";
 import { resolvePublicTemplateOwnerSlug } from "@/lib/routes";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -233,7 +234,11 @@ export const saveTemplateEditorData = async (
   const normalizedForm = normalizeTemplateEditorFormForSave(options.values, {
     storedSlug: options.storedSlug,
   });
-  const validationErrors = validateTemplateEditorFormForSave(normalizedForm);
+  const slugIssue = findTemplateEditorSlugIssue(options.values.seoUrl, options.storedSlug);
+  const validationErrors = [
+    ...validateTemplateEditorFormForSave(normalizedForm),
+    ...(slugIssue ? [{ type: "validation" as const, message: slugIssue }] : []),
+  ];
   if (validationErrors.length > 0) {
     return { success: false, errors: validationErrors };
   }

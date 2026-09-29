@@ -470,6 +470,36 @@ describe("saveTemplateEditorData validation", () => {
       expect.objectContaining({ seoUrl: "my-launch-checklist" }),
     );
   });
+
+  it.each([undefined, "launch-checklist"])(
+    "refuses a typed URL slug with no Latin letters or digits instead of dropping it (stored %j)",
+    async (storedSlug) => {
+      const saveTemplate = vi.fn();
+
+      const result = await saveTemplateEditorData(
+        { id: storedSlug && "template-1", expectedVersion: 2, storedSlug, values: { ...values, seoUrl: "Список" } },
+        { saveTemplate },
+      );
+
+      expect(saveTemplate).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        success: false,
+        errors: [{ type: "validation", message: "URL Slug: use Latin letters or numbers." }],
+      });
+    },
+  );
+
+  it("keeps saving a template whose unedited stored slug today's rule would not produce", async () => {
+    const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [] });
+
+    const result = await saveTemplateEditorData(
+      { id: "template-1", expectedVersion: 2, storedSlug: "список", values: { ...values, seoUrl: "список" } },
+      { saveTemplate },
+    );
+
+    expect(result.success).toBe(true);
+    expect(saveTemplate).toHaveBeenCalledWith(expect.objectContaining({ seoUrl: "список" }));
+  });
 });
 
 describe("stale editor protection", () => {

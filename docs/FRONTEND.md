@@ -262,7 +262,10 @@ let it ask, so the user is asked once.
 - Field limits and slug rules live in `src/lib/schemas/templateFields.ts`, shared
   with the API payload schema. The editor schema applies them with messages that
   name the field, and saves are validated before the API call. The URL slug is
-  normalized (`slugifyTemplateSlug`) when the field loses focus and on save.
+  normalized (`slugifyTemplateSlug`, the API's one slug rule from
+  `src/lib/utils/slug.ts`) when the field loses focus and on save. Typed text with no
+  Latin letters or digits (`Список`, `!!!`) stays in the field and the save is refused
+  with "URL Slug: use Latin letters or numbers."; an empty field keeps the stored slug.
 - Keep category autocomplete triggers as real text inputs and use `onKeyDown` for
   tag entry.
 - Preserve `seoTitle`, `seoDescription`, `slug`/`seoUrl`, and `rules` across save

@@ -184,9 +184,10 @@ describe('useTemplateEditorModel saved slug', () => {
     expect(result.savedValues?.seoUrl).toBe('moving-checklist-1a2b3c4d');
   });
 
-  // A cleared (or all-symbol) slug field sends no slug, and the template keeps its slug.
+  // A cleared slug field sends no slug, and the template keeps its slug. (A slug with no
+  // Latin letters or digits, such as '!!!', is refused before saving.)
   it('shows the slug the template kept when the field was cleared', () => {
-    for (const typed of ['', '!!!']) {
+    for (const typed of ['', '   ']) {
       const saved = buildTemplateEditorSavedState(
         buildTemplateEditorFormValues({ title: 'Moving', seoUrl: typed }),
         { storedSlug: 'moving-checklist' },

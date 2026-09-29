@@ -1,4 +1,7 @@
-import { normalizeTemplateEditorSlugForSave } from "@/lib/forms/templateEditorDetailsForm";
+import {
+  findTemplateEditorSlugIssue,
+  normalizeTemplateEditorSlugForSave,
+} from "@/lib/forms/templateEditorDetailsForm";
 import { buildPublicTemplatePath } from "@/lib/routes";
 import { capTemplateSlug, DEFAULT_TEMPLATE_TITLE } from "@/lib/schemas/templateFields";
 import { generateSlug } from "@/utils/urlHelpers";
@@ -46,13 +49,16 @@ export const resolveTemplateEditorOwnerSlug = (params: {
 // The slug the template will have after a save, mirroring the save path: the editor
 // sends the typed slug normalized (an unchanged stored slug is kept as is), an update
 // with no slug keeps the stored one, and a create with no slug gets one built from
-// the saved name (functions/api/handlers/templates.ts generateUniqueSlug).
+// the saved name (functions/api/handlers/templates.ts generateUniqueSlug). A typed slug
+// the save refuses (no Latin letters or digits) shows the slug the template has without it.
 export const resolveTemplatePreviewSlug = ({
   seoUrl,
   storedSlug,
   title,
 }: TemplatePreviewSlugInput): string => {
-  const sent = normalizeTemplateEditorSlugForSave(seoUrl, storedSlug);
+  const sent = findTemplateEditorSlugIssue(seoUrl, storedSlug)
+    ? ""
+    : normalizeTemplateEditorSlugForSave(seoUrl, storedSlug);
   if (sent) {
     return sent;
   }
