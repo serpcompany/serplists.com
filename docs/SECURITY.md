@@ -128,12 +128,12 @@ and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist; also the remote hosts `/api/mcp` accepts. The first valid one (`FRONTEND_URL` first) is the MCP endpoint Agent Access shows on any other host |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
-| `PERSONAL_RUN_MCP_ENABLED`, `VITE_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
+| `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
 
 Rules:
 
 - `pnpm run typecheck:env` and the runtime validate env the same way, with
-  `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `VITE_`
+  `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `NEXT_PUBLIC_`
   client variables, `emptyStringAsUndefined: true`). URL values are strictly
   validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
@@ -173,8 +173,8 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
   `null` origin is never added to the allowlist or Better Auth's trusted origins.
 - `X-Request-Id` is exposed to the client for correlation.
 
-Locally, the dev launcher keeps the frontend origin and the allowlist in sync when
-it moves ports. Do not hand-edit only one side.
+Locally, `pnpm run dev:all` passes its server's origin as `FRONTEND_URL` and adds it to
+`CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.mjs`).
 
 ## Secrets in URLs and third-party tags
 

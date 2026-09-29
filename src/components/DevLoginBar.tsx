@@ -25,15 +25,16 @@ import { usePathname } from 'next/navigation';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
-function resolveFrontendPort(): string {
-  return typeof window === 'undefined' ? '' : window.location.port;
+// The app and its API share this origin.
+function resolveOrigin(): string {
+  return typeof window === 'undefined' ? '' : window.location.origin;
 }
 
 export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
   const pathname = usePathname();
   const router = useAppRouter();
-  // Dev-only and browser-only (it shows the page's port), so it renders after hydration: the
+  // Dev-only and browser-only (it shows the page's origin), so it renders after hydration: the
   // server's HTML never differs from the first client render.
   const mounted = useIsClient();
   const [isVisible, setIsVisible] = React.useState(true);
@@ -87,7 +88,7 @@ export function DevLoginBar(): JSX.Element | null {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
     } catch (error) {
-      toast.error('Login error - is the API running on port 8788?');
+      toast.error('Login error - check the dev server log (tmp/logs/dev-all.log).');
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +166,7 @@ export function DevLoginBar(): JSX.Element | null {
       </PageContainer>
       
       <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 text-center">
-        API: http://localhost:8788 | Frontend: http://localhost:{resolveFrontendPort()} | 
+        App and API: {resolveOrigin()} | 
         <span className="ml-1">{getDevTestUserPasswordHelp()}</span>
       </div>
     </div>

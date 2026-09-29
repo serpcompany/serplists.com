@@ -1,8 +1,9 @@
-import { initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
+import { getCloudflareContext, initOpenNextCloudflareForDev } from '@opennextjs/cloudflare';
 import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 import { assertProductionApiUrl } from './scripts/lib/buildEnv';
+import { applyDevBindings } from './scripts/lib/dev-bindings.mjs';
 import {
   CONTENT_SECURITY_POLICY,
   LOCAL_CONTENT_SECURITY_POLICY,
@@ -73,5 +74,7 @@ export default function config(phase: string): NextConfig {
   return nextConfig;
 }
 
-// Lets `next dev` read the Cloudflare bindings (D1, R2) through getCloudflareContext().
-initOpenNextCloudflareForDev();
+// Lets `next dev` read the Cloudflare bindings (D1, R2, and the vars in wrangler.toml and
+// .dev.vars) through getCloudflareContext(), with the vars `pnpm run dev:all` sets for the port
+// it picked (scripts/lib/dev-bindings.mjs).
+void initOpenNextCloudflareForDev().then(() => applyDevBindings(process.env, getCloudflareContext));

@@ -7,18 +7,21 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings.mjs";
 import { readProcessInfo } from "./lib/process-info.mjs";
-import { buildShellCommandLine, buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
+import { buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
 
-export const DEFAULT_FRONTEND_PORT = 8080;
-export const DEFAULT_API_PORT = 8788;
+// `pnpm run dev:all` runs one Next.js dev server (pages and the API on one origin). It
+// prefers Next.js's own default port and moves up when another checkout or program holds it.
+export const DEFAULT_DEV_PORT = 3000;
 export const PORT_SEARCH_LIMIT = 25;
 export const DEV_SESSION_PATH = "tmp/dev-session.json";
 // The recorded start time and the one the OS reports differ by clock granularity
 // (ps prints whole seconds) and Node's startup time.
 export const START_TIME_TOLERANCE_MS = 5_000;
+// Used only when neither .dev.vars nor the shell has an auth secret.
+export const DEV_FALLBACK_AUTH_SECRET = "local-dev-better-auth-secret-32-chars";
 const DEV_LAUNCHER_SCRIPT = /dev-auto\.mjs/;
-const ROLES = ["all", "frontend", "api"];
 
 function normalizePid(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
@@ -28,26 +31,17 @@ function normalizeStartedAt(value) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+// The launcher pid is stored with its process start time, so a pid the OS has since given
+// to another process is never mistaken for the launcher.
 function normalizeDevSession(value) {
-  if (
-    !value ||
-    !Number.isInteger(value.frontendPort) ||
-    !Number.isInteger(value.apiPort)
-  ) {
+  if (!value || !Number.isInteger(value.port) || value.port <= 0) {
     return null;
   }
 
-  // Each launcher pid is stored with its process start time, so a pid the OS has
-  // since given to another process is never mistaken for the launcher.
   return {
-    frontendPort: value.frontendPort,
-    apiPort: value.apiPort,
-    frontendPid: normalizePid(value.frontendPid),
-    frontendStartedAt: normalizeStartedAt(value.frontendStartedAt),
-    apiPid: normalizePid(value.apiPid),
-    apiStartedAt: normalizeStartedAt(value.apiStartedAt),
-    allPid: normalizePid(value.allPid),
-    allStartedAt: normalizeStartedAt(value.allStartedAt),
+    port: value.port,
+    pid: normalizePid(value.pid),
+    startedAt: normalizeStartedAt(value.startedAt),
   };
 }
 
@@ -74,7 +68,7 @@ export function parseEnvFile(filePath) {
   return entries;
 }
 
-export function buildCorsAllowedOrigins(existingValue, frontendUrl) {
+export function buildCorsAllowedOrigins(existingValue, origin) {
   const origins = new Set();
 
   for (const rawValue of String(existingValue ?? "").split(",")) {
@@ -83,108 +77,52 @@ export function buildCorsAllowedOrigins(existingValue, frontendUrl) {
     origins.add(trimmed);
   }
 
-  origins.add(frontendUrl);
+  origins.add(origin);
 
   return Array.from(origins).join(",");
 }
 
-export function buildDevAutoConfig({
-  frontendPort,
-  apiPort,
-  baseEnv = {},
-}) {
-  const frontendUrl = `http://localhost:${frontendPort}`;
-  const apiUrl = `http://localhost:${apiPort}/api`;
-  const corsAllowedOrigins = buildCorsAllowedOrigins(
-    baseEnv.CORS_ALLOWED_ORIGINS,
-    frontendUrl,
-  );
-  const betterAuthSecret =
-    baseEnv.BETTER_AUTH_SECRET ||
-    baseEnv.JWT_SECRET ||
-    "local-dev-better-auth-secret-32-chars";
-
+/**
+ * The dev server on `port`: its origin, and the Worker vars it needs that .dev.vars cannot
+ * know (the port is picked at start). The API builds its own links (Stripe returns, invites)
+ * from FRONTEND_URL, so it names this server; CORS_ALLOWED_ORIGINS keeps the configured
+ * origins and adds it. `baseEnv` is .dev.vars with the shell's variables over it.
+ */
+export function buildDevServerConfig({ port, baseEnv = {} }) {
+  const origin = `http://localhost:${port}`;
   return {
-    frontendPort,
-    apiPort,
-    frontendUrl,
-    apiUrl,
-    betterAuthSecret,
-    corsAllowedOrigins,
-    envOverrides: {
-      BETTER_AUTH_SECRET: betterAuthSecret,
-      FRONTEND_URL: frontendUrl,
-      CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
-      PORT: String(frontendPort),
-      VITE_API_URL: apiUrl,
+    port,
+    origin,
+    bindings: {
+      FRONTEND_URL: origin,
+      CORS_ALLOWED_ORIGINS: buildCorsAllowedOrigins(baseEnv.CORS_ALLOWED_ORIGINS, origin),
+      BETTER_AUTH_SECRET: baseEnv.BETTER_AUTH_SECRET || baseEnv.JWT_SECRET || DEV_FALLBACK_AUTH_SECRET,
     },
   };
 }
 
 /**
- * The process dev-auto starts for a mode. Tools run as `node <bin script>` (no
- * npx or pnpm shims, no shell), so Windows needs no .cmd resolution and values
- * such as the auth secret reach Wrangler literally. dev:all hands concurrently
- * one command line per server, quoted for the shell concurrently uses.
+ * How dev-auto starts the server: `next dev` run with the current Node and Next.js's bin
+ * script (no npx or pnpm shims, no shell), with .dev.vars and the shell's variables in its
+ * environment (Next.js inlines NEXT_PUBLIC_* values from there) and the Worker vars in
+ * DEV_BINDINGS_VARIABLE (scripts/lib/dev-bindings.mjs).
  */
-export function buildDevCommands({
-  mode,
-  config,
-  hasDevVars = false,
-  platform = process.platform,
-  execPath = process.execPath,
-}) {
-  const vite = buildToolInvocation(
-    "vite",
-    ["--host", "localhost", "--port", String(config.frontendPort), "--strictPort"],
-    { execPath },
-  );
-  const wrangler = buildToolInvocation(
-    "wrangler",
-    [
-      "pages",
-      "dev",
-      "./dist",
-      "--local",
-      "--port",
-      String(config.apiPort),
-      ...(hasDevVars ? ["--env-file", ".dev.vars"] : []),
-      "--show-interactive-dev-session=false",
-      "-b",
-      `FRONTEND_URL=${config.frontendUrl}`,
-      "-b",
-      `CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`,
-      "-b",
-      `BETTER_AUTH_SECRET=${config.betterAuthSecret}`,
-    ],
-    { execPath },
-  );
-
-  if (mode === "frontend") return { ...vite, label: "Vite" };
-  if (mode === "api") return { ...wrangler, label: "Wrangler" };
-
+export function buildDevServerCommand({ config, baseEnv = {}, execPath = process.execPath }) {
   return {
-    ...buildToolInvocation(
-      "concurrently",
-      [
-        "--kill-others-on-fail",
-        "--names",
-        "web,api",
-        "--prefix-colors",
-        "cyan,magenta",
-        buildShellCommandLine(vite, platform),
-        buildShellCommandLine(wrangler, platform),
-      ],
-      { execPath },
-    ),
-    label: "concurrently",
+    ...buildToolInvocation("next", ["dev", "--port", String(config.port)], { execPath }),
+    label: "Next.js",
+    env: {
+      ...baseEnv,
+      PORT: String(config.port),
+      [DEV_BINDINGS_VARIABLE]: JSON.stringify(config.bindings),
+    },
   };
 }
 
-// A dev server listens on one address: Vite's `localhost` is ::1 or 127.0.0.1 depending on
-// the resolver, Wrangler binds 127.0.0.1 on Windows and `localhost` elsewhere, and other
-// tools take a wildcard. On Windows a bind to one of these succeeds while another process
-// holds the port on a different one, so a port is free only if every one of them binds.
+// A dev server listens on one address: `localhost` is ::1 or 127.0.0.1 depending on the
+// resolver, Wrangler binds 127.0.0.1 on Windows and `localhost` elsewhere, and other tools
+// (next dev) take a wildcard. On Windows a bind to one of these succeeds while another
+// process holds the port on a different one, so a port is free only if every one of them binds.
 const PORT_PROBE_BINDS = [
   { host: "127.0.0.1" },
   { host: "::1" },
@@ -225,8 +163,8 @@ function acceptsConnection(port, host) {
 /**
  * True when no server holds `port` on any address a dev server may use: nothing accepts a
  * connection on either loopback address, and the port binds on 127.0.0.1, ::1, 0.0.0.0 and
- * the dual-stack wildcard in turn. The dev launchers, the smoke runner and the Stripe
- * listener's predicted target all pick ports with it (findOpenPortPair).
+ * the dual-stack wildcard in turn. The dev launcher, the smoke runner and the Stripe
+ * listener's predicted target all pick ports with it (findOpenPort).
  */
 export async function isPortAvailable(port) {
   const accepted = await Promise.all(PORT_PROBE_CONNECT_HOSTS.map((host) => acceptsConnection(port, host)));
@@ -235,6 +173,20 @@ export async function isPortAvailable(port) {
     if (!(await canBind(port, listenOptions))) return false;
   }
   return true;
+}
+
+/** The first free port from `preferredPort` up, trying `searchLimit` more after it. */
+export async function findOpenPort({
+  preferredPort = DEFAULT_DEV_PORT,
+  searchLimit = PORT_SEARCH_LIMIT,
+  portAvailabilityChecker = isPortAvailable,
+} = {}) {
+  for (let offset = 0; offset <= searchLimit; offset += 1) {
+    const port = preferredPort + offset;
+    if (await portAvailabilityChecker(port)) return port;
+  }
+
+  throw new Error(`Unable to find an open port from ${preferredPort} to ${preferredPort + searchLimit}.`);
 }
 
 // EPERM means the pid belongs to another user or an elevated process. The dev
@@ -271,31 +223,6 @@ export async function isOwnedDevProcess(pid, startedAt, { isAlive = isProcessAli
   );
 }
 
-export async function findOpenPortPair({
-  preferredFrontendPort = DEFAULT_FRONTEND_PORT,
-  preferredApiPort = DEFAULT_API_PORT,
-  searchLimit = PORT_SEARCH_LIMIT,
-  portAvailabilityChecker = isPortAvailable,
-} = {}) {
-  for (let offset = 0; offset <= searchLimit; offset += 1) {
-    const frontendPort = preferredFrontendPort + offset;
-    const apiPort = preferredApiPort + offset;
-
-    const [frontendAvailable, apiAvailable] = await Promise.all([
-      portAvailabilityChecker(frontendPort),
-      portAvailabilityChecker(apiPort),
-    ]);
-
-    if (frontendAvailable && apiAvailable) {
-      return { frontendPort, apiPort };
-    }
-  }
-
-  throw new Error(
-    `Unable to find an open frontend/API port pair starting at ${preferredFrontendPort}/${preferredApiPort}.`,
-  );
-}
-
 export function readDevSession(sessionPath = DEV_SESSION_PATH) {
   if (!existsSync(sessionPath)) {
     return null;
@@ -325,198 +252,44 @@ export function removeDevSession(sessionPath = DEV_SESSION_PATH) {
   }
 }
 
-const ROLE_COMMANDS = { all: "pnpm run dev:all", frontend: "pnpm run dev", api: "pnpm run dev:api" };
-
-function describeRunningLauncher({ role, pid }, { frontendPort, apiPort }) {
-  return `\`${ROLE_COMMANDS[role]}\` (pid ${pid}) is already running on ${frontendPort}/${apiPort}`;
-}
-
-/** Why dev:all refused: a single-role launcher owns the session pair. */
-export function describeDevSessionConflict({ frontendPort, apiPort, conflict }) {
-  const missing = conflict.role === "frontend" ? { role: "api", name: "API" } : { role: "frontend", name: "frontend" };
-  return (
-    `${describeRunningLauncher(conflict, { frontendPort, apiPort })}. Run \`${ROLE_COMMANDS[missing.role]}\` ` +
-    `to add the ${missing.name} to that pair, or \`pnpm run dev:stop\` first and then \`pnpm run dev:all\`.`
-  );
-}
-
 /**
- * The port pair a launcher should use. It joins the session's pair while a
- * launcher recorded there is still running. dev:all instead returns a
- * `conflict` when only `dev` or only `dev:api` is running: it must not start a
- * second pair and so drop that launcher from the session.
+ * Where dev:all should run: on the recorded session's port while the launcher that
+ * recorded it still runs (`running`, so dev:all does not start a second server), otherwise
+ * on the first free port from `preferredPort`.
  */
-export async function resolvePortPairForMode({
-  mode,
+export async function resolveDevServerPort({
   existingSession = null,
-  preferredFrontendPort = DEFAULT_FRONTEND_PORT,
-  preferredApiPort = DEFAULT_API_PORT,
+  preferredPort = DEFAULT_DEV_PORT,
   searchLimit = PORT_SEARCH_LIMIT,
   portAvailabilityChecker = isPortAvailable,
   processLivenessChecker = isOwnedDevProcess,
 } = {}) {
   const session = normalizeDevSession(existingSession);
-
-  if (session) {
-    const [allActive, frontendActive, apiActive] = await Promise.all(
-      ROLES.map((role) => processLivenessChecker(session[`${role}Pid`], session[`${role}StartedAt`])),
-    );
-    const sessionPair = { frontendPort: session.frontendPort, apiPort: session.apiPort, source: "session" };
-
-    if (mode === "all") {
-      // `dev` plus `dev:api` on one pair is already the whole stack.
-      if (allActive || (frontendActive && apiActive)) {
-        return { ...sessionPair, roleAlreadyRunning: true };
-      }
-      // A new pair would drop the running single-role launcher from the session,
-      // and dev:stop could no longer stop it. dev-auto refuses instead.
-      if (frontendActive || apiActive) {
-        const role = frontendActive ? "frontend" : "api";
-        return { ...sessionPair, roleAlreadyRunning: false, conflict: { role, pid: session[`${role}Pid`] } };
-      }
-    } else if (allActive || frontendActive || apiActive) {
-      // A single-role launcher joins any live launcher's pair.
-      return { ...sessionPair, roleAlreadyRunning: allActive || (mode === "frontend" ? frontendActive : apiActive) };
-    }
+  if (session && (await processLivenessChecker(session.pid, session.startedAt))) {
+    return { port: session.port, running: true, pid: session.pid };
   }
-
-  const openPair = await findOpenPortPair({
-    preferredFrontendPort,
-    preferredApiPort,
-    searchLimit,
-    portAvailabilityChecker,
-  });
 
   return {
-    ...openPair,
-    source: "open-pair",
-    roleAlreadyRunning: false,
+    port: await findOpenPort({ preferredPort, searchLimit, portAvailabilityChecker }),
+    running: false,
   };
-}
-
-export function buildDevSession({
-  existingSession = null,
-  role,
-  pid,
-  startedAt = null,
-  config,
-}) {
-  const previousSession = normalizeDevSession(existingSession);
-  const reusingExistingPair =
-    previousSession != null &&
-    previousSession.frontendPort === config.frontendPort &&
-    previousSession.apiPort === config.apiPort;
-  const nextSession = {
-    frontendPort: config.frontendPort,
-    apiPort: config.apiPort,
-  };
-
-  // Companion launchers on the same pair keep their pid and start time; dev:all
-  // replaces the single-role launchers.
-  for (const sessionRole of ROLES) {
-    const keep = reusingExistingPair && (role !== "all" || sessionRole === "all");
-    nextSession[`${sessionRole}Pid`] = keep ? previousSession[`${sessionRole}Pid`] : null;
-    nextSession[`${sessionRole}StartedAt`] = keep ? previousSession[`${sessionRole}StartedAt`] : null;
-  }
-
-  if (ROLES.includes(role)) {
-    nextSession[`${role}Pid`] = pid;
-    nextSession[`${role}StartedAt`] = normalizeStartedAt(startedAt);
-  }
-
-  return normalizeDevSession(nextSession);
-}
-
-export function clearDevSessionRole({
-  existingSession,
-  role,
-  pid,
-}) {
-  const session = normalizeDevSession(existingSession);
-  if (!session) {
-    return null;
-  }
-
-  const nextSession = { ...session };
-
-  if (ROLES.includes(role) && (pid == null || nextSession[`${role}Pid`] === pid)) {
-    nextSession[`${role}Pid`] = null;
-    nextSession[`${role}StartedAt`] = null;
-  }
-
-  if (
-    nextSession.frontendPid == null &&
-    nextSession.apiPid == null &&
-    nextSession.allPid == null
-  ) {
-    return null;
-  }
-
-  return nextSession;
 }
 
 /**
- * Records this launcher in the session file. It refuses (throws) rather than
- * write a session that forgets a launcher that is still running, because
- * dev:stop stops only the launchers the file lists.
+ * Removes the session file when it still records this launcher (`pid`). A session another
+ * launcher wrote since is left alone.
  */
-export async function storeDevSession({
-  role,
-  pid,
-  startedAt,
-  config,
-  sessionPath = DEV_SESSION_PATH,
-  processLivenessChecker = isOwnedDevProcess,
-}) {
-  const existingSession = readDevSession(sessionPath);
-  const nextSession = buildDevSession({
-    existingSession,
-    role,
-    pid,
-    startedAt,
-    config,
-  });
-
-  for (const droppedRole of ROLES) {
-    const droppedPid = existingSession?.[`${droppedRole}Pid`] ?? null;
-    if (droppedPid == null || nextSession[`${droppedRole}Pid`] === droppedPid) continue;
-
-    if (await processLivenessChecker(droppedPid, existingSession[`${droppedRole}StartedAt`])) {
-      throw new Error(
-        `${describeRunningLauncher({ role: droppedRole, pid: droppedPid }, existingSession)} and is recorded in ` +
-          `${sessionPath}. Run \`pnpm run dev:stop\` before starting another port pair.`,
-      );
-    }
-  }
-
-  writeDevSession(nextSession, sessionPath);
-  return nextSession;
-}
-
-export function releaseDevSession({
-  role,
-  pid,
-  sessionPath = DEV_SESSION_PATH,
-}) {
-  const nextSession = clearDevSessionRole({
-    existingSession: readDevSession(sessionPath),
-    role,
-    pid,
-  });
-
-  if (nextSession) {
-    writeDevSession(nextSession, sessionPath);
-    return nextSession;
-  }
-
+export function releaseDevSession({ pid, sessionPath = DEV_SESSION_PATH }) {
+  const session = readDevSession(sessionPath);
+  if (session && session.pid !== pid) return session;
   removeDevSession(sessionPath);
   return null;
 }
 
 /**
- * Stops the launchers a session recorded (dev:stop). Only a pid that still
- * belongs to its dev launcher is killed; a stale or reused pid is skipped. A
- * failed kill does not stop the others, and the session file is always removed.
+ * Stops the launcher a session recorded (dev:stop), with everything it started. Only a pid
+ * that still belongs to its dev launcher is killed; a stale or reused pid is skipped. The
+ * session file is always removed.
  */
 export async function stopDevSession({
   session,
@@ -527,20 +300,17 @@ export async function stopDevSession({
   const result = { stopped: [], skipped: [], failed: [] };
 
   try {
-    for (const role of ROLES) {
-      const pid = session[`${role}Pid`];
-      if (pid == null) continue;
-
-      if (!(await isOwned(pid, session[`${role}StartedAt`]))) {
+    const { pid, startedAt } = session;
+    if (pid != null) {
+      if (!(await isOwned(pid, startedAt))) {
         result.skipped.push(pid);
-        continue;
-      }
-
-      try {
-        killTree(pid);
-        result.stopped.push(pid);
-      } catch (error) {
-        result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+      } else {
+        try {
+          killTree(pid);
+          result.stopped.push(pid);
+        } catch (error) {
+          result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+        }
       }
     }
   } finally {

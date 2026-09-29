@@ -2,20 +2,22 @@
 //   pnpm run d1:profile                # default volume (about 150k rows)
 //   pnpm run d1:profile -- --scale 3   # 3x the volume
 //   pnpm run d1:profile -- --reuse     # restore the last dataset instead of rebuilding
-// Builds an isolated local D1 in .wrangler/d1-profile-state, runs the API with
-// D1_PROFILE=true, replays a scripted workload, and writes tmp/d1-profile/report.md.
+// Builds the app with OpenNext (the build bundles the API, so it always runs: an older build
+// would measure older queries), builds an isolated local D1 in .wrangler/d1-profile-state,
+// serves the build with `opennextjs-cloudflare preview` and D1_PROFILE=true, replays a
+// scripted workload, and writes tmp/d1-profile/report.md.
 // Local D1 reports rows_read/rows_written with production semantics (rows scanned).
 // After a build the dataset is copied to .wrangler/d1-profile-pristine; --reuse copies
 // it back, so every run replays the workload's writes on the same data. A request that
 // returns anything but its expected status is marked INVALID and fails the command.
 import type { ChildProcess } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { getPlatformProxy } from "wrangler";
 import { createServer } from "node:net";
-import { execPnpm, execTool, killProcessTree, spawnTool, type ToolName } from "./lib/run-tool.mjs";
+import { execTool, killProcessTree, spawnTool, type ToolName } from "./lib/run-tool.mjs";
 import {
   buildUpdateRunBody,
   buildUpdateTemplateBody,
@@ -80,12 +82,15 @@ function datasetKey() {
 }
 
 // ---------------------------------------------------------------- server + capture
-async function startServer(apiPort: number, origin: string, onRecord: (record: QueryRecord) => void) {
-  const child = spawnTool("wrangler", [
-    "pages", "dev", "./dist", "--local", "--port", String(apiPort), "--persist-to", persistPath,
+// `opennextjs-cloudflare preview` hands these to `wrangler dev` through a shell, so every
+// value here is plain (no spaces or shell characters). --var overrides .dev.vars.
+async function startServer(port: number, onRecord: (record: QueryRecord) => void) {
+  const origin = `http://localhost:${port}`;
+  const child = spawnTool("opennextjs-cloudflare", [
+    "preview", "--port", String(port), "--persist-to", persistPath,
     "--show-interactive-dev-session=false",
-    "-b", "D1_PROFILE=true", "-b", `FRONTEND_URL=${origin}`, "-b", `CORS_ALLOWED_ORIGINS=${origin}`,
-    "-b", "BETTER_AUTH_SECRET=d1-profile-secret-at-least-32-characters",
+    "--var", "D1_PROFILE:true", "--var", `FRONTEND_URL:${origin}`, "--var", `CORS_ALLOWED_ORIGINS:${origin}`,
+    "--var", "BETTER_AUTH_SECRET:d1-profile-secret-at-least-32-characters",
   ], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
   let buffer = "";
   const serverLog = createWriteStream(path.join(outDir, "server.log"));
@@ -107,10 +112,9 @@ async function startServer(apiPort: number, origin: string, onRecord: (record: Q
   };
   child.stdout?.on("data", consume);
   child.stderr?.on("data", consume);
-  const base = `http://localhost:${apiPort}`;
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
-      if ((await fetch(`${base}/api/health`)).ok) return { child, base };
+      if ((await fetch(`${origin}/api/health`)).ok) return { child, base: origin };
     } catch {
       // Not up yet.
     }
@@ -167,9 +171,7 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
 }
 
 async function main() {
-  if (!existsSync(path.join(repoRoot, "dist/index.html"))) {
-    execPnpm(["run", "build:dev"], { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
-  }
+  run("opennextjs-cloudflare", ["build"]);
   mkdirSync(outDir, { recursive: true });
   const key = datasetKey();
   const statePath = path.join(repoRoot, persistPath);
@@ -183,10 +185,10 @@ async function main() {
     saveSnapshot({ statePath, snapshotPath, meta: { scale, datasetKey: key } });
   }
 
-  const apiPort = await freePort();
-  const origin = "http://localhost:4290";
   let current: QueryRecord[] = [];
-  const { child, base } = await startServer(apiPort, origin, (record) => current.push(record));
+  const { child, base } = await startServer(await freePort(), (record) => current.push(record));
+  // Requests come from the app's own origin, as the pages' do.
+  const origin = base;
   const results: { scenario: Scenario; status: number; responseBody?: string; queries: QueryRecord[] }[] = [];
   const nonce = Date.now().toString(36);
   try {

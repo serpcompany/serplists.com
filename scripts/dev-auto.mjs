@@ -1,82 +1,31 @@
-import { createWriteStream, existsSync, mkdirSync } from "node:fs";
+// `pnpm run dev:all`: the Next.js dev server (pages and the API on one origin) on a free
+// port, recorded in tmp/dev-session.json so `pnpm run dev:stop`, ui:snap and the Stripe
+// listener find it. Output is mirrored to tmp/logs/dev-all.log.
+import { createWriteStream, mkdirSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import {
-  buildDevAutoConfig,
-  buildDevCommands,
-  DEFAULT_API_PORT,
-  DEFAULT_FRONTEND_PORT,
+  buildDevServerCommand,
+  buildDevServerConfig,
+  DEFAULT_DEV_PORT,
   DEV_SESSION_PATH,
-  describeDevSessionConflict,
   parseEnvFile,
   readDevSession,
   releaseDevSession,
-  resolvePortPairForMode,
-  storeDevSession,
+  resolveDevServerPort,
+  writeDevSession,
 } from "./dev-auto-lib.mjs";
 import { currentProcessStartedAt } from "./lib/process-info.mjs";
 import { describeSpawnError, killProcessTree } from "./lib/run-tool.mjs";
 
-const DIST_INDEX_PATH = "dist/index.html";
 const LOG_DIR = "tmp/logs";
+const LOG_NAME = "dev-all.log";
 
-function getMode() {
-  const rawMode = process.argv[2] ?? "all";
-
-  if (rawMode === "frontend" || rawMode === "api" || rawMode === "all") {
-    return rawMode;
-  }
-
-  throw new Error(`Unsupported dev-auto mode "${rawMode}".`);
-}
-
-function printStartupSummary({
-  mode,
-  config,
-  source,
-  roleAlreadyRunning,
-}) {
-  const scriptName =
-    mode === "all" ? "dev:all/dev:auto" : mode === "frontend" ? "dev" : "dev:api";
-
-  if (source === "session") {
-    console.log(
-      `${scriptName}: reusing active session ports ${config.frontendPort}/${config.apiPort} from ${DEV_SESSION_PATH}.`,
-    );
-  } else if (
-    config.frontendPort === DEFAULT_FRONTEND_PORT &&
-    config.apiPort === DEFAULT_API_PORT
-  ) {
-    console.log(
-      `${scriptName}: using default ports ${config.frontendPort}/${config.apiPort}.`,
-    );
-  } else {
-    console.log(
-      `${scriptName}: default ports ${DEFAULT_FRONTEND_PORT}/${DEFAULT_API_PORT} are busy, using ${config.frontendPort}/${config.apiPort}.`,
-    );
-  }
-
-  console.log(`Frontend: ${config.frontendUrl}`);
-  console.log(`API: ${config.apiUrl}`);
-
-  if (roleAlreadyRunning) {
-    console.log(
-      `${scriptName}: requested service is already running on that pair, so this command is reusing the live session instead of starting a duplicate process.`,
-    );
-  }
-
-  if ((mode === "api" || mode === "all") && !existsSync(DIST_INDEX_PATH)) {
-    console.warn(
-      `${scriptName}: ${DIST_INDEX_PATH} is missing. The API process uses ./dist just like the normal Wrangler dev flow. Run "pnpm run build:dev" if it fails to start.`,
-    );
-  }
-}
-
-// Mirror dev server output into tmp/logs/dev-<mode>.log (ANSI stripped) so agents and
-// humans can search it after the fact, e.g. grep '"level":"error"' tmp/logs/dev-all.log
-function teeToLogFile(child, mode) {
+// Mirror dev server output into tmp/logs/dev-all.log (ANSI stripped) so agents and humans
+// can search it after the fact, e.g. grep '"level":"error"' tmp/logs/dev-all.log
+function teeToLogFile(child) {
   mkdirSync(LOG_DIR, { recursive: true });
-  const logPath = path.join(LOG_DIR, `dev-${mode}.log`);
+  const logPath = path.join(LOG_DIR, LOG_NAME);
   const logFile = createWriteStream(logPath, { flags: "w" });
   const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
   const forward = (source, target) => {
@@ -91,70 +40,39 @@ function teeToLogFile(child, mode) {
 }
 
 async function main() {
-  const mode = getMode();
-  const fileEnv = parseEnvFile(".dev.vars");
-  const baseEnv = { ...fileEnv, ...process.env };
+  const baseEnv = { ...parseEnvFile(".dev.vars"), ...process.env };
+  const selected = await resolveDevServerPort({ existingSession: readDevSession() });
 
-  const selectedPorts = await resolvePortPairForMode({
-    mode,
-    existingSession: readDevSession(),
-  });
-
-  // Exits before touching the session file, so the running launcher stays in it
-  // and dev:stop can still stop it.
-  if (selectedPorts.conflict) {
-    console.error(`dev:all: ${describeDevSessionConflict(selectedPorts)}`);
-    process.exit(1);
-  }
-
-  const config = buildDevAutoConfig({
-    frontendPort: selectedPorts.frontendPort,
-    apiPort: selectedPorts.apiPort,
-    baseEnv,
-  });
-
-  printStartupSummary({
-    mode,
-    config,
-    source: selectedPorts.source,
-    roleAlreadyRunning: selectedPorts.roleAlreadyRunning,
-  });
-
-  if (selectedPorts.roleAlreadyRunning) {
+  if (selected.running) {
+    console.log(
+      `dev:all is already running at http://localhost:${selected.port} (pid ${selected.pid}, recorded in ${DEV_SESSION_PATH}). ` +
+        "Stop it with `pnpm run dev:stop`.",
+    );
     process.exit(0);
   }
 
-  // The start time lets dev:stop and later launches tell this process from an
-  // unrelated one that reuses its pid after it exits.
-  await storeDevSession({
-    role: mode,
-    pid: process.pid,
-    startedAt: currentProcessStartedAt(),
-    config,
-  });
+  const config = buildDevServerConfig({ port: selected.port, baseEnv });
+  if (config.port !== DEFAULT_DEV_PORT) {
+    console.log(`dev:all: port ${DEFAULT_DEV_PORT} is busy, using ${config.port}.`);
+  }
+  console.log(`App and API: ${config.origin} (API at ${config.origin}/api)`);
 
-  const childEnv = {
-    ...baseEnv,
-    ...config.envOverrides,
-  };
+  // The start time lets dev:stop and later launches tell this process from an unrelated one
+  // that reuses its pid after it exits.
+  writeDevSession({ port: config.port, pid: process.pid, startedAt: currentProcessStartedAt() });
 
-  const command = buildDevCommands({ mode, config, hasDevVars: existsSync(".dev.vars") });
+  const command = buildDevServerCommand({ config, baseEnv });
   const child = spawn(command.command, command.args, {
     ...command.options,
     cwd: process.cwd(),
-    env: { ...childEnv, FORCE_COLOR: childEnv.FORCE_COLOR ?? "1" },
+    env: { ...command.env, FORCE_COLOR: command.env.FORCE_COLOR ?? "1" },
     stdio: ["inherit", "pipe", "pipe"],
   });
-  teeToLogFile(child, mode);
+  teeToLogFile(child);
 
-  const cleanupSession = () => {
-    releaseDevSession({
-      role: mode,
-      pid: process.pid,
-    });
-  };
+  const cleanupSession = () => releaseDevSession({ pid: process.pid });
 
-  // On Windows this ends the whole tree, so Vite and workerd do not keep the ports.
+  // On Windows this ends the whole tree, so Next.js and workerd do not keep the port.
   const shutdown = (signal) => killProcessTree(child, signal);
 
   process.on("SIGINT", () => shutdown("SIGINT"));
@@ -181,10 +99,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  releaseDevSession({
-    role: getMode(),
-    pid: process.pid,
-  });
+  releaseDevSession({ pid: process.pid });
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

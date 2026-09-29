@@ -61,7 +61,7 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   it('leaves a process alone when the recorded pid now belongs to another program', async () => {
     const other = await startIdleProcess('editor-helper.cjs');
 
-    const result = runDevStop({ frontendPort: 8081, apiPort: 8789, allPid: other.pid, allStartedAt: other.startedAt });
+    const result = runDevStop({ port: 3001, pid: other.pid, startedAt: other.startedAt });
 
     expect(result.status).toBe(0);
     expect(isRunning(other.pid)).toBe(true);
@@ -72,7 +72,7 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   it('leaves a process alone when the session has no start times', async () => {
     const other = await startIdleProcess('browser-helper.cjs');
 
-    const result = runDevStop({ frontendPort: 8081, apiPort: 8789, allPid: other.pid });
+    const result = runDevStop({ port: 3001, pid: other.pid });
 
     expect(result.status).toBe(0);
     expect(isRunning(other.pid)).toBe(true);
@@ -82,7 +82,7 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   it('stops the dev launcher the session recorded', async () => {
     const launcher = await startIdleProcess('dev-auto.mjs');
 
-    const result = runDevStop({ frontendPort: 8081, apiPort: 8789, allPid: launcher.pid, allStartedAt: launcher.startedAt });
+    const result = runDevStop({ port: 3001, pid: launcher.pid, startedAt: launcher.startedAt });
 
     expect(result.status).toBe(0);
     expect(result.output).toContain(`Stopped dev session (pid ${launcher.pid})`);

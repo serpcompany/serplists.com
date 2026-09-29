@@ -21,7 +21,7 @@ describe('renderDevVars', () => {
     expect(lines).toContain(`BETTER_AUTH_SECRET=${SECRET}`);
     expect(lines).toContain('# RESEND_API_KEY=re_xxx');
     expect(lines).toContain('# STRIPE_SECRET_KEY=sk_test_xxx');
-    expect(lines).toContain('FRONTEND_URL=http://localhost:8080');
+    expect(lines).toContain('FRONTEND_URL=http://localhost:3000');
   });
 
   it('gives a CRLF checkout of .dev.vars.example the same result', () => {

@@ -5,9 +5,10 @@
 // for .jpg/.jpeg) with the accessibility tree beside it as <name>.aria.yml, and prints
 // the tree (readable text), console errors, and failed requests. Start the app first
 // with `pnpm run dev:all`.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
+import { DEFAULT_DEV_PORT, readDevSession } from "./dev-auto-lib.mjs";
 import { parseUiSnapArgs, UI_SNAP_USAGE } from "./ui-snapshot-lib.mjs";
 
 let options;
@@ -19,14 +20,11 @@ try {
 }
 const { routePath, outPath, ariaPath } = options;
 
-let ports = { frontendPort: 8080, apiPort: 8788 };
-try {
-  ports = { ...ports, ...JSON.parse(readFileSync("tmp/dev-session.json", "utf8")) };
-} catch {
-  // No dev session file: fall back to the default port pair.
-}
-const baseUrl = options.base ?? `http://localhost:${ports.frontendPort}`;
-const apiUrl = options.api ?? `http://localhost:${ports.apiPort}/api`;
+// The app dev:all runs (tmp/dev-session.json), else Next.js's default port. The API is on
+// the same origin.
+const port = readDevSession()?.port ?? DEFAULT_DEV_PORT;
+const baseUrl = options.base ?? `http://localhost:${port}`;
+const apiUrl = options.api ?? new URL("/api", baseUrl).toString();
 
 const browser = await chromium.launch();
 try {

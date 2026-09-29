@@ -1,4 +1,4 @@
-// Launch repo tools (wrangler, vite, tsx, ...) and pnpm from Node scripts the same
+// Launch repo tools (wrangler, next, tsx, ...) and pnpm from Node scripts the same
 // way on every OS. Scripts must not spawn "npx" or "pnpm" by name: on Windows they
 // exist only as .cmd shims, so a spawn without a shell fails with ENOENT, and
 // spawning a .cmd file without a shell fails with EINVAL (Node 18.20.2+).
@@ -16,11 +16,11 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 // Tool name -> the package that ships its bin. Add an entry to launch a new tool.
 export const TOOL_PACKAGES = {
-  concurrently: "concurrently",
   "drizzle-kit": "drizzle-kit",
+  next: "next",
+  "opennextjs-cloudflare": "@opennextjs/cloudflare",
   playwright: "@playwright/test",
   tsx: "tsx",
-  vite: "vite",
   wrangler: "wrangler",
 };
 
@@ -86,37 +86,6 @@ export function buildPnpmInvocation(
   return { command: "pnpm", args, options: {} };
 }
 
-// cmd.exe metacharacters, escaped with ^ (the approach cross-spawn uses, from https://qntm.org/cmd).
-const CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
-
-function quoteCmdArg(arg) {
-  const quoted = `"${String(arg)
-    // Backslashes before a quote are doubled, and the quote is escaped for the C runtime.
-    .replace(/(\\*)"/g, '$1$1\\"')
-    // Trailing backslashes are doubled so they do not escape the closing quote.
-    .replace(/(\\*)$/, "$1$1")}"`;
-  return quoted.replace(CMD_META_CHARS, "^$1");
-}
-
-function quotePosixArg(arg) {
-  const value = String(arg);
-  if (/^[\w@%+=:,./-]+$/.test(value)) return value;
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-/**
- * One shell command line for an invocation, for tools that take a command
- * string and run it through a shell (concurrently runs `cmd.exe /s /c "<line>"`
- * on Windows and `/bin/sh -c <line>` elsewhere). Every argument reaches the
- * program literally, including spaces, quotes and & | ^ % $ characters.
- */
-export function buildShellCommandLine({ command, args }, platform = process.platform) {
-  if (platform === "win32") {
-    return [command.replace(CMD_META_CHARS, "^$1"), ...args.map(quoteCmdArg)].join(" ");
-  }
-  return [command, ...args].map(quotePosixArg).join(" ");
-}
-
 /** spawn() a local tool (see TOOL_PACKAGES) with the current Node. */
 export function spawnTool(tool, args, options = {}) {
   const invocation = buildToolInvocation(tool, args);
@@ -129,7 +98,7 @@ export function execTool(tool, args, options = {}) {
   return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
 
-/** execFileSync() pnpm itself, e.g. `execPnpm(["run", "build:dev"])`. */
+/** execFileSync() pnpm itself, e.g. `execPnpm(["run", "build"])`. */
 export function execPnpm(args, options = {}) {
   const invocation = buildPnpmInvocation(args);
   return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
@@ -137,7 +106,7 @@ export function execPnpm(args, options = {}) {
 
 /**
  * Stop a process by pid and everything it started. On Windows, killing only the
- * process leaves its children (Vite, workerd) running and holding their ports,
+ * process leaves its children (Next.js, workerd) running and holding their ports,
  * so the whole tree is ended with taskkill. Elsewhere the process gets `signal`
  * (the dev launcher and Wrangler pass it on). Throws when the kill fails.
  */

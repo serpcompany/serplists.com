@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 
 export const UI_SNAP_USAGE =
   "Usage: pnpm run ui:snap -- [route] [--login <email>] [--password <password>] [--mobile] " +
-  "[--out <file.png|file.jpg>] [--base <frontend url>] [--api <api url>]\n" +
+  "[--out <file.png|file.jpg>] [--base <app url>] [--api <api url, default <app url>/api>]\n" +
   "Flags may come before or after the route. Write the route without a leading slash (dashboard/templates).";
 
 const OPTIONS = {

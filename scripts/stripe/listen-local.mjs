@@ -19,15 +19,15 @@ if (!testKey) {
   throw new Error(`Stripe local listener requires a test secret key. ${TEST_SECRET_KEY_HINT}`);
 }
 
-// Each checkout runs its own dev stack on a free port pair, so forward to this
-// checkout's API (tmp/dev-session.json), not to a fixed port another worktree may own.
+// Each checkout runs its own dev server on a free port, so forward to this checkout's API
+// (tmp/dev-session.json), not to a fixed port another worktree may own.
 const target = await resolveWebhookForwardTarget({
   envUrl: env.STRIPE_LOCAL_WEBHOOK_URL,
   session: readDevSession(),
 });
 if (target.source === "predicted") {
   console.log(
-    "[stripe-listen] dev:all is not running in this checkout yet. Forwarding to the API port it would pick now; " +
+    "[stripe-listen] dev:all is not running in this checkout yet. Forwarding to the port it would pick now; " +
       "the listener follows it if dev:all starts on another port.",
   );
 }

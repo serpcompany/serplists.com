@@ -1,31 +1,29 @@
-import { findOpenPortPair, isPortAvailable, isProcessAlive } from "../dev-auto-lib.mjs";
+import { findOpenPort, isPortAvailable, isProcessAlive } from "../dev-auto-lib.mjs";
 
-// Every clone or worktree runs its own dev stack on a free port pair (dev-auto), so the
-// Stripe listener must forward to this checkout's API. A fixed default port can belong
-// to another worktree, whose API has a different signing secret and local D1.
+// Every clone or worktree runs its own dev server on a free port (dev-auto), so the Stripe
+// listener must forward to this checkout's API. A fixed default port can belong to another
+// worktree, whose API has a different signing secret and local D1.
 
 const WEBHOOK_PATH = "/api/stripe/webhook";
 
-export function webhookUrlForApiPort(apiPort) {
-  return `http://localhost:${apiPort}${WEBHOOK_PATH}`;
+export function webhookUrlForPort(port) {
+  return `http://localhost:${port}${WEBHOOK_PATH}`;
 }
 
 /**
- * The API port reserved by this checkout's running dev stack (tmp/dev-session.json),
- * or null when none of its processes is alive. A live frontend-only session counts:
- * dev:api reuses its pair.
+ * The port of this checkout's running dev server (tmp/dev-session.json), which serves the
+ * API too, or null when its launcher is not alive.
  */
-export function liveSessionApiPort(session, isAlive = isProcessAlive) {
+export function liveSessionPort(session, isAlive = isProcessAlive) {
   if (!session) return null;
-  const running = [session.allPid, session.apiPid, session.frontendPid].some((pid) => isAlive(pid));
-  return running ? session.apiPort : null;
+  return isAlive(session.pid) ? session.port : null;
 }
 
 /**
  * Where `stripe listen` forwards events, in priority order:
  * - `env`: STRIPE_LOCAL_WEBHOOK_URL, when set;
- * - `session`: the API of this checkout's running dev stack;
- * - `predicted`: the API port dev:all would pick now, when the listener starts first.
+ * - `session`: the API of this checkout's running dev server;
+ * - `predicted`: the port dev:all would pick now, when the listener starts first.
  */
 export async function resolveWebhookForwardTarget({
   envUrl,
@@ -47,22 +45,22 @@ export async function resolveWebhookForwardTarget({
     return { url: parsed.toString(), source: "env" };
   }
 
-  const apiPort = liveSessionApiPort(session, isAlive);
-  if (apiPort) return { url: webhookUrlForApiPort(apiPort), source: "session" };
+  const port = liveSessionPort(session, isAlive);
+  if (port) return { url: webhookUrlForPort(port), source: "session" };
 
-  const pair = await findOpenPortPair({ portAvailabilityChecker: portAvailable });
-  return { url: webhookUrlForApiPort(pair.apiPort), source: "predicted" };
+  const predicted = await findOpenPort({ portAvailabilityChecker: portAvailable });
+  return { url: webhookUrlForPort(predicted), source: "predicted" };
 }
 
 /**
- * The URL to forward to instead of `target` once this checkout's dev stack runs on
- * another API port, or null to keep forwarding where it does. An explicit
- * STRIPE_LOCAL_WEBHOOK_URL is never changed.
+ * The URL to forward to instead of `target` once this checkout's dev server runs on another
+ * port, or null to keep forwarding where it does. An explicit STRIPE_LOCAL_WEBHOOK_URL is
+ * never changed.
  */
 export function retargetForDevSession(target, session, isAlive = isProcessAlive) {
   if (target.source === "env") return null;
-  const apiPort = liveSessionApiPort(session, isAlive);
-  if (!apiPort) return null;
-  const url = webhookUrlForApiPort(apiPort);
+  const port = liveSessionPort(session, isAlive);
+  if (!port) return null;
+  const url = webhookUrlForPort(port);
   return url === target.url ? null : url;
 }

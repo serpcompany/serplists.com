@@ -5,14 +5,13 @@
 // - creates local D1 if this checkout has none, otherwise applies pending migrations,
 //   then seeds whatever seed data is missing (never resetting data that is there)
 // - installs the Playwright browser used by e2e tests and `pnpm run ui:snap`
-// - builds dist/ for the API dev server if it is missing
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DATABASE_NAME, LOCAL_SEED_STEPS, parseSeedStatus } from "./lib/local-d1-seed.mjs";
-import { buildPnpmInvocation, buildToolInvocation } from "./lib/run-tool.mjs";
+import { buildToolInvocation } from "./lib/run-tool.mjs";
 import { renderDevVars, runLocalD1Setup } from "./setup-local-lib.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -74,13 +73,9 @@ try {
 
 run("Install the Playwright browser (no-op when present)", buildToolInvocation("playwright", ["install", "chromium"]));
 
-if (!existsSync(path.join(repoRoot, "dist/index.html"))) {
-  run("Build dist/ for the API dev server", buildPnpmInvocation(["run", "build:dev"]));
-}
-
 console.log(`
 Setup complete.
-  Start:        pnpm run dev:all   (ports and URLs are printed; logs go to tmp/logs/)
+  Start:        pnpm run dev:all   (the URL is printed; logs go to tmp/logs/dev-all.log)
   Sign in:      john@test.com / password123 (see docs/design-docs/development-environment.md)
   Screenshot:   pnpm run ui:snap -- dashboard --login john@test.com
   Verify:       pnpm run verify

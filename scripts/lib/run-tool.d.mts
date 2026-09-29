@@ -1,6 +1,6 @@
 import type { ChildProcess, ExecFileSyncOptions, SpawnOptions } from "node:child_process";
 
-export type ToolName = "concurrently" | "drizzle-kit" | "playwright" | "tsx" | "vite" | "wrangler";
+export type ToolName = "drizzle-kit" | "next" | "opennextjs-cloudflare" | "playwright" | "tsx" | "wrangler";
 
 export interface Invocation {
   command: string;
@@ -21,10 +21,6 @@ export function buildPnpmInvocation(
   args: string[],
   options?: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; execPath?: string },
 ): Invocation;
-export function buildShellCommandLine(
-  invocation: { command: string; args: string[] },
-  platform?: NodeJS.Platform,
-): string;
 export function spawnTool(tool: ToolName, args: string[], options?: SpawnOptions): ChildProcess;
 export function execTool(tool: ToolName, args: string[], options?: ExecFileSyncOptions): string | Buffer;
 export function execPnpm(args: string[], options?: ExecFileSyncOptions): string | Buffer;
