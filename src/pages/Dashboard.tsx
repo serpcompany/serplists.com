@@ -18,7 +18,7 @@ const Dashboard = () => {
   } = useTemplateLists({ catalog: true, runs: true });
   // Each run follows the viewer's role in the Organization that owns it.
   const { getPermissions } = useWorkspace();
-  const { stopSharingRun } = useRunSharing();
+  const { refreshAfterShareFailure, stopSharingRun } = useRunSharing();
 
   return (
     <RunsDashboardView
@@ -29,6 +29,7 @@ const Dashboard = () => {
       onDeleteRun={deleteRun}
       onRevalidateRun={revalidateRun}
       onRunShared={markRunShared}
+      onShareFailed={refreshAfterShareFailure}
       onStopSharingRun={stopSharingRun}
       loading={runsLoading}
       loadError={runsError}

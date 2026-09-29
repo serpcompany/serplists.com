@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
+import { createApiError } from '@/lib/api-errors';
 import Templates from '@/pages/Templates';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -166,5 +167,24 @@ describe('My Templates archive', () => {
 
     expect(toast.error).toHaveBeenCalledWith('Failed to archive template.');
     expect(dialogs(container)).toHaveLength(1);
+  });
+
+  // Archived by a teammate or in another tab: the Template lists reload (deleteTemplate's
+  // onError) and it leaves them, so its dialog closes instead of offering a retry that fails
+  // the same way.
+  it('closes the dialog when the Template was already archived elsewhere', async () => {
+    const error = createApiError(404, { error: 'Template not found or unauthorized' });
+    const container = await renderTemplates(vi.fn(async () => Promise.reject(error)));
+
+    await act(async () => {
+      click(container, buttonIn(container, 'Archive'));
+    });
+    const [dialog] = dialogs(container);
+    await act(async () => {
+      click(container, buttonIn(dialog, 'Archive'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('Template not found or unauthorized');
+    expect(dialogs(container)).toHaveLength(0);
   });
 });

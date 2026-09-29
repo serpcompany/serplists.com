@@ -52,6 +52,7 @@ import {
   buildConsoleTemplatesPath,
   buildRunPath,
 } from '@/lib/routes';
+import { isStaleRecordError } from '@/lib/editConflicts';
 import { cn } from '@/lib/utils';
 import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -79,6 +80,8 @@ interface RunsDashboardViewProps {
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
+  // Reloads the runs list before a refused share shows its error (a run archived elsewhere).
+  onShareFailed?: (error: unknown) => Promise<void>;
   /** Turns the run's share link off; the run becomes private and can be revalidated. */
   onStopSharingRun?: (runId: string) => Promise<void>;
   loading?: boolean;
@@ -107,6 +110,7 @@ export function RunsDashboardView({
   onDeleteRun,
   onRevalidateRun,
   onRunShared,
+  onShareFailed,
   onStopSharingRun,
   loading = false,
   loadError,
@@ -119,7 +123,7 @@ export function RunsDashboardView({
   // Each run stays busy until its own Revalidate finishes.
   const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
-    useRunsDashboardSharing({ runs, onRunShared, onStopSharingRun });
+    useRunsDashboardSharing({ runs, onRunShared, onShareFailed, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
@@ -147,6 +151,8 @@ export function RunsDashboardView({
       toast.error(
         error instanceof Error ? error.message : 'Failed to archive run.',
       );
+      // Archived elsewhere: the list reloaded without it, so a retry could only fail again.
+      if (isStaleRecordError(error)) setRunToDelete(null);
     } finally {
       setIsDeletingRun(false);
     }

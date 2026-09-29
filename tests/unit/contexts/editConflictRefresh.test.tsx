@@ -10,7 +10,13 @@ import type { ChecklistRun, ChecklistTemplate, TemplatesContextProps } from '@/t
 // the record changed elsewhere the server answers 409 edit_conflict. Unless the cache is
 // refreshed, every retry sends the same stale value and fails the same way.
 
-const apiMock = vi.hoisted(() => ({ revalidateChecklist: vi.fn(), updateTemplate: vi.fn() }));
+const apiMock = vi.hoisted(() => ({
+  createChecklist: vi.fn(),
+  deleteChecklist: vi.fn(),
+  deleteTemplate: vi.fn(),
+  revalidateChecklist: vi.fn(),
+  updateTemplate: vi.fn(),
+}));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -90,8 +96,7 @@ const conflict = (code: string) => createApiError(409, { error: 'Checklist run c
 describe('conflict refresh', () => {
   afterEach(() => {
     clients.splice(0).forEach((client) => client.clear());
-    apiMock.revalidateChecklist.mockReset();
-    apiMock.updateTemplate.mockReset();
+    Object.values(apiMock).forEach((mock) => mock.mockReset());
   });
 
   it('refreshes the runs list before Revalidate rejects, so the next click sends the new revision', async () => {
@@ -145,5 +150,111 @@ describe('conflict refresh', () => {
     await expect(context.updateTemplate({ ...template, isPublic: true })).rejects.toMatchObject({ status: 409 });
 
     expect(client.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
+  });
+});
+
+// My Templates, the template page: an active observer on the Template list, and the
+// catalog as a page last loaded it.
+async function showTemplateList(client: QueryClient) {
+  const listFetch = vi.fn(async () => [template]);
+  const observer = new QueryObserver(client, {
+    queryKey: ['templates', 'user-1', 'personal'],
+    queryFn: listFetch,
+    staleTime: 5 * 60 * 1000,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  await vi.waitFor(() => expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([template]));
+  listFetch.mockClear();
+  listFetch.mockResolvedValue([]);
+  client.setQueryData(['templates', 'catalog'], [template, { ...template, id: 'template-2' }]);
+  return { listFetch, unsubscribe };
+}
+
+const archivedTemplate = () => createApiError(404, { error: 'Template not found or unauthorized' });
+const archivedRun = () => createApiError(404, { error: 'Checklist not found or unauthorized' });
+const serverError = () => createApiError(500, { error: 'Internal error' });
+
+// An item archived in another tab, by a teammate or over MCP stays in the cached lists for
+// up to 5 minutes (their staleTime). Deleting it or starting a run from it answers 404, and
+// without a refresh every retry fails the same way while the item stays listed.
+describe('refresh after an action on an item archived elsewhere', () => {
+  afterEach(() => {
+    clients.splice(0).forEach((client) => client.clear());
+    Object.values(apiMock).forEach((mock) => mock.mockReset());
+  });
+
+  it('reloads the runs list before Archive on a run rejects', async () => {
+    const { client, context } = renderProvider();
+    const { listFetch, unsubscribe } = await showRunsList(client);
+    listFetch.mockResolvedValue([]);
+    const error = archivedRun();
+    apiMock.deleteChecklist.mockRejectedValueOnce(error);
+
+    await expect(context.deleteRun('run-1')).rejects.toBe(error);
+
+    expect(listFetch).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(['runs', 'user-1', 'personal'])).toEqual([]);
+    unsubscribe();
+  });
+
+  it('reloads the Template list before Archive on a template rejects, and drops it from the catalog', async () => {
+    const { client, context } = renderProvider();
+    const { listFetch, unsubscribe } = await showTemplateList(client);
+    // The template's own page is open too; its read now finds the Template gone.
+    const detailKey = ['templates', 'detail', 'template-1', 'user-1'];
+    const detailFetch = vi.fn<() => Promise<ChecklistTemplate | null>>(async () => template);
+    const detail = new QueryObserver(client, { queryKey: detailKey, queryFn: detailFetch, staleTime: 60_000 });
+    const stopDetail = detail.subscribe(() => {});
+    await vi.waitFor(() => expect(client.getQueryData(detailKey)).toEqual(template));
+    detailFetch.mockResolvedValue(null);
+    const error = archivedTemplate();
+    apiMock.deleteTemplate.mockRejectedValueOnce(error);
+
+    await expect(context.deleteTemplate('template-1')).rejects.toBe(error);
+
+    expect(listFetch).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([]);
+    expect(client.getQueryData(detailKey)).toBeNull();
+    stopDetail();
+    // Patched, not refetched: the edge copy of the catalog can still list it.
+    expect(client.getQueryData<ChecklistTemplate[]>(['templates', 'catalog'])?.map((item) => item.id)).toEqual([
+      'template-2',
+    ]);
+    expect(client.getQueryState(['templates', 'catalog'])?.isInvalidated).toBe(false);
+    unsubscribe();
+  });
+
+  it('reloads the Template list before Start Run on an archived template rejects', async () => {
+    const { client, context } = renderProvider();
+    const { listFetch, unsubscribe } = await showTemplateList(client);
+    const error = createApiError(404, { error: 'Template not found' });
+    apiMock.createChecklist.mockRejectedValueOnce(error);
+
+    await expect(context.createRun({ templateId: 'template-1', template })).rejects.toBe(error);
+
+    expect(listFetch).toHaveBeenCalledTimes(1);
+    expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([]);
+    unsubscribe();
+  });
+
+  it('does not reload the lists for a failure a refresh cannot fix', async () => {
+    const { client, context } = renderProvider();
+    const runs = await showRunsList(client);
+    const templates = await showTemplateList(client);
+    apiMock.deleteChecklist.mockRejectedValueOnce(serverError());
+    apiMock.deleteTemplate.mockRejectedValueOnce(serverError());
+    apiMock.createChecklist.mockRejectedValueOnce(
+      createApiError(409, { error: 'Template belongs to another Organization', code: 'organization_mismatch' }),
+    );
+
+    await expect(context.deleteRun('run-1')).rejects.toMatchObject({ status: 500 });
+    await expect(context.deleteTemplate('template-1')).rejects.toMatchObject({ status: 500 });
+    await expect(context.createRun({ templateId: 'template-1', template })).rejects.toMatchObject({ status: 409 });
+
+    expect(runs.listFetch).not.toHaveBeenCalled();
+    expect(templates.listFetch).not.toHaveBeenCalled();
+    expect(client.getQueryData<ChecklistTemplate[]>(['templates', 'catalog'])).toHaveLength(2);
+    runs.unsubscribe();
+    templates.unsubscribe();
   });
 });

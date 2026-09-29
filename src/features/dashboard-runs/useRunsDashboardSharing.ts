@@ -22,11 +22,14 @@ const isLinkListedShared = (link: SharedLink, runs: Pick<ChecklistRun, 'id' | 'i
 export function useRunsDashboardSharing({
   runs,
   onRunShared,
+  onShareFailed,
   onStopSharingRun,
 }: {
   runs: Pick<ChecklistRun, 'id' | 'isPublic'>[];
   // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
+  // Awaited before a refused share shows its error (refreshAfterShareFailure).
+  onShareFailed?: (error: unknown) => Promise<void>;
   onStopSharingRun?: (runId: string) => Promise<void>;
 }) {
   const [sharedLink, setSharedLink] = useState<SharedLink | null>(null);
@@ -52,7 +55,7 @@ export function useRunsDashboardSharing({
     sharingRunId.current = runId;
     try {
       const result = await createShareLinkAndCopy(() =>
-        createRunsDashboardShareUrl(runId, window.location.origin, undefined, onRunShared),
+        createRunsDashboardShareUrl(runId, window.location.origin, undefined, onRunShared, onShareFailed),
       );
       if (result.kind === 'error') {
         toast.error(result.message);

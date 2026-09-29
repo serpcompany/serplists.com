@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { isApiError } from '@/lib/api-errors';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import {
   isTemplatePageOf,
@@ -15,7 +16,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 // when a page mounts them again. Never force-refetch inactive runs keys: an unobserved key keeps
 // the queryFn (and `user`) of the render that last observed it, so after a sign-out and a
 // sign-in in the same tab it would fetch the new session's runs into the old user's key.
-export const refreshRunLists = (queryClient: QueryClient): Promise<void> =>
+export const refreshRunLists = (queryClient: Pick<QueryClient, 'invalidateQueries'>): Promise<void> =>
   queryClient.invalidateQueries({ queryKey: ['runs'] });
 
 const isCatalogKey = (queryKey: readonly unknown[]): boolean =>
@@ -91,11 +92,32 @@ export const refreshAfterRunShared = async (queryClient: QueryClient, runId: str
   await Promise.all([markRunShared(queryClient, runId), refreshRunHistory(queryClient, runId)]);
 };
 
-// A stale-record answer on revalidate means the cached list is out of date (the run was
-// shared, changed, or archived elsewhere): reload it before the error reaches the page, so the
-// button re-enables on the current revision (or disappears) instead of repeating the conflict.
-export const refreshRunsAfterConflict = async (queryClient: QueryClient, error: unknown): Promise<void> => {
+// A stale-record answer on revalidate, archive, Share or Stop sharing means the cached list is
+// out of date (the run was shared, changed, or archived elsewhere): reload it before the error
+// reaches the page, so the button re-enables on the current revision (or the run leaves the
+// list) instead of repeating the same failure.
+export const refreshRunsAfterConflict = async (
+  queryClient: Pick<QueryClient, 'invalidateQueries'>,
+  error: unknown,
+): Promise<void> => {
   if (isStaleRecordError(error)) await refreshRunLists(queryClient);
+};
+
+// The same for archiving a Template or starting a Run from it: a 404 means it was archived,
+// or made private, elsewhere. The Template lists (and an open detail page, which then shows
+// the Template is gone) reload before the error reaches the page. The catalog is patched, not
+// refetched: its edge copy can list the Template for 5 more minutes.
+export const refreshTemplatesAfterConflict = async (
+  queryClient: QueryClient,
+  error: unknown,
+  templateId: string,
+): Promise<void> => {
+  if (!isStaleRecordError(error)) return;
+  if (isApiError(error) && error.status === 404) dropTemplateFromCatalog(queryClient, templateId);
+  await queryClient.invalidateQueries({
+    queryKey: ['templates'],
+    predicate: (query) => !isCatalogKey(query.queryKey),
+  });
 };
 
 export const refreshAfterRunDelete = (queryClient: QueryClient): void => {

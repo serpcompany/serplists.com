@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { toast } from 'sonner';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
+import { createApiError } from '@/lib/api-errors';
 import { PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -144,5 +145,23 @@ describe('RunsDashboardView archive', () => {
 
     expect(toast.error).toHaveBeenCalledWith('Failed to archive run.');
     expect(byRole(container, 'dialog')).toHaveLength(1);
+  });
+
+  // Archived in another tab: the runs list reloads (deleteRun's onError) and the run leaves
+  // it, so the dialog for it closes instead of offering a retry that fails the same way.
+  it('closes the dialog when the run was already archived elsewhere', async () => {
+    const error = createApiError(404, { error: 'Checklist not found or unauthorized' });
+    const container = await renderRuns(vi.fn(async () => Promise.reject(error)));
+
+    await act(async () => {
+      click(container, buttonIn(container, 'Archive'));
+    });
+    const [dialog] = byRole(container, 'dialog');
+    await act(async () => {
+      click(container, buttonIn(dialog, 'Archive'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('Checklist not found or unauthorized');
+    expect(byRole(container, 'dialog')).toHaveLength(0);
   });
 });
