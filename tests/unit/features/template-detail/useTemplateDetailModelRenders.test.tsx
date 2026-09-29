@@ -147,6 +147,9 @@ afterEach(async () => {
   });
   root = undefined;
   queryClient.clear();
+  // TanStack Query hands React its batched notifications on a timer. Let a pending one run
+  // while the fake window is still there: after afterAll removes it, React fails on it.
+  await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
 // H36: the page reloaded its template, and showed its spinner (unmounting the Start Run
