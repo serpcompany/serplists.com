@@ -1,14 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
 
 // A task removed from a Template keeps its completion and notes on the Run, read-only
 // under "Removed from Template", and the Run's Changelog records the reconcile.
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
-
 async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
+  const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -20,16 +18,7 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return page.evaluate(async ({ apiBaseUrl, requestPath, requestMethod, requestBody }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    if (!response.ok) throw new Error(`${requestMethod} ${requestPath} failed: ${response.status}`);
-    return response.json();
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestPath: path, requestMethod: method, requestBody: body }) as Promise<T>;
+  return apiJson<T>(page, path, { method, body });
 }
 
 test('notes on a task removed from the Template stay visible on the Run', async ({ page }) => {

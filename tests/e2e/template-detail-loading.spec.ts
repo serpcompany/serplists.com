@@ -1,10 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // Template detail pages load their template once. Re-renders from auth, context, list, or
 // mutation state must not refetch it or swap the page for its loading spinner, which would
 // unmount open dialogs (see src/features/template-detail/useTemplateDetailRecord.ts).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
@@ -38,11 +39,7 @@ for (const signedIn of [false, true]) {
 
 test('the Start Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
   await login(page, 'Fill John');
-  const templateId = await page.evaluate(async ({ apiBaseUrl, slug }) => {
-    const response = await fetch(`${apiBaseUrl}/templates/slug/${slug}`, { credentials: 'include' });
-    if (!response.ok) throw new Error(`Failed to load template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, slug: PUBLIC_TEMPLATE_SLUG });
+  const { id: templateId } = await apiJson<{ id: string }>(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`);
 
   // Another owner's template is not in John's lists, so the page fetches it by id.
   const requests = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/${templateId}`));

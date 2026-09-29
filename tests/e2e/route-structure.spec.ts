@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-const API_BASE_URL = process.env.VITE_API_URL ?? 'http://localhost:8788/api';
+import { API_BASE_URL, apiJson } from './support/api-requests';
+
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 
 /**
@@ -264,54 +265,25 @@ test.describe('route structure', () => {
 
     await signInAsAdmin(page);
 
-    const shareToken = await page.evaluate(async (apiBase) => {
-      const createRunResponse = await fetch(`${apiBase}/checklists`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: 'Share Route Verification',
-          items: [{ id: 'item-1', title: 'Confirm canonical share route' }],
-          status: 'in_progress',
-        }),
-      });
-
-      if (!createRunResponse.ok) {
-        throw new Error(`Unable to create run: ${createRunResponse.status}`);
-      }
-
-      const createdRun = (await createRunResponse.json()) as { id?: string };
-
-      if (!createdRun.id) {
-        throw new Error('Run id missing from API response');
-      }
-
-      const response = await fetch(
-        `${apiBase}/checklists/run/${createdRun.id}/share`,
-        {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Unable to create share token: ${response.status}`);
-      }
-
-      const data = (await response.json()) as { shareToken?: string };
-
-      if (!data.shareToken) {
-        throw new Error('Share token missing from API response');
-      }
-
-      return data.shareToken;
-    }, API_BASE_URL);
+    const createdRun = await apiJson<{ id?: string }>(page, '/checklists', {
+      method: 'POST',
+      body: {
+        title: 'Share Route Verification',
+        items: [{ id: 'item-1', title: 'Confirm canonical share route' }],
+        status: 'in_progress',
+      },
+    });
+    if (!createdRun.id) {
+      throw new Error('Run id missing from API response');
+    }
+    const { shareToken } = await apiJson<{ shareToken?: string }>(
+      page,
+      `/checklists/run/${createdRun.id}/share`,
+      { method: 'POST', body: {} },
+    );
+    if (!shareToken) {
+      throw new Error('Share token missing from API response');
+    }
 
     await serveLocalAppAsProduction(page);
     await page.goto(`${PRODUCTION_ORIGIN}/share/${shareToken}`);

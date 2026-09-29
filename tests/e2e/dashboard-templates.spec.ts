@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiRequest } from './support/api-requests';
+
 // My Templates is the main place runs start (the dashboard's "Start a new run" links here).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const RUN_LIMIT_MESSAGE =
   'Active run limit reached. Upgrade to Pro to create more checklist runs.';
 
@@ -67,9 +68,7 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${templateTitle} - `);
 
   const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 });
 
 test('grid cards name the actions menu and never focus the hidden Start Run shortcut', async ({ page }) => {

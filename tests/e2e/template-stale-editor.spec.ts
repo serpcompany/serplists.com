@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // An editor loaded before a Share in another tab must not make the template private again
 // when it saves: the save is guarded by the version the editor loaded, even after the
 // template list refetches on focus.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -14,16 +14,7 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return page.evaluate(async ({ apiBaseUrl, requestPath, requestMethod, requestBody }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    if (!response.ok) throw new Error(`${requestMethod} ${requestPath} failed: ${response.status}`);
-    return response.json();
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestPath: path, requestMethod: method, requestBody: body }) as Promise<T>;
+  return apiJson<T>(page, path, { method, body });
 }
 
 test('an editor opened before a Share cannot make the template private again', async ({ context }) => {

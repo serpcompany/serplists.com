@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson, apiRequest } from './support/api-requests';
+
 // Pages that await a request and then navigate (Start Run to the new run, Save to the
 // template list) must not pull a user who already left back to that destination: React
 // Router still runs a navigate() from a page that is gone.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -14,32 +14,23 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 async function deleteTemplate(page: Page, templateId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
 }
 
 async function createTemplateViaApi(page: Page, title: string): Promise<string> {
-  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      body: JSON.stringify({
-        is_public: false,
-        sections: [{ id: 'slow-section', title: 'Prep', items: [{ id: 'slow-task', title: 'First task' }] }],
-        title: templateTitle,
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const template = await apiJson<{ id: string }>(page, '/templates', {
+    method: 'POST',
+    body: {
+      is_public: false,
+      sections: [{ id: 'slow-section', title: 'Prep', items: [{ id: 'slow-task', title: 'First task' }] }],
+      title,
+    },
+  });
+  return template.id;
 }
 
 // Holds the next run creation until release() and records the created run's id.

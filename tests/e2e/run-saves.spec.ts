@@ -1,14 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
 
 // Saves on the run page run one at a time, and a double click counts as one click
 // (src/features/run-execution/saveQueue.ts).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
-
 async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
+  const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -19,56 +17,45 @@ async function loginAsAdmin(page: Page) {
   await apiRequests.settled();
 }
 
+async function postRun(page: Page, body: Record<string, unknown>) {
+  return (await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body })).id;
+}
+
 async function createRun(page: Page, title: string) {
-  return page.evaluate(async ({ apiBaseUrl, runTitle }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'fin', title: 'Section', items: [
-          { id: 'fin-a', title: 'Task A' },
-          { id: 'fin-b', title: 'Task B' },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  return postRun(page, {
+    title,
+    sections: [{ id: 'fin', title: 'Section', items: [
+      { id: 'fin-a', title: 'Task A' },
+      { id: 'fin-b', title: 'Task B' },
+    ] }],
+  });
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+}
+
+// The stored run, with its sections parsed.
+async function getRun<Task>(page: Page, runId: string) {
+  const run = await apiJson<{ status: string; title: string; items: unknown }>(page, `/checklists/${runId}`);
+  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Task[] }>;
+  return { ...run, sections };
 }
 
 async function readRun(page: Page, runId: string) {
-  return page.evaluate(async ({ id, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
-    const run = (await response.json()) as { status: string; items: unknown };
-    const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Array<{ isCompleted?: boolean }> }>;
-    return { status: run.status, completed: sections.flatMap((section) => section.items.map((item) => item.isCompleted === true)) };
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  const { status, sections } = await getRun<{ isCompleted?: boolean }>(page, runId);
+  return { status, completed: sections.flatMap((section) => section.items.map((item) => item.isCompleted === true)) };
 }
 
 test('a double click saves once and never reports a conflict', async ({ page }) => {
   await loginAsAdmin(page);
-  const runId = await page.evaluate(async ({ apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: `Double click QA ${Date.now()}`,
-        sections: [{ id: 'dbl', title: 'Section', items: [
-          { id: 'dbl-a', title: 'Task A' },
-          { id: 'dbl-b', title: 'Task B' },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL });
+  const runId = await postRun(page, {
+    title: `Double click QA ${Date.now()}`,
+    sections: [{ id: 'dbl', title: 'Section', items: [
+      { id: 'dbl-a', title: 'Task A' },
+      { id: 'dbl-b', title: 'Task B' },
+    ] }],
+  });
 
   const saves: number[] = [];
   page.on('response', (response) => {
@@ -92,9 +79,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
   expect(saves).toEqual([200, 200, 200]);
   await expect(conflictToast).toHaveCount(0);
 
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await deleteRun(page, runId);
 });
 
 test('a dismissed completion dialog can be reopened with Finish Run', async ({ page }) => {
@@ -122,22 +107,18 @@ test('a fully ticked run that is still in progress can be completed after a relo
   await loginAsAdmin(page);
   const runId = await createRun(page, `Ticked elsewhere QA ${Date.now()}`);
   // Tick every task without completing the run, as an MCP client can.
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, {
-      body: JSON.stringify({
-        expected_revision: 1,
-        progress: 100,
-        sections: [{ id: 'fin', title: 'Section', items: [
-          { id: 'fin-a', title: 'Task A', isCompleted: true },
-          { id: 'fin-b', title: 'Task B', isCompleted: true },
-        ] }],
-        status: 'in_progress',
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiJson(page, `/checklists/${runId}`, {
+    method: 'PUT',
+    body: {
+      expected_revision: 1,
+      progress: 100,
+      sections: [{ id: 'fin', title: 'Section', items: [
+        { id: 'fin-a', title: 'Task A', isCompleted: true },
+        { id: 'fin-b', title: 'Task B', isCompleted: true },
+      ] }],
+      status: 'in_progress',
+    },
+  });
 
   await page.goto(`/dashboard/runs/${runId}`);
   await page.getByRole('button', { name: 'Complete run' }).click();
@@ -209,21 +190,17 @@ test('text typed while a notes save is in flight is kept', async ({ page }) => {
 // page has it open. The page reloads the run on the 409 and retries once
 // (src/features/run-execution/runSaver.ts), so it never gets stuck on a stale revision.
 async function tickElsewhere(page: Page, runId: string, ticked: { a: boolean; b: boolean }) {
-  await page.evaluate(async ({ id, apiBaseUrl, done }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, {
-      body: JSON.stringify({
-        expected_revision: 1,
-        sections: [{ id: 'fin', title: 'Section', items: [
-          { id: 'fin-a', title: 'Task A', isCompleted: done.a },
-          { id: 'fin-b', title: 'Task B', isCompleted: done.b },
-        ] }],
-        status: 'in_progress',
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL, done: ticked });
+  await apiJson(page, `/checklists/${runId}`, {
+    method: 'PUT',
+    body: {
+      expected_revision: 1,
+      sections: [{ id: 'fin', title: 'Section', items: [
+        { id: 'fin-a', title: 'Task A', isCompleted: ticked.a },
+        { id: 'fin-b', title: 'Task B', isCompleted: ticked.b },
+      ] }],
+      status: 'in_progress',
+    },
+  });
 }
 
 test('a tick saved by another session is kept and this page can still save', async ({ page }) => {
@@ -269,35 +246,23 @@ test('ticking a task another session already ticked does not untick it', async (
 // A click made while an earlier save is still in flight sets the value the user saw and
 // chose; it is not a flip of whatever the earlier save left behind.
 async function createRunWithSubTasks(page: Page, title: string, stepTwoDone: boolean) {
-  return page.evaluate(async ({ apiBaseUrl, runTitle, done }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'st', title: 'Section', items: [
-          { id: 'st-a', title: 'Task A', contents: [{ type: 'subItems', value: '', subItems: [
-            { id: 'st-a-1', title: 'Step one', isCompleted: false },
-            { id: 'st-a-2', title: 'Step two', isCompleted: done },
-          ] }] },
-          { id: 'st-b', title: 'Task B' },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title, done: stepTwoDone });
+  return postRun(page, {
+    title,
+    sections: [{ id: 'st', title: 'Section', items: [
+      { id: 'st-a', title: 'Task A', contents: [{ type: 'subItems', value: '', subItems: [
+        { id: 'st-a-1', title: 'Step one', isCompleted: false },
+        { id: 'st-a-2', title: 'Step two', isCompleted: stepTwoDone },
+      ] }] },
+      { id: 'st-b', title: 'Task B' },
+    ] }],
+  });
 }
 
 async function readTaskA(page: Page, runId: string) {
-  return page.evaluate(async ({ id, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
-    const run = (await response.json()) as { items: unknown };
-    type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
-    const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Task[] }>;
-    const task = sections[0].items[0];
-    return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
+  const { sections } = await getRun<Task>(page, runId);
+  const task = sections[0].items[0];
+  return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
 }
 
 async function holdFirstSave(page: Page, runId: string) {
@@ -501,26 +466,22 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
 test('a completed run cannot be unticked, privately or through its share link', async ({ page, browser }) => {
   await loginAsAdmin(page);
   const runId = await createRunWithSubTasks(page, `Frozen run QA ${Date.now()}`, true);
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, {
-      body: JSON.stringify({
-        completed_at: new Date().toISOString(),
-        expected_revision: 1,
-        progress: 100,
-        sections: [{ id: 'st', title: 'Section', items: [
-          { id: 'st-a', title: 'Task A', isCompleted: true, contents: [{ type: 'subItems', value: '', subItems: [
-            { id: 'st-a-1', title: 'Step one', isCompleted: true },
-            { id: 'st-a-2', title: 'Step two', isCompleted: true },
-          ] }] },
-          { id: 'st-b', title: 'Task B', isCompleted: true },
-        ] }],
-        status: 'completed',
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'PUT',
-    });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiJson(page, `/checklists/${runId}`, {
+    method: 'PUT',
+    body: {
+      completed_at: new Date().toISOString(),
+      expected_revision: 1,
+      progress: 100,
+      sections: [{ id: 'st', title: 'Section', items: [
+        { id: 'st-a', title: 'Task A', isCompleted: true, contents: [{ type: 'subItems', value: '', subItems: [
+          { id: 'st-a-1', title: 'Step one', isCompleted: true },
+          { id: 'st-a-2', title: 'Step two', isCompleted: true },
+        ] }] },
+        { id: 'st-b', title: 'Task B', isCompleted: true },
+      ] }],
+      status: 'completed',
+    },
+  });
   const saves = recordSaves(page, runId);
 
   await page.goto(`/dashboard/runs/${runId}`);
@@ -567,21 +528,13 @@ test('the run Changelog shows a save without a reload', async ({ page }) => {
 // Completing a task moves on from it only if it is still selected when the save lands, so a
 // task opened while the save was in flight stays open (getSelectionAfterToggle).
 async function createFourTaskRun(page: Page, title: string) {
-  return page.evaluate(async ({ apiBaseUrl, runTitle }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'mv', title: 'Section', items: ['A', 'B', 'C', 'D'].map((name) => ({
-          id: `mv-${name.toLowerCase()}`,
-          title: `Task ${name}`,
-        })) }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  return postRun(page, {
+    title,
+    sections: [{ id: 'mv', title: 'Section', items: ['A', 'B', 'C', 'D'].map((name) => ({
+      id: `mv-${name.toLowerCase()}`,
+      title: `Task ${name}`,
+    })) }],
+  });
 }
 
 // Holds every save of the run until it is released, one at a time and in order.
@@ -684,10 +637,7 @@ test('the run title editor stops at the length the API accepts, and the save goe
   await expect(page.getByText('Run title updated')).toBeVisible();
   await expect(page.getByText(/String must contain/)).toHaveCount(0);
 
-  const title = await page.evaluate(async ({ id, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
-    return ((await response.json()) as { title: string }).title;
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  const { title } = await getRun(page, runId);
   expect(title).toBe(longTitle.slice(0, 160).trim());
 
   await deleteRun(page, runId);
@@ -778,12 +728,8 @@ test('completing a run saves an unsaved note and leaves without asking', async (
   await expect(page).toHaveURL(/\/dashboard\/runs$/);
   expect(dialogs).toEqual([]);
 
-  const stored = await page.evaluate(async ({ id, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
-    const run = (await response.json()) as { status: string; items: unknown };
-    const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Array<{ notes?: string }> }>;
-    return { status: run.status, notes: sections.flatMap((section) => section.items.map((item) => item.notes ?? '')) };
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  const { status, sections } = await getRun<{ notes?: string }>(page, runId);
+  const stored = { status, notes: sections.flatMap((section) => section.items.map((item) => item.notes ?? '')) };
   expect(stored).toEqual({ status: 'completed', notes: ['', 'Signed off by QA'] });
 
   await deleteRun(page, runId);
@@ -792,15 +738,10 @@ test('completing a run saves an unsaved note and leaves without asking', async (
 test('a share-link guest is asked before unsaved task notes are lost', async ({ browser, page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Shared notes leave guard QA ${Date.now()}`);
-  const shareToken = await page.evaluate(async ({ id, apiBaseUrl }) => {
-    const shared = await fetch(`${apiBaseUrl}/checklists/run/${id}/share`, {
-      body: '{}',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await shared.json()) as { shareToken: string }).shareToken;
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  const { shareToken } = await apiJson<{ shareToken: string }>(page, `/checklists/run/${runId}/share`, {
+    method: 'POST',
+    body: {},
+  });
 
   const guestContext = await browser.newContext();
   const guest = await guestContext.newPage();
@@ -839,18 +780,10 @@ for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await loginAsAdmin(page);
     const tasks = ['Check DNS', 'Check TLS', 'Check redirects', 'Check sitemap'];
-    const runId = await page.evaluate(async ({ apiBaseUrl, titles }) => {
-      const response = await fetch(`${apiBaseUrl}/checklists`, {
-        body: JSON.stringify({
-          title: `Footer QA ${Date.now()}`,
-          sections: [{ id: 'foot', title: 'Section', items: titles.map((title, index) => ({ id: `foot-${index}`, title })) }],
-        }),
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
-      return ((await response.json()) as { id: string }).id;
-    }, { apiBaseUrl: DEV_API_BASE_URL, titles: tasks });
+    const runId = await postRun(page, {
+      title: `Footer QA ${Date.now()}`,
+      sections: [{ id: 'foot', title: 'Section', items: tasks.map((title, index) => ({ id: `foot-${index}`, title })) }],
+    });
     const markComplete = page.getByRole('button', { name: 'Mark Complete' });
     const changelogEntries = page
       .locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) })

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // Every tab shares one session cookie. When another tab signs in as someone else or signs out,
 // an open tab must follow (src/contexts/sessionSync.ts) instead of showing the old user while
 // its requests, and any Template it saves, go to the new one. Tab 1 is never reloaded here.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function signIn(page: Page, fillButton: 'Fill Admin' | 'Fill John') {
   await page.goto('/login');
@@ -44,15 +44,10 @@ test('an open tab follows another tab that signs in as someone else', async ({ c
 
   // Tab 2 replaces the session cookie with John's without signing out first, then loads the app.
   await openSignedInTab(tab2);
-  await tab2.evaluate(async (apiBaseUrl) => {
-    const response = await fetch(`${apiBaseUrl}/auth/sign-in/email`, {
-      body: JSON.stringify({ email: 'john@test.com', password: 'password123' }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Sign-in failed: ${response.status}`);
-  }, DEV_API_BASE_URL);
+  await apiJson(tab2, '/auth/sign-in/email', {
+    method: 'POST',
+    body: { email: 'john@test.com', password: 'password123' },
+  });
   await tab2.reload();
   await expect(tab2.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 

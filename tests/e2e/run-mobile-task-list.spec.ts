@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson, apiRequest } from './support/api-requests';
+
 // Below xl (1280px) the run page hides its task column, so the progress block opens the
 // same task list in a sheet (src/components/run-execution/MobileRunProgress.tsx).
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -13,34 +13,28 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function createRun(page: Page) {
-  return page.evaluate(async ({ apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: `Mobile task list QA ${Date.now()}`,
-        sections: [
-          { id: 'mob-1', title: 'Prepare', items: [
-            { id: 'mob-a', title: 'Task A' },
-            { id: 'mob-b', title: 'Task B' },
-            { id: 'mob-c', title: 'Task C' },
-          ] },
-          { id: 'mob-2', title: 'Ship', items: [
-            { id: 'mob-d', title: 'Task D' },
-            { id: 'mob-e', title: 'Task E' },
-          ] },
-        ],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL });
+  const run = await apiJson<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title: `Mobile task list QA ${Date.now()}`,
+      sections: [
+        { id: 'mob-1', title: 'Prepare', items: [
+          { id: 'mob-a', title: 'Task A' },
+          { id: 'mob-b', title: 'Task B' },
+          { id: 'mob-c', title: 'Task C' },
+        ] },
+        { id: 'mob-2', title: 'Ship', items: [
+          { id: 'mob-d', title: 'Task D' },
+          { id: 'mob-e', title: 'Task E' },
+        ] },
+      ],
+    },
+  });
+  return run.id;
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 }]) {

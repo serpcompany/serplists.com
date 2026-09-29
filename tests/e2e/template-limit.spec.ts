@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const DEV_API_BASE_URL =
-  process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+import { apiJson } from "./support/api-requests";
+
 const PASSWORD = "Aa!template-limit-password-12345";
 const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.";
 
@@ -21,16 +21,11 @@ async function registerFreeAccount(page: Page) {
 }
 
 async function createTemplateViaApi(page: Page, title: string): Promise<string> {
-  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: templateTitle, is_public: false, sections: [] }),
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const template = await apiJson<{ id: string }>(page, "/templates", {
+    method: "POST",
+    body: { title, is_public: false, sections: [] },
+  });
+  return template.id;
 }
 
 // Checkout would leave for Stripe; answer it with the billing page instead, and report

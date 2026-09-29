@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // Share, archive and restore create no template version, only an audit event; the
 // Changelog must still show them (src/features/template-detail/templateHistoryTimeline.ts).
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -13,16 +13,7 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return page.evaluate(async ({ apiBaseUrl, requestBody, requestMethod, requestPath }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    if (!response.ok) throw new Error(`${requestMethod} ${requestPath} failed: ${response.status}`);
-    return (await response.json()) as Record<string, unknown>;
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestBody: body, requestMethod: method, requestPath: path });
+  return apiJson<Record<string, unknown>>(page, path, { method, body });
 }
 
 test('the Changelog shows Share, archive and restore next to versions', async ({ page }) => {

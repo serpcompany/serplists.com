@@ -1,27 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiRequest } from './support/api-requests';
+
 // Deleting a Template or Run archives it. The archive page, opened from the console
 // navigation, lists archived items and restores them (src/pages/Archive.tsx).
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-async function apiRequest(page: Page, path: string, method: string, body?: unknown) {
-  return page.evaluate(async ({ apiBaseUrl, requestPath, requestMethod, requestBody }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    return { status: response.status, body: (await response.json().catch(() => null)) as { id?: string } | null };
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestPath: path, requestMethod: method, requestBody: body });
 }
 
 // One archive row. The two archive lists sit in a grid of their own, so only the innermost
@@ -37,12 +25,15 @@ test('an archived template and run can be restored from the archive page', async
   const runTitle = `Archive restore run ${stamp}`;
   const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
 
-  const template = await apiRequest(page, '/templates', 'POST', { title: templateTitle, is_public: false, sections });
+  const template = await apiRequest<{ id: string }>(page, '/templates', {
+    method: 'POST',
+    body: { title: templateTitle, is_public: false, sections },
+  });
   const templateId = template.body?.id as string;
-  const run = await apiRequest(page, '/checklists', 'POST', { title: runTitle, sections });
+  const run = await apiRequest<{ id: string }>(page, '/checklists', { method: 'POST', body: { title: runTitle, sections } });
   const runId = run.body?.id as string;
-  expect((await apiRequest(page, `/templates/${templateId}`, 'DELETE')).status).toBe(200);
-  expect((await apiRequest(page, `/checklists/${runId}`, 'DELETE')).status).toBe(200);
+  expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
+  expect((await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' })).status).toBe(200);
 
   await page.goto('/dashboard/templates');
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
@@ -61,8 +52,8 @@ test('an archived template and run can be restored from the archive page', async
   await expect(page.getByText('Run restored')).toBeVisible();
   await expect(page.getByText(runTitle)).toHaveCount(0);
 
-  expect((await apiRequest(page, `/templates/${templateId}`, 'GET')).status).toBe(200);
-  expect((await apiRequest(page, `/checklists/${runId}`, 'GET')).status).toBe(200);
+  expect((await apiRequest(page, `/templates/${templateId}`)).status).toBe(200);
+  expect((await apiRequest(page, `/checklists/${runId}`)).status).toBe(200);
 
   await page.getByRole('link', { name: 'Runs', exact: true }).first().click();
   await expect(page.getByText(runTitle)).toBeVisible({ timeout: 15_000 });
@@ -71,9 +62,12 @@ test('an archived template and run can be restored from the archive page', async
 test('a deleted run appears in the archive without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runTitle = `Archive refresh run ${Date.now()}`;
-  const run = await apiRequest(page, '/checklists', 'POST', {
-    title: runTitle,
-    sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
+  const run = await apiRequest<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title: runTitle,
+      sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
+    },
   });
   const runId = run.body?.id as string;
 
@@ -104,7 +98,10 @@ test('a template archived from its page opens normally once restored', async ({ 
   await loginAsAdmin(page);
   const title = `Archive detail template ${Date.now()}`;
   const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
-  const template = await apiRequest(page, '/templates', 'POST', { title, is_public: false, sections });
+  const template = await apiRequest<{ id: string }>(page, '/templates', {
+    method: 'POST',
+    body: { title, is_public: false, sections },
+  });
   const templateId = template.body?.id as string;
   const isDetailRead = (url: URL, method: string) =>
     method === 'GET' && url.pathname.endsWith(`/api/templates/${templateId}`);
@@ -150,5 +147,5 @@ test('a template archived from its page opens normally once restored', async ({ 
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });
 
-  expect((await apiRequest(page, `/templates/${templateId}`, 'DELETE')).status).toBe(200);
+  expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
 });

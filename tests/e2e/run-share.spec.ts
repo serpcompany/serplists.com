@@ -1,16 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
 
 // Creating a run share link and copying it are separate steps: the link is always shown
 // in a dialog, and a refused clipboard write (Safari after an awaited request, denied
 // permission) is not reported as a failed share (src/lib/shareLink.ts).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const SHARE_URL = /\/share\/[0-9a-f-]{36}$/;
 
 async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
+  const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -32,25 +31,20 @@ async function refuseClipboardWrites(page: Page) {
   });
 }
 
+async function send(page: Page, path: string, method: string, body: unknown) {
+  return apiJson<{ id: string }>(page, path, { method, body });
+}
+
 async function createRun(page: Page, title: string) {
-  return page.evaluate(async ({ apiBaseUrl, runTitle }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'share', title: 'Section', items: [{ id: 'share-a', title: 'Task A' }] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  const run = await send(page, '/checklists', 'POST', {
+    title,
+    sections: [{ id: 'share', title: 'Section', items: [{ id: 'share-a', title: 'Task A' }] }],
+  });
+  return run.id;
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 test('the run page shows the share link when the clipboard refuses the copy', async ({ page, context }) => {
@@ -111,24 +105,24 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
   const title = `Stale share QA ${Date.now()}`;
-  const { runId, templateId } = await page.evaluate(async ({ apiBaseUrl, runTitle }) => {
-    const send = async (path: string, method: string, body: unknown) =>
-      (await fetch(`${apiBaseUrl}${path}`, {
-        body: JSON.stringify(body),
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        method,
-      })).json() as Promise<{ id: string }>;
-    const sections = (done: boolean, ids: string[]) =>
-      [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
-
-    const template = await send('/templates', 'POST', { title: runTitle, sections: sections(false, ['stale-a']), is_public: false });
-    const run = await send('/checklists', 'POST', { template_id: template.id, title: runTitle, status: 'in_progress' });
-    // A completed run is frozen when its Template changes, so it goes stale.
-    await send(`/checklists/${run.id}`, 'PUT', { expected_revision: 1, progress: 100, sections: sections(true, ['stale-a']), status: 'completed' });
-    await send(`/templates/${template.id}`, 'PUT', { title: runTitle, sections: sections(false, ['stale-a', 'stale-b']), expected_version: 1 });
-    return { runId: run.id, templateId: template.id };
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  const sections = (done: boolean, ids: string[]) =>
+    [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
+  const template = await send(page, '/templates', 'POST', { title, sections: sections(false, ['stale-a']), is_public: false });
+  const run = await send(page, '/checklists', 'POST', { template_id: template.id, title, status: 'in_progress' });
+  // A completed run is frozen when its Template changes, so it goes stale.
+  await send(page, `/checklists/${run.id}`, 'PUT', {
+    expected_revision: 1,
+    progress: 100,
+    sections: sections(true, ['stale-a']),
+    status: 'completed',
+  });
+  await send(page, `/templates/${template.id}`, 'PUT', {
+    title,
+    sections: sections(false, ['stale-a', 'stale-b']),
+    expected_version: 1,
+  });
+  const { id: runId } = run;
+  const { id: templateId } = template;
 
   await page.goto('/dashboard/runs');
   const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}"]`) });
@@ -146,9 +140,7 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   await expect(row.getByText('Shared snapshot is out of date')).toBeVisible();
 
   await deleteRun(page, runId);
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
 });
 
 // Sharing marks the run public in the cached runs list. That must not reload the open run
@@ -157,22 +149,14 @@ test('sharing from the run page keeps unsaved task notes and the open task', asy
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
   const title = `Share keeps notes QA ${Date.now()}`;
-  const runId = await page.evaluate(async ({ apiBaseUrl, runTitle }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'keep', title: 'Section', items: [
-          { id: 'keep-a', title: 'Task A' },
-          { id: 'keep-b', title: 'Task B' },
-          { id: 'keep-c', title: 'Task C' },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, runTitle: title });
+  const { id: runId } = await send(page, '/checklists', 'POST', {
+    title,
+    sections: [{ id: 'keep', title: 'Section', items: [
+      { id: 'keep-a', title: 'Task A' },
+      { id: 'keep-b', title: 'Task B' },
+      { id: 'keep-c', title: 'Task C' },
+    ] }],
+  });
   const runLoads: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'GET' && new URL(request.url()).pathname.endsWith(`/checklists/${runId}`)) {

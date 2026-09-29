@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // My Templates merges the user's own list with the cached public catalog (docs/FRONTEND.md).
 // A Template deleted after a page loaded the catalog must leave My Templates at once, without
 // a reload, even though the catalog copy is still cached.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function navigateInApp(page: Page, path: string) {
   await page.evaluate((to) => {
@@ -20,20 +20,14 @@ test('a deleted public template leaves My Templates after the catalog was loaded
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 
   const title = `Catalog delete ${Date.now()}`;
-  const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      body: JSON.stringify({
-        title: templateTitle,
-        is_public: true,
-        sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const { id: templateId } = await apiJson<{ id: string }>(page, '/templates', {
+    method: 'POST',
+    body: {
+      title,
+      is_public: true,
+      sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
+    },
+  });
 
   // The runs page loads the public catalog, which now includes the new public template.
   const catalogLoaded = page.waitForResponse((response) => response.url().includes('/api/templates?scope=public'));

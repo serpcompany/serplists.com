@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // Pressing Back on Stripe Checkout can restore the page from the back/forward cache,
 // with its JavaScript state exactly as it was when the browser left. Buttons that were
 // busy opening checkout must be usable again, and the editor must guard new edits.
@@ -8,7 +10,6 @@ import { expect, test, type Page } from '@playwright/test';
 // then sends the pageshow event a back/forward cache restore sends (Chromium does not
 // always keep a page in that cache under test).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const RUN_LIMIT_MESSAGE =
   'Active run limit reached. Upgrade to Pro to create more checklist runs.';
 const TEMPLATE_LIMIT_MESSAGE = 'Template limit reached. Upgrade to create more templates.';
@@ -55,15 +56,7 @@ async function registerFreeAccount(page: Page) {
 }
 
 async function createTemplateViaApi(page: Page, title: string) {
-  await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: templateTitle, is_public: false, sections: [] }),
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  await apiJson(page, '/templates', { method: 'POST', body: { title, is_public: false, sections: [] } });
 }
 
 test('Back from checkout leaves the Start Run dialog usable on My Templates', async ({ page }) => {

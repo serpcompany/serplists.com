@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson, apiRequest } from './support/api-requests';
+
 // Sign-out and sign-in are SPA navigations, so the React Query cache outlives a session
 // (docs/FRONTEND.md). Nothing one user loaded may be shown to, or refetched for, the next
 // person who signs in on the same tab. Every step below stays in the app: a page.goto()
 // would reload and hide the bug by creating a fresh QueryClient.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function navigateInApp(page: Page, path: string) {
   await page.evaluate((to) => {
@@ -28,25 +28,18 @@ async function signOut(page: Page) {
 }
 
 async function createRun(page: Page, title: string): Promise<string> {
-  return page.evaluate(async ({ runTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'switch-section', title: 'Section', items: [{ id: 'switch-task', title: 'Task' }] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { runTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const run = await apiJson<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title,
+      sections: [{ id: 'switch-section', title: 'Section', items: [{ id: 'switch-task', title: 'Task' }] }],
+    },
+  });
+  return run.id;
 }
 
 async function deleteRuns(page: Page, runIds: string[]) {
-  await page.evaluate(async ({ ids, apiBaseUrl }) => {
-    await Promise.all(ids.map((id) => fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' })));
-  }, { ids: runIds, apiBaseUrl: DEV_API_BASE_URL });
+  await Promise.all(runIds.map((id) => apiRequest(page, `/checklists/${id}`, { method: 'DELETE' })));
 }
 
 test('a user who signs in after another on the same tab never sees the other user\'s runs', async ({ page }) => {

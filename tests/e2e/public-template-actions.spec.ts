@@ -1,9 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiRequest } from './support/api-requests';
+
 // Start Run and Save on a public template page act once per click intent
 // (src/pages/PublicTemplate.tsx, src/components/template/PublicTemplateView.tsx).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
 
 async function loginAsAdmin(page: Page) {
@@ -36,9 +37,7 @@ test('a double click on the header Start Run creates one run', async ({ page }) 
   expect(runCreates).toHaveLength(1);
 
   const runId = new URL(page.url()).pathname.split('/').pop();
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 });
 
 test('a failed Save keeps the Save button instead of showing Saved', async ({ page }) => {

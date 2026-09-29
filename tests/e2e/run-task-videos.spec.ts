@@ -1,17 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
 
 // The run page keeps one task panel mounted while the task changes. A video block at the
 // same position in the next task used to keep the previous task's player, which reads its
 // file only once, so it kept playing the previous task's video
 // (src/components/shared/VideoEmbed.tsx).
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
 
 async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
+  const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -23,28 +22,22 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function createRun(page: Page, videos: string[]) {
-  return page.evaluate(async ({ apiBaseUrl, urls }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: `Task videos QA ${Date.now()}`,
-        sections: [{ id: 'vid', title: 'Section', items: urls.map((url, index) => ({
-          id: `vid-${index}`,
-          title: `Watch video ${'AB'[index]}`,
-          contents: [{ type: 'video', value: url }],
-        })) }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, urls: videos });
+  const run = await apiJson<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title: `Task videos QA ${Date.now()}`,
+      sections: [{ id: 'vid', title: 'Section', items: videos.map((url, index) => ({
+        id: `vid-${index}`,
+        title: `Watch video ${'AB'[index]}`,
+        contents: [{ type: 'video', value: url }],
+      })) }],
+    },
+  });
+  return run.id;
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 test('each task plays its own video', async ({ page }) => {

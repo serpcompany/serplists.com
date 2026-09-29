@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson, apiRequest } from './support/api-requests';
+
 // The run page shows one task at a time and the window scrolls. Moving to another task
 // (Mark Complete, Next, Previous) scrolls its header back into view below the sticky
 // headers and focuses its title (src/components/run-execution/TaskHeaderReveal.tsx).
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -17,31 +17,25 @@ async function loginAsAdmin(page: Page) {
 const longText = Array.from({ length: 60 }, (_, index) => `Paragraph ${index + 1} of the task instructions.`).join('\n\n');
 
 async function createRun(page: Page) {
-  return page.evaluate(async ({ apiBaseUrl, text }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: `Task navigation QA ${Date.now()}`,
-        sections: [{ id: 'nav', title: 'Section', items: [
-          { id: 'nav-a', title: 'Task A', contents: [{ type: 'text', value: text }] },
-          { id: 'nav-b', title: 'Task B', contents: [
-            { type: 'text', value: text },
-            { type: 'subItems', value: '', subItems: [{ id: 'nav-b-1', title: 'Check B one' }] },
-          ] },
-          { id: 'nav-c', title: 'Task C', contents: [{ type: 'text', value: text }] },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, text: longText });
+  const run = await apiJson<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title: `Task navigation QA ${Date.now()}`,
+      sections: [{ id: 'nav', title: 'Section', items: [
+        { id: 'nav-a', title: 'Task A', contents: [{ type: 'text', value: longText }] },
+        { id: 'nav-b', title: 'Task B', contents: [
+          { type: 'text', value: longText },
+          { type: 'subItems', value: '', subItems: [{ id: 'nav-b-1', title: 'Check B one' }] },
+        ] },
+        { id: 'nav-c', title: 'Task C', contents: [{ type: 'text', value: longText }] },
+      ] }],
+    },
+  });
+  return run.id;
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 // The sticky site header, plus the context header below md (768px).

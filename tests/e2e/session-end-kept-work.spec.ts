@@ -1,16 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
 
 // A session that ends in the background (a sign-out in another tab, an expired or revoked
 // session) unmounts every signed-in page and sends the tab to /login without a question. Unsaved
 // work is kept on the tab first and offered back after sign-in (src/lib/navigation/leaveGuard.ts).
 // Tab 1 is never reloaded here.
 
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
-
 async function signIn(page: Page) {
-  const apiRequests = trackApiRequests(page, DEV_API_BASE_URL);
+  const apiRequests = trackApiRequests(page, API_BASE_URL);
   await page.goto('/login');
   await page.getByRole('button', { name: 'Fill Admin' }).click();
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -39,16 +37,7 @@ async function signOutInAnotherTab(page: Page) {
 }
 
 async function callApi<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return page.evaluate(async ({ apiBaseUrl, requestPath, requestMethod, requestBody }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    if (!response.ok) throw new Error(`${requestMethod} ${requestPath} failed: ${response.status}`);
-    return response.json();
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestPath: path, requestMethod: method, requestBody: body }) as Promise<T>;
+  return apiJson<T>(page, path, { method, body });
 }
 
 test('edits to an existing template are offered back after another tab signs out', async ({ page }) => {

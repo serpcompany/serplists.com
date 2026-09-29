@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const DEV_API_BASE_URL =
-  process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+import { apiJson, apiRequest } from "./support/api-requests";
+
 const PASSWORD = "Aa!template-editor-password-12345";
 
 function uniqueSuffix() {
@@ -33,50 +33,39 @@ async function loginAsSeedUser(page: Page) {
 }
 
 async function findTemplateByTitle(page: Page, title: string) {
-  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates?scope=personal`, { credentials: "include" });
-    if (!response.ok) {
-      throw new Error(`Failed to load templates: ${response.status}`);
-    }
-
-    const templates = (await response.json()) as Array<Record<string, unknown>>;
-    return templates.find((template) => template.title === templateTitle) ?? null;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const templates = await apiJson<Array<Record<string, unknown>>>(page, "/templates?scope=personal");
+  return templates.find((template) => template.title === title) ?? null;
 }
 
 async function deleteTemplate(page: Page, templateId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/templates/${id}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
-  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/templates/${templateId}`, { method: "DELETE" });
+}
+
+// Creates a template as the signed-in user and returns its id.
+async function postTemplate(page: Page, body: Record<string, unknown>) {
+  return (await apiJson<{ id: string }>(page, "/templates", { method: "POST", body })).id;
+}
+
+// Creates a run as the signed-in user and returns its id.
+async function postRun(page: Page, body: Record<string, unknown>) {
+  return (await apiJson<{ id: string }>(page, "/checklists", { method: "POST", body })).id;
 }
 
 async function createTemplateViaApi(page: Page, title: string) {
-  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title: templateTitle,
-        is_public: false,
-        sections: [
-          {
-            id: "guard-section",
-            title: "Prep",
-            items: [
-              { id: "guard-task-1", title: "First task", description: "" },
-              { id: "guard-task-2", title: "Second task", description: "" },
-            ],
-          },
+  return postTemplate(page, {
+    title,
+    is_public: false,
+    sections: [
+      {
+        id: "guard-section",
+        title: "Prep",
+        items: [
+          { id: "guard-task-1", title: "First task", description: "" },
+          { id: "guard-task-2", title: "Second task", description: "" },
         ],
-      }),
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+      },
+    ],
+  });
 }
 
 // A save leaves for the Templates list once the API answers. Wait for that answer, not
@@ -416,37 +405,28 @@ test.describe("template editor regressions", () => {
 
   test('shows one task-level notes area and persists it on the run', async ({ page }) => {
     await loginAsSeedUser(page);
-    const runId = await page.evaluate(async ({ apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/checklists`, {
-        body: JSON.stringify({
-          sections: [
+    const runId = await postRun(page, {
+      sections: [
+        {
+          id: 'notes-section',
+          title: 'Outreach',
+          items: [
             {
-              id: 'notes-section',
-              title: 'Outreach',
-              items: [
+              id: 'notes-task',
+              title: 'Send email',
+              contents: [
                 {
-                  id: 'notes-task',
-                  title: 'Send email',
-                  contents: [
-                    {
-                      type: 'subItems',
-                      value: '',
-                      subItems: [{ id: 'notes-subtask', title: 'Wait for reply' }],
-                    },
-                  ],
+                  type: 'subItems',
+                  value: '',
+                  subItems: [{ id: 'notes-subtask', title: 'Wait for reply' }],
                 },
               ],
             },
           ],
-          title: 'Run notes QA',
-        }),
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { apiBaseUrl: DEV_API_BASE_URL });
+        },
+      ],
+      title: 'Run notes QA',
+    });
 
     await page.goto(`/dashboard/runs/${runId}`);
     await expect(page.getByLabel('Task notes')).toHaveCount(1);
@@ -729,16 +709,7 @@ test.describe("template editor regressions", () => {
     expect(subItems?.map((subItem) => subItem.title)).toEqual(["Check title"]);
 
     const templateId = String(savedTemplate?.id);
-    const runId = await page.evaluate(async ({ id, runSections, apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/checklists`, {
-        body: JSON.stringify({ template_id: id, title: "Blank titles run", sections: runSections }),
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { id: templateId, runSections: sections, apiBaseUrl: DEV_API_BASE_URL });
+    const runId = await postRun(page, { template_id: templateId, title: "Blank titles run", sections });
 
     await page.goto(`/dashboard/runs/${runId}`);
     await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
@@ -750,9 +721,7 @@ test.describe("template editor regressions", () => {
     await expect(page.getByRole("checkbox", { name: "Check title", exact: true })).toBeVisible();
     await expect(page.getByText("Check title", { exact: true })).toBeVisible();
 
-    await page.evaluate(async ({ id, apiBaseUrl }) => {
-      await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: "include", method: "DELETE" });
-    }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+    await apiRequest(page, `/checklists/${runId}`, { method: "DELETE" });
     await deleteTemplate(page, templateId);
   });
 
@@ -1304,24 +1273,15 @@ test.describe("template editor regressions", () => {
     const stamp = Date.now();
     const templateTitle = `QA Outline ${stamp}`;
     const sectionTitles = ["Before the move", "Moving day", "After the move"];
-    const templateId = await page.evaluate(async ({ title, titles, apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/templates`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title,
-          is_public: false,
-          sections: titles.map((sectionTitle, index) => ({
-            id: `outline-section-${index}`,
-            title: sectionTitle,
-            items: [{ id: `outline-task-${index}`, title: `${sectionTitle} task`, description: "" }],
-          })),
-        }),
-      });
-      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { title: templateTitle, titles: sectionTitles, apiBaseUrl: DEV_API_BASE_URL });
+    const templateId = await postTemplate(page, {
+      title: templateTitle,
+      is_public: false,
+      sections: sectionTitles.map((sectionTitle, index) => ({
+        id: `outline-section-${index}`,
+        title: sectionTitle,
+        items: [{ id: `outline-task-${index}`, title: `${sectionTitle} task`, description: "" }],
+      })),
+    });
 
     // Record whether the header ever showed the blank form's title before the template.
     await page.addInitScript(() => {
@@ -1472,20 +1432,17 @@ test.describe("template editor regressions", () => {
       await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}$`));
 
       // Another tab (or an Organization teammate) saves a new task meanwhile.
-      await page.evaluate(async ({ id, apiBaseUrl }) => {
-        const current = await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: "include" });
-        // Reads return the checklist as parsed `sections` (the raw items column is not sent).
-        const template = (await current.json()) as { sections: Array<{ items: unknown[] }>; version: number };
-        const { sections } = template;
-        sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
-        const response = await fetch(`${apiBaseUrl}/templates/${id}`, {
-          method: "PUT",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ sections, expected_version: template.version }),
-        });
-        if (!response.ok) throw new Error(`Failed to update template: ${response.status}`);
-      }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+      // Reads return the checklist as parsed `sections` (the raw items column is not sent).
+      const template = await apiJson<{ sections: Array<{ items: unknown[] }>; version: number }>(
+        page,
+        `/templates/${templateId}`,
+      );
+      const { sections } = template;
+      sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
+      await apiJson(page, `/templates/${templateId}`, {
+        method: "PUT",
+        body: { sections, expected_version: template.version },
+      });
 
       await page.getByRole("link", { name: "Edit" }).click();
       await expect(page.getByText("Added elsewhere").first()).toBeVisible();
@@ -1506,35 +1463,26 @@ test.describe("template editor regressions", () => {
     const title = `Legacy content ${uniqueSuffix()}`;
     // Writes still store ids and nulls as given, as a lenient JSON import did
     // (src/lib/schemas/storedSections.ts passes them through).
-    const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/templates`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          title: templateTitle,
-          is_public: false,
-          sections: [
+    const templateId = await postTemplate(page, {
+      title,
+      is_public: false,
+      sections: [
+        {
+          id: "legacy-section",
+          title: "Prep",
+          items: [
             {
-              id: "legacy-section",
-              title: "Prep",
-              items: [
-                {
-                  id: "legacy-task",
-                  title: "Legacy task",
-                  contents: [
-                    { id: 1, type: "text", value: "Numeric id" },
-                    { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
-                  ],
-                },
+              id: "legacy-task",
+              title: "Legacy task",
+              contents: [
+                { id: 1, type: "text", value: "Numeric id" },
+                { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
               ],
             },
           ],
-        }),
-      });
-      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+        },
+      ],
+    });
     // Every write now refuses a block of unknown type, but rows stored before that check
     // still hold them. The editor loads this template with one, as it would load such a row.
     await page.route(`**/api/templates/${templateId}`, async (route) => {
@@ -1570,19 +1518,10 @@ test.describe("template editor regressions", () => {
 test.describe("template editor route switches", () => {
   async function openNewTemplateEditor(page: Page) {
     const title = `Route switch QA ${uniqueSuffix()}`;
-    const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/templates`, {
-        body: JSON.stringify({
-          title: templateTitle,
-          sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
-        }),
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+    const templateId = await postTemplate(page, {
+      title,
+      sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
+    });
     await page.goto(`/dashboard/templates/${templateId}/edit`);
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue(title);
     return { templateId, title };

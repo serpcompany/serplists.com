@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson, apiRequest } from './support/api-requests';
+
 // Template and run lists load only on pages that show them (docs/FRONTEND.md). These
 // flows must not depend on a list another page happened to load earlier.
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -13,9 +13,15 @@ async function loginAsAdmin(page: Page) {
 }
 
 async function deleteRun(page: Page, runId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
+}
+
+async function deleteTemplate(page: Page, templateId: string) {
+  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
+}
+
+async function createTemplate(page: Page, body: Record<string, unknown>): Promise<string> {
+  return (await apiJson<{ id: string }>(page, '/templates', { method: 'POST', body })).id;
 }
 
 test('starts a run from a public template page opened directly', async ({ page }) => {
@@ -31,22 +37,16 @@ test('starts a run from a public template page opened directly', async ({ page }
 test('keeps toggled tasks and advances on a run opened from the runs dashboard', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Toggle QA ${Date.now()}`;
-  const runId = await page.evaluate(async ({ runTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists`, {
-      body: JSON.stringify({
-        title: runTitle,
-        sections: [{ id: 'toggle-section', title: 'Section', items: [
-          { id: 'toggle-one', title: 'First task' },
-          { id: 'toggle-two', title: 'Second task' },
-        ] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { runTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const { id: runId } = await apiJson<{ id: string }>(page, '/checklists', {
+    method: 'POST',
+    body: {
+      title,
+      sections: [{ id: 'toggle-section', title: 'Section', items: [
+        { id: 'toggle-one', title: 'First task' },
+        { id: 'toggle-two', title: 'Second task' },
+      ] }],
+    },
+  });
 
   // The runs dashboard loads the run list; open the run in the same app session.
   await page.goto('/dashboard/runs');
@@ -66,12 +66,10 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
   await expect(page.getByRole('heading', { name: 'Second task' })).toBeVisible();
   await completeTask();
 
-  const completed = await page.evaluate(async ({ id, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/checklists/${id}`, { credentials: 'include' });
-    const run = (await response.json()) as { items: string | Array<{ items: Array<{ isCompleted?: boolean }> }> };
-    const sections = typeof run.items === 'string' ? JSON.parse(run.items) : run.items;
-    return sections.flatMap((section: { items: Array<{ isCompleted?: boolean }> }) => section.items.map((item) => item.isCompleted === true));
-  }, { id: runId, apiBaseUrl: DEV_API_BASE_URL });
+  type Sections = Array<{ items: Array<{ isCompleted?: boolean }> }>;
+  const run = await apiJson<{ items: string | Sections }>(page, `/checklists/${runId}`);
+  const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Sections;
+  const completed = sections.flatMap((section) => section.items.map((item) => item.isCompleted === true));
   expect(completed).toEqual([true, true]);
   await deleteRun(page, runId);
 });
@@ -79,19 +77,10 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
 test('saves a template twice from the editor without loading a template list', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Editor save QA ${Date.now()}`;
-  const templateId = await page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      body: JSON.stringify({
-        title: templateTitle,
-        sections: [{ id: 'save-section', title: 'Section', items: [{ id: 'save-task', title: 'Task' }] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const templateId = await createTemplate(page, {
+    title,
+    sections: [{ id: 'save-section', title: 'Section', items: [{ id: 'save-task', title: 'Task' }] }],
+  });
 
   // The editor loads its template by id; a list request (?scope= or ?teamId=) is waste.
   const listRequests: string[] = [];
@@ -115,27 +104,16 @@ test('saves a template twice from the editor without loading a template list', a
   }
 
   expect(listRequests).toEqual([]);
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
-  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  await deleteTemplate(page, templateId);
 });
 
 test('opens a template detail page with one request for that template and no list', async ({ page }) => {
   await loginAsAdmin(page);
-  const templateId = await page.evaluate(async ({ apiBaseUrl, templateTitle }) => {
-    const response = await fetch(`${apiBaseUrl}/templates`, {
-      body: JSON.stringify({
-        title: templateTitle,
-        is_public: false,
-        sections: [{ id: 'detail-section', title: 'Section', items: [{ id: 'detail-item', title: 'Task' }] }],
-      }),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    });
-    if (!response.ok) throw new Error(`Failed to create template: ${response.status}`);
-    return ((await response.json()) as { id: string }).id;
-  }, { apiBaseUrl: DEV_API_BASE_URL, templateTitle: `Detail Load QA ${Date.now()}` });
+  const templateId = await createTemplate(page, {
+    title: `Detail Load QA ${Date.now()}`,
+    is_public: false,
+    sections: [{ id: 'detail-section', title: 'Section', items: [{ id: 'detail-item', title: 'Task' }] }],
+  });
 
   const templateRequests: string[] = [];
   page.on('request', (request) => {
@@ -167,8 +145,6 @@ test('opens a template detail page with one request for that template and no lis
 
     expect(templateRequests.filter(isList)).toEqual([]);
   } finally {
-    await page.evaluate(async ({ id, apiBaseUrl }) => {
-      await fetch(`${apiBaseUrl}/templates/${id}`, { credentials: 'include', method: 'DELETE' });
-    }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+    await deleteTemplate(page, templateId);
   }
 });

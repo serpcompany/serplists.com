@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { apiJson } from './support/api-requests';
+
 // The public template page must show the server's copy, not the catalog another page
 // loaded earlier in the same tab (docs/FRONTEND.md).
-
-const DEV_API_BASE_URL = process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');
@@ -21,16 +21,7 @@ async function navigateInApp(page: Page, path: string) {
 }
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return page.evaluate(async ({ apiBaseUrl, requestBody, requestMethod, requestPath }) => {
-    const response = await fetch(`${apiBaseUrl}${requestPath}`, {
-      body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      method: requestMethod,
-    });
-    if (!response.ok) throw new Error(`${requestMethod} ${requestPath} failed: ${response.status}`);
-    return (await response.json()) as Record<string, unknown>;
-  }, { apiBaseUrl: DEV_API_BASE_URL, requestBody: body, requestMethod: method, requestPath: path });
+  return apiJson<Record<string, unknown>>(page, path, { method, body });
 }
 
 test('shows edits and unpublishing on a public template page after the catalog loaded', async ({ page }) => {
