@@ -775,12 +775,14 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
 
 // The task footer (Previous, Mark Complete, Next) stays at the bottom of the window: it is in
 // view without scrolling on a short task, and the Changelog, which grows by an entry after
-// every save, never moves it under the pointer. On phones it sits above the bottom navigation.
-// No bar covers the bottom of the window on phones: the console's navigation is a sidebar sheet.
-for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390, height: 844, bottomNav: 0 }]) {
+// every save, never moves it under the pointer. No bar covers the bottom of the window on
+// phones: the console's navigation opens as a sidebar sheet.
+for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
   test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
-    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    // Sign in at the default width: below md the context switcher that loginAsAdmin waits
+    // for sits in the closed sidebar sheet.
     await loginAsAdmin(page);
+    await page.setViewportSize(viewport);
     const tasks = ['Check DNS', 'Check TLS', 'Check redirects', 'Check sitemap'];
     const runId = await postRun(page, {
       title: `Footer QA ${Date.now()}`,
@@ -796,7 +798,7 @@ for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390
     await expect(changelogEntries).toHaveCount(1);
     const first = await markComplete.boundingBox();
     if (!first) throw new Error('Mark Complete is not shown');
-    expect(first.y + first.height).toBeLessThanOrEqual(viewport.height - viewport.bottomNav);
+    expect(first.y + first.height).toBeLessThanOrEqual(viewport.height);
 
     for (const [index, next] of tasks.slice(1).entries()) {
       await markComplete.click();

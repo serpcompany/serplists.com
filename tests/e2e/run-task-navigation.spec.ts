@@ -39,7 +39,6 @@ async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
-// The sticky site header, plus the context header below md (768px).
 // The console's top bar (AppShell.tsx) is the only sticky header, at every width.
 const STICKY_HEIGHT = 56;
 
@@ -105,9 +104,9 @@ test('the desktop task list opens a task at its title', async ({ page }) => {
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { level: 2, name: 'Task A' })).toBeVisible();
-  // Scroll the task header 30px under the sticky site header, leaving the task list in view.
+  // Scroll the task header 30px under the sticky top bar, leaving the task list in view.
   const shell = await page.locator('[data-run-workspace-shell]').boundingBox();
-  await page.evaluate((by) => window.scrollBy(0, by), (shell?.y ?? 0) - stickyHeight(1440) + 30);
+  await page.evaluate((by) => window.scrollBy(0, by), (shell?.y ?? 0) - STICKY_HEIGHT + 30);
 
   await page.locator('[data-run-progress-panel]').getByRole('button', { name: /Task C/ }).click();
   await expectRevealed(page, 'Task C');

@@ -1,5 +1,5 @@
 export type PublicTemplateSaveLabels = {
-  // The compact bookmark button in the sticky header.
+  // The bookmark button in the page header.
   header: string;
   // The "Ready to use this template?" call to action.
   footer: string;

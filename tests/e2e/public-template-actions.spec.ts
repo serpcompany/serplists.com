@@ -32,7 +32,7 @@ test('a double click on the header Start Run creates one run', async ({ page }) 
   });
 
   await openPublicTemplate(page);
-  // The sticky header button comes first in the page; the bottom call-to-action is second.
+  // The header button comes first in the page; the bottom call-to-action is second.
   await page.getByRole('button', { name: 'Start Run' }).first().dblclick();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   expect(runCreates).toHaveLength(1);

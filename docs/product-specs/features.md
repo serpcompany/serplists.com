@@ -24,7 +24,7 @@ Canonical private routes:
 - Runs: `/dashboard/runs`
 - Run detail: `/dashboard/runs/:id`
 - Settings: `/dashboard/settings`
-- Archive: `/dashboard/archive`, linked from the console sidebar and mobile menu
+- Archive: `/dashboard/archive`, linked from the console sidebar (a sheet on phones)
 
 ## Templates
 
@@ -55,7 +55,7 @@ Canonical private routes:
 - A task with sub-tasks is done when every sub-task in all of its Sub-tasks blocks is ticked, and unticking any of them reopens the task. Mark Complete ticks or unticks all of them. The web app and the agent API use the same rule, and read the same Sub-tasks (`getTaskSubTasks` in `src/lib/schemas/storedSections.ts`): only the rows of Sub-tasks blocks. Sub-items stored on another block or on the task itself (older rows, hand-written packs, direct API writes) are never shown, counted, ticked or matched by reconciliation, and Run Key `get_run` and `update_run` results leave them out (live and retired work alike; the stored run keeps the ones on the task); imports and new runs drop the ones on other blocks.
 - Run task counts ("2 of 5 tasks finished", the task list, "Task N of M", the runs list) count tasks only, never sub-tasks. The progress percentage and its bars follow the progress rule above, the same value the API stores as the run's progress.
 - The run page lists every task and opens any of them directly: in a side column on wide screens, and from a Tasks button in the progress block on phones and narrower windows.
-- The task's Previous, Mark Complete and Next buttons stay at the bottom of the window (above the phone navigation bar) until the end of the task, so they are in view on a short task and do not move when the run's Changelog grows after a save.
+- The task's Previous, Mark Complete and Next buttons stay at the bottom of the window until the end of the task, so they are in view on a short task and do not move when the run's Changelog grows after a save.
 - Moving to another task on the run page (Mark Complete, Next, Previous, or a task list) scrolls back to that task's title when it is out of view, just below the sticky headers. Mark Complete, Next, Previous and the side task list also move focus to the title; the phone Tasks sheet returns focus to its Tasks button, as dialogs do. The rest of a double click that lands after that scroll is ignored. Opening a run, or saving a change to the task on screen, never moves the page or takes focus, and a field the user is typing in keeps its focus.
 - The run page saves one change at a time. Each tick or untick sets the value the user clicked rather than flipping the saved one, so a click made while an earlier save is still in flight never reverses it, and a click that changes nothing sends no save. Completing a task moves on to the next unfinished task only if the completed task is still open when its save lands; a task the user opened while the save was in flight stays open.
 - Run page controls that change what they do after a click (Next Task becomes the next task's Mark Complete, a completed task moves on to the next one, Rename becomes Save title) ignore the second click of a double click, and the completion prompt stays open through the rest of the double click that opened it. Saving an unchanged run title sends nothing.

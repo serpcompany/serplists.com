@@ -133,9 +133,8 @@ Template.
   task column shows only at `xl`; below it, the progress block's Tasks button opens the
   same list (`RunTaskList`) in a sheet (`src/components/run-execution/MobileRunProgress.tsx`).
 - Controls used again and again keep their place. The run page's task footer (Previous,
-  Mark Complete, Next) is sticky at the bottom of the window, above the phone navigation
-  bar, until the end of the task panel scrolls into view, so content that grows under
-  the panel (the Changelog, after every save) never moves it under the pointer. A sticky
-  element needs every box around it to clip (`overflow-clip`), not scroll: an
-  `overflow-auto` or `overflow-hidden` ancestor holds it instead of the window
-  (`src/components/run-execution/TaskExecutionPanel.tsx`).
+  Mark Complete, Next) is sticky at the bottom of the window until the end of the task
+  panel scrolls into view, so content that grows under the panel (the Changelog, after
+  every save) never moves it under the pointer. A sticky element needs every box around it
+  to clip (`overflow-clip`), not scroll: an `overflow-auto` or `overflow-hidden` ancestor
+  holds it instead of the window (`src/components/run-execution/TaskExecutionPanel.tsx`).
