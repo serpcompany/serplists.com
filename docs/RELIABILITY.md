@@ -173,10 +173,14 @@ Common failures:
 - The local API runs behind wrangler's dev proxy, which now and then drops a request
   that arrives while the page has several of its own in flight: a non-GET gets
   `503 Your worker restarted mid-request` without CORS headers (the browser reports
-  `Failed to fetch`), and a GET is held unanswered. Signing in lands on Account
-  Settings, which loads several sections at once, so a spec that calls the API from
-  the page right after signing in first waits for the page's requests with
-  `trackApiRequests()` from `tests/e2e/support/api-requests.ts`.
+  `Failed to fetch`), and a GET is held unanswered. Specs set up and read their data
+  with `apiRequest()` or `apiJson()` from `tests/e2e/support/api-requests.ts`: they
+  call the API through Playwright's request client with the page's cookies, and send
+  a request again only when the proxy dropped it. A fetch inside `page.evaluate()`
+  stays only where the page's own request is what the test checks, marked with an
+  `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
+  any other. `trackApiRequests()` in the same file waits for the page's own requests,
+  such as the several that Account Settings sends when signing in lands there.
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
   routes change.
