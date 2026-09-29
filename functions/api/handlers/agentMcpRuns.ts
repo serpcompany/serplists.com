@@ -1,4 +1,4 @@
-import { getTaskSubTasks, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { findRunCompletionRefusal } from "../utils/run-completion";
 import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
@@ -57,6 +57,31 @@ export function parseRetiredItems(run: JsonRecord): JsonRecord[] {
   return (parseJsonArray(run.retired_items) ?? []).filter(isRecord);
 }
 
+// A task as an agent reads it: sub-items only inside Sub-tasks blocks, the ones the run page
+// shows and update_run can tick (getTaskSubTasks). Sub-items stored on the task itself (older
+// rows) or, in retired work, on another block are left out; the stored run keeps them.
+const withoutSubItems = ({ subItems: _notSubTasks, ...rest }: JsonRecord): JsonRecord => rest;
+
+function agentTaskView(task: JsonRecord): JsonRecord {
+  const view = withoutSubItems(task);
+  if (Array.isArray(task.contents)) {
+    view.contents = task.contents.map((content: unknown) =>
+      isRecord(content) && !isSubTasksBlock(content) ? withoutSubItems(content) : content);
+  }
+  return view;
+}
+
+function agentSectionView(section: JsonRecord): JsonRecord {
+  if (!Array.isArray(section.items)) return section;
+  return { ...section, items: section.items.map((task) => (isRecord(task) ? agentTaskView(task) : task)) };
+}
+
+function agentRetiredView(entry: JsonRecord): JsonRecord {
+  if (entry.kind === "section" && isRecord(entry.section)) return { ...entry, section: agentSectionView(entry.section) };
+  if (entry.kind === "item" && isRecord(entry.item)) return { ...entry, item: agentTaskView(entry.item) };
+  return entry;
+}
+
 export function serializeRun(
   run: JsonRecord,
   sections: JsonRecord[] = parseStoredSections(run.items),
@@ -66,8 +91,8 @@ export function serializeRun(
     id: run.id,
     templateId: run.template_id,
     title: run.title,
-    sections,
-    retiredItems,
+    sections: sections.map(agentSectionView),
+    retiredItems: retiredItems.map(agentRetiredView),
     status: run.status ?? "in_progress",
     progress: typeof run.progress === "number" ? run.progress : 0,
     revision: typeof run.revision === "number" ? run.revision : 1,
@@ -164,7 +189,8 @@ export function applyRunOperation(sections: JsonRecord[], operation: UpdateRunAr
 export function updateRunResult(nextRun: JsonRecord, sections: JsonRecord[], operation: UpdateRunArgs): JsonRecord {
   const run = summarizeRun(nextRun);
   if (operation.operation === "set_run_status") return { run };
-  const result = { run, task: findTask(sections, operation.taskId) };
+  const task = findTask(sections, operation.taskId);
+  const result = { run, task: task ? agentTaskView(task) : task };
   return jsonByteLength(result) <= MAX_RESULT_BYTES ? result : { run, taskOmitted: true };
 }
 
