@@ -32,6 +32,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
     activeTeamId: undefined,
     activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
+    getPermissions: () => ({ canRun: true, canEditTemplates: true, canManage: true }),
     isWorkspaceLoading: false,
     selectWorkspace: vi.fn(),
     workspaceScopeId: 'personal',

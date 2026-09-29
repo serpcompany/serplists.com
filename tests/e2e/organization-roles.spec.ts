@@ -4,7 +4,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 // (src/lib/organizationPermissions.ts mirrors functions/api/utils/team-access.ts).
 // The API is mocked so each role sees the same Organization, Template, and run.
 
-type Role = 'viewer' | 'runner';
+type Role = 'viewer' | 'runner' | 'editor';
 
 const sections = [
   { id: 'sec-1', title: 'Section', items: [
@@ -38,6 +38,10 @@ const organizationRun = {
   revision: 1,
   started_at: '2026-07-02T00:00:00.000Z',
 };
+
+// Every member sees the archive; restoring needs editor (Templates) or admin (runs).
+const archivedTemplate = { ...organizationTemplate, id: 'tpl-archived', title: 'Archived Playbook', deleted_at: '2026-07-03T00:00:00.000Z' };
+const archivedRun = { ...organizationRun, id: 'run-archived', title: 'Archived Run', deleted_at: '2026-07-03T00:00:00.000Z' };
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
@@ -100,6 +104,8 @@ async function mockOrganizationApi(page: Page, role: Role) {
     if (path === '/api/checklists/run-org/history') {
       return fulfillJson(route, { checklistId: 'run-org', events: [], subject: { type: 'team', id: 'team-1' } });
     }
+    if (path === '/api/templates/archived') return fulfillJson(route, [archivedTemplate]);
+    if (path === '/api/checklists/archived') return fulfillJson(route, [archivedRun]);
 
     await route.continue();
   });
@@ -135,6 +141,11 @@ test('an Organization viewer sees no actions the API would reject', async ({ pag
   await expect(page.getByRole('button', { name: 'Share' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save notes' })).toHaveCount(0);
 
+  await page.goto('/dashboard/archive');
+  await expect(page.getByText('Archived Playbook', { exact: true })).toBeVisible();
+  await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
+
   expect(api.forbidden).toEqual([]);
 });
 
@@ -154,4 +165,14 @@ test('an Organization runner can run but not edit or delete', async ({ page }) =
   await page.goto('/dashboard/runs/run-org');
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
   await expect(page.getByText('View only')).toHaveCount(0);
+});
+
+test('an Organization editor can restore archived Templates but not runs', async ({ page }) => {
+  await mockOrganizationApi(page, 'editor');
+
+  await page.goto('/dashboard/archive');
+  await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
+  const templateRow = page.locator('div.grid').filter({ hasText: 'Archived Playbook' }).filter({ hasNot: page.locator('div.grid') });
+  await expect(templateRow.getByRole('button', { name: 'Restore' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(1);
 });

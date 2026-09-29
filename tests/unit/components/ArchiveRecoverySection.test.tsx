@@ -1,10 +1,19 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
+import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
+import { api } from '@/lib/api';
+import { getResourcePermissions, type OrganizationRole } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
+
+const workspace = vi.hoisted(() => ({
+  activeTeamId: undefined as string | undefined,
+  role: undefined as string | undefined,
+  scope: 'personal',
+}));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({
@@ -14,10 +23,18 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => ({
-    activeTeamId: undefined,
-    workspaceScopeId: 'personal',
+    activeTeamId: workspace.activeTeamId,
+    getPermissions: (teamId?: string) =>
+      getResourcePermissions(teamId, () => workspace.role as OrganizationRole | undefined),
+    workspaceScopeId: workspace.scope,
   }),
 }));
+
+afterEach(() => {
+  workspace.activeTeamId = undefined;
+  workspace.role = undefined;
+  workspace.scope = 'personal';
+});
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -70,5 +87,82 @@ describe('ArchiveRecoverySection', () => {
     expect(html).toContain('Archived Launch Run');
     expect(html).toContain('Archived Jul 3, 2026');
     expect(html).toContain('Restore');
+  });
+});
+
+// The API restores a Template for editors and above, and a Run for admins and above
+// (canEditTemplate, canRestoreRun). Offering Restore to other roles only led to "Forbidden".
+describe('ArchiveRecoverySection restore by role', () => {
+  const renderArchive = () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(queryKeys.archivedTemplates('user-1', workspace.scope), [
+      { id: 'template-1', kind: 'template', title: 'Archived Launch Template', archivedAt: '2026-07-03T12:00:00.000Z' },
+    ]);
+    queryClient.setQueryData(queryKeys.archivedRuns('user-1', workspace.scope), [
+      { id: 'run-1', kind: 'run', title: 'Archived Launch Run', archivedAt: '2026-07-03T12:30:00.000Z' },
+    ]);
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <ArchiveRecoverySection />
+      </QueryClientProvider>,
+    );
+    const [templatesList, runsList] = html.split('Archived runs</h2>');
+    const restoreButtons = (list: string) => (list.match(/>Restore<\/button>/g) ?? []).length;
+    return {
+      html,
+      runs: restoreButtons(runsList),
+      templates: restoreButtons(templatesList),
+    };
+  };
+
+  it('offers Restore on both lists in Personal', () => {
+    const shown = renderArchive();
+    expect(shown.templates).toBe(1);
+    expect(shown.runs).toBe(1);
+  });
+
+  it.each([
+    ['owner', 1, 1],
+    ['admin', 1, 1],
+    ['editor', 1, 0],
+    ['runner', 0, 0],
+    ['viewer', 0, 0],
+    [undefined, 0, 0],
+  ])('offers an Organization %s Restore only where the API allows it', (role, templates, runs) => {
+    workspace.activeTeamId = 'team-1';
+    workspace.role = role;
+    workspace.scope = 'team-1';
+
+    const shown = renderArchive();
+
+    // The archived items stay listed: every member may see them.
+    expect(shown.html).toContain('Archived Launch Template');
+    expect(shown.html).toContain('Archived Launch Run');
+    expect(shown.templates).toBe(templates);
+    expect(shown.runs).toBe(runs);
+  });
+});
+
+describe('useArchiveRecovery restore', () => {
+  it('sends no request for a kind the role cannot restore, as from a stale render', async () => {
+    workspace.activeTeamId = 'team-1';
+    workspace.role = 'editor';
+    workspace.scope = 'team-1';
+    let recovery: ReturnType<typeof useArchiveRecovery> | undefined;
+    const Probe = () => {
+      recovery = useArchiveRecovery();
+      return null;
+    };
+    renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Probe />
+      </QueryClientProvider>,
+    );
+
+    expect(recovery?.canRestoreTemplates).toBe(true);
+    expect(recovery?.canRestoreRuns).toBe(false);
+    await recovery?.restore({ id: 'run-1', kind: 'run', title: 'Archived Launch Run', archivedAt: '' });
+
+    expect(api.restoreChecklist).not.toHaveBeenCalled();
   });
 });

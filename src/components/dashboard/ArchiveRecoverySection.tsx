@@ -17,6 +17,8 @@ function formatArchiveDate(dateString: string): string {
 }
 
 type ArchiveListProps = {
+  // False when the member's role cannot restore this kind: the items stay listed.
+  canRestore: boolean;
   emptyLabel: string;
   error: unknown;
   icon: ReactNode;
@@ -29,6 +31,7 @@ type ArchiveListProps = {
 };
 
 function ArchiveList({
+  canRestore,
   emptyLabel,
   error,
   icon,
@@ -75,17 +78,19 @@ function ArchiveList({
                     Archived {formatArchiveDate(item.archivedAt)}
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={restoring}
-                  onClick={() => onRestore(item)}
-                  className="rounded-md"
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  {restoring ? 'Restoring...' : 'Restore'}
-                </Button>
+                {canRestore ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={restoring}
+                    onClick={() => onRestore(item)}
+                    className="rounded-md"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    {restoring ? 'Restoring...' : 'Restore'}
+                  </Button>
+                ) : null}
               </div>
             );
           })}
@@ -104,6 +109,8 @@ export function ArchiveRecoverySection() {
     refetchTemplates,
     refetchRuns,
     isLoading,
+    canRestoreTemplates,
+    canRestoreRuns,
     restoringIds,
     restore,
   } = useArchiveRecovery();
@@ -120,6 +127,7 @@ export function ArchiveRecoverySection() {
       <div className="grid gap-4 lg:grid-cols-2">
         <ArchiveList
           title="Archived templates"
+          canRestore={canRestoreTemplates}
           listName="archived templates"
           emptyLabel="No archived templates"
           error={templatesError}
@@ -131,6 +139,7 @@ export function ArchiveRecoverySection() {
         />
         <ArchiveList
           title="Archived runs"
+          canRestore={canRestoreRuns}
           listName="archived runs"
           emptyLabel="No archived runs"
           error={runsError}

@@ -1,6 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
+import type { ResourcePermissions } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
 import { refreshRunLists } from '@/contexts/templateListCache';
 
@@ -40,6 +42,24 @@ export function parseArchiveItems(rows: unknown, kind: ArchiveKind): ArchiveItem
       archivedAt: deletedAt || updatedAt || '',
     }];
   });
+}
+
+// The API restores a Template for those who may edit it (editor and above in an
+// Organization, canEditTemplate) and a Run for admins and above (canRestoreRun). In Personal
+// the owner may restore both. Every archived row belongs to the active context.
+export const canRestoreArchiveItem = (permissions: ResourcePermissions, kind: ArchiveKind): boolean =>
+  kind === 'template' ? permissions.canEditTemplates : permissions.canManage;
+
+// Plan limits come back as a 403 with a code and the reason in the message. A 403 without a
+// code is a role refusal (the role changed since the page loaded), whose message is only
+// "Forbidden".
+export function describeRestoreError(error: unknown, kind: ArchiveKind): string {
+  if (isApiError(error) && error.status === 403 && !error.code) {
+    return kind === 'template'
+      ? 'Your role in this Organization cannot restore templates.'
+      : 'Your role in this Organization cannot restore runs.';
+  }
+  return getApiErrorMessage(error, kind === 'template' ? 'Failed to restore template.' : 'Failed to restore run.');
 }
 
 type RestoreDependencies = {

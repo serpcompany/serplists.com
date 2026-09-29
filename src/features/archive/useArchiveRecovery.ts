@@ -5,16 +5,25 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { api } from '@/lib/api';
-import { getApiErrorMessage } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryKeys';
 
-import { parseArchiveItems, restoreArchiveItem, type ArchiveItem } from './archiveRecovery';
+import {
+  canRestoreArchiveItem,
+  describeRestoreError,
+  parseArchiveItems,
+  restoreArchiveItem,
+  type ArchiveItem,
+} from './archiveRecovery';
 
 // Archived Templates and Runs for the active context. The archive lists read every archived
-// row for the owner, so only the archive page loads them.
+// row for the owner, so only the archive page loads them. Every member may see them, but
+// Restore follows the member's role (canRestoreArchiveItem).
 export function useArchiveRecovery() {
   const { user } = useAuth();
-  const { activeTeamId, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
+  const { activeTeamId, getPermissions, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
+  const permissions = getPermissions(activeTeamId);
+  const canRestoreTemplates = canRestoreArchiveItem(permissions, 'template');
+  const canRestoreRuns = canRestoreArchiveItem(permissions, 'run');
   const queryClient = useQueryClient();
   const params = activeTeamId ? { teamId: activeTeamId } : undefined;
   const enabled = Boolean(user) && !isWorkspaceLoading;
@@ -40,7 +49,8 @@ export function useArchiveRecovery() {
 
   const restore = useCallback(
     async (item: ArchiveItem) => {
-      if (pendingRef.current.has(item.id)) return;
+      const allowed = item.kind === 'template' ? canRestoreTemplates : canRestoreRuns;
+      if (pendingRef.current.has(item.id) || !allowed) return;
       setRestoringIds((ids) => new Set(ids).add(item.id));
       try {
         const restored = await restoreArchiveItem(
@@ -58,10 +68,7 @@ export function useArchiveRecovery() {
           toast.success(item.kind === 'template' ? 'Template restored' : 'Run restored');
         }
       } catch (error) {
-        // Plan limits and Organization roles come back as 403 with the reason in the message.
-        toast.error(
-          getApiErrorMessage(error, item.kind === 'template' ? 'Failed to restore template.' : 'Failed to restore run.'),
-        );
+        toast.error(describeRestoreError(error, item.kind));
       } finally {
         setRestoringIds((ids) => {
           const next = new Set(ids);
@@ -70,7 +77,7 @@ export function useArchiveRecovery() {
         });
       }
     },
-    [queryClient, user?.id, workspaceScopeId],
+    [canRestoreRuns, canRestoreTemplates, queryClient, user?.id, workspaceScopeId],
   );
 
   return {
@@ -81,6 +88,8 @@ export function useArchiveRecovery() {
     refetchTemplates: () => void templatesQuery.refetch(),
     refetchRuns: () => void runsQuery.refetch(),
     isLoading: templatesQuery.isLoading || runsQuery.isLoading,
+    canRestoreTemplates,
+    canRestoreRuns,
     restoringIds,
     restore,
   };
