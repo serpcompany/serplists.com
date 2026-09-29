@@ -5,12 +5,17 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { describe, expect, it } from "vitest";
 import {
   cleanupLocalTestData,
+  LEGACY_TEST_TEMPLATE_SLUGS,
+  readLocalSeedStatus,
+  repairLegacyTestTemplateSlugs,
   seedLocalTestData,
+  seedOfficialLocalLogin,
   TEST_TEMPLATE_IDS,
   TEST_USER_IDS,
 } from "../../../../db/seeds/local";
 import * as schema from "../../../../db/schema/index";
 import type { LocalDb } from "../../../../scripts/data/local-d1";
+import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed.mjs";
 
 const migrationsDir = path.join("db", "migrations");
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
@@ -238,5 +243,124 @@ describe("cleanupLocalTestData", () => {
     expect(accountsBefore).toHaveLength(TEST_USER_IDS.length);
     expect(local.ids(`SELECT id FROM account WHERE user_id IN (${testUserList}) ORDER BY id`)).toEqual(accountsBefore);
     expect(local.ids("SELECT id FROM templates ORDER BY id")).toEqual(templatesBefore);
+  });
+});
+
+// Before the sample- prefix, these test Templates held official Templates' slugs, and the
+// official seed (then INSERT OR IGNORE) silently skipped those four official Templates.
+// Every local database seeded then still looks like this.
+const PRE_SAMPLE_TEST_SLUGS: Record<string, string> = {
+  "template-1": "technical-seo-audit-checklist",
+  "template-2": "keyword-research-mapping-checklist",
+  "template-3": "content-refresh-checklist",
+  "template-5": "local-seo-gbp-checklist",
+};
+
+async function databaseSeededBeforeSampleSlugs() {
+  const local = createMigratedDatabase();
+  await seedLocalTestData(local.db);
+  local.runOfficialSeed();
+  await seedOfficialLocalLogin(local.db);
+  for (const [id, slug] of Object.entries(PRE_SAMPLE_TEST_SLUGS)) {
+    local.exec(
+      `DELETE FROM templates WHERE user_id = 'serp-user' AND slug = '${slug}';` +
+        `UPDATE templates SET slug = '${slug}' WHERE id = '${id}';`,
+    );
+  }
+  return local;
+}
+
+type LocalDatabase = ReturnType<typeof createMigratedDatabase>;
+
+// What each stage setup plans runs (scripts/lib/local-d1-seed.mjs LOCAL_SEED_STEPS).
+async function runSeedStage(local: LocalDatabase, step: string) {
+  if (step === "seed-test") return seedLocalTestData(local.db);
+  if (step === "repair-test-slugs") return repairLegacyTestTemplateSlugs(local.db);
+  if (step === "official-templates") return local.runOfficialSeed();
+  if (step === "official-login") return seedOfficialLocalLogin(local.db);
+  throw new Error(`Unexpected seed stage ${step}`);
+}
+
+const testSlugs = (local: LocalDatabase) =>
+  Object.fromEntries(
+    local.templates().filter((row) => row.id in PRE_SAMPLE_TEST_SLUGS).map((row) => [row.id, row.slug]),
+  );
+
+const DEVELOPER_TEMPLATE_SQL =
+  "INSERT INTO templates (id, user_id, title, items, slug, created_at) " +
+  "VALUES ('developer-template', 'user-2', 'Mine', '[]', 'developer-template', datetime('now'));";
+
+describe("setup on a database seeded before the sample- test slugs", () => {
+  it("renames the old test slugs in place so the official Templates seed, without reseeding test data", async () => {
+    const local = await databaseSeededBeforeSampleSlugs();
+    local.exec(DEVELOPER_TEMPLATE_SQL);
+    expect(() => local.runOfficialSeed()).toThrow(/UNIQUE constraint failed: templates\.slug/);
+
+    const status = await readLocalSeedStatus(local.db);
+    expect(status).toEqual({ testData: true, officialTemplates: false, officialLogin: true, legacyTestSlugs: true });
+    const plan = planSeedSteps(status);
+    expect(plan).not.toContain("seed-test");
+    for (const step of plan) await runSeedStage(local, step);
+
+    expect(officialTemplateIds(local.templates())).toEqual(expectedOfficialIds);
+    expect(testSlugs(local)).toEqual(
+      Object.fromEntries(Object.entries(PRE_SAMPLE_TEST_SLUGS).map(([id, slug]) => [id, `sample-${slug}`])),
+    );
+    expect(local.ids("SELECT id FROM templates WHERE id = 'developer-template'")).toEqual(["developer-template"]);
+
+    const repaired = await readLocalSeedStatus(local.db);
+    expect(repaired).toEqual({ testData: true, officialTemplates: true, officialLogin: true, legacyTestSlugs: false });
+    expect(planSeedSteps(repaired)).toEqual([]);
+  });
+
+  it("leaves renamed test Templates and every other Template alone", async () => {
+    const local = await databaseSeededBeforeSampleSlugs();
+    local.exec(
+      "UPDATE templates SET slug = 'my-keyword-list' WHERE id = 'template-2';" +
+        "UPDATE templates SET slug = 'my-gbp-list' WHERE id = 'template-5';" +
+        "INSERT INTO templates (id, user_id, title, items, slug, created_at) " +
+        "VALUES ('developer-gbp', 'user-2', 'GBP', '[]', 'local-seo-gbp-checklist', datetime('now'));" +
+        "INSERT INTO templates (id, user_id, title, items, slug, created_at) " +
+        "VALUES ('developer-audit', 'user-2', 'Audit', '[]', 'sample-technical-seo-audit-checklist', datetime('now'));",
+    );
+
+    await repairLegacyTestTemplateSlugs(local.db);
+
+    expect(testSlugs(local)).toEqual({
+      // Its sample- slug is taken, so it keeps the old one rather than failing.
+      "template-1": "technical-seo-audit-checklist",
+      "template-2": "my-keyword-list",
+      "template-3": "sample-content-refresh-checklist",
+      "template-5": "my-gbp-list",
+    });
+    expect(local.ids("SELECT slug AS id FROM templates WHERE id LIKE 'developer-%' ORDER BY slug")).toEqual([
+      "local-seo-gbp-checklist",
+      "sample-technical-seo-audit-checklist",
+    ]);
+    expect(() => local.runOfficialSeed()).toThrow(/UNIQUE constraint failed: templates\.slug/);
+  });
+
+  it("changes nothing on a database seeded today", async () => {
+    const local = createMigratedDatabase();
+    await seedLocalTestData(local.db);
+    local.runOfficialSeed();
+    const before = local.templates();
+
+    await repairLegacyTestTemplateSlugs(local.db);
+
+    expect(local.templates()).toEqual(before);
+    expect((await readLocalSeedStatus(local.db)).legacyTestSlugs).toBe(false);
+  });
+
+  it("knows the old slugs: each is an official slug the seed now prefixes with sample-", async () => {
+    const local = createMigratedDatabase();
+    await seedLocalTestData(local.db);
+    const officialSlugs = new Set(expectedOfficialTemplates.map((row) => row.slug));
+
+    expect(LEGACY_TEST_TEMPLATE_SLUGS).toEqual(PRE_SAMPLE_TEST_SLUGS);
+    for (const slug of Object.values(LEGACY_TEST_TEMPLATE_SLUGS)) expect(officialSlugs).toContain(slug);
+    expect(testSlugs(local)).toEqual(
+      Object.fromEntries(Object.entries(LEGACY_TEST_TEMPLATE_SLUGS).map(([id, slug]) => [id, `sample-${slug}`])),
+    );
   });
 });

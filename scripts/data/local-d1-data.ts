@@ -1,5 +1,10 @@
 import { cleanupLocalTestData, resetLocalTestUserPasswords } from "../../db/maintenance/local";
-import { readLocalSeedStatus, seedLocalTestData, seedOfficialLocalLogin } from "../../db/seeds/local";
+import {
+  readLocalSeedStatus,
+  repairLegacyTestTemplateSlugs,
+  seedLocalTestData,
+  seedOfficialLocalLogin,
+} from "../../db/seeds/local";
 import { SEED_STATUS_PREFIX } from "../lib/local-d1-seed.mjs";
 import { withLocalD1, type LocalDb } from "./local-d1";
 
@@ -14,6 +19,7 @@ if (persistFlagIndex >= 0 && !persistPath) {
 const operations = {
   "seed-test": seedLocalTestData,
   "seed-official-login": seedOfficialLocalLogin,
+  "repair-test-slugs": repairLegacyTestTemplateSlugs,
   cleanup: cleanupLocalTestData,
   "reset-passwords": resetLocalTestUserPasswords,
   // Read-only: prints which seed stages have completed, for scripts/setup-local.mjs.
@@ -24,7 +30,7 @@ const operations = {
 
 if (!command || !(command in operations)) {
   throw new Error(
-    "Usage: tsx scripts/data/local-d1-data.ts <seed-test|seed-official-login|cleanup|reset-passwords|seed-status> [--persist-to path]",
+    "Usage: tsx scripts/data/local-d1-data.ts <seed-test|seed-official-login|repair-test-slugs|cleanup|reset-passwords|seed-status> [--persist-to path]",
   );
 }
 

@@ -6,13 +6,23 @@ import { z } from "zod";
 
 export const DATABASE_NAME = "serp-checklists-db";
 
-/** In run order. Each stage is safe to re-run. */
+/**
+ * In run order. Each stage is safe to re-run. A stage with `existingDataOnly` only fixes
+ * data an older seed left, so db:reset (which seeds from scratch) skips it.
+ */
 export const LOCAL_SEED_STEPS = [
   {
     id: "seed-test",
     label: "Seed local test Users, Organizations, Templates and Runs",
     tool: "tsx",
     args: ["scripts/data/local-d1-data.ts", "seed-test"],
+  },
+  {
+    id: "repair-test-slugs",
+    label: "Rename test Template slugs that official Templates need",
+    tool: "tsx",
+    args: ["scripts/data/local-d1-data.ts", "repair-test-slugs"],
+    existingDataOnly: true,
   },
   {
     id: "official-templates",
@@ -28,12 +38,16 @@ export const LOCAL_SEED_STEPS = [
   },
 ];
 
+/** The stages db:reset runs, in order, after creating and migrating local D1. */
+export const RESET_SEED_STEPS = LOCAL_SEED_STEPS.filter((step) => !step.existingDataOnly);
+
 export const SEED_STATUS_PREFIX = "LOCAL_SEED_STATUS ";
 
 const seedStatusSchema = z.object({
   testData: z.boolean(),
   officialTemplates: z.boolean(),
   officialLogin: z.boolean(),
+  legacyTestSlugs: z.boolean().default(false),
 });
 
 /** The status from `local-d1-data.ts seed-status` output (Wrangler may log around it). */
@@ -57,11 +71,14 @@ export function missingSeedParts(status) {
 /**
  * The seed stages to run for a migrated database: only the missing ones, so data that
  * is already there is never reset (seed-test starts by deleting the test Users' data).
+ * Test data seeded before the test Templates got sample- slugs holds official Templates'
+ * slugs, so it is renamed in place before the official Templates are seeded.
  * The official login needs the SERP User from the official Templates seed.
  */
 export function planSeedSteps(status) {
   return [
     ...(status.testData ? [] : ["seed-test"]),
+    ...(status.testData && status.legacyTestSlugs ? ["repair-test-slugs"] : []),
     ...(status.officialTemplates ? [] : ["official-templates"]),
     ...(status.officialTemplates && status.officialLogin ? [] : ["official-login"]),
   ];

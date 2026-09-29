@@ -127,7 +127,11 @@ baseline.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing
   (`tests/integration/setup-local-seed.test.ts`). If seedLocalTestData gains a later
-  insert, move the completion marker to it.
+  insert, move the completion marker to it. When a seed change renames a slug that an
+  existing local database still holds, add a local-only stage that fixes it in place
+  (like `repair-test-slugs`, which gives test Templates seeded with official slugs
+  their `sample-` slugs): setup never reruns seed-test on existing data, and
+  `db/seeds/official-templates.sql` also runs against staging and production.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.

@@ -1071,7 +1071,26 @@ export type LocalSeedStatus = {
   officialTemplates: boolean;
   /** seed-official-login ran: the SERP persona can sign in. */
   officialLogin: boolean;
+  /** A test Template still holds the slug an older seed gave it (LEGACY_TEST_TEMPLATE_SLUGS). */
+  legacyTestSlugs: boolean;
 };
+
+/**
+ * The slugs seed-test gave these test Templates before they got a `sample-` prefix. They
+ * are official Templates' slugs (db/seeds/official-templates.sql), so a database seeded
+ * then is missing those official Templates, and seeding them fails on the slug index.
+ */
+export const LEGACY_TEST_TEMPLATE_SLUGS: Readonly<Record<string, string>> = {
+  "template-1": "technical-seo-audit-checklist",
+  "template-2": "keyword-research-mapping-checklist",
+  "template-3": "content-refresh-checklist",
+  "template-5": "local-seo-gbp-checklist",
+};
+const legacyTestSlugMatch = or(
+  ...Object.entries(LEGACY_TEST_TEMPLATE_SLUGS).map(([id, slug]) =>
+    and(eq(templates.id, id), eq(templates.slug, slug)),
+  ),
+);
 
 // seedLocalTestData inserts audit events last and this one last among them, and it
 // runs without a transaction, so a seed cut short (an error, Ctrl+C) has no marker.
@@ -1087,7 +1106,7 @@ const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
  */
 export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
   try {
-    const [[testUsers], [marker], [officialTemplate], [officialLogin]] = await Promise.all([
+    const [[testUsers], [marker], [officialTemplate], [officialLogin], [legacySlugs]] = await Promise.all([
       db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
       db.select({ value: count() }).from(audit_events).where(eq(audit_events.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
       db
@@ -1098,17 +1117,37 @@ export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus>
         .select({ value: count() })
         .from(account)
         .where(and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
+      db.select({ value: count() }).from(templates).where(legacyTestSlugMatch),
     ]);
     return {
       testData: testUsers.value === TEST_USER_EMAILS.length && marker.value === 1,
       officialTemplates: officialTemplate.value === 1,
       officialLogin: officialLogin.value === 1,
+      legacyTestSlugs: legacySlugs.value > 0,
     };
   } catch (error) {
     if (/no such table/i.test(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error))) {
-      return { testData: false, officialTemplates: false, officialLogin: false };
+      return { testData: false, officialTemplates: false, officialLogin: false, legacyTestSlugs: false };
     }
     throw error;
+  }
+}
+
+/**
+ * Gives each test Template that still holds its old slug (LEGACY_TEST_TEMPLATE_SLUGS) the
+ * `sample-` slug seed-test gives it today, so the official Templates can be seeded without
+ * reseeding test data. A test Template whose slug was changed, any other Template, and a
+ * Template whose `sample-` slug is taken are left as they are. Safe to re-run.
+ */
+export async function repairLegacyTestTemplateSlugs(db: LocalDb): Promise<void> {
+  for (const [id, legacySlug] of Object.entries(LEGACY_TEST_TEMPLATE_SLUGS)) {
+    const sampleSlug = `sample-${legacySlug}`;
+    const [taken] = await db.select({ id: templates.id }).from(templates).where(eq(templates.slug, sampleSlug)).limit(1);
+    if (taken) continue;
+    await db
+      .update(templates)
+      .set({ slug: sampleSlug })
+      .where(and(eq(templates.id, id), eq(templates.slug, legacySlug)));
   }
 }
 

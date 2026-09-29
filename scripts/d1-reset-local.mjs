@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DATABASE_NAME, LOCAL_SEED_STEPS } from "./lib/local-d1-seed.mjs";
+import { DATABASE_NAME, RESET_SEED_STEPS } from "./lib/local-d1-seed.mjs";
 import { execTool } from "./lib/run-tool.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -55,7 +55,7 @@ try {
     DATABASE_NAME,
     "--local",
   ]);
-  for (const step of LOCAL_SEED_STEPS) run(step.tool, step.args);
+  for (const step of RESET_SEED_STEPS) run(step.tool, step.args);
   console.log("Local D1 reset complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

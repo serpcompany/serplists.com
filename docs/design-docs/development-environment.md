@@ -19,8 +19,12 @@ and builds `dist/` if it is missing. The seed decision comes from the database, 
 its directory: `tsx scripts/data/local-d1-data.ts seed-status` reports whether the
 test data, the official Templates and the official login are there, and setup runs
 only the missing stages, so a seed that failed or was interrupted is finished on the
-next run and data you created is never reset. Setup fails, without printing the
-sign-in hint, if seed data is still missing afterwards. `.dev.vars` is the only local env file; variables are listed in
+next run and data you created is never reset. A database seeded before the test
+Templates got `sample-` slugs has test Templates holding four official Templates'
+slugs, so those official Templates are missing; setup renames the test Templates'
+slugs in place first (the `repair-test-slugs` stage) and then seeds them. Setup fails,
+without printing the sign-in hint, if a seed stage fails (the error names the stage
+and how to recover) or seed data is still missing afterwards. `.dev.vars` is the only local env file; variables are listed in
 [SECURITY.md](../SECURITY.md#secrets-and-environment). The client reads `VITE_*`
 variables through `src/env.ts`; `VITE_API_URL` overrides the dev API base
 (`http://localhost:8788/api`; `/api` when deployed). `pnpm run build` (the

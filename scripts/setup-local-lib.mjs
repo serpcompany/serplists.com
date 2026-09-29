@@ -23,13 +23,28 @@ export function renderDevVars(exampleText, secret) {
     .join("\n");
 }
 
+const SEED_RECOVERY_HINT =
+  "If one of your own Templates uses an official Template's slug, change that slug and run setup again. " +
+  "Otherwise `pnpm run db:seed` seeds the test data again (this deletes what the test Users made), " +
+  "or `pnpm run db:reset` rebuilds local D1 (this deletes local data).";
+
+function runSeedStep(run, step) {
+  try {
+    run(step);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Seed stage ${step} failed: ${reason}\n${SEED_RECOVERY_HINT}`, { cause: error });
+  }
+}
+
 /**
  * Brings local D1 to a migrated, fully seeded state and returns the seed status.
  * The decision comes from what the database holds, not from whether its directory
  * exists: a seed that failed or was interrupted, or a database dev:api created, is
  * seeded on the next run. An existing database is never reset, and only missing seed
  * stages run. Throws when seed data is still missing, so setup never reports success
- * (or the john@test.com sign-in) for a database without it.
+ * (or the john@test.com sign-in) for a database without it. A failed seed stage's error
+ * names the stage and how to recover.
  *
  * `run(step)` runs "reset" (create, migrate and seed from scratch), "migrate", or a
  * seed step from LOCAL_SEED_STEPS; `readSeedStatus()` reads the seed status.
@@ -37,7 +52,7 @@ export function renderDevVars(exampleText, secret) {
 export function runLocalD1Setup({ stateDirExists, run, readSeedStatus }) {
   if (stateDirExists) {
     run("migrate");
-    for (const step of planSeedSteps(readSeedStatus())) run(step);
+    for (const step of planSeedSteps(readSeedStatus())) runSeedStep(run, step);
   } else {
     run("reset");
   }
