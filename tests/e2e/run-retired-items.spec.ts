@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -40,7 +40,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   });
   const run = await api<{ id: string }>(page, '/checklists', 'POST', { template_id: template.id, title: `Retired run ${suffix}` });
 
-  await page.goto(`/dashboard/runs/${run.id}`);
+  await page.goto(`/dashboard/runs/${run.id}/`);
   await expect(page.getByRole('heading', { name: 'Check DNS' })).toBeVisible();
   await page.getByLabel('Task notes').fill('Registrar login is in vault X; TTL lowered to 300');
   await page.getByRole('button', { name: 'Save notes' }).click();

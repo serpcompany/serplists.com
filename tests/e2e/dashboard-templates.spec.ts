@@ -9,14 +9,14 @@ const RUN_LIMIT_MESSAGE =
   'Active run limit reached. Upgrade to Pro to create more checklist runs.';
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
 async function openStartRunDialog(page: Page) {
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   return page.getByRole('dialog', { name: 'Start Run' });
@@ -63,18 +63,18 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   expect(templateTitle.length).toBeGreaterThan(0);
 
   await dialog.getByRole('button', { name: 'Start Run' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
 
   // Before the fix a blank name saved the bare template title.
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${templateTitle} - `);
 
-  const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? '');
+  const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 });
 
 test('grid cards name the actions menu and never focus the hidden Start Run shortcut', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in grid view' }).click();
 
   const trigger = page.getByRole('button', { name: /^Actions for / }).first();

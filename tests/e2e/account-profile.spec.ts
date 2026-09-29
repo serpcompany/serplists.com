@@ -88,7 +88,7 @@ async function mockProfileApi(page: Page) {
 test.describe('account profile form', () => {
   test('an avatar upload keeps unsaved name and username edits', async ({ page }) => {
     const api = await mockProfileApi(page);
-    await page.goto('/dashboard/settings');
+    await page.goto('/dashboard/settings/');
 
     const fullName = page.locator('#fullName');
     const username = page.locator('#username');
@@ -115,7 +115,7 @@ test.describe('account profile form', () => {
 
   test('clearing a saved username is refused instead of reported as saved', async ({ page }) => {
     const api = await mockProfileApi(page);
-    await page.goto('/dashboard/settings');
+    await page.goto('/dashboard/settings/');
 
     const username = page.locator('#username');
     await expect(username).toHaveValue('john', { timeout: 15_000 });

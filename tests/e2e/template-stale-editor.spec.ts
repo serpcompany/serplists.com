@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // template list refetches on focus.
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -29,12 +29,12 @@ test('an editor opened before a Share cannot make the template private again', a
   });
   const loaded = await api<{ version: number }>(editor, `/templates/${created.id}`, 'GET');
 
-  await editor.goto(`/dashboard/templates/${created.id}/edit`);
+  await editor.goto(`/dashboard/templates/${created.id}/edit/`);
   await expect(editor.getByPlaceholder('Enter template name...')).toHaveValue(title);
 
   // Another tab shares the template (the Share button's request).
   const sharer = await context.newPage();
-  await sharer.goto('/dashboard/templates');
+  await sharer.goto('/dashboard/templates/');
   await api(sharer, `/templates/${created.id}`, 'PUT', { is_public: true, expected_version: loaded.version });
   await sharer.close();
 

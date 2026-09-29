@@ -12,7 +12,7 @@ function uniqueSuffix() {
 async function registerAccount(page: Page) {
   const suffix = uniqueSuffix();
 
-  await page.goto("/register");
+  await page.goto("/register/");
   await page.getByLabel("Name").fill("Template Editor QA");
   await page.getByLabel("Email").fill(`template-editor+${suffix}@e2e.local`);
   await page.locator("#password").fill(PASSWORD);
@@ -25,7 +25,7 @@ async function registerAccount(page: Page) {
 
 // Admin is a Pro persona created by `seed-test`, which the isolated e2e database runs.
 async function loginAsSeedUser(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
@@ -79,7 +79,7 @@ async function saveAndReturnToTemplates(page: Page) {
   });
   await page.getByRole("button", { name: "Save" }).click();
   expect((await saved).ok()).toBe(true);
-  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 }
 
 function getTemplateSections(template: Record<string, unknown>) {
@@ -116,7 +116,7 @@ function getTemplateSections(template: Record<string, unknown>) {
 test.describe("template editor regressions", () => {
   test('remembers the signed-in user layout independently on template screens', async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates');
+    await page.goto('/dashboard/templates/');
 
     await page.getByRole('button', { name: 'Show templates in list view' }).click();
     await expect(
@@ -128,7 +128,7 @@ test.describe("template editor regressions", () => {
       page.getByRole('button', { name: 'Show templates in list view' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
-    await page.goto('/categories/seo');
+    await page.goto('/categories/seo/');
     await expect(
       page.getByRole('button', { name: 'Show templates in grid view' }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -141,18 +141,18 @@ test.describe("template editor regressions", () => {
 
   test('supports full-size console navigation targets', async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates');
+    await page.goto('/dashboard/templates/');
 
     const runsLink = page.getByRole('link', { name: 'Runs', exact: true });
     const box = await runsLink.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     await runsLink.click({ position: { x: 8, y: 8 } });
-    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   });
 
   test('reorders sections and tasks with the visible drag handles', async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
 
     await page.getByRole('button', { name: /add task to section 1/i }).click();
     await page.getByLabel('Task Title').fill('First task');
@@ -182,7 +182,7 @@ test.describe("template editor regressions", () => {
   // sections and tasks could only be reordered by mouse drag.
   test('shows outline actions on keyboard focus and reorders with the arrow keys', async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
 
     await page.getByRole('button', { name: /add task to section 1/i }).click();
     await page.getByLabel('Task Title').fill('First task');
@@ -219,13 +219,13 @@ test.describe("template editor regressions", () => {
 
   test('previews the current unsaved template draft', async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
     await page.getByPlaceholder('Enter template name...').fill('Unsaved preview title');
 
     await page.getByRole('button', { name: 'Preview' }).click();
 
     await expect(page.getByRole('dialog')).toContainText('Unsaved preview title');
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
   });
 
   test('reviews, edits, previews, and explicitly publishes a generated Clipy draft', async ({ page }) => {
@@ -298,7 +298,7 @@ test.describe("template editor regressions", () => {
       });
     });
 
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
     await page.getByLabel('Public Clipy video link').fill(
       'https://clipy.online/video/8fptqlnappr6',
     );
@@ -316,7 +316,7 @@ test.describe("template editor regressions", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     expect(createPayload).toBeNull();
 
     await page.getByPlaceholder('Enter template name...').fill('Reviewed Clipy Checklist');
@@ -332,7 +332,7 @@ test.describe("template editor regressions", () => {
 
     await page.getByRole('switch').click();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
     expect(createPayload).toMatchObject({
       title: 'Reviewed Clipy Checklist',
       is_public: true,
@@ -378,7 +378,7 @@ test.describe("template editor regressions", () => {
       });
     });
 
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
     const title = page.getByPlaceholder('Enter template name...');
     const clipyLink = page.getByLabel('Public Clipy video link');
     await title.fill('My hand-built checklist');
@@ -429,7 +429,7 @@ test.describe("template editor regressions", () => {
       title: 'Run notes QA',
     });
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByLabel('Task notes')).toHaveCount(1);
     await expect(page.getByLabel('Notes for Wait for reply')).toHaveCount(0);
     await page.getByLabel('Task notes').fill('Sent email: https://example.com/message/42');
@@ -450,7 +450,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
 
@@ -530,7 +530,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", {
@@ -567,7 +567,7 @@ test.describe("template editor regressions", () => {
     );
 
     if (createdTemplateId) {
-      await page.goto(`/dashboard/templates/${createdTemplateId}`);
+      await page.goto(`/dashboard/templates/${createdTemplateId}/`);
       const renderedContent = page.getByText(
         new RegExp(`${contentLines[0]}\\s+${contentLines[1]}\\s+${contentLines[2]}`),
       );
@@ -605,7 +605,7 @@ test.describe("template editor regressions", () => {
     });
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with image ${stamp}`);
@@ -660,7 +660,7 @@ test.describe("template editor regressions", () => {
     });
 
     await loginAsSeedUser(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
     await page.getByRole("button", { name: "Image", exact: true }).last().click();
@@ -688,7 +688,7 @@ test.describe("template editor regressions", () => {
     const templateTitle = `QA Blank titles ${stamp}`;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with sub-tasks ${stamp}`);
@@ -712,7 +712,7 @@ test.describe("template editor regressions", () => {
     const templateId = String(savedTemplate?.id);
     const runId = await postRun(page, { template_id: templateId, title: "Blank titles run", sections });
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
     // The task has its own checkbox; the only other one is its single Sub-task's.
     await expect(
@@ -732,7 +732,7 @@ test.describe("template editor regressions", () => {
     const embedUrl = "https://www.loom.com/share/abc";
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with embed ${stamp}`);
@@ -779,7 +779,7 @@ test.describe("template editor regressions", () => {
     const embedUrl = "https://www.loom.com/share/order";
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with blocks ${stamp}`);
@@ -854,7 +854,7 @@ test.describe("template editor regressions", () => {
 
     await loginAsSeedUser(page);
     const templateId = await createTemplateViaApi(page, templateTitle);
-    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
     await page.getByRole("button", { name: "Image", exact: true }).last().click();
@@ -877,7 +877,7 @@ test.describe("template editor regressions", () => {
     });
     await page.getByRole("button", { name: "Back to templates" }).click();
     await expect.poll(() => confirmMessage).toContain("still uploading");
-    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
     releaseUpload();
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
@@ -918,7 +918,7 @@ test.describe("template editor regressions", () => {
       await route.fallback();
     });
 
-    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByLabel("Description (Optional)").fill("Sent with the first save");
 
@@ -944,7 +944,7 @@ test.describe("template editor regressions", () => {
     });
     await page.getByRole("button", { name: "Back to templates" }).click();
     await expect.poll(() => confirmMessage).toContain("unsaved template changes");
-    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
@@ -966,7 +966,7 @@ test.describe("template editor regressions", () => {
     await loginAsSeedUser(page);
     const templateTitle = `QA Leave guard ${Date.now()}`;
     const templateId = await createTemplateViaApi(page, templateTitle);
-    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit$`);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
     const draft = "Edited but not saved";
     const dialogs: string[] = [];
     let acceptDialogs = false;
@@ -976,7 +976,7 @@ test.describe("template editor regressions", () => {
     });
 
     // Arrive through the app so browser Back stays inside the single-page app.
-    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.goto(`/dashboard/templates/${templateId}/`);
     await page.getByRole("link", { name: "Edit" }).click();
     await expect(page).toHaveURL(editorUrl);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
@@ -1011,7 +1011,7 @@ test.describe("template editor regressions", () => {
 
     acceptDialogs = true;
     await page.getByRole("link", { name: "Runs", exact: true }).click();
-    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
     expect(dialogs).toHaveLength(6);
 
     await deleteTemplate(page, templateId);
@@ -1021,7 +1021,7 @@ test.describe("template editor regressions", () => {
     await loginAsSeedUser(page);
     const templateTitle = `QA Leave during save ${Date.now()}`;
     const templateId = await createTemplateViaApi(page, templateTitle);
-    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit$`);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
     const draft = "Typed before a save that fails";
 
     // Hold the update, then refuse it as a conflict.
@@ -1050,7 +1050,7 @@ test.describe("template editor regressions", () => {
       await dialog.dismiss();
     });
 
-    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByLabel("Description (Optional)").fill(draft);
     await page.getByRole("button", { name: "Save" }).click();
@@ -1098,17 +1098,17 @@ test.describe("template editor regressions", () => {
       await dialog.accept();
     });
 
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
     await page.getByRole("link", { name: "Runs", exact: true }).click();
-    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 
     releaseCreate();
     await expect.poll(() => createFinished).toBe(true);
     await expect.poll(() => findTemplateByTitle(page, templateTitle)).toBeTruthy();
-    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     if (savedTemplate && typeof savedTemplate.id === "string") {
@@ -1125,7 +1125,7 @@ test.describe("template editor regressions", () => {
       await dialog.dismiss();
     });
 
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await saveAndReturnToTemplates(page);
     expect(dialogs).toEqual([]);
@@ -1163,7 +1163,7 @@ test.describe("template editor regressions", () => {
     });
 
     await loginAsSeedUser(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
 
     for (const upload of [
@@ -1184,7 +1184,7 @@ test.describe("template editor regressions", () => {
 
   test("uploads the file types a File block offers, as Windows reports them", async ({ page }) => {
     await loginAsSeedUser(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
 
     for (const upload of [
@@ -1236,7 +1236,7 @@ test.describe("template editor regressions", () => {
     });
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with file ${stamp}`);
@@ -1296,7 +1296,7 @@ test.describe("template editor regressions", () => {
       }).observe(document, { childList: true, subtree: true, characterData: true });
     });
 
-    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
     for (const title of sectionTitles) {
       await expect(page.getByRole("button", { name: `Collapse ${title}` })).toBeVisible();
       await expect(page.getByRole("button", { name: `${title} task`, exact: true })).toBeVisible();
@@ -1333,7 +1333,7 @@ test.describe("template editor regressions", () => {
       });
     });
 
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     await page.getByLabel("Public Clipy video link").fill("https://clipy.online/video/twopart1234");
     await page.getByRole("button", { name: "Generate draft" }).click();
 
@@ -1348,7 +1348,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByPlaceholder("Add tag...").fill(tagName);
@@ -1384,7 +1384,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /search & seo/i }).click();
@@ -1409,7 +1409,7 @@ test.describe("template editor regressions", () => {
       throw new Error("Template ID missing after save");
     }
 
-    await page.goto(`/dashboard/templates/${createdTemplateId}/edit`);
+    await page.goto(`/dashboard/templates/${createdTemplateId}/edit/`);
     await page.getByRole("button", { name: /search & seo/i }).click();
 
     await expect(page.getByPlaceholder("Title for search results...")).toHaveValue(seoTitle);
@@ -1428,9 +1428,9 @@ test.describe("template editor regressions", () => {
 
     try {
       // The template list is now cached in the app.
-      await page.goto("/dashboard/templates");
+      await page.goto("/dashboard/templates/");
       await page.getByRole("link", { name: title }).first().click();
-      await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}$`));
+      await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/$`));
 
       // Another tab (or an Organization teammate) saves a new task meanwhile.
       // Reads return the checklist as parsed `sections` (the raw items column is not sent).
@@ -1497,7 +1497,7 @@ test.describe("template editor regressions", () => {
     });
 
     try {
-      await page.goto(`/dashboard/templates/${templateId}/edit`);
+      await page.goto(`/dashboard/templates/${templateId}/edit/`);
       await page.getByPlaceholder("Enter template name...").fill(`${title} saved`);
       await page.getByRole("button", { name: "Save", exact: true }).click();
 
@@ -1523,7 +1523,7 @@ test.describe("template editor route switches", () => {
       title,
       sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
     });
-    await page.goto(`/dashboard/templates/${templateId}/edit`);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue(title);
     return { templateId, title };
   }
@@ -1544,7 +1544,7 @@ test.describe("template editor route switches", () => {
     await expect(page.getByText("Template changed since it was loaded.")).toBeVisible();
     await page.getByRole("link", { name: "New Template" }).first().click();
 
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
     await expect(page.getByText("Template changed since it was loaded.")).toHaveCount(0);
     await page.unroute(`**/api/templates/${templateId}`);
@@ -1573,13 +1573,13 @@ test.describe("template editor route switches", () => {
     );
     await page.getByRole("button", { name: "Save" }).click();
     await page.getByRole("link", { name: "New Template" }).first().click();
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     releaseSave();
     expect((await saved).status()).toBe(200);
 
     await expect(page.getByText("Template saved")).toBeVisible();
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     expect(creates).toEqual([]);
     await page.unroute(`**/api/templates/${templateId}`);
     await deleteTemplate(page, templateId);

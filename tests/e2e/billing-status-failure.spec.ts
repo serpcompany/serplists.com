@@ -5,7 +5,7 @@ import { fillSignInForm } from './support/sign-in';
 // their features and are never sent to a checkout (docs/product-specs/pricing-and-entitlements.md).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -27,7 +27,7 @@ test('import and export stay usable when the plan check fails', async ({ page })
     await route.abort();
   });
 
-  await page.goto('/dashboard/import-templates');
+  await page.goto('/dashboard/import-templates/');
 
   await expect(page.getByText("Couldn't check your plan")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
@@ -65,7 +65,7 @@ test('pricing offers a retry, not the upgrade, when the plan check fails', async
     await route.abort();
   });
 
-  await page.goto('/pricing');
+  await page.goto('/pricing/');
 
   await expect(page.getByText("Couldn't check your plan")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: /Upgrade/ })).toHaveCount(0);

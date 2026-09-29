@@ -51,14 +51,14 @@ test('a failing session check keeps the page and the Organization, then recovers
   const sessionAvailable = { value: true };
   await mockApi(page, sessionAvailable);
 
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await page.evaluate(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
 
   sessionAvailable.value = false;
   await page.reload();
 
   await expect(page.getByText(/Can't reach/)).toBeVisible({ timeout: 30_000 });
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(await page.evaluate(() => window.localStorage.getItem('serplists.activeWorkspaceId'))).toBe('team-1');
 
   sessionAvailable.value = true;
@@ -67,13 +67,13 @@ test('a failing session check keeps the page and the Organization, then recovers
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org', {
     timeout: 30_000,
   });
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 });
 
 // A rate-limited session check is retried with backoff, and a check that keeps failing offers
 // a retry, against the real API.
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -99,7 +99,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
 
   const loginNavigations: string[] = [];
   page.on('framenavigated', (frame) => {
-    if (frame === page.mainFrame() && new URL(frame.url()).pathname === '/login') {
+    if (frame === page.mainFrame() && new URL(frame.url()).pathname === '/login/') {
       loginNavigations.push(frame.url());
     }
   });
@@ -109,7 +109,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
   expect(rejected).toBe(1);
   // Once the retried check confirms the session, /dashboard forwards a signed-in user to
   // their Templates (a redirect in next.config.ts), never to /login.
-  expect(new URL(page.url()).pathname).toBe('/dashboard/templates');
+  expect(new URL(page.url()).pathname).toBe('/dashboard/templates/');
   expect(loginNavigations).toEqual([]);
 });
 
@@ -129,7 +129,7 @@ test('a session check that keeps failing offers a retry instead of the login pag
   await page.goto('/dashboard');
   const retry = page.getByRole('button', { name: 'Retry' });
   await expect(retry).toBeVisible({ timeout: 30_000 });
-  expect(new URL(page.url()).pathname).toBe('/dashboard/templates');
+  expect(new URL(page.url()).pathname).toBe('/dashboard/templates/');
 
   failing = false;
   await retry.click();

@@ -8,7 +8,7 @@ import { fillSignInForm, type TestUser } from './support/sign-in';
 // its requests, and any Template it saves, go to the new one. Tab 1 is never reloaded here.
 
 async function signIn(page: Page, user: TestUser) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, user);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -25,7 +25,7 @@ async function signOut(page: Page) {
 }
 
 async function openSignedInTab(page: Page) {
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 

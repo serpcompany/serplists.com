@@ -192,7 +192,7 @@ test('@smoke team workspace settings create link invites and expose owner contro
 }) => {
   const apiMock = await mockTeamWorkspaceApi(page);
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
 
   await page.getByRole('button', { name: 'Switch context' }).click();
   await page.getByRole('menuitem', { name: /Acme Team/i }).click();
@@ -231,7 +231,7 @@ test('an ownership transfer that saved is not reported as failed when the Organi
 }) => {
   await mockTeamWorkspaceApi(page, { failTeamsAfterTransfer: true });
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.getByRole('button', { name: 'Switch context' }).click();
   await page.getByRole('menuitem', { name: /Acme Team/i }).click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();

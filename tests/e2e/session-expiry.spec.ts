@@ -10,16 +10,16 @@ import { fillSignInForm } from './support/sign-in';
 
 test('a tab whose session ended signs out on its next request and returns after sign-in', async ({ page, context }) => {
   test.setTimeout(120_000);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  await navigateInApp(page, '/dashboard/templates');
+  await navigateInApp(page, '/dashboard/templates/');
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible();
 
   // The session ends on the server; the tab still thinks it is signed in.
   await context.clearCookies();
-  await navigateInApp(page, '/dashboard/runs');
+  await navigateInApp(page, '/dashboard/runs/');
 
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
   await expect(page.getByText('Your session ended. Sign in again.')).toBeVisible();

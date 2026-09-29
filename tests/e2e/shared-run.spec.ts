@@ -9,7 +9,7 @@ import { fillSignInForm } from './support/sign-in';
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -67,7 +67,7 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
   const guestRevision = async () =>
     ((await (await guest.request.get(sharedUrl)).json()) as { revision: number }).revision;
 
-  await guest.goto(`/share/${shareToken}`);
+  await guest.goto(`/share/${shareToken}/`);
   await expect(guest.getByRole('heading', { name: 'Task A' })).toBeVisible();
   // The shared view lists every task with its own checkbox (no step-by-step Mark Complete).
   await guest.getByRole('checkbox', { name: 'Mark "Task A" complete' }).click();
@@ -114,7 +114,7 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
   const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
   expect((await guest.request.get(sharedUrl)).status()).toBe(200);
 
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   const row = page.locator('div.group', { hasText: title });
   await expect(row.getByText('Shared', { exact: true })).toBeVisible();
   await row.getByRole('button', { name: 'Run options' }).click();
@@ -144,7 +144,7 @@ test('stopping a share from the run page turns the guest link off', async ({ bro
   const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
   expect((await guest.request.get(sharedUrl)).status()).toBe(200);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByText('Shared', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Stop sharing' }).click();
   await expect(page.getByText('Sharing stopped. The old link no longer works.')).toBeVisible();

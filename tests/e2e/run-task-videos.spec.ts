@@ -12,7 +12,7 @@ const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -49,7 +49,7 @@ test('each task plays its own video', async ({ page }) => {
   const runId = await createRun(page, [videoUrl('a'), videoUrl('b')]);
 
   try {
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     const player = page.locator('video');
     const playing = () => player.evaluate((video: HTMLVideoElement) => video.currentSrc);
     await expect(page.getByRole('heading', { level: 2, name: 'Watch video A' })).toBeVisible();
@@ -77,7 +77,7 @@ test('a video URL the player cannot load becomes a link to it', async ({ page })
   const runId = await createRun(page, [pageUrl]);
 
   try {
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByRole('heading', { level: 2, name: 'Watch video A' })).toBeVisible();
     const link = page.getByRole('link', { name: 'Open video' });
     await expect(link).toHaveAttribute('href', pageUrl);

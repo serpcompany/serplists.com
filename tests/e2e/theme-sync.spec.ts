@@ -26,8 +26,8 @@ test('a theme chosen in one tab applies to the page in another', async ({ contex
   await pageA.setViewportSize({ width: 1280, height: 900 });
   await pageB.setViewportSize({ width: 1280, height: 900 });
 
-  await pageA.goto('/templates');
-  await pageB.goto('/templates');
+  await pageA.goto('/templates/');
+  await pageB.goto('/templates/');
   await expectTheme(pageA, 'light');
   await expectTheme(pageB, 'light');
 

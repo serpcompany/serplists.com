@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // headers and focuses its title (src/components/run-execution/TaskHeaderReveal.tsx).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -63,7 +63,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     const runId = await createRun(page);
     await page.setViewportSize(viewport);
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     const taskA = page.getByRole('heading', { level: 2, name: 'Task A' });
     await expect(taskA).toBeVisible();
     // Opening a run neither scrolls nor takes focus.
@@ -102,7 +102,7 @@ test('the desktop task list opens a task at its title', async ({ page }) => {
   const runId = await createRun(page);
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { level: 2, name: 'Task A' })).toBeVisible();
   // Scroll the task header 30px under the sticky site header, leaving the task list in view.
   const shell = await page.locator('[data-run-workspace-shell]').boundingBox();

@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // Router still runs a navigate() from a page that is gone.
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -62,17 +62,17 @@ test('stays on the page the user went Back to when a public Start Run finishes',
   await loginAsAdmin(page);
   const { created, release } = await holdRunCreation(page);
 
-  await page.goto('/templates');
-  await page.goto('/profile/admin/sample-technical-seo-audit-checklist');
+  await page.goto('/templates/');
+  await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   await page.goBack();
-  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page).toHaveURL(/\/templates\/$/);
 
   release();
   await expect.poll(() => created.runId).toBeTruthy();
   // Give a late navigation the chance to happen before checking it did not.
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page).toHaveURL(/\/templates\/$/);
 
   await deleteRun(page, created.runId ?? '');
 });
@@ -82,18 +82,18 @@ test('stays on the page the user went Back to when a template Start Run finishes
   const templateId = await createTemplateViaApi(page, `QA slow run ${Date.now()}`);
   const { created, release } = await holdRunCreation(page);
 
-  await page.goto('/dashboard/templates');
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto('/dashboard/templates/');
+  await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   await page.getByRole('button', { name: 'Start Checklist' }).click();
   await expect(page.getByRole('button', { name: 'Creating...' })).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 
   release();
   await expect.poll(() => created.runId).toBeTruthy();
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 
   await deleteRun(page, created.runId ?? '');
   await deleteTemplate(page, templateId);
@@ -103,12 +103,12 @@ test('opens the new run when the user waits on the template page', async ({ page
   await loginAsAdmin(page);
   const templateId = await createTemplateViaApi(page, `QA run stays ${Date.now()}`);
 
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   await page.getByRole('button', { name: 'Start Checklist' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
 
-  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? ''));
+  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
   await deleteTemplate(page, templateId);
 });
 
@@ -147,20 +147,20 @@ test('does not start checkout from the page the user went Back to when a My Temp
     });
   });
 
-  await page.goto('/dashboard/runs');
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/runs/');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Start Run' });
   await dialog.getByRole('button', { name: 'Start Run' }).click();
   await expect(dialog.getByRole('button', { name: 'Creating...' })).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 
   release();
   await expect.poll(() => answered).toBe(true);
   // Give a late checkout the chance to start before checking it did not.
   await page.waitForTimeout(500);
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(checkoutRequests).toBe(0);
 });

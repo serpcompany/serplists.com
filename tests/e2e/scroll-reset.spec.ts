@@ -11,7 +11,7 @@ test.describe('scroll reset on navigation', () => {
   test('a category link at the bottom of the library opens the category at the top', async ({
     page,
   }) => {
-    await page.goto('/templates');
+    await page.goto('/templates/');
     const browseHeading = page.getByRole('heading', { name: 'Browse by Category' });
     await browseHeading.scrollIntoViewIfNeeded();
     const categoryLink = browseHeading.locator('xpath=..').getByRole('link').first();
@@ -25,23 +25,23 @@ test.describe('scroll reset on navigation', () => {
     expect(await scrollY(page)).toBe(0);
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/templates$/);
+    await expect(page).toHaveURL(/\/templates\/$/);
     await expect.poll(() => scrollY(page)).toBeGreaterThan(0);
   });
 
   test('a footer link from a long page opens the page at the top', async ({ page }) => {
-    await page.goto('/templates');
+    await page.goto('/templates/');
     const aboutLink = page.getByRole('contentinfo').getByRole('link', { name: 'About' });
     await aboutLink.scrollIntoViewIfNeeded();
     expect(await scrollY(page)).toBeGreaterThan(0);
 
     await aboutLink.click();
-    await expect(page).toHaveURL(/\/about$/);
+    await expect(page).toHaveURL(/\/about\/$/);
     expect(await scrollY(page)).toBe(0);
   });
 
   test('typing in the library search keeps the scroll position', async ({ page }) => {
-    await page.goto('/templates');
+    await page.goto('/templates/');
     const search = page.getByPlaceholder('Search templates...');
     await page.evaluate(() => window.scrollTo(0, 80));
     await search.focus();

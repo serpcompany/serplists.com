@@ -10,7 +10,7 @@ import { fillSignInForm } from './support/sign-in';
 const isTemplatesEndpoint = (url: URL) => url.pathname.endsWith('/api/templates');
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -47,7 +47,7 @@ test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page
   );
 
   try {
-    await page.goto(`/dashboard/templates/${created.id}`);
+    await page.goto(`/dashboard/templates/${created.id}/`);
     await expect(page.getByRole('heading', { name: title, exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Template actions' }).click();
@@ -66,7 +66,7 @@ test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page
     releaseCopy();
     const copy = (await (await copied).json()) as { id: string };
     copyIds.push(copy.id);
-    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${copy.id}$`));
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${copy.id}/$`));
     expect(copyRequests).toBe(1);
 
     const own = await apiJson<Array<{ id: string; title: string }>>(page, '/templates?scope=personal');

@@ -10,7 +10,7 @@ async function openAccountMenu(page: Page) {
 }
 
 test('a failed sign-out keeps the user signed in, and a later one signs them out for good', async ({ page }) => {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });

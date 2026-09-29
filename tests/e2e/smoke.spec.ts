@@ -115,7 +115,7 @@ test("@smoke login page renders", async ({ page }) => {
     }
   });
 
-  await page.goto("/login");
+  await page.goto("/login/");
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
@@ -263,22 +263,24 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(await headResponse.text()).toBe("");
   }
 
-  expect(allPageLocations).toContain("https://serplists.com/profile/admin");
+  expect(allPageLocations).toContain("https://serplists.com/profile/admin/");
   expect(allPageLocations).toContain(
-    "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist",
+    "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist/",
   );
-  expect(allPageLocations).toContain("https://serplists.com/categories/seo");
+  expect(allPageLocations).toContain("https://serplists.com/categories/seo/");
+  // SERP URL standard: every page URL a sitemap lists is canonical, with its trailing slash.
+  expect([...allPageLocations].filter((location) => !location.endsWith("/"))).toEqual([]);
   // Registry categories no public Template uses are empty pages, so they stay unlisted.
-  expect(allPageLocations).not.toContain("https://serplists.com/categories/engineering");
-  expect(allPageLocations).not.toContain("https://serplists.com/categories/compliance");
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/engineering/");
+  expect(allPageLocations).not.toContain("https://serplists.com/categories/compliance/");
   expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/internal-publishing-checklist",
+    "https://serplists.com/profile/admin/internal-publishing-checklist/",
   );
   expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/shared-growth-launch-checklist",
+    "https://serplists.com/profile/admin/shared-growth-launch-checklist/",
   );
   expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/jane/client-reporting-qa-checklist",
+    "https://serplists.com/profile/jane/client-reporting-qa-checklist/",
   );
 
   const unchangedIndexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
@@ -320,7 +322,7 @@ test("@smoke login link renders the login page without refresh", async ({ page }
   await page.goto("/");
   await page.getByRole("link", { name: /^log in$/i }).click();
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\/$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
@@ -329,10 +331,10 @@ test("@smoke login link renders the login page without refresh", async ({ page }
 test("@smoke protected routes render login after redirect without refresh", async ({
   page,
 }) => {
-  await page.goto("/dashboard/settings");
+  await page.goto("/dashboard/settings/");
 
   // The page it came from travels in ?next= (never in history state).
-  await expect(page).toHaveURL(/\/login\?next=%2Fdashboard%2Fsettings$/);
+  await expect(page).toHaveURL(/\/login\/\?next=%2Fdashboard%2Fsettings%2F$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
@@ -341,7 +343,7 @@ test("@smoke protected routes render login after redirect without refresh", asyn
 test("@smoke API-backed public template single renders", async ({ page }) => {
   await mockApiBackedPublicTemplate(page);
 
-  await page.goto("/profile/admin/sample-technical-seo-audit-checklist");
+  await page.goto("/profile/admin/sample-technical-seo-audit-checklist/");
 
   await expect(
     page.getByRole("heading", {
@@ -467,7 +469,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
     });
   });
 
-  await page.goto("/dashboard/runs/run-line-breaks");
+  await page.goto("/dashboard/runs/run-line-breaks/");
 
   await expect(
     page.getByRole("heading", { name: "Create a .txt file of URLs" }),
@@ -502,7 +504,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
     await page.goto(startPath);
     await page.getByRole("link", { name: /^log in$/i }).click();
 
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\/$/);
     await expect(
       page.getByRole("heading", { name: /welcome back/i })
     ).toBeVisible();
@@ -510,7 +512,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
 });
 
 test("@smoke login password visibility toggles", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login/");
 
   const password = page.locator("#password");
 
@@ -522,7 +524,7 @@ test("@smoke login password visibility toggles", async ({ page }) => {
 });
 
 test("@smoke register password visibility toggles", async ({ page }) => {
-  await page.goto("/register");
+  await page.goto("/register/");
 
   const password = page.locator("#password");
   const confirmPassword = page.locator("#confirmPassword");

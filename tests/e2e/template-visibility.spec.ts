@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // Share are used together, and each later change is accepted (no stale version).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -27,7 +27,7 @@ test('shows Public after Share follows a switch to Private', async ({ page }) =>
   const templateId = String(created.id);
 
   try {
-    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.goto(`/dashboard/templates/${templateId}/`);
     const visibilitySwitch = page.getByRole('switch');
     await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'true');
 

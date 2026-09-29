@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // default run name shortens the title instead of failing (src/lib/runs/runName.ts).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -31,10 +31,10 @@ test('Start Run on a public template with a 160-character title creates the run'
   let runId: string | undefined;
 
   try {
-    await page.goto(`/profile/admin/${String(created.slug)}`);
+    await page.goto(`/profile/admin/${String(created.slug)}/`);
     await page.getByRole('button', { name: 'Start Run' }).first().click();
-    await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/);
-    runId = new URL(page.url()).pathname.split('/').pop();
+    await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
+    runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
 
     const run = await callApi(page, 'GET', `/checklists/${runId}`);
     expect(String(run.title).length).toBeLessThanOrEqual(160);

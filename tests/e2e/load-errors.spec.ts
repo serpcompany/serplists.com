@@ -6,7 +6,7 @@ import { fillSignInForm } from './support/sign-in';
 // src/features/profile/loadUserProfile.ts).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -39,7 +39,7 @@ test('template detail offers a retry when loading the template fails', async ({ 
     },
   );
 
-  await page.goto('/dashboard/templates/template-2');
+  await page.goto('/dashboard/templates/template-2/');
   await expect(page.getByRole('heading', { name: 'Unable to load template' })).toBeVisible();
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
   expect(slugLookups).toHaveLength(0);
@@ -64,7 +64,7 @@ test('a public profile offers a retry when loading the profile fails', async ({ 
     },
   );
 
-  await page.goto('/profile/john');
+  await page.goto('/profile/john/');
   await expect(page.getByRole('heading', { name: 'Unable to load profile' })).toBeVisible();
   await expect(page.getByText('User not found')).toHaveCount(0);
 

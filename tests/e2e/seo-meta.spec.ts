@@ -24,7 +24,7 @@ async function expectOneOfEachTag(page: Page) {
 }
 
 test('a public template page has one description, its own', async ({ page }) => {
-  await page.goto('/profile/serp/ultimate-camping-checklist');
+  await page.goto('/profile/serp/ultimate-camping-checklist/');
   await expect(page).toHaveTitle(/Camping/);
 
   await expectOneOfEachTag(page);
@@ -36,13 +36,13 @@ test('a public template page has one description, its own', async ({ page }) => 
 });
 
 test('leaving an SEO page restores the site defaults once', async ({ page }) => {
-  await page.goto('/templates');
+  await page.goto('/templates/');
   await expect(page).toHaveTitle('Discover Templates | SERP Lists');
   await expectOneOfEachTag(page);
 
   // A header link navigates client-side; page.goto would load the page from the server.
   await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
-  await expect(page).toHaveURL(/\/pricing$/);
+  await expect(page).toHaveURL(/\/pricing\/$/);
   await expect(page).toHaveTitle('SERP Lists');
 
   await expectOneOfEachTag(page);

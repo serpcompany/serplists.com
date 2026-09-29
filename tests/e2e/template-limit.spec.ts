@@ -9,7 +9,7 @@ const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.
 async function registerFreeAccount(page: Page) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  await page.goto("/register");
+  await page.goto("/register/");
   await page.getByLabel("Name").fill("Template Limit QA");
   await page.getByLabel("Email").fill(`template-limit+${suffix}@e2e.local`);
   await page.locator("#password").fill(PASSWORD);
@@ -56,14 +56,14 @@ test.describe("template limit upgrade path", () => {
     await createTemplateViaApi(page, "First template");
     const checkout = await stubCheckout(page);
 
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     // Warned before writing a template the plan cannot save.
     await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
 
     await page.getByPlaceholder("Enter template name...").fill("Second template");
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     // One message, with its action, not an error alert plus a toast.
     await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
@@ -73,7 +73,7 @@ test.describe("template limit upgrade path", () => {
     expect(checkout.requests).toBe(1);
     await page.getByRole("link", { name: "Resume template draft" }).click();
 
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     await page.getByRole("button", { name: "Restore draft" }).click();
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("Second template");
   });
@@ -84,7 +84,7 @@ test.describe("template limit upgrade path", () => {
     await createTemplateViaApi(page, "First template");
     await stubCheckout(page);
 
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
     // Warned once the editor has counted the templates; a Save before that is refused by
     // the API with its own message.
     await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
@@ -95,7 +95,7 @@ test.describe("template limit upgrade path", () => {
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
     await expect(page).toHaveURL(/\/dashboard\/settings/);
     await page.getByRole("link", { name: "Resume template draft" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
 
     await title.fill("Another template");
     let confirmMessage: string | null = null;
@@ -119,7 +119,7 @@ test.describe("template limit upgrade path", () => {
     const templateId = await createTemplateViaApi(page, "Only template");
     const checkout = await stubCheckout(page);
 
-    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.goto(`/dashboard/templates/${templateId}/`);
     await page.getByRole("button", { name: "Template actions" }).click();
     await page.getByRole("menuitem", { name: "Duplicate" }).click();
 

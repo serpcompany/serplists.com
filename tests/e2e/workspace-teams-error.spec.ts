@@ -80,7 +80,7 @@ test('a failed teams request shows an error instead of switching to Personal', a
   const templateListRequests = await mockApi(page, state);
   await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
 
   await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
   const switcher = page.getByRole('button', { name: 'Switch context' }).first();
@@ -101,7 +101,7 @@ test('Continue in Personal leaves the error for Personal', async ({ page }) => {
   await mockApi(page, { teamsFail: true });
   await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Continue in Personal' }).click({ timeout: 30_000 });
 
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
@@ -115,7 +115,7 @@ test('in Personal, a failed teams request is shown on an Organization run and in
   await mockApi(page, state);
   await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'personal'));
 
-  await page.goto('/dashboard/runs/run-org');
+  await page.goto('/dashboard/runs/run-org/');
 
   await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
   const header = page.locator('[data-dashboard-page-header="true"]');

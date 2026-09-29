@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // loaded earlier in the same tab (docs/FRONTEND.md).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -32,7 +32,7 @@ test('shows edits and unpublishing on a public template page after the catalog l
 
   try {
     // Loads the public catalog into memory for the rest of the tab session.
-    await page.goto('/templates');
+    await page.goto('/templates/');
     await expect(page.getByRole('heading', { name: 'Discover Templates' })).toBeVisible();
 
     // A content edit names the version it was based on; a new template is version 1.
@@ -41,7 +41,7 @@ test('shows edits and unpublishing on a public template page after the catalog l
     await expect(page.getByRole('heading', { level: 1, name: `Freshness Edited ${stamp}` })).toBeVisible();
 
     await callApi(page, 'PUT', `/templates/${templateId}`, { is_public: false });
-    await navigateInApp(page, '/templates');
+    await navigateInApp(page, '/templates/');
     await navigateInApp(page, publicPath);
     await expect(page.getByRole('heading', { name: 'Template not found' })).toBeVisible();
   } finally {

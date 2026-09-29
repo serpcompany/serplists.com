@@ -37,14 +37,14 @@ async function mcpRequest(
 }
 
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
     timeout: 30_000,
   });
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
 
   const keyName = `Playwright SOP Runner ${Date.now()}`;
@@ -138,14 +138,14 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   expect(completed.response.status).toBe(200);
   const completedRun = ((completed.body.result as JsonRecord).structuredContent as JsonRecord).run as JsonRecord;
 
-  await page.goto(`/dashboard/runs/${encodeURIComponent(runId)}`);
+  await page.goto(`/dashboard/runs/${encodeURIComponent(runId)}/`);
   await expect(page.getByRole('heading', { name: runTitle })).toBeVisible();
   await expect(page.getByText(`${completedRun.progress}%`, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: taskTitle }).click();
   await expect(page.getByLabel('Task notes')).toHaveValue(note);
   await expect(page.getByText(new RegExp(`${keyName} via MCP · authorized by `)).first()).toBeVisible();
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   const keyRow = page.locator('div.divide-y > div').filter({ hasText: keyName });
   await expect(keyRow).toHaveCount(1);
   await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
@@ -157,7 +157,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
 });
 
 test('a Run Key created while the key list is still loading shows in the list', async ({ page }) => {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
@@ -182,7 +182,7 @@ test('a Run Key created while the key list is still loading shows in the list', 
     await route.fulfill({ response });
   });
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
 
   const keyName = `Playwright Slow List Runner ${Date.now()}`;

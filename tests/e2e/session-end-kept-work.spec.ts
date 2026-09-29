@@ -10,7 +10,7 @@ import { fillSignInForm } from './support/sign-in';
 
 async function signIn(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible({ timeout: 30_000 });
@@ -29,7 +29,7 @@ async function signInAgain(page: Page) {
 
 async function signOutInAnotherTab(page: Page) {
   const other = await page.context().newPage();
-  await other.goto('/dashboard/templates');
+  await other.goto('/dashboard/templates/');
   await other.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
   await other.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(other.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
@@ -51,7 +51,7 @@ test('edits to an existing template are offered back after another tab signs out
     is_public: false,
   });
 
-  await page.goto(`/dashboard/templates/${created.id}/edit`);
+  await page.goto(`/dashboard/templates/${created.id}/edit/`);
   const titleField = page.getByPlaceholder('Enter template name...');
   await expect(titleField).toHaveValue(title);
   await titleField.fill(`${title} (edited)`);
@@ -71,7 +71,7 @@ test('edits to an existing template are offered back after another tab signs out
   expect(stored.title).toBe(`${title} (edited)`);
 
   // Saved: the draft is not offered again.
-  await page.goto(`/dashboard/templates/${created.id}/edit`);
+  await page.goto(`/dashboard/templates/${created.id}/edit/`);
   await expect(titleField).toHaveValue(`${title} (edited)`);
   await expect(page.getByText('Unsaved template draft')).toHaveCount(0);
 
@@ -91,7 +91,7 @@ test('restored edits to a template saved elsewhere meanwhile get the edit confli
   });
   const loaded = await callApi<{ version: number }>(page, `/templates/${created.id}`, 'GET');
 
-  await page.goto(`/dashboard/templates/${created.id}/edit`);
+  await page.goto(`/dashboard/templates/${created.id}/edit/`);
   const titleField = page.getByPlaceholder('Enter template name...');
   await expect(titleField).toHaveValue(title);
   await titleField.fill(`${title} (draft)`);
@@ -133,7 +133,7 @@ test('unsaved task notes are offered back after another tab signs out', async ({
   });
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  await page.goto(`/dashboard/runs/${created.id}`);
+  await page.goto(`/dashboard/runs/${created.id}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Deployed build 42');
 
@@ -165,7 +165,7 @@ test("a new template's draft kept in an Organization is offered after signing in
   });
   await page.evaluate((teamId) => window.localStorage.setItem('serplists.activeWorkspaceId', teamId), organization.id);
   const editorRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/dashboard/templates/new');
+  await page.goto('/dashboard/templates/new/');
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name, {
     timeout: 30_000,
   });
@@ -190,7 +190,7 @@ test("a new template's draft kept in an Organization is offered after signing in
   await expect(titleField).toHaveValue(title);
 
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard\/templates$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
   const saved = await callApi<Array<{ id: string; title: string }>>(page, `/templates?teamId=${organization.id}`, 'GET');
   const created = saved.find((template) => template.title === title);
   expect(created).toBeTruthy();

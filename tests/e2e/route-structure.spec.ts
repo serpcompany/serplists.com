@@ -6,12 +6,11 @@ import { fillSignInForm } from './support/sign-in';
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 
 /**
- * Pages noindex every host but serplists.com (src/lib/seo/siteOrigin.ts), so a page's own
- * robots rule only shows on the production host. This serves the local preview (the built
- * app, its pages and the API, all on one origin like production) as
- * https://serplists.com, and aborts every other request (analytics, fonts), so nothing
- * reaches the real site or reports a visit to it. Register page mocks after this, so they
- * answer first.
+ * Loads pages as https://serplists.com, the way a crawler reads the live site: this serves
+ * the local preview (the production build, its pages and the API, all on one origin like
+ * production) under that origin, and aborts every other request (analytics, fonts), so
+ * nothing reaches the real site or reports a visit to it. Register page mocks after this, so
+ * they answer first.
  */
 async function serveLocalAppAsProduction(page: Page) {
   const pagesOrigin = new URL(API_BASE_URL).origin;
@@ -102,10 +101,10 @@ async function mockAuthenticatedRouteApi(page: Page) {
 }
 
 async function signInAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard\/settings$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/dashboard\/settings\/$/, { timeout: 30_000 });
 }
 
 test.describe('route structure', () => {
@@ -118,19 +117,19 @@ test.describe('route structure', () => {
   test('canonical feature, library, and category detail routes render', async ({
     page,
   }) => {
-    await page.goto('/templates');
+    await page.goto('/templates/');
     await expect(
       page.getByRole('heading', {
         name: 'Discover Templates',
       }),
     ).toBeVisible();
 
-    await page.goto('/features/template-builder');
+    await page.goto('/features/template-builder/');
     await expect(
       page.getByRole('heading', { name: 'Template Builder' }),
     ).toBeVisible();
 
-    await page.goto('/categories/outdoor');
+    await page.goto('/categories/outdoor/');
     await expect(
       page.getByRole('heading', { name: 'outdoor' }),
     ).toBeVisible();
@@ -142,11 +141,11 @@ test.describe('route structure', () => {
   test('legacy public routes redirect to the live canonical library path', async ({
     page,
   }) => {
-    await page.goto('/templates');
-    await expect(page).toHaveURL(/\/templates$/);
+    await page.goto('/templates/');
+    await expect(page).toHaveURL(/\/templates\/$/);
 
     await page.goto('/checklists');
-    await expect(page).toHaveURL(/\/templates$/);
+    await expect(page).toHaveURL(/\/templates\/$/);
   });
 
   test('legacy console routes redirect to the live canonical dashboard path', async ({
@@ -155,24 +154,24 @@ test.describe('route structure', () => {
     await mockAuthenticatedRouteApi(page);
 
     await page.goto('/console');
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 
     await page.goto('/account');
-    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
 
     await page.goto('/dashboard/profile');
-    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
   });
 
   test('legacy redirects keep the query string and hash', async ({ page }) => {
     await mockAuthenticatedRouteApi(page);
 
     await page.goto('/dashboard/profile?foo=1#top');
-    await expect(page).toHaveURL(/\/dashboard\/settings\?foo=1#top$/);
+    await expect(page).toHaveURL(/\/dashboard\/settings\/\?foo=1#top$/);
 
     await page.goto('/account?billing=cancel');
     await expect(page.getByText('Upgrade canceled.')).toBeVisible();
-    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
   });
 
   test('returning from Checkout through /account confirms Pro once it activates', async ({ page }) => {
@@ -192,7 +191,7 @@ test.describe('route structure', () => {
 
     await page.goto('/account?billing=success');
     await expect(page.getByText('Welcome to Pro!')).toBeVisible({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/dashboard\/settings$/);
+    await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
   });
 
   test('canonical dashboard resolves to the templates dashboard surface', async ({
@@ -201,21 +200,21 @@ test.describe('route structure', () => {
     await mockAuthenticatedRouteApi(page);
 
     await page.goto('/dashboard');
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
   });
 
   test('removed mixed-surface routes still return not found', async ({ page }) => {
-    await page.goto('/templates/new');
+    await page.goto('/templates/new/');
     await expect(
       page.getByRole('heading', { name: 'That page does not exist' }),
     ).toBeVisible();
 
-    await page.goto('/templates/template-1');
+    await page.goto('/templates/template-1/');
     await expect(
       page.getByRole('heading', { name: 'That page does not exist' }),
     ).toBeVisible();
 
-    await page.goto('/templates/template-1/edit');
+    await page.goto('/templates/template-1/edit/');
     await expect(
       page.getByRole('heading', { name: 'That page does not exist' }),
     ).toBeVisible();
@@ -227,9 +226,9 @@ test.describe('route structure', () => {
     // results.
     await serveLocalAppAsProduction(page);
     for (const path of [
-      '/definitely-missing',
-      '/categories/definitely-missing',
-      '/features/definitely-missing',
+      '/definitely-missing/',
+      '/categories/definitely-missing/',
+      '/features/definitely-missing/',
     ]) {
       await page.goto(`${PRODUCTION_ORIGIN}${path}`);
       await expect(
@@ -240,9 +239,9 @@ test.describe('route structure', () => {
 
     // Each page's own content shows it finished loading before its robots tag is read.
     for (const [path, heading, content] of [
-      ['/categories/outdoor', 'outdoor', 'Ultimate Camping Checklist'],
-      ['/categories/seo', 'SEO', 'Technical SEO Audit Checklist'],
-      ['/features/template-builder', 'Template Builder', 'Build reusable SOPs with sections and tasks.'],
+      ['/categories/outdoor/', 'outdoor', 'Ultimate Camping Checklist'],
+      ['/categories/seo/', 'SEO', 'Technical SEO Audit Checklist'],
+      ['/features/template-builder/', 'Template Builder', 'Build reusable SOPs with sections and tasks.'],
     ] as const) {
       await page.goto(`${PRODUCTION_ORIGIN}${path}`);
       await expect(
@@ -259,7 +258,7 @@ test.describe('route structure', () => {
 
     // A registry category no public Template uses yet is a real page, but it stays out
     // of the index (and the sitemap) until a Template uses it.
-    await page.goto(`${PRODUCTION_ORIGIN}/categories/business`);
+    await page.goto(`${PRODUCTION_ORIGIN}/categories/business/`);
     await expect(
       page.getByRole('heading', { exact: true, name: 'Business & Operations' }),
     ).toBeVisible();
@@ -295,9 +294,9 @@ test.describe('route structure', () => {
     }
 
     await serveLocalAppAsProduction(page);
-    await page.goto(`${PRODUCTION_ORIGIN}/share/${shareToken}`);
+    await page.goto(`${PRODUCTION_ORIGIN}/share/${shareToken}/`);
 
-    await expect(page).toHaveURL(new RegExp(`/share/${shareToken}$`));
+    await expect(page).toHaveURL(new RegExp(`/share/${shareToken}/$`));
     await expect(
       page.getByRole('heading', { level: 1, name: 'Share Route Verification' }),
     ).toBeVisible();
@@ -315,7 +314,7 @@ test.describe('route structure', () => {
       fulfillJson(route, { error: 'Template not found' }, 404),
     );
 
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure`);
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/`);
     await expect(
       page.getByRole('heading', { name: 'User not found' }),
     ).toBeVisible();
@@ -323,7 +322,7 @@ test.describe('route structure', () => {
     await expect(page).toHaveTitle(/Profile not found/);
 
     // e2e-unseeded-template: the page for a Template that does not exist.
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/no-such-template`);
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/no-such-template/`);
     await expect(
       page.getByRole('heading', { name: 'Template not found' }),
     ).toBeVisible();
@@ -341,7 +340,7 @@ test.describe('route structure', () => {
 
     // A seeded public Template, so the server's metadata finds it; the page's own read of
     // it in the browser is answered with the 503 above.
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/admin/sample-technical-seo-audit-checklist`);
+    await page.goto(`${PRODUCTION_ORIGIN}/profile/admin/sample-technical-seo-audit-checklist/`);
     await expect(
       page.getByRole('heading', { name: 'Unable to load template' }),
     ).toBeVisible();

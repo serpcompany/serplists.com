@@ -108,7 +108,7 @@ async function mockOrganizationApi(page: Page, state: MockState) {
 }
 
 async function openOrganizationSettings(page: Page) {
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.getByRole('button', { name: 'Switch context' }).click();
   await page.getByRole('menuitem', { name: /Acme Team/i }).click();
   await expect(page.getByText('Your role: Owner')).toBeVisible();

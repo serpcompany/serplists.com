@@ -116,24 +116,24 @@ async function mockOrganizationApi(page: Page, role: Role) {
 test('an Organization viewer sees no actions the API would reject', async ({ page }) => {
   const api = await mockOrganizationApi(page, 'viewer');
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await expect(page.getByText('Org Playbook')).toBeVisible();
   await expect(page.getByRole('button', { name: 'New Template' })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'New Template' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Start Run' })).toHaveCount(0);
 
-  await page.goto('/dashboard/templates/tpl-org');
+  await page.goto('/dashboard/templates/tpl-org/');
   await expect(page.getByRole('heading', { name: 'Org Playbook' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start Run' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Copy to My Templates|Upgrade to copy/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
 
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await expect(page.getByText('Org Run')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Revalidate' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Run options' })).toHaveCount(0);
 
-  await page.goto('/dashboard/runs/run-org');
+  await page.goto('/dashboard/runs/run-org/');
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await expect(page.getByText('View only').first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toHaveCount(0);
@@ -141,7 +141,7 @@ test('an Organization viewer sees no actions the API would reject', async ({ pag
   await expect(page.getByRole('button', { name: 'Share' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save notes' })).toHaveCount(0);
 
-  await page.goto('/dashboard/archive');
+  await page.goto('/dashboard/archive/');
   await expect(page.getByText('Archived Playbook', { exact: true })).toBeVisible();
   await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
@@ -152,17 +152,17 @@ test('an Organization viewer sees no actions the API would reject', async ({ pag
 test('an Organization runner can run but not edit or delete', async ({ page }) => {
   await mockOrganizationApi(page, 'runner');
 
-  await page.goto('/dashboard/templates/tpl-org');
+  await page.goto('/dashboard/templates/tpl-org/');
   await expect(page.getByRole('heading', { name: 'Org Playbook' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start Run' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Edit' })).toHaveCount(0);
 
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await page.getByRole('button', { name: 'Run options' }).click();
   await expect(page.getByRole('menuitem', { name: 'Share Run' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Delete' })).toHaveCount(0);
 
-  await page.goto('/dashboard/runs/run-org');
+  await page.goto('/dashboard/runs/run-org/');
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
   await expect(page.getByText('View only')).toHaveCount(0);
 });
@@ -172,12 +172,12 @@ test('an Organization runner can run but not edit or delete', async ({ page }) =
 test('an Organization viewer opening an edit link gets a read-only notice, not the editor', async ({ page }) => {
   const api = await mockOrganizationApi(page, 'viewer');
 
-  await page.goto('/dashboard/templates/tpl-org/edit');
+  await page.goto('/dashboard/templates/tpl-org/edit/');
 
   await expect(page.getByText("You can't edit this template")).toBeVisible();
   await expect(page.getByRole('link', { name: 'View template' })).toHaveAttribute(
     'href',
-    '/dashboard/templates/tpl-org',
+    '/dashboard/templates/tpl-org/',
   );
   await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
@@ -187,7 +187,7 @@ test('an Organization viewer opening an edit link gets a read-only notice, not t
 test('an Organization runner opening New Template gets a read-only notice', async ({ page }) => {
   const api = await mockOrganizationApi(page, 'runner');
 
-  await page.goto('/dashboard/templates/new');
+  await page.goto('/dashboard/templates/new/');
 
   await expect(page.getByText("You can't create templates here")).toBeVisible();
   await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
@@ -198,7 +198,7 @@ test('an Organization runner opening New Template gets a read-only notice', asyn
 test('an Organization editor can restore archived Templates but not runs', async ({ page }) => {
   await mockOrganizationApi(page, 'editor');
 
-  await page.goto('/dashboard/archive');
+  await page.goto('/dashboard/archive/');
   await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
   const templateRow = page.locator('div.grid').filter({ hasText: 'Archived Playbook' }).filter({ hasNot: page.locator('div.grid') });
   await expect(templateRow.getByRole('button', { name: 'Restore' })).toBeVisible();

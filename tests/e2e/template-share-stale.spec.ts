@@ -10,7 +10,7 @@ import { fillSignInForm } from './support/sign-in';
 const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try again.';
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -31,7 +31,7 @@ async function createPublicTemplate(page: Page, label: string) {
 }
 
 async function openPublicDetail(page: Page, templateId: string) {
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto(`/dashboard/templates/${templateId}/`);
   await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
   return callApi(page, 'GET', `/templates/${templateId}`);
 }
@@ -60,7 +60,7 @@ test('Share gives no link after the template was made private elsewhere', async 
     const dialog = page.getByRole('dialog', { name: 'Share Template' });
     await expect(dialog).toBeVisible();
     const link = dialog.getByRole('textbox', { name: 'Share link' });
-    await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${String(loaded.slug)}$`));
+    await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${String(loaded.slug)}/$`));
     const shareUrl = await link.inputValue();
     const republished = await callApi(page, 'GET', `/templates/${templateId}`);
     expect(Boolean(republished.is_public)).toBe(true);
@@ -104,7 +104,7 @@ test('Share builds the link from the slug set elsewhere', async ({ page }) => {
     const dialog = page.getByRole('dialog', { name: 'Share Template' });
     await expect(dialog).toBeVisible();
     const link = dialog.getByRole('textbox', { name: 'Share link' });
-    await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${newSlug}$`));
+    await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${newSlug}/$`));
     await expect(link).not.toHaveValue(new RegExp(`/${oldSlug}$`));
   } finally {
     await callApi(page, 'DELETE', `/templates/${templateId}`);

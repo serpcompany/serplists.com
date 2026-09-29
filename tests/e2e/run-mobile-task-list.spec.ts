@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // same task list in a sheet (src/components/run-execution/MobileRunProgress.tsx).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -44,7 +44,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 
     const runId = await createRun(page);
     await page.setViewportSize(viewport);
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
     await expect(page.locator('[data-run-progress-panel]')).toBeHidden();
 
@@ -71,7 +71,7 @@ test('at desktop width the task column shows and the Tasks button does not', asy
   const runId = await createRun(page);
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.locator('[data-run-progress-panel]')).toBeVisible();
   await expect(page.locator('[data-mobile-run-tasks-trigger]')).toBeHidden();
   await page.locator('[data-run-progress-panel]').getByRole('button', { name: /Task E/ }).click();

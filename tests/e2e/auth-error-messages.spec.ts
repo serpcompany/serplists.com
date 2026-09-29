@@ -19,7 +19,7 @@ test('a rate-limited sign-in tells the user to wait', async ({ page }) => {
     });
   });
 
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
@@ -32,7 +32,7 @@ test('a sign-in blocked by an older router body without a message still says to 
     await route.fulfill({ status: 429, contentType: 'application/json', body: '{"error":"Too many requests"}' });
   });
 
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
 
@@ -58,7 +58,7 @@ test('a password reset refused by the router shows its message', async ({ page }
     });
   });
 
-  await page.goto('/forgot-password');
+  await page.goto('/forgot-password/');
   await page.getByLabel('Email').fill('john@test.com');
   await page.getByRole('button', { name: 'Send reset link' }).click();
 

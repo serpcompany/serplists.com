@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // template, so the next click succeeds without a page reload (docs/product-specs/features.md).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -27,7 +27,7 @@ test('the visibility switch recovers from an edit conflict without a reload', as
   expect(created.status).toBe(200);
   const templateId = String(created.body?.id);
 
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto(`/dashboard/templates/${templateId}/`);
   const visibility = page.getByRole('switch');
   await expect(visibility).toBeEnabled({ timeout: 15_000 });
 

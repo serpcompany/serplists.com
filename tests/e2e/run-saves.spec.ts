@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -66,7 +66,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
   });
   const conflictToast = page.getByText(/changed (while|since)/);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).dblclick();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
@@ -75,7 +75,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await page.getByRole('button', { name: 'Return to Dashboard' }).dblclick();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
   expect(saves).toEqual([200, 200, 200]);
   await expect(conflictToast).toHaveCount(0);
@@ -87,7 +87,7 @@ test('a dismissed completion dialog can be reopened with Finish Run', async ({ p
   await loginAsAdmin(page);
   const runId = await createRun(page, `Finish run QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
@@ -98,7 +98,7 @@ test('a dismissed completion dialog can be reopened with Finish Run', async ({ p
 
   await page.getByRole('button', { name: 'Finish Run' }).click();
   await page.getByRole('button', { name: 'Return to Dashboard' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
   await deleteRun(page, runId);
@@ -121,10 +121,10 @@ test('a fully ticked run that is still in progress can be completed after a relo
     },
   });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Complete run' }).click();
   await page.getByRole('button', { name: 'Return to Dashboard' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
   await deleteRun(page, runId);
@@ -135,7 +135,7 @@ test('unsaved task notes are saved with Mark Complete and survive moving between
   const runId = await createRun(page, `Notes draft QA ${Date.now()}`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Deployed build 42, see link');
   await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -169,7 +169,7 @@ test('text typed while a notes save is in flight is kept', async ({ page }) => {
     await route.continue();
   });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await notes.fill('abc');
   await page.getByRole('button', { name: 'Save notes' }).click();
   await notes.pressSequentially('def');
@@ -214,7 +214,7 @@ test('a tick saved by another session is kept and this page can still save', asy
     }
   });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await tickElsewhere(page, runId, { a: false, b: true });
   saves.length = 0;
@@ -232,7 +232,7 @@ test('ticking a task another session already ticked does not untick it', async (
   await loginAsAdmin(page);
   const runId = await createRun(page, `Same tick QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await tickElsewhere(page, runId, { a: true, b: false });
 
@@ -288,7 +288,7 @@ test('ticking the last sub-task, then Mark Complete during the save, keeps every
   const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, true);
   const release = await holdFirstSave(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await stepCheckbox(page, 'Step one').click();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -307,7 +307,7 @@ test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it
   const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, false);
   const release = await holdFirstSave(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await stepCheckbox(page, 'Step one').click();
@@ -365,7 +365,7 @@ test('a double click on Next Task moves on without completing the next task', as
   await tickElsewhere(page, runId, { a: true, b: false });
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Previous' }).click();
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
@@ -386,7 +386,7 @@ test('the second click of a double click after a fast save does not complete the
   const runId = await createRun(page, `Fast save double click QA ${Date.now()}`);
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
@@ -415,7 +415,7 @@ test('the rest of the double click that completes the last task keeps the comple
   const runId = await createRun(page, `Dialog double click QA ${Date.now()}`);
   await tickElsewhere(page, runId, { a: true, b: false });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   const point = await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
@@ -431,7 +431,7 @@ test('the rest of the double click that completes the last task keeps the comple
   expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
 
   await dialog.getByRole('button', { name: 'Return to Dashboard' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
   await deleteRun(page, runId);
@@ -444,7 +444,7 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await page.setViewportSize(viewport);
     const saves = recordSaves(page, runId);
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
     await page.getByRole('button', { name: 'Rename' }).dblclick();
 
@@ -485,7 +485,7 @@ test('a completed run cannot be unticked, privately or through its share link', 
   });
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await expect(stepCheckbox(page, 'Step one')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toHaveCount(0);
@@ -513,7 +513,7 @@ test('the run Changelog shows a save without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Changelog QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   const changelog = page.locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) });
   await expect(changelog.getByText('Created run')).toBeVisible();
@@ -558,7 +558,7 @@ test('a task opened while Mark Complete is saving stays open when the save lands
   const releaseNextSave = await holdEverySave(page, runId);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await page.getByRole('navigation', { name: 'Run tasks' }).getByRole('button', { name: 'Task D' }).click();
@@ -579,7 +579,7 @@ test('queued Mark Complete saves never move back to an earlier task', async ({ p
   const releaseNextSave = await holdEverySave(page, runId);
   const next = page.getByRole('button', { name: 'Next', exact: true });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await next.click();
@@ -604,7 +604,7 @@ test('a completed task can be found and unticked by its named checkbox', async (
   await loginAsAdmin(page);
   const runId = await createRun(page, `Task checkbox QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   const taskA = page.getByRole('checkbox', { name: 'Mark "Task A" complete' });
   await expect(taskA).not.toBeChecked();
@@ -628,7 +628,7 @@ test('the run title editor stops at the length the API accepts, and the save goe
   const runId = await createRun(page, `Title limit QA ${Date.now()}`);
   const longTitle = 'Quarterly vendor onboarding '.repeat(7);
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Rename' }).click();
   const titleInput = page.getByRole('textbox', { name: 'Run title' });
   await titleInput.clear();
@@ -653,7 +653,7 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
   const title = `Notes leave guard QA ${Date.now()}`;
   const runId = await createRun(page, title);
   // The runs list opens a run at /run/<id>.
-  const runUrl = new RegExp(`/runs?/${runId}$`);
+  const runUrl = new RegExp(`/runs?/${runId}/$`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
   const accountMenu = page.locator('header').first().getByRole('button', { name: 'Account menu' });
   const sidebarTemplates = page.getByRole('complementary').getByRole('link', { name: 'Templates', exact: true });
@@ -665,7 +665,7 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
   });
 
   // Arrive through the app so browser Back stays inside the single-page app.
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await page.getByRole('link', { name: title }).click();
   await expect(page).toHaveURL(runUrl);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
@@ -699,7 +699,7 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
 
   acceptDialogs = true;
   await sidebarTemplates.click();
-  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
   expect(dialogs).toHaveLength(6);
 
   await deleteRun(page, runId);
@@ -715,7 +715,7 @@ test('completing a run saves an unsaved note and leaves without asking', async (
     void dialog.dismiss();
   });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -726,7 +726,7 @@ test('completing a run saves an unsaved note and leaves without asking', async (
   await notes.fill('Signed off by QA');
   await page.getByRole('button', { name: 'Finish Run' }).click();
   await page.getByRole('button', { name: 'Return to Dashboard' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(dialogs).toEqual([]);
 
   const { status, sections } = await getRun<{ notes?: string }>(page, runId);
@@ -752,11 +752,11 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
     dialogs.push(dialog.message());
     await (acceptDialogs ? dialog.accept() : dialog.dismiss());
   });
-  const sharedUrl = new RegExp(`/share/${shareToken}$`);
+  const sharedUrl = new RegExp(`/share/${shareToken}/$`);
   const browse = guest.getByRole('link', { name: 'Browse Public Templates' });
   const notes = guest.getByRole('textbox', { name: 'Task notes' }).first();
 
-  await guest.goto(`/share/${shareToken}`);
+  await guest.goto(`/share/${shareToken}/`);
   await notes.fill('Checked by the guest');
   await browse.click();
   await expect.poll(() => dialogs.length).toBe(1);
@@ -766,7 +766,7 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
 
   acceptDialogs = true;
   await browse.click();
-  await expect(guest).toHaveURL(/\/templates$/);
+  await expect(guest).toHaveURL(/\/templates\/$/);
   expect(dialogs).toHaveLength(2);
 
   await guestContext.close();
@@ -790,7 +790,7 @@ for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390
       .locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) })
       .locator('time');
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByRole('heading', { name: tasks[0] })).toBeVisible();
     await expect(changelogEntries).toHaveCount(1);
     const first = await markComplete.boundingBox();

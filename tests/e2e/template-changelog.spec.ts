@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // Changelog must still show them (src/features/template-detail/templateHistoryTimeline.ts).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -29,7 +29,7 @@ test('the Changelog shows Share, archive and restore next to versions', async ({
   const templateId = String(created.id);
 
   try {
-    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.goto(`/dashboard/templates/${templateId}/`);
     await expect(page.getByText('Created template v1')).toBeVisible();
 
     await page.getByRole('button', { name: 'Share' }).click();

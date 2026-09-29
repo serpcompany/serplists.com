@@ -9,7 +9,7 @@ import { fillSignInForm } from './support/sign-in';
 // a reload, even though the catalog copy is still cached.
 
 test('a deleted public template leaves My Templates after the catalog was loaded', async ({ page }) => {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -26,10 +26,10 @@ test('a deleted public template leaves My Templates after the catalog was loaded
 
   // The runs page loads the public catalog, which now includes the new public template.
   const catalogLoaded = page.waitForResponse((response) => response.url().includes('/api/templates?scope=public'));
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await catalogLoaded;
 
-  await navigateInApp(page, '/dashboard/templates');
+  await navigateInApp(page, '/dashboard/templates/');
   await page.getByPlaceholder('Search templates...').fill(title);
   await page.getByRole('button', { name: 'Show templates in grid view' }).click();
   const card = page.locator('div.group').filter({ has: page.getByRole('link', { name: title, exact: true }) });
@@ -52,7 +52,7 @@ test('a deleted public template leaves My Templates after the catalog was loaded
 // Deleting a Template drops it from the cached catalog, and that copy must stay: a refetch on
 // the next library visit would bring the deleted Template back.
 test('a deleted public template stays off the library while the edge still serves the old catalog', async ({ page }) => {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -87,7 +87,7 @@ test('a deleted public template stays off the library while the edge still serve
   await expect(card).toBeVisible({ timeout: 15_000 });
   const requestsBeforeDelete = catalogRequests;
 
-  await navigateInApp(page, `/dashboard/templates/${templateId}`);
+  await navigateInApp(page, `/dashboard/templates/${templateId}/`);
   // The detail page offers Delete in its template actions menu.
   await page.getByRole('button', { name: 'Template actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();

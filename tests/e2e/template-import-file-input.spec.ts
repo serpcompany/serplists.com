@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // Chromium's same-path suppression.
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -33,7 +33,7 @@ test('each chosen import file replaces the preview and clears the file input', a
     }),
   );
 
-  await page.goto('/dashboard/import-templates');
+  await page.goto('/dashboard/import-templates/');
   const input = page.getByLabel('Select a YAML, JSON, or Markdown template file');
   await expect(input).toBeEnabled({ timeout: 15_000 });
 

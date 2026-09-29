@@ -31,7 +31,7 @@ test('bundled public template frames its YouTube video without a CSP violation',
     if (/Refused to frame/i.test(message.text())) refusedFrames.push(message.text());
   });
 
-  await page.goto(`${pagesOrigin}/profile/serp/full-website-launch-qa-checklist`);
+  await page.goto(`${pagesOrigin}/profile/serp/full-website-launch-qa-checklist/`);
   // The preview opens every section, so the task's video frames without a click.
   await expect(page.getByText('Review launch walkthrough video', { exact: true })).toBeVisible();
 

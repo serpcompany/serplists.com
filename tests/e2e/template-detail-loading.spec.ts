@@ -11,7 +11,7 @@ const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklis
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
 async function login(page: Page, user: TestUser) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, user);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -45,7 +45,7 @@ test('the Start Run dialog keeps its typed name when the app refreshes data in t
   // Another owner's template is not in John's lists, so the page fetches it by id.
   const requests = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/${templateId}`));
   await page.clock.install();
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).click();
   await page.getByLabel('Run Name').fill('Kept run name');
 

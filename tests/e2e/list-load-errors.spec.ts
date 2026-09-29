@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // and Retry must load the list (docs/FRONTEND.md).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -36,7 +36,7 @@ test('My Templates shows Retry instead of an empty library when the list fails t
     page,
     (url) => url.pathname.endsWith('/api/templates') && url.searchParams.get('scope') === 'personal',
   );
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
 
   await expect(page.getByText("Couldn't load your templates")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('No templates found')).toHaveCount(0);
@@ -57,7 +57,7 @@ test('My Runs shows Retry instead of an empty list when the runs fail to load', 
   });
 
   const failing = await failRequests(page, (url) => url.pathname.endsWith('/api/checklists'));
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
 
   await expect(page.getByText("Couldn't load your runs")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('No runs found')).toHaveCount(0);

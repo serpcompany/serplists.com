@@ -27,16 +27,16 @@ async function waitForApp(page: Page) {
 }
 
 const SENSITIVE_PAGES = [
-  { path: '/share/e2e-analytics-share-token', secret: 'e2e-analytics-share-token' },
-  { path: '/team-invites/e2e-analytics-invite-token', secret: 'e2e-analytics-invite-token' },
-  { path: '/reset-password?token=E2E_RESET_SENTINEL', secret: 'E2E_RESET_SENTINEL' },
+  { path: '/share/e2e-analytics-share-token/', secret: 'e2e-analytics-share-token' },
+  { path: '/team-invites/e2e-analytics-invite-token/', secret: 'e2e-analytics-invite-token' },
+  { path: '/reset-password/?token=E2E_RESET_SENTINEL', secret: 'E2E_RESET_SENTINEL' },
   {
-    path: '/login?verify_email=1&email=analytics-e2e%40example.com',
+    path: '/login/?verify_email=1&email=analytics-e2e%40example.com',
     secret: 'analytics-e2e',
   },
   // Where the verification email returns a new invitee.
   {
-    path: '/login?verified=1&next=%2Fteam-invites%2Fe2e-analytics-next-token',
+    path: '/login/?verified=1&next=%2Fteam-invites%2Fe2e-analytics-next-token',
     secret: 'e2e-analytics-next-token',
   },
 ];
@@ -62,20 +62,20 @@ test.describe('analytics privacy', () => {
   }
 
   test('removes the reset token from the address bar and keeps the form usable', async ({ page }) => {
-    await page.goto('/reset-password?token=E2E_RESET_SENTINEL');
+    await page.goto('/reset-password/?token=E2E_RESET_SENTINEL');
 
     await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible();
     await expect(page).not.toHaveURL(/token=/);
-    await expect(page).toHaveURL(/\/reset-password$/);
+    await expect(page).toHaveURL(/\/reset-password\/$/);
   });
 
   test('moves an email address in an old login link out of the URL', async ({ page }) => {
-    await page.goto('/login?verify_email=1&email=analytics-e2e%40example.com');
+    await page.goto('/login/?verify_email=1&email=analytics-e2e%40example.com');
 
     await expect(page.getByLabel('Email')).toHaveValue('analytics-e2e@example.com');
     await expect(page).not.toHaveURL(/email=analytics/);
     // The one-shot verify_email notice parameter goes too, so a reload does not replay it.
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\/$/);
   });
 
   test('still loads the container on public pages', async ({ page }) => {

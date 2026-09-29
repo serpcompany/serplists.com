@@ -52,13 +52,13 @@ test('a Personal tab stays Personal after another tab selects an Organization', 
   const tabBTeamsRequests = await mockApi(tabB);
   await tabB.clock.install();
 
-  await tabB.goto('/dashboard/templates');
+  await tabB.goto('/dashboard/templates/');
   await tabB.evaluate(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'personal'));
   await tabB.reload();
   const switcherB = tabB.getByRole('button', { name: 'Switch context' }).first();
   await expect(switcherB).toContainText('Personal', { timeout: 30_000 });
 
-  await tabA.goto('/dashboard/templates');
+  await tabA.goto('/dashboard/templates/');
   await tabA.getByRole('button', { name: 'Switch context' }).first().click();
   await tabA.getByRole('menuitem', { name: /Acme Org/ }).click();
   await expect(tabA.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org');

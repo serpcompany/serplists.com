@@ -11,7 +11,8 @@ const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
 const BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 
 async function fetchHead(request: APIRequestContext, path: string, userAgent = SLACKBOT) {
-  const response = await request.get(`${APP_URL}${path}`, { headers: { 'User-Agent': userAgent } });
+  // A crawler follows no redirect to read a page's tags: each path is the page's own URL.
+  const response = await request.get(`${APP_URL}${path}`, { headers: { 'User-Agent': userAgent }, maxRedirects: 0 });
   expect(response.status(), path).toBe(200);
   const html = await response.text();
   const head = html.slice(0, html.indexOf('</head>'));
@@ -28,15 +29,15 @@ async function fetchHead(request: APIRequestContext, path: string, userAgent = S
 }
 
 test('a shared public template unfurls with its own title and a PNG card', async ({ request }) => {
-  const head = await fetchHead(request, '/profile/serp/ultimate-camping-checklist?utm_source=slack');
+  const head = await fetchHead(request, '/profile/serp/ultimate-camping-checklist/?utm_source=slack');
 
   expect(head.title).toBe('Ultimate Camping Checklist | SERP Lists');
   expect(head.meta('og:title')).toEqual(['Ultimate Camping Checklist | SERP Lists']);
   expect(head.meta('og:type')).toEqual(['article']);
   expect(head.meta('description')).toHaveLength(1);
   expect(head.meta('description')[0]).toContain('camping');
-  expect(head.meta('og:url')).toEqual(['https://serplists.com/profile/serp/ultimate-camping-checklist']);
-  expect(head.canonical).toEqual(['https://serplists.com/profile/serp/ultimate-camping-checklist']);
+  expect(head.meta('og:url')).toEqual(['https://serplists.com/profile/serp/ultimate-camping-checklist/']);
+  expect(head.canonical).toEqual(['https://serplists.com/profile/serp/ultimate-camping-checklist/']);
   expect(head.meta('og:image')).toEqual(['https://serplists.com/og-default.png']);
 
   const image = await request.get(`${APP_URL}/og-default.png`);
@@ -45,17 +46,17 @@ test('a shared public template unfurls with its own title and a PNG card', async
 });
 
 test('category and library links unfurl with their own titles', async ({ request }) => {
-  expect((await fetchHead(request, '/categories/outdoor')).title).toBe('outdoor Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories/business')).title).toBe('Business &amp; Operations Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories')).title).toBe('Browse Template Categories | SERP Lists');
-  expect((await fetchHead(request, '/templates')).title).toBe('Discover Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories/outdoor/')).title).toBe('outdoor Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories/business/')).title).toBe('Business &amp; Operations Templates | SERP Lists');
+  expect((await fetchHead(request, '/categories/')).title).toBe('Browse Template Categories | SERP Lists');
+  expect((await fetchHead(request, '/templates/')).title).toBe('Discover Templates | SERP Lists');
 });
 
 // The server answers what the page shows: not found, out of search, and no canonical URL,
 // since the address is not a page.
 test('an unknown template unfurls as not found', async ({ request }) => {
   // e2e-unseeded-template: no Template has this slug.
-  const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere');
+  const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere/');
 
   expect(head.title).toBe('Template not found | SERP Lists');
   expect(head.meta('robots')).toEqual(['noindex, nofollow']);
@@ -63,7 +64,7 @@ test('an unknown template unfurls as not found', async ({ request }) => {
 });
 
 test('people get the same tags as link-preview crawlers', async ({ request }) => {
-  for (const path of ['/profile/serp/ultimate-camping-checklist', '/categories/outdoor', '/categories', '/templates']) {
+  for (const path of ['/profile/serp/ultimate-camping-checklist/', '/categories/outdoor/', '/categories/', '/templates/']) {
     const forPeople = await fetchHead(request, path, BROWSER);
     const forCrawlers = await fetchHead(request, path);
     expect(forPeople.title, path).toBe(forCrawlers.title);

@@ -7,7 +7,7 @@ const MENU_LINKS = ['Templates', 'Features', 'Pricing', 'Log in', 'Get started']
 test.describe('public navigation on phones', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  for (const path of ['/', '/templates', '/pricing']) {
+  for (const path of ['/', '/templates/', '/pricing/']) {
     test(`reaches Log in and every header link from ${path}`, async ({ page }) => {
       await page.goto(path);
 
@@ -21,17 +21,17 @@ test.describe('public navigation on phones', () => {
       }
 
       await menu.getByRole('link', { name: 'Log in', exact: true }).click();
-      await expect(page).toHaveURL(/\/login$/);
+      await expect(page).toHaveURL(/\/login\/$/);
       await expect(page.getByRole('dialog')).toBeHidden();
     });
   }
 
   test('opens Pricing from the menu', async ({ page }) => {
-    await page.goto('/templates');
+    await page.goto('/templates/');
     await page.getByRole('button', { name: 'Open menu' }).click();
     await page.getByRole('dialog').getByRole('link', { name: 'Pricing', exact: true }).click();
 
-    await expect(page).toHaveURL(/\/pricing$/);
+    await expect(page).toHaveURL(/\/pricing\/$/);
     await expect(page.getByRole('dialog')).toBeHidden();
   });
 

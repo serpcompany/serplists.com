@@ -35,7 +35,7 @@ async function restoreFromBackForwardCache(page: Page) {
 }
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -45,7 +45,7 @@ async function loginAsAdmin(page: Page) {
 async function registerFreeAccount(page: Page) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  await page.goto('/register');
+  await page.goto('/register/');
   await page.getByLabel('Name').fill('Back From Checkout QA');
   await page.getByLabel('Email').fill(`back-from-checkout+${suffix}@e2e.local`);
   await page.locator('#password').fill(PASSWORD);
@@ -82,7 +82,7 @@ test('Back from checkout leaves the Start Run dialog usable on My Templates', as
   });
   await stubCheckout(page);
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   await page.getByRole('button', { name: 'Start Run' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Start Run' });
@@ -105,7 +105,7 @@ test('Back from checkout offers Upgrade again and guards new edits in the editor
   await createTemplateViaApi(page, 'First template');
   await stubCheckout(page);
 
-  await page.goto('/dashboard/templates/new');
+  await page.goto('/dashboard/templates/new/');
   await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toBeVisible();
   const title = page.getByPlaceholder('Enter template name...');
   await title.fill('Second template');

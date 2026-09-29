@@ -4,7 +4,7 @@ import { apiRequest } from "./support/api-requests";
 import { fillSignInForm } from "./support/sign-in";
 
 async function signInAsAdmin(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login/");
   await fillSignInForm(page, 'admin');
   await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(/\/dashboard\/settings/);
@@ -74,7 +74,7 @@ test("the import page lists every failed template when none imported", async ({ 
     });
   });
 
-  await page.goto("/dashboard/import-templates");
+  await page.goto("/dashboard/import-templates/");
   // The picker stays disabled until the template list and plan load; a file set on a
   // disabled input is ignored.
   const fileInput = page.locator("#template-file-input");

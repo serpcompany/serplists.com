@@ -8,7 +8,7 @@ import { fillSignInForm } from './support/sign-in';
 // navigation, lists archived items and restores them (src/views/Archive.tsx).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -37,9 +37,9 @@ test('an archived template and run can be restored from the archive page', async
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
   expect((await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' })).status).toBe(200);
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
-  await expect(page).toHaveURL(/\/dashboard\/archive$/);
+  await expect(page).toHaveURL(/\/dashboard\/archive\/$/);
   await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
 
   const templateRow = archiveRow(page, templateTitle);
@@ -74,7 +74,7 @@ test('an item restored elsewhere leaves the archive when Restore finds it alread
   const templateId = template.body?.id as string;
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
 
-  await page.goto('/dashboard/archive');
+  await page.goto('/dashboard/archive/');
   const row = archiveRow(page, title);
   await expect(row).toHaveCount(1, { timeout: 15_000 });
 
@@ -105,7 +105,7 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   const runId = run.body?.id as string;
 
   // Load the archive first so its lists are cached, then delete from the runs page.
-  await page.goto('/dashboard/archive');
+  await page.goto('/dashboard/archive/');
   await expect(page.getByRole('heading', { name: 'Archived runs' })).toBeVisible();
   // The count replaces "Loading" once both archive lists have loaded.
   await expect(page.getByText(/^\d+ archived$/)).toBeVisible();
@@ -142,7 +142,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
   });
   const templateId = template.body?.id as string;
 
-  await page.goto('/dashboard/templates');
+  await page.goto('/dashboard/templates/');
   await page.getByPlaceholder('Search templates...').fill(title);
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
   const row = page.locator('div.group').filter({ has: page.getByRole('link', { name: title, exact: true }) });
@@ -186,7 +186,7 @@ test('a template deleted from its page opens normally once restored', async ({ p
   const isDetailRead = (url: URL, method: string) =>
     method === 'GET' && url.pathname.endsWith(`/api/templates/${templateId}`);
 
-  await page.goto(`/dashboard/templates/${templateId}`);
+  await page.goto(`/dashboard/templates/${templateId}/`);
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });
 
   const readsAfterArchive: string[] = [];
@@ -200,7 +200,7 @@ test('a template deleted from its page opens normally once restored', async ({ p
   );
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
-  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
   await page.waitForTimeout(500);
   expect(readsAfterArchive).toEqual([]);
 
@@ -219,7 +219,7 @@ test('a template deleted from its page opens normally once restored', async ({ p
     },
   );
   // In-app navigation keeps the query cache.
-  await navigateInApp(page, `/dashboard/templates/${templateId}`);
+  await navigateInApp(page, `/dashboard/templates/${templateId}/`);
   await page.waitForTimeout(700);
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });

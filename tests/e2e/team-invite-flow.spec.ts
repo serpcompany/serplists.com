@@ -7,7 +7,7 @@ function uniqueSuffix() {
 }
 
 async function registerAccount(page: Page, account: { email: string; name: string }) {
-  await page.goto('/register');
+  await page.goto('/register/');
   await page.getByLabel('Name').fill(account.name);
   await page.getByLabel('Email').fill(account.email);
   await page.locator('#password').fill(PASSWORD);
@@ -115,7 +115,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
     name: 'Owner User',
   });
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.locator('#team-name').fill(teamName);
   await page.locator('#team-slug').fill(`flow-${suffix.toLowerCase()}`);
   await page.getByRole('button', { name: 'Create Organization' }).click();
@@ -167,7 +167,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   expect(storedWorkspaceAfterAccept ?? 'personal').toBe('personal');
 
   await linkInviteePage.getByRole('button', { name: `Switch to ${teamName}` }).click();
-  await linkInviteePage.goto('/dashboard/settings');
+  await linkInviteePage.goto('/dashboard/settings/');
   await expectWorkspaceSelected(linkInviteePage, teamName, linkInviteResponses);
   await expect(linkInviteePage.getByText('Your role: Viewer')).toBeVisible();
 
@@ -187,7 +187,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
     email: settingsInviteeEmail,
     name: 'Settings Invitee',
   });
-  await settingsInviteePage.goto('/dashboard/settings');
+  await settingsInviteePage.goto('/dashboard/settings/');
   await expect(settingsInviteePage.getByText('Incoming invites')).toBeVisible({
     timeout: 15_000,
   });
@@ -203,7 +203,7 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(settingsInviteePage.getByText('Incoming invites')).toHaveCount(0);
   await settingsInviteeContext.close();
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.reload();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
     teamName,
@@ -225,7 +225,7 @@ test('a new invitee who signs up from the invite link comes back to the invite',
   const inviteeEmail = `signup+${suffix}@e2e.local`;
 
   await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.locator('#team-name').fill(teamName);
   await page.getByRole('button', { name: 'Create Organization' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
@@ -241,7 +241,7 @@ test('a new invitee who signs up from the invite link comes back to the invite',
   // Through Log in, then Sign up: the invite path must survive both hops.
   await inviteePage.getByRole('link', { name: 'Log in to accept' }).click();
   await inviteePage.getByRole('link', { name: 'Sign up' }).click();
-  await expect(inviteePage).toHaveURL(/\/register\?next=/);
+  await expect(inviteePage).toHaveURL(/\/register\/\?next=/);
 
   await inviteePage.getByLabel('Name').fill('New Invitee');
   await inviteePage.getByLabel('Email').fill(inviteeEmail);
@@ -264,7 +264,7 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   const inviteeEmail = `relink+${suffix}@e2e.local`;
 
   await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.locator('#team-name').fill(teamName);
   await page.getByRole('button', { name: 'Create Organization' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
@@ -321,7 +321,7 @@ test('revoking an invite removes its link, and only its link, from the page', as
   const keptEmail = `kept+${suffix}@e2e.local`;
 
   await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.locator('#team-name').fill(teamName);
   await page.getByRole('button', { name: 'Create Organization' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
@@ -357,7 +357,7 @@ test('an invite opened in another account offers to sign out and come back to it
   const otherEmail = `other+${suffix}@e2e.local`;
 
   await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
   await page.locator('#team-name').fill(teamName);
   await page.getByRole('button', { name: 'Create Organization' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
@@ -385,7 +385,7 @@ test('an invite opened in another account offers to sign out and come back to it
   // Sign-out finishes before the login page opens, so it does not bounce back
   // to the invite as the old account.
   await devicePage.getByRole('button', { name: 'Sign out and continue' }).click();
-  await expect(devicePage).toHaveURL(/\/login\?next=/, { timeout: 15_000 });
+  await expect(devicePage).toHaveURL(/\/login\/\?next=/, { timeout: 15_000 });
   await expect(devicePage.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
   await devicePage.getByLabel('Email').fill(inviteeEmail);

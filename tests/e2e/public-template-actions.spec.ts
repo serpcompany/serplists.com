@@ -9,7 +9,7 @@ import { fillSignInForm } from './support/sign-in';
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -34,10 +34,10 @@ test('a double click on the header Start Run creates one run', async ({ page }) 
   await openPublicTemplate(page);
   // The sticky header button comes first in the page; the bottom call-to-action is second.
   await page.getByRole('button', { name: 'Start Run' }).first().dblclick();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/);
+  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   expect(runCreates).toHaveLength(1);
 
-  const runId = new URL(page.url()).pathname.split('/').pop();
+  const runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 });
 
@@ -71,7 +71,7 @@ test('a failed Save keeps the Save button instead of showing Saved', async ({ pa
 
 test('a Free Personal user sees that Save leads to an upgrade', async ({ page }) => {
   // John has no Personal Pro plan; copying into Personal is a Pro feature.
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'john');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });

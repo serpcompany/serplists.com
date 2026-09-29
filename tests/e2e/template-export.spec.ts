@@ -6,7 +6,7 @@ import { fillSignInForm } from './support/sign-in';
 // (docs/product-specs/portable-templates.md).
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -42,7 +42,7 @@ test('a double click on Export Portable Pack runs one export and downloads one f
   const downloads: string[] = [];
   page.on('download', (download) => downloads.push(download.suggestedFilename()));
 
-  await page.goto('/dashboard/import-templates');
+  await page.goto('/dashboard/import-templates/');
   const exportButton = page.getByRole('button', { name: 'Export Portable Pack' });
   await expect(exportButton).toBeEnabled({ timeout: 15_000 });
 

@@ -7,7 +7,7 @@ import { fillSignInForm } from './support/sign-in';
 // flows must not depend on a list another page happened to load earlier.
 
 async function loginAsAdmin(page: Page) {
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -27,12 +27,12 @@ async function createTemplate(page: Page, body: Record<string, unknown>): Promis
 
 test('starts a run from a public template page opened directly', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.goto('/profile/admin/sample-technical-seo-audit-checklist');
+  await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
 
   await page.getByRole('button', { name: 'Start Run' }).first().click();
 
-  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+$/);
-  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').pop() ?? ''));
+  await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
+  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
 });
 
 test('keeps toggled tasks and advances on a run opened from the runs dashboard', async ({ page }) => {
@@ -50,7 +50,7 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
   });
 
   // The runs dashboard loads the run list; open the run in the same app session.
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await page.getByRole('link', { name: title }).click();
 
   const completeTask = async () => {
@@ -89,7 +89,7 @@ test('saves a template twice from the editor without loading a template list', a
     const url = new URL(request.url());
     if (request.method() === 'GET' && url.pathname.endsWith('/api/templates') && url.search) listRequests.push(url.search);
   });
-  await page.goto(`/dashboard/templates/${templateId}/edit`);
+  await page.goto(`/dashboard/templates/${templateId}/edit/`);
   const nameInput = page.getByPlaceholder('Enter template name...');
   await expect(nameInput).toHaveValue(title);
 
@@ -126,7 +126,7 @@ test('opens a template detail page with one request for that template and no lis
   const isList = (path: string) => path === '/api/templates' || path.startsWith('/api/templates?');
 
   try {
-    await page.goto(`/dashboard/templates/${templateId}`);
+    await page.goto(`/dashboard/templates/${templateId}/`);
     const visibilitySwitch = page.getByRole('switch');
     await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'false');
 

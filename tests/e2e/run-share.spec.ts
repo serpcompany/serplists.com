@@ -11,7 +11,7 @@ const SHARE_URL = /\/share\/[0-9a-f-]{36}$/;
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login');
+  await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
@@ -57,7 +57,7 @@ test('the run page shows the share link when the clipboard refuses the copy', as
     if (response.url().includes(`/api/checklists/run/${runId}/share`)) shareRequests.push(response.status());
   });
 
-  await page.goto(`/dashboard/runs/${runId}`);
+  await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Share' }).click();
   const dialog = page.getByRole('dialog', { name: 'Share run' });
   await expect(dialog).toBeVisible();
@@ -88,8 +88,8 @@ test('the runs list shows the share link when the clipboard refuses the copy', a
   const title = `List share QA ${Date.now()}`;
   const runId = await createRun(page, title);
 
-  await page.goto('/dashboard/runs');
-  const row = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}"]`) });
+  await page.goto('/dashboard/runs/');
+  const row = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}/"]`) });
   await row.getByRole('button', { name: 'Run options' }).click();
   await page.getByRole('menuitem', { name: 'Share Run' }).click();
 
@@ -125,8 +125,8 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   const { id: runId } = run;
   const { id: templateId } = template;
 
-  await page.goto('/dashboard/runs');
-  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}"]`) });
+  await page.goto('/dashboard/runs/');
+  const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/run/${runId}/"]`) });
   const row = actions.locator('..');
   await expect(row.getByText('Needs revalidation')).toBeVisible();
   await expect(actions.getByRole('button', { name: 'Revalidate' })).toBeVisible();
@@ -167,7 +167,7 @@ test('sharing from the run page keeps unsaved task notes and the open task', asy
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
   // Opened from the runs list, so the list is cached when the share marks the run public.
-  await page.goto('/dashboard/runs');
+  await page.goto('/dashboard/runs/');
   await page.getByRole('link', { name: title }).click();
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Checked the redirects');

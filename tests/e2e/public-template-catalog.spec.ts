@@ -22,7 +22,7 @@ test('repo-backed public templates render in the checklist library', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1600 });
-  await page.goto('/templates');
+  await page.goto('/templates/');
 
   await expect(
     page.getByRole('heading', {
@@ -38,7 +38,7 @@ test('repo-backed public templates render in the checklist library', async ({
     .click();
 
   await expect(page).toHaveURL(
-    /\/profile\/serp\/ultimate-camping-checklist$/,
+    /\/profile\/serp\/ultimate-camping-checklist\/$/,
   );
   await expect(
     page.getByRole('heading', { level: 1, name: 'Ultimate Camping Checklist' }),
@@ -86,7 +86,7 @@ test('public creator profile page stays available under /profile/:username', asy
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1600 });
-  await page.goto('/profile/serp');
+  await page.goto('/profile/serp/');
 
   const firstTemplateCard = page.getByRole('link', {
     name: /Complete Wedding Planning Checklist/i,
@@ -139,30 +139,30 @@ test('library filters follow the URL and clearing the search keeps the page', as
   });
 
   // The header link to a plain /templates resets a search typed on the page.
-  await page.goto('/templates');
+  await page.goto('/templates/');
   await expect(campingCard).toBeVisible();
   await searchBox.fill('zzzz-no-such-template');
-  await expect(page).toHaveURL(/\/templates\?search=zzzz-no-such-template$/);
+  await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
   await expect(campingCard).toHaveCount(0);
   await page
     .locator('header nav')
     .getByRole('link', { name: 'Templates', exact: true })
     .click();
-  await expect(page).toHaveURL(/\/templates$/);
+  await expect(page).toHaveURL(/\/templates\/$/);
   await expect(searchBox).toHaveValue('');
   await expect(campingCard).toBeVisible();
 
   // Back returns to the search, and the box and results follow it.
   await page.goBack();
-  await expect(page).toHaveURL(/\/templates\?search=zzzz-no-such-template$/);
+  await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
   await expect(searchBox).toHaveValue('zzzz-no-such-template');
   await expect(campingCard).toHaveCount(0);
 
   // Clearing the search on a legacy category link leaves the user on the library.
-  await page.goto('/templates?category=outdoor&search=camping');
+  await page.goto('/templates/?category=outdoor&search=camping');
   await expect(searchBox).toHaveValue('camping');
   await searchBox.fill('');
-  await expect(page).toHaveURL(/\/templates\?category=outdoor$/);
+  await expect(page).toHaveURL(/\/templates\/\?category=outdoor$/);
   await expect(
     page.getByRole('heading', { name: 'Discover Templates' }),
   ).toBeVisible();
@@ -172,8 +172,8 @@ test('library filters follow the URL and clearing the search keeps the page', as
   // A category-only link from elsewhere still goes to the category page. Leave first:
   // opening the URL the tab already shows reloads the library's own entry, marker included.
   await page.goto('/');
-  await page.goto('/templates?category=outdoor');
-  await expect(page).toHaveURL(/\/categories\/outdoor$/);
+  await page.goto('/templates/?category=outdoor');
+  await expect(page).toHaveURL(/\/categories\/outdoor\/$/);
 });
 
 test('a related category opens with no search or sort from the previous one', async ({
@@ -182,7 +182,7 @@ test('a related category opens with no search or sort from the previous one', as
   const searchBox = page.getByPlaceholder('Search templates...');
   const sortTrigger = page.getByRole('combobox');
 
-  await page.goto('/categories/outdoor');
+  await page.goto('/categories/outdoor/');
   await expect(
     page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
   ).toBeVisible();
