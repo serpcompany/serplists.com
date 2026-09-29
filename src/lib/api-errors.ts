@@ -108,6 +108,14 @@ export const isOpenSubscriptionConflictError = (error: unknown): error is ApiErr
     && (error.code === "already_subscribed" || error.code === "subscription_needs_attention");
 };
 
+/**
+ * The Customer Portal refused because Stripe no longer has the billing account. The
+ * API replaced it, so refetched billing status offers Upgrade instead of the portal.
+ */
+export const isBillingCustomerMissingError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "billing_customer_missing";
+};
+
 export type AccessFailure =
   | { kind: "auth_required"; message: string }
   | { kind: "upgrade_required"; message: string }

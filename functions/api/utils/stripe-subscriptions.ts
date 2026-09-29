@@ -36,33 +36,52 @@ export type PersonalSubscriptionSummary = {
   hasCustomer: boolean;
 };
 
+export type StoredOpenSubscription = { id: string | null; customerId: string; status: string };
+
+/** The user's stored subscriptions that have not ended, on any customer and price. */
+export async function listOpenStoredSubscriptions(db: Db, userId: string): Promise<StoredOpenSubscription[]> {
+  const { stripe_subscriptions } = schema;
+  return db
+    .select({
+      id: stripe_subscriptions.stripe_subscription_id,
+      customerId: stripe_subscriptions.stripe_customer_id,
+      status: stripe_subscriptions.status,
+    })
+    .from(stripe_subscriptions)
+    .where(
+      and(
+        eq(stripe_subscriptions.user_id, userId),
+        notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
+      ),
+    )
+    .limit(10);
+}
+
 /**
- * Summarizes a user's stored Stripe billing state. Any open subscription, on any
- * price, blocks a new Checkout: Stripe would otherwise bill the customer twice.
+ * Summarizes a user's stored Stripe billing state for Billing. Once the user has a
+ * Stripe customer, only that customer's subscriptions count: the Customer Portal
+ * shows only those, and one stored for a customer that checkout or the portal
+ * replaced (Stripe no longer had it) would otherwise offer a portal that cannot
+ * manage it instead of Upgrade. Checkout asks Stripe about every open subscription.
  */
 export async function getPersonalSubscriptionSummary(env: Env, userId: string): Promise<PersonalSubscriptionSummary> {
   const db = createDb(env);
-  const { stripe_customers, stripe_subscriptions } = schema;
+  const { stripe_customers } = schema;
   const [customers, openSubscriptions] = await Promise.all([
     db
       .select({ stripeCustomerId: stripe_customers.stripe_customer_id })
       .from(stripe_customers)
       .where(eq(stripe_customers.user_id, userId))
       .limit(1),
-    db
-      .select({ status: stripe_subscriptions.status })
-      .from(stripe_subscriptions)
-      .where(
-        and(
-          eq(stripe_subscriptions.user_id, userId),
-          notInArray(stripe_subscriptions.status, TERMINAL_SUBSCRIPTION_STATUSES),
-        ),
-      )
-      .limit(10),
+    listOpenStoredSubscriptions(db, userId),
   ]);
 
+  const [customer] = customers;
+  const counted = customer
+    ? openSubscriptions.filter((subscription) => subscription.customerId === customer.stripeCustomerId)
+    : openSubscriptions;
   return {
-    openStatus: mostUrgentOpenStatus(openSubscriptions.map((row) => row.status)),
+    openStatus: mostUrgentOpenStatus(counted.map((subscription) => subscription.status)),
     hasCustomer: customers.length > 0,
   };
 }
@@ -196,6 +215,38 @@ export async function syncCustomerSubscriptions(
   );
   if (blocking.length === 0 && list.has_more) {
     throw new Error("Stripe returned an incomplete subscription list");
+  }
+
+  const [first, ...rest] = found;
+  if (first) {
+    const db = createDb(env);
+    const nowIso = new Date().toISOString();
+    await db.batch([
+      upsertStripeSubscription(db, userId, first, nowIso),
+      ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
+    ]);
+  }
+  return found.filter((subscription) => !isTerminalSubscriptionStatus(subscription.status));
+}
+
+/**
+ * Reads stored subscriptions from Stripe one by one, stores what Stripe returns, and
+ * returns the ones still open. One Stripe does not have (made with the other mode's
+ * keys, for example) is left as stored but not returned: a stored row is only ever
+ * ended by Stripe saying so, never by a key that cannot see it. Throws when Stripe
+ * cannot answer.
+ */
+export async function refreshStoredSubscriptions(
+  env: Env,
+  secretKey: string,
+  userId: string,
+  stored: StoredOpenSubscription[],
+): Promise<SubscriptionSnapshot[]> {
+  const found: SubscriptionSnapshot[] = [];
+  for (const subscription of stored) {
+    if (!subscription.id) throw new Error("A stored subscription has no id");
+    const current = await retrieveSubscription(secretKey, subscription.id);
+    if (current) found.push(current);
   }
 
   const [first, ...rest] = found;

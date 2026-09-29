@@ -19,7 +19,9 @@ import { describeErrorForLog, log } from "../utils/logger";
 import {
   getPersonalSubscriptionSummary,
   isPaidSubscriptionStatus,
+  listOpenStoredSubscriptions,
   mostUrgentOpenStatus,
+  refreshStoredSubscriptions,
   syncCustomerSubscriptions,
   type SubscriptionSnapshot,
 } from "../utils/stripe-subscriptions";
@@ -119,12 +121,6 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     });
   }
 
-  const { openStatus } = await getPersonalSubscriptionSummary(env, userId);
-  // Stripe decides below whether an unfinished first payment can be resumed.
-  const storedIncomplete = openStatus === "incomplete";
-  const storedConflict = storedIncomplete ? null : openSubscriptionConflict(openStatus);
-  if (storedConflict) return storedConflict;
-
   const db = createDb(env);
   const { stripe_customers } = schema;
 
@@ -133,6 +129,16 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
     .from(stripe_customers)
     .where(eq(stripe_customers.user_id, userId))
     .limit(1);
+  const storedOpen = await listOpenStoredSubscriptions(db, userId);
+
+  if (!existingCustomer?.stripe_customer_id) {
+    // Webhooks store the customer with the subscription, so this should not happen:
+    // with no customer to ask Stripe about, stored rows decide, rather than risk a
+    // second subscription.
+    const openStatus = mostUrgentOpenStatus(storedOpen.map((subscription) => subscription.status));
+    const storedConflict = openStatus === "incomplete" ? checkoutIncomplete() : openSubscriptionConflict(openStatus);
+    if (storedConflict) return storedConflict;
+  }
 
   const successUrl = `${origin}${SETTINGS_PATH}?billing=success`;
   const cancelUrl = `${origin}${SETTINGS_PATH}?billing=cancel`;
@@ -148,7 +154,8 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   let canReplaceCustomer = false;
 
   if (existingCustomer?.stripe_customer_id) {
-    stripeCustomerId = existingCustomer.stripe_customer_id;
+    const storedCustomerId = existingCustomer.stripe_customer_id;
+    stripeCustomerId = storedCustomerId;
     canReplaceCustomer = true;
     // Every open Checkout Session is payable for 24 hours and opens its own subscription.
     // Expire the others before listing subscriptions, so none can complete unseen after
@@ -171,8 +178,9 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       });
       return billingUnavailable();
     }
-    // D1 learns about subscriptions from webhooks, which can lag or fail, so ask
-    // Stripe too. Fail closed: a missed subscription would be billed twice.
+    // D1 learns about subscriptions from webhooks, which can lag or fail, so Stripe
+    // decides for the stored customer's subscriptions, stored or not. Fail closed: a
+    // missed subscription would be billed twice.
     let stripeOpenSubscriptions: SubscriptionSnapshot[] = [];
     try {
       stripeOpenSubscriptions = await syncCustomerSubscriptions(env, secretKey, userId, stripeCustomerId);
@@ -190,13 +198,26 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
       reusableSessionUrl = null;
       reusableSubscriptionId = null;
     }
-    const stripeConflict = stripeSubscriptionConflict(stripeOpenSubscriptions, reusableSubscriptionId);
+    // A subscription stored for another customer is read from Stripe by id: a real one
+    // still blocks, and one Stripe does not have (left by the other mode's keys) no
+    // longer does. Its row is left as it was.
+    const otherStored = storedOpen.filter((subscription) => subscription.customerId !== storedCustomerId);
+    let otherOpenSubscriptions: SubscriptionSnapshot[] = [];
+    try {
+      otherOpenSubscriptions = await refreshStoredSubscriptions(env, secretKey, userId, otherStored);
+    } catch (error) {
+      log("error", "stripe_subscription_check_failed", {
+        userId,
+        ...describeErrorForLog(error),
+      });
+      return billingUnavailable();
+    }
+    const stripeConflict = stripeSubscriptionConflict(
+      [...stripeOpenSubscriptions, ...otherOpenSubscriptions],
+      reusableSubscriptionId,
+    );
     if (stripeConflict) return stripeConflict;
     if (reusableSessionUrl) return json({ url: reusableSessionUrl });
-  } else if (storedIncomplete) {
-    // Webhooks store the customer with the subscription, so this should not happen:
-    // with no customer to ask Stripe about, refuse rather than risk a second one.
-    return checkoutIncomplete();
   } else {
     // The idempotency key makes concurrent first checkouts share one Stripe customer.
     const createdCustomerId = await createStripeCustomer(db, secretKey, userId, `customer-${userId}`);
@@ -341,9 +362,12 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
       });
     } catch (error) {
       if (!isMissingStripeCustomer(error)) throw error;
-      // Checkout replaces the missing customer; the portal has nothing to show for one.
+      // The portal has nothing to show for a customer Stripe does not have. Replace it as
+      // checkout would, so Billing stops showing that customer's stored subscriptions
+      // (which only the other mode's keys can see) and offers Upgrade instead.
       log("warn", "stripe_customer_missing", { userId, stripeCustomerId: existingCustomer.stripe_customer_id });
-      return jsonError("Your billing account could not be found. Contact support.", 409, {
+      await replaceMissingStripeCustomer(db, secretKey, userId, existingCustomer.stripe_customer_id);
+      return jsonError("Your billing account could not be found. Choose Upgrade to start a new subscription.", 409, {
         code: "billing_customer_missing",
       });
     }

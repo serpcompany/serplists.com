@@ -5,6 +5,7 @@ import {
   BILLING_UNAVAILABLE_MESSAGE,
   createApiError,
   getAccessFailure,
+  isBillingCustomerMissingError,
   isOpenSubscriptionConflictError,
   getLimitContext,
 } from "@/lib/api-errors";
@@ -119,5 +120,12 @@ describe("api-errors", () => {
     expect(isOpenSubscriptionConflictError(createApiError(409, { code: "plan_managed_by_support" }))).toBe(false);
     expect(isOpenSubscriptionConflictError(createApiError(503, { code: "billing_unavailable" }))).toBe(false);
     expect(isOpenSubscriptionConflictError(new Error("already_subscribed"))).toBe(false);
+  });
+
+  it("recognizes a portal refusal for a billing account Stripe no longer has", () => {
+    // The API replaced the account, so the page refetches billing status to offer Upgrade.
+    expect(isBillingCustomerMissingError(createApiError(409, { code: "billing_customer_missing" }))).toBe(true);
+    expect(isBillingCustomerMissingError(createApiError(409, { code: "no_billing_account" }))).toBe(false);
+    expect(isBillingCustomerMissingError(new Error("billing_customer_missing"))).toBe(false);
   });
 });

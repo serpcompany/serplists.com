@@ -11,6 +11,7 @@ const entitlementsMocks = vi.hoisted(() => ({
 
 const subscriptionMocks = vi.hoisted(() => ({
   getPersonalSubscriptionSummary: vi.fn(),
+  listOpenStoredSubscriptions: vi.fn(),
 }));
 
 const teamAccessMocks = vi.hoisted(() => ({
@@ -89,6 +90,7 @@ vi.mock("@functions/api/utils/entitlements", () => ({
 vi.mock("@functions/api/utils/stripe-subscriptions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@functions/api/utils/stripe-subscriptions")>()),
   getPersonalSubscriptionSummary: subscriptionMocks.getPersonalSubscriptionSummary,
+  listOpenStoredSubscriptions: subscriptionMocks.listOpenStoredSubscriptions,
 }));
 
 vi.mock("@functions/api/utils/team-access", () => ({
@@ -184,6 +186,7 @@ describe("Billing handler", () => {
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
     subscriptionMocks.getPersonalSubscriptionSummary.mockResolvedValue({ openStatus: null, hasCustomer: false });
+    subscriptionMocks.listOpenStoredSubscriptions.mockResolvedValue([]);
     teamAccessMocks.getActiveTeamMembership.mockResolvedValue({
       id: "member-1",
       role: "viewer",

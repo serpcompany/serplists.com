@@ -14,7 +14,7 @@ import {
   PLAN_MANAGED_BY_SUPPORT_MESSAGE,
   PRO_MONTHLY_PRICE_LABEL,
 } from "@/lib/billing";
-import { isOpenSubscriptionConflictError } from "@/lib/api-errors";
+import { isBillingCustomerMissingError, isOpenSubscriptionConflictError } from "@/lib/api-errors";
 import { fetchPersonalBillingStatus, waitForPersonalPro } from "@/lib/billing-return";
 import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
 import { buildConsoleTemplateCreatePath } from "@/lib/routes";
@@ -138,6 +138,10 @@ export function BillingSection() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
       setIsOpeningPortal(false);
+      // Stripe no longer had the billing account and the API replaced it: Upgrade replaces Manage.
+      if (isBillingCustomerMissingError(err)) {
+        void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(userId, null) });
+      }
     }
   };
 

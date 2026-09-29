@@ -126,15 +126,42 @@ afterEach(() => {
 });
 
 describe("POST /api/billing/checkout with an existing Stripe subscription", () => {
+  // For the stored customer, Stripe's list decides: it also finds a customer Stripe no
+  // longer has, whose stored rows no webhook will ever update.
   it.each(["past_due", "unpaid", "paused"])(
-    "returns 409 subscription_needs_attention for a %s subscription and never calls Stripe",
+    "returns 409 subscription_needs_attention for a %s subscription Stripe still lists",
     async (status) => {
       insertSubscription("sub_1", status);
+      stripeSubscriptions = { data: [stripeSubscription("sub_1", status)], has_more: false };
 
       const result = await checkout();
 
       expect(result.status).toBe(409);
       expect(result.body.code).toBe("subscription_needs_attention");
+      expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS]);
+    },
+  );
+
+  it("no longer refuses for a stored subscription Stripe does not list for the customer", async () => {
+    // Its cancellation webhook was lost.
+    insertSubscription("sub_1", "past_due");
+
+    const result = await checkout();
+
+    expect(result.status).toBe(200);
+    expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS, CREATE_SESSION]);
+  });
+
+  it.each(["past_due", "active"])(
+    "refuses a stored %s subscription without calling Stripe when the user has no Stripe customer",
+    async (status) => {
+      d1.sqlite.exec("DELETE FROM stripe_customers");
+      insertSubscription("sub_1", status);
+
+      const result = await checkout();
+
+      expect(result.status).toBe(409);
+      expect(result.body.code).toBe(status === "active" ? "already_subscribed" : "subscription_needs_attention");
       expect(stripeCalls()).toEqual([]);
     },
   );
@@ -166,16 +193,18 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     "returns 409 already_subscribed for a %s subscription on another price",
     async (status) => {
       insertSubscription("sub_1", status, "price_other");
+      stripeSubscriptions = { data: [stripeSubscription("sub_1", status, "price_other")], has_more: false };
 
       const result = await checkout();
 
       expect(result.status).toBe(409);
       expect(result.body.code).toBe("already_subscribed");
-      expect(stripeCalls()).toEqual([]);
+      expect(stripeCalls()).not.toContain(CREATE_SESSION);
     },
   );
 
-  it("checks every row, not only the most recent one", async () => {
+  it("checks every stored row, not only the most recent one", async () => {
+    d1.sqlite.exec("DELETE FROM stripe_customers");
     insertSubscription("sub_old", "canceled");
     insertSubscription("sub_new", "past_due");
 

@@ -166,11 +166,18 @@ Authenticated:
   so does a stored `incomplete` status with no Stripe customer to ask. Billing and
   Pricing keep offering Upgrade for an `incomplete` status. An active manual override
   returns `409 plan_managed_by_support` before any Stripe call.
-  Stored rows come from webhooks, which can lag or fail, so when D1 shows no
-  open subscription and the user has a Stripe customer, checkout also lists the
-  customer's subscriptions in Stripe (`GET /v1/subscriptions?customer=...`),
-  stores them, and applies the same rules. If Stripe cannot answer, checkout
-  fails closed with `503 billing_unavailable` and creates no session.
+  Stored rows come from webhooks, which can lag or fail, and the stored customer
+  can be one Stripe no longer has, so for a user with a Stripe customer Stripe
+  decides: checkout lists the customer's subscriptions in Stripe
+  (`GET /v1/subscriptions?customer=...`), stores them, and applies the same rules
+  to what Stripe lists, whatever D1 holds for that customer. A subscription stored
+  for any other customer is read by id (`GET /v1/subscriptions/{id}`): one Stripe
+  has is stored and the same rules apply to it; one Stripe does not have (`404`,
+  such as one made with the other mode's keys) no longer blocks, and its row is
+  left as it was, because a key that cannot see a subscription does not prove it
+  ended. Only a user with no Stripe customer is refused from stored rows alone,
+  without a Stripe call. If Stripe cannot answer, checkout fails closed with
+  `503 billing_unavailable` and creates no session.
   Every open Checkout Session stays payable for 24 hours and opens its own
   subscription, so before that subscription check, checkout lists the
   customer's open sessions (`GET /v1/checkout/sessions?customer=...&status=open`)
@@ -192,7 +199,9 @@ Authenticated:
   `resource_missing` for `customer`, checkout creates a new customer (with an
   idempotency key, so a double click creates one), swaps the mapping only if it
   still holds the missing id, and retries once. Other Stripe errors never
-  replace the customer.
+  replace the customer. Subscriptions stored for the missing customer keep their
+  rows (no webhook will update them); they stop blocking checkout and stop showing
+  in billing status because they are no longer on the stored customer.
   A first checkout creates the customer with the idempotency key
   `customer-<userId>-<email digest>`, so concurrent or retried first checkouts
   share one customer, and stores the mapping with `ON CONFLICT DO NOTHING`: a
@@ -206,7 +215,9 @@ Authenticated:
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal,
   `409 no_billing_account` when the user has no Stripe customer (such as Pro
   granted by an override), or `409 billing_customer_missing` when Stripe no
-  longer has the stored customer
+  longer has the stored customer. That response first replaces the customer the
+  way checkout does, so billing status stops showing the missing customer's stored
+  subscriptions; Billing refetches status on it and offers Upgrade.
 - Stripe returns the user to `/dashboard/settings?billing=success` or
   `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
   Billing reads `billing=success` and polls Personal status (whichever context is
@@ -216,7 +227,9 @@ Authenticated:
   and lands back on the same URL, query included.
 - `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
   In Personal context it also returns `subscriptionStatus` (the most urgent open
-  subscription status, failed payments first, or `null`), `canManageBilling`
+  subscription status, failed payments first, or `null`; once the user has a
+  Stripe customer, only that customer's subscriptions count, since the Customer
+  Portal shows only those), `canManageBilling`
   (a Stripe customer exists), and `managedBySupport` (a manual override sets the
   plan). Organization context never includes them. Billing shows Manage
   subscription, not Upgrade, whenever `plan` is `pro` or `subscriptionStatus` is

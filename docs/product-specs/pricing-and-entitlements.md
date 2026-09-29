@@ -126,7 +126,10 @@ instead of inferring access state from message text:
 - `409 plan_managed_by_support` means a manual Free override sets the Personal
   plan, so self-serve checkout is closed.
 - `409 billing_customer_missing` means Stripe no longer has the User's billing
-  account, so the Customer Portal cannot open; checkout replaces the account.
+  account (deleted, or made with the other mode's keys), so the Customer Portal
+  cannot open. The portal request replaces the account, as checkout does, and
+  Billing refetches its status: subscriptions stored for the old account no longer
+  show, so Billing offers Upgrade.
 - `409 no_billing_account` means the User has no billing account (for example,
   Pro granted by support), so there is no Customer Portal to open.
 - `409 checkout_in_progress` means another checkout for the User is still
