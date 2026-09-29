@@ -1,20 +1,28 @@
 #!/usr/bin/env node
-// Mechanical checks for the repository knowledge base (AGENTS.md, root docs, docs/**).
+// Mechanical checks for the repository knowledge base (AGENTS.md, root docs, docs/**, and the
+// agent skills in .claude/skills/**).
 // - the root and docs/ follow the fixed layout (see DOCS_LAYOUT)
 // - relative Markdown links (and #anchors into Markdown files) resolve
 // - backticked repository paths such as `src/lib/api.ts` exist, and backticked
 //   directories hold a file git tracks (an emptied folder is missing from a fresh checkout)
+// - every `pnpm run <script>` names a script in package.json
 // - every docs/**/*.md page is reachable from AGENTS.md or README.md
 // - design docs and product specs are catalogued in their index.md
+// - each skill is named after its folder, has a description, and is listed in SKILLS_CATALOG
 // - AGENTS.md stays a short map rather than an encyclopedia
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
 import { directoriesWithoutFiles } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_DOCS = ["AGENTS.md", "ARCHITECTURE.md", "README.md"];
+const SKILLS_DIR = ".claude/skills";
+const SKILLS_CATALOG = "docs/design-docs/agent-workflow.md";
+// The Agent Skills limit; Claude reads the description to decide when to load a skill.
+const SKILL_DESCRIPTION_MAX = 1024;
 const ENTRY_POINTS = ["AGENTS.md", "README.md"];
 // The only entries allowed directly under docs/.
 const DOCS_LAYOUT = [
@@ -23,7 +31,7 @@ const DOCS_LAYOUT = [
 ];
 const DESIGN_DOC_STATUSES = new Set(["current", "accepted", "historical", "draft"]);
 const AGENTS_MAX_LINES = 120;
-const PATH_PREFIXES = ["src/", "functions/", "scripts/", "db/", "tests/", "docs/", ".github/"];
+const PATH_PREFIXES = ["src/", "functions/", "scripts/", "db/", "tests/", "docs/", ".github/", ".claude/", ".mcp.json"];
 
 function walkMarkdown(dir) {
   return readdirSync(path.join(repoRoot, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -67,18 +75,33 @@ function lineOf(text, index) {
   return text.slice(0, index).split("\n").length;
 }
 
-const files = [...ROOT_DOCS.filter((file) => existsSync(path.join(repoRoot, file))), ...walkMarkdown("docs")];
+const files = [
+  ...ROOT_DOCS.filter((file) => existsSync(path.join(repoRoot, file))),
+  ...walkMarkdown("docs"),
+  ...(existsSync(path.join(repoRoot, SKILLS_DIR)) ? walkMarkdown(SKILLS_DIR) : []),
+];
+const packageScripts = new Set(Object.keys(JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")).scripts ?? {}));
 const errors = [];
 const linkGraph = new Map();
 let linksChecked = 0;
 let pathsChecked = 0;
+let scriptsChecked = 0;
 const missingPaths = [];
 const directoryPaths = [];
 
 for (const file of files) {
-  const text = stripFencedCode(readFileSync(path.join(repoRoot, file), "utf8"));
+  const source = readFileSync(path.join(repoRoot, file), "utf8");
+  const text = stripFencedCode(source);
   const targets = new Set();
   linkGraph.set(file, targets);
+
+  // Commands in code blocks count too: that is where most of them are.
+  for (const match of source.matchAll(/\bpnpm run ([a-z][\w:.-]*\w)/g)) {
+    scriptsChecked += 1;
+    if (!packageScripts.has(match[1])) {
+      errors.push(`${file}:${lineOf(source, match.index)} runs "pnpm run ${match[1]}", but package.json has no "${match[1]}" script. Name an existing script, or update the command if the script was renamed.`);
+    }
+  }
 
   for (const match of text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
     const raw = match[1];
@@ -205,6 +228,39 @@ function checkCatalog(dir, { requireStatus }) {
 checkCatalog("docs/design-docs", { requireStatus: true });
 checkCatalog("docs/product-specs", { requireStatus: false });
 
+// Skills: Claude Code finds each one by its folder and loads it by its description.
+function checkSkills() {
+  if (!existsSync(path.join(repoRoot, SKILLS_DIR))) return;
+  const catalog = readFileSync(path.join(repoRoot, SKILLS_CATALOG), "utf8");
+  for (const entry of readdirSync(path.join(repoRoot, SKILLS_DIR), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const skillFile = `${SKILLS_DIR}/${entry.name}/SKILL.md`;
+    if (!existsSync(path.join(repoRoot, skillFile))) {
+      errors.push(`${SKILLS_DIR}/${entry.name}/ has no SKILL.md. Add one, or delete the folder.`);
+      continue;
+    }
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(readFileSync(path.join(repoRoot, skillFile), "utf8"))?.[1];
+    let fields = {};
+    try {
+      fields = yaml.load(frontmatter ?? "") ?? {};
+    } catch (error) {
+      errors.push(`${skillFile}: its frontmatter is not valid YAML (${error.message.split("\n")[0]}).`);
+    }
+    if (fields.name !== entry.name) {
+      errors.push(`${skillFile}: set "name: ${entry.name}" in its frontmatter, the name of its folder.`);
+    }
+    if (typeof fields.description !== "string" || fields.description.trim() === "") {
+      errors.push(`${skillFile}: add a frontmatter description saying what the skill does and when to use it; Claude reads it to decide when to load the skill.`);
+    } else if (fields.description.length > SKILL_DESCRIPTION_MAX) {
+      errors.push(`${skillFile}: its description has ${fields.description.length} characters (limit ${SKILL_DESCRIPTION_MAX}). Move detail into the body.`);
+    }
+    if (!catalog.includes(`](../../${skillFile})`)) {
+      errors.push(`${skillFile} is not listed in ${SKILLS_CATALOG}. Add it to the skills table under Agent tooling.`);
+    }
+  }
+}
+checkSkills();
+
 const agentsLines = readFileSync(path.join(repoRoot, "AGENTS.md"), "utf8").trimEnd().split("\n").length;
 if (agentsLines > AGENTS_MAX_LINES) {
   errors.push(`AGENTS.md has ${agentsLines} lines (limit ${AGENTS_MAX_LINES}). Keep it a map: move detail into docs/ and link to it.`);
@@ -219,4 +275,4 @@ if (errors.length > 0) {
   console.error(`\nDocs check failed with ${errors.length} problem(s).`);
   process.exit(1);
 }
-console.log(`Docs OK: ${files.length} files, ${linksChecked} links, ${pathsChecked} repository paths, ${reachable.size} pages reachable.`);
+console.log(`Docs OK: ${files.length} files, ${linksChecked} links, ${pathsChecked} repository paths, ${scriptsChecked} script commands, ${reachable.size} pages reachable.`);

@@ -123,6 +123,9 @@ come before or after the route; an unknown flag, a flag with no value, or a seco
 route stops with the usage text instead of snapshotting another page. Use it to
 reproduce a bug before fixing it and to show the fix afterwards.
 
+To click through a flow, record it, or read the network and console as you go, an agent
+drives Chrome with the `verify-web` skill ([agent tooling](agent-workflow.md#agent-tooling)).
+
 ## Local database
 
 ```bash

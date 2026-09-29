@@ -20,7 +20,7 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Billing](billing.md) | current | 2026-09-25 | Stripe setup, portal, webhooks, local and production verification |
 | [Template content types](template-content-types.md) | current | 2026-09-27 | Adding a checklist content type or editor tab |
 | [Development environment](development-environment.md) | current | 2026-09-27 | Setup, running, signing in, UI snapshots, logs, local D1, tests |
-| [Agent workflow](agent-workflow.md) | current | 2026-09-27 | Issue to merge, triage labels, weekly maintenance, admin settings |
+| [Agent workflow](agent-workflow.md) | current | 2026-09-29 | Issue to merge, agent tooling (skills, Chrome, permissions), triage labels, weekly maintenance, admin settings |
 | [UI app map](ui-app-map.md) | current | 2026-09-29 | Every screen, the flows between them, and how each page route is reached (UI runbook phase 1) |
 | [UI screen inventory](ui-screen-inventory.md) | current | 2026-09-29 | Reference patterns and a spec card with its structure for every screen and overlay (UI runbook phases 2 and 3) |
 | [UI-service decoupling audit](ui-service-decoupling-audit.md) | historical | 2026-04-10 | Point-in-time audit; progress lives in the [UI decoupling plan](../exec-plans/active/ui-decoupling.md) |

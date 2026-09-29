@@ -1,6 +1,7 @@
 # Agent Workflow
 
-How work moves from an issue to production, and how the repo is kept clean.
+How work moves from an issue to production, the tools agents share, and how the repo is
+kept clean.
 
 ## From issue to merged PR
 
@@ -9,8 +10,9 @@ How work moves from an issue to production, and how the repo is kept clean.
 2. Branch from `staging`. For multi-step work, add a plan under
    `docs/exec-plans/active/` ([PLANS.md](../PLANS.md)).
 3. Reproduce first: `pnpm run setup`, `pnpm run dev:all`, then confirm the bug or
-   current behavior with `pnpm run ui:snap` or a failing test
-   ([development environment](development-environment.md)).
+   current behavior in Chrome with the `verify-web` skill (recording it), with
+   `pnpm run ui:snap`, or with a failing test
+   ([development environment](development-environment.md), [agent tooling](#agent-tooling)).
 4. Make the change with tests. Run `pnpm run verify` before opening the PR.
 5. Open a PR into `staging` and fill in the template, including evidence for UI changes.
 6. Review loop: review your own diff first. Claude then reviews the PR automatically
@@ -21,6 +23,56 @@ How work moves from an issue to production, and how the repo is kept clean.
 
 Promotion to production is a PR from `staging` to `main`; CI runs the full browser
 suite on it and deploys after merge.
+
+## Agent tooling
+
+The Claude Code configuration everyone shares is committed, so every checkout and worktree
+starts with the same tools. Personal settings go in `.claude/settings.local.json`, which git
+ignores.
+
+- **Chrome (`.mcp.json`):** the `chrome-devtools` MCP server
+  ([chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp), pinned to an
+  exact version) lets an agent drive the app in Chrome: open pages, read the accessibility
+  tree, click and type, take screenshots, record video, and read the console, network
+  requests, and performance traces. It starts its own Chrome with a temporary profile
+  (`--isolated`) when a tool first needs one, and sends no usage statistics or CrUX lookups.
+  Recording (`--experimental-screencast`) needs ffmpeg on the PATH; without it only the
+  recording tools fail. Claude Code asks each person once per checkout to approve the server.
+  `npx` starts it on Windows too, without a `cmd /c` wrapper (checked with Claude Code
+  2.1.284). To upgrade, change the version in `.mcp.json` and in the `verify-web` skill's
+  setup line; a test checks that they match.
+- **Skills (`.claude/skills/`):** instructions Claude loads when a task matches a skill's
+  description, or when you type `/<name>`. They point to the docs rather than repeat them.
+  To add one, create `.claude/skills/<name>/SKILL.md` with `name` and `description`
+  frontmatter and list it here.
+
+  | Skill | Use it to |
+  | --- | --- |
+  | [verify-web](../../.claude/skills/verify-web/SKILL.md) | Run the app and check a change or reproduce a UI bug in Chrome, with screenshots and before-and-after recordings |
+  | [debug-api](../../.claude/skills/debug-api/SKILL.md) | Find a request's server log lines by its `X-Request-Id`, look at local D1 data, and measure D1 rows read |
+  | [browser-tests](../../.claude/skills/browser-tests/SKILL.md) | Pick the smallest Playwright run, read a failure, and write specs the way this repository does |
+
+- **Permissions (`.claude/settings.json`):** Claude asks before commands that reach staging,
+  production, Cloudflare, or live Stripe: wrangler with `--remote`, the `*:staging`,
+  `*:prod`, and `*:remote` package scripts, deploys, version uploads, rollbacks, Worker
+  deletion, secrets, `stripe:portal:configure`, and `stripe` with `--live`. `rg` is denied,
+  since it crashes VS Code. The rules match the commands agents usually write, not every way
+  to run a program, so they back the [escalation rules](../../AGENTS.md#escalate-to-a-human)
+  rather than replace them.
+- **CI loads the same settings:** the Claude jobs in [Claude code review](#claude-code-review)
+  and [Weekly maintenance](#weekly-maintenance) run in the checkout. There an ask rule cannot
+  prompt, so it denies: the review's guard fails on any denied tool, and the gardening job
+  could not push its branch. A deny on the Grep or Glob tools would take them from both jobs.
+  The settings therefore never deny or ask for what those jobs use: `git push`, `gh`, and
+  the Grep and Glob tools. To keep the Grep tool (built on ripgrep) out of your own sessions,
+  deny it in `.claude/settings.local.json`. Those jobs also start the `chrome-devtools`
+  server, since `.mcp.json` servers load without approval there, but they allow none of its
+  tools. `tests/unit/config/agent-tooling.test.ts` checks both directions: every package
+  script that reaches staging, production, Cloudflare, or Stripe is asked, and nothing the
+  CI jobs run is.
+- **Checks:** `pnpm run docs:check` covers the skills as it does the docs: links and
+  repository paths resolve, every `pnpm run` names a script in `package.json`, and each skill
+  is named after its folder, has a description, and is listed above.
 
 ## Triage labels
 

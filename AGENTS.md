@@ -24,6 +24,7 @@ Use `grep`/`find` instead.
 | Quality grade per domain | [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md) |
 | Current database tables (generated) | [docs/generated/db-schema.md](docs/generated/db-schema.md) |
 | Third-party docs for our pinned versions | [docs/references/](docs/references/) |
+| Agent skills (browser checks, API logs, browser tests), Chrome DevTools, permissions | [docs/design-docs/agent-workflow.md](docs/design-docs/agent-workflow.md#agent-tooling) |
 
 ## Commands
 
