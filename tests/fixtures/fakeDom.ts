@@ -196,3 +196,22 @@ export const click = (container: FakeElement, target: FakeNode, modifiers: Click
   }
   return event;
 };
+
+/** Dispatches any other event (focusin, touchstart, ...) through the container's listeners. */
+export const dispatch = (container: FakeElement, target: FakeNode, type: string) => {
+  const event = {
+    type,
+    target,
+    defaultPrevented: false,
+    timeStamp: Date.now(),
+    preventDefault() {
+      this.defaultPrevented = true;
+    },
+    stopPropagation() {},
+  };
+  const listeners = container.listeners.filter((entry) => entry.type === type);
+  for (const entry of [...listeners.filter((l) => l.capture), ...listeners.filter((l) => !l.capture)]) {
+    entry.listener(event);
+  }
+  return event;
+};

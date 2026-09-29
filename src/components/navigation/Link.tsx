@@ -2,7 +2,7 @@
 
 import NextLink from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { forwardRef, type ComponentProps } from 'react';
+import { forwardRef, useState, type ComponentProps } from 'react';
 
 import { hrefToString, leavesPage } from '@/lib/navigation/leavesPage';
 import { hasLeaveGuards, leavePage } from '@/lib/navigation/leaveGuard';
@@ -16,13 +16,19 @@ type LinkProps = ComponentProps<typeof NextLink>;
  * the router then opens the link. A link that only changes the search or hash of the current
  * page never asks. External, modifier-key, and new-tab clicks are left to the browser
  * (Next.js does not call onNavigate for them), and beforeunload covers those.
+ *
+ * A link prefetches its page on intent: once the user points at, focuses or touches it
+ * (Next.js's hover-triggered prefetch pattern). Next.js would otherwise prefetch every link
+ * that scrolls into view, and each prefetch is a request to the Worker. A caller's own
+ * `prefetch` wins.
  */
 export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
-  { href, onNavigate, replace, scroll, ...props },
+  { href, onNavigate, replace, scroll, prefetch, onMouseEnter, onFocus, onTouchStart, ...props },
   ref,
 ) {
   const pathname = usePathname();
   const router = useRouter();
+  const [intent, setIntent] = useState(false);
 
   return (
     <NextLink
@@ -30,6 +36,19 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       href={href}
       replace={replace}
       scroll={scroll}
+      prefetch={prefetch !== undefined ? prefetch : intent ? null : false}
+      onMouseEnter={(event) => {
+        onMouseEnter?.(event);
+        setIntent(true);
+      }}
+      onFocus={(event) => {
+        onFocus?.(event);
+        setIntent(true);
+      }}
+      onTouchStart={(event) => {
+        onTouchStart?.(event);
+        setIntent(true);
+      }}
       onNavigate={(event) => {
         let cancelled = false;
         onNavigate?.({

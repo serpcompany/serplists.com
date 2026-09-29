@@ -6,7 +6,7 @@ import { Link } from '@/components/navigation/Link';
 import { subscribeToNavigations } from '@/lib/navigation/navigationSignal';
 import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
-import { click, createFakeContainer, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
+import { click, createFakeContainer, dispatch, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
@@ -92,6 +92,65 @@ const clickLink = async (label: string, modifiers?: Parameters<typeof click>[2])
   });
   return event!;
 };
+
+// Next.js prefetches every link that scrolls into view, and each prefetch is a request to the
+// Worker: a page of template cards made a dozen before the user clicked anything. The app's
+// Link prefetches on intent instead (Next.js's hover-triggered prefetch pattern).
+describe('Link prefetching', () => {
+  const mountLinks = async () => {
+    navigation.reset('/pricing', { routes: ['/pricing', '/about', '/templates'] });
+    container = createFakeContainer();
+    root = createRoot(container as unknown as HTMLElement);
+    await act(async () => {
+      root?.render(
+        <RoutedPages
+          pages={{
+            '/pricing': (
+              <main>
+                <Link href="/about">About</Link>
+                <Link href="/templates" prefetch>
+                  Library
+                </Link>
+              </main>
+            ),
+          }}
+        />,
+      );
+    });
+  };
+  const prefetchOf = (label: string) =>
+    (findByText(container, 'A', label) as FakeElement).getAttribute('data-prefetch');
+
+  it('does not prefetch a link that is only on screen', async () => {
+    await mountLinks();
+
+    expect(prefetchOf('About')).toBe('false');
+  });
+
+  it('prefetches once the user focuses the link', async () => {
+    await mountLinks();
+    await act(async () => {
+      dispatch(container, findByText(container, 'A', 'About'), 'focusin');
+    });
+
+    expect(prefetchOf('About')).toBe('null');
+  });
+
+  it('prefetches once the user touches the link', async () => {
+    await mountLinks();
+    await act(async () => {
+      dispatch(container, findByText(container, 'A', 'About'), 'touchstart');
+    });
+
+    expect(prefetchOf('About')).toBe('null');
+  });
+
+  it("keeps a caller's own prefetch", async () => {
+    await mountLinks();
+
+    expect(prefetchOf('Library')).toBe('true');
+  });
+});
 
 describe('Link with unsaved work on the page', () => {
   it('asks before opening another page, and stays when the user cancels', async () => {

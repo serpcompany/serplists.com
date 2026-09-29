@@ -518,7 +518,7 @@ const Link = forwardRef<HTMLAnchorElement, MockLinkProps>(function Link(props, r
     href,
     replace,
     scroll: _scroll,
-    prefetch: _prefetch,
+    prefetch,
     shallow: _shallow,
     passHref: _passHref,
     legacyBehavior: _legacyBehavior,
@@ -550,7 +550,14 @@ const Link = forwardRef<HTMLAnchorElement, MockLinkProps>(function Link(props, r
   };
 
   return (
-    <a ref={ref} href={formatted} {...anchorProps} onClick={handleClick}>
+    // data-prefetch records the prefetch prop Next.js would receive (unset: its default).
+    <a
+      ref={ref}
+      href={formatted}
+      data-prefetch={prefetch === undefined ? 'unset' : String(prefetch)}
+      {...anchorProps}
+      onClick={handleClick}
+    >
       {children}
     </a>
   );
