@@ -179,16 +179,13 @@ Common failures:
   from `tests/e2e/support/request-connections.ts`, which gives each of its requests a
   new connection; `tests/unit/e2e/request-connections.test.ts` fails if a Playwright
   upgrade undoes that.
-- Wrangler 4.54's dev proxy keeps its own connections to the worker the same way.
-  Unpatched, a request it forwarded on a connection being closed was lost: a non-GET
-  got `503 Your worker restarted mid-request` although nothing restarted, and a GET
-  was held until another request reached the proxy (cloudflare/workers-sdk#14641).
-  `patches/wrangler@4.54.0.patch`, which pnpm applies on install
-  (`pnpm.patchedDependencies` in `package.json`), makes the proxy forward such a
-  request once more when no response has started, and answer a real restart as one.
-  `tests/unit/e2e/wrangler-proxy-patch.test.ts` fails if the patch stops applying.
-  When you upgrade wrangler, check whether upstream fixed this; if not, re-create the
-  patch for the new version with `pnpm patch wrangler@<version>`.
+- Wrangler's dev proxy keeps its own connections to the worker the same way, and a
+  request it forwards on a connection being closed can be lost
+  (cloudflare/workers-sdk#14641). Wrangler 4.143 answers a real restart correctly and
+  resends a dropped GET or HEAD itself; a dropped POST, PUT or DELETE still fails. If
+  the browser suite shows dropped writes, patch the proxy with `pnpm patch wrangler@<version>`
+  (forward the request once more when no response has started) and add a check that the
+  patch applies; see the Next.js migration plan.
 - Specs set up and read their data with `apiRequest()` or `apiJson()` from
   `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
   client with the page's cookies. A fetch inside `page.evaluate()`
