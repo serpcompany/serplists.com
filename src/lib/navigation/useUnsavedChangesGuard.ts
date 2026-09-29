@@ -5,6 +5,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { registerLeaveGuard } from './leaveGuard';
 
+// The page's copy of its history entry carries this key, so a popstate onto the copy (Back
+// from a #fragment the page moved to) is told apart from Back past it onto the page's own
+// entry. Next.js keeps other keys of an entry's state.
+const HELD_ENTRY_KEY = '__serplistsHeldEntry';
+
+type HeldEntry = { token: string; href: string };
+
+let heldEntryCount = 0;
+
+const isHeldEntry = (state: unknown, held: HeldEntry): boolean =>
+  typeof state === 'object' &&
+  state !== null &&
+  (state as Record<string, unknown>)[HELD_ENTRY_KEY] === held.token;
+
 // Asks before a page's unsaved work is lost, whichever way the user leaves:
 // - links and code that opens another page (sidebar, header, account menu, in-page links and
 //   buttons) through the leave-guard registry, which the app's Link and useAppRouter hand
@@ -31,8 +45,9 @@ export const useUnsavedChangesGuard = (
   const leaveAllowedRef = useRef(false);
   // The latest render's values, for handlers that run later.
   const latestRef = useRef({ shouldBlock, message, keepWork });
-  // True while the copy of the page's history entry is the current entry.
-  const holdingEntryRef = useRef(false);
+  // The copy of the page's history entry, from when the page first holds unsaved work until
+  // Back passes it.
+  const heldEntryRef = useRef<HeldEntry | null>(null);
   // A navigation the app asked to make, decided after the page renders its latest state.
   const pendingLeaveRef = useRef<(() => void) | null>(null);
   const [leaveRequest, setLeaveRequest] = useState(0);
@@ -56,7 +71,10 @@ export const useUnsavedChangesGuard = (
           pendingLeaveRef.current = leave;
           setLeaveRequest((count) => count + 1);
         },
-        holdsHistoryEntry: () => holdingEntryRef.current,
+        holdsHistoryEntry: () => {
+          const held = heldEntryRef.current;
+          return held !== null && isHeldEntry(window.history.state, held);
+        },
         onLeaveConfirmed: () => {
           leaveAllowedRef.current = true;
         },
@@ -82,19 +100,27 @@ export const useUnsavedChangesGuard = (
   // Next.js keeps its own router state in history entries, so the copy repeats the current
   // entry: going back to the original renders the same page.
   const holdEntry = useCallback(() => {
-    window.history.pushState(window.history.state, '', window.location.href);
-    holdingEntryRef.current = true;
+    // Unique across page loads too: a reload keeps the entries an earlier copy left.
+    heldEntryCount += 1;
+    const held = { token: `${Date.now().toString(36)}-${heldEntryCount}`, href: window.location.href };
+    window.history.pushState({ ...window.history.state, [HELD_ENTRY_KEY]: held.token }, '', held.href);
+    heldEntryRef.current = held;
   }, []);
 
   useEffect(() => {
-    if (shouldBlock && !holdingEntryRef.current) holdEntry();
+    if (shouldBlock && !heldEntryRef.current) holdEntry();
   }, [holdEntry, shouldBlock]);
 
-  // Back from the copy: the browser is on the page's own entry now.
+  // Back past the copy: the browser is on the page's own entry now.
   useEffect(() => {
-    const handlePopState = () => {
-      if (!holdingEntryRef.current) return;
-      holdingEntryRef.current = false;
+    const handlePopState = (event: PopStateEvent) => {
+      const held = heldEntryRef.current;
+      if (!held) return;
+      // Back onto the copy, from a #fragment the page moved to: still on the page.
+      if (isHeldEntry(event.state, held)) return;
+      // A #fragment above the copy (or an entry with another URL): not Back past the copy.
+      if (window.location.href !== held.href) return;
+      heldEntryRef.current = null;
       const { shouldBlock: blocking, message: question } = latestRef.current;
       if (blocking && !leaveAllowedRef.current && !window.confirm(question)) {
         holdEntry();

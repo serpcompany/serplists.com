@@ -278,6 +278,32 @@ describe('useUnsavedChangesGuard history entry', () => {
     expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/runs/r1']);
   });
 
+  // Moving to a #fragment (a same-page link, or checkout answering with one) adds an entry
+  // above the copy and fires popstate. It stays on the page: it neither asks nor goes back,
+  // and neither does Back from it onto the copy. Back past the copy still asks.
+  it('lets the page move to a #fragment and back without asking', async () => {
+    await mountGuard();
+    navigation.window.confirm.mockReturnValue(false);
+
+    await act(async () => {
+      navigation.window.history.pushState(null, '', '/runs/r1#notes');
+      navigation.window.dispatchEvent(Object.assign(new Event('popstate'), { state: null }));
+      await navigation.settle();
+    });
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs/r1#notes');
+
+    await goBack();
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs/r1');
+    expect(navigation.index()).toBe(2);
+
+    await goBack();
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs/r1');
+    expect(container.textContent).toContain('Next run');
+  });
+
   it('goes back in one step once the work is saved', async () => {
     await mountGuard();
     await act(async () => probe.setDirty?.(false));
