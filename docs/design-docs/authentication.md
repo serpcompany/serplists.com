@@ -32,7 +32,7 @@ and user-facing failure states when a supporting service is unavailable.
   hostname, turns on the other production-only checks: breached-password lookups
   and test-email blocking (`functions/api/utils/auth-policy.ts`). Preview sets it to
   `false`, so `staging.serplists.com` and `*.pages.dev` previews behave the same.
-- Verification emails return to `/login?verified=1`. Links expire after Better
+- Verification emails return to `/login/?verified=1`. Links expire after Better
   Auth's default of one hour; a failed link (expired, invalid, or for a deleted
   account) returns to the same URL with `&error=<code>` appended. Login checks
   `error` before `verified`, explains the failure, and offers to resend
@@ -45,7 +45,7 @@ and user-facing failure states when a supporting service is unavailable.
   exception: sign-up creates the account before it sends the verification email,
   so a provider failure there is logged (`auth_email_send_failed`, user id only)
   and sign-up still succeeds. Register then sends the person to
-  `/login?verify_email=1`, where they can resend it. Sign-up is refused with
+  `/login/?verify_email=1`, where they can resend it. Sign-up is refused with
   `503 auth_email_unavailable` before any account is created when verification is
   required and no provider is configured. `GET /api/auth/status` reports whether
   email delivery is available.
@@ -58,10 +58,10 @@ and user-facing failure states when a supporting service is unavailable.
   parameter, which Login, Register, and the verification callback carry forward so
   a new account returns to the page that sent it, such as an Organization invite. Only same-origin, non-auth paths are accepted (one
   leading `/`, not `//`, checked again after dot segments are removed, so
-  `/.//host` is rejected too); without one, Login goes to `/dashboard/settings`.
+  `/.//host` is rejected too); without one, Login goes to `/dashboard/settings/`.
 - A password reset revokes every session for the account, including the one in
   the browser doing the reset; `ResetPassword.tsx` signs that browser out locally
-  (the server answers that its session is gone) before sending it to `/login`.
+  (the server answers that its session is gone) before sending it to `/login/`.
   Change password revokes other sessions only when asked (`revokeOtherSessions`,
   on by default in `SecuritySection.tsx`).
 - Sessions last 7 days and slide: Better Auth extends a session, and resends its
@@ -77,7 +77,7 @@ and user-facing failure states when a supporting service is unavailable.
   answers `401`, only when there is no valid session. If the lookup itself fails
   (a D1 outage, or Better Auth cannot be set up), it logs `session_lookup_failed`
   and rethrows, so the API answers `500`. A `401` there would send a signed-in user
-  to `/login`, or quietly show them anonymous data. Anonymous requests never reach
+  to `/login/`, or quietly show them anonymous data. Anonymous requests never reach
   D1 here, so public pages are unaffected.
 - Auth errors the API router sends itself, before Better Auth runs (rate limit,
   blocked test account, `auth_email_unavailable`, a non-JSON body or an untrusted
@@ -94,7 +94,7 @@ and user-facing failure states when a supporting service is unavailable.
   only a successful answer with no session, or a `401`, is
   (`classifySessionResult` in `src/contexts/authSession.ts`). `AuthProvider` retries
   the first check twice with backoff, then reports `sessionStatus: 'unavailable'`,
-  and `RequireAuth` shows a retry instead of redirecting to `/login`. A failed
+  and `RequireAuth` shows a retry instead of redirecting to `/login/`. A failed
   profile refresh or sign-in session read keeps the current user, and the stored
   Organization choice is cleared only on a confirmed sign-out. Registration takes
   "verify your email" from the sign-up response (no session token), not from a later
@@ -109,7 +109,7 @@ and user-facing failure states when a supporting service is unavailable.
   session (`400 FAILED_TO_GET_SESSION`, `401`). On a `429`, `403`, `5xx`, or network
   failure the session cookie is still valid, so the user stays signed in and the menu
   shows the error. Callers navigate away only on `{ ok: true }`, and a page that sends
-  the user to `/login` after signing out must wait for it (`signOutAndReturn` in
+  the user to `/login/` after signing out must wait for it (`signOutAndReturn` in
   `src/features/auth/signOut.ts`): Login redirects a signed-in visitor straight to
   the return path.
 - Tabs share one session cookie, so every tab follows a sign-in or sign-out made in
@@ -118,7 +118,7 @@ and user-facing failure states when a supporting service is unavailable.
   storage event where that is missing). A tab showing a different user re-reads the
   session and trusts only the server's answer: a new user replaces the old one (whose
   cached queries are then dropped), a confirmed sign-out sends protected pages to
-  `/login`, and a failed check changes nothing. A tab also re-reads the session when
+  `/login/`, and a failed check changes nothing. A tab also re-reads the session when
   it comes back into view, at most once a minute, and after a back/forward cache
   restore. A re-check that finds the same user with a changed profile (name,
   username, avatar, email) shows the new one, and a tab that saves a profile change
@@ -133,7 +133,7 @@ and user-facing failure states when a supporting service is unavailable.
   `401` (`src/lib/unauthorizedResponses.ts`), and a signed-in tab re-reads the session:
   one check for a burst of `401`s, at most one every 5 seconds. Only a confirmed
   "no session" signs the tab out ("Your session ended. Sign in again."); `RequireAuth`
-  then sends the user to `/login` with the page to return to, and the previous user's
+  then sends the user to `/login/` with the page to return to, and the previous user's
   cached queries are dropped. A `403` never signs anyone out.
 - Passwords: at least 10 characters and at most 72 UTF-8 bytes (bcrypt ignores
   anything longer; emoji are 4 bytes, accented letters 2). Better Auth enforces the
@@ -150,8 +150,8 @@ and user-facing failure states when a supporting service is unavailable.
   The username lookup trims the value and ignores its case: it matches the value as
   given (usernames saved before Better Auth may be mixed case) or its lowercase
   form, preferring an exact match, with an `IN` list that stays on
-  `idx_users_username`. `/profile/JohnDoe` then replaces the URL with the stored
-  `/profile/johndoe`. Account settings links the saved username as stored (a legacy
+  `idx_users_username`. `/profile/JohnDoe/` then replaces the URL with the stored
+  `/profile/johndoe/`. Account settings links the saved username as stored (a legacy
   mixed-case one is found only in that casing) and previews an unsaved edit as the
   lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
@@ -173,7 +173,7 @@ and user-facing failure states when a supporting service is unavailable.
   unique index, when two requests claim a name at once, is mapped to the same
   `422 USERNAME_IS_ALREADY_TAKEN` instead of a bodyless 500. Re-saving your own
   username in a different case is allowed.
-- Settings live at `/dashboard/settings`; `/account` and `/dashboard/profile`
+- Settings live at `/dashboard/settings/`; `/account` and `/dashboard/profile`
   redirect there.
 
 Better Auth endpoints are under `/api/auth/*`, for example

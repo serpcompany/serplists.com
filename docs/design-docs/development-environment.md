@@ -98,7 +98,7 @@ Seeded users share the password `password123`:
 | `bob@test.com` | Free | |
 | `checklists@serp.co` | Pro | Official `serp` publisher that owns the official Templates |
 
-In development (`next dev`), `/login` has quick-fill buttons and `DevLoginBar` sits at
+In development (`next dev`), `/login/` has quick-fill buttons and `DevLoginBar` sits at
 the bottom of the app; production builds (the preview, the browser tests) have neither.
 `pnpm run db:reset:test-user-passwords` restores changed passwords. Admin and Jane are
 Pro only through their seeded overrides, never by email address, so a local D1 seeded
@@ -151,10 +151,14 @@ pnpm run test:coverage
 ```
 
 The browser tests run the production build: `test:smoke` and `test:e2e:full` build it
-with OpenNext, wipe, migrate and seed their own D1 in `.wrangler/smoke-state`, and serve
-the build with `opennextjs-cloudflare preview` (workerd) on a free port from `4173`
-(`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`). Pass `-- --skip-build` to
-reuse the build in `.open-next/` (`pnpm run build:worker`). They run on one Playwright
+with OpenNext and `SITE_ENV=production`, wipe, migrate and seed their own D1 in
+`.wrangler/smoke-state`, and serve the build with `opennextjs-cloudflare preview` (workerd)
+on a free port from `4173` (`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`). Pass
+`-- --skip-build` to reuse the build in `.open-next/`, made with
+`SITE_ENV=production pnpm run build:worker` (the runner refuses one made for another
+environment). `pnpm run preview` and `next dev` run without `SITE_ENV`, as a non-production
+site: noindex, crawlers disallowed, no Tag Manager
+([RELIABILITY.md](../RELIABILITY.md#environments-and-hosts)). They run on one Playwright
 worker: one workerd process renders every page and prefetch. `pnpm exec playwright test`
 serves the existing build on your own local D1.
 
@@ -165,11 +169,11 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 
 ## Verify an Organization flow by hand
 
-1. Sign in as `admin@test.com` and create an Organization at `/dashboard/settings`.
+1. Sign in as `admin@test.com` and create an Organization at `/dashboard/settings/`.
 2. Create a link invite for another seeded or newly registered email.
 3. In a separate browser context, sign in as the invitee.
-4. Open `/team-invites/:token` (legacy route) and click **Accept invite**, or accept from
-   the incoming invites on `/dashboard/settings`.
+4. Open `/team-invites/:token/` (legacy route) and click **Accept invite**, or accept from
+   the incoming invites on `/dashboard/settings/`.
 5. Switch to the Organization and confirm Personal data stays separate.
 
 ## All scripts
@@ -179,7 +183,7 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Run | `setup`, `dev`, `dev:all`, `dev:api`, `dev:auto`, `dev:stop`, `build`, `build:worker`, `preview`, `cf-typegen`, `ui:snap` |
 | Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `deps:check`, `deps:baseline`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report`, `sre:dup` |
 | Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
-| Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `templates:generate`, `templates:render-markdown`, `docs:references` |
+| Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `headers:generate` (the build's `public/_headers`), `templates:generate`, `templates:render-markdown`, `docs:references` |
 | Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
 | Remote D1 | `verify:staging`, `verify:prod:d1`, `db:migrate:d1:staging`, `db:migrate:d1:prod`, `db:migrations:*`, `check:*:d1-schema`, `check:preview:d1-binding`, `db:seed:official:staging`, `db:seed:official:remote` |
 | Stripe (test mode) | `stripe:local:setup`, `stripe:local:listen`, `stripe:local:scrub-live`, `stripe:portal:configure` |

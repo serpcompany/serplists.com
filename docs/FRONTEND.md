@@ -29,7 +29,7 @@ tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
 route group and signed-in pages in `(app)`, whose layout checks the session first
-(`RequireAuth` sends a signed-out visitor to `/login?next=<path>`). Both layouts render
+(`RequireAuth` sends a signed-out visitor to `/login/?next=<path>`). Both layouts render
 `Layout`, which picks the public or console shell from the pathname.
 
 The views are client components, and the server renders them too. A view must render the
@@ -38,8 +38,8 @@ same HTML on the server and in the browser's first render, or hydration fails: n
 `useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
 visitor's data in module-level state, which the server would share with the next visitor.
 A view that reads the query with `useSearchParams` on a statically rendered page is
-wrapped in `<Suspense>` in its route file (`/templates`, `/login`, `/register`,
-`/reset-password`): the server sends the fallback and the browser renders the rest.
+wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/`,
+`/reset-password/`): the server sends the fallback and the browser renders the rest.
 
 In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
 `useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work
@@ -67,6 +67,37 @@ an empty search and the default sort; `TemplateEditorRoute` does the same for th
 Next.js scrolls to the top, or to the URL's `#anchor`, when a navigation opens another
 page, and Back and Forward restore the scroll position. Rewriting the query in place (the
 library's search) never scrolls. Pages scroll the window, not an inner container.
+
+## URLs
+
+The app follows the SERP URL standard (`src/lib/http/urlStandard.ts`): a page ends in a slash
+(`/about/`, `/profile/<user>/<slug>/`), a file never does (`/robots.txt`,
+`/sitemaps/pages/1.xml`), and the other form of either answers 308 with the canonical URL, in
+one hop. A profile page is a page even when its username looks like a file name
+(`/profile/john.doe/`). The API (`/api/...`) and `/.well-known/` are not pages: they answer at
+the path they are called with and are never redirected, since Better Auth, the Stripe webhook
+and agents (MCP) call them directly and do not follow redirects.
+
+- Link with the builders in `src/lib/routes.ts`, which return canonical paths, and never write
+  a page path by hand: no link may depend on a redirect. `tests/unit/lib/canonicalUrls.test.ts`
+  checks every builder, the sitemap entries and the links the API writes, and scans `src` for a
+  hard-coded link that is not in canonical form or that redirects.
+- `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
+  route helpers (`isPathWithin`, `resolveRouteShell`, `resolveConsoleSection`), which accept
+  either form, not with `===` or `startsWith` on a literal.
+- `next.config.ts` sets `trailingSlash: true`, so the URLs Next.js writes (canonical and Open
+  Graph URLs) get their slash, and `skipTrailingSlashRedirect: true`: Next.js's own
+  trailing-slash redirect would move the API too, and OpenNext skips its redirect for files.
+  `redirects()` does that work instead (`trailingSlashRedirects()`), after sending the legacy
+  paths (`/account`, `/console/*`, `/checklists`, `/dashboard/profile`) straight to their page's
+  canonical URL. `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's
+  server and OpenNext's routing, and `tests/e2e/site-standards.spec.ts` checks them in workerd.
+- `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
+  My Templates for now. Links use `buildConsoleHomePath()`, which returns the home itself.
+- `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens
+  its page without a redirect.
+- Each environment answers on one host: `www.serplists.com` and every `*.workers.dev` URL
+  redirect there in one hop (see [RELIABILITY.md](RELIABILITY.md#environments-and-hosts)).
 
 ## Unsaved changes
 
@@ -139,7 +170,7 @@ let it ask, so the user is asked once.
   treat a failed status as unknown, never Free (`getBillingPlanStatus`).
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
-  The archive lists load only on `/dashboard/archive`; deleting a Template or Run
+  The archive lists load only on `/dashboard/archive/`; deleting a Template or Run
   marks them stale through `src/contexts/templateListCache.ts`. Deleting a Template also
   removes it from the cached catalog and leaves the catalog fresh instead of stale: the
   edge cache can serve the pre-delete catalog for up to 5 more minutes, so a refetch
@@ -203,7 +234,7 @@ let it ask, so the user is asked once.
   `useTemplateLists` (`loading`, `catalogError`, and `retryCatalog` in
   `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
   404 or "no templates" message only after the catalog loaded. That includes category
-  lists and counts (`/categories`), which would otherwise count only the bundled
+  lists and counts (`/categories/`), which would otherwise count only the bundled
   templates; `tests/unit/contexts/catalogConsumers.test.ts` checks every page that uses
   `useTemplateLibrary`. A failed catalog request stays an error; it is never cached as
   an empty catalog.
@@ -392,16 +423,36 @@ title, the site description, and the Open Graph and Twitter tags with the shared
 page with tags of its own builds them with `buildPageMetadata`
 (`src/lib/seo/pageMetadata.ts`), which titles it "Page | SERP Lists" (`buildPageTitle` in
 `src/lib/brand.ts`, which never adds the suffix twice), points the canonical URL and
-`og:url` at the path on `https://serplists.com`, and sets robots to `index, follow` unless
+`og:url` at the page's canonical URL on `https://serplists.com` (`buildCanonicalUrl` in
+`src/lib/seo/siteOrigin.ts`, on every environment), and sets robots to `index, follow` unless
 the page says otherwise. The route also renders the same text as JSON-LD (`JsonLd` and
-`PageJsonLd` in `src/components/seo/`). Every host but serplists.com (staging, every
-workers.dev host, a local server) also gets `X-Robots-Tag: noindex, nofollow` from
-`next.config.ts`, which wins over the tag.
+`PageJsonLd` in `src/components/seo/`). A build that is not production also sends
+`X-Robots-Tag: noindex, nofollow`, which wins over the tag (below).
 
-- Static pages export `metadata` (`/templates`, `/categories`, the 404 page).
+### Production and other environments
+
+A site is not production unless `SITE_ENV=production` marks it (`isProductionSite` in
+`src/lib/seo/siteOrigin.ts`, the SERP environment configuration standard); nothing is inferred
+from the host. The value is read where it is used: at build time for the static pages, the
+`next.config.ts` headers and redirects and `public/_headers`, and from the Worker's vars for
+what renders on request, so each environment sets it in both (`wrangler.toml`,
+[RELIABILITY.md](RELIABILITY.md#environments-and-hosts)). Anything but production (staging, a
+local build or `next dev`):
+
+- sends `X-Robots-Tag: noindex, nofollow` with every page and API response (`next.config.ts`)
+  and every static file (`public/_headers`, which `scripts/generate-static-headers.ts` writes
+  for each build from `src/lib/http/securityHeaders.ts`);
+- answers `/robots.txt` with `Disallow: /` and no sitemap (`src/app/robots.ts`; production
+  allows crawling and lists `https://serplists.com/sitemap.xml`);
+- loads no Google Tag Manager (the root layout renders its bootstrap only on production).
+
+Share pages are noindex on every environment. `tests/unit/seo/siteEnvIndexing.test.ts` checks
+both sides, and `scripts/check-site-standards.mjs` checks a running site.
+
+- Static pages export `metadata` (`/templates/`, `/categories/`, the 404 page).
 - Dynamic public pages look their subject up in `generateMetadata`, the way the page itself
   finds it (`src/server/pageMeta/`):
-  - a template page (`/profile/<user>/<slug>`): a bundled library template, or one D1 row
+  - a template page (`/profile/<user>/<slug>/`): a bundled library template, or one D1 row
     (`functions/seo/public-template-lookup.ts`), cached in the data center for 5 minutes;
   - a profile: the profile and its public templates through the API router in the same
     Worker (`src/server/api.ts`), cached for 5 minutes;

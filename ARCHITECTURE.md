@@ -18,7 +18,7 @@ top-level map. Request flow, routes, and the data model are in the
 | Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `views/Pricing.tsx` |
 | Agent access (Run Keys, MCP) | `handlers/agent-keys.ts`, `handlers/agentMcp.ts`, `utils/agent-mcp-host.ts`, `utils/personal-run-key.ts` | `components/account/AgentAccessSection.tsx` |
-| Public discovery and SEO | `functions/sitemap/` (served by the route handlers in `src/app/sitemap.xml` and `src/app/sitemaps`), `functions/seo/` (lookups for page metadata) | public `views/`, `data/`, `lib/publicPageMeta.ts`, `lib/seo/`, `server/pageMeta/` (each page's metadata, rendered on the server; see docs/FRONTEND.md) |
+| Public discovery and SEO | `functions/sitemap/` (served by the route handlers in `src/app/sitemap.xml` and `src/app/sitemaps`), `functions/seo/` (lookups for page metadata) | public `views/`, `data/`, `lib/publicPageMeta.ts`, `lib/seo/`, `server/pageMeta/` (each page's metadata, rendered on the server; see docs/FRONTEND.md), `app/robots.ts`, `lib/http/urlStandard.ts` (the canonical URL form and the redirects `next.config.ts` builds from it) |
 | Imports and uploads | `handlers/clipy.ts`, `handlers/uploads.ts` | `lib/schemas/portableTemplate*`, `components/TemplateBackup.tsx` |
 
 Legacy `team`/`workspace` identifiers in code mean Organization; see
@@ -81,7 +81,7 @@ versioned links below rather than relying on memory.
 | Data | Cloudflare D1 with Drizzle ORM 0.45 / Kit 0.31; R2 for uploads | [cloudflare-d1-llms.txt](docs/references/cloudflare-d1-llms.txt), [drizzle-llms.txt](docs/references/drizzle-llms.txt) |
 | Auth | Better Auth 1.3.4 (exact pin; current docs describe newer releases) | [authentication](docs/design-docs/authentication.md) |
 | Billing | Stripe REST API via `fetch` (no SDK) | [stripe-llms.txt](docs/references/stripe-llms.txt), [billing](docs/design-docs/billing.md) |
-| SEO | Page metadata from the Next.js Metadata API, XML sitemaps from route handlers | [xml-sitemap-standards.md](docs/references/xml-sitemap-standards.md) |
+| SEO | Page metadata from the Next.js Metadata API, XML sitemaps from route handlers; SERP's URL standard (pages end in `/`, files and the API never do) and environment configuration standard (`SITE_ENV`, one host per environment) | [xml-sitemap-standards.md](docs/references/xml-sitemap-standards.md), [URL trailing slash](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/url-trailing-slash.md), [environment configuration](https://github.com/serpcompany/serp/blob/main/docs/engineering/standards/environment-configuration.md) |
 | Tests | Vitest 3, Playwright | [vitest-llms.txt](docs/references/vitest-llms.txt) |
 | Tooling | pnpm 9, ESLint 9, dependency-cruiser, Lefthook | |
 

@@ -203,9 +203,16 @@ tags read the full page URL (GA4 sends it as `page_location`). So:
 
 `next.config.ts` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on every
 page and API response (`src/lib/http/securityHeaders.ts`). Static files are served without
-running the Worker, so `public/_headers` repeats the same headers for them; keep the two
-in step. `next dev` applies only `next.config.ts`, so check asset headers on
-`pnpm run preview` or a deployed host. On `localhost` and `127.0.0.1` the policy leaves
+running the Worker, so each build writes `public/_headers` from the same values
+(`scripts/generate-static-headers.ts`, run by `pnpm run build`; the file is not committed).
+`next dev` applies only `next.config.ts`, so check asset headers on `pnpm run preview` or a
+deployed host. A build that is not production also marks every response and file
+`X-Robots-Tag: noindex, nofollow` ([FRONTEND.md](FRONTEND.md#production-and-other-environments)).
+Other hosts (`www`, `*.workers.dev`) never serve the site: they redirect to the
+environment's one host ([RELIABILITY.md](RELIABILITY.md#environments-and-hosts)), so the
+API's origin checks and Better Auth's reset and verification links only ever see that host
+(and a workers.dev request carrying CI's `x-serplists-smoke-test` header, which is not a
+secret). On `localhost` and `127.0.0.1` the policy leaves
 out `upgrade-insecure-requests`: over plain http the browser would upgrade the redirects
 the app's own navigations follow to https, which a local server does not serve.
 

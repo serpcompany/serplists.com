@@ -40,26 +40,28 @@ Role capabilities:
 
 ## Routes
 
-Canonical private routes use `/dashboard/*`:
+Every page URL ends in a slash, and the other form redirects (308) to it (the SERP URL
+standard, [FRONTEND.md](../FRONTEND.md#urls)); the API routes below do not, and are never
+redirected. Canonical private routes use `/dashboard/*`:
 
-- `/dashboard/templates`
-- `/dashboard/templates/new`
-- `/dashboard/templates/:id`
-- `/dashboard/templates/:id/edit`
-- `/dashboard/import-templates`
-- `/dashboard/runs`
-- `/dashboard/runs/:id`
-- `/dashboard/settings`
-- `/dashboard/archive`
+- `/dashboard/templates/`
+- `/dashboard/templates/new/`
+- `/dashboard/templates/:id/`
+- `/dashboard/templates/:id/edit/`
+- `/dashboard/import-templates/`
+- `/dashboard/runs/`
+- `/dashboard/runs/:id/`
+- `/dashboard/settings/`
+- `/dashboard/archive/`
 
 Public routes include:
 
-- `/templates`
-- `/categories`
-- `/profile/:username`
-- `/profile/:username/:templateSlug`
-- `/share/:shareToken`
-- `/team-invites/:token` (legacy compatibility route for Organization invites)
+- `/templates/`
+- `/categories/`
+- `/profile/:username/`
+- `/profile/:username/:templateSlug/`
+- `/share/:shareToken/`
+- `/team-invites/:token/` (legacy compatibility route for Organization invites)
 
 ## API Routes
 
@@ -170,9 +172,9 @@ Do not use git history for user-generated Template or Organization history. Git 
 
 - `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15). Template list and detail responses carry the checklist as parsed `sections` only; the raw `items` column is not sent.
 - Public template responses carry only the allowlisted fields in `functions/api/utils/template-public.ts`. That covers the catalog, Public Profile lists, the public rows of the unscoped list, and slug or id reads by anyone other than the owner or a member of the owning Organization. They leave out `team_id`, `created_by_user_id`, `updated_by_user_id`, `deleted_at` and `content_version`, so they never reveal which Organization owns a Template or which members edited it. The creator stays attributed through `user_id` and the owner fields, and `owner_type` marks an Organization Template. Owners and Organization members still get the whole row.
-- Public template detail routes are available through `/profile/:username/:templateSlug`.
+- Public template detail routes are available through `/profile/:username/:templateSlug/`.
 - Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`, for Users who have a username only.
-- Shared run links use `/share/:shareToken` and do not expose template editing.
+- Shared run links use `/share/:shareToken/` and do not expose template editing.
 
 ## Deployment Environments
 

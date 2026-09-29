@@ -64,12 +64,9 @@ Cloudflare Pages settings:
 - Project name `serplists-com`, set directly in the workflow. Do not use the
   `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
 - Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
-- Only `serplists.com` may be indexed. `next.config.ts` sends
-  `X-Robots-Tag: noindex, nofollow` with every page and API response on every other host
-  (`staging.serplists.com`, every `*.workers.dev` host, a local server), and
-  `public/_headers` does the same for the static files of staging and `*.workers.dev`. Page metadata points canonical links at
-  `https://serplists.com` (`src/lib/seo/pageMetadata.ts`). Leave robots.txt crawlable on
-  those hosts: a `Disallow` would hide the noindex from crawlers.
+- Which environment may be indexed, and which host each one answers on, is set by
+  `SITE_ENV` and `next.config.ts` now, not by the host a request names (see
+  [environments and hosts](#environments-and-hosts)).
 - GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
   The workflow uses email plus global key because the repo's legacy
   `CLOUDFLARE_API_TOKEN` could not read the Pages project.
@@ -81,6 +78,48 @@ Cloudflare Pages settings:
 There is no deploy by hand until the Workers deploy exists. `pnpm run build` refuses a
 localhost `NEXT_PUBLIC_API_URL` (unless `ALLOW_LOCAL_API_URL=1`), so a local API URL
 cannot ship.
+
+## Environments and hosts
+
+The app follows the SERP environment configuration standard: configuration is set
+explicitly per environment, never inferred from the host.
+
+| Environment | `wrangler.toml` env | `SITE_ENV` | Canonical host |
+| --- | --- | --- | --- |
+| Production | `production` | `production` | `serplists.com` |
+| Staging | `preview` | `staging` | `staging.serplists.com` |
+| Local (`next dev`, `pnpm preview`) | top level | unset | none |
+
+- **Indexing and analytics.** Only a site marked `SITE_ENV=production` may be indexed or
+  load analytics ([FRONTEND.md](FRONTEND.md#production-and-other-environments)). Any other
+  value, or none, sends `X-Robots-Tag: noindex, nofollow` with every page, API response
+  and static file, answers `/robots.txt` with `Disallow: /`, and loads no Tag Manager.
+  Canonical URLs name `https://serplists.com` on every environment.
+- **Set it in both places.** `SITE_ENV` shapes the build (static pages, the `next.config.ts`
+  headers and redirects, `public/_headers`) and what renders on request (the Worker's
+  `vars`). Each environment's vars in `wrangler.toml` set it, and each environment's build
+  command must set the same value (`SITE_ENV=production pnpm run build:worker`). A build
+  without it is non-production, which is the safe default; `scripts/check-env.mjs` rejects a
+  value other than `production` or `staging`.
+- **One host per environment.** `next.config.ts` sends every other host that reaches the
+  Worker to the environment's host with a 308, in one hop and in the canonical URL form:
+  `www.serplists.com` to `serplists.com`, and the Worker's `*.workers.dev` URL (and its
+  version preview URLs) to `serplists.com` or `staging.serplists.com`. API paths keep their
+  exact path. A request with the `x-serplists-smoke-test` header skips the workers.dev
+  redirect, so CI can test a deployment on its workers.dev URL; the header is not a secret.
+  When adding a host (another custom domain), add its redirect in `next.config.ts` and a
+  case in `tests/unit/config/urlStandard.test.ts`.
+- **Checking a running site.** `node scripts/check-site-standards.mjs <base-url>
+  <staging|production>` checks the URL standard (canonical URLs answer 200, the other form
+  308 in one hop, the API is never redirected, the sitemaps list only canonical URLs), the
+  environment's robots.txt, `X-Robots-Tag` and Tag Manager, and the host redirects. Against
+  a deployed workers.dev URL it sends the smoke-test header, and checks that a request
+  without it is redirected. Locally, build with the environment's `SITE_ENV`, serve it with
+  `opennextjs-cloudflare preview --env <production|preview> --persist-to <dir>` (after
+  `wrangler d1 migrations apply DB --local --env <env> --persist-to <dir>`: an env's local D1
+  is a separate database), and pass `--local`, which sends the other hosts as a `Host` header.
+  Do not test host rules with an env that has custom-domain `routes`: Wrangler then rewrites
+  the `Host` header.
 
 ## Observability
 
@@ -169,15 +208,23 @@ Common failures:
   `next dev`), and move inside the app without a reload with `navigateInApp()` from
   `tests/e2e/support/navigation.ts` (Next.js's router; a synthetic `pushState` only
   changes the URL).
-- Pages on the local stack carry the production robots tags in their HTML; like every host
-  but `serplists.com`, it also answers with `X-Robots-Tag: noindex, nofollow`.
-  A spec that checks a page's own robots rule loads the page as
-  `https://serplists.com` with `serveLocalAppAsProduction` in
-  `tests/e2e/route-structure.spec.ts`: Playwright answers that origin from the local
-  preview (the built app, its pages and API) and aborts every other request, so nothing
-  reaches production or analytics. A page can carry two robots tags, its server
-  metadata's and the one it adds in the browser (`NoIndexMeta`), so `expectRobots` there
-  checks every one.
+- The browser tests run the production configuration (`E2E_SITE_ENV` in
+  `tests/e2e/run-smoke-lib.mjs`): the runner builds with `SITE_ENV=production`, the preview
+  gets the same var, and CI's Build step sets it too. Pages are then indexable and load Tag
+  Manager, as on `serplists.com`. The runner refuses a build it reuses (`--skip-build`) that
+  was made for another environment, since the preview's var alone cannot change what the
+  build baked in. Staging's noindex is covered by the unit tests and
+  `scripts/check-site-standards.mjs`. `tests/e2e/site-standards.spec.ts` checks the URL
+  standard, the production rules and the host redirects (Playwright sends the other hosts
+  as a `Host` header).
+- A spec that checks a page's own robots rule loads the page as `https://serplists.com`
+  with `serveLocalAppAsProduction` in `tests/e2e/route-structure.spec.ts`: Playwright
+  answers that origin from the local preview (the built app, its pages and API) and aborts
+  every other request, so nothing reaches production or analytics. A page can carry two
+  robots tags, its server metadata's and the one it adds in the browser (`NoIndexMeta`), so
+  `expectRobots` there checks every one.
+- Specs open pages at their canonical URLs (`/dashboard/templates/`, `/login/`); a URL
+  without its slash only tests a redirect.
 - Browser tests run on one Playwright worker (`playwright.config.ts`): e2e specs share
   one database (TD-11), and one workerd process renders every page and every link
   prefetch, so parallel browsers only queue up behind each other there.

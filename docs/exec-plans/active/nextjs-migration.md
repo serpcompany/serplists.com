@@ -42,7 +42,13 @@ The same as the approved reference:
 - **Security headers and redirects** move from `public/_headers` and `public/_redirects` into
   `next.config.ts`, because rendered pages come from the Worker, not static assets.
   `public/_headers` keeps the rules for static files, which Workers Static Assets serves
-  without running the Worker.
+  without running the Worker; each build writes it for its environment
+  (`scripts/generate-static-headers.ts`).
+- **URLs** follow the SERP URL standard: pages end in `/`, files and the API never do, and
+  the other form answers one 308 ([FRONTEND.md](../../FRONTEND.md#urls)).
+- **Environments** follow the SERP environment configuration standard: `SITE_ENV` marks
+  production in each environment's Worker vars and build, and each environment answers on one
+  host ([RELIABILITY.md](../../RELIABILITY.md#environments-and-hosts)).
 - **Unsaved-changes guard:** React Router's blocker is replaced by a navigation guard that
   covers links, router calls, Back/Forward, and reload or close.
 
@@ -83,12 +89,33 @@ The same as the approved reference:
 
 ## Open questions
 
-- **Trailing slashes.** zenbujapanese.com follows the SERP URL standard: pages end in `/`,
-  files never do. Adopting it here means a 308 redirect from every current URL. It is
-  cheapest to do during the port.
-- **Workers plan.** The Worker is 2,883 KiB gzipped: 189 KiB under the Workers Free limit
-  of 3 MiB. Free also caps each request at 10 ms of CPU, which server-rendered pages can
-  exceed. Workers Paid ($5/month) raises the limit to 10 MiB. Waiting on the user.
+None. Both earlier questions were answered on 2026-09-29 (decision log): the app follows the
+SERP URL standard (trailing slashes) and the SERP environment configuration standard, and it
+runs on Workers Paid.
+
+## Left for launch
+
+Each of these needs the user's approval, or happens with the domain move:
+
+- **Deploy workflow** (phase 4): build each environment with its own `SITE_ENV`
+  (`SITE_ENV=staging` for `--env preview`, `SITE_ENV=production` for `--env production`), then
+  run `node scripts/check-site-standards.mjs <workers.dev URL> <staging|production>` against
+  the deployment (it sends the smoke-test header), and against the canonical host after the
+  domain move.
+- **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
+  `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
+  the move from the Pages project, and `wrangler.jsonc` with the `preview` environment renamed
+  `staging`. The Pages hosts (`serp-checklists.pages.dev`, `staging.serp-checklists.pages.dev`)
+  retire with the Pages project; the `preview` environment's `CORS_ALLOWED_ORIGINS` still
+  lists the staging one.
+- **Stripe:** the live Customer Portal configuration's `default_return_url` still names
+  `/account` (`stripe:portal:configure` only creates a configuration when there is none). The
+  app passes its own return URLs, and `/account` redirects in one hop, but the live setting
+  should become `https://serplists.com/dashboard/settings/`.
+- **Cloudflare Web Analytics** is injected by the zone, not by the app: keep it off for
+  `staging.serplists.com`, which loads no analytics of its own.
+- **Search engines:** after the move, every old URL without its slash answers 308 once;
+  resubmit `https://serplists.com/sitemap.xml` in Search Console.
 
 ## Progress
 
@@ -120,6 +147,22 @@ The same as the approved reference:
     and tests that build; the Pages deploy is disconnected (`3f667692`). Worker now:
     14,177 KiB, 2,883 KiB gzipped (`wrangler deploy --dry-run`), 189 KiB under the Workers
     Free limit.
+  - [x] Workers Paid, confirmed by the user: 10 MiB per Worker and no 10 ms CPU cap.
+  - [x] SERP environment configuration standard: `SITE_ENV` in each environment's vars in
+    `wrangler.toml` and in its build. Anything but production sends `X-Robots-Tag: noindex`,
+    disallows crawlers in robots.txt and loads no Tag Manager; `public/_headers` is generated
+    per build (`b8b0baa8`).
+  - [x] SERP URL standard: pages end in `/`, files never do, the other form answers one 308,
+    and the API and `/.well-known` are never redirected. Links, navigation, canonical and
+    Open Graph URLs, JSON-LD, sitemaps and the URLs the API writes are canonical, and legacy
+    paths redirect in one hop (`8f8fe8d0`, `4808b7a4`).
+  - [x] One host per environment: `www.serplists.com` and every `*.workers.dev` URL answer
+    308 with the environment's host, and the `x-serplists-smoke-test` header exempts
+    workers.dev (`1e0d7588`).
+  - [x] Browser tests on canonical URLs, with `tests/e2e/site-standards.spec.ts`, and
+    `scripts/check-site-standards.mjs` for a running site (`89a433b5`). Production and
+    staging builds, served in workerd with `opennextjs-cloudflare preview --env production`
+    and `--env preview`, pass all 45 of its checks.
 
 ## Decision log
 
@@ -179,7 +222,8 @@ The same as the approved reference:
   without `upgrade-insecure-requests`: over http, Chrome upgraded the redirects client
   navigations follow (`/dashboard`) to https and the navigation stalled for about 15
   seconds. Every host but `serplists.com` gets `X-Robots-Tag: noindex, nofollow`, as the old
-  app's host check did for every host (the page metadata cannot know the host).
+  app's host check did for every host (the page metadata cannot know the host). Replaced by
+  `SITE_ENV` below.
 - 2026-09-29: **`dev:all`** runs one `next dev` on a free port from 3000. `next dev` reads
   bindings only from `wrangler.toml` and `.dev.vars` (OpenNext passes no env files), so the
   launcher hands the port-dependent vars (`FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, the auth
@@ -214,3 +258,41 @@ The same as the approved reference:
     timer, which that cache cannot do.
   - A page view now costs one Worker request (the HTML, or the RSC payload of a client-side
     navigation) plus the API calls the page makes, as before.
+- 2026-09-29: **SERP standards.** The user chose SERP's standards for every URL and
+  environment: the URL trailing-slash standard and the environment configuration standard
+  (as in zenbujapanese.com's `next.config.ts`), and Workers Paid.
+- 2026-09-29: **Trailing slashes through `redirects()`.** `trailingSlash: true` gives the URLs
+  Next.js writes their slash; `skipTrailingSlashRedirect: true` turns off Next.js's own
+  redirect, and rules built by `src/lib/http/urlStandard.ts` do that work.
+  - Next.js's redirect would move `/api/*` under `next dev`, and OpenNext skips it for
+    `/api/` and for files, so the two runtimes would disagree.
+  - A `proxy.ts` was rejected: Next.js 16 runs the proxy only on Node.js, which OpenNext's
+    Cloudflare adapter (1.20) calls experimental, and it would run for every request.
+  - Next.js matches a rule's source with or without a trailing slash, so a page rule ends
+    with `(?!/)` or it would redirect the slashed URL to itself.
+  - `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's server and
+    OpenNext's routing, which must agree.
+- 2026-09-29: **The API and `/.well-known` keep their exact paths**, with or without a slash,
+  and on other hosts too: Better Auth, the Stripe webhook, uploads and MCP clients call exact
+  paths and do not all follow redirects.
+- 2026-09-29: **Profile pages are always pages.** Usernames may contain dots (Better Auth's
+  username validator), so `/profile/john.doe/` is a page, not a file.
+- 2026-09-29: **Legacy paths** (`/account`, `/console/*`, `/checklists`, `/dashboard/profile`)
+  redirect straight to the canonical URL, in one hop. `/dashboard/` is not a page: it answers
+  307 with the dashboard's home, and links go to the home itself (`buildConsoleHomePath`).
+- 2026-09-29: **`SITE_ENV` instead of the host.** Only `SITE_ENV=production` is production;
+  anything else, or nothing, is not. It is set in each environment's Worker vars and in its
+  build, because the build bakes it into the static pages (robots.txt among them), the
+  `next.config.ts` headers and redirects, and `public/_headers`. Staging answers robots.txt
+  with `Disallow: /` as well as sending noindex, as the standard asks; this replaces the
+  earlier rule that kept robots.txt crawlable on other hosts, which no longer serve the site.
+  The Tag Manager bootstrap renders on production only.
+- 2026-09-29: **The browser tests run the production configuration** (`SITE_ENV=production`
+  in the runner and in CI's build), since production is what users see. Staging's rules are
+  covered by unit tests and by `scripts/check-site-standards.mjs` on a staging build.
+- 2026-09-29: **One host per environment.** `www.serplists.com` redirects to `serplists.com`,
+  and every `*.workers.dev` URL (version previews included) to its environment's host, in one
+  hop and in canonical form. A request with the `x-serplists-smoke-test` header (not a secret)
+  skips the workers.dev redirect, so CI can test a deployment before the domains move. Host
+  rules were checked in workerd with `opennextjs-cloudflare preview --env <env>` and a `Host`
+  header, which Wrangler keeps as long as the environment has no custom-domain routes.

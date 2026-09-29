@@ -93,7 +93,7 @@ Main server handlers:
 - `functions/api/handlers/stripe.ts`
 - `functions/api/handlers/templates.ts`
 - `functions/api/handlers/checklists.ts`
-- `functions/api/handlers/checklists-shared.ts` (the `/share/:token` guest route)
+- `functions/api/handlers/checklists-shared.ts` (the `/share/:token/` guest route)
 - `functions/api/handlers/teams.ts`
 - `functions/api/handlers/admin.ts`
 - `functions/api/handlers/uploads.ts`
@@ -127,13 +127,13 @@ Template backup and portable import/export are implemented through `src/lib/util
 The portable contract is shared by uploaded files and repo-backed public packs.
 Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
 the same validation path as uploaded packs. Public URLs are
-`/profile/<owner>/<slug>`, so the public catalog merges a repo entry and a D1
+`/profile/<owner>/<slug>/`, so the public catalog merges a repo entry and a D1
 template only when both the owner and the slug match (an official `serp` copy of a
 starter, where the repo entry wins); another owner's template with the same slug
 stays listed. The API also treats every bundled starter slug as taken
 (`functions/api/utils/reserved-template-slugs.ts`, read from the generated sitemap
 catalog), and every UUID, since the template page and its server-rendered metadata read
-`/profile/<owner>/<uuid>` as a template id first: create, import, clone and a slug
+`/profile/<owner>/<uuid>/` as a template id first: create, import, clone and a slug
 change get the `-<id8>` suffix instead, while a Template that already holds such a
 slug keeps it (a UUID the id lookup does not match is then tried as a slug). Repo templates are dated
 by their pack's `exportedAt` (a fixed fallback date when it is missing or invalid,
@@ -161,7 +161,7 @@ pages keep saving. Archiving and restoring a run also clear its share fields.
 Sharing never creates a run, and a shared run in progress counts toward the
 active-run limit like any other (the old `POST /api/checklists/:templateId/share`
 route, which created public runs outside that count, is gone and returns `404`).
-The public guest URL is `/share/:token`. Guest saves never replace the run's
+The public guest URL is `/share/:token/`. Guest saves never replace the run's
 structure: the server copies only completion and notes from the payload onto the
 stored sections, matched by the ids the share page uses. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before

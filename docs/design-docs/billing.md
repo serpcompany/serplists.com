@@ -239,8 +239,8 @@ Authenticated:
   subscriptions; Billing refetches status on it and offers Upgrade. While an open
   subscription on a current Pro price is stored, it keeps the customer and asks
   the user to contact support instead (see checkout above).
-- Stripe returns the user to `/dashboard/settings?billing=success` or
-  `?billing=cancel` after Checkout, and to `/dashboard/settings` from the Portal.
+- Stripe returns the user to `/dashboard/settings/?billing=success` or
+  `?billing=cancel` after Checkout, and to `/dashboard/settings/` from the Portal.
   Billing reads `billing=success` and polls Personal status (whichever context is
   selected) until the plan is Pro, then removes the parameter. Sessions created
   before this return URL send buyers to `/account?billing=...`, which redirects

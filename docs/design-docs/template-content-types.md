@@ -25,7 +25,8 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
   video loaded keeps the player. `tests/e2e/run-task-videos.spec.ts` checks this.
 
 Every iframe origin the helper can produce must be listed in `frame-src` in
-`public/_headers`; `tests/unit/security/headers.test.ts` checks this.
+`src/lib/http/securityHeaders.ts` (the policy `next.config.ts` and `public/_headers` send);
+`tests/unit/security/headers.test.ts` checks this.
 
 ## Image blocks
 
