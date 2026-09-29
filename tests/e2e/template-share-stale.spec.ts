@@ -35,7 +35,7 @@ async function openPublicDetail(page: Page, templateId: string) {
   return callApi(page, 'GET', `/templates/${templateId}`);
 }
 
-test('Share gives no link after the template was made private elsewhere', async ({ page }) => {
+test('Share gives no link after the template was made private elsewhere', async ({ page, browser }) => {
   await loginAsAdmin(page);
   const templateId = await createPublicTemplate(page, 'private');
 
@@ -58,9 +58,25 @@ test('Share gives no link after the template was made private elsewhere', async 
     await page.getByRole('button', { name: 'Share' }).click();
     const dialog = page.getByRole('dialog', { name: 'Share Template' });
     await expect(dialog).toBeVisible();
-    await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    const link = dialog.getByRole('textbox', { name: 'Share link' });
+    await expect(link).toHaveValue(new RegExp(`/profile/[^/]+/${String(loaded.slug)}$`));
+    const shareUrl = await link.inputValue();
     const republished = await callApi(page, 'GET', `/templates/${templateId}`);
     expect(Boolean(republished.is_public)).toBe(true);
+
+    // The Share dialog is modal, so the page behind it is out of the accessibility tree until it closes.
+    await dialog.getByRole('button', { name: 'Close' }).first().click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+
+    const guestContext = await browser.newContext();
+    try {
+      const guest = await guestContext.newPage();
+      await guest.goto(shareUrl);
+      await expect(guest.getByRole('heading', { level: 1, name: String(loaded.title) })).toBeVisible();
+    } finally {
+      await guestContext.close();
+    }
   } finally {
     await callApi(page, 'DELETE', `/templates/${templateId}`);
   }
