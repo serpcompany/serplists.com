@@ -11,9 +11,10 @@ async function expectSchemaValid(xml: string, schema: string, fileName: string) 
   expect(result.valid, result.rawOutput).toBe(true);
 }
 
+// Admin's public sample Template from `seed-test` (db/seeds/local.ts), as the API returns it.
 const apiTemplate = {
-  id: "serp-template-technical-seo-audit",
-  user_id: "serp-user",
+  id: "template-1",
+  user_id: "user-1",
   title: "Technical SEO Audit Checklist",
   description: "A practical technical SEO audit you can run in 60-90 minutes.",
   items: JSON.stringify([
@@ -60,11 +61,11 @@ const apiTemplate = {
   category: JSON.stringify(["SEO", "Technical SEO"]),
   categories: ["SEO", "Technical SEO"],
   tags: ["audit", "crawl"],
-  slug: "technical-seo-audit-checklist",
+  slug: "sample-technical-seo-audit-checklist",
   created_at: "2026-07-04T00:16:35.000Z",
   updated_at: "2026-07-04T00:16:35.000Z",
-  owner_username: "serp",
-  owner_full_name: "SERP",
+  owner_username: "admin",
+  owner_full_name: "Admin (Pro)",
 };
 
 async function mockApiBackedPublicTemplate(page: Page) {
@@ -81,7 +82,7 @@ async function mockApiBackedPublicTemplate(page: Page) {
       return;
     }
 
-    if (path === "/api/templates/slug/technical-seo-audit-checklist") {
+    if (path === "/api/templates/slug/sample-technical-seo-audit-checklist") {
       await route.fulfill({
         contentType: "application/json",
         body: JSON.stringify(apiTemplate),
@@ -336,7 +337,7 @@ test("@smoke protected routes render login after redirect without refresh", asyn
 test("@smoke API-backed public template single renders", async ({ page }) => {
   await mockApiBackedPublicTemplate(page);
 
-  await page.goto("/profile/serp/technical-seo-audit-checklist");
+  await page.goto("/profile/admin/sample-technical-seo-audit-checklist");
 
   await expect(
     page.getByRole("heading", {
