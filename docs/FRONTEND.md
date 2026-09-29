@@ -187,7 +187,11 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
-  after the user has left. `tests/unit/pages/navigateAfterAwait.test.ts` fails when a
+  after the user has left. `tests/unit/pages/navigateAfterAwait.test.ts` scans `src/`
+  and fails when an async handler navigates, signs in or starts checkout after an
+  await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
+  the visit has ended, a callback given to one of the visit helpers, or a call that is
+  passed the visit), unless it is listed as ungated on purpose. It also fails when a
   file uses a sign-in or checkout helper without `usePageVisit()`.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a

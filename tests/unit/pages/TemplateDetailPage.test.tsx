@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
-import { handleUpgradeRequiredForContext } from '@/lib/access-flow';
+import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
@@ -17,6 +17,7 @@ const {
   menuItemProps,
   mockUseTemplateLists,
   switchProps,
+  visitState,
   workspaceState,
 } = vi.hoisted(() => ({
   contextCreateTemplate: vi.fn(),
@@ -24,6 +25,8 @@ const {
   menuItemProps: [] as Array<Record<string, unknown>>,
   mockUseTemplateLists: vi.fn(),
   switchProps: [] as Array<Record<string, unknown>>,
+  // Whether the user is still on the page (usePageVisit); read when a handler checks.
+  visitState: { current: false },
   workspaceState: {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
@@ -144,6 +147,11 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
   };
 });
 
+// Static rendering runs no effects, so the real hook reports every visit as ended.
+vi.mock('@/hooks/usePageVisit', () => ({
+  usePageVisit: () => () => ({ isCurrent: () => visitState.current }),
+}));
+
 vi.mock('@/lib/access-flow', () => ({
   handleUpgradeRequiredForContext: vi.fn(),
   navigateToLoginWithReturnPath: vi.fn(),
@@ -175,6 +183,8 @@ beforeEach(() => {
   menuItemProps.length = 0;
   mockUseTemplateDetailModel.mockReset();
   switchProps.length = 0;
+  visitState.current = false;
+  vi.mocked(navigateToLoginWithReturnPath).mockClear();
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;
   workspaceState.isTeamWorkspace = false;
@@ -443,6 +453,44 @@ describe('TemplateDetail visibility', () => {
 
     expect(setVisibility).toHaveBeenCalledWith(false);
     expect(contextUpdateTemplate).not.toHaveBeenCalled();
+  });
+
+  // Flips the switch, lets the test act while the request is in flight, then answers
+  // that the session has expired.
+  const flipWithExpiredSession = async (whileSaving: () => void) => {
+    let answer: (result: { kind: 'login_required' }) => void = () => {};
+    const setVisibility = vi.fn(
+      () => new Promise((resolve) => { answer = resolve; }),
+    );
+    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
+
+    renderTemplateDetail();
+    const onCheckedChange = switchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    const flipped = onCheckedChange(true);
+    whileSaving();
+    answer({ kind: 'login_required' });
+    await flipped;
+    expect(setVisibility).toHaveBeenCalledWith(true);
+  };
+
+  it('sends an expired session to sign-in while the user is still on the page', async () => {
+    visitState.current = true;
+
+    await flipWithExpiredSession(() => {});
+
+    expect(navigateToLoginWithReturnPath).toHaveBeenCalledTimes(1);
+  });
+
+  // A late 401 pulled a user who had pressed Back (or followed a link) to sign-in
+  // with a return path to this template.
+  it('does not go to sign-in once the user has left the page', async () => {
+    visitState.current = true;
+
+    await flipWithExpiredSession(() => {
+      visitState.current = false;
+    });
+
+    expect(navigateToLoginWithReturnPath).not.toHaveBeenCalled();
   });
 });
 
