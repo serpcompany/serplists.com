@@ -31,6 +31,7 @@ import { RetiredRunItems } from '@/components/run-execution/RetiredRunItems';
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { RunShareActions } from '@/components/run-execution/RunShareActions';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
+import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
@@ -60,7 +61,7 @@ const ChecklistRunPage = () => {
   // Completing awaits the save; it leaves for the list only if the user is still here.
   const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
-  const { getPermissions } = useWorkspace();
+  const { getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
@@ -294,6 +295,8 @@ const ChecklistRunPage = () => {
 
   // Share links govern shared runs; private runs follow the role in the run's Organization.
   const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
+  // The role is unknown because the teams request failed: say so, not a silent View only.
+  const roleUnavailable = !isSharedRun && isRoleUnavailable(displayRun.teamId);
   // Completed runs are frozen: their tasks can no longer be ticked or unticked.
   const isRunCompleted = displayRun.status === 'completed';
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
@@ -365,7 +368,7 @@ const ChecklistRunPage = () => {
       >
         {displayRun.status === 'completed' ? 'Completed' : 'In Progress'}
       </Badge>
-      {canUpdateRun ? null : <Badge variant="secondary">View only</Badge>}
+      {canUpdateRun || roleUnavailable ? null : <Badge variant="secondary">View only</Badge>}
       {finishRunButton}
       <div className="hidden min-w-[120px] xl:block">
         <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
@@ -585,6 +588,11 @@ const ChecklistRunPage = () => {
             actions={privateRunHeaderActions}
           />
           <DashboardScrollArea className="overflow-clip p-0">
+          {roleUnavailable ? (
+            <div className="p-4">
+              <WorkspaceErrorNotice id="run-workspace-error" message="This run's actions wait until they load. Check your connection and try again." onRetry={retryWorkspace} />
+            </div>
+          ) : null}
           <MobileRunProgress
             completedTasks={counts.tasksCompleted}
             currentSectionId={currentSectionId}

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
 import type { TeamSummary } from '@/lib/api';
+import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 const apiMocks = vi.hoisted(() => ({
   createTeam: vi.fn(),
@@ -122,5 +123,33 @@ describe('WorkspaceProvider teams cache', () => {
 
     await expect(workspace.refreshTeams()).rejects.toThrow('Network down');
     expect(queryClient.getQueryData(teamsKey)).toEqual([joinedTeam]);
+  });
+});
+
+// A Personal context never waits on the teams request, but a failed request must not look
+// like "no Organizations": pages that show Organizations, or act on an Organization's
+// resource, say it failed and offer Retry.
+describe('WorkspaceProvider after the teams request failed', () => {
+  it('reports the teams list as unavailable in Personal, without blocking Personal', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, teamsKey);
+    const workspace = renderWorkspace(queryClient);
+
+    expect(workspace.activeWorkspaceId).toBe('personal');
+    expect(workspace.workspaceStatus).toBe('ready');
+    expect(workspace.teamsUnavailable).toBe(true);
+    // The role in an Organization is unknown because the list failed, not because the user left.
+    expect(workspace.isRoleUnavailable('acme')).toBe(true);
+    expect(workspace.isRoleUnavailable(undefined)).toBe(false);
+  });
+
+  it('keeps the last loaded list after a failed refresh, where a missing Organization means no role', () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, teamsKey, [joinedTeam]);
+    const workspace = renderWorkspace(queryClient);
+
+    expect(workspace.teamsUnavailable).toBe(false);
+    expect(workspace.isRoleUnavailable('team-1')).toBe(false);
+    expect(workspace.isRoleUnavailable('acme')).toBe(false);
   });
 });

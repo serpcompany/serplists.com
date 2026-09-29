@@ -4,6 +4,20 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 // request fails sees an error with Retry, never a silent switch to Personal
 // (src/contexts/workspaceSelection.ts).
 
+// A run owned by the Organization, opened from Personal by a link.
+const organizationRun = {
+  id: 'run-org',
+  title: 'Org Run',
+  template_id: 'tpl-org',
+  items: JSON.stringify([{ id: 'sec-1', title: 'Section', items: [{ id: 'task-a', title: 'Task A' }] }]),
+  status: 'in_progress',
+  is_public: 0,
+  team_id: 'team-1',
+  user_id: 'user-owner',
+  revision: 1,
+  started_at: '2026-07-02T00:00:00.000Z',
+};
+
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
 }
@@ -48,6 +62,14 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
       await fulfillJson(route, { billingEnabled: true, plan: 'free' });
       return;
     }
+    if (path === '/api/checklists/run-org') {
+      await fulfillJson(route, organizationRun);
+      return;
+    }
+    if (path === '/api/checklists/run-org/history') {
+      await fulfillJson(route, { checklistId: 'run-org', events: [], subject: { type: 'team', id: 'team-1' } });
+      return;
+    }
     await fulfillJson(route, []);
   });
   return scopedListRequests;
@@ -84,6 +106,36 @@ test('Continue in Personal leaves the error for Personal', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+});
+
+// Personal never waits on the teams request, but a failed one must not read as "no
+// Organizations" or turn an Organization's run silently read-only.
+test('in Personal, a failed teams request is shown on an Organization run and in the switcher', async ({ page }) => {
+  const state = { teamsFail: true };
+  await mockApi(page, state);
+  await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'personal'));
+
+  await page.goto('/dashboard/runs/run-org');
+
+  await expect(page.getByText("Couldn't load your Organizations")).toBeVisible({ timeout: 30_000 });
+  const header = page.locator('[data-dashboard-page-header="true"]');
+  await expect(header.getByText('View only')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rename' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Continue in Personal' })).toHaveCount(0);
+  const switcher = page.getByRole('button', { name: 'Switch context' }).first();
+  await expect(switcher).toContainText('Personal');
+  await switcher.click();
+  await expect(page.getByRole('menuitem', { name: 'Retry loading Organizations' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  state.teamsFail = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+
+  await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rename' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeEnabled();
+  await switcher.click();
+  await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
 });
 
 // The public shell has no WorkspaceGate or switcher, so the public template page, which

@@ -20,6 +20,8 @@ const workspaceMocks = vi.hoisted(() => ({
   },
   canManageTeam: true,
   createTeam: vi.fn(),
+  // Personal, with the teams request failed and no list to show.
+  inPersonalWithoutTeams: false,
   patchTeam: vi.fn(),
   rememberTeam: vi.fn(),
   refreshTeams: vi.fn(),
@@ -49,8 +51,19 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     patchTeam: workspaceMocks.patchTeam,
     rememberTeam: workspaceMocks.rememberTeam,
     refreshTeams: workspaceMocks.refreshTeams,
+    retryWorkspace: vi.fn(),
     selectWorkspace: workspaceMocks.selectWorkspace,
     teams: workspaceMocks.teams,
+    ...(workspaceMocks.inPersonalWithoutTeams
+      ? {
+          activeTeamId: undefined,
+          activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
+          canManageTeam: false,
+          isTeamWorkspace: false,
+          teams: [],
+          teamsUnavailable: true,
+        }
+      : {}),
   }),
 }));
 
@@ -99,6 +112,17 @@ describe('TeamSettingsSection', () => {
   beforeEach(() => {
     workspaceMocks.activeWorkspace.role = 'admin';
     workspaceMocks.canManageTeam = true;
+    workspaceMocks.inPersonalWithoutTeams = false;
+  });
+
+  // Otherwise a member of two Organizations reads that they have none, and may create a duplicate.
+  it('says the Organizations could not load, with Retry, instead of inviting the user to create one', () => {
+    workspaceMocks.inPersonalWithoutTeams = true;
+    const html = renderSectionWithMembers([]);
+
+    expect(html).toContain('Couldn&#x27;t load your Organizations.');
+    expect(html).toContain('Retry');
+    expect(html).not.toContain('Create or select an Organization to share templates and runs.');
   });
 
   it('copies invite links through the clipboard API when available', async () => {

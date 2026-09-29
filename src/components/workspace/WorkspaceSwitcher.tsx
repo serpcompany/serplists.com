@@ -32,6 +32,7 @@ export function WorkspaceSwitcher() {
     isWorkspaceLoading,
     retryWorkspace,
     selectWorkspace,
+    teamsUnavailable,
     workspaces,
     workspaceStatus,
   } = useWorkspace();
@@ -90,7 +91,14 @@ export function WorkspaceSwitcher() {
             </DropdownMenuItem>
           );
         })}
-        {workspaceStatus === 'error' ? (
+        {/* The active context works on, but a failed list must not read as "no Organizations". */}
+        {teamsUnavailable && workspaceStatus !== 'error' ? (
+          <DropdownMenuLabel className="flex items-center gap-3 font-normal text-muted-foreground">
+            <AlertTriangle className="h-4 w-4" />
+            Couldn&apos;t load your Organizations
+          </DropdownMenuLabel>
+        ) : null}
+        {workspaceStatus === 'error' || teamsUnavailable ? (
           <DropdownMenuItem className="gap-3" onClick={retryWorkspace}>
             <RotateCw className="h-4 w-4 text-muted-foreground" />
             Retry loading Organizations
