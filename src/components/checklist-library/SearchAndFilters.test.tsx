@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 
 describe('SearchAndFilters', () => {
-  it('renders the v0 category pills above the discovery sort row', () => {
+  it('renders the category chips above the discovery sort row', () => {
     const markup = renderToStaticMarkup(
       <SearchAndFilters
         categories={[
@@ -29,5 +29,7 @@ describe('SearchAndFilters', () => {
     expect(markup.indexOf('Launch')).toBeLessThan(markup.indexOf('8 templates'));
     expect(markup).toContain('overflow-x-auto pb-2');
     expect(markup).toContain('justify-between');
+    // The sort in use is pressed.
+    expect(markup).toMatch(/<button[^>]*aria-pressed="true"[^>]*>(?:(?!<\/button>).)*Popular/);
   });
 });

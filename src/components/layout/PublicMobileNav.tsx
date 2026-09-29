@@ -99,7 +99,7 @@ export function PublicMobileNav() {
       <SheetTrigger
         render={
           <Button
-            className="md:hidden"
+            className="-ml-2 md:hidden"
             data-public-mobile-nav="trigger"
             size="icon"
             variant="ghost"
@@ -109,7 +109,7 @@ export function PublicMobileNav() {
         <Menu />
         <span className="sr-only">Open menu</span>
       </SheetTrigger>
-      <SheetContent side="right" className="w-72">
+      <SheetContent side="left" className="w-72">
         <SheetHeader>
           <SheetTitle>{APP_BRAND_NAME}</SheetTitle>
         </SheetHeader>

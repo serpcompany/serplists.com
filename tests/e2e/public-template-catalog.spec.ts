@@ -49,9 +49,11 @@ test('repo-backed public templates render in the checklist library', async ({
   ).toBeVisible();
   await expect(page.getByText('Pack the tent setup')).toBeVisible();
 
-  const backToTemplatesLink = page.getByRole('link', {
-    name: 'Back',
-  });
+  // The breadcrumb's Templates link goes back to the library.
+  const backToTemplatesLink = page
+    .getByRole('navigation', { name: 'breadcrumb' })
+    .getByRole('link', { name: 'Templates', exact: true });
+  await expect(backToTemplatesLink).toHaveAttribute('href', '/templates/');
   const shareButton = page.getByRole('button', { name: 'Share' });
   const ctaPanel = page
     .getByRole('heading', { name: 'Ready to use this template?' })

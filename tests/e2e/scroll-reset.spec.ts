@@ -14,7 +14,7 @@ test.describe('scroll reset on navigation', () => {
     await page.goto('/templates/');
     const browseHeading = page.getByRole('heading', { name: 'Browse by Category' });
     await browseHeading.scrollIntoViewIfNeeded();
-    const categoryLink = browseHeading.locator('xpath=..').getByRole('link').first();
+    const categoryLink = page.getByRole('region', { name: 'Browse by Category' }).getByRole('link').first();
     await categoryLink.scrollIntoViewIfNeeded();
     const libraryOffset = await scrollY(page);
     expect(libraryOffset).toBeGreaterThan(0);

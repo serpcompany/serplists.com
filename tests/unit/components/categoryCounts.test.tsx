@@ -110,7 +110,7 @@ describe('template card category pills', () => {
       <TemplateCard template={template('pills', ['SEO', 'SEO', 'seo', 'Ops'])} />,
     );
 
-    const pills = [...html.matchAll(/rounded-full bg-secondary[^>]*>([^<]*)</g)].map((match) => match[1]);
+    const pills = [...html.matchAll(/<span[^>]*data-slot="badge"[^>]*>([^<]*)</g)].map((match) => match[1]);
     expect(pills).toEqual(['SEO', 'Ops']);
   });
 });

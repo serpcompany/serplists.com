@@ -44,6 +44,10 @@ const CATEGORY_STYLES = new Map<string, CategoryStyle>([
   ['compliance', DEFAULT_CATEGORY_STYLE],
 ]);
 
+/** The icon of a category: its built-in one, or the default for any other category. */
+export const getCategoryIcon = (slug: string): ElementType =>
+  (CATEGORY_STYLES.get(slug) ?? DEFAULT_CATEGORY_STYLE).icon;
+
 /**
  * How a category page presents itself, or null when the slug is neither a built-in
  * category nor one that a public template uses (the page then renders NotFound).

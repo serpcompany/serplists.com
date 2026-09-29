@@ -23,7 +23,8 @@ import { cn } from '@/lib/utils';
 
 // The public site's header: the brand on the left, the site links in a navigation menu in
 // the middle, and the theme switch with the account actions on the right. Below md the
-// links, Log in and the theme switch move into the menu sheet (PublicMobileNav).
+// links, Log in and the theme switch move into the menu sheet (PublicMobileNav), whose
+// button sits before the brand.
 export function SiteHeader() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -31,7 +32,8 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background">
       <PageContainer width="shell" className="flex h-14 items-center gap-4">
-        <div className="flex flex-1 items-center">
+        <div className="flex flex-1 items-center gap-2">
+          <PublicMobileNav />
           <BrandLink />
         </div>
 
@@ -72,7 +74,6 @@ export function SiteHeader() {
               </Link>
             </>
           )}
-          <PublicMobileNav />
         </div>
       </PageContainer>
     </header>

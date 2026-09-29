@@ -5,19 +5,25 @@ import {
   ArrowRight,
   ClipboardList,
   Eye,
+  FileText,
   Globe,
   Library,
+  List,
   ListChecks,
   PlayCircle,
   Share2,
 } from 'lucide-react';
 
-import { IconTile } from '@/components/layout/IconTile';
-import { PageSection, Surface } from '@/components/layout/page-shell';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { CtaBanner } from '@/components/layout/CtaBanner';
+import { ListCard } from '@/components/layout/ListCard';
+import { MediaCard } from '@/components/layout/MediaCard';
+import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
+import { SectionHeader } from '@/components/layout/SectionHeader';
+import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
@@ -84,6 +90,7 @@ function countTemplateItems(template: ChecklistTemplate): number {
   );
 }
 
+// The home page (/): the hero, how the product works, and the starter templates.
 const Index = () => {
   const { user } = useAuth();
   const { templates, templatesLoading } = useTemplates();
@@ -99,169 +106,120 @@ const Index = () => {
 
   return (
     <>
-      <PageSection spacing="hero" width="wide">
-        <div className="mx-auto max-w-4xl">
-          <PageHero
-            align="center"
-            actions={
-              <>
-                <Link href={primaryCta.href} className={buttonVariants()}>
-                    {primaryCta.label}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                <Link
-                  href={buildPublicTemplatesPath()}
-                  className={buttonVariants({ variant: 'outline' })}
-                >
-                    <Globe className="mr-2 h-4 w-4" />
-                    Browse Templates
-                  </Link>
-              </>
-            }
-            description="SERP Lists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
-            eyebrow="Operations checklists that actually run"
-            title="Build the checklist once. Run it every time."
-          />
-        </div>
+      <PageSection spacing="hero">
+        <PageHero
+          align="center"
+          actions={
+            <>
+              <Link href={primaryCta.href} className={buttonVariants({ size: 'lg' })}>
+                {primaryCta.label}
+                <ArrowRight data-icon="inline-end" />
+              </Link>
+              <Link
+                href={buildPublicTemplatesPath()}
+                className={buttonVariants({ variant: 'outline', size: 'lg' })}
+              >
+                <Globe data-icon="inline-start" />
+                Browse Templates
+              </Link>
+            </>
+          }
+          description="SERP Lists turns repeatable work into a reusable template, a focused execution run, and a shareable record. It is for teams that need the same process done cleanly more than once."
+          eyebrow="Operations checklists that actually run"
+          title="Build the checklist once. Run it every time."
+        />
       </PageSection>
 
-      <PageSection className="pt-0" spacing="spacious">
-        <div className="grid gap-6 md:grid-cols-3">
+      <PageSection spacing="compact">
+        <CardGrid>
           {workflowSteps.map((step) => {
             const Icon = step.icon;
-
             return (
-              <Surface key={step.title} as="article" tone="docs">
-                <CardHeader className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <IconTile>
-                      <Icon className="h-5 w-5" />
-                    </IconTile>
-                    <span className="text-4xl font-semibold tracking-tight text-muted-foreground/30">
-                      {step.step}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    <CardTitle>{step.title}</CardTitle>
-                    <CardDescription>{step.description}</CardDescription>
-                  </div>
-                </CardHeader>
-              </Surface>
+              <MediaCard
+                key={step.title}
+                badge={<Badge variant="secondary">{step.step}</Badge>}
+                description={step.description}
+                icon={<Icon />}
+                title={step.title}
+              />
             );
           })}
-        </div>
+        </CardGrid>
       </PageSection>
 
-      <PageSection spacing="spacious">
-        <div className="grid gap-6 lg:grid-cols-3">
+      <PageSection spacing="compact">
+        <CardGrid>
           {productSurfaces.map((surface) => {
             const Icon = surface.icon;
-
             return (
-              <Surface key={surface.title} as="article" tone="console">
-                <CardHeader className="space-y-4">
-                  <IconTile>
-                    <Icon className="h-5 w-5" />
-                  </IconTile>
-                  <div className="space-y-2">
-                    <CardTitle>{surface.title}</CardTitle>
-                    <CardDescription>{surface.description}</CardDescription>
-                  </div>
-                </CardHeader>
-              </Surface>
+              <ListCard
+                key={surface.title}
+                description={surface.description}
+                icon={<Icon />}
+                title={surface.title}
+              />
             );
           })}
-        </div>
+        </CardGrid>
       </PageSection>
 
       <PageSection spacing="spacious">
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
-              Starter library
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold text-foreground">
-              Start with a real checklist, then make it yours.
-            </h2>
-          </div>
-          <Link
-            href={buildPublicTemplatesPath()}
-            className={cn(buttonVariants({ variant: 'ghost' }), 'w-fit')}
-          >
-              View all templates
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-        </div>
+        <SectionHeader
+          action={{ href: buildPublicTemplatesPath(), label: 'View all templates' }}
+          eyebrow="Starter library"
+          title="Start with a real checklist, then make it yours."
+        />
 
         {templatesLoading ? (
-          <Surface tone="docs">
-            <CardContent className="p-6 text-sm text-muted-foreground">
-              Loading templates...
-            </CardContent>
-          </Surface>
+          <Card>
+            <CardContent className="text-muted-foreground">Loading templates...</CardContent>
+          </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-3">
+          <CardGrid>
             {featuredTemplates.map((template) => {
-              const href =
-                buildCanonicalPublicTemplatePath(template) ??
-                buildPublicTemplatesPath();
-
+              const TypeIcon = template.type === 'recipe' ? List : FileText;
               return (
-                <Link key={template.id} href={href}>
-                  <Surface
-                    as="article"
-                    className="h-full transition-transform duration-200 hover:-translate-y-0.5"
-                    tone="glass"
-                  >
-                    <CardHeader className="space-y-3">
-                      <CardTitle>{template.title}</CardTitle>
-                      <CardDescription>
-                        {template.description || 'No description yet.'}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3 pt-0 text-sm text-muted-foreground">
-                      <p>
-                        {countTemplateItems(template)} items in {template.sections.length}{' '}
-                        sections
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {(template.categories || []).slice(0, 3).map((category) => (
-                          <span
-                            key={category}
-                            className="rounded-full bg-secondary px-2 py-0.5 text-xs text-secondary-foreground"
-                          >
-                            {category}
-                          </span>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Surface>
-                </Link>
+                <MediaCard
+                  key={template.id}
+                  description={template.description || 'No description yet.'}
+                  href={buildCanonicalPublicTemplatePath(template) ?? buildPublicTemplatesPath()}
+                  icon={<TypeIcon />}
+                  title={template.title}
+                >
+                  <p className="text-sm text-muted-foreground">
+                    {countTemplateItems(template)} items in {template.sections.length} sections
+                  </p>
+                  {template.categories?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {template.categories.slice(0, 3).map((category) => (
+                        <Badge key={category} variant="secondary">
+                          {category}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : null}
+                </MediaCard>
               );
             })}
-          </div>
+          </CardGrid>
         )}
       </PageSection>
 
       <PageSection spacing="spacious">
-        <Surface tone="glass">
-          <CardHeader className="space-y-3">
-            <CardTitle className="text-3xl">
-              Stop rebuilding the same checklist in docs and spreadsheets.
-            </CardTitle>
-            <CardDescription className="max-w-2xl text-base">
-              SERP Lists gives your repeatable work a home: one source template,
-              many tracked runs, and clean share links when someone needs proof.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-3 pt-0">
-            <Link href={primaryCta.href} className={buttonVariants()}>{primaryCta.label}</Link>
-            <Link
-              href={buildPublicFeaturesPath()}
-              className={buttonVariants({ variant: 'outline' })}
-            >Explore Features</Link>
-          </CardContent>
-        </Surface>
+        <CtaBanner
+          actions={
+            <>
+              <Link href={primaryCta.href} className={buttonVariants()}>
+                {primaryCta.label}
+              </Link>
+              <Link href={buildPublicFeaturesPath()} className={buttonVariants({ variant: 'outline' })}>
+                Explore Features
+              </Link>
+            </>
+          }
+          description="SERP Lists gives your repeatable work a home: one source template, many tracked runs, and clean share links when someone needs proof."
+          title="Stop rebuilding the same checklist in docs and spreadsheets."
+        />
       </PageSection>
     </>
   );
