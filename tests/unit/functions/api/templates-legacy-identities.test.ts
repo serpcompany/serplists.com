@@ -268,3 +268,63 @@ describe('saving a Template stored without stable ids', () => {
     ]);
   });
 });
+
+// The official seed, starter packs, imports and copies of those store content blocks
+// without ids, and the editor gives each block a new id when it loads. A save that
+// changes only a detail must still not count as a structure change: that would bump
+// content_version, rewrite active runs, and mark completed and shared runs stale.
+const seedSections = (run = false) => [
+  {
+    id: 'sec-1',
+    title: 'Audit',
+    items: [
+      {
+        id: 't-1',
+        title: 'Crawl the site',
+        description: 'Start with the homepage.',
+        contents: [
+          { type: 'text', value: 'Use the crawler.' },
+          { type: 'subItems', value: '', subItems: [
+            { id: 'st-1', title: 'Check title tags', ...(run ? { isCompleted: true } : {}) },
+            { id: 'st-2', title: 'Check meta descriptions' },
+          ] },
+        ],
+        ...(run ? { isCompleted: true } : {}),
+      },
+      { id: 't-2', title: 'Write the report', contents: [{ type: 'image', value: 'https://example.com/report.png', uploadType: 'url' }] },
+    ],
+  },
+];
+
+describe('saving a Template whose content blocks have no ids', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    responses.length = 0;
+    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
+    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    dbMocks.insertChain.values.mockResolvedValue(undefined);
+    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+  });
+
+  it('keeps content_version and the run when a save changes only the description', async () => {
+    const { template, run } = createStore(cases[0][1]);
+    const store = {
+      template: { ...template, items: JSON.stringify(seedSections()) },
+      run: { ...run, items: JSON.stringify(seedSections(true)) },
+    };
+    const { items: storedItems } = store.template;
+    const { items: runItems } = store.run;
+    useStore(store);
+    const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
+    expect(JSON.stringify(loaded.initialValues.sections)).toContain('"id":"content_');
+
+    await saveAs({ loaded, version: loaded.version }, { ...loaded.initialValues, description: 'Fixed a typo' });
+
+    expect(responses[0]).toMatchObject({ structureChanged: false, content_version: 3 });
+    expect(store.template.description).toBe('Fixed a typo');
+    expect(store.template.items).toBe(storedItems);
+    expect(store.run).toMatchObject({ items: runItems, revision: 1, template_version: 3 });
+  });
+});
