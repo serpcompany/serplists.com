@@ -83,7 +83,9 @@ describe('WorkspaceProvider teams cache', () => {
     expect(queryClient.getQueryData(teamsKey)).toEqual([joinedTeam]);
   });
 
-  it('keeps a remembered Organization when an older teams response lands before the refresh', async () => {
+  // The provider shows the remembered Organization from its own state
+  // (WorkspaceContextInviteAccept.test.tsx); the cache holds only lists the server sent.
+  it('drops an older teams response that lands after a remembered Organization', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const workspace = renderWorkspace(queryClient);
     const staleTeams = startStaleTeamsLoad(queryClient);
@@ -92,7 +94,20 @@ describe('WorkspaceProvider teams cache', () => {
     staleTeams.resolve([]);
     await flush();
 
-    expect(queryClient.getQueryData(teamsKey)).toEqual([joinedTeam]);
+    // Not [], which would drop the team, and not an invented [joinedTeam], which would read
+    // as a server list without the stored Organization.
+    expect(queryClient.getQueryData(teamsKey)).toBeUndefined();
+  });
+
+  it('adds a remembered Organization to a list the server sent', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const otherTeam = { ...joinedTeam, id: 'team-2', name: 'Bravo' };
+    queryClient.setQueryData(teamsKey, [otherTeam]);
+    const workspace = renderWorkspace(queryClient);
+
+    workspace.rememberTeam(joinedTeam);
+
+    expect(queryClient.getQueryData(teamsKey)).toEqual([joinedTeam, otherTeam]);
   });
 
   it('accepting an invite without team details waits for a teams list read after the accept', async () => {

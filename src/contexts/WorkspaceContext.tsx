@@ -77,6 +77,8 @@ type WorkspaceContextValue = {
   /** Applies a confirmed change to one cached Organization without refetching. */
   patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;
   refreshTeams: () => Promise<TeamSummary[]>;
+  // Shows a created or joined Organization at once. Call refreshTeams() after it: when no
+  // list was loaded yet, only that request confirms the stored Organization.
   rememberTeam: (team: TeamSummary) => void;
   // Retries the teams request after it failed, in any context.
   retryWorkspace: () => void;
@@ -209,6 +211,7 @@ export function WorkspaceProvider({
       teamIds: teams.map((team) => team.id),
       teamsSettled,
       teamsLoaded,
+      teamsFailed,
     });
     if (nextWorkspaceId !== activeWorkspaceId) {
       setActiveWorkspaceId(nextWorkspaceId);
@@ -218,6 +221,7 @@ export function WorkspaceProvider({
     isAuthLoading,
     sessionStatus,
     teams,
+    teamsFailed,
     teamsLoaded,
     teamsSettled,
     user,
@@ -261,12 +265,14 @@ export function WorkspaceProvider({
         // drop the team when it lands. Cancelling reverts the query to its last data,
         // and the write below is kept as that data.
         void queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
-        queryClient.setQueryData<TeamSummary[]>(
-          ['teams', user.id],
-          (currentTeams = []) => [
-            team,
-            ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id),
-          ],
+        // Only added to a list the server sent. With none (the first load failed or was
+        // cancelled), a one-team list would read as a settled server list without the
+        // stored Organization and move the tab to Personal; optimisticTeams shows the team
+        // until the caller's refreshTeams() loads the list.
+        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+          currentTeams
+            ? [team, ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id)]
+            : currentTeams,
         );
       }
     },
