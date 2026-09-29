@@ -563,24 +563,61 @@ describe("personal run MCP handler", () => {
     expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 
-  it("logs the key ID and tool name with the request ID, never the secret", async () => {
+  it("logs the key ID for every authenticated request, including malformed ones, never the secret", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
-    const request = callTool("get_run", { runId: "run-1" });
-    request.headers.set("X-Request-Id", "req-123");
+    try {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
+      const toolRequest = callTool("get_run", { runId: "run-1" });
+      toolRequest.headers.set("Authorization", "Bearer slrk_secret-canary");
+      toolRequest.headers.set("X-Request-Id", "req-123");
+      await handleAgentMcp(toolRequest, env);
 
-    await handleAgentMcp(request, env);
+      const malformed = new Request("http://localhost/api/mcp", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer slrk_secret-canary",
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          "X-Request-Id": "req-456",
+        },
+        body: "{not json",
+      });
+      await handleAgentMcp(malformed, env);
 
-    const entries = info.mock.calls.map(([line]) => JSON.parse(String(line)));
-    expect(entries).toContainEqual(expect.objectContaining({
-      message: "mcp_request",
-      requestId: "req-123",
-      keyId: "key-1",
-      rpcMethod: "tools/call",
-      toolName: "get_run",
-    }));
-    expect(JSON.stringify(entries)).not.toContain("Bearer");
-    info.mockRestore();
+      const entries = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+      expect(entries).toContainEqual(expect.objectContaining({ message: "mcp_request", requestId: "req-123", keyId: "key-1" }));
+      expect(entries).toContainEqual(expect.objectContaining({
+        message: "mcp_tool_call",
+        requestId: "req-123",
+        keyId: "key-1",
+        toolName: "get_run",
+      }));
+      expect(entries).toContainEqual(expect.objectContaining({ message: "mcp_request", requestId: "req-456", keyId: "key-1" }));
+      expect(JSON.stringify(entries)).not.toContain("secret-canary");
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("refuses an IP that keeps failing authentication before reading D1", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
+    const fromIp = () => {
+      const request = rpcRequest("ping");
+      request.headers.set("CF-Connecting-IP", "203.0.113.7");
+      return request;
+    };
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await handleAgentMcp(fromIp(), env)).status).toBe(401);
+    }
+    vi.mocked(authenticatePersonalRunKey).mockClear();
+
+    const blocked = await handleAgentMcp(fromIp(), env);
+    expect(blocked.status).toBe(429);
+    expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
+
+    const otherIp = rpcRequest("ping");
+    otherIp.headers.set("CF-Connecting-IP", "203.0.113.8");
+    expect((await handleAgentMcp(otherIp, env)).status).toBe(401);
   });
 
   it("hides a personal run owned by another user", async () => {

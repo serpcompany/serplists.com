@@ -1,12 +1,17 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
-import { createPersonalRunKeySecret } from "../utils/personal-run-key";
+import {
+  createPersonalRunKeySecret,
+  insertPersonalRunKeyWithinCap,
+  MAX_ACTIVE_PERSONAL_RUN_KEYS,
+} from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
 
-const MAX_ACTIVE_KEYS_PER_USER = 10;
+// Active keys are capped, so this bounds the list to every active key plus recent revoked ones.
+const MAX_LISTED_KEYS = 50;
 
 const createKeyBodySchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80, "Name must be 80 characters or fewer"),
@@ -48,7 +53,8 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       .select(safeKeySelection(personal_run_keys))
       .from(personal_run_keys)
       .where(eq(personal_run_keys.user_id, userId))
-      .orderBy(desc(personal_run_keys.created_at));
+      .orderBy(sql`${personal_run_keys.revoked_at} is not null`, desc(personal_run_keys.created_at))
+      .limit(MAX_LISTED_KEYS);
     return json(keys.map((key) => ({
       ...key,
       status: key.revokedAt ? "revoked" : "active",
@@ -59,15 +65,6 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
     const parsed = createKeyBodySchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid key payload", 400);
-    }
-
-    const activeKeys = await db
-      .select({ id: personal_run_keys.id })
-      .from(personal_run_keys)
-      .where(and(eq(personal_run_keys.user_id, userId), isNull(personal_run_keys.revoked_at)))
-      .limit(MAX_ACTIVE_KEYS_PER_USER);
-    if (activeKeys.length >= MAX_ACTIVE_KEYS_PER_USER) {
-      return jsonError(`You can have up to ${MAX_ACTIVE_KEYS_PER_USER} active personal run keys. Revoke one to create another.`, 409);
     }
 
     let secret: Awaited<ReturnType<typeof createPersonalRunKeySecret>>;
@@ -88,7 +85,9 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       revoked_at: null,
     };
 
-    await db.insert(personal_run_keys).values(record);
+    if (!(await insertPersonalRunKeyWithinCap(env, record))) {
+      return jsonError(`You can have up to ${MAX_ACTIVE_PERSONAL_RUN_KEYS} active Run Keys. Revoke one to create another.`, 409);
+    }
     const response = json({
       key: {
         id: record.id,
