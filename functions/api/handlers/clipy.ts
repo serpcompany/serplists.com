@@ -113,7 +113,12 @@ function buildSeoDescription(tldr: string, stepCount: number): string {
 // phrases, not common verbs, for the same reason.
 const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'GitHub', pattern: /\bgithub\b/i },
-  { label: 'Issue Tracking', pattern: /\b(issue|issues|bug|bugs|ticket|tickets)\b/i },
+  {
+    label: 'Issue Tracking',
+    // Bare "issue", "bug" and "ticket" are everyday words ("issue a refund", "bug spray",
+    // "concert tickets"), so they count only in software phrases.
+    pattern: /\b(issue[- ]track(er|ers|ing)|bug[- ]track(er|ers|ing)|bug reports?|bug fix(es|ing)?|bug triage|triag(e|ing) (bugs|issues|tickets)|(github|gitlab) (issues?|bugs?|tickets?)|(issues?|bugs?|tickets?) (in|on) (github|gitlab)|jira|support tickets?|help ?desk tickets?|ticketing (system|tool)s?)\b/i,
+  },
   { label: 'Software Development', pattern: /\b(source code|code review|coding|developer|developers|software development|git|repository|repositories|pull request)\b/i },
   { label: 'Project Management', pattern: /\b(project management|project plan|project planning|sprint planning|kanban|milestones?)\b/i },
   { label: 'Tutorial', pattern: /\b(guide|tutorial|walkthrough|how to)\b/i },

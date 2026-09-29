@@ -394,6 +394,43 @@ describe('Clipy draft categories and tags', () => {
     expect(classifyClipySummary({ title: phrase, tldr: phrase }).categories).toEqual([]);
   });
 
+  it.each([
+    ['Weekend Camping Trip Prep', 'Pack the tent, stove and bug spray, and print your park entry tickets before you leave.'],
+    ['Fix a Leaking Faucet Issue', 'Stop the drip under the sink.'],
+    ['Buying Concert Tickets', 'Get seats before they sell out.'],
+    ['Issue a Refund in Stripe', 'Refund a customer payment.'],
+    ['Fix a Common Wi-Fi Issue', 'Restart the router and check the cables.'],
+    ['Get Rid of Bed Bugs', 'Wash the sheets on high heat.'],
+    ['Pay a Parking Ticket Online', 'Enter the citation number.'],
+    ['Recovering From a Stomach Bug', 'Rest and drink plenty of water.'],
+  ])('does not tag %s as Issue Tracking from ordinary words', (title, tldr) => {
+    const { tags } = classifyClipySummary({ title, tldr });
+
+    expect(tags).not.toContain('Issue Tracking');
+  });
+
+  it('tags the camping example with Clipy only', () => {
+    expect(classifyClipySummary({
+      title: 'Weekend Camping Trip Prep',
+      tldr: 'Pack the tent, stove and bug spray, and print your park entry tickets.',
+    })).toEqual({ categories: ['camping'], tags: ['Clipy'] });
+  });
+
+  it.each([
+    ['Filing a Bug Report in Jira', 'Include the steps to reproduce.'],
+    ['Write a Good Bug Report', 'Say what you expected and what happened.'],
+    ['Creating Issues in GitHub', 'Open a new one from the repository page.'],
+    ['Triage GitHub Issues', 'Walk through the bug tracker and label new bug reports.'],
+    ['Set Up an Issue Tracker', 'Pick the fields every report needs.'],
+    ['Issue-Tracking Basics', 'Label, assign and close.'],
+    ['Answer Support Tickets', 'Reply within one business day.'],
+    ['Triage Jira Tickets', 'Sort the backlog by priority.'],
+    ['Ship Bug Fixes Weekly', 'Batch small changes.'],
+    ['Configure a Helpdesk Ticket Queue', 'Route requests to the right agent.'],
+  ])('tags %s as Issue Tracking', (title, tldr) => {
+    expect(classifyClipySummary({ title, tldr }).tags).toContain('Issue Tracking');
+  });
+
   it('does not tag generic process words as Project Management or Software Development', async () => {
     const draft = await generateDraft({
       title: 'Print a QR Code for the Front Desk',
