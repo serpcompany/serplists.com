@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   templateListOptions: [] as unknown[],
   templateLists: {
     allTemplates: [] as Array<Record<string, unknown>>,
+    templatesError: null as unknown,
     templatesLoading: false,
   },
   workspace: {
@@ -50,7 +51,9 @@ vi.mock('@/contexts/TemplatesContext', () => ({
     return {
       allTemplates: mocks.templateLists.allTemplates,
       importTemplates: vi.fn(),
+      refetchTemplates: vi.fn(),
       templates: [],
+      templatesError: mocks.templateLists.templatesError,
       templatesLoading: mocks.templateLists.templatesLoading,
     };
   },
@@ -212,6 +215,26 @@ describe('TemplateBackup while the template list loads', () => {
     expect(isDisabled(exportButton(html))).toBe(false);
     expect(isDisabled(includePublicSwitch(html))).toBe(false);
     expect(isDisabled(fileInput(html))).toBe(false);
+  });
+});
+
+// A failed list showed 0 templates, public and private, as if the context had none.
+describe('TemplateBackup when the template list failed to load', () => {
+  afterEach(() => {
+    mocks.templateLists.templatesError = null;
+  });
+
+  it('says the list failed and offers Retry instead of zero counts', () => {
+    mocks.billingQuery = knownBillingQuery('pro');
+    mocks.templateLists.templatesError = new Error('HTTP 503');
+
+    const html = renderToStaticMarkup(<MemoryRouter><TemplateBackup /></MemoryRouter>);
+
+    expect(html).toContain('Couldn&#x27;t load your templates');
+    expect(html).toContain('Retry');
+    expect(statValues(html)).toEqual([]);
+    // The server's pack decides what the context owns, so export still works.
+    expect(isDisabled(exportButton(html))).toBe(false);
   });
 });
 

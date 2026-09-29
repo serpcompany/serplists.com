@@ -11,6 +11,14 @@ const exportedPackSchema = z
   .object({ templates: z.array(z.unknown()) })
   .passthrough();
 
+// The slugs of the templates the server exported. A template without one is skipped.
+const exportedSlugSchema = z.object({ slug: z.string().min(1) }).passthrough();
+const readExportedSlugs = (templates: unknown[]): string[] =>
+  templates.flatMap((template) => {
+    const parsed = exportedSlugSchema.safeParse(template);
+    return parsed.success ? [parsed.data.slug] : [];
+  });
+
 type ExportBackup = (params: { teamId?: string }) => Promise<unknown>;
 type LoadPublicCatalog = () => Promise<ChecklistTemplate[]>;
 
@@ -59,7 +67,8 @@ export const exportTemplatePack = async (
 ): Promise<ExportTemplatePackResult> => {
   const exportBackup = dependencies.exportBackup ?? defaultExportBackup;
   const ownedPack = await exportBackup({ teamId: options.teamId });
-  if (!exportedPackSchema.safeParse(ownedPack).success) {
+  const parsedPack = exportedPackSchema.safeParse(ownedPack);
+  if (!parsedPack.success) {
     throw new Error(EXPORT_PACK_UNREADABLE_MESSAGE);
   }
 
@@ -69,6 +78,8 @@ export const exportTemplatePack = async (
       userId: options.userId,
       teamId: options.teamId,
       ownedTemplateIds: options.ownedTemplateIds,
+      // The page's list may be missing some of them; the server's pack is not.
+      exportedSlugs: readExportedSlugs(parsedPack.data.templates),
     });
     if (publicTemplates.length > 0) {
       try {

@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
 import { TemplateImportPreview } from "@/components/TemplateImportPreview";
+import { ListLoadErrorState } from "@/components/dashboard/ListLoadErrorState";
 
 interface TemplateBackupProps {
   className?: string;
@@ -50,6 +51,8 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   const {
     allTemplates,
     importTemplates,
+    refetchTemplates,
+    templatesError,
     templatesLoading,
   } = useTemplateLists();
   const {
@@ -379,8 +382,11 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
             </div>
           ) : null}
 
-          {/* Current Templates Stats */}
-          <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
+          {/* Current Templates Stats; a failed list is not zero templates. Export still
+              works: the server's pack decides what this context owns. */}
+          {templatesError ? (
+            <ListLoadErrorState error={templatesError} listName="templates" onRetry={() => void refetchTemplates()} />
+          ) : <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
             <div className="text-center">
               <div className="text-2xl font-bold">{formatCount(ownedTemplates.length)}</div>
               <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
@@ -393,7 +399,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
               <div className="text-2xl font-bold text-blue-600">{formatCount(privateTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Private</div>
             </div>
-          </div>
+          </div>}
 
           <Separator />
 

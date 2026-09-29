@@ -50,6 +50,33 @@ describe('adding public templates to an export', () => {
     expect(ids(selectPublicTemplatesForExport(withTeamIds, { userId: 'user-1' }))).toEqual(['mine-in-org', 'other-org']);
   });
 
+  // Catalog rows carry no team_id, and the page's list can miss Organization templates
+  // (its request failed, or a teammate published one since it loaded): the server's pack
+  // holds them, so its slugs recognise them too.
+  it('in an Organization, leaves out templates whose slug the server already exported', () => {
+    const rows = [
+      template('org-guide-id', { slug: 'org-guide', ownerType: 'team' }),
+      template('community', { ownerType: 'user' }),
+    ];
+
+    expect(ids(selectPublicTemplatesForExport(rows, {
+      userId: 'user-1',
+      teamId: 'org-1',
+      ownedTemplateIds: [],
+      exportedSlugs: ['org-guide'],
+    }))).toEqual(['community']);
+  });
+
+  it('never matches a template without a slug by slug', () => {
+    const rows = [template('no-slug', { slug: '' }), template('owned-no-slug', { slug: '' })];
+
+    expect(ids(selectPublicTemplatesForExport(rows, {
+      teamId: 'org-1',
+      ownedTemplateIds: ['owned-no-slug'],
+      exportedSlugs: ['', 'org-guide'],
+    }))).toEqual(['no-slug']);
+  });
+
   it('never adds the bundled library or a private template', () => {
     const selected = ids(selectPublicTemplatesForExport(catalog, { userId: 'someone-else' }));
     expect(selected).not.toContain('repo:library');
@@ -89,6 +116,21 @@ describe('adding public templates to an export', () => {
       assetWarnings: 2,
       skippedTemplates: [{ title: 'Template empty', reason: 'Template has no sections with tasks' }],
     });
+  });
+
+  it('lists a template the server skipped once when its catalog copy is skipped again', () => {
+    const broken = {
+      id: 'broken', title: 'Broken', description: '', type: 'checklist', seoTitle: '', seoDescription: '',
+      sections: [], categories: [], tags: [], isPublic: true, slug: 'broken',
+    };
+    const ownedPack = JSON.parse(JSON.stringify(buildPortableTemplatePack([broken], undefined)));
+
+    const pack = addPublicTemplatesToPack(ownedPack, [template('community'), template('broken-copy', { title: 'Broken', sections: [] })]);
+
+    expect(pack.templates.map((entry) => entry.title)).toEqual(['Template community']);
+    expect(pack.manifest?.skippedTemplates).toEqual([
+      { title: 'Broken', reason: 'Template has no sections with tasks' },
+    ]);
   });
 
   it('returns the owned pack unchanged when there is nothing to add, and rejects a response that is not a pack', () => {

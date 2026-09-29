@@ -63,6 +63,13 @@ the Organization). "Include public community templates" adds, in the browser, th
 public templates from the loaded catalog that the context does not own (never the
 bundled library), and recomputes the manifest for the whole pack with the same
 `buildPortablePackManifest` the API uses (`src/lib/schemas/portableTemplatePack.ts`).
+Catalog rows carry no Organization id, so a catalog template counts as owned when its
+id is in the page's template list or its slug is in the pack the server returned
+(slugs are unique). The server's pack decides, so a list that failed to load or is
+older than the catalog never writes a template twice. A template both the server
+and the browser skipped is listed once in `manifest.skippedTemplates`. When the
+template list fails to load, the export page shows the load error with Retry
+instead of zero counts, and export still works.
 
 Portable template fields are intentionally cleaner than app row exports:
 - no `userId`
