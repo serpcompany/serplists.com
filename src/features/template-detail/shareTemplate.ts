@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { buildCanonicalPublicTemplatePath } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -14,6 +15,9 @@ const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
 
 // Resolves the public URL before changing visibility, so a template that cannot
 // be shared is never published, and once it is published local state follows.
+// The server confirms every Share, even when the loaded copy already says Public: a
+// copy made private, archived or re-slugged elsewhere gets 409 or 404 and a reload
+// instead of a dead link.
 export const shareTemplateToPublic = async (params: {
   apiClient?: TemplateDetailApiClient;
   // From getTemplateDetailPermissions: edit rights, not who created the template.
@@ -48,8 +52,7 @@ export const shareTemplateToPublic = async (params: {
     apiClient,
   );
 
-  const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-  if (!publicPath) {
+  if (!buildCanonicalPublicTemplatePath(nextTemplate)) {
     return {
       kind: 'error',
       message: isCreator
@@ -58,13 +61,15 @@ export const shareTemplateToPublic = async (params: {
     };
   }
 
-  if (!nextTemplate.isPublic) {
+  // Public library templates are not stored rows, so there is nothing to confirm.
+  if (!(nextTemplate.isPublic && isRepoTemplate(nextTemplate))) {
     try {
+      // On a current copy that is already public this changes nothing on the server.
       const saved = await apiClient.updateTemplate(nextTemplate.id, {
         is_public: true,
         expected_version: nextTemplate.version,
       });
-      nextTemplate = applyTemplateSaveResult(nextTemplate, {}, saved);
+      nextTemplate = applyTemplateSaveResult(nextTemplate, { isPublic: true }, saved);
     } catch (error) {
       return mapTemplateChangeFailure(error, SHARE_FAILED_MESSAGE, params.reloadAfterConflict);
     }
@@ -77,5 +82,9 @@ export const shareTemplateToPublic = async (params: {
     // The template is public either way; lists catch up on their next fetch.
   }
 
-  return { kind: 'ok', shareUrl: `${params.origin}${publicPath}` };
+  // Built from the slug the server returned, which can differ from the loaded one.
+  const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
+  return publicPath
+    ? { kind: 'ok', shareUrl: `${params.origin}${publicPath}` }
+    : { kind: 'error', message: SHARE_FAILED_MESSAGE };
 };

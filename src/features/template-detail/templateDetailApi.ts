@@ -101,7 +101,9 @@ export const hydrateTemplateOwner = async (
 /**
  * The template with the owner name its share link should use. Cached lists carry the
  * username from when they were fetched, which is stale after a rename, so the signed-in
- * Creator's current username wins. Anyone else's template keeps (or looks up) its own.
+ * Creator's current username wins. For a template someone else created (an Organization
+ * editor sharing it), the Creator's current username is looked up; the cached one is
+ * kept only when that lookup fails.
  */
 export const resolveShareOwnerTemplate = async (
   template: ChecklistTemplate,
@@ -111,6 +113,15 @@ export const resolveShareOwnerTemplate = async (
   const username = owner.username?.trim();
   if (username && owner.userId && template.userId === owner.userId) {
     return { ...template, ownerProfile: { ...template.ownerProfile, username } };
+  }
+
+  if (owner.userId && template.userId && template.userId !== owner.userId) {
+    try {
+      const profile = (await apiClient.getProfileById(template.userId)) as Record<string, unknown>;
+      return resolveTemplateOwnerProfile(template, profile).template;
+    } catch {
+      return template;
+    }
   }
 
   return hydrateTemplateOwner(template, apiClient);

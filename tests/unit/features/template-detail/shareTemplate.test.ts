@@ -160,8 +160,9 @@ describe('shareTemplateToPublic', () => {
     );
   });
 
-  it('does not publish again when the template is already public', async () => {
+  it('asks the server to confirm a template the loaded copy shows as public', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
+    apiClient.updateTemplate.mockResolvedValue({ version: 3, slug: 'camping-checklist' });
 
     const result = await shareTemplateToPublic({
       apiClient,
@@ -174,8 +175,124 @@ describe('shareTemplateToPublic', () => {
       username: undefined,
     });
 
-    expect(result.kind).toBe('ok');
-    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      kind: 'ok',
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+    });
+    // The server's no-change path stores nothing and answers with the current version.
+    expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
+    expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
+      is_public: true,
+      expected_version: 3,
+    });
+  });
+
+  it('gives no link when a public copy went private or was re-slugged elsewhere', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+    apiClient.updateTemplate.mockRejectedValue(
+      createApiError(409, { code: 'edit_conflict', error: 'Template changed' }),
+    );
+    const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
+    const onTemplateChange = vi.fn();
+    const invalidateTemplates = vi.fn();
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      invalidateTemplates,
+      isAuthenticated: true,
+      onTemplateChange,
+      origin: ORIGIN,
+      reloadAfterConflict,
+      template: buildTemplate({ isPublic: true, slug: 'old', version: 5 }),
+      userId: 'user-1',
+      username: undefined,
+    });
+
+    expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
+      is_public: true,
+      expected_version: 5,
+    });
+    expect(reloadAfterConflict).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'This template changed elsewhere. It was reloaded; try again.',
+    });
+    expect(onTemplateChange).not.toHaveBeenCalled();
+    expect(invalidateTemplates).not.toHaveBeenCalled();
+  });
+
+  it('gives no link when a public copy was archived elsewhere', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+    apiClient.updateTemplate.mockRejectedValue(
+      createApiError(404, { error: 'Template not found or unauthorized' }),
+    );
+    const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
+    const onTemplateChange = vi.fn();
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      isAuthenticated: true,
+      onTemplateChange,
+      origin: ORIGIN,
+      reloadAfterConflict,
+      template: buildTemplate({ isPublic: true }),
+      userId: 'user-1',
+      username: undefined,
+    });
+
+    expect(reloadAfterConflict).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ kind: 'error', message: 'This template is no longer available.' });
+    expect(onTemplateChange).not.toHaveBeenCalled();
+  });
+
+  it('builds the link from the slug the server returns', async () => {
+    const apiClient = buildApiClient({ username: 'alice' });
+    apiClient.updateTemplate.mockResolvedValue({ version: 5, slug: 'new' });
+    const onTemplateChange = vi.fn();
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      isAuthenticated: true,
+      onTemplateChange,
+      origin: ORIGIN,
+      template: buildTemplate({ isPublic: true, slug: 'old', version: 5 }),
+      userId: 'user-1',
+      username: undefined,
+    });
+
+    expect(result).toEqual({ kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/new` });
+    expect(onTemplateChange).toHaveBeenCalledWith(
+      expect.objectContaining({ isPublic: true, slug: 'new', version: 5 }),
+    );
+  });
+
+  it("looks up the Creator's current username when someone else shares their template", async () => {
+    const apiClient = buildApiClient({ username: 'alicejones' });
+
+    const result = await shareTemplateToPublic({
+      apiClient,
+      canShare: true,
+      isAuthenticated: true,
+      onTemplateChange: vi.fn(),
+      origin: ORIGIN,
+      template: buildTemplate({
+        isPublic: true,
+        ownerProfile: { username: 'alice' },
+        teamId: 'team-1',
+        userId: 'alice-id',
+      }),
+      userId: 'bob-id',
+      username: 'bob',
+    });
+
+    expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
+    expect(result).toEqual({
+      kind: 'ok',
+      shareUrl: `${ORIGIN}/profile/alicejones/camping-checklist`,
+    });
   });
 
   it('publishes again after the switch made the template private, with a version the server accepts', async () => {
@@ -233,6 +350,8 @@ describe('shareTemplateToPublic', () => {
       kind: 'ok',
       shareUrl: `${ORIGIN}/profile/serp/camping-checklist`,
     });
+    // Library templates are not stored rows, so there is nothing to confirm.
+    expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 
   it('refuses when the viewer may not share the template and leaves it unchanged', async () => {
