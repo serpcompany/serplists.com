@@ -563,6 +563,26 @@ describe("personal run MCP handler", () => {
     expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
 
+  it("logs the key ID and tool name with the request ID, never the secret", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
+    const request = callTool("get_run", { runId: "run-1" });
+    request.headers.set("X-Request-Id", "req-123");
+
+    await handleAgentMcp(request, env);
+
+    const entries = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+    expect(entries).toContainEqual(expect.objectContaining({
+      message: "mcp_request",
+      requestId: "req-123",
+      keyId: "key-1",
+      rpcMethod: "tools/call",
+      toolName: "get_run",
+    }));
+    expect(JSON.stringify(entries)).not.toContain("Bearer");
+    info.mockRestore();
+  });
+
   it("hides a personal run owned by another user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
 

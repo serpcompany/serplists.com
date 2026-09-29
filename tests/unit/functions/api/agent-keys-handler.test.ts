@@ -99,6 +99,25 @@ describe("Personal run key management handler", () => {
     expect(JSON.stringify(body)).not.toContain("hash-only-stored");
   });
 
+  it("refuses a new key once the user has the maximum number of active keys", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce(
+      Array.from({ length: 10 }, (_, index) => ({ id: `key-${index}` })),
+    );
+
+    const response = await handleAgentKeys(
+      new Request("http://localhost/api/agent-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "One too many" }),
+      }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(409);
+    expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
+    expect(dbMocks.db.insert).not.toHaveBeenCalled();
+  });
+
   it("rejects blank and oversized names without minting a secret", async () => {
     for (const name of ["   ", "x".repeat(81)]) {
       const response = await handleAgentKeys(

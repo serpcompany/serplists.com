@@ -14,7 +14,9 @@
 - **Production blocks known test-email domains** at sign-up and sign-in.
 - **Agents act through Run Keys**, revocable credentials limited to reading
   Personal templates and listing, starting, reading, and updating Personal runs.
-  Keys are stored hashed. The MCP routes are off on remote hosts unless
+  Keys are stored hashed, and each user can hold at most 10 active keys. Each
+  MCP request logs its request ID and key ID (never the secret), so a key being
+  abused can be found and revoked. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`.
 - **Uploads** are written under the uploader's key prefix, and deletes are
   restricted to that prefix.

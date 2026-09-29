@@ -49,7 +49,7 @@ const runs: ChecklistRun[] = [
         ],
       },
     ],
-    startedAt: '2024-01-16T08:00:00Z',
+    startedAt: '2024-01-16T12:00:00Z', // Midday UTC renders as Jan 16 in any local timezone from UTC-11 to UTC+11.
     userId: 'user-1',
   },
   {

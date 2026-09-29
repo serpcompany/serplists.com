@@ -4,6 +4,7 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
+import { log } from "../utils/logger";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -793,8 +794,11 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(null, -32001, "Unauthorized", undefined, 401);
   }
 
+  // The router sets X-Request-Id; logging the key ID lets an abused key be found and revoked.
+  const requestId = request.headers.get("X-Request-Id") ?? undefined;
   const rateLimitResult = rateLimit(identity);
   if (!rateLimitResult.allowed) {
+    log("warn", "mcp_rate_limited", { requestId, keyId: identity.keyId });
     const response = rpcError(null, -32000, "Rate limit exceeded", undefined, 429);
     response.headers.set("Retry-After", String(rateLimitResult.retryAfter));
     return response;
@@ -820,6 +824,10 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   }
 
   const id: JsonRpcId = isValidRequestId(payload.id) ? payload.id : null;
+  const toolName = payload.method === "tools/call" && isRecord(payload.params) && typeof payload.params.name === "string"
+    ? boundedText(payload.params.name, 64)
+    : undefined;
+  log("info", "mcp_request", { requestId, keyId: identity.keyId, rpcMethod: boundedText(payload.method, 64), toolName });
 
   const protocolVersion = request.headers.get("MCP-Protocol-Version");
   if (payload.method !== "initialize" && protocolVersion !== MCP_PROTOCOL_VERSION) {

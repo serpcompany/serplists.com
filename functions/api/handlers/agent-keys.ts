@@ -6,6 +6,8 @@ import { createPersonalRunKeySecret } from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
 
+const MAX_ACTIVE_KEYS_PER_USER = 10;
+
 const createKeyBodySchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80, "Name must be 80 characters or fewer"),
 });
@@ -57,6 +59,15 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
     const parsed = createKeyBodySchema.safeParse(await readJson(request));
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid key payload", 400);
+    }
+
+    const activeKeys = await db
+      .select({ id: personal_run_keys.id })
+      .from(personal_run_keys)
+      .where(and(eq(personal_run_keys.user_id, userId), isNull(personal_run_keys.revoked_at)))
+      .limit(MAX_ACTIVE_KEYS_PER_USER);
+    if (activeKeys.length >= MAX_ACTIVE_KEYS_PER_USER) {
+      return jsonError(`You can have up to ${MAX_ACTIVE_KEYS_PER_USER} active personal run keys. Revoke one to create another.`, 409);
     }
 
     let secret: Awaited<ReturnType<typeof createPersonalRunKeySecret>>;
