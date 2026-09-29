@@ -37,12 +37,13 @@ export function scenarios(): Scenario[] {
     get("public template by slug", "anon", `/api/templates/slug/${publicTemplateSlug}`),
     // Public pages look up what their <head> says while rendering on the server
     // (src/server/pageMeta), for every visitor; a repeat is an edge-cache hit.
-    get("public template page", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}`),
-    get("public template page (repeat)", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}`),
-    get("public profile page", "anon", "/profile/synth_2"),
-    get("public profile page (repeat)", "anon", "/profile/synth_2"),
-    get("category page", "anon", "/categories/business"),
-    get("shared run page", "anon", `/share/${shareToken}`),
+    // Pages in their canonical form (with the slash): the other form is only a redirect.
+    get("public template page", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}/`),
+    get("public template page (repeat)", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}/`),
+    get("public profile page", "anon", "/profile/synth_2/"),
+    get("public profile page (repeat)", "anon", "/profile/synth_2/"),
+    get("category page", "anon", "/categories/business/"),
+    get("shared run page", "anon", `/share/${shareToken}/`),
     get("public profile templates", "anon", "/api/templates/public?userId=synthetic-user-2"),
     get("public profile by username", "anon", "/api/profiles/by-username?username=synth_2"),
     get("shared run", "anon", `/api/checklists/shared/${shareToken}`),

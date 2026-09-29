@@ -104,7 +104,7 @@ describe('shareTemplateToPublic', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
     });
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
@@ -133,7 +133,7 @@ describe('shareTemplateToPublic', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
     });
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
   });
@@ -177,7 +177,7 @@ describe('shareTemplateToPublic', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
     });
     // The server's no-change path stores nothing and answers with the current version.
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
@@ -263,7 +263,7 @@ describe('shareTemplateToPublic', () => {
       username: undefined,
     });
 
-    expect(result).toEqual({ kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/new` });
+    expect(result).toEqual({ kind: 'ok', shareUrl: `${ORIGIN}/profile/alice/new/` });
     expect(onTemplateChange).toHaveBeenCalledWith(
       expect.objectContaining({ isPublic: true, slug: 'new', version: 5 }),
     );
@@ -291,7 +291,7 @@ describe('shareTemplateToPublic', () => {
     expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alicejones/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/alicejones/camping-checklist/`,
     });
   });
 
@@ -348,7 +348,7 @@ describe('shareTemplateToPublic', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/serp/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/serp/camping-checklist/`,
     });
     // Library templates are not stored rows, so there is nothing to confirm.
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
@@ -391,7 +391,7 @@ describe('shareTemplateToPublic', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      shareUrl: `${ORIGIN}/profile/alice/camping-checklist`,
+      shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
     });
     expect(apiClient.getProfileById).toHaveBeenCalledWith('alice-id');
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);

@@ -1056,7 +1056,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       after_json: json({ email: "john@test.com", role: "editor" }),
       metadata_json: json({
         source: "seed",
-        inviteUrlPath: "/team-invites/dev-client-john-invite",
+        inviteUrlPath: "/team-invites/dev-client-john-invite/",
       }),
       user_agent: "seed",
       created_at: at(-12 * HOUR),

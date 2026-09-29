@@ -15,6 +15,7 @@ const SHARED_FROM_SRC = [
   "^src/lib/publicPageMeta\\.ts$",
   "^src/lib/progress\\.ts$",
   "^src/lib/seo/siteOrigin\\.ts$",
+  "^src/lib/http/urlStandard\\.ts$",
 ];
 
 // The Next.js app's entry points: route files (layouts, pages, route handlers) in src/app.

@@ -61,7 +61,7 @@ describe('stripLoginNoticeParams', () => {
 describe('EMAIL_VERIFIED_CALLBACK_URL', () => {
   it('carries exactly one query parameter so the unencoded email link keeps it whole', () => {
     const [, query = ''] = EMAIL_VERIFIED_CALLBACK_URL.split('?');
-    expect(EMAIL_VERIFIED_CALLBACK_URL.startsWith('/login?')).toBe(true);
+    expect(EMAIL_VERIFIED_CALLBACK_URL.startsWith('/login/?')).toBe(true);
     expect(query).not.toContain('&');
     expect(getLoginNotice(`?${query}`)?.kind).toBe('verified');
   });
@@ -73,15 +73,15 @@ describe('buildEmailVerifiedCallbackURL', () => {
   });
 
   it('hides the next parameter from the unencoded email link and restores it after one decode', () => {
-    const callbackURL = buildEmailVerifiedCallbackURL('/team-invites/abc?x=1#h');
+    const callbackURL = buildEmailVerifiedCallbackURL('/team-invites/abc/?x=1#h');
 
     expect(callbackURL).not.toMatch(/[&#]/);
     // What /verify-email reads back out of the email link, and redirects to.
     const redirect = decodeURIComponent(callbackURL);
-    expect(redirect).toBe('/login?verified=1&next=%2Fteam-invites%2Fabc%3Fx%3D1%23h');
+    expect(redirect).toBe('/login/?verified=1&next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
   });
 
   it("encodes the characters Better Auth's callback check rejects", () => {
-    expect(buildEmailVerifiedCallbackURL("/t/(v2)!~*'")).toMatch(/^\/login\?[\w\-.+/=&%@]*$/);
+    expect(buildEmailVerifiedCallbackURL("/t/(v2)!~*'/")).toMatch(/^\/login\/\?[\w\-.+/=&%@]*$/);
   });
 });

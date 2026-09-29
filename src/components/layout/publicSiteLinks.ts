@@ -1,4 +1,7 @@
 import {
+  buildAboutPath,
+  buildContactPath,
+  buildPricingPath,
   buildPublicFeaturesPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
@@ -26,19 +29,19 @@ export const publicSiteLinks: readonly PublicSiteLink[] = [
     placements: ['header'],
   },
   {
-    href: '/pricing',
+    href: buildPricingPath(),
     label: 'Pricing',
     placements: ['header'],
   },
   {
     footerGroup: 'Company',
-    href: '/about',
+    href: buildAboutPath(),
     label: 'About',
     placements: ['footer'],
   },
   {
     footerGroup: 'Support',
-    href: '/contact',
+    href: buildContactPath(),
     label: 'Contact',
     placements: ['footer'],
   },

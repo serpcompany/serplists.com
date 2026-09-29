@@ -32,6 +32,8 @@ afterEach(() => {
 });
 
 const mountAt = async (url: string) => {
+  // One bar at a time: a test may check several URLs.
+  act(() => root?.unmount());
   navigation.reset(url);
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
@@ -42,18 +44,22 @@ const mountAt = async (url: string) => {
 describe('DevLoginBar', () => {
   it('stays hidden on blank template editor routes', async () => {
     expect(await mountAt('/dashboard/templates/new')).toBe('');
+    expect(await mountAt('/dashboard/templates/new/')).toBe('');
   });
 
   it('stays hidden on authenticated dashboard routes used for design QA', async () => {
     expect(await mountAt('/dashboard')).toBe('');
+    expect(await mountAt('/dashboard/templates/')).toBe('');
+    expect(await mountAt('/dashboard/runs/run-1/')).toBe('');
   });
 
   it('still renders on the login route in development', async () => {
     expect(await mountAt('/login')).toContain('DEV MODE');
+    expect(await mountAt('/login/')).toContain('DEV MODE');
   });
 
   it('renders nothing on the server, so hydration matches', () => {
-    navigation.reset('/login');
+    navigation.reset('/login/');
 
     expect(renderToStaticMarkup(<DevLoginBar />)).toBe('');
   });

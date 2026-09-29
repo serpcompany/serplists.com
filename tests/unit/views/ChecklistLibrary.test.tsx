@@ -79,7 +79,7 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Launch', 'Web Development'],
     });
 
-    navigation.reset('/templates');
+    navigation.reset('/templates/');
     const markup = renderToStaticMarkup(
       <ChecklistLibrary />,
     );
@@ -90,14 +90,15 @@ describe('ChecklistLibrary route behavior', () => {
     );
     expect(markup).toContain('1 templates');
     expect(markup).toContain('Browse by Category');
-    expect(markup).toContain('href="/profile/designops/website-launch-checklist"');
-    expect(markup).toContain('href="/categories/launch"');
+    expect(markup).toContain('href="/profile/designops/website-launch-checklist/"');
+    expect(markup).toContain('href="/categories/launch/"');
+    expect(markup).not.toContain('href="/templates/?category=launch"');
     expect(markup).not.toContain('href="/templates?category=launch"');
     expect(markup).not.toContain('Template library');
     expect(markup).not.toContain('Browse all templates');
     // The route's own title and canonical URL, rendered on the server.
     expect(libraryMetadata.title).toEqual({ absolute: 'Discover Templates | SERP Lists' });
-    expect(libraryMetadata.alternates?.canonical).toBe('https://serplists.com/templates');
+    expect(libraryMetadata.alternates?.canonical).toBe('https://serplists.com/templates/');
   });
 
   it('navigates to the owner/template path when the owner username is known', () => {
@@ -112,7 +113,7 @@ describe('ChecklistLibrary route behavior', () => {
     mockNavigate(path ?? buildPublicTemplatesPath());
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      '/profile/alice/ultimate-camping-checklist',
+      '/profile/alice/ultimate-camping-checklist/',
     );
   });
 
@@ -129,7 +130,7 @@ describe('ChecklistLibrary route behavior', () => {
     mockNavigate(path ?? buildPublicTemplatesPath());
 
     expect(mockNavigate).toHaveBeenCalledWith(
-      `/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template`,
+      `/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template/`,
     );
   });
 
@@ -146,7 +147,7 @@ describe('ChecklistLibrary route behavior', () => {
 
   it('builds category filters as category detail routes', () => {
     expect(buildPublicCategoryPath('technical seo')).toBe(
-      '/categories/technical-seo',
+      '/categories/technical-seo/',
     );
   });
 
@@ -344,16 +345,16 @@ describe('Discovery pages while the catalog loads', () => {
 
     // Clearing the search on ?category=moving&search=box writes ?category=moving, marking
     // the entry as written here.
-    const selfWritten = await mountLibrary('/templates?category=moving', LIBRARY_FILTER_UPDATE_STATE);
+    const selfWritten = await mountLibrary('/templates/?category=moving', LIBRARY_FILTER_UPDATE_STATE);
     expect(selfWritten).toContain('Discover Templates');
     expect(selfWritten).toContain('Moving Day');
     expect(selfWritten).not.toContain('Camping Checklist');
-    expect(navigation.url()).toBe('/templates?category=moving');
+    expect(navigation.url()).toBe('/templates/?category=moving');
 
     // A link from elsewhere still lands on the category page.
-    const incoming = await mountLibrary('/templates?category=moving');
+    const incoming = await mountLibrary('/templates/?category=moving');
     expect(incoming).not.toContain('Discover Templates');
-    expect(navigation.url()).toBe('/categories/moving');
+    expect(navigation.url()).toBe('/categories/moving/');
   });
 
   it('shows the search from the URL in the search box and filters by it', () => {

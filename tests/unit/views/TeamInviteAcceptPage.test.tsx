@@ -67,7 +67,7 @@ function renderInvitePage(
     queryClient.setQueryData(teamInvitePreviewQueryKey('invite-token', seededForUserId), seed);
   }
 
-  navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
+  navigation.reset('/team-invites/invite-token/', { routes: ['/team-invites/[token]'] });
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <TeamInviteAccept />
@@ -139,6 +139,6 @@ describe('Organization invite page', () => {
     const html = renderInvitePage();
 
     expect(html).toContain('Create an account');
-    expect(html).toContain('href="/register?next=%2Fteam-invites%2Finvite-token"');
+    expect(html).toContain('href="/register/?next=%2Fteam-invites%2Finvite-token%2F"');
   });
 });

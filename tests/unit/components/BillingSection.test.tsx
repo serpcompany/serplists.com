@@ -67,7 +67,7 @@ const renderBillingSection = (billingData: {
     billingData,
   );
 
-  navigation.reset('/dashboard/settings');
+  navigation.reset('/dashboard/settings/');
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <BillingSection />
@@ -220,7 +220,7 @@ describe('BillingSection', () => {
 
     expect(draftMock.readTemplateDraft).toHaveBeenCalledWith({ userId: 'user-1', teamId: undefined });
     expect(html).toContain('Resume template draft');
-    expect(html).toContain('href="/dashboard/templates/new"');
+    expect(html).toContain('href="/dashboard/templates/new/"');
   });
 
   it('shows no draft link when nothing was kept', () => {
@@ -234,7 +234,7 @@ describe('BillingSection', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, ['billing', 'status', 'user-1', 'personal']);
 
-    navigation.reset('/dashboard/settings');
+    navigation.reset('/dashboard/settings/');
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
         <BillingSection />

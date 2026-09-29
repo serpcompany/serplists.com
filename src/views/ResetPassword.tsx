@@ -15,6 +15,7 @@ import { submitPasswordReset } from "@/lib/auth/passwordReset";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
+import { buildForgotPasswordPath, buildLoginPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
@@ -68,7 +69,7 @@ const ResetPassword = () => {
         toast.error(result.message);
       } else {
         toast.success("Password updated. Please sign in again.");
-        router.replace("/login");
+        router.replace(buildLoginPath());
       }
     } finally {
       setIsSubmitting(false);
@@ -84,7 +85,7 @@ const ResetPassword = () => {
         description="That reset link is no longer valid."
         footer={
           <>
-            <Link href="/forgot-password" className="font-medium text-primary hover:underline">
+            <Link href={buildForgotPasswordPath()} className="font-medium text-primary hover:underline">
               Request a new link
             </Link>
           </>
@@ -104,7 +105,7 @@ const ResetPassword = () => {
       footer={
         <>
           Remembered it?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href={buildLoginPath()} className="font-medium text-primary hover:underline">
             Back to sign in
           </Link>
         </>

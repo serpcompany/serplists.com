@@ -38,7 +38,7 @@ import {
 import { getReturnPath, toSameOriginPath, withReturnPath } from "@/lib/auth/returnPath";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
-import { buildConsoleSettingsPath } from "@/lib/routes";
+import { buildConsoleSettingsPath, buildForgotPasswordPath, buildRegisterPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
@@ -220,7 +220,7 @@ const Login = () => {
         <>
           Don&apos;t have an account?{" "}
           <Link
-            href={withReturnPath("/register", returnPath)}
+            href={withReturnPath(buildRegisterPath(), returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign up
@@ -335,7 +335,7 @@ const Login = () => {
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
               <Link
-                href="/forgot-password"
+                href={buildForgotPasswordPath()}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Forgot password?

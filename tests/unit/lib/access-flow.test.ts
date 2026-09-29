@@ -161,7 +161,7 @@ describe('handleAccessFailure', () => {
     vi.stubGlobal('window', {
       location: {
         href: 'http://localhost/dashboard/runs',
-        pathname: '/dashboard/import-templates',
+        pathname: '/dashboard/import-templates/',
         search: '?billing=success',
         hash: '#export',
       },
@@ -219,7 +219,7 @@ describe('handleAccessFailure', () => {
 
     // Back to this page, with its query and hash, after sign-in.
     expect(navigate).toHaveBeenCalledWith(
-      '/login?next=%2Fdashboard%2Fimport-templates%3Fbilling%3Dsuccess%23export',
+      '/login/?next=%2Fdashboard%2Fimport-templates%2F%3Fbilling%3Dsuccess%23export',
     );
   });
 });

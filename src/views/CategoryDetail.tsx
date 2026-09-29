@@ -31,7 +31,11 @@ import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
-import { buildCategorySlug, buildPublicCategoryPathForSlug } from '@/lib/routes';
+import {
+  buildCategorySlug,
+  buildPublicCategoriesPath,
+  buildPublicCategoryPathForSlug,
+} from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -51,7 +55,7 @@ const backToCategories = (
   <div className="mb-6 flex items-center gap-2 text-sm">
     <Link
       className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-      href="/categories"
+      href={buildPublicCategoriesPath()}
     >
       <ArrowLeft className="h-4 w-4" />
       All Categories

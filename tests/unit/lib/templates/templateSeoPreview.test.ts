@@ -27,7 +27,7 @@ describe('buildTemplateSeoPreview', () => {
     expect(preview).toMatchObject({
       kind: 'url',
       slug: 'launch-checklist',
-      url: 'https://serplists.com/profile/jane/launch-checklist',
+      url: 'https://serplists.com/profile/jane/launch-checklist/',
     });
     if (preview.kind === 'url') {
       expect(preview.url).not.toContain('/templates/');
@@ -140,7 +140,7 @@ describe('buildTemplateSeoPreview', () => {
     const preview = buildTemplateSeoPreview({ seoUrl: 'a', title: '', ownerSlug: 'jane' });
 
     expect(preview.kind === 'url' ? preview.url : null).toBe(
-      `${TEMPLATE_PUBLIC_URL_FALLBACK_ORIGIN}/profile/jane/a`,
+      `${TEMPLATE_PUBLIC_URL_FALLBACK_ORIGIN}/profile/jane/a/`,
     );
   });
 });

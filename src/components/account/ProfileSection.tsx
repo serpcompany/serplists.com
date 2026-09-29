@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ExternalLink, User } from 'lucide-react';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
-import { buildProfilePreviewPath } from '@/lib/routes';
+import { buildProfilePreviewPath, buildPublicProfilePath } from '@/lib/routes';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
 
 import { Link } from '@/components/navigation/Link';
@@ -123,7 +123,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
                 <ExternalLink className="h-3 w-3" />
               </Link>
             ) : (
-              `${origin}/profile/username`
+              `${origin}${buildPublicProfilePath('username')}`
             )}
           </p>
         </div>

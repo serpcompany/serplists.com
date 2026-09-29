@@ -497,7 +497,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return json({
         id: runId,
         shareToken,
-        sharePath: `/share/${shareToken}`,
+        sharePath: `/share/${shareToken}/`,
       });
     }
 

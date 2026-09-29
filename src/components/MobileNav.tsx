@@ -38,6 +38,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicCategoriesPath,
   buildPublicTemplatesPath,
+  isPathWithin,
 } from '@/lib/routes';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
@@ -73,10 +74,10 @@ const bottomNavItems = [
   { href: buildPublicTemplatesPath(), icon: Globe, title: 'Browse' },
 ];
 
+// A run's own page (/run/<id>/) belongs to Runs.
 const isActivePath = (pathname: string, href: string) =>
-  pathname === href ||
-  (href !== '/' && pathname.startsWith(href)) ||
-  (href === buildConsoleRunsPath() && pathname.startsWith('/run/'));
+  isPathWithin(pathname, href) ||
+  (href === buildConsoleRunsPath() && isPathWithin(pathname, '/run/'));
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);

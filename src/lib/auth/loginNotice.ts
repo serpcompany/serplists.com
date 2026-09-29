@@ -4,7 +4,7 @@
  * Better Auth redirects the email verification link back to
  * EMAIL_VERIFIED_CALLBACK_URL. On success it redirects to the callback as is;
  * on failure it appends `&error=<code>` (or `?error=<code>` when the callback
- * has no query), so a failed link lands on `/login?verified=1&error=...`.
+ * has no query), so a failed link lands on `/login/?verified=1&error=...`.
  * Always check `error` before `verified`.
  */
 
@@ -15,7 +15,7 @@ import { RETURN_PATH_PARAM } from "@/lib/auth/returnPath";
  * email link without encoding it, so it must not contain a raw `&`: a second
  * parameter would become a parameter of /verify-email and be lost.
  */
-export const EMAIL_VERIFIED_CALLBACK_URL = "/login?verified=1";
+export const EMAIL_VERIFIED_CALLBACK_URL = "/login/?verified=1";
 
 // encodeURIComponent plus the characters it leaves alone (! ' ( ) * ~), which
 // Better Auth's callbackURL check rejects.
@@ -29,7 +29,7 @@ const encodeStrict = (value: string): string =>
  * The verification callback, carrying a return path as `next` when there is
  * one. The `&next=...` part is encoded one extra time so it survives the
  * unencoded email link: /verify-email decodes it and redirects to
- * `/login?verified=1&next=<path>`.
+ * `/login/?verified=1&next=<path>`.
  */
 export function buildEmailVerifiedCallbackURL(returnPath: string | null): string {
   if (!returnPath) {

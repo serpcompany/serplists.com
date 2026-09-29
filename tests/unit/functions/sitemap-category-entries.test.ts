@@ -65,7 +65,7 @@ describe('category sitemap entries', () => {
     const db = categoryDatabase();
     addPublicTemplate(db, 't-listed', 'alice', 'Zymurgy Listed');
 
-    expect(await categoryPaths(db)).toContain('/categories/zymurgy-listed');
+    expect(await categoryPaths(db)).toContain('/categories/zymurgy-listed/');
   });
 
   it('skips categories whose only templates have owners with no public username', async () => {
@@ -84,7 +84,7 @@ describe('category sitemap entries', () => {
     addPublicTemplate(db, 't-blank', ' ', 'Zymurgy Shared');
     addPublicTemplate(db, 't-named', 'bob_1', 'Zymurgy Shared');
 
-    expect(await categoryPaths(db)).toContain('/categories/zymurgy-shared');
+    expect(await categoryPaths(db)).toContain('/categories/zymurgy-shared/');
   });
 
   // An Organization's public Template is listed in the library and on category pages under
@@ -93,7 +93,7 @@ describe('category sitemap entries', () => {
     const db = categoryDatabase();
     addPublicTemplate(db, 't-team', 'alice', 'Zymurgy Procurement', { type: 'team', teamId: 'team-1' });
 
-    expect(await categoryPaths(db)).toContain('/categories/zymurgy-procurement');
+    expect(await categoryPaths(db)).toContain('/categories/zymurgy-procurement/');
   });
 });
 

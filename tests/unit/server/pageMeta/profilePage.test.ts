@@ -61,7 +61,7 @@ describe('profile page metadata', () => {
 
     expect(metadata.title).toEqual({ absolute: `John Doe | ${APP_BRAND_NAME}` });
     expect(metadata.description).toBe('Public checklist templates from @johndoe covering Technical SEO.');
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/johndoe');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/johndoe/');
     expect(metadata.robots).toBe('index, follow');
   });
 
@@ -78,15 +78,15 @@ describe('profile page metadata', () => {
 
     const metadata = await generateMetadata(params('JohnDoe'));
 
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/johndoe');
-    expect(metadata.openGraph?.url).toBe('https://serplists.com/profile/johndoe');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/johndoe/');
+    expect(metadata.openGraph?.url).toBe('https://serplists.com/profile/johndoe/');
   });
 
   it('names the official library profile, whose templates ship with the app', async () => {
     const result = await loadProfilePageSeo('serp');
 
     expect(result.kind).toBe('found');
-    expect(result.kind === 'found' && result.seo.path).toBe('/profile/serp');
+    expect(result.kind === 'found' && result.seo.path).toBe('/profile/serp/');
   });
 });
 

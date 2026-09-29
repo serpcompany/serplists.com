@@ -77,7 +77,7 @@ async function buildBoth() {
   ).get() as { content_hash: string };
   const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => match[1]).sort();
   const landingLastmod = shard.match(
-    /<loc>https:\/\/serplists\.com\/categories<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
+    /<loc>https:\/\/serplists\.com\/categories\/<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
   )?.[1];
   return { shard, indexLastmod, storedHash: stored.content_hash, shardLastmods, landingLastmod };
 }
@@ -139,7 +139,7 @@ describe('categories sitemap index and shard', () => {
 
   it('drops a category that loses its last public Template and advances the landing lastmod', async () => {
     const before = await buildBoth();
-    expect(before.shard).toContain('https://serplists.com/categories/outdoor-gear');
+    expect(before.shard).toContain('<loc>https://serplists.com/categories/outdoor-gear/</loc>');
 
     db.exec(`UPDATE templates SET is_public = 0 WHERE id = 't1'`);
     const after = await buildBoth();
@@ -159,7 +159,7 @@ describe('categories sitemap index and shard', () => {
     `);
     const { shard } = await buildBoth();
     const listed = Array.from(
-      shard.matchAll(/<loc>https:\/\/serplists\.com\/categories\/([^<]+)<\/loc>/g),
+      shard.matchAll(/<loc>https:\/\/serplists\.com\/categories\/([^<]+)\/<\/loc>/g),
       (match) => match[1],
     );
     const used = new Set(

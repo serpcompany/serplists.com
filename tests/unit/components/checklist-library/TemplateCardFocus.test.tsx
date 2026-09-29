@@ -31,10 +31,10 @@ const template: ChecklistTemplate = {
   categories: ['Launch'],
   ownerProfile: { full_name: 'Design Ops', username: 'designops' },
 };
-const TEMPLATE_PATH = '/profile/designops/website-launch-checklist';
+const TEMPLATE_PATH = '/profile/designops/website-launch-checklist/';
 
 const renderCard = () => {
-  navigation.reset('/templates');
+  navigation.reset('/templates/');
   return renderToStaticMarkup(
     <TemplateCard template={template} />,
   );

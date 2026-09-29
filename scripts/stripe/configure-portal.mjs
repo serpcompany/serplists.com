@@ -42,7 +42,7 @@ if (!configuration) {
   const form = new URLSearchParams();
   const values = {
     "business_profile[headline]": "Manage your SERP Lists Pro subscription",
-    default_return_url: "https://serplists.com/account",
+    default_return_url: "https://serplists.com/dashboard/settings/",
     "features[customer_update][enabled]": "true",
     "features[invoice_history][enabled]": "true",
     "features[payment_method_update][enabled]": "true",

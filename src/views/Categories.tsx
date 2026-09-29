@@ -24,7 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
-import { buildPublicCategoryPathForSlug } from '@/lib/routes';
+import { buildConsoleTemplateCreatePath, buildPublicCategoryPathForSlug } from '@/lib/routes';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 
 import { Link } from '@/components/navigation/Link';
@@ -210,7 +210,7 @@ const Categories = () => {
             community.
           </p>
           <Button asChild className="mt-4 bg-foreground text-background hover:bg-foreground/90">
-            <Link href="/dashboard/templates/new">
+            <Link href={buildConsoleTemplateCreatePath()}>
               Create Template
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>

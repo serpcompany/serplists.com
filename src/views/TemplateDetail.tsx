@@ -84,6 +84,7 @@ import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
+  buildLoginPath,
 } from '@/lib/routes';
 import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
@@ -466,7 +467,7 @@ const TemplateDetail = () => {
         ) : null
       ) : copyButton.visible ? (
         <Button asChild variant="outline" size="sm" className="border-border">
-          <Link href={withReturnPath('/login', currentPath)}>
+          <Link href={withReturnPath(buildLoginPath(), currentPath)}>
             Log in to copy template
           </Link>
         </Button>

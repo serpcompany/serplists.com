@@ -1,3 +1,5 @@
+import { canonicalPath } from '../http/urlStandard';
+
 /**
  * The production origin. Canonical links, og:url, and sitemap entries always point
  * here, whichever environment (staging, a local server) served the page.
@@ -18,10 +20,11 @@ export const isProductionSite = (env: SiteEnvSource = process.env): boolean =>
   env.SITE_ENV === 'production';
 
 /**
- * The production URL for a path or URL on any host, without its query string or
- * hash, so every host and query variant names one canonical page.
+ * The production URL for a path or URL on any host, in the URL standard's canonical form
+ * (src/lib/http/urlStandard.ts) and without its query string or hash, so every host and
+ * query variant names one canonical page.
  */
 export const buildCanonicalUrl = (pathOrUrl: string): string => {
   const { pathname } = new URL(pathOrUrl, CANONICAL_ORIGIN);
-  return `${CANONICAL_ORIGIN}${pathname}`;
+  return `${CANONICAL_ORIGIN}${canonicalPath(pathname)}`;
 };

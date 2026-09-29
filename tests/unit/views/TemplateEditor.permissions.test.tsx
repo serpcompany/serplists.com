@@ -54,8 +54,8 @@ const loadedModel = (ownership: Record<string, unknown> | undefined) => ({
 });
 
 const renderEdit = () =>
-  renderPageAt('/dashboard/templates/template-1/edit', { '/dashboard/templates/[id]/edit': <TemplateEditor /> });
-const renderNew = () => renderPageAt('/dashboard/templates/new', { '/dashboard/templates/new': <TemplateEditor /> });
+  renderPageAt('/dashboard/templates/template-1/edit/', { '/dashboard/templates/[id]/edit': <TemplateEditor /> });
+const renderNew = () => renderPageAt('/dashboard/templates/new/', { '/dashboard/templates/new': <TemplateEditor /> });
 const hasSaveButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*Save(?:(?!<\/button>).)*<\/button>/.test(html);
 
 beforeEach(() => {
@@ -73,7 +73,7 @@ describe('TemplateEditor permissions', () => {
     const html = await renderEdit();
 
     expect(html).toContain("You can&#x27;t edit this template");
-    expect(html).toContain('href="/dashboard/templates/template-1"');
+    expect(html).toContain('href="/dashboard/templates/template-1/"');
     expect(html).not.toContain('Launch checklist');
     expect(hasSaveButton(html)).toBe(false);
   });

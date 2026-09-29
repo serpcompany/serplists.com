@@ -16,7 +16,10 @@ import {
 } from '@/lib/auth/devUsers';
 import {
   buildConsoleHomePath,
+  buildHomePath,
+  buildPublicCategoriesPath,
   isBlankTemplateEditorRoute,
+  isPathWithin,
   isPublicTemplatesDiscoveryPath,
 } from '@/lib/routes';
 import { toast } from 'sonner';
@@ -52,16 +55,10 @@ export function DevLoginBar(): JSX.Element | null {
   }
 
   if (
-    pathname === '/' ||
-    pathname.startsWith('/categories') ||
-    pathname.startsWith('/profile/') ||
-    pathname.startsWith('/run/') ||
-    pathname.startsWith('/share/')
+    [buildHomePath(), buildPublicCategoriesPath(), '/profile/', '/run/', '/share/', buildConsoleHomePath()].some(
+      (section) => isPathWithin(pathname, section),
+    )
   ) {
-    return null;
-  }
-
-  if (pathname.startsWith(buildConsoleHomePath())) {
     return null;
   }
 

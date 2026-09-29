@@ -97,7 +97,7 @@ describe('RouteErrorBoundary', () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
     pageBroken = true;
-    const page = await renderAt('/dashboard/templates');
+    const page = await renderAt('/dashboard/templates/');
     expect(page.hasAlert()).toBe(true);
 
     pageBroken = false;
@@ -107,7 +107,7 @@ describe('RouteErrorBoundary', () => {
     });
     await settle();
 
-    expect(navigation.pathname()).toBe('/dashboard/templates');
+    expect(navigation.pathname()).toBe('/dashboard/templates/');
     expect(page.hasAlert()).toBe(false);
     expect(page.text()).toContain('Page ok');
   });
@@ -132,7 +132,7 @@ describe('RouteErrorBoundary', () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
     pageBroken = true;
-    const page = await renderAt('/dashboard/templates?scope=team');
+    const page = await renderAt('/dashboard/templates/?scope=team');
     expect(page.hasAlert()).toBe(true);
 
     pageBroken = false;
@@ -150,7 +150,7 @@ describe('RouteErrorBoundary', () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
     pageBroken = true;
-    const page = await renderAt('/dashboard/templates');
+    const page = await renderAt('/dashboard/templates/');
 
     await act(async () => {
       click(page.container, page.link('Go to My Templates'));
@@ -164,15 +164,15 @@ describe('RouteErrorBoundary', () => {
   });
 
   it('never remounts a healthy page when it navigates to itself or changes its query', async () => {
-    const page = await renderAt('/dashboard/templates');
+    const page = await renderAt('/dashboard/templates/');
     expect(page.text()).toContain('Page ok');
     expect(pageMounts).toBe(1);
 
     await act(async () => {
-      navigation.router.replace('/dashboard/templates');
+      navigation.router.replace('/dashboard/templates/');
     });
     await act(async () => {
-      navigation.router.replace('/dashboard/templates?scope=team');
+      navigation.router.replace('/dashboard/templates/?scope=team');
     });
     await settle();
 

@@ -582,8 +582,8 @@ describe("Teams handler", () => {
     expect(data.email).toBe("new@example.com");
     expect(data.role).toBe("editor");
     expect(typeof data.inviteToken).toBe("string");
-    expect(data.invitePath).toBe(`/team-invites/${encodeURIComponent(data.inviteToken)}`);
-    expect(data.inviteUrl).toBe(`https://app.serplists.test/team-invites/${encodeURIComponent(data.inviteToken)}`);
+    expect(data.invitePath).toBe(`/team-invites/${encodeURIComponent(data.inviteToken)}/`);
+    expect(data.inviteUrl).toBe(`https://app.serplists.test/team-invites/${encodeURIComponent(data.inviteToken)}/`);
     expect(data.delivery).toEqual({
       mode: "link",
       status: "ready",

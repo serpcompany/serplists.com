@@ -60,7 +60,7 @@ describe('category page metadata', () => {
     expect(metadata.description).toBe(
       '1 templates for Engineering & Development. Checklists for code reviews, deployments, and development workflows',
     );
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/engineering');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/engineering/');
     expect(metadata.robots).toBe('index, follow');
   });
 
@@ -69,7 +69,7 @@ describe('category page metadata', () => {
 
     const metadata = await generateMetadata(params('ENGINEERING'));
 
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/engineering');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/engineering/');
   });
 
   it('keeps a built-in category that no public template uses yet out of search', async () => {

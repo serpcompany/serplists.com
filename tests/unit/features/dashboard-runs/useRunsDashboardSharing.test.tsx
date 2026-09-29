@@ -112,7 +112,7 @@ describe('sharing from the runs list', () => {
 
     expect(createChecklistRunShare).toHaveBeenCalledTimes(1);
     expect(list.current().isShareDialogOpen).toBe(true);
-    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1');
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1/');
   });
 
   it('keeps a new link while the list has not yet caught up with the share', async () => {
@@ -122,7 +122,7 @@ describe('sharing from the runs list', () => {
     await list.render(runs);
 
     expect(list.current().isShareDialogOpen).toBe(true);
-    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1');
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1/');
   });
 
   it('makes a new link once the refreshed list shows the run private', async () => {
@@ -138,7 +138,7 @@ describe('sharing from the runs list', () => {
 
     expect(createChecklistRunShare).toHaveBeenCalledTimes(2);
     expect(list.current().isShareDialogOpen).toBe(true);
-    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2');
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
   });
 
   it('does not bring the old link back when the run is later listed shared again', async () => {
@@ -153,7 +153,7 @@ describe('sharing from the runs list', () => {
     await list.share('run-1');
 
     expect(createChecklistRunShare).toHaveBeenCalledTimes(2);
-    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2');
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
   });
 
   it('forgets the link, and closes its dialog, when the run leaves the list', async () => {

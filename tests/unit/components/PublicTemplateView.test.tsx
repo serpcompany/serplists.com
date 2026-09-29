@@ -18,7 +18,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
       template={template}
       totalItems={1}
       ownerSlug="devinschumacher"
-      ownerPath="/profile/devinschumacher"
+      ownerPath="/profile/devinschumacher/"
       isAuthenticated
       canSaveTemplate
       canStartRun
@@ -80,7 +80,7 @@ describe('PublicTemplateView', () => {
         template={template}
         totalItems={1}
         ownerSlug="devinschumacher"
-        ownerPath="/profile/devinschumacher"
+        ownerPath="/profile/devinschumacher/"
         isAuthenticated={false}
         canSaveTemplate
         canStartRun
@@ -135,7 +135,7 @@ describe('PublicTemplateView', () => {
         }}
         totalItems={1}
         ownerSlug="devinschumacher"
-        ownerPath="/profile/devinschumacher"
+        ownerPath="/profile/devinschumacher/"
         isAuthenticated={false}
         canSaveTemplate
         canStartRun
@@ -165,7 +165,7 @@ describe('PublicTemplateView', () => {
         template={{ ...template, categories: ['日本語', '🚀'] }}
         totalItems={1}
         ownerSlug="devinschumacher"
-        ownerPath="/profile/devinschumacher"
+        ownerPath="/profile/devinschumacher/"
         isAuthenticated={false}
         isBillingLoading={false}
         isProUser={false}
@@ -176,7 +176,7 @@ describe('PublicTemplateView', () => {
       />,
     );
 
-    expect(html).toContain('href="/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E"');
+    expect(html).toContain('href="/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E/"');
     expect(html).toMatch(/<span[^>]*>🚀<\/span>/);
     expect(html).not.toContain('href="/categories/%F0');
   });

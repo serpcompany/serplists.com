@@ -10,11 +10,19 @@ import {
   LOCAL_HOSTS,
   SECURITY_HEADERS,
 } from './src/lib/http/securityHeaders';
+import { trailingSlashRedirects } from './src/lib/http/urlStandard';
 import { isProductionSite } from './src/lib/seo/siteOrigin';
 
 const NOINDEX = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
 
 const nextConfig: NextConfig = {
+  // SERP URL standard (src/lib/http/urlStandard.ts): pages end in a slash (/about/), files and
+  // the API never do. Next.js's own trailing-slash redirects would move the API too
+  // (/api/auth/sign-in to /api/auth/sign-in/), and Stripe and agents do not follow redirects,
+  // so the redirects below do that work instead. trailingSlash still gives the URLs Next.js
+  // writes (canonical and Open Graph URLs) their slash.
+  trailingSlash: true,
+  skipTrailingSlashRedirect: true,
   turbopack: {
     // Keep lockfiles outside the repository from changing the workspace root.
     root: process.cwd(),
@@ -44,19 +52,23 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // Paths from earlier versions of the app.
-      { source: '/checklists', destination: '/templates', permanent: true },
-      { source: '/console', destination: '/dashboard/templates', permanent: true },
-      { source: '/dashboard', destination: '/dashboard/templates', permanent: false },
-      { source: '/account', destination: '/dashboard/settings', permanent: true },
-      { source: '/dashboard/profile', destination: '/dashboard/settings', permanent: true },
-      { source: '/console/templates/:id', destination: '/dashboard/templates/:id', permanent: true },
+      // Paths from earlier versions of the app, each straight to its page's canonical URL.
+      // A source matches with or without its trailing slash.
+      { source: '/checklists', destination: '/templates/', permanent: true },
+      { source: '/console', destination: '/dashboard/templates/', permanent: true },
+      // The dashboard's home is My Templates for now, which may change.
+      { source: '/dashboard', destination: '/dashboard/templates/', permanent: false },
+      { source: '/account', destination: '/dashboard/settings/', permanent: true },
+      { source: '/dashboard/profile', destination: '/dashboard/settings/', permanent: true },
+      { source: '/console/templates/:id', destination: '/dashboard/templates/:id/', permanent: true },
       {
         source: '/console/templates/:id/edit',
-        destination: '/dashboard/templates/:id/edit',
+        destination: '/dashboard/templates/:id/edit/',
         permanent: true,
       },
-      { source: '/console/runs/:id', destination: '/dashboard/runs/:id', permanent: true },
+      { source: '/console/runs/:id', destination: '/dashboard/runs/:id/', permanent: true },
+      // Every other path in its canonical form: /about to /about/, /robots.txt/ to /robots.txt.
+      ...trailingSlashRedirects(),
     ];
   },
 };

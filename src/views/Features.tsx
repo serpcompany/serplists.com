@@ -12,7 +12,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FEATURES, findFeature } from '@/data/publicFeatures';
-import { buildPublicFeaturePath, buildPublicTemplatesPath } from '@/lib/routes';
+import {
+  buildPricingPath,
+  buildPublicFeaturePath,
+  buildPublicFeaturesPath,
+  buildPublicTemplatesPath,
+} from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -28,7 +33,7 @@ const Features = () => {
       <>
         <PageSection spacing="spacious" width="narrow">
           <Button asChild className="mb-6" variant="ghost">
-            <Link href="/features">
+            <Link href={buildPublicFeaturesPath()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Features
             </Link>
@@ -57,7 +62,7 @@ const Features = () => {
                   <Link href={buildPublicTemplatesPath()}>Browse Templates</Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/pricing">See Pricing</Link>
+                  <Link href={buildPricingPath()}>See Pricing</Link>
                 </Button>
               </div>
             </CardContent>
@@ -74,7 +79,7 @@ const Features = () => {
           actions={
             <>
               <Button asChild>
-                <Link href="/pricing">See Pricing</Link>
+                <Link href={buildPricingPath()}>See Pricing</Link>
               </Button>
               <Button asChild variant="outline">
                 <Link href={buildPublicTemplatesPath()}>Browse Templates</Link>

@@ -73,7 +73,7 @@ const libraryState = (overrides: Record<string, unknown>) => ({
 });
 
 const renderCategories = () => {
-  navigation.reset('/categories');
+  navigation.reset('/categories/');
   return renderToStaticMarkup(
     <Categories />,
   );
@@ -92,7 +92,7 @@ describe('Categories page catalog states', () => {
 
     expect(markup).toContain('Browse Categories');
     expect(markup).toContain('aria-busy="true"');
-    expect(markup).not.toContain('href="/categories/outdoor"');
+    expect(markup).not.toContain('href="/categories/outdoor/"');
     expect(markup).not.toMatch(/\d+ templates/);
     expect(markup).not.toContain('Could not load templates');
     // The call to action does not depend on the catalog.
@@ -108,7 +108,7 @@ describe('Categories page catalog states', () => {
     expect(markup).toContain('role="alert"');
     expect(markup.match(/Could not load templates/g)).toHaveLength(1);
     expect(markup.match(/Try again/g)).toHaveLength(1);
-    expect(markup).not.toContain('href="/categories/outdoor"');
+    expect(markup).not.toContain('href="/categories/outdoor/"');
     expect(markup).not.toMatch(/\d+ templates/);
     expect(markup).not.toContain('aria-busy="true"');
     expect(markup).toContain('Create Template');
@@ -128,8 +128,8 @@ describe('Categories page catalog states', () => {
 
     expect(markup).toContain('Popular Categories');
     expect(markup).toContain('All Categories');
-    expect(markup).toContain('href="/categories/outdoor"');
-    expect(markup).toContain('href="/categories/moving"');
+    expect(markup).toContain('href="/categories/outdoor/"');
+    expect(markup).toContain('href="/categories/moving/"');
     expect(markup).toContain('1 templates');
     expect(markup).not.toContain('aria-busy="true"');
     expect(markup).not.toContain('Could not load templates');

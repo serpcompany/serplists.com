@@ -209,7 +209,7 @@ describe('run reads never return share tokens', () => {
 
     expect(response.status).toBe(200);
     expect(data.shareToken).toEqual(expect.any(String));
-    expect(data.sharePath).toBe(`/share/${data.shareToken}`);
+    expect(data.sharePath).toBe(`/share/${data.shareToken}/`);
   });
 });
 

@@ -151,11 +151,14 @@ describe('site environment helpers', () => {
     }
   });
 
-  it('builds production canonical URLs without query strings or hashes', () => {
+  it('builds production canonical URLs in the canonical form, without query strings or hashes', () => {
     expect(CANONICAL_ORIGIN).toBe('https://serplists.com');
     expect(buildCanonicalUrl('https://staging.serplists.com/profile/a/b?x=1#top')).toBe(
-      'https://serplists.com/profile/a/b',
+      'https://serplists.com/profile/a/b/',
     );
-    expect(buildCanonicalUrl('/templates')).toBe('https://serplists.com/templates');
+    expect(buildCanonicalUrl('/templates')).toBe('https://serplists.com/templates/');
+    expect(buildCanonicalUrl('/templates/')).toBe('https://serplists.com/templates/');
+    expect(buildCanonicalUrl('/')).toBe('https://serplists.com/');
+    expect(buildCanonicalUrl('/sitemaps/pages/1.xml')).toBe('https://serplists.com/sitemaps/pages/1.xml');
   });
 });

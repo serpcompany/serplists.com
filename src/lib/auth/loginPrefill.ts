@@ -8,7 +8,7 @@ import { getSessionStorage } from '@/lib/browserStorage';
 // page, which takes it once and keeps it in its own history entry's state, so a reload of
 // that entry still fills the form and a later visit to /login does not.
 
-export const VERIFY_EMAIL_LOGIN_PATH = '/login?verify_email=1';
+export const VERIFY_EMAIL_LOGIN_PATH = '/login/?verify_email=1';
 
 const HANDOFF_STORAGE_KEY = 'serplists:login-email';
 

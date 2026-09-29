@@ -40,9 +40,9 @@ describe('TemplateCard', () => {
     expect(markup).toContain('designops');
     expect(markup).toContain('Start');
     expect(markup).toContain('View Template');
-    expect(markup).toContain('href="/profile/designops/website-launch-checklist"');
-    expect(markup).toContain('href="/profile/designops"');
-    expect(markup).not.toContain('href="/run/website-launch"');
+    expect(markup).toContain('href="/profile/designops/website-launch-checklist/"');
+    expect(markup).toContain('href="/profile/designops/"');
+    expect(markup).not.toContain('href="/run/website-launch');
     expect(markup).not.toContain('href="/categories/');
     expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Launch</span>');
     expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Marketing</span>');
@@ -50,7 +50,7 @@ describe('TemplateCard', () => {
   });
 
   it('never links a template without a public URL back to the library', () => {
-    navigation.reset('/categories/launch');
+    navigation.reset('/categories/launch/');
     const markup = renderToStaticMarkup(
       <TemplateCard
         template={{ ...template, ownerProfile: { full_name: 'No Handle' } }}
@@ -58,8 +58,8 @@ describe('TemplateCard', () => {
     );
 
     expect(markup).toContain('Website Launch Checklist');
-    expect(markup).not.toContain('href="/templates"');
+    expect(markup).not.toContain('href="/templates');
     const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
-    hrefs.forEach((href) => expect(href).toMatch(/^\/profile\/[^/]+(\/[^/]+)?$/));
+    hrefs.forEach((href) => expect(href).toMatch(/^\/profile\/[^/]+(\/[^/]+)?\/$/));
   });
 });

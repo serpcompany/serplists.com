@@ -11,6 +11,7 @@ import {
 import { withReturnPath } from "@/lib/auth/returnPath";
 import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
 import { currentLocationPath } from "@/lib/navigation/replaceCurrentUrl";
+import { buildLoginPath } from "@/lib/routes";
 
 /** Opens another page of the app, like useAppRouter().push. */
 export type NavigateTo = (href: string) => unknown;
@@ -20,7 +21,7 @@ export type NavigateTo = (href: string) => unknown;
  * after sign-in. Call it while the user is still on the page (see usePageVisit).
  */
 export const navigateToLoginWithReturnPath = (navigate: NavigateTo): void => {
-  navigate(withReturnPath("/login", currentLocationPath()));
+  navigate(withReturnPath(buildLoginPath(), currentLocationPath()));
 };
 
 const openBillingPortal = async (reason: string): Promise<boolean> => {

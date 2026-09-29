@@ -62,7 +62,7 @@ describe('signOutAndReturn', () => {
     const switching = signOutAndReturn({
       logout: () => logout.promise,
       navigate,
-      returnPath: '/team-invites/invite-token',
+      returnPath: '/team-invites/invite-token/',
       onError: vi.fn(),
     });
     await Promise.resolve();
@@ -73,7 +73,7 @@ describe('signOutAndReturn', () => {
     await expect(switching).resolves.toBe(true);
 
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('/login?next=%2Fteam-invites%2Finvite-token');
+    expect(navigate).toHaveBeenCalledWith('/login/?next=%2Fteam-invites%2Finvite-token%2F');
   });
 
   it('keeps the query and hash of the return path', async () => {
@@ -82,12 +82,12 @@ describe('signOutAndReturn', () => {
     await signOutAndReturn({
       logout: async () => ({ ok: true }),
       navigate,
-      returnPath: '/team-invites/invite-token?ref=email#join',
+      returnPath: '/team-invites/invite-token/?ref=email#join',
       onError: vi.fn(),
     });
 
     expect(navigate).toHaveBeenCalledWith(
-      '/login?next=%2Fteam-invites%2Finvite-token%3Fref%3Demail%23join',
+      '/login/?next=%2Fteam-invites%2Finvite-token%2F%3Fref%3Demail%23join',
     );
   });
 
@@ -99,7 +99,7 @@ describe('signOutAndReturn', () => {
       signOutAndReturn({
         logout: async () => ({ ok: false, error: 'Sign out failed: too many requests.' }),
         navigate,
-        returnPath: '/team-invites/invite-token',
+        returnPath: '/team-invites/invite-token/',
         onError,
       }),
     ).resolves.toBe(false);

@@ -23,6 +23,7 @@ import {
   buildConsoleTemplateImportPath,
   buildConsoleTemplatesPath,
   buildPublicTemplatesPath,
+  isPathWithin,
 } from '@/lib/routes';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { APP_BRAND_NAME } from '@/lib/brand';
@@ -60,10 +61,10 @@ const secondaryNavItems = [
   },
 ];
 
+// A run's own page (/run/<id>/) belongs to Runs.
 const isActivePath = (pathname: string, href: string) =>
-  pathname === href ||
-  pathname.startsWith(`${href}/`) ||
-  (href === buildConsoleRunsPath() && pathname.startsWith('/run/'));
+  isPathWithin(pathname, href) ||
+  (href === buildConsoleRunsPath() && isPathWithin(pathname, '/run/'));
 
 export function DashboardSidebar() {
   const pathname = usePathname();

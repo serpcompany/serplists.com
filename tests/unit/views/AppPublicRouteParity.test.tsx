@@ -153,9 +153,9 @@ describe('App public route parity', () => {
     expect(html).toContain('Live run tracking');
     expect(html).toContain('Shareable proof');
     expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('href="/templates"');
-    expect(html).toContain('href="/features"');
-    expect(html).toContain('href="/pricing"');
+    expect(html).toContain('href="/templates/"');
+    expect(html).toContain('href="/features/"');
+    expect(html).toContain('href="/pricing/"');
     expect(html).not.toContain('Checklist Product Prototype');
   });
 
@@ -174,22 +174,22 @@ describe('App public route parity', () => {
   });
 
   it('renders /templates inside the shared public shell with detail-card href semantics', async () => {
-    const html = renderAppAt('/templates', <TemplatesPage />);
+    const html = renderAppAt('/templates/', <TemplatesPage />);
 
     expect(html).toContain('Discover Templates');
     expect(html).toContain('Browse by Category');
-    expect(html).toContain('href="/templates"');
-    expect(html).toContain('href="/features"');
-    expect(html).toContain('href="/pricing"');
-    expect(html).toContain('href="/profile/designops/website-launch-checklist"');
-    expect(html).not.toContain('href="/run/website-launch"');
+    expect(html).toContain('href="/templates/"');
+    expect(html).toContain('href="/features/"');
+    expect(html).toContain('href="/pricing/"');
+    expect(html).toContain('href="/profile/designops/website-launch-checklist/"');
+    expect(html).not.toContain('href="/run/website-launch');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain('<footer');
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
   it('renders /categories inside the shared public shell with one global header and footer', async () => {
-    const html = renderAppAt('/categories', <CategoriesPage />);
+    const html = renderAppAt('/categories/', <CategoriesPage />);
 
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
@@ -201,7 +201,7 @@ describe('App public route parity', () => {
 
   it('renders /categories/business inside the shared public shell with one global header and footer', async () => {
     const html = renderAppAt(
-      '/categories/business',
+      '/categories/business/',
       <CategoryPage params={Promise.resolve({ categorySlug: 'business' })} />,
       { categorySlug: 'business' },
     );

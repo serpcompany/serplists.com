@@ -104,18 +104,16 @@ describe('signed-in layout navigation', () => {
       username: 'alice',
     };
 
-    navigation.reset('/dashboard/templates');
+    navigation.reset('/dashboard/templates/');
     const html = renderToStaticMarkup(
       React.createElement(Layout, null, React.createElement('div', null, 'Authenticated page')),
     );
 
-    expect(html).toContain('href="/dashboard/templates"');
-    expect(html).toContain('href="/dashboard/runs"');
-    expect(html).toContain('href="/dashboard/settings"');
-    expect(html).not.toContain('href="/dashboard/profile"');
-    expect(html).not.toContain('href="/console"');
-    expect(html).not.toContain('href="/console/templates"');
-    expect(html).not.toContain('href="/console/runs"');
+    expect(html).toContain('href="/dashboard/templates/"');
+    expect(html).toContain('href="/dashboard/runs/"');
+    expect(html).toContain('href="/dashboard/settings/"');
+    expect(html).not.toContain('href="/dashboard/profile');
+    expect(html).not.toContain('href="/console');
   });
 });
 
@@ -268,9 +266,9 @@ describe('dashboard template lane actions', () => {
     openDashboardPublicLibrary(navigate);
 
     expect(navigate.mock.calls).toEqual([
-      ['/dashboard/templates/template-9/edit'],
-      ['/dashboard/templates/new'],
-      ['/templates'],
+      ['/dashboard/templates/template-9/edit/'],
+      ['/dashboard/templates/new/'],
+      ['/templates/'],
     ]);
   });
 
@@ -423,7 +421,7 @@ describe('finishDashboardTemplateRun', () => {
     finishDashboardTemplateRun(run, { isCurrent: () => true }, { closeLauncher, navigate });
 
     expect(closeLauncher).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('/dashboard/runs/run-9');
+    expect(navigate).toHaveBeenCalledWith('/dashboard/runs/run-9/');
   });
 
   it('does not navigate once the user has left the page', () => {

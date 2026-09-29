@@ -40,8 +40,9 @@ function resolveInviteOrigin(request: Request, frontendUrl?: string): string {
   return new URL(request.url).origin;
 }
 
+// The invite page's canonical path, with its trailing slash (src/lib/http/urlStandard.ts).
 export function buildTeamInvitePath(token: string): string {
-  return `/team-invites/${encodeURIComponent(token)}`;
+  return `/team-invites/${encodeURIComponent(token)}/`;
 }
 
 export function buildTeamInviteDelivery({

@@ -1,5 +1,12 @@
 import { VERIFY_EMAIL_LOGIN_PATH } from "@/lib/auth/loginPrefill";
-import { buildConsoleHomePath } from "@/lib/routes";
+import { canonicalPath } from "@/lib/http/urlStandard";
+import {
+  buildConsoleHomePath,
+  buildForgotPasswordPath,
+  buildLoginPath,
+  buildRegisterPath,
+  buildResetPasswordPath,
+} from "@/lib/routes";
 
 /**
  * Where to send someone after they sign in or sign up. Protected pages, the invite
@@ -13,7 +20,12 @@ export const RETURN_PATH_PARAM = "next";
 // Any origin works: it only lets URL() resolve a relative path so a value that
 // escapes to another origin can be detected.
 const PARSE_BASE = "https://return-path.invalid";
-const AUTH_PAGES = new Set(["/login", "/register", "/forgot-password", "/reset-password"]);
+const AUTH_PAGES = new Set([
+  buildLoginPath(),
+  buildRegisterPath(),
+  buildForgotPasswordPath(),
+  buildResetPasswordPath(),
+]);
 const hasControlCharacter = (value: string): boolean =>
   Array.from(value).some((character) => {
     const code = character.charCodeAt(0);
@@ -23,7 +35,9 @@ const hasControlCharacter = (value: string): boolean =>
 /**
  * Returns an in-app path (pathname + search + hash) or null. Rejects anything
  * that could leave the app (`//host`, `/\host`, schemes), control characters,
- * and the auth pages themselves so sign-in cannot loop.
+ * and the auth pages themselves so sign-in cannot loop. The path comes back in its
+ * canonical form (src/lib/http/urlStandard.ts), so a return path from an older link
+ * (`/dashboard/templates`) opens its page without a redirect.
  */
 export function sanitizeReturnPath(value: unknown): string | null {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
@@ -43,15 +57,14 @@ export function sanitizeReturnPath(value: unknown): string | null {
     return null;
   }
 
-  const normalizedPathname = url.pathname.replace(/\/+$/, "").toLowerCase() || "/";
-  if (AUTH_PAGES.has(normalizedPathname)) {
+  if (AUTH_PAGES.has(canonicalPath(url.pathname.toLowerCase()))) {
     return null;
   }
 
   // The parser removes dot segments, so /.//evil.com comes back as //evil.com, which
   // a browser resolves to another origin. Only return a path that means the same
   // thing when it is read again.
-  const result = `${url.pathname}${url.search}${url.hash}`;
+  const result = `${canonicalPath(url.pathname)}${url.search}${url.hash}`;
   return toSameOriginPath(result, PARSE_BASE) === result ? result : null;
 }
 

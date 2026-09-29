@@ -6,6 +6,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: './tests/setup.ts',
+    server: {
+      deps: {
+        // tests/support/nextRouting.ts runs OpenNext's routing, which is published unbundled
+        // (extensionless imports) for OpenNext's own bundler: let Vite resolve it.
+        inline: ['@opennextjs/aws'],
+      },
+    },
     exclude: [
       '**/node_modules/**',
       '**/dist/**',

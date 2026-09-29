@@ -57,7 +57,7 @@ async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapR
   const profiles = profileRows.flatMap((row): SitemapEntry[] => {
     const username = row.username?.trim() ?? '';
     return isValidUsername(username) ? [{
-      path: `/profile/${encodeURIComponent(username)}`,
+      path: `/profile/${encodeURIComponent(username)}/`,
       lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.profile_revision),
     }] : [];
   });
@@ -79,13 +79,13 @@ async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapR
     const username = row.username?.trim() ?? '';
     const slug = row.slug?.trim() ?? '';
     return isValidUsername(username) && isValidTemplateSlug(slug) ? [{
-      path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
+      path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
       lastmod: mostRecentLastmod(row.updated_at || row.created_at, row.owner_updated_at),
     }] : [];
   });
 
   const categoryEntries = await loadCategoryEntries(env);
-  const templateLanding = catalogPageEntry('/templates');
+  const templateLanding = catalogPageEntry('/templates/');
   const templateEntries = [{
     ...templateLanding,
     lastmod: mostRecentLastmod(templateLanding.lastmod, revisions.get('templates'), bundledInventoryLastmod('templates')),
@@ -143,7 +143,7 @@ export const serveProfilesSitemap = (context: SitemapContext, page: string): Pro
     toEntry: (row) => {
       const username = row.username?.trim() ?? '';
       return isValidUsername(username) ? ({
-        path: `/profile/${encodeURIComponent(username)}`,
+        path: `/profile/${encodeURIComponent(username)}/`,
         lastmod: mostRecentLastmod(
           row.updated_at || row.created_at,
           row.profile_revision,
@@ -164,7 +164,7 @@ type TemplateRow = {
 /** /sitemaps/templates/<page>.xml: the library page, the bundled and every public template. */
 export const serveTemplatesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
   const db = createDb(context.env);
-  const landingPage = catalogPageEntry('/templates');
+  const landingPage = catalogPageEntry('/templates/');
   return cachedSitemap(context, (request, revisions) => handlePagedDatabaseSitemap<TemplateRow>({
     request,
     params: { page },
@@ -198,7 +198,7 @@ export const serveTemplatesSitemap = (context: SitemapContext, page: string): Pr
       const username = row.username?.trim() ?? '';
       const slug = row.slug?.trim() ?? '';
       return isValidUsername(username) && isValidTemplateSlug(slug) ? ({
-        path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
+        path: `/profile/${encodeURIComponent(username)}/${encodeURIComponent(slug)}/`,
         lastmod: mostRecentLastmod(
           row.updated_at || row.created_at,
           row.owner_updated_at,

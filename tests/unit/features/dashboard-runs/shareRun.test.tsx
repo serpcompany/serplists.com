@@ -38,7 +38,7 @@ afterEach(() => {
 });
 
 const renderRuns = (runs: ChecklistRun[]) => {
-  navigation.reset('/dashboard/runs');
+  navigation.reset('/dashboard/runs/');
   return renderToStaticMarkup(
     <RunsDashboardView
       getRunPermissions={() => getResourcePermissions(undefined, () => undefined)}
@@ -72,7 +72,7 @@ describe('sharing a run from the runs list', () => {
       refuseCopy,
     );
 
-    expect(result).toEqual({ kind: 'ok', copied: false, shareUrl: 'https://serplists.com/share/token-1' });
+    expect(result).toEqual({ kind: 'ok', copied: false, shareUrl: 'https://serplists.com/share/token-1/' });
     const cached = client.getQueryData<ChecklistRun[]>(personal) ?? [];
     expect(cached.map((run) => run.isPublic)).toEqual([true, false]);
     const html = renderRuns(cached.slice(0, 1));

@@ -26,7 +26,7 @@ import {
   PRO_MONTHLY_PRICE_LABEL,
   shouldRetryBillingStatus,
 } from '@/lib/billing';
-import { buildConsoleSettingsPath } from '@/lib/routes';
+import { buildConsoleSettingsPath, buildRegisterPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -105,7 +105,7 @@ const Pricing = () => {
               </ul>
               <div className="mt-6">
                 <Button asChild variant="outline">
-                  <Link href="/register">Start Free</Link>
+                  <Link href={buildRegisterPath()}>Start Free</Link>
                 </Button>
               </div>
             </CardContent>
@@ -136,7 +136,7 @@ const Pricing = () => {
               <div className="mt-6">
                 {!user ? (
                   <Button asChild>
-                    <Link href="/register">Get Started</Link>
+                    <Link href={buildRegisterPath()}>Get Started</Link>
                   </Button>
                 ) : planStatus === 'unknown' ? (
                   <QueryErrorNotice

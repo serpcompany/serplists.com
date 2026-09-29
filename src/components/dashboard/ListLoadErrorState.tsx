@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardEmptyState } from '@/components/dashboard/DashboardContentShell';
 import { isAuthRequiredError } from '@/lib/api-errors';
+import { buildLoginPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -29,7 +30,7 @@ export function ListLoadErrorState({ error, listName, onRetry }: ListLoadErrorSt
       action={
         signedOut ? (
           <Button asChild>
-            <Link href="/login">Sign in</Link>
+            <Link href={buildLoginPath()}>Sign in</Link>
           </Button>
         ) : (
           <Button type="button" onClick={onRetry}>

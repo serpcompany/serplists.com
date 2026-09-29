@@ -150,4 +150,6 @@ export const SITEMAP_IMPLEMENTATION_SOURCES = [
   'src/lib/categorySlug.ts',
   'src/lib/utils/slug.ts',
   'src/lib/seo/siteOrigin.ts',
+  // The canonical form of every <loc> (a page's trailing slash).
+  'src/lib/http/urlStandard.ts',
 ] as const;

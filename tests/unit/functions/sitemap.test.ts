@@ -83,8 +83,12 @@ describe('public sitemap behavior', () => {
       { path: '/profile/bob/second', lastmod: null },
     ]);
 
-    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice');
-    expect(xml).toContain('https://serplists.com/profile/alice/a&amp;b');
+    expect(canonicalUrl('/profile/alice/')).toBe('https://serplists.com/profile/alice/');
+    // Every <loc> is canonical: a page with its trailing slash, a sitemap file without one.
+    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice/');
+    expect(canonicalUrl('/sitemaps/pages/1.xml')).toBe('https://serplists.com/sitemaps/pages/1.xml');
+    expect(xml).toContain('<loc>https://serplists.com/profile/alice/a&amp;b/</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/profile/bob/second/</loc>');
     expect(xml.indexOf('/profile/alice')).toBeLessThan(xml.indexOf('/profile/bob'));
     expect(xml).toContain('<lastmod>2026-01-02T03:04:05.000Z</lastmod>');
     await expectValidXml(xml, sitemapSchema, 'escaped-sitemap.xml');
@@ -193,11 +197,11 @@ describe('public sitemap behavior', () => {
   });
 
   it('accounts for prefix entries before loading database rows', async () => {
-    const loadRows = vi.fn(async () => [{ path: '/profile/alice/database' }]);
+    const loadRows = vi.fn(async () => [{ path: '/profile/alice/database/' }]);
     const response = await handlePagedDatabaseSitemap<{ path: string }>({
       request: new Request('https://serplists.com/sitemaps/templates/1.xml'),
       params: { page: '1' },
-      prefixEntries: [{ path: '/templates' }, { path: '/profile/serp/bundled' }],
+      prefixEntries: [{ path: '/templates/' }, { path: '/profile/serp/bundled/' }],
       loadRows,
       toEntry: (row) => row,
     });
@@ -240,7 +244,7 @@ describe('public sitemap behavior', () => {
 
     expect(getResponse.status).toBe(200);
     expect(xml).toContain('<loc>https://serplists.com/</loc>');
-    expect(xml).toContain('<loc>https://serplists.com/features/template-builder</loc>');
+    expect(xml).toContain('<loc>https://serplists.com/features/template-builder/</loc>');
     expect(xml).not.toContain('/login');
     expect(xml).not.toContain('/profile/');
     expect(headResponse.status).toBe(200);

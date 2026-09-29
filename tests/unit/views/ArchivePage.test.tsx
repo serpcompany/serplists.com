@@ -108,7 +108,7 @@ const has = (html: string, text: string) => html.includes(text);
 
 describe('archive route', () => {
   it('mounts the archive at /dashboard/archive in the signed-in console', async () => {
-    const html = renderAppAt('/dashboard/archive', <ArchivePage />);
+    const html = renderAppAt('/dashboard/archive/', <ArchivePage />);
 
     expect(has(html, 'data-archive-recovery-section="true"')).toBe(true);
     expect(has(html, 'data-app-shell="console"')).toBe(true);
@@ -118,9 +118,9 @@ describe('archive route', () => {
   });
 
   it('links the archive from the console navigation and keeps /dashboard/runs on the runs list', async () => {
-    const html = renderAppAt('/dashboard/runs', <RunsPage />);
+    const html = renderAppAt('/dashboard/runs/', <RunsPage />);
 
-    expect(has(html, 'href="/dashboard/archive"')).toBe(true);
+    expect(has(html, 'href="/dashboard/archive/"')).toBe(true);
     expect(has(html, 'My Runs')).toBe(true);
     expect(has(html, 'data-archive-recovery-section')).toBe(false);
   });

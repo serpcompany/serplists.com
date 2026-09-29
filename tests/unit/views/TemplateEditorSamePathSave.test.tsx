@@ -135,7 +135,7 @@ const created = (): TemplateEditorSaveResult => ({
 });
 
 async function renderNewTemplateEditor() {
-  navigation.reset('/dashboard/templates/new', {
+  navigation.reset('/dashboard/templates/new/', {
     routes: ['/dashboard/templates/new', '/dashboard/templates', '/dashboard/runs'],
   });
   const container = createFakeContainer();
@@ -145,8 +145,8 @@ async function renderNewTemplateEditor() {
     root?.render(
       <>
         <nav>
-          <Link href="/dashboard/templates/new">New Template</Link>
-          <Link href="/dashboard/runs">Runs</Link>
+          <Link href="/dashboard/templates/new/">New Template</Link>
+          <Link href="/dashboard/runs/">Runs</Link>
         </nav>
         <RoutedPages pages={{ '/dashboard/templates/new': <TemplateEditor /> }} />
       </>,
@@ -168,8 +168,8 @@ describe('TemplateEditor create after a same-path navigation', () => {
     await act(async () => {
       click(container, findByText(container, 'A', 'New Template'));
     });
-    expect(navigation.pathname()).toBe('/dashboard/templates/new');
-    expect(navigation.log.at(-1)).toMatchObject({ href: '/dashboard/templates/new', via: 'link' });
+    expect(navigation.pathname()).toBe('/dashboard/templates/new/');
+    expect(navigation.log.at(-1)).toMatchObject({ href: '/dashboard/templates/new/', via: 'link' });
     expect(navigation.window.confirm).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -179,7 +179,7 @@ describe('TemplateEditor create after a same-path navigation', () => {
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(mocks.settleDraft).toHaveBeenCalledTimes(1);
     // The saved template does not stay in the editor as unsaved work.
-    expect(navigation.pathname()).toBe('/dashboard/templates');
+    expect(navigation.pathname()).toBe('/dashboard/templates/');
   });
 
   it('does not pull the user back when they went to another page while it saved', async () => {
@@ -193,13 +193,13 @@ describe('TemplateEditor create after a same-path navigation', () => {
     await act(async () => {
       click(container, findByText(container, 'A', 'Runs'));
     });
-    expect(navigation.pathname()).toBe('/dashboard/runs');
+    expect(navigation.pathname()).toBe('/dashboard/runs/');
     await act(async () => {
       request.resolve(created());
     });
 
     // The draft is still settled, but the user stays where they went.
     expect(mocks.settleDraft).toHaveBeenCalledTimes(1);
-    expect(navigation.pathname()).toBe('/dashboard/runs');
+    expect(navigation.pathname()).toBe('/dashboard/runs/');
   });
 });

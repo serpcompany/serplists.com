@@ -54,39 +54,41 @@ const baseTemplate: ChecklistTemplate = {
 
 describe('routes', () => {
   it('builds the canonical public routes', () => {
-    expect(buildPublicTemplatesPath()).toBe('/templates');
-    expect(buildPublicCategoriesPath()).toBe('/categories');
+    expect(buildPublicTemplatesPath()).toBe('/templates/');
+    expect(buildPublicCategoriesPath()).toBe('/categories/');
     expect(buildPublicCategoryPath('Technical SEO')).toBe(
-      '/categories/technical-seo',
+      '/categories/technical-seo/',
     );
-    expect(buildPublicProfilePath('alice')).toBe('/profile/alice');
+    expect(buildPublicProfilePath('alice')).toBe('/profile/alice/');
+    // A username may look like a file name; its profile is still a page.
+    expect(buildPublicProfilePath('john.doe')).toBe('/profile/john.doe/');
     expect(buildPublicTemplatePath('alice', 'video-downloader')).toBe(
-      '/profile/alice/video-downloader',
+      '/profile/alice/video-downloader/',
     );
     expect(buildPublicFeaturePath('template-builder')).toBe(
-      '/features/template-builder',
+      '/features/template-builder/',
     );
-    expect(buildSharePath('share-123')).toBe('/share/share-123');
+    expect(buildSharePath('share-123')).toBe('/share/share-123/');
   });
 
   it('builds the canonical console routes', () => {
-    expect(buildConsoleHomePath()).toBe('/dashboard');
-    expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates');
-    expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new');
-    expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates');
+    expect(buildConsoleHomePath()).toBe('/dashboard/');
+    expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates/');
+    expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new/');
+    expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates/');
     expect(buildConsoleTemplatePath('template-1')).toBe(
-      '/dashboard/templates/template-1',
+      '/dashboard/templates/template-1/',
     );
     expect(buildConsoleTemplateEditPath('template-1')).toBe(
-      '/dashboard/templates/template-1/edit',
+      '/dashboard/templates/template-1/edit/',
     );
-    expect(buildConsoleRunsPath()).toBe('/dashboard/runs');
-    expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1');
-    expect(buildRunPath('run-1')).toBe('/run/run-1');
+    expect(buildConsoleRunsPath()).toBe('/dashboard/runs/');
+    expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1/');
+    expect(buildRunPath('run-1')).toBe('/run/run-1/');
     expect(buildRunUrl('run-1', 'https://serplists.com')).toBe(
-      'https://serplists.com/run/run-1',
+      'https://serplists.com/run/run-1/',
     );
-    expect(buildConsoleSettingsPath()).toBe('/dashboard/settings');
+    expect(buildConsoleSettingsPath()).toBe('/dashboard/settings/');
     expect(LEGACY_ACCOUNT_PATH).toBe('/account');
     expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
   });
@@ -97,6 +99,11 @@ describe('routes', () => {
     expect(isBlankTemplateEditorRoute('/console/templates/template-1/edit')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates')).toBe(false);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1')).toBe(false);
+    // The router reports the canonical, slashed form.
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/new/')).toBe(true);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/edit/')).toBe(true);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/')).toBe(false);
+    expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/')).toBe(false);
   });
 
   it('builds and resolves category slugs', () => {
@@ -112,7 +119,7 @@ describe('routes', () => {
   it('finds an accented category from the URL it had before its letters were folded', () => {
     const categories = ['Café Guides', 'Technical SEO'];
 
-    expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides');
+    expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides/');
     expect(findCategoryNameBySlug(categories, 'caf-guides')).toBeNull();
     expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
     expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
@@ -123,12 +130,12 @@ describe('routes', () => {
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=technical-seo'),
       ),
-    ).toBe('/categories/technical-seo');
+    ).toBe('/categories/technical-seo/');
     expect(
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=Technical%20SEO'),
       ),
-    ).toBe('/categories/technical-seo');
+    ).toBe('/categories/technical-seo/');
     expect(
       resolveLegacyTemplatesCategoryRedirectPath(
         new URLSearchParams('category=technical-seo&sort=recent'),
@@ -154,6 +161,12 @@ describe('routes', () => {
     expect(resolveRouteShell('/dashboard/runs/run-1')).toBe('console');
     expect(resolveRouteShell('/console')).toBe('console');
     expect(resolveRouteShell('/account')).toBe('console');
+    // The router reports the canonical, slashed form.
+    expect(resolveRouteShell('/templates/')).toBe('public');
+    expect(resolveRouteShell('/profile/alice/ultimate-camping-checklist/')).toBe('public');
+    expect(resolveRouteShell('/dashboard/templates/')).toBe('console');
+    expect(resolveRouteShell('/dashboard/runs/run-1/')).toBe('console');
+    expect(resolveRouteShell('/run/run-1/')).toBe('console');
   });
 
   it('labels public routes by discovery emphasis', () => {
@@ -169,6 +182,14 @@ describe('routes', () => {
       'secondary',
     );
     expect(resolvePublicRouteTier('/share/share-123')).toBe('minimal');
+    // The router reports the canonical, slashed form.
+    expect(resolvePublicRouteTier('/templates/')).toBe('core');
+    expect(resolvePublicRouteTier('/profile/alice/')).toBe('core');
+    expect(resolvePublicRouteTier('/categories/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/categories/outdoor/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/features/template-builder/')).toBe('secondary');
+    expect(resolvePublicRouteTier('/share/share-123/')).toBe('minimal');
+    expect(resolvePublicRouteTier('/pricing/')).toBe('marketing');
   });
 
   it('maps console routes to persistent navigation sections', () => {
@@ -184,12 +205,22 @@ describe('routes', () => {
     expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
     expect(resolveConsoleSection('/dashboard/settings')).toBe('account');
     expect(resolveConsoleSection('/dashboard/profile')).toBe('account');
-    expect(buildConsoleArchivePath()).toBe('/dashboard/archive');
+    expect(buildConsoleArchivePath()).toBe('/dashboard/archive/');
     expect(resolveConsoleSection('/dashboard/archive')).toBe('archive');
     expect(resolveConsoleSection('/console')).toBe('home');
     expect(resolveConsoleSection('/account')).toBe('account');
     expect(resolveConsoleSection('/templates')).toBeNull();
     expect(resolveConsoleSection('/checklists')).toBeNull();
+    // The router reports the canonical, slashed form.
+    expect(resolveConsoleSection('/dashboard/')).toBe('home');
+    expect(resolveConsoleSection('/dashboard/templates/')).toBe('templates');
+    expect(resolveConsoleSection('/dashboard/templates/template-1/edit/')).toBe('templates');
+    expect(resolveConsoleSection('/dashboard/import-templates/')).toBe('templates');
+    expect(resolveConsoleSection('/dashboard/runs/')).toBe('runs');
+    expect(resolveConsoleSection('/run/run-1/')).toBe('runs');
+    expect(resolveConsoleSection('/dashboard/settings/')).toBe('account');
+    expect(resolveConsoleSection('/dashboard/archive/')).toBe('archive');
+    expect(resolveConsoleSection('/templates/')).toBeNull();
   });
 
   it('resolves public owner slugs from template ownership data', () => {
@@ -225,7 +256,7 @@ describe('routes', () => {
         slug: 'video-downloader',
         ownerProfile: { username: 'alice' },
       }),
-    ).toBe('/profile/alice/video-downloader');
+    ).toBe('/profile/alice/video-downloader/');
 
     expect(
       buildCanonicalPublicTemplatePath({
@@ -233,7 +264,7 @@ describe('routes', () => {
         slug: 'starter-template',
         userId: REPO_TEMPLATE_USER_ID,
       }),
-    ).toBe(`/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template`);
+    ).toBe(`/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template/`);
 
     expect(
       buildCanonicalPublicTemplatePath({
@@ -247,7 +278,7 @@ describe('routes', () => {
         ...baseTemplate,
         ownerProfile: { username: 'alice' },
       }),
-    ).toBe('/profile/alice/template-1');
+    ).toBe('/profile/alice/template-1/');
   });
 
   it('reports which templates have a public URL for discovery', () => {
@@ -262,7 +293,7 @@ describe('routes', () => {
 
 describe('getCanonicalProfilePath', () => {
   it('sends a mixed-case profile URL to the stored lowercase username', () => {
-    expect(getCanonicalProfilePath('JohnDoe', 'johndoe')).toBe('/profile/johndoe');
+    expect(getCanonicalProfilePath('JohnDoe', 'johndoe')).toBe('/profile/johndoe/');
   });
 
   it('stays on a URL that already uses the stored username', () => {
@@ -279,14 +310,14 @@ describe('getCanonicalProfilePath', () => {
 
 describe('buildProfilePreviewPath', () => {
   it('links the saved username as stored, even a legacy mixed-case one', () => {
-    expect(buildProfilePreviewPath('JaneDoe', 'JaneDoe')).toBe('/profile/JaneDoe');
-    expect(buildProfilePreviewPath('  johndoe ', 'johndoe')).toBe('/profile/johndoe');
+    expect(buildProfilePreviewPath('JaneDoe', 'JaneDoe')).toBe('/profile/JaneDoe/');
+    expect(buildProfilePreviewPath('  johndoe ', 'johndoe')).toBe('/profile/johndoe/');
   });
 
   it('previews the lowercase form an unsaved edit will be stored as', () => {
-    expect(buildProfilePreviewPath('JANEDOE', 'JaneDoe')).toBe('/profile/janedoe');
-    expect(buildProfilePreviewPath('JohnDoe', 'john')).toBe('/profile/johndoe');
-    expect(buildProfilePreviewPath('JohnDoe', undefined)).toBe('/profile/johndoe');
+    expect(buildProfilePreviewPath('JANEDOE', 'JaneDoe')).toBe('/profile/janedoe/');
+    expect(buildProfilePreviewPath('JohnDoe', 'john')).toBe('/profile/johndoe/');
+    expect(buildProfilePreviewPath('JohnDoe', undefined)).toBe('/profile/johndoe/');
   });
 
   it('has no URL for an empty field', () => {

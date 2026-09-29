@@ -49,7 +49,7 @@ describe('shared run page metadata', () => {
     expect(metadata.title).toEqual({ absolute: `Launch prep | ${APP_BRAND_NAME}` });
     expect(metadata.description).toBe('Shared checklist run for Launch prep');
     expect(metadata.robots).toBe('noindex, nofollow');
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/share/share-token-1');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/share/share-token-1/');
   });
 
   it.each([

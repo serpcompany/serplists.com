@@ -38,7 +38,7 @@ vi.mock('@/lib/api', () => ({
 const BILLING_STATUS_KEY = ['billing', 'status', 'user-1', 'personal'];
 
 const renderWithClient = (queryClient: QueryClient) => {
-  navigation.reset('/pricing');
+  navigation.reset('/pricing/');
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <Pricing />
@@ -50,7 +50,7 @@ const renderPricing = (billingData: Record<string, unknown>) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(BILLING_STATUS_KEY, billingData);
 
-  navigation.reset('/pricing');
+  navigation.reset('/pricing/');
   return renderToStaticMarkup(
     <QueryClientProvider client={queryClient}>
       <Pricing />
@@ -81,7 +81,7 @@ describe('Pricing', () => {
     const html = renderPricing({ plan: 'pro', billingEnabled: true, subscriptionStatus: 'active' });
 
     expect(html).toContain('Manage Pro');
-    expect(html).toContain('href="/dashboard/settings"');
+    expect(html).toContain('href="/dashboard/settings/"');
     expect(html).not.toContain('Upgrade — $9/month');
   });
 

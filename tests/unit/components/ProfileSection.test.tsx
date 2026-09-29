@@ -18,7 +18,7 @@ vi.mock('@/lib/auth-client', () => ({ authClient: { updateUser: vi.fn() } }));
 
 describe('ProfileSection', () => {
   it('limits the full name to the length the API accepts', () => {
-    navigation.reset('/dashboard/settings');
+    navigation.reset('/dashboard/settings/');
     const html = renderToStaticMarkup(
       <ProfileSection
         profileData={{ email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' }}
@@ -33,7 +33,7 @@ describe('ProfileSection', () => {
   });
 
   const renderSection = (username: string, savedUsername: string | undefined) => {
-    navigation.reset('/dashboard/settings');
+    navigation.reset('/dashboard/settings/');
     return renderToStaticMarkup(
       <ProfileSection
         profileData={{ email: 'john@test.com', fullName: 'John', username, avatar_url: '' }}
@@ -50,7 +50,7 @@ describe('ProfileSection', () => {
     for (const savedUsername of ['john', undefined]) {
       const html = renderSection('JohnDoe', savedUsername);
 
-      expect(html).toContain('href="/profile/johndoe"');
+      expect(html).toContain('href="/profile/johndoe/"');
       expect(html).not.toContain('/profile/JohnDoe');
     }
   });
@@ -60,14 +60,14 @@ describe('ProfileSection', () => {
   it('links a saved legacy mixed-case username as stored', () => {
     const html = renderSection('JaneDoe', 'JaneDoe');
 
-    expect(html).toContain('href="/profile/JaneDoe"');
+    expect(html).toContain('href="/profile/JaneDoe/"');
     expect(html).not.toContain('/profile/janedoe');
   });
 
   it('previews the lowercase URL a case-only edit of a legacy username will store', () => {
     const html = renderSection('JANEDOE', 'JaneDoe');
 
-    expect(html).toContain('href="/profile/janedoe"');
+    expect(html).toContain('href="/profile/janedoe/"');
     expect(html).not.toContain('/profile/JaneDoe');
   });
 
@@ -75,6 +75,6 @@ describe('ProfileSection', () => {
     const html = renderSection('', 'JaneDoe');
 
     expect(html).not.toContain('href="/profile/');
-    expect(html).toContain('/profile/username');
+    expect(html).toContain('/profile/username/');
   });
 });

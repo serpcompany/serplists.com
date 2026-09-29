@@ -32,7 +32,10 @@ import {
   buildConsoleRunsPath,
   buildConsoleTemplatesPath,
   buildConsoleSettingsPath,
+  buildLoginPath,
   buildPublicProfilePath,
+  buildRegisterPath,
+  isPathWithin,
   resolvePublicRouteTier,
   resolveRouteShell,
 } from '@/lib/routes';
@@ -54,18 +57,6 @@ interface LayoutProps {
 interface SiteFooterProps {
   className?: string;
 }
-
-const isPathActive = (pathname: string, href: string): boolean => {
-  if (href === buildConsoleHomePath()) {
-    return pathname === href;
-  }
-
-  if (href === '/account') {
-    return pathname === href;
-  }
-
-  return pathname === href || pathname.startsWith(`${href}/`);
-};
 
 const BrandLink = ({ to }: { to: string }) => (
   <Link href={to} className="inline-flex items-center gap-2">
@@ -254,7 +245,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               href={item.href}
               className={cn(
                 'text-sm font-medium text-muted-foreground transition hover:text-foreground',
-                isPathActive(pathname, item.href) &&
+                isPathWithin(pathname, item.href) &&
                   'text-foreground',
               )}
             >
@@ -278,10 +269,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 variant="ghost"
                 className="hidden text-muted-foreground md:inline-flex"
               >
-                <Link href="/login">Log in</Link>
+                <Link href={buildLoginPath()}>Log in</Link>
               </Button>
               <Button asChild>
-                <Link href="/register">Get started</Link>
+                <Link href={buildRegisterPath()}>Get started</Link>
               </Button>
             </>
           )}

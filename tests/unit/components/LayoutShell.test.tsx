@@ -75,7 +75,7 @@ describe('Layout shell selection', () => {
 
       expect(html).toContain('data-app-shell="console"');
       expect(html).not.toContain('New Template');
-      expect(html).not.toContain('href="/dashboard/templates/new"');
+      expect(html).not.toContain('href="/dashboard/templates/new/"');
     } finally {
       workspaceState.canEditTemplates = true;
     }

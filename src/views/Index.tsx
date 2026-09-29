@@ -23,6 +23,7 @@ import {
   buildConsoleTemplatesPath,
   buildPublicFeaturesPath,
   buildPublicTemplatesPath,
+  buildRegisterPath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -91,7 +92,7 @@ const Index = () => {
 
   const primaryCta = user
     ? { href: buildConsoleTemplatesPath(), label: 'Open Dashboard' }
-    : { href: '/register', label: 'Get Started' };
+    : { href: buildRegisterPath(), label: 'Get Started' };
 
   return (
     <>

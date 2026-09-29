@@ -35,7 +35,7 @@ describe('TemplateListItem', () => {
     );
 
     expect(html).toContain('Start Run');
-    expect(html).toContain('href="/dashboard/templates/template-1/edit"');
+    expect(html).toContain('href="/dashboard/templates/template-1/edit/"');
     expect(html).toContain('Delete</button>');
   });
 

@@ -54,14 +54,14 @@ describe('buildLibraryFilterParams', () => {
 describe('resolveLibraryLegacyRedirect', () => {
   it('still redirects an incoming category-only link to the category page', () => {
     expect(resolveLibraryLegacyRedirect(params('?category=moving'), null)).toBe(
-      '/categories/moving',
+      '/categories/moving/',
     );
     expect(resolveLibraryLegacyRedirect(params('?category=Technical%20SEO'), undefined)).toBe(
-      '/categories/technical-seo',
+      '/categories/technical-seo/',
     );
     expect(
       resolveLibraryLegacyRedirect(params('?category=moving'), { from: '/somewhere' }),
-    ).toBe('/categories/moving');
+    ).toBe('/categories/moving/');
   });
 
   it('does not redirect a category-only URL the library wrote itself', () => {

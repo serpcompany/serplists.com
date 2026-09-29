@@ -173,7 +173,7 @@ vi.mock('@/lib/access-flow', () => ({
 }));
 
 const renderTemplateDetail = () => {
-  navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
+  navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
   return renderToStaticMarkup(
     <TemplateDetail />,
   );
@@ -208,7 +208,7 @@ beforeEach(() => {
 });
 
 const hasShareButton = (html: string) => /Share<\/button>/.test(html);
-const hasEditLink = (html: string) => html.includes('href="/dashboard/templates/tpl-1/edit"');
+const hasEditLink = (html: string) => html.includes('href="/dashboard/templates/tpl-1/edit/"');
 const isVisibilitySwitchDisabled = (html: string) =>
   /<button[^>]*id="template-visibility"[^>]*>/.exec(html)?.[0].includes('disabled=""') ?? false;
 
@@ -531,7 +531,7 @@ describe('TemplateDetail opened by slug', () => {
   it('links Edit on a page opened by slug to the loaded template id', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
-    const html = renderAt('/dashboard/templates/product-launch-checklist');
+    const html = renderAt('/dashboard/templates/product-launch-checklist/');
 
     expect(hasEditLink(html)).toBe(true);
     expect(html).not.toContain('/product-launch-checklist/edit');
@@ -540,7 +540,7 @@ describe('TemplateDetail opened by slug', () => {
   it('keeps the id link when the page was opened by id', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
-    expect(hasEditLink(renderAt('/dashboard/templates/tpl-1'))).toBe(true);
+    expect(hasEditLink(renderAt('/dashboard/templates/tpl-1/'))).toBe(true);
   });
 });
 
@@ -839,7 +839,7 @@ describe('TemplateDetail page', () => {
       template: buildV0DemoPrivateTemplate(),
     });
 
-    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
+    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
     const html = renderToStaticMarkup(
       <TemplateDetail />,
     );
@@ -881,7 +881,7 @@ describe('TemplateDetail page', () => {
       template: { ...buildV0DemoPrivateTemplate(), userId: 'someone-else' },
     });
 
-    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
+    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
     const html = renderToStaticMarkup(
       <TemplateDetail />,
     );
@@ -906,7 +906,7 @@ describe('TemplateDetail page', () => {
       template: { ...buildV0DemoPrivateTemplate(), ...templateOverrides },
     });
 
-    navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
+    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
     return renderToStaticMarkup(
       <TemplateDetail />,
     );
@@ -918,14 +918,14 @@ describe('TemplateDetail page', () => {
     expect(html).toContain('Product Launch Checklist');
     expect(html).not.toContain('Start Run');
     expect(html).not.toContain('Copy to My Templates');
-    expect(html).not.toContain('/edit"');
+    expect(html).not.toContain('/edit/"');
   });
 
   it('takes Edit and Share away from a creator demoted to runner, but keeps Start Run', () => {
     const html = renderAs('runner', { isPublic: false, teamId: 'acme', userId: 'user-1' });
 
     expect(html).toContain('Start Run');
-    expect(html).not.toContain('/edit"');
+    expect(html).not.toContain('/edit/"');
     expect(html).not.toMatch(/>Share</);
   });
 
@@ -933,7 +933,7 @@ describe('TemplateDetail page', () => {
     const html = renderAs('editor', { isPublic: false, teamId: 'acme', userId: 'someone-else' });
 
     expect(html).toContain('Start Run');
-    expect(html).toContain('/edit"');
+    expect(html).toContain('/edit/"');
   });
 });
 

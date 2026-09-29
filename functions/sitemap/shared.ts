@@ -11,7 +11,7 @@ import type { Env } from '../api/types';
 import bundledTemplateCatalog from './bundled-catalog.generated.json';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../src/data/publicCategories';
 import { categorySlug } from '../../src/lib/categorySlug';
-import { CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigin';
+import { buildCanonicalUrl, CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigin';
 
 export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
@@ -102,8 +102,10 @@ export function xmlEscape(value: string): string {
     .replaceAll("'", '&apos;');
 }
 
+// Every <loc> names the production site in the URL standard's canonical form: a page with its
+// trailing slash, a sitemap file without one (src/lib/http/urlStandard.ts).
 export function canonicalUrl(path: string): string {
-  return new URL(path, CANONICAL_ORIGIN).toString();
+  return buildCanonicalUrl(path);
 }
 
 function validLastmod(value?: string | null): string | null {
@@ -188,18 +190,18 @@ export function paginateEntries<T>(entries: T[], page: number): T[] {
 
 export function bundledTemplateEntries(): SitemapEntry[] {
   return bundledTemplates.filter((template) => isValidTemplateSlug(template.slug ?? '')).map((template) => ({
-    path: `/profile/serp/${encodeURIComponent(template.slug!.trim())}`,
+    path: `/profile/serp/${encodeURIComponent(template.slug!.trim())}/`,
     lastmod: template.lastmod,
   }));
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {
   return staticPages.filter(
-    (entry) => entry.path !== '/templates' && entry.path !== '/categories',
+    (entry) => entry.path !== '/templates/' && entry.path !== '/categories/',
   );
 }
 
-export function catalogPageEntry(path: '/templates' | '/categories'): SitemapEntry {
+export function catalogPageEntry(path: '/templates/' | '/categories/'): SitemapEntry {
   const entry = staticPages.find((page) => page.path === path);
   if (!entry) throw new Error(`Missing generated sitemap metadata for ${path}`);
   return entry;
@@ -402,7 +404,7 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   // A registry category's page shows its registry name and description, but it is only
   // worth listing once a public Template uses it; otherwise it is an empty page.
   PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
-    if (lastmodBySlug.has(category.slug)) addCategory(category.slug, catalogPageEntry('/categories').lastmod);
+    if (lastmodBySlug.has(category.slug)) addCategory(category.slug, catalogPageEntry('/categories/').lastmod);
   });
   const categoryRevisions = await db
     .select({
@@ -422,10 +424,10 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   }
 
   const categoryEntries = Array.from(lastmodBySlug, ([slug, lastmod]) => ({
-    path: `/categories/${encodeURIComponent(slug)}`,
+    path: `/categories/${encodeURIComponent(slug)}/`,
     lastmod,
   })).sort((left, right) => left.path.localeCompare(right.path));
-  const landingPage = catalogPageEntry('/categories');
+  const landingPage = catalogPageEntry('/categories/');
 
   return [
     {

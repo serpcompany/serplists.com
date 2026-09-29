@@ -99,7 +99,7 @@ describe('ErrorBoundary', () => {
       if (shellBroken) throw new Error('provider failed');
       return <p>App at {pathname}</p>;
     }
-    navigation.reset('/dashboard/templates');
+    navigation.reset('/dashboard/templates/');
     const container = createFakeContainer();
     const root = createRoot(container as unknown as HTMLElement);
     try {
@@ -144,7 +144,7 @@ describe('ErrorBoundary', () => {
 
 describe('RouteErrorFallback', () => {
   const renderFallback = () => {
-    navigation.reset('/categories/broken');
+    navigation.reset('/categories/broken/');
     return renderToStaticMarkup(
       <RouteErrorFallback reset={() => {}} />,
     );
@@ -161,6 +161,6 @@ describe('RouteErrorFallback', () => {
   it('sends a signed-in user to My Templates', () => {
     authUser = { id: 'user-1' };
 
-    expect(renderFallback()).toContain('href="/dashboard/templates"');
+    expect(renderFallback()).toContain('href="/dashboard/templates/"');
   });
 });

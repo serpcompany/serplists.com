@@ -97,7 +97,7 @@ describe('template page metadata', () => {
     const result = await loadTemplatePageSeo('ALICE', TEMPLATE_ID);
     const metadata = await generateMetadata(params('ALICE', TEMPLATE_ID));
 
-    const canonical = 'https://serplists.com/profile/alice/reviewed-clipy-checklist';
+    const canonical = 'https://serplists.com/profile/alice/reviewed-clipy-checklist/';
     expect(metadata.alternates?.canonical).toBe(canonical);
     expect(metadata.openGraph?.url).toBe(canonical);
     expect(result.kind === 'found' && buildPageJsonLd(result.seo).url).toBe(canonical);
@@ -110,7 +110,7 @@ describe('template page metadata', () => {
       serverContext.host = host;
       const metadata = await generateMetadata(params('alice', 'reviewed-clipy-checklist'));
 
-      expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/alice/reviewed-clipy-checklist');
+      expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/alice/reviewed-clipy-checklist/');
       expect(JSON.stringify(metadata)).not.toContain(host);
     }
   });
@@ -120,7 +120,7 @@ describe('template page metadata', () => {
 
     const metadata = await generateMetadata(params('alice', TEMPLATE_ID));
 
-    expect(metadata.alternates?.canonical).toBe(`https://serplists.com/profile/alice/${TEMPLATE_ID}`);
+    expect(metadata.alternates?.canonical).toBe(`https://serplists.com/profile/alice/${TEMPLATE_ID}/`);
   });
 
   it('finds a bundled library template under the official owner, without reading D1', async () => {
@@ -129,7 +129,7 @@ describe('template page metadata', () => {
     const metadata = await generateMetadata(params('SERP', 'ultimate-camping-checklist'));
 
     expect(metadata.title).toEqual({ absolute: `Ultimate Camping Checklist | ${APP_BRAND_NAME}` });
-    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/serp/ultimate-camping-checklist');
+    expect(metadata.alternates?.canonical).toBe('https://serplists.com/profile/serp/ultimate-camping-checklist/');
     expect(metadata.robots).toBe('index, follow');
   });
 });

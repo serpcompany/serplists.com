@@ -35,7 +35,7 @@ type StripePortalSession = { id: string; url: string };
 // The SPA's settings page (buildConsoleSettingsPath() in src/lib/routes.ts, which the
 // API cannot import). Stripe returns here directly: Billing reads ?billing= on it, and
 // a redirecting legacy path such as /account could drop that query.
-const SETTINGS_PATH = "/dashboard/settings";
+const SETTINGS_PATH = "/dashboard/settings/";
 
 // Checkout and portal each call Stripe, whose rate limit the whole account
 // shares. The router limits them per IP; this limits each account, whatever IP

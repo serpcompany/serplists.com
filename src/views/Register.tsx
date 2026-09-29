@@ -21,6 +21,7 @@ import {
   withReturnPath,
 } from "@/lib/auth/returnPath";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
+import { buildLoginPath } from "@/lib/routes";
 import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
 
 import { Link } from '@/components/navigation/Link';
@@ -95,7 +96,7 @@ const Register = () => {
         <>
           Already have an account?{" "}
           <Link
-            href={withReturnPath("/login", returnPath)}
+            href={withReturnPath(buildLoginPath(), returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign in

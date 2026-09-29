@@ -182,7 +182,7 @@ const templates: ChecklistTemplate[] = [publicCatalogTemplate];
 const allTemplates: ChecklistTemplate[] = [privateTemplate];
 
 const renderRunsPage = () => {
-  navigation.reset('/dashboard/runs');
+  navigation.reset('/dashboard/runs/');
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
       <Dashboard />
@@ -222,15 +222,15 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('role="combobox"');
     expect(html).toContain('Team Offsite Planning');
     expect(html).toContain('From Team Offsite Template');
-    expect(html).toContain('href="/dashboard/templates/template-5"');
+    expect(html).toContain('href="/dashboard/templates/template-5/"');
     expect(html).toContain('Website Launch - Q1 Release');
     expect(html).toContain('Started Jan 16, 2024');
     expect(html).toContain('In Progress');
     expect(html).toContain('Completed');
     expect(html).toContain('Needs revalidation');
     expect(html).toContain('Revalidate');
-    expect(html).toContain('href="/run/run-5"');
-    expect(html).toContain('href="/run/run-2"');
+    expect(html).toContain('href="/run/run-5/"');
+    expect(html).toContain('href="/run/run-2/"');
     expect(html).toContain('data-run-actions="true"');
     expect(html).toContain('focus-within:opacity-100');
     expect(html).not.toContain('Track active checklist runs');
@@ -270,10 +270,11 @@ describe('/dashboard/runs presentation', () => {
     const html = renderRunsPage();
 
     expect(html).toContain('From Org Checklist');
-    expect(html).toContain('href="/dashboard/templates/org-template"');
+    expect(html).toContain('href="/dashboard/templates/org-template/"');
     expect(html).toContain('From Website Launch Playbook');
-    expect(html).toContain('href="/dashboard/templates/template-1"');
+    expect(html).toContain('href="/dashboard/templates/template-1/"');
     expect(html.match(/>From /g)).toHaveLength(2);
+    expect(html).not.toContain('href="/dashboard/templates//"');
     expect(html).not.toContain('href="/dashboard/templates/"');
   });
 
@@ -390,7 +391,7 @@ describe('/dashboard/runs presentation', () => {
     const onShared = vi.fn();
     await expect(
       createRunsDashboardShareUrl('run-5', 'https://serplists.com', apiClient, onShared),
-    ).resolves.toBe('https://serplists.com/share/share-token-1');
+    ).resolves.toBe('https://serplists.com/share/share-token-1/');
     expect(onShared).toHaveBeenCalledWith('run-5');
   });
 
@@ -459,7 +460,7 @@ describe('/dashboard/runs presentation', () => {
         'https://serplists.com',
         apiClient,
       ),
-    ).resolves.toBe('https://serplists.com/share/share-token-1');
+    ).resolves.toBe('https://serplists.com/share/share-token-1/');
 
     expect(apiClient.createChecklistRunShare).toHaveBeenCalledWith('run-5');
   });

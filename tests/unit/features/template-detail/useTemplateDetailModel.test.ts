@@ -680,7 +680,7 @@ describe('resolveShareOwnerTemplate', () => {
 
     const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
 
-    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit/');
     expect(shared.ownerProfile?.full_name).toBe('Alice');
     expect(apiClient.getProfileById).not.toHaveBeenCalled();
   });
@@ -692,7 +692,7 @@ describe('resolveShareOwnerTemplate', () => {
     const shared = await resolveShareOwnerTemplate(template, { userId: 'user-1' }, apiClient);
 
     expect(apiClient.getProfileById).toHaveBeenCalledWith('user-1');
-    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit');
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/alicejones/seo-audit/');
   });
 
   it("never puts the signed-in user's name on someone else's template", async () => {
@@ -705,7 +705,7 @@ describe('resolveShareOwnerTemplate', () => {
 
     const shared = await resolveShareOwnerTemplate(template, renamedOwner, apiClient);
 
-    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/bob/seo-audit');
+    expect(buildCanonicalPublicTemplatePath(shared)).toBe('/profile/bob/seo-audit/');
   });
 });
 

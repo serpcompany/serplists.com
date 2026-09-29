@@ -29,29 +29,30 @@ const renderAt = (url: string) => {
 describe('Register page', () => {
   // Return paths travel only in ?next=, with their own query and hash.
   it('keeps the return path on the Sign in link so switching pages does not lose it', () => {
-    const html = renderAt('/register?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h');
+    const html = renderAt('/register/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
 
-    expect(html).toContain('href="/login?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h"');
+    expect(html).toContain('href="/login/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h"');
   });
 
   it('reads the return path from next', () => {
-    const html = renderAt('/register?next=%2Fteam-invites%2Fabc');
+    const html = renderAt('/register/?next=%2Fteam-invites%2Fabc');
 
-    expect(html).toContain('href="/login?next=%2Fteam-invites%2Fabc"');
+    // A return path from an older link comes back in its canonical form.
+    expect(html).toContain('href="/login/?next=%2Fteam-invites%2Fabc%2F"');
   });
 
   it('links plainly to sign in without a return path', () => {
-    expect(renderAt('/register')).toContain('href="/login"');
+    expect(renderAt('/register/')).toContain('href="/login/"');
   });
 
   it('never carries a return path to another origin', () => {
-    const html = renderAt('/register?next=https%3A%2F%2Fevil.example%2Fsteal');
+    const html = renderAt('/register/?next=https%3A%2F%2Fevil.example%2Fsteal');
 
-    expect(html).toContain('href="/login"');
+    expect(html).toContain('href="/login/"');
     expect(html).not.toContain('evil.example');
   });
 
   it('limits the name to the length the API accepts', () => {
-    expect(renderAt('/register')).toMatch(new RegExp(`<input[^>]*id="name"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
+    expect(renderAt('/register/')).toMatch(new RegExp(`<input[^>]*id="name"[^>]*maxLength="${USER_NAME_MAX_LENGTH}"`));
   });
 });

@@ -41,7 +41,7 @@ const renderAt = (url: string) => {
 
 describe('Login page', () => {
   it('uses the feature-wired sign-in surface without dead auth affordances', () => {
-    const html = renderAt('/login');
+    const html = renderAt('/login/');
 
     expect(html).toContain('Welcome back');
     expect(html).toContain('Forgot password?');
@@ -54,7 +54,7 @@ describe('Login page', () => {
   });
 
   it('offers a new verification email when the verification link failed', () => {
-    const html = renderAt('/login?verified=1&error=token_expired');
+    const html = renderAt('/login/?verified=1&error=token_expired');
 
     expect(html).toContain('Resend verification email');
     expect(html).toContain('That verification link has expired.');
@@ -63,19 +63,19 @@ describe('Login page', () => {
 
   // Return paths travel only in ?next=, with their own query and hash.
   it('carries the return path to sign-up so a new invitee comes back to the invite', () => {
-    const html = renderAt('/login?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h');
+    const html = renderAt('/login/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
 
-    expect(html).toContain('href="/register?next=%2Fteam-invites%2Fabc%3Fx%3D1%23h"');
+    expect(html).toContain('href="/register/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h"');
   });
 
   it('reads the return path from next after the email verification round trip', () => {
-    const html = renderAt('/login?verified=1&next=%2Fteam-invites%2Fabc');
+    const html = renderAt('/login/?verified=1&next=%2Fteam-invites%2Fabc%2F');
 
-    expect(html).toContain('href="/register?next=%2Fteam-invites%2Fabc"');
+    expect(html).toContain('href="/register/?next=%2Fteam-invites%2Fabc%2F"');
   });
 
   it('does not offer a resend after a successful verification', () => {
-    expect(renderAt('/login?verified=1')).not.toContain('Resend verification email');
+    expect(renderAt('/login/?verified=1')).not.toContain('Resend verification email');
   });
 });
 
@@ -116,7 +116,7 @@ describe('Login email handoff from sign-up', () => {
     const container = await mountLogin();
 
     expect(emailField(container).value).toBe('alice+new@example.com');
-    expect(navigation.url()).toBe('/login');
+    expect(navigation.url()).toBe('/login/');
     expect(navigation.window.history.state).toMatchObject({ email: 'alice+new@example.com' });
   });
 
@@ -126,7 +126,7 @@ describe('Login email handoff from sign-up', () => {
     await mountLogin();
     act(() => root?.unmount());
 
-    navigation.reset('/login');
+    navigation.reset('/login/');
     const container = await mountLogin();
 
     expect(emailField(container).value ?? '').toBe('');
@@ -134,7 +134,7 @@ describe('Login email handoff from sign-up', () => {
   });
 
   it('fills the form again when its history entry is reloaded', async () => {
-    navigation.reset('/login', { state: { email: 'alice+new@example.com', __NA: true } });
+    navigation.reset('/login/', { state: { email: 'alice+new@example.com', __NA: true } });
 
     const container = await mountLogin();
 
@@ -142,12 +142,12 @@ describe('Login email handoff from sign-up', () => {
   });
 
   it('moves the address of a link sent before it left the URL into the entry', async () => {
-    navigation.reset('/login?verify_email=1&email=alice%40example.com&next=%2Fteam-invites%2Fabc');
+    navigation.reset('/login/?verify_email=1&email=alice%40example.com&next=%2Fteam-invites%2Fabc%2F');
 
     const container = await mountLogin();
 
     expect(emailField(container).value).toBe('alice@example.com');
-    expect(navigation.url()).toBe('/login?next=%2Fteam-invites%2Fabc');
+    expect(navigation.url()).toBe('/login/?next=%2Fteam-invites%2Fabc%2F');
     expect(navigation.window.history.state).toMatchObject({ email: 'alice@example.com' });
   });
 });

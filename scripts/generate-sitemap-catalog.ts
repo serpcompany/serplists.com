@@ -32,16 +32,16 @@ const outputPath = path.join(
 );
 const staticPageSources = [
   { path: '/', sources: ['src/views/Index.tsx'] },
-  { path: '/features', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
-  { path: '/features/template-builder', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
-  { path: '/features/checklist-runs', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
-  { path: '/features/public-sharing', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
-  { path: '/features/import-export', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
-  { path: '/pricing', sources: ['src/views/Pricing.tsx'] },
-  { path: '/about', sources: ['src/views/About.tsx'] },
-  { path: '/contact', sources: ['src/views/Contact.tsx'] },
-  { path: '/templates', sources: ['src/views/ChecklistLibrary.tsx'] },
-  { path: '/categories', sources: ['src/views/Categories.tsx'] },
+  { path: '/features/', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/template-builder/', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/checklist-runs/', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/public-sharing/', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/features/import-export/', sources: ['src/views/Features.tsx', 'src/data/publicFeatures.ts'] },
+  { path: '/pricing/', sources: ['src/views/Pricing.tsx'] },
+  { path: '/about/', sources: ['src/views/About.tsx'] },
+  { path: '/contact/', sources: ['src/views/Contact.tsx'] },
+  { path: '/templates/', sources: ['src/views/ChecklistLibrary.tsx'] },
+  { path: '/categories/', sources: ['src/views/Categories.tsx'] },
 ] as const;
 
 const normalizeDate = (value: unknown): string | null => {

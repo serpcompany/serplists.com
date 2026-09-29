@@ -63,12 +63,13 @@ describe('buildPublicCategoryPath', () => {
     named.forEach((name) => {
       const path = buildPublicCategoryPath(name);
       expect(path).not.toBeNull();
-      const segment = decodeURIComponent(path!.split('/').pop()!);
+      // /categories/<slug>/
+      const segment = decodeURIComponent(path!.split('/').filter(Boolean).pop()!);
       expect(findCategoryNameBySlug(named, segment)).toBe(
         named.find((candidate) => buildCategorySlug(candidate) === buildCategorySlug(name)),
       );
     });
-    expect(buildPublicCategoryPath('日本語')).toBe('/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E');
+    expect(buildPublicCategoryPath('日本語')).toBe('/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E/');
   });
 
   it('gives a category with no letters or digits no page', () => {
@@ -79,7 +80,7 @@ describe('buildPublicCategoryPath', () => {
 
   it('redirects a legacy ?category= query with a Unicode name', () => {
     expect(resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=Русский'))).toBe(
-      `/categories/${encodeURIComponent('русский')}`,
+      `/categories/${encodeURIComponent('русский')}/`,
     );
   });
 });

@@ -43,7 +43,7 @@ describe("verify-email failure redirect", () => {
     const { status, location } = await visitVerificationLink(token);
 
     expect(status).toBe(302);
-    expect(location).toBe("/login?verified=1&error=token_expired");
+    expect(location).toBe("/login/?verified=1&error=token_expired");
     expect(getLoginNotice(new URL(location!, "http://x").search)).toMatchObject({
       kind: "verification_failed",
       reason: "token_expired",
@@ -56,7 +56,7 @@ describe("verify-email failure redirect", () => {
     const { status, location } = await visitVerificationLink(token);
 
     expect(status).toBe(302);
-    expect(location).toBe("/login?verified=1&error=invalid_token");
+    expect(location).toBe("/login/?verified=1&error=invalid_token");
     expect(getLoginNotice(new URL(location!, "http://x").search)?.kind).toBe("verification_failed");
   });
 });
@@ -102,9 +102,9 @@ describe("verification return path round trip", () => {
   }
 
   it.each([
-    "/team-invites/abc_DEF-123",
-    "/team-invites/abc?x=1#h",
-    "/templates/launch-(v2)!~*'",
+    "/team-invites/abc_DEF-123/",
+    "/team-invites/abc/?x=1#h",
+    "/templates/launch-(v2)!~*'/",
   ])("returns to %s after verification", async (returnPath) => {
     const { status, location } = await signUpAndOpenVerificationLink(returnPath);
 

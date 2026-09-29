@@ -730,7 +730,7 @@ describe('sharing from the run page', () => {
       { apiClient: client, onShared, origin: 'https://serplists.com', updateRun: vi.fn() },
     );
 
-    expect(result).toMatchObject({ kind: 'ok', shareUrl: 'https://serplists.com/share/token-1' });
+    expect(result).toMatchObject({ kind: 'ok', shareUrl: 'https://serplists.com/share/token-1/' });
     expect(result.kind === 'ok' ? result.run : undefined).toMatchObject({ id: 'run-1', isPublic: true, revision: 4 });
     expect(onShared).toHaveBeenCalledWith('run-1');
   });
@@ -795,7 +795,7 @@ describe('run page sharing', () => {
     expect(result).toEqual({
       kind: 'ok',
       run: expect.objectContaining({ id: 'run-1', isPublic: true }),
-      shareUrl: 'https://app.test/share/token-1',
+      shareUrl: 'https://app.test/share/token-1/',
     });
     expect(onShared).toHaveBeenCalledWith('run-1');
   });

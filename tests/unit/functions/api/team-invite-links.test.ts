@@ -147,7 +147,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link", () => {
       }),
     );
     expect(typeof data.inviteToken).toBe("string");
-    expect(data.invitePath).toBe(`/team-invites/${encodeURIComponent(data.inviteToken)}`);
+    expect(data.invitePath).toBe(`/team-invites/${encodeURIComponent(data.inviteToken)}/`);
     expect(data.inviteUrl).toBe(`https://app.serplists.test${data.invitePath}`);
     expect(data.delivery).toEqual({
       mode: "link",

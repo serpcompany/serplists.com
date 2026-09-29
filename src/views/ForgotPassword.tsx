@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
 import { getAuthErrorMessage } from "@/lib/auth/authErrors";
+import { buildLoginPath, buildResetPasswordPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
@@ -28,7 +29,7 @@ const ForgotPassword = () => {
         return;
       }
 
-      const redirectTo = `${window.location.origin}/reset-password`;
+      const redirectTo = `${window.location.origin}${buildResetPasswordPath()}`;
       const result = await authClient.requestPasswordReset({ email, redirectTo });
 
       if (result?.error) {
@@ -51,7 +52,7 @@ const ForgotPassword = () => {
       footer={
         <>
           Remembered it?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          <Link href={buildLoginPath()} className="font-medium text-primary hover:underline">
             Back to sign in
           </Link>
         </>

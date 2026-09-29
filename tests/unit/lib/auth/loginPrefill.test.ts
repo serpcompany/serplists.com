@@ -29,7 +29,7 @@ describe('the sign-up email handoff', () => {
   it('keeps the new account email out of the login URL', () => {
     const url = new URL(VERIFY_EMAIL_LOGIN_PATH, 'https://serplists.com');
 
-    expect(url.pathname).toBe('/login');
+    expect(url.pathname).toBe('/login/');
     expect(url.searchParams.get('verify_email')).toBe('1');
     expect(url.searchParams.has('email')).toBe(false);
     expect(isSensitiveAnalyticsLocation(url.pathname, url.search)).toBe(false);

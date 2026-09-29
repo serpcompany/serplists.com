@@ -9,6 +9,7 @@ import {
   Surface,
 } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
+import { buildContactPath, buildPublicFeaturesPath } from '@/lib/routes';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Link } from '@/components/navigation/Link';
@@ -39,10 +40,10 @@ const About = () => {
           actions={
             <>
               <Button asChild>
-                <Link href="/features">Explore Features</Link>
+                <Link href={buildPublicFeaturesPath()}>Explore Features</Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/contact">Contact Us</Link>
+                <Link href={buildContactPath()}>Contact Us</Link>
               </Button>
             </>
           }

@@ -16,13 +16,10 @@ import { publicHeaderLinks } from '@/components/layout/publicSiteLinks';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { APP_BRAND_NAME } from '@/lib/brand';
-import { buildConsoleHomePath } from '@/lib/routes';
+import { buildConsoleHomePath, buildLoginPath, buildRegisterPath, isPathWithin } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
 import { Link } from '@/components/navigation/Link';
-
-const isActiveLink = (pathname: string, href: string): boolean =>
-  pathname === href || pathname.startsWith(`${href}/`);
 
 // The menu body: the same header links as the desktop nav (so a new header link shows up
 // on phones too), the theme switch, and the account actions.
@@ -38,7 +35,7 @@ export const PublicMobileMenu = ({
   <div className="flex flex-col gap-4 p-4">
     <nav aria-label="Site" className="flex flex-col gap-1">
       {publicHeaderLinks.map((item) => {
-        const active = isActiveLink(pathname, item.href);
+        const active = isPathWithin(pathname, item.href);
         return (
           <Link
             key={item.href}
@@ -70,10 +67,10 @@ export const PublicMobileMenu = ({
       ) : (
         <>
           <Button asChild onClick={onNavigate} variant="outline">
-            <Link href="/login">Log in</Link>
+            <Link href={buildLoginPath()}>Log in</Link>
           </Button>
           <Button asChild onClick={onNavigate}>
-            <Link href="/register">Get started</Link>
+            <Link href={buildRegisterPath()}>Get started</Link>
           </Button>
         </>
       )}

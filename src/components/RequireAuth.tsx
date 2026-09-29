@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { resolveProtectedRouteAction } from '@/contexts/authSession';
 import { withReturnPath } from '@/lib/auth/returnPath';
 import { APP_BRAND_NAME } from '@/lib/brand';
+import { buildLoginPath } from '@/lib/routes';
 
 const RequireAuth = ({ children }: { children: ReactNode }) => {
   const { retrySession, sessionStatus } = useAuth();
@@ -26,7 +27,7 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
 
     // Login sends the user back here after signing in (the `next` parameter, sanitized there).
     const { search, hash } = window.location;
-    router.replace(withReturnPath('/login', `${pathname}${search}${hash}`));
+    router.replace(withReturnPath(buildLoginPath(), `${pathname}${search}${hash}`));
   }, [action, pathname, router]);
 
   if (action === 'unavailable') {

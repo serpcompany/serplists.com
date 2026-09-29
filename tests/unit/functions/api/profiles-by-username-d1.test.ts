@@ -79,7 +79,8 @@ describe('GET /api/profiles/by-username casing', () => {
     addUser('newer', 'janedoe');
 
     const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
-    const previewUsername = decodeURIComponent(previewPath!.replace('/profile/', ''));
+    // /profile/<username>/
+    const previewUsername = decodeURIComponent(previewPath!.split('/')[2]!);
 
     expect(await (await lookUp(previewUsername)).json()).toMatchObject({ id: 'legacy' });
   });

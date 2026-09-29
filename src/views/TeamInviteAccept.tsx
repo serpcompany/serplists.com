@@ -22,6 +22,8 @@ import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
 import {
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
+  buildLoginPath,
+  buildRegisterPath,
 } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
@@ -150,12 +152,12 @@ export default function TeamInviteAccept() {
           </p>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <Link href={withReturnPath('/login', invitePath)}>
+              <Link href={withReturnPath(buildLoginPath(), invitePath)}>
                 Log in to accept
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href={withReturnPath('/register', invitePath)}>
+              <Link href={withReturnPath(buildRegisterPath(), invitePath)}>
                 Create an account
               </Link>
             </Button>
