@@ -1,6 +1,6 @@
 import { getTaskSubTasks, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
-import { findOpenRunTasks } from "../utils/template-reconciliation";
+import { findRunCompletionRefusal } from "../utils/run-completion";
 import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
 
 // Run content helpers for the personal run MCP endpoint: parsing, serialization, the
@@ -110,13 +110,13 @@ const MAX_REPORTED_OPEN_TASKS = 20;
  * (even an older one with open work) stays a no-op.
  */
 export function assertRunCanBeCompleted(sections: JsonRecord[]): void {
-  const { total, open } = findOpenRunTasks(sections);
-  if (total > 0 && open.length === 0) return;
-  throw new ToolError(
-    total === 0 ? "This run has no tasks to complete" : "Finish every task and Sub-task before completing the run",
-    "run_incomplete",
-    { openTaskCount: open.length, openTaskIds: open.slice(0, MAX_REPORTED_OPEN_TASKS) },
-  );
+  const refusal = findRunCompletionRefusal(sections);
+  if (!refusal) return;
+  const open = refusal.openTaskIds;
+  throw new ToolError(refusal.message, "run_incomplete", {
+    openTaskCount: open.length,
+    openTaskIds: open.slice(0, MAX_REPORTED_OPEN_TASKS),
+  });
 }
 
 function sectionTasks(section: JsonRecord): JsonRecord[] {

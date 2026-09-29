@@ -14,7 +14,7 @@ import {
 import { mergeSharedRunState, readStoredRunSections, sharedRunUpdateSchema } from '../utils/shared-run-merge';
 import { activeRunLimitResponse, findActiveRunLimitHit, isReopening } from '../utils/active-run-limit';
 import { canViewRun } from '../utils/run-access';
-import { completionStamps } from '../utils/run-completion';
+import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 
 // /api/checklists/shared/:token needs no login: holding the link is the only credential.
@@ -110,6 +110,18 @@ export async function handleSharedChecklist(
     const tooLarge = contentTooLargeResponse('run', nextSections, storedSections);
     if (tooLarge) return tooLarge;
     updates.items = JSON.stringify(nextSections);
+  }
+  // A link holder completes a run only as the run page would: it has tasks and none is left
+  // open, counting the ticks this save makes. The share page checks this too, but the link
+  // is not a trusted client. Guests get the open count, not task ids.
+  if (status === 'completed' && existingSharedRun.status !== 'completed') {
+    const refusal = findRunCompletionRefusal(nextSections);
+    if (refusal) {
+      return jsonError(refusal.message, 409, {
+        code: 'run_incomplete',
+        details: { openTaskCount: refusal.openTaskIds.length },
+      });
+    }
   }
   if (status !== undefined) {
     updates.status = status;

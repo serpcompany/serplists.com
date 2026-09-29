@@ -150,7 +150,9 @@ describe('audit rows are written only when the guarded write lands', () => {
 
   it('share-link PUT: a lost revision race returns 409', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
-    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1' })]);
+    // Every task done, so a guest may complete it.
+    const done = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1', items: done })]);
 
     const result = await send(handleChecklists, 'checklists/shared/token-1', 'PUT', { status: 'completed', expected_revision: 7 });
 
