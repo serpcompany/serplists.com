@@ -18,7 +18,7 @@ export type Scenario = {
   expectedStatus: number;
 };
 
-export const personalTemplate = "synthetic-template-50"; // owned by user-1, private
+export const personalTemplate = "synthetic-template-50"; // owned by user-1, public, 301 versions
 export const organizationTemplate = "synthetic-template-40"; // owned by team-seed-growth, private
 export const publicTemplateSlug = "synthetic-template-5"; // public, user-owned (synthetic ids equal slugs)
 export const publicTemplateOwner = "synth_6"; // synthetic-user-6, the owner of synthetic-template-5

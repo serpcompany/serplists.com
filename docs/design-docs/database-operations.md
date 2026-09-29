@@ -121,6 +121,8 @@ baseline.
   row: a save writes history row `version + 1`, so a lower value makes every save
   fail with a 409 edit conflict. `tests/integration/local-d1-fixtures.test.ts`
   checks this for every seeded Template and saves the seeded Organization Template.
+  The `d1:profile` synthetic data (`scripts/d1-profile-dataset.ts`) follows the same
+  rule, checked by `tests/unit/scripts/d1-profile-dataset.test.ts`.
   The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing
