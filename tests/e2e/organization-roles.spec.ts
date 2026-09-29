@@ -155,3 +155,31 @@ test('an Organization runner can run but not edit or delete', async ({ page }) =
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
   await expect(page.getByText('View only')).toHaveCount(0);
 });
+
+// An edit link reaches the editor with no Edit button on the way (a teammate's link, a
+// bookmark from before a demotion); the API would refuse every save from it.
+test('an Organization viewer opening an edit link gets a read-only notice, not the editor', async ({ page }) => {
+  const api = await mockOrganizationApi(page, 'viewer');
+
+  await page.goto('/dashboard/templates/tpl-org/edit');
+
+  await expect(page.getByText("You can't edit this template")).toBeVisible();
+  await expect(page.getByRole('link', { name: 'View template' })).toHaveAttribute(
+    'href',
+    '/dashboard/templates/tpl-org',
+  );
+  await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  expect(api.forbidden).toEqual([]);
+});
+
+test('an Organization runner opening New Template gets a read-only notice', async ({ page }) => {
+  const api = await mockOrganizationApi(page, 'runner');
+
+  await page.goto('/dashboard/templates/new');
+
+  await expect(page.getByText("You can't create templates here")).toBeVisible();
+  await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+  expect(api.forbidden).toEqual([]);
+});

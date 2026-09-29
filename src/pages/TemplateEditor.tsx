@@ -52,6 +52,8 @@ import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTempl
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
 import { saveTemplateForVisit } from "@/features/template-editor/saveForVisit";
 import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
+import { TemplateEditorReadOnlyNotice } from "@/components/template-editor/TemplateEditorReadOnlyNotice";
+import { useTemplateEditPermission } from "@/features/template-editor/useTemplateEditPermission";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const shouldNavigateToTemplatesAfterSave = (params: {
@@ -348,11 +350,17 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 // has loaded. A form created earlier would start from the blank defaults and be reset
 // after the outline mounted, so the first frame showed "New Template" and one empty
 // section. Reloading (Load latest version) passes through loading again, which
-// remounts the editor with the reloaded values.
+// remounts the editor with the reloaded values. A viewer who cannot save this template
+// (their Organization role, or someone else's template) gets a notice instead.
 const TemplateEditor = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const model = useTemplateEditorModel({ id });
+  const permission = useTemplateEditPermission({
+    isCreate: !id,
+    loading: model.loading,
+    ownership: model.ownership,
+  });
 
   if (model.loading) {
     return (
@@ -377,6 +385,18 @@ const TemplateEditor = () => {
         </div>
       </div>
     );
+  }
+
+  if (permission === "checking") {
+    return (
+      <div className="flex h-52 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (permission !== "editable") {
+    return <TemplateEditorReadOnlyNotice reason={permission} templateId={id} />;
   }
 
   return <TemplateEditorForm id={id} key={id ?? "new"} model={model} />;

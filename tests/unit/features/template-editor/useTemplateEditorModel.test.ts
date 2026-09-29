@@ -94,6 +94,36 @@ describe("loadTemplateEditorData", () => {
     expect(result.version).toBeUndefined();
   });
 
+  // The page decides from these whether the viewer may edit (templateEditPermission.ts).
+  it("keeps who owns the loaded template, and nothing for a new one or a failed load", async () => {
+    const organizationTemplate = await loadTemplateEditorData(
+      { id: "template-3" },
+      {
+        apiClient: {
+          getTemplateById: vi.fn().mockResolvedValue({
+            id: "template-3",
+            title: "Organization Template",
+            user_id: "creator-1",
+            team_id: "team-1",
+            owner_type: "team",
+          }),
+        },
+      },
+    );
+    const failed = await loadTemplateEditorData(
+      { id: "template-3" },
+      { apiClient: { getTemplateById: vi.fn().mockRejectedValue(new Error("Template not found")) } },
+    );
+
+    expect(organizationTemplate.ownership).toEqual({
+      userId: "creator-1",
+      teamId: "team-1",
+      ownerType: "team",
+    });
+    expect((await loadTemplateEditorData({})).ownership).toBeUndefined();
+    expect(failed.ownership).toBeUndefined();
+  });
+
   it("maps the API record into the editor form", async () => {
     const apiClient = {
       getTemplateById: vi.fn().mockResolvedValue({

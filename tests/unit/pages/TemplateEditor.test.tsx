@@ -41,6 +41,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => ({ canEditTemplates: true, isWorkspaceLoading: false, teams: [] }),
+}));
+
 vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
   useTemplateEditorAccess: (...args: unknown[]) =>
     mockUseTemplateEditorAccess(...args),
