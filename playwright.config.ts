@@ -1,5 +1,9 @@
 import { defineConfig } from "@playwright/test";
 import { existsSync } from "node:fs";
+import { disableRequestKeepAlive } from "./tests/e2e/support/request-connections";
+
+// The local API (workerd) closes connections idle for 5 seconds; see request-connections.ts.
+disableRequestKeepAlive();
 
 const frontendHost = process.env.PLAYWRIGHT_FRONTEND_HOST ?? "localhost";
 const frontendPort = process.env.PLAYWRIGHT_FRONTEND_PORT ?? "4173";
