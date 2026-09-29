@@ -44,8 +44,14 @@ import {
   buildPublicTemplatesPath,
   isPathWithin,
 } from '@/lib/routes';
+import { cn } from '@/lib/utils';
 
 type NavItem = { href: string; icon: typeof FileText; label: string };
+
+// Console targets are full-size (44px tall, like the old sidebar's rows; guarded by
+// tests/e2e/template-editor-bugs.spec.ts) instead of shadcn's 32px rows. Collapsed to
+// icons they stay shadcn's 32px squares.
+const TARGET_CLASS = 'h-11';
 
 const mainItems: NavItem[] = [
   { href: buildConsoleTemplatesPath(), icon: FileText, label: 'Templates' },
@@ -73,6 +79,7 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
+              className={TARGET_CLASS}
               isActive={active}
               tooltip={item.label}
               render={<Link href={item.href} aria-current={active ? 'page' : undefined} />}
@@ -91,7 +98,13 @@ function ThemeMenuButton() {
   const { accessibleLabel, label, toggle } = useThemeToggle();
 
   return (
-    <SidebarMenuButton aria-label={accessibleLabel} tooltip={label} onClick={toggle} type="button">
+    <SidebarMenuButton
+      aria-label={accessibleLabel}
+      className={TARGET_CLASS}
+      tooltip={label}
+      onClick={toggle}
+      type="button"
+    >
       <ThemeIcon />
       <span>{label}</span>
     </SidebarMenuButton>
@@ -134,7 +147,10 @@ export function AppSidebar() {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       tooltip="New Template"
-                      className="bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                      className={cn(
+                        TARGET_CLASS,
+                        'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground',
+                      )}
                       render={<Link href={buildConsoleTemplateCreatePath()} />}
                     >
                       <CirclePlus />
