@@ -28,7 +28,9 @@ const {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
     isTeamWorkspace: false,
+    isWorkspaceLoading: false,
     roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
+    workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
 }));
 
@@ -178,7 +180,9 @@ beforeEach(() => {
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;
   workspaceState.isTeamWorkspace = false;
+  workspaceState.isWorkspaceLoading = false;
   workspaceState.roles = {};
+  workspaceState.workspaceStatus = 'ready';
 });
 
 const hasShareButton = (html: string) => /Share<\/button>/.test(html);
@@ -296,6 +300,29 @@ describe('TemplateDetail copy into an Organization', () => {
     expect(html).not.toContain('Copy to');
     expect(html).not.toContain('Upgrade to copy template');
     expect(html).toContain('Start Run');
+  });
+});
+
+describe('TemplateDetail copy before the active context is known', () => {
+  // A stored Organization not yet confirmed shows as Personal: a copy made now would land
+  // in Personal, or send a Free user to Personal checkout.
+  it.each([true, false])('keeps the copy disabled, whatever the Personal plan (Pro: %s)', (isPro) => {
+    workspaceState.isWorkspaceLoading = true;
+    workspaceState.workspaceStatus = 'loading';
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro },
+      template: { ...buildV0DemoPrivateTemplate(), isPublic: true, userId: 'someone-else' },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).not.toContain('Upgrade to copy template');
+    expect(html).not.toContain('Copy to My Templates');
+    expect(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Loading\.\.\.<\/button>/.test(html)).toBe(true);
+    expect(mockUseTemplateDetailModel).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceStatus: 'loading' }),
+    );
   });
 });
 

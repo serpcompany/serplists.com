@@ -159,6 +159,7 @@ describe('getCopyTemplateButton', () => {
     canEditTemplates: true,
     isCloning: false,
     isTeamWorkspace: false,
+    isWorkspaceLoading: false,
     template: buildTemplate(),
   };
   const organization = { ...personal, isTeamWorkspace: true };
@@ -203,6 +204,19 @@ describe('getCopyTemplateButton', () => {
         billingState: { ...freeOrganizationBilling, isPro: true },
       }),
     ).toEqual({ disabled: false, label: 'Copy to My Templates', visible: true });
+  });
+
+  // The context shows Personal until a stored Organization is confirmed, so neither the
+  // Personal plan's label nor a click may apply yet.
+  it('waits for the active context before offering a Personal copy', () => {
+    for (const billingState of [
+      freeOrganizationBilling,
+      { ...freeOrganizationBilling, isPro: true },
+    ]) {
+      expect(
+        getCopyTemplateButton({ ...personal, billingState, isWorkspaceLoading: true }),
+      ).toEqual({ disabled: true, label: 'Loading...', visible: true });
+    }
   });
 
   it('shows progress while copying', () => {

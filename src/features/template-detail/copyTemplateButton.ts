@@ -23,10 +23,16 @@ export const getCopyTemplateButton = (params: {
   canEditTemplates: boolean;
   isCloning: boolean;
   isTeamWorkspace: boolean;
+  // A stored Organization is not confirmed yet, so the context shown may not be the real one.
+  isWorkspaceLoading: boolean;
   template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'userId'> | null;
 }): CopyTemplateButton => {
   if (!canCopyTemplate(params.template)) {
     return { disabled: true, label: '', visible: false };
+  }
+
+  if (params.isWorkspaceLoading) {
+    return { disabled: true, label: 'Loading...', visible: true };
   }
 
   if (params.isTeamWorkspace) {

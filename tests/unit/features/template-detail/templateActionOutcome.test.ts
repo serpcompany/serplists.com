@@ -3,9 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast: toastMocks }));
 
-import { followTemplateActionResult } from '@/features/template-detail/templateActionOutcome';
+import { WORKSPACE_NOT_READY_MESSAGE } from '@/contexts/workspaceSelection';
+import {
+  followTemplateActionResult,
+  saveTemplateToAccount,
+} from '@/features/template-detail/templateActionOutcome';
 import type { TemplateDetailActionResult } from '@/features/template-detail/useTemplateDetailModel';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
+import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 const visit = (current: boolean): PageVisit => ({ isCurrent: () => current });
 
@@ -74,5 +80,70 @@ describe('followTemplateActionResult', () => {
     await followTemplateActionResult({ kind: 'upgrade_required' }, visit(true), spies);
 
     expect(finished).toBe(true);
+  });
+});
+
+// While a stored Organization is unconfirmed the context shows Personal (no teamId), so
+// a copy must wait: it would land in Personal, or send a Free user to Personal checkout.
+describe('saveTemplateToAccount before the active context is known', () => {
+  const publicTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
+    categories: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    description: '',
+    id: 'template-1',
+    isPublic: true,
+    sections: [],
+    slug: 'audit',
+    tags: [],
+    title: 'Audit',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    userId: 'someone-else',
+    version: 1,
+    ...overrides,
+  });
+
+  const save = (params: {
+    isPro: boolean;
+    template?: ChecklistTemplate;
+    workspaceStatus: 'ready' | 'loading' | 'error';
+  }) => {
+    const apiClient = { clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'copy-1' }) };
+    const createTemplate = vi.fn().mockResolvedValue(publicTemplate({ id: 'copy-2' }));
+    const result = saveTemplateToAccount({
+      apiClient,
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: params.isPro },
+      createTemplate,
+      isAuthenticated: true,
+      teamId: undefined,
+      template: params.template ?? publicTemplate(),
+      userId: 'user-1',
+      workspaceStatus: params.workspaceStatus,
+    });
+    return { apiClient, createTemplate, result };
+  };
+
+  it.each([
+    ['loading', true],
+    ['loading', false],
+    ['error', true],
+    ['error', false],
+  ] as const)('refuses a copy while the context is %s (Pro: %s), without cloning or checkout', async (workspaceStatus, isPro) => {
+    for (const template of [publicTemplate(), publicTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID })]) {
+      const { apiClient, createTemplate, result } = save({ isPro, template, workspaceStatus });
+
+      await expect(result).resolves.toEqual({ kind: 'error', message: WORKSPACE_NOT_READY_MESSAGE });
+      expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
+      expect(createTemplate).not.toHaveBeenCalled();
+    }
+  });
+
+  it('copies once the context is known', async () => {
+    const { apiClient, result } = save({ isPro: true, workspaceStatus: 'ready' });
+
+    await expect(result).resolves.toEqual({ kind: 'ok', templateId: 'copy-1' });
+    expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
+      teamId: undefined,
+      visibility: 'private',
+    });
   });
 });

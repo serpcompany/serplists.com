@@ -92,7 +92,8 @@ const TemplateDetail = () => {
   // Actions below await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
-  const { activeTeamId, canEditTemplates, getPermissions, isTeamWorkspace, teams } = useWorkspace();
+  const { activeTeamId, canEditTemplates, getPermissions, isTeamWorkspace, teams, workspaceStatus } =
+    useWorkspace();
   // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
@@ -129,6 +130,7 @@ const TemplateDetail = () => {
     teamId: activeTeamId,
     userId: user?.id,
     username: user?.username,
+    workspaceStatus,
   });
   const displayTemplate = template;
   // Organization Templates follow the viewer's role, never who created them.
@@ -138,6 +140,8 @@ const TemplateDetail = () => {
     canEditTemplates,
     isCloning: isCloningTemplate,
     isTeamWorkspace,
+    // Personal users are never kept waiting: their status is known at once.
+    isWorkspaceLoading: workspaceStatus === 'loading' || workspaceStatus === 'error',
     template: displayTemplate,
   });
   // Runs and copies of another Organization's private template go to that Organization.

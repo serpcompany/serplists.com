@@ -53,6 +53,7 @@ const PublicTemplate = () => {
     canRunTemplates,
     isTeamWorkspace,
     isWorkspaceLoading,
+    workspaceStatus,
   } = useWorkspace();
   const { createRun, createTemplate } = useTemplates();
   const [isCreatingRun, setIsCreatingRun] = useState(false);
@@ -79,6 +80,7 @@ const PublicTemplate = () => {
     ownerUsername: username,
     teamId: activeTeamId,
     userId: user?.id,
+    workspaceStatus,
   });
   const displayTemplate = template;
   const displayTotalItems =

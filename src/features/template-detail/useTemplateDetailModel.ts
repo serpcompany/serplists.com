@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
 
@@ -54,6 +55,8 @@ type TemplateDetailCommonOptions = {
   teamId: string | undefined;
   userId?: string;
   username?: string;
+  // Required so a copy never goes to a context shown only until the stored one is known.
+  workspaceStatus: WorkspaceStatus;
 };
 
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
@@ -144,6 +147,7 @@ export const useTemplateDetailModel = (
       teamId: options.teamId,
       template,
       userId: options.userId,
+      workspaceStatus: options.workspaceStatus,
     });
   };
 

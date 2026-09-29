@@ -77,6 +77,7 @@ const privateOptions = (): UseTemplateDetailModelOptions => ({
   teamId: undefined,
   userId: 'user-1',
   username: 'alice',
+  workspaceStatus: 'ready',
 });
 
 const publicOptions = (userId: string | undefined): UseTemplateDetailModelOptions => ({
@@ -89,6 +90,7 @@ const publicOptions = (userId: string | undefined): UseTemplateDetailModelOption
   teamId: undefined,
   userId,
   username: undefined,
+  workspaceStatus: 'ready',
 });
 
 let root: Root | undefined;
