@@ -73,9 +73,7 @@ describe('signOutAndReturn', () => {
     await expect(switching).resolves.toBe(true);
 
     expect(navigate).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith('/login?next=%2Fteam-invites%2Finvite-token', {
-      state: { from: '/team-invites/invite-token' },
-    });
+    expect(navigate).toHaveBeenCalledWith('/login?next=%2Fteam-invites%2Finvite-token');
   });
 
   it('keeps the query and hash of the return path', async () => {
@@ -90,7 +88,6 @@ describe('signOutAndReturn', () => {
 
     expect(navigate).toHaveBeenCalledWith(
       '/login?next=%2Fteam-invites%2Finvite-token%3Fref%3Demail%23join',
-      { state: { from: '/team-invites/invite-token?ref=email#join' } },
     );
   });
 

@@ -6,8 +6,11 @@
 
 export type StringStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-// Keys whose last write could not be persisted, with the value that was written.
+// Keys whose last write could not be persisted, with the value that was written. The server
+// renders client components too: it has no storage, and anything kept in this module there
+// would be shared by every visitor, so on the server nothing is read or kept.
 const unpersisted = new Map<string, string>();
+const onServer = () => typeof window === 'undefined';
 
 export const getLocalStorage = (): Storage | undefined => {
   if (typeof window === 'undefined') return undefined;
@@ -31,6 +34,7 @@ export const getSessionStorage = (): Storage | undefined => {
 
 export const safeLocalStorage: StringStorage = {
   getItem(key) {
+    if (onServer()) return null;
     if (unpersisted.has(key)) return unpersisted.get(key) ?? null;
     try {
       return getLocalStorage()?.getItem(key) ?? null;
@@ -39,6 +43,7 @@ export const safeLocalStorage: StringStorage = {
     }
   },
   setItem(key, value) {
+    if (onServer()) return;
     try {
       const storage = getLocalStorage();
       if (storage) {

@@ -156,11 +156,16 @@ describe('handleUpgradeRequiredForContext', () => {
 // Template import and export await a request and then handle its failure. A checkout
 // or sign-in redirect for that failure ran even after the user had left the page.
 describe('handleAccessFailure', () => {
-  const location = { pathname: '/dashboard/templates/import', search: '', hash: '' };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.stubGlobal('window', { location: { href: 'http://localhost/dashboard/runs' } });
+    vi.stubGlobal('window', {
+      location: {
+        href: 'http://localhost/dashboard/runs',
+        pathname: '/dashboard/import-templates',
+        search: '?billing=success',
+        hash: '#export',
+      },
+    });
   });
 
   afterEach(() => {
@@ -196,7 +201,6 @@ describe('handleAccessFailure', () => {
     await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
       fallbackMessage: 'Failed to export templates',
       isCurrent: () => false,
-      location,
       navigate,
     });
 
@@ -210,11 +214,13 @@ describe('handleAccessFailure', () => {
     await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
       fallbackMessage: 'Failed to export templates',
       isCurrent: () => true,
-      location,
       navigate,
     });
 
-    expect(navigate).toHaveBeenCalledWith('/login', expect.anything());
+    // Back to this page, with its query and hash, after sign-in.
+    expect(navigate).toHaveBeenCalledWith(
+      '/login?next=%2Fdashboard%2Fimport-templates%3Fbilling%3Dsuccess%23export',
+    );
   });
 });
 
