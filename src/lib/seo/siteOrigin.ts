@@ -7,6 +7,16 @@ import { canonicalPath } from '../http/urlStandard';
  */
 export const CANONICAL_ORIGIN = 'https://serplists.com';
 
+/** Staging's one host (the `preview` environment in wrangler.toml). */
+export const STAGING_ORIGIN = 'https://staging.serplists.com';
+
+/**
+ * A request with this header is exempt from the redirect of a Worker's workers.dev URL to its
+ * environment's host (next.config.ts), so CI can test a deployment there. It is not a secret:
+ * it only shows the same public site on another host.
+ */
+export const SMOKE_TEST_HEADER = 'x-serplists-smoke-test';
+
 type SiteEnvSource = Readonly<Record<string, string | undefined>>;
 
 /**
@@ -18,6 +28,13 @@ type SiteEnvSource = Readonly<Record<string, string | undefined>>;
  */
 export const isProductionSite = (env: SiteEnvSource = process.env): boolean =>
   env.SITE_ENV === 'production';
+
+/**
+ * The one host this deployment answers on: serplists.com for production, staging's host for
+ * anything else. Every other host that reaches the Worker redirects there (next.config.ts).
+ */
+export const deploymentOrigin = (env: SiteEnvSource = process.env): string =>
+  isProductionSite(env) ? CANONICAL_ORIGIN : STAGING_ORIGIN;
 
 /**
  * The production URL for a path or URL on any host, in the URL standard's canonical form

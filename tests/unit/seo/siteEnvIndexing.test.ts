@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import robots from '@/app/robots';
 import { renderStaticHeaders } from '@/lib/http/securityHeaders';
-import { buildCanonicalUrl, CANONICAL_ORIGIN, isProductionSite } from '@/lib/seo/siteOrigin';
+import {
+  buildCanonicalUrl,
+  CANONICAL_ORIGIN,
+  deploymentOrigin,
+  isProductionSite,
+  STAGING_ORIGIN,
+} from '@/lib/seo/siteOrigin';
 
 import { headersFor, loadBuiltRoutes, withSiteEnv } from '../../support/nextRouting';
 
@@ -149,6 +155,12 @@ describe('site environment helpers', () => {
     for (const value of ['staging', 'Production', 'prod', '', undefined]) {
       expect(isProductionSite({ SITE_ENV: value }), String(value)).toBe(false);
     }
+  });
+
+  it('answers on serplists.com in production and on staging otherwise', () => {
+    expect(deploymentOrigin({ SITE_ENV: 'production' })).toBe(CANONICAL_ORIGIN);
+    expect(deploymentOrigin({ SITE_ENV: 'staging' })).toBe(STAGING_ORIGIN);
+    expect(deploymentOrigin({})).toBe(STAGING_ORIGIN);
   });
 
   it('builds production canonical URLs in the canonical form, without query strings or hashes', () => {

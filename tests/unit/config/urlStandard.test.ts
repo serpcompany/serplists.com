@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { canonicalPath } from '@/lib/http/urlStandard';
+import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
 
 import {
   loadBuiltRoutes,
@@ -18,8 +19,10 @@ vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
 
 // The SERP URL standard: pages end in a slash, files never do, the other form redirects (308)
 // to the canonical one in one hop, and only the canonical form answers. The API and
-// /.well-known are not pages and are never redirected. Every case runs through Next.js's
-// server and through OpenNext's routing in the Worker, which must agree.
+// /.well-known are not pages and are never redirected on their own host. Each environment
+// answers on one host; www and workers.dev hosts redirect there in one hop, and the smoke-test
+// header exempts workers.dev. Every case runs through Next.js's server and through OpenNext's
+// routing in the Worker, which must agree.
 
 const PRODUCTION = await loadBuiltRoutes('production');
 const STAGING = await loadBuiltRoutes('staging');
@@ -182,6 +185,77 @@ describe.each([
     for (const path of paths) {
       const redirect = await redirectFor(build, `${ORIGIN}${path}`);
       expect(redirect?.location ?? path, path).toBe(canonicalPath(path));
+    }
+  });
+});
+
+describe.each([
+  ['production', PRODUCTION, 'https://serplists.com'],
+  ['staging', STAGING, 'https://staging.serplists.com'],
+] as const)('other hosts (%s build)', (_name, build, canonicalOrigin) => {
+  const WORKERS_DEV = [
+    'https://serp-checklists-production.serp.workers.dev',
+    'https://serp-checklists-preview.serp.workers.dev',
+    // A version preview URL.
+    'https://3f2a1b9c-serp-checklists-preview.serp.workers.dev',
+  ];
+
+  it('sends every workers.dev URL to the environment host, in canonical form and one hop', async () => {
+    for (const host of WORKERS_DEV) {
+      for (const [path, canonical] of [
+        ['/', '/'],
+        ['/about', '/about/'],
+        ['/about/', '/about/'],
+        ['/profile/john.doe', '/profile/john.doe/'],
+        ['/profile/serp/ultimate-camping-checklist', '/profile/serp/ultimate-camping-checklist/'],
+        ['/robots.txt', '/robots.txt'],
+        ['/robots.txt/', '/robots.txt'],
+        ['/sitemaps/pages/1.xml/', '/sitemaps/pages/1.xml'],
+        ['/login?next=%2Fdashboard%2F', '/login/?next=%2Fdashboard%2F'],
+      ]) {
+        expect(await redirectFor(build, `${host}${path}`), `${host}${path}`).toEqual({
+          status: 308,
+          location: `${canonicalOrigin}${canonical}`,
+        });
+      }
+    }
+  });
+
+  it('keeps the exact API path when it sends the API there', async () => {
+    for (const path of ['/api/mcp', '/api/auth/get-session', '/api/health/', '/api', '/api/', '/.well-known/security.txt']) {
+      expect(await redirectFor(build, `${WORKERS_DEV[0]}${path}`), path).toEqual({
+        status: 308,
+        location: `${canonicalOrigin}${path}`,
+      });
+    }
+  });
+
+  it('serves a workers.dev request that carries the smoke-test header', async () => {
+    const smokeTest = { headers: { [SMOKE_TEST_HEADER]: '1' } };
+    for (const path of ['/', '/about/', '/robots.txt', '/api/health']) {
+      expect(await redirectFor(build, `${WORKERS_DEV[0]}${path}`, smokeTest), path).toBeNull();
+    }
+    // The header does not skip the URL standard itself.
+    expect(await redirectFor(build, `${WORKERS_DEV[0]}/about`, smokeTest)).toEqual({ status: 308, location: '/about/' });
+  });
+
+  it('sends www to serplists.com, whatever the environment, with no smoke-test exemption', async () => {
+    for (const options of [undefined, { headers: { [SMOKE_TEST_HEADER]: '1' } }]) {
+      expect(await redirectFor(build, 'https://www.serplists.com/pricing', options)).toEqual({
+        status: 308,
+        location: 'https://serplists.com/pricing/',
+      });
+      expect(await redirectFor(build, 'https://www.serplists.com/', options)).toEqual({
+        status: 308,
+        location: 'https://serplists.com/',
+      });
+    }
+  });
+
+  it('leaves the environment host and local servers alone', async () => {
+    for (const origin of [canonicalOrigin, 'http://localhost:4173', 'http://127.0.0.1:3000']) {
+      expect(await redirectFor(build, `${origin}/about/`), origin).toBeNull();
+      expect(await redirectFor(build, `${origin}/api/health`), origin).toBeNull();
     }
   });
 });

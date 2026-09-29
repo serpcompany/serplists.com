@@ -80,3 +80,33 @@ export function trailingSlashRedirects(): RedirectRule[] {
     rule(`/:top(${TOP})/:dir+/:page(${PAGE})`, '/:top/:dir+/:page/'),
   ];
 }
+
+/**
+ * Redirects every path on a host that matches `has` (and none of `missing`) to the same path
+ * on `origin`, in one hop to its canonical form. The API and /.well-known keep their exact
+ * path. The homepage has its own rule because OpenNext cannot fill an empty path parameter,
+ * and profile pages and files come before `/:path+`, which would match them too.
+ */
+export function canonicalHostRedirects(
+  origin: string,
+  has: RedirectCondition[],
+  missing: RedirectCondition[] = [],
+): RedirectRule[] {
+  const rule = (source: string, destination: string): RedirectRule => ({
+    source,
+    has,
+    ...(missing.length ? { missing } : {}),
+    destination: `${origin}${destination}`,
+    permanent: true,
+  });
+  return [
+    rule('/:ns(api|\\.well-known)/:path*/', '/:ns/:path*/'),
+    rule('/:ns(api|\\.well-known)/:path*', '/:ns/:path*'),
+    rule('/profile/:username', '/profile/:username/'),
+    rule('/profile/:username/:template', '/profile/:username/:template/'),
+    rule('/', '/'),
+    rule(`/:file(${FILE})`, '/:file'),
+    rule(`/:dir+/:file(${FILE})`, '/:dir+/:file'),
+    rule('/:path+', '/:path+/'),
+  ];
+}

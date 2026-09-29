@@ -10,10 +10,22 @@ import {
   LOCAL_HOSTS,
   SECURITY_HEADERS,
 } from './src/lib/http/securityHeaders';
-import { trailingSlashRedirects } from './src/lib/http/urlStandard';
-import { isProductionSite } from './src/lib/seo/siteOrigin';
+import { canonicalHostRedirects, trailingSlashRedirects } from './src/lib/http/urlStandard';
+import {
+  CANONICAL_ORIGIN,
+  deploymentOrigin,
+  isProductionSite,
+  SMOKE_TEST_HEADER,
+} from './src/lib/seo/siteOrigin';
 
 const NOINDEX = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+
+// Each environment answers on one host (SERP environment configuration standard): every other
+// host that reaches its Worker redirects there. A request with the smoke-test header skips the
+// workers.dev redirect, so CI can test a deployment on its workers.dev URL.
+const workersDevHost = { type: 'host', value: '.+\\.workers\\.dev' } as const;
+const wwwHost = { type: 'host', value: 'www\\.serplists\\.com' } as const;
+const smokeTest = { type: 'header', key: SMOKE_TEST_HEADER } as const;
 
 const nextConfig: NextConfig = {
   // SERP URL standard (src/lib/http/urlStandard.ts): pages end in a slash (/about/), files and
@@ -52,6 +64,10 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // Other hosts first, so they reach the canonical host in one hop.
+      ...canonicalHostRedirects(deploymentOrigin(), [workersDevHost], [smokeTest]),
+      // www serves the production Worker.
+      ...canonicalHostRedirects(CANONICAL_ORIGIN, [wwwHost]),
       // Paths from earlier versions of the app, each straight to its page's canonical URL.
       // A source matches with or without its trailing slash.
       { source: '/checklists', destination: '/templates/', permanent: true },
