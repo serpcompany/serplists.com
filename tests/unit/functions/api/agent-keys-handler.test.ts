@@ -8,7 +8,7 @@ const dbMocks = vi.hoisted(() => {
     limit: vi.fn(),
   };
   const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
+  const updateChain = { set: vi.fn(), where: vi.fn(), returning: vi.fn() };
   return {
     db: {
       select: vi.fn(() => selectChain),
@@ -49,7 +49,8 @@ describe("Personal run key management handler", () => {
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockResolvedValue(undefined);
+    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
+    dbMocks.updateChain.returning.mockResolvedValue([]);
   });
 
   it("requires an authenticated browser session", async () => {
@@ -208,7 +209,7 @@ describe("Personal run key management handler", () => {
   });
 
   it("revokes only a key found under the current user", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "key-1" }]);
+    dbMocks.updateChain.returning.mockResolvedValueOnce([{ revokedAt: "2026-09-19T02:00:00.000Z" }]);
 
     const response = await handleAgentKeys(
       new Request("http://localhost/api/agent-keys/key-1", { method: "DELETE" }),
@@ -217,12 +218,25 @@ describe("Personal run key management handler", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ id: "key-1", revokedAt: expect.any(String) });
+    expect(body).toEqual({ id: "key-1", revokedAt: "2026-09-19T02:00:00.000Z" });
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
+    expect(dbMocks.db.select).not.toHaveBeenCalled();
   });
 
-  it("does not revoke a missing, already-revoked, or foreign key", async () => {
+  it("reports an already-revoked key's stored time without revoking it again", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ revokedAt: "2026-09-18T02:00:00.000Z" }]);
+
+    const response = await handleAgentKeys(
+      new Request("http://localhost/api/agent-keys/key-1", { method: "DELETE" }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: "key-1", revokedAt: "2026-09-18T02:00:00.000Z" });
+  });
+
+  it("does not revoke a missing or foreign key", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
     const response = await handleAgentKeys(
@@ -231,7 +245,7 @@ describe("Personal run key management handler", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(dbMocks.db.update).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual(expect.objectContaining({ error: "Personal run key not found" }));
   });
 
   it("rejects lookalike paths instead of treating them as the collection", async () => {

@@ -49,9 +49,11 @@ describe('withStableTemplateIdentities', () => {
     const stable = withStableTemplateIdentities(legacySections);
 
     expect(ids(stable)).toEqual(ids(assignMissingStableTemplateIdentities(legacySections)));
+    // A sub-item stored on the task itself is not a Sub-task (the run page never shows it), so
+    // it keeps what it has.
     expect(ids(stable)).toEqual([
       'legacy-section-1',
-      'legacy-item-1-1', 'legacy-subitem-1-1-1', 'legacy-subitem-1-1-2', 'legacy-subitem-1-1-3',
+      'legacy-item-1-1', 1, 'legacy-subitem-1-1-1', 'legacy-subitem-1-1-2',
       'kept-task', 'legacy-subitem-1-2-1',
       'legacy-item-1-3',
       'kept-section', 'legacy-item-2-1',
@@ -61,7 +63,7 @@ describe('withStableTemplateIdentities', () => {
     expect((stable[0] as Row).title).toBe('Plan');
     expect(((stable[0] as Row).items as Row[])[0].contents).toEqual([
       { type: 'text', value: 'Notes' },
-      { type: 'subItems', value: '', subItems: [{ id: 'legacy-subitem-1-1-2', title: 'In a block' }, { id: 'legacy-subitem-1-1-3', title: 'No id' }] },
+      { type: 'subItems', value: '', subItems: [{ id: 'legacy-subitem-1-1-1', title: 'In a block' }, { id: 'legacy-subitem-1-1-2', title: 'No id' }] },
     ]);
   });
 
@@ -69,7 +71,7 @@ describe('withStableTemplateIdentities', () => {
     // A list is sections only when its first entry is a section (isSectionedList), so the
     // section-level entry that is not an object sits between two sections.
     const sections = [
-      { title: 'Plan', items: ['A text task', { title: 'First' }, { title: 'Second', subItems: ['text', { title: 'Sub' }] }] },
+      { title: 'Plan', items: ['A text task', { title: 'First' }, { title: 'Second', contents: [{ type: 'subItems', subItems: ['text', { title: 'Sub' }] }] }] },
       'junk',
       { title: 'Ship', items: [{ title: 'Release' }] },
     ];
@@ -81,7 +83,7 @@ describe('withStableTemplateIdentities', () => {
         items: [
           'A text task',
           { id: 'legacy-item-1-1', title: 'First' },
-          { id: 'legacy-item-1-2', title: 'Second', subItems: ['text', { id: 'legacy-subitem-1-2-1', title: 'Sub' }] },
+          { id: 'legacy-item-1-2', title: 'Second', contents: [{ type: 'subItems', subItems: ['text', { id: 'legacy-subitem-1-2-1', title: 'Sub' }] }] },
         ],
       },
       'junk',

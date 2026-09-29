@@ -21,7 +21,7 @@ const template: ChecklistTemplate = {
 };
 
 describe('TemplateListItem', () => {
-  it('keeps start, edit, and delete actions available in dashboard list view', () => {
+  it('keeps start, edit, and archive actions available in dashboard list view', () => {
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
         <TemplateListItem
@@ -34,10 +34,10 @@ describe('TemplateListItem', () => {
 
     expect(html).toContain('Start Run');
     expect(html).toContain('href="/dashboard/templates/template-1/edit"');
-    expect(html).toContain('Delete');
+    expect(html).toContain('Archive</button>');
   });
 
-  it('shows no actions to members who cannot run, edit or delete Templates', () => {
+  it('shows no actions to members who cannot run, edit or archive Templates', () => {
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
         <TemplateListItem canEdit={false} template={template} />
@@ -47,10 +47,10 @@ describe('TemplateListItem', () => {
     expect(html).toContain('Website Launch Checklist');
     expect(html).not.toContain('Start Run');
     expect(html).not.toContain('/edit"');
-    expect(html).not.toContain('Delete');
+    expect(html).not.toContain('Archive');
   });
 
-  it('lets a runner start a run without editing or deleting', () => {
+  it('lets a runner start a run without editing or archiving', () => {
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
         <TemplateListItem canEdit={false} onStartRun={vi.fn()} template={template} />
@@ -59,6 +59,6 @@ describe('TemplateListItem', () => {
 
     expect(html).toContain('Start Run');
     expect(html).not.toContain('/edit"');
-    expect(html).not.toContain('Delete');
+    expect(html).not.toContain('Archive');
   });
 });

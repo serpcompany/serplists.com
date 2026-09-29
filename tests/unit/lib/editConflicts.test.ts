@@ -13,12 +13,19 @@ const editConflict = createApiError(409, {
 });
 const sharedRunConflict = createApiError(409, { error: 'Make the run private first.', code: 'shared_run_conflict' });
 const archived = createApiError(404, { error: 'Checklist not found' });
+// The run is still there, but its template was archived or made private, or is not usable here.
+const sourceUnavailable = createApiError(404, {
+  error: 'Source template not found',
+  code: 'source_template_unavailable',
+});
 
 describe('isStaleRecordError', () => {
   it('matches answers that mean the cached copy is out of date', () => {
     expect(isStaleRecordError(editConflict)).toBe(true);
     expect(isStaleRecordError(sharedRunConflict)).toBe(true);
     expect(isStaleRecordError(archived)).toBe(true);
+    // The runs list still reloads, so the run stops offering Revalidate.
+    expect(isStaleRecordError(sourceUnavailable)).toBe(true);
   });
 
   it('ignores failures a refresh cannot fix', () => {
@@ -36,6 +43,12 @@ describe('conflict messages', () => {
     expect(getRevalidateRunErrorMessage(archived)).toBe('This run is no longer available. The list was refreshed.');
     expect(getRevalidateRunErrorMessage(new Error('Network down'))).toBe('Network down');
     expect(getRevalidateRunErrorMessage('boom')).toBe('Unable to revalidate run');
+  });
+
+  it('says the template is gone, not the run, when only the source template is unavailable', () => {
+    expect(getRevalidateRunErrorMessage(sourceUnavailable)).toBe(
+      "This run's template is no longer available, so it can't be revalidated. The list was refreshed.",
+    );
   });
 
   it('says the template was reloaded', () => {

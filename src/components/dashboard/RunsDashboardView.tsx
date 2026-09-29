@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  Archive,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -11,7 +12,6 @@ import {
   RefreshCw,
   Search,
   Share2,
-  Trash2,
 } from 'lucide-react';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
@@ -52,6 +52,7 @@ import {
   buildConsoleTemplatesPath,
   buildRunPath,
 } from '@/lib/routes';
+import { isStaleRecordError } from '@/lib/editConflicts';
 import { cn } from '@/lib/utils';
 import { countRunTasks } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
@@ -79,6 +80,8 @@ interface RunsDashboardViewProps {
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
   // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
+  // Reloads the runs list before a refused share shows its error (a run archived elsewhere).
+  onShareFailed?: (error: unknown) => Promise<void>;
   /** Turns the run's share link off; the run becomes private and can be revalidated. */
   onStopSharingRun?: (runId: string) => Promise<void>;
   loading?: boolean;
@@ -107,6 +110,7 @@ export function RunsDashboardView({
   onDeleteRun,
   onRevalidateRun,
   onRunShared,
+  onShareFailed,
   onStopSharingRun,
   loading = false,
   loadError,
@@ -119,7 +123,7 @@ export function RunsDashboardView({
   // Each run stays busy until its own Revalidate finishes.
   const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
-    useRunsDashboardSharing({ runs, onRunShared, onStopSharingRun });
+    useRunsDashboardSharing({ runs, onRunShared, onShareFailed, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
@@ -141,12 +145,14 @@ export function RunsDashboardView({
     setIsDeletingRun(true);
     try {
       await onDeleteRun(runToDelete);
-      toast.success('Run deleted');
+      toast.success('Run archived');
       setRunToDelete(null);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to delete run.',
+        error instanceof Error ? error.message : 'Failed to archive run.',
       );
+      // Archived elsewhere: the list reloaded without it, so a retry could only fail again.
+      if (isStaleRecordError(error)) setRunToDelete(null);
     } finally {
       setIsDeletingRun(false);
     }
@@ -390,8 +396,8 @@ export function RunsDashboardView({
                               onClick={() => setRunToDelete(run.id)}
                               className="text-destructive"
                             >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
+                              <Archive className="mr-2 h-4 w-4" />
+                              Archive
                             </DropdownMenuItem>
                           ) : null}
                         </DropdownMenuContent>
@@ -415,10 +421,11 @@ export function RunsDashboardView({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete run</DialogTitle>
+            <DialogTitle>Archive run</DialogTitle>
+            {/* DELETE archives it and ends its share link; /dashboard/archive restores it. */}
             <DialogDescription>
-              Are you sure you want to delete this run? This action cannot be
-              undone.
+              The run moves to Archive, where it can be restored. Any share
+              link stops working.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -434,7 +441,7 @@ export function RunsDashboardView({
               disabled={isDeletingRun}
               onClick={() => void confirmDeleteRun()}
             >
-              {isDeletingRun ? 'Deleting...' : 'Delete'}
+              {isDeletingRun ? 'Archiving...' : 'Archive'}
             </Button>
           </DialogFooter>
         </DialogContent>

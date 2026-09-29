@@ -45,6 +45,7 @@ import {
   refreshAfterTemplateSave,
   refreshRunLists,
   refreshRunsAfterConflict,
+  refreshTemplatesAfterConflict,
 } from "./templateListCache";
 import {
   CATALOG_QUERY_KEY,
@@ -317,6 +318,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return true;
     },
     onSuccess: (_deleted, id) => refreshAfterTemplateDelete(queryClient, id),
+    onError: (error, id) => refreshTemplatesAfterConflict(queryClient, error, id),
   });
 
   const createRunMutation = useMutation({
@@ -359,7 +361,8 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     onSuccess: async () => {
       await refreshRunLists(queryClient);
-    }
+    },
+    onError: (error, { templateId }) => refreshTemplatesAfterConflict(queryClient, error, templateId),
   });
 
   const updateRunMutation = useMutation({
@@ -386,6 +389,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return true;
     },
     onSuccess: () => refreshAfterRunDelete(queryClient),
+    onError: (error) => refreshRunsAfterConflict(queryClient, error),
   });
 
   const revalidateRunMutation = useMutation({

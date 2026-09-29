@@ -1,5 +1,5 @@
-import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   dropTemplateFromCatalog,
@@ -41,6 +41,42 @@ describe('delete refreshes', () => {
     expect(client.getQueryData(['templates', 'catalog'])).toEqual([]);
     expect(client.getQueryState(queryKeys.archivedTemplates('user-1', 'personal'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(queryKeys.archivedTemplates('user-1', 'team-1'))?.isInvalidated).toBe(true);
+    client.clear();
+  });
+
+  // The edge cache can still answer with the pre-delete catalog for 5 minutes, so the
+  // patched copy must stay fresh: a refetch would put the deleted Template back.
+  it('keeps the patched catalog fresh when a Template is deleted, and still marks the other lists stale', () => {
+    const client = new QueryClient();
+    client.setQueryData(['templates', 'catalog'], [{ id: 'deleted' }, { id: 'kept' }]);
+    client.setQueryData(['templates', 'user-1', 'personal'], [{ id: 'deleted' }]);
+
+    refreshAfterTemplateDelete(client, 'deleted');
+
+    expect(client.getQueryData(['templates', 'catalog'])).toEqual([{ id: 'kept' }]);
+    expect(client.getQueryState(['templates', 'catalog'])?.isInvalidated).toBe(false);
+    expect(client.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
+    client.clear();
+  });
+
+  it('does not refetch a catalog a page is showing when a Template is deleted', async () => {
+    const client = new QueryClient();
+    client.setQueryData(['templates', 'catalog'], [{ id: 'deleted' }, { id: 'kept' }]);
+    // What the edge cache answers until its copy expires.
+    const queryFn = vi.fn().mockResolvedValue([{ id: 'deleted' }, { id: 'kept' }]);
+    const observer = new QueryObserver(client, {
+      queryKey: ['templates', 'catalog'],
+      queryFn,
+      staleTime: 5 * 60 * 1000,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+
+    refreshAfterTemplateDelete(client, 'deleted');
+    await vi.waitFor(() => expect(client.isFetching()).toBe(0));
+
+    expect(queryFn).not.toHaveBeenCalled();
+    expect(client.getQueryData(['templates', 'catalog'])).toEqual([{ id: 'kept' }]);
+    unsubscribe();
     client.clear();
   });
 

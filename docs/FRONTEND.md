@@ -125,7 +125,10 @@ let it ask, so the user is asked once.
   Build other private keys (invites, Organization members, Run Keys, archives) with
   `queryKeys` in `src/lib/queryKeys.ts`, and give those queries `enabled: Boolean(userId)`.
   The archive lists load only on `/dashboard/archive`; deleting a Template or Run
-  marks them stale through `src/contexts/templateListCache.ts`. Each list reads as
+  marks them stale through `src/contexts/templateListCache.ts`. Deleting a Template also
+  removes it from the cached catalog and leaves the catalog fresh instead of stale: the
+  edge cache can serve the pre-delete catalog for up to 5 more minutes, so a refetch
+  would list the deleted Template again. Each list reads as
   loading until it has data or its request failed (`getArchiveListState`), including
   while it waits, disabled, for the Organizations to load.
 - Sign-out and sign-in are SPA navigations, so the QueryClient outlives a session.
@@ -216,7 +219,10 @@ let it ask, so the user is asked once.
   a `navigate()` from a page the user has left. Call `beginVisit()` from
   `usePageVisit` (`src/hooks/usePageVisit.ts`) when the action starts and check
   `visit.isCurrent()` after the request; it is false once the page unmounts or its
-  location changes (Back, a link, another id on the same page). The request's own
+  location changes (Back, a link, another id on the same page). The template editor
+  passes `{ endOn: "pathname" }`: the sidebar's New Template link on the new-template
+  page keeps the editor mounted at the same path, and a create in flight must still
+  finish and leave for My Templates. The request's own
   result stands: cache updates still happen. The template pages route Start Run,
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
@@ -226,7 +232,7 @@ let it ask, so the user is asked once.
   await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
   the visit has ended, a callback given to one of the visit helpers, or a call that is
   passed the visit), unless it is listed as ungated on purpose. It also fails when a
-  file uses a sign-in or checkout helper without `usePageVisit()`.
+  file uses a sign-in or checkout helper without calling `usePageVisit`.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with
@@ -344,12 +350,15 @@ let it ask, so the user is asked once.
   (Upgrade to Pro, or Sign in) instead of plain error text. The new template's draft
   is kept in `sessionStorage` (`templateDraftStore.ts`, keyed by user and context)
   before any checkout or sign-in redirect, offered back on the new-template editor
-  and from the billing section, and cleared only when a save succeeds (even one that
-  finishes after the user left the editor) or the user discards it. A confirmed
-  sign-out returns the tab to Personal, so the new-template editor also offers a
-  draft kept in another context the user can still create templates in, with a
-  switch to that context (`useOtherContextTemplateDraft.ts`); the draft is restored,
-  and saved, only in the context it was written for.
+  and from the billing section, and cleared only when it is saved (even by a save
+  that finishes after the user left the editor) or the user discards it. Until the
+  user restores or discards an offered draft, a different template written in the
+  form neither clears nor replaces it, whether that template saves, is refused, or
+  is kept for an upgrade, sign-in or ended session; leaving with that other work
+  asks first. A confirmed sign-out returns the tab to Personal, so the new-template
+  editor also offers a draft kept in another context the user can still create
+  templates in, with a switch to that context (`useOtherContextTemplateDraft.ts`);
+  the draft is restored, and saved, only in the context it was written for.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

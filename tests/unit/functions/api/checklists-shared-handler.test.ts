@@ -103,6 +103,18 @@ function clientSections() {
   return JSON.parse(JSON.stringify(storedSections)) as typeof storedSections;
 }
 
+// The sections with every task and Sub-task ticked.
+function doneSections() {
+  const sections = clientSections();
+  for (const item of sections[0].items) {
+    item.isCompleted = true;
+    for (const content of item.contents ?? []) {
+      for (const subItem of content.subItems ?? []) subItem.isCompleted = true;
+    }
+  }
+  return sections;
+}
+
 async function putShared(body: unknown) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run', {
     method: 'PUT',
@@ -205,11 +217,9 @@ describe('shared run updates', () => {
 
   it('sets completed_at on the server when a guest completes the run', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = clientSections();
-    sections[0].items[1].isCompleted = true;
 
     const { response } = await putShared({
-      sections,
+      sections: doneSections(),
       status: 'completed',
       completed_at: '2020-01-01T00:00:00.000Z',
       expected_revision: 3,
@@ -221,8 +231,7 @@ describe('shared run updates', () => {
     expect(update.completed_at).not.toBe('2020-01-01T00:00:00.000Z');
     expect(typeof update.completed_at).toBe('string');
     expect(typeof update.share_used_at).toBe('string');
-    // item-1 (and its two sub-items) are still open: 1 of 4 units done.
-    expect(update.progress).toBe(25);
+    expect(update.progress).toBe(100);
   });
 
   it('keeps completed_at and the completer when a guest reopens the run', async () => {
@@ -244,6 +253,7 @@ describe('shared run updates', () => {
 
   it('restamps a reopened run on the next completion and does not keep the previous completer', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      items: JSON.stringify(doneSections()),
       status: 'in_progress',
       completed_at: '2026-02-01T00:00:00.000Z',
       completed_by_user_id: 'owner-123',
@@ -262,12 +272,74 @@ describe('shared run updates', () => {
 
   it('names a signed-in owner who completes the run through its share link', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('owner-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ completed_by_user_id: 'someone-else' })]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      completed_by_user_id: 'someone-else',
+      items: JSON.stringify(doneSections()),
+    })]);
 
     const { response } = await putShared({ status: 'completed', expected_revision: 3 });
 
     expect(response.status).toBe(200);
     expect(storedUpdate().completed_by_user_id).toBe('owner-123');
+  });
+
+  it('refuses to complete a run with open tasks and writes nothing', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
+
+    const { response, data } = await putShared({ status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 2 } }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to complete a run whose ticked task still has an open Sub-task', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
+    const sections = doneSections();
+    sections[0].items[0].contents[1].subItems![1].isCompleted = false;
+
+    const { response, data } = await putShared({ sections, status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 1 } }));
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it('refuses to complete a run with no tasks', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ items: JSON.stringify([{ id: 'section-1', title: 'Launch', items: [] }]) })]);
+
+    const { response, data } = await putShared({ status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 0 } }));
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+  });
+
+  it('completes a run when the same save ticks its last open task', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
+      items: JSON.stringify(doneSections().map((section) => ({
+        ...section,
+        items: section.items.map((item) => (item.id === 'item-2' ? { ...item, isCompleted: false } : item)),
+      }))),
+    })]);
+
+    const { response } = await putShared({ sections: doneSections(), status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    expect(storedUpdate()).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
+  });
+
+  it('keeps saving notes on a run completed before the rule, open tasks and all', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ status: 'completed', completed_at: '2026-02-01T00:00:00.000Z' })]);
+    const sections = clientSections();
+    (sections[0].items[1] as Record<string, unknown>).notes = 'Shipped anyway';
+
+    const { response } = await putShared({ sections, status: 'completed', expected_revision: 3 });
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(storedUpdate().items as string)[0].items[1].notes).toBe('Shipped anyway');
   });
 
   it('leaves the completion stamps alone on later saves of a completed run', async () => {

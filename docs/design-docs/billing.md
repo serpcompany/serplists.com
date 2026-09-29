@@ -156,8 +156,12 @@ Authenticated:
   when an open subscription is not paid up (`past_due`, `unpaid`, `paused`).
   Only `canceled` and `incomplete_expired` subscriptions allow a
   new Checkout, because Stripe would bill both subscriptions. The client opens the
-  Customer Portal on `subscription_needs_attention`, and Billing and Pricing
-  refetch billing status on either `409`.
+  Customer Portal on `subscription_needs_attention`, and every checkout entry
+  point reloads billing status on either `409` and on `plan_managed_by_support`:
+  Billing and Pricing themselves, and every other page through the shared
+  checkout path (`refreshBillingStatusOnCheckoutConflict` in
+  `src/lib/access-flow.ts`), so a page that gates Pro features on a cached Free
+  plan stops asking for checkout.
   An `incomplete` subscription is different: Checkout creates the subscription
   when the buyer submits payment, and a declined card or an abandoned 3DS step
   leaves it `incomplete` while its session stays open. Only a retry in that

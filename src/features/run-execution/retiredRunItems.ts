@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { getTaskSubTasks } from '@/lib/schemas/storedSections';
 import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
 
 // checklist_runs.retired_items, written by Template reconciliation and Revalidate: a JSON
@@ -30,12 +31,9 @@ const toSubTask = (subItem: JsonRecord, index: number): RetiredRunSubTask => ({
   isCompleted: wasCompleted(subItem),
 });
 
-// Sub-tasks live on the task or in its subItems content blocks.
+// Sub-tasks are the rows of the task's Sub-tasks blocks, the ones the run page showed.
 const toTask = (item: JsonRecord, index: number): RetiredRunTask => {
-  const subItems = [
-    ...records(item.subItems),
-    ...records(item.contents).flatMap((content) => records(content.subItems)),
-  ];
+  const subItems = getTaskSubTasks(item);
   const notes = text(item.notes);
   return {
     id: typeof item.id === 'string' ? item.id : String(index + 1),

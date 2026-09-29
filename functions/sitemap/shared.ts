@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   sitemap_category_revisions,
   sitemap_owner_revisions,
@@ -68,11 +68,19 @@ export const validUsernameCondition = sql<boolean>`
   length(trim(${users.username})) between 3 and 30
   and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.]*'}`;
 
+// A public Personal or Organization Template. The library, category pages and link
+// previews list both under the Creator's username (the users join on templates.user_id),
+// so the sitemaps do too. Rows whose owner fields disagree (a Personal row with a
+// team_id, an Organization row without one) stay out. The 0023 revision triggers still
+// fire only for Personal rows, so an Organization Template edit reaches a cached shard
+// only when it expires (see cache.ts).
 export const publicTemplateCondition = and(
-  eq(templates.owner_type, 'user'),
-  isNull(templates.team_id),
   eq(templates.is_public, true),
   isNull(templates.deleted_at),
+  or(
+    and(eq(templates.owner_type, 'user'), isNull(templates.team_id)),
+    and(eq(templates.owner_type, 'team'), isNotNull(templates.team_id), ne(templates.team_id, '')),
+  ),
 );
 
 export const validTemplateSlugCondition = sql<boolean>`

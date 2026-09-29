@@ -1,8 +1,15 @@
+import type { QueryClient } from "@tanstack/react-query";
 import type { Location, NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
-import { BILLING_UNAVAILABLE_MESSAGE, getAccessFailure } from "@/lib/api-errors";
+import {
+  BILLING_UNAVAILABLE_MESSAGE,
+  getAccessFailure,
+  isApiError,
+  isOpenSubscriptionConflictError,
+} from "@/lib/api-errors";
+import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
 
 type ReturnLocation = Pick<Location, "pathname" | "search" | "hash">;
 
@@ -33,12 +40,43 @@ const openBillingPortal = async (reason: string): Promise<boolean> => {
   }
 };
 
+// Checkout asks Stripe, so it can find an open subscription, or a plan support manages,
+// that the cached billing status does not show yet. The server has stored that plan by now.
+const revealsStoredPlan = (error: unknown): boolean =>
+  isOpenSubscriptionConflictError(error)
+  || (isApiError(error) && error.code === "plan_managed_by_support");
+
+const storedPlanListeners = new Set<() => void>();
+
+/**
+ * Reloads every cached billing status (Personal and each Organization) when a checkout
+ * started here finds that the plan already changed on the server. Pages that gate a Pro
+ * feature on the cached plan (Import and Export, template Copy and Export) then stop
+ * asking for checkout on every click. The app registers its QueryClient once; returns
+ * the function that stops it.
+ */
+export const refreshBillingStatusOnCheckoutConflict = (
+  queryClient: Pick<QueryClient, "invalidateQueries">
+): (() => void) => {
+  const listener = () => {
+    void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
+  };
+  storedPlanListeners.add(listener);
+  return () => {
+    storedPlanListeners.delete(listener);
+  };
+};
+
 const requestBillingCheckout = async (): Promise<boolean> => {
   try {
     const { url } = await api.createBillingCheckout();
     window.location.href = url;
     return true;
   } catch (error) {
+    // Once per request: a second click joins this one (pendingCheckout).
+    if (revealsStoredPlan(error)) {
+      storedPlanListeners.forEach((listener) => listener());
+    }
     const failure = getAccessFailure(error, "Failed to start checkout");
     if (failure.kind === "subscription_needs_attention") {
       // The existing subscription is fixed in the Customer Portal, not with a second one.

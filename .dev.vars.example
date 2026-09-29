@@ -33,7 +33,7 @@ STRIPE_PRO_PRICE_ID=price_xxx
 # STRIPE_PRO_LEGACY_PRICE_IDS=price_old
 STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxx
 
-# Optional admin/ops
+# Optional admin/ops. Use a long random value (openssl rand -base64 32), never a word.
 ENTITLEMENTS_ADMIN_SECRET=replace-with-admin-secret
 
 # Optional client API override for `pnpm run build:dev`. `pnpm dev`/`dev:all` and

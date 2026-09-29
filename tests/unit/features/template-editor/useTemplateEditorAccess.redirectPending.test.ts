@@ -23,6 +23,11 @@ vi.mock("react", async (importOriginal) => ({
     };
     return [fake.cells[index], setState];
   },
+  useRef: (initial: unknown) => {
+    const index = fake.cursor++;
+    if (!(index in fake.cells)) fake.cells[index] = { current: initial };
+    return fake.cells[index];
+  },
   useCallback: (callback: unknown) => callback,
   useEffect: (effect: () => void | (() => void)) => {
     const cleanup = effect();
@@ -55,6 +60,7 @@ vi.mock("@/contexts/TemplatesContext", () => ({
 vi.mock("@/lib/api", () => ({ api: { getBillingStatus: vi.fn() } }));
 vi.mock("@/features/template-editor/templateDraftStore", () => ({
   clearTemplateDraft: vi.fn(),
+  getTemplateDraftKey: () => "serplists:template-draft:user-1:personal",
   // No draft kept in another context (useOtherContextTemplateDraft).
   listTemplateDraftContexts: () => [],
   readTemplateDraft: () => null,

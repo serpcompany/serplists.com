@@ -4,7 +4,8 @@ import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 // Against real local D1: stopping a share turns the link off for guests, writes exactly one
 // audit event, and lets a shared run that went stale be revalidated again. Shared runs count
 // toward the Free active-run limit like any other active run. A signed-in visitor who edits
-// through a link is named in history only if they belong to the run's Organization.
+// through a link is named in history only if they belong to the run's Organization. A link
+// holder can complete a run only once every task and Sub-task is done.
 
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
@@ -150,5 +151,32 @@ describe.sequential("run sharing against local D1", () => {
     expect(JSON.stringify(history.body)).not.toContain("free@example.test");
     const actors = (history.body.events as Array<{ actor: { userId: string | null } }>).map((event) => event.actor.userId);
     expect(actors.sort()).toEqual([null, null, "member"].sort());
+  });
+
+  it("lets a link holder complete a run only once every task and Sub-task is done", async () => {
+    const sections = (done: boolean) => [{ id: "s1", title: "S", items: [
+      { id: "t1", title: "Task", isCompleted: done, contents: [{ type: "subItems", value: "", subItems: [{ id: "u1", title: "Step", isCompleted: done }] }] },
+      { id: "t2", title: "Other", isCompleted: done },
+    ] }];
+    await d1.env.DB.prepare(`
+      INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
+        progress, template_version, revision, retired_items, is_public, share_token)
+      VALUES ('open-run', 'owner', NULL, NULL, 'Open run', ?, 'in_progress', ?, ?, 0, 1, 1, '[]', 1, 'open-token')
+    `).bind(JSON.stringify(sections(false)), now, now).run();
+    const stored = () => d1.env.DB.prepare("SELECT status, progress, revision, completed_at FROM checklist_runs WHERE id = 'open-run'")
+      .first<Record<string, unknown>>();
+    const auditCount = async () => (await d1.env.DB.prepare("SELECT count(*) AS count FROM audit_events WHERE resource_id = 'open-run'")
+      .first<{ count: number }>())?.count;
+
+    const refused = await call("shared/open-token", "PUT", null, { expected_revision: 1, status: "completed" });
+    expect(refused.status).toBe(409);
+    expect(refused.body).toEqual(expect.objectContaining({ code: "run_incomplete", details: { openTaskCount: 2 } }));
+    expect(await stored()).toEqual({ status: "in_progress", progress: 0, revision: 1, completed_at: null });
+    expect(await auditCount()).toBe(0);
+
+    const completed = await call("shared/open-token", "PUT", null, { expected_revision: 1, status: "completed", sections: sections(true) });
+    expect(completed.status).toBe(200);
+    expect(await stored()).toEqual(expect.objectContaining({ status: "completed", progress: 100, revision: 2 }));
+    expect(await auditCount()).toBe(1);
   });
 });

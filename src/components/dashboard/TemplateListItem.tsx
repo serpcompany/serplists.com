@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FileText, List, Play, Trash2 } from 'lucide-react';
+import { Archive, FileText, List, Play } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -81,8 +81,8 @@ export function TemplateListItem({
             onClick={() => onDelete(template.id)}
             className="text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
+            <Archive className="mr-2 h-4 w-4" />
+            Archive
           </Button>
         ) : null}
       </div>

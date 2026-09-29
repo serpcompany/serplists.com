@@ -1,4 +1,5 @@
 import type { PortableTemplatePack } from '@/lib/schemas/checklistSchema';
+import { formatExportSummaryMessage } from '@/lib/templates/templateImportSummary';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
@@ -63,7 +64,16 @@ export const exportTemplateFile = (params: {
     return { kind: 'upgrade_required' };
   }
 
+  // A template the portable format can't hold is left out of the pack and listed in the
+  // manifest. A pack with nothing in it is no backup: name the reason, download nothing.
   const { filename, pack } = buildTemplateExportFile(params.template);
+  if (pack.templates.length === 0) {
+    const { message } = formatExportSummaryMessage({
+      exported: 0,
+      skipped: pack.manifest?.skippedTemplates ?? [],
+    });
+    return { kind: 'error', message };
+  }
   (params.download ?? downloadBackupFile)(pack, filename);
 
   return { kind: 'ok', assetWarnings: pack.manifest?.assetWarnings ?? 0 };

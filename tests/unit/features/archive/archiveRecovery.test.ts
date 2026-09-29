@@ -103,6 +103,88 @@ describe('restoreArchiveItem', () => {
   });
 });
 
+// Another tab, a teammate, or a concurrent request restored the item (or it is gone). The
+// archive list is fresh for a minute, so without a refresh the row kept a Restore button that
+// failed the same way on every click.
+describe('restoreArchiveItem when the item is no longer archived', () => {
+  const alreadyRestored = (kind: 'Template' | 'Checklist') =>
+    createApiError(400, { error: `${kind} is not archived`, code: 'not_archived' });
+
+  const seedLists = (queryClient: QueryClient) => {
+    queryClient.setQueryData(queryKeys.archivedTemplates('user-1', 'personal'), []);
+    queryClient.setQueryData(queryKeys.archivedRuns('user-1', 'personal'), []);
+    queryClient.setQueryData(['templates', 'user-1', 'personal'], []);
+    queryClient.setQueryData(['runs', 'user-1', 'personal'], []);
+  };
+  const isInvalidated = (queryClient: QueryClient, key: readonly unknown[]) =>
+    queryClient.getQueryState(key)?.isInvalidated ?? false;
+
+  it('refreshes the archived templates and the lists when a template was already restored', async () => {
+    const error = alreadyRestored('Template');
+    const { queryClient, dependencies } = setup({ restoreTemplate: async () => { throw error; } });
+    seedLists(queryClient);
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), null);
+
+    await expect(restoreArchiveItem(dependencies, { id: 'template-1', kind: 'template' })).rejects.toBe(error);
+
+    expect(isInvalidated(queryClient, queryKeys.archivedTemplates('user-1', 'personal'))).toBe(true);
+    expect(isInvalidated(queryClient, ['templates', 'user-1', 'personal'])).toBe(true);
+    expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(true);
+    // It is live again, so an unviewed "gone" detail answer must not linger.
+    expect(queryClient.getQueryState(getTemplateDetailQueryKey('template-1', 'user-1'))).toBeUndefined();
+    expect(dependencies.pending.size).toBe(0);
+  });
+
+  it('refreshes the archived runs and the run lists when a run was already restored', async () => {
+    const error = alreadyRestored('Checklist');
+    const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
+    seedLists(queryClient);
+
+    await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+
+    expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(true);
+    expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(true);
+    expect(isInvalidated(queryClient, queryKeys.archivedTemplates('user-1', 'personal'))).toBe(false);
+    expect(dependencies.pending.size).toBe(0);
+  });
+
+  it('refreshes the archive when the item is gone (404)', async () => {
+    const error = createApiError(404, { error: 'Checklist not found' });
+    const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
+    seedLists(queryClient);
+
+    await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+
+    expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(true);
+  });
+
+  it('leaves the lists alone when the item is still archived (a plan limit or a role refusal)', async () => {
+    for (const error of [
+      createApiError(403, { code: 'limit_reached', error: 'Your plan allows 3 active runs.' }),
+      createApiError(403, { error: 'Forbidden' }),
+      createApiError(400, { error: 'Checklist ID required' }),
+    ]) {
+      const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
+      seedLists(queryClient);
+
+      await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+
+      expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(false);
+      expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(false);
+      expect(dependencies.pending.size).toBe(0);
+    }
+  });
+
+  it('still reports the restore error when the refresh fails', async () => {
+    const error = alreadyRestored('Template');
+    const { queryClient, dependencies } = setup({ restoreTemplate: async () => { throw error; } });
+    vi.spyOn(queryClient, 'invalidateQueries').mockRejectedValue(new Error('refresh failed'));
+
+    await expect(restoreArchiveItem(dependencies, { id: 'template-1', kind: 'template' })).rejects.toBe(error);
+    expect(dependencies.pending.size).toBe(0);
+  });
+});
+
 // A delete from the detail page could cache the archived template as gone (null). After a
 // restore the next visit showed "Template Not Found" until its refetch returned.
 describe('restoreArchiveItem and cached detail pages', () => {
@@ -161,6 +243,19 @@ describe('describeRestoreError', () => {
     expect(describeRestoreError(limit, 'run')).toBe('Your plan allows 3 active runs.');
     expect(describeRestoreError(new Error(''), 'template')).toBe('Failed to restore template.');
     expect(describeRestoreError(createApiError(500, {}), 'run')).toBe('HTTP 500');
+  });
+
+  it('says an item restored elsewhere, or gone, left the list instead of "is not archived"', () => {
+    const template = createApiError(400, { error: 'Template is not archived', code: 'not_archived' });
+    const run = createApiError(400, { error: 'Checklist is not archived', code: 'not_archived' });
+    expect(describeRestoreError(template, 'template')).toBe('This template was already restored. The list was refreshed.');
+    expect(describeRestoreError(run, 'run')).toBe('This run was already restored. The list was refreshed.');
+    expect(describeRestoreError(createApiError(404, { error: 'Template not found' }), 'template')).toBe(
+      'This template is no longer available. The list was refreshed.',
+    );
+    expect(describeRestoreError(createApiError(404, { error: 'Checklist not found' }), 'run')).toBe(
+      'This run is no longer available. The list was refreshed.',
+    );
   });
 });
 

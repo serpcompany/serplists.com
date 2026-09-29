@@ -1,8 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
-import { loadCategoryEntries } from '../../../functions/sitemap/shared';
+import { createDb } from '../../../functions/api/db';
+import { loadCategoryEntries, publicTemplateCondition } from '../../../functions/sitemap/shared';
 import type { Env } from '../../../functions/api/types';
+import { templates } from '../../../db/schema/index';
 
 type SqlValue = string | number | null;
 
@@ -39,12 +41,18 @@ function categoryDatabase(): DatabaseSync {
   return db;
 }
 
-function addPublicTemplate(db: DatabaseSync, id: string, username: string | null, category: string) {
+function addPublicTemplate(
+  db: DatabaseSync,
+  id: string,
+  username: string | null,
+  category: string,
+  owner: { type: 'user' | 'team'; teamId: string | null } = { type: 'user', teamId: null },
+) {
   db.prepare('INSERT INTO users (id, username) VALUES (?, ?)').run(`user-${id}`, username);
   db.prepare(`
     INSERT INTO templates (id, user_id, owner_type, team_id, is_public, deleted_at, category, created_at, updated_at)
-    VALUES (?, ?, 'user', NULL, 1, NULL, ?, '2030-01-01 00:00:00', NULL)
-  `).run(id, `user-${id}`, JSON.stringify([category]));
+    VALUES (?, ?, ?, ?, 1, NULL, ?, '2030-01-01 00:00:00', NULL)
+  `).run(id, `user-${id}`, owner.type, owner.teamId, JSON.stringify([category]));
 }
 
 async function categoryPaths(db: DatabaseSync): Promise<string[]> {
@@ -77,5 +85,39 @@ describe('category sitemap entries', () => {
     addPublicTemplate(db, 't-named', 'bob_1', 'Zymurgy Shared');
 
     expect(await categoryPaths(db)).toContain('/categories/zymurgy-shared');
+  });
+
+  // An Organization's public Template is listed in the library and on category pages under
+  // its Creator's username, so its category belongs in the sitemap too.
+  it("lists a category that only an Organization's public Template uses", async () => {
+    const db = categoryDatabase();
+    addPublicTemplate(db, 't-team', 'alice', 'Zymurgy Procurement', { type: 'team', teamId: 'team-1' });
+
+    expect(await categoryPaths(db)).toContain('/categories/zymurgy-procurement');
+  });
+});
+
+describe('public Template rule for the sitemaps', () => {
+  it('matches public Personal and Organization Templates, not private, deleted or malformed rows', async () => {
+    const db = categoryDatabase();
+    const insert = db.prepare(`
+      INSERT INTO templates (id, user_id, owner_type, team_id, is_public, deleted_at, category, created_at)
+      VALUES (?, 'user-1', ?, ?, ?, ?, '[]', '2030-01-01 00:00:00')
+    `);
+    insert.run('personal', 'user', null, 1, null);
+    insert.run('organization', 'team', 'team-1', 1, null);
+    insert.run('private-organization', 'team', 'team-1', 0, null);
+    insert.run('deleted-organization', 'team', 'team-1', 1, '2030-01-02 00:00:00');
+    insert.run('user-row-with-team', 'user', 'team-1', 1, null);
+    insert.run('team-row-without-team', 'team', null, 1, null);
+    insert.run('team-row-with-blank-team', 'team', '', 1, null);
+
+    const rows = await createDb({ DB: sqliteD1(db) } as unknown as Env)
+      .select({ id: templates.id })
+      .from(templates)
+      .where(publicTemplateCondition)
+      .orderBy(templates.id);
+
+    expect(rows.map((row) => row.id)).toEqual(['organization', 'personal']);
   });
 });

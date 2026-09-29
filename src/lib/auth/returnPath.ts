@@ -50,7 +50,30 @@ export function sanitizeReturnPath(value: unknown): string | null {
     return null;
   }
 
-  return `${url.pathname}${url.search}${url.hash}`;
+  // The parser removes dot segments, so /.//evil.com comes back as //evil.com, which
+  // a browser resolves to another origin. Only return a path that means the same
+  // thing when it is read again.
+  const result = `${url.pathname}${url.search}${url.hash}`;
+  return toSameOriginPath(result, PARSE_BASE) === result ? result : null;
+}
+
+/**
+ * Resolves an in-app path against `origin` and returns its path, query, and hash,
+ * or null when it, or the path it normalizes to, would leave that origin. A
+ * navigation then never follows the raw value.
+ */
+export function toSameOriginPath(path: string, origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(path, origin);
+  } catch {
+    return null;
+  }
+  const result = `${url.pathname}${url.search}${url.hash}`;
+  if (path.startsWith("//") || result.startsWith("//") || url.origin !== new URL(origin).origin) {
+    return null;
+  }
+  return result;
 }
 
 function decodeURIComponentSafe(value: string): string {

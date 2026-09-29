@@ -97,8 +97,10 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   // A Clipy draft is being generated; it replaces the form when it arrives.
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
   // A save that finishes after the user left must not act on the page (a create's
-  // redirect would pull them off the page they went to).
-  const beginVisit = usePageVisit();
+  // redirect would pull them off the page they went to). Only leaving the path counts:
+  // the sidebar's New Template link here keeps this editor mounted, and a create in
+  // flight must still leave for My Templates, not stay here as unsaved work.
+  const beginVisit = usePageVisit({ endOn: "pathname" });
   
   const {
     selectedSectionIndex,

@@ -22,7 +22,13 @@ describe('routeRateLimitBucket', () => {
     ['DELETE', 'agent-keys/key-1', 'write'],
     ['POST', 'mcp', 'mcp'],
     ['GET', 'mcp', null],
-    ['POST', 'admin/entitlements/override', 'write'],
+    // Every admin request counts: the endpoint checks a secret, and a GET must not be a
+    // free way to test guesses.
+    ['POST', 'admin/entitlements/override', 'admin'],
+    ['DELETE', 'admin/entitlements/override', 'admin'],
+    ['GET', 'admin/entitlements/override', 'admin'],
+    ['HEAD', 'admin', 'admin'],
+    ['PROPFIND', 'admin/x', 'admin'],
     ['POST', 'templates/generate-from-clipy', 'write'],
     ['GET', 'templates', null],
     ['GET', 'checklists/shared/abc', null],

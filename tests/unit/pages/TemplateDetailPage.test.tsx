@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
+import { toast } from 'sonner';
+
 import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import TemplateDetail from '@/pages/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
@@ -152,6 +154,10 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
 // Static rendering runs no effects, so the real hook reports every visit as ended.
 vi.mock('@/hooks/usePageVisit', () => ({
   usePageVisit: () => () => ({ isCurrent: () => visitState.current }),
+}));
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }));
 
 vi.mock('@/lib/access-flow', () => ({
@@ -449,6 +455,28 @@ describe('TemplateDetail export after a failed plan check', () => {
     expect(html).not.toContain('Upgrade to export');
     expect(refetchBilling).toHaveBeenCalledTimes(1);
     expect(handleUpgradeRequiredForContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('TemplateDetail export of a template the portable format cannot hold', () => {
+  it('shows the reason instead of a success message', async () => {
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      template: { ...buildV0DemoPrivateTemplate(), title: 'Launch plan', sections: [] },
+    });
+
+    renderTemplateDetail();
+    const exportItem = menuItemProps.find((props) =>
+      [props.children].flat(Infinity).includes('Export JSON'),
+    );
+    await (exportItem?.onClick as () => Promise<void>)();
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'No templates exported. Not exported: Launch plan (Template has no sections with tasks)',
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
 

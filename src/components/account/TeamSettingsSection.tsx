@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Crown, Users } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -21,6 +21,7 @@ import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
+import { useTeamSettingsForm } from '@/features/teams/useTeamSettingsForm';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
 import { TeamActivityList } from '@/components/account/TeamActivityList';
@@ -66,8 +67,13 @@ export function TeamSettingsSection() {
   } = useWorkspace();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
-  const [editTeamName, setEditTeamName] = useState(isTeamWorkspace ? activeWorkspace.name : '');
-  const [editTeamSlug, setEditTeamSlug] = useState(('slug' in activeWorkspace && activeWorkspace.slug) || '');
+  // Keeps unsaved edits when the Organizations list changes (see useTeamSettingsForm).
+  const teamSettingsForm = useTeamSettingsForm(
+    activeWorkspace.type === 'team'
+      ? { teamId: activeWorkspace.teamId, name: activeWorkspace.name, slug: activeWorkspace.slug ?? '' }
+      : null,
+  );
+  const { name: editTeamName, slug: editTeamSlug } = teamSettingsForm.values;
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [isUpdatingTeam, setIsUpdatingTeam] = useState(false);
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null);
@@ -97,17 +103,6 @@ export function TeamSettingsSection() {
   const teamSettingsUpdate = isTeamWorkspace
     ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
     : null;
-
-  useEffect(() => {
-    if (!isTeamWorkspace) {
-      setEditTeamName('');
-      setEditTeamSlug('');
-      return;
-    }
-
-    setEditTeamName(activeWorkspace.name);
-    setEditTeamSlug('slug' in activeWorkspace && activeWorkspace.slug ? activeWorkspace.slug : '');
-  }, [activeWorkspace, isTeamWorkspace]);
 
   const handleCreateTeam = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -155,6 +150,7 @@ export function TeamSettingsSection() {
     }
 
     const teamId = activeTeamId;
+    const submitted = { name: editTeamName, slug: editTeamSlug };
     setIsUpdatingTeam(true);
     try {
       await runTeamWrite({
@@ -162,7 +158,10 @@ export function TeamSettingsSection() {
         onSaved: (result) => {
           // The response has the saved name and slug (the server may adjust the slug).
           const team = result?.team;
-          if (team) patchTeam(teamId, { name: team.name, slug: team.slug ?? null });
+          if (team) {
+            teamSettingsForm.applySaved(teamId, submitted, { name: team.name, slug: team.slug ?? '' });
+            patchTeam(teamId, { name: team.name, slug: team.slug ?? null });
+          }
           toast.success('Organization updated');
         },
         refreshes: [refreshTeams, reload.activity],
@@ -393,7 +392,7 @@ export function TeamSettingsSection() {
                     id="team-settings-name"
                     maxLength={ORGANIZATION_NAME_MAX}
                     value={editTeamName}
-                    onChange={(event) => setEditTeamName(event.target.value)}
+                    onChange={(event) => teamSettingsForm.setName(event.target.value)}
                     placeholder="Agency operations"
                   />
                 </div>
@@ -402,7 +401,7 @@ export function TeamSettingsSection() {
                   <Input
                     id="team-settings-slug"
                     value={editTeamSlug}
-                    onChange={(event) => setEditTeamSlug(event.target.value)}
+                    onChange={(event) => teamSettingsForm.setSlug(event.target.value)}
                     placeholder="agency-ops"
                   />
                 </div>

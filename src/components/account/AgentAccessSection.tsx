@@ -372,6 +372,9 @@ export function AgentAccessSection() {
       toast.success('Run Key revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke Run Key');
+      // The key may already be revoked (the response was lost, or another tab revoked it):
+      // show its real state instead of a stale Active row.
+      await reloadQuery(queryClient, queryKeys.agentKeys(userId)).catch(() => {});
     } finally {
       setRevokingKeyId(null);
     }

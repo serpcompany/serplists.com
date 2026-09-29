@@ -26,6 +26,9 @@ const cases: Array<[string, unknown[], boolean]> = [
   ['every task and Sub-task done', [section(task('a', { isCompleted: true, contents: subTasks({ isCompleted: true }, { isCompleted: true }) }))], true],
   ['legacy completed keys', [section(task('a', { completed: true, contents: subTasks({ completed: true }) }))], true],
   ['a legacy open Sub-task', [section(task('a', { completed: true, contents: subTasks({ completed: false }) }))], false],
+  // Sub-items the run page never shows are not Sub-tasks (getTaskSubTasks).
+  ['an open sub-item on a text block', [section(task('a', { isCompleted: true, contents: [{ type: 'text', value: 'Steps', subItems: [{ id: 'x', title: 'X', isCompleted: false }] }] }))], true],
+  ['an open sub-item on the task itself', [section(task('a', { isCompleted: true, subItems: [{ id: 'x', title: 'X', isCompleted: false }] }))], true],
   ['open work in a later section', [section(task('a', { isCompleted: true })), { id: 'section-2', title: 'QA', items: [task('b', { isCompleted: false })] }], false],
   ['no tasks', [section()], false],
   ['no sections', [], false],

@@ -27,7 +27,7 @@ import {
   getLoginNotice,
   stripLoginNoticeParams,
 } from "@/lib/auth/loginNotice";
-import { buildAuthLinkState, getReturnPath, withReturnPath } from "@/lib/auth/returnPath";
+import { buildAuthLinkState, getReturnPath, toSameOriginPath, withReturnPath } from "@/lib/auth/returnPath";
 import { buildConsoleSettingsPath } from "@/lib/routes";
 
 function getVerificationFailure(search: string): string | null {
@@ -94,13 +94,15 @@ const Login = () => {
     if (!isLoading && isAuthenticated) {
       // Returning to an invite link after sign-in: if analytics tags run in this document,
       // load the invite as a new page so they never see its token. The return path
-      // keeps its query and hash, so check both parts.
-      const target = new URL(from, window.location.origin);
+      // keeps its query and hash, so check both parts. Only a path on this origin is
+      // followed, never the raw value.
+      const destination = toSameOriginPath(from, window.location.origin) ?? buildConsoleSettingsPath();
+      const target = new URL(destination, window.location.origin);
       if (needsFullPageLoad(target.pathname, target.search, window)) {
-        window.location.replace(from);
+        window.location.replace(destination);
         return;
       }
-      navigate(from, { replace: true });
+      navigate(destination, { replace: true });
     }
   }, [from, isAuthenticated, isLoading, navigate]);
 

@@ -273,7 +273,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Forbidden', 403);
       }
       if (!(typeof runRecord.deleted_at === 'string' && runRecord.deleted_at)) {
-        return jsonError('Checklist is not archived', 400);
+        return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
       }
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
@@ -318,7 +318,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
           if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
         }
         // A concurrent request restored it first.
-        return jsonError('Checklist is not archived', 400);
+        return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
       }
 
       return json({ success: true });
@@ -380,9 +380,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
         .limit(1);
       // Same answer whether the template is gone or no longer usable here, so the
-      // response does not reveal that a private template exists.
+      // response does not reveal that a private template exists. The code tells the page
+      // the run itself is still there.
       if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
-        return jsonError('Source template not found', 404);
+        return jsonError('Source template not found', 404, { code: 'source_template_unavailable' });
       }
       // Revalidation always leaves the run in_progress, which reopens a completed run.
       if (isReopening(existingRun.status, 'in_progress')) {

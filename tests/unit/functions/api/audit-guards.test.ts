@@ -150,7 +150,9 @@ describe('audit rows are written only when the guarded write lands', () => {
 
   it('share-link PUT: a lost revision race returns 409', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
-    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1' })]);
+    // Every task done, so a guest may complete it.
+    const done = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1', items: done })]);
 
     const result = await send(handleChecklists, 'checklists/shared/token-1', 'PUT', { status: 'completed', expected_revision: 7 });
 
@@ -184,6 +186,8 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1/restore', 'POST');
 
     expect(result.status).toBe(400);
+    // The page refreshes its archive list on this code.
+    expect(result.body.code).toBe('not_archived');
     expectGuardedAudit(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 
@@ -230,6 +234,8 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleTemplates, 'templates/template-1/restore', 'POST');
 
     expect(result.status).toBe(400);
+    // The page refreshes its archive list on this code.
+    expect(result.body.code).toBe('not_archived');
     expectGuardedAudit(schema.templates, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 });

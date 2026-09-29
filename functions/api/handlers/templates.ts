@@ -936,7 +936,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
         return jsonError('Forbidden', 403);
       }
       if (!(typeof templateRecord.deleted_at === 'string' && templateRecord.deleted_at)) {
-        return jsonError('Template is not archived', 400);
+        return jsonError('Template is not archived', 400, { code: 'not_archived' });
       }
 
       const teamId = templateRecord.owner_type === 'team' && typeof templateRecord.team_id === 'string'
@@ -987,7 +987,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
         }
         // A concurrent request restored it first.
-        return jsonError('Template is not archived', 400);
+        return jsonError('Template is not archived', 400, { code: 'not_archived' });
       }
 
       return json({ success: true });

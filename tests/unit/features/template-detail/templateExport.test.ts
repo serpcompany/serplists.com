@@ -198,4 +198,38 @@ describe('template detail export', () => {
 
     expect(result).toEqual({ kind: 'ok', assetWarnings: 1 });
   });
+
+  // A template the portable format can't hold (imported with an empty section, or with a
+  // content block id that is not text) is left out of the pack, which would then hold
+  // nothing. The user gets an error naming the reason, and no file.
+  it.each([
+    ['has no sections', { sections: [] }, 'Template has no sections with tasks'],
+    ['has a section with no tasks', { sections: [{ id: 'section-1', title: 'Prep', items: [] }] }, 'Template has no sections with tasks'],
+    [
+      'has a content block whose id is a number',
+      {
+        sections: [{
+          id: 'section-1',
+          title: 'Prep',
+          items: [{ id: 'item-1', title: 'Write', contents: [{ id: 7, type: 'text', value: 'Hi' }] }],
+        }],
+      } as unknown as Partial<ChecklistTemplate>,
+      'Expected string, received number',
+    ],
+  ])('downloads nothing and names the reason when the template %s', (_label, overrides, reason) => {
+    const download = vi.fn();
+
+    const result = exportTemplateFile({
+      billingState: billing(),
+      download,
+      template: buildTemplate({ title: 'Launch plan', ...overrides }),
+    });
+
+    expect(download).not.toHaveBeenCalled();
+    expect(result.kind).toBe('error');
+    const message = result.kind === 'error' ? result.message : '';
+    expect(message).toContain('No templates exported.');
+    expect(message).toContain('Launch plan (');
+    expect(message).toContain(reason);
+  });
 });

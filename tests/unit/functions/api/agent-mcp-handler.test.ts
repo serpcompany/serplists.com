@@ -741,7 +741,6 @@ describe("personal run MCP handler", () => {
     it.each([
       ["an open task", runOf(task({ isCompleted: true, id: "task-0" }), task({ isCompleted: false })), ["task-1"]],
       ["a ticked task with an open Sub-task", runOf(task({ isCompleted: true, contents: subTasks(true, false) })), ["task-1"]],
-      ["a ticked task with an open direct Sub-task", runOf(task({ isCompleted: true, subItems: [{ id: "sub-9", title: "Old", isCompleted: false }] })), ["task-1"]],
       ["an unticked task whose Sub-tasks are done", runOf(task({ isCompleted: false, contents: subTasks(true, true) })), ["task-1"]],
       ["no tasks", personalRun({ items: JSON.stringify([{ id: "section-1", title: "Release", items: [] }]) }), []],
     ])("refuses a run with %s and writes nothing", async (_label, run, openTaskIds) => {
@@ -761,6 +760,17 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.structuredContent.details.openTaskCount).toBe(30);
       expect(body.result.structuredContent.details.openTaskIds).toHaveLength(20);
+    });
+
+    it("ignores open sub-items the run page never shows, on the task itself or on another block", async () => {
+      const body = await completeRun(runOf(task({
+        isCompleted: true,
+        subItems: [{ id: "sub-8", title: "Old", isCompleted: false }],
+        contents: [{ type: "text", value: "Steps", subItems: [{ id: "sub-9", title: "Hidden", isCompleted: false }] }, ...subTasks(true)],
+      })));
+
+      expect(body.result.isError).toBeUndefined();
+      expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ status: "completed" }));
     });
 
     it("completes a run whose every task and Sub-task is done, legacy completed keys included", async () => {
@@ -1270,6 +1280,60 @@ describe("personal run MCP handler", () => {
     const listBody = await listResponse.json() as any;
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("retiredItems");
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("sections");
+  });
+
+  describe("sub-items the run page never shows", () => {
+    const hiddenOnTask = [{ id: "sub-8", title: "Old", isCompleted: false }];
+    const hiddenOnText = [{ id: "sub-9", title: "Hidden", isCompleted: false }];
+    const visible = [{ id: "sub-1", title: "Tests pass", isCompleted: false }];
+    const taskWithHidden = (id: string) => ({
+      id,
+      title: "Verify",
+      isCompleted: false,
+      subItems: hiddenOnTask,
+      contents: [{ type: "text", value: "Steps", subItems: hiddenOnText }, { type: "subItems", value: "", subItems: visible }],
+    });
+    const run = () => personalRun({
+      items: JSON.stringify([{ id: "section-1", title: "Release", items: [taskWithHidden("task-1")] }]),
+      retired_items: JSON.stringify([
+        { kind: "item", sectionId: "section-1", item: taskWithHidden("task-old") },
+        { kind: "section", section: { id: "section-old", title: "Old", items: [taskWithHidden("task-older")] } },
+      ]),
+    });
+
+    function expectOnlySubTasks(task: any) {
+      expect(task).not.toHaveProperty("subItems");
+      expect(task.contents[0]).not.toHaveProperty("subItems");
+      expect(task.contents[1].subItems).toEqual([expect.objectContaining({ id: "sub-1" })]);
+    }
+
+    it("leaves them out of get_run, live and retired", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env));
+      const { sections, retiredItems } = body.result.structuredContent.run;
+
+      expectOnlySubTasks(sections[0].items[0]);
+      expectOnlySubTasks(retiredItems[0].item);
+      expectOnlySubTasks(retiredItems[1].section.items[0]);
+    });
+
+    it("leaves them out of the task update_run returns, but keeps the stored ones on the task", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 1,
+        operation: "set_task_notes",
+        taskId: "task-1",
+        notes: "Checked",
+      }), env));
+
+      expect(body.result.isError).toBeUndefined();
+      expectOnlySubTasks(body.result.structuredContent.task);
+      const stored = JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].items);
+      expect(stored[0].items[0].subItems).toEqual([expect.objectContaining({ id: "sub-8" })]);
+    });
   });
 
   describe("retired work in a run too large to return at once", () => {

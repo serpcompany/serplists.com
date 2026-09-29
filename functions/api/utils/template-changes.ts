@@ -24,14 +24,17 @@ function sortKeysDeep(value: unknown): unknown {
 
 // Drops run state and empty values (an editor's `description: ''` or `contents: []` equals a
 // missing key) and sorts keys. Array order is kept: reordering is a real structure change.
-function canonicalStructure(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalStructure);
+// A content block's own id is dropped too: blocks are often stored without one (seed and
+// starter Templates, imports, copies of those), the editor gives each a new id on load,
+// and runs never match blocks by id. Section, task, and Sub-task ids are kept.
+function canonicalStructure(value: unknown, isContentBlock = false): unknown {
+  if (Array.isArray(value)) return value.map((entry) => canonicalStructure(entry, isContentBlock));
   if (typeof value !== 'object' || value === null) return value;
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key, entry]) => !RUN_STATE_KEYS.has(key) && !isEmptyValue(entry))
+      .filter(([key, entry]) => !RUN_STATE_KEYS.has(key) && !isEmptyValue(entry) && !(isContentBlock && key === 'id'))
       .sort(byKey)
-      .map(([key, entry]) => [key, canonicalStructure(entry)]),
+      .map(([key, entry]) => [key, canonicalStructure(entry, key === 'contents')]),
   );
 }
 

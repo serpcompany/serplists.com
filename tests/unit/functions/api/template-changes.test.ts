@@ -4,7 +4,16 @@ import {
   omitUnchangedTemplateColumns,
   templateStructureChanged,
 } from '@functions/api/utils/template-changes';
+import { withStableTemplateIdentities } from '@functions/api/utils/template-identities';
 import { assignMissingStableTemplateIdentities } from '@functions/api/utils/template-reconciliation';
+import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
+import { buildTemplateEditorFormValues, normalizeTemplateEditorFormForSave } from '@/lib/forms/templateEditorForm';
+import {
+  normalizePortableTemplate,
+  parseTemplateMarkdown,
+  renderTemplateMarkdown,
+} from '@/lib/templates/templateMarkdown';
+import type { ChecklistSection } from '@/types/checklist';
 
 const storedSections = [
   {
@@ -89,6 +98,80 @@ describe('templateStructureChanged', () => {
     const incoming = clone(editorSections);
     mutate(incoming);
     expect(changed(storedSections, incoming)).toBe(true);
+  });
+});
+
+// Content blocks are stored without ids by the official seed, starter packs, Markdown and
+// YAML imports, and copies of those. The editor gives each block a new id on load, and a
+// save that only changed the title must still not count as a structure change: it would
+// bump content_version, rewrite active runs and mark completed and shared runs stale.
+describe('templateStructureChanged after an editor round trip', () => {
+  const seedSections = [
+    {
+      id: 'sec-1',
+      title: 'Crawlability',
+      items: [
+        {
+          id: 't-1',
+          title: 'Check robots.txt',
+          description: 'Make sure nothing important is blocked.',
+          contents: [
+            { type: 'text', value: 'Open /robots.txt' },
+            { type: 'subItems', value: '', subItems: [{ id: 'st-1', title: 'Disallow rules' }, { id: 'st-2', title: 'Sitemap line' }] },
+            { type: 'image', value: 'https://example.com/robots.png', uploadType: 'url' },
+          ],
+        },
+        { id: 't-2', title: 'Check the sitemap', contents: [{ type: 'text', value: 'Submit it' }] },
+      ],
+    },
+  ];
+
+  // What the editor sends back after loading the stored sections (as GET returns them)
+  // and saving without touching the outline.
+  const editorSave = (stored: unknown[]): unknown[] => {
+    const loaded = withStableTemplateIdentities(clone(stored));
+    const form = normalizeTemplateEditorFormForSave(
+      buildTemplateEditorFormValues({ title: 'Technical SEO Audit', sections: loaded }),
+    );
+    const { sections } = applyTemplateSaveDefaults(form.title, form.sections as ChecklistSection[]);
+    return JSON.parse(JSON.stringify(sections)) as unknown[];
+  };
+
+  it('treats a save of stored id-less content blocks as unchanged', () => {
+    const incoming = editorSave(seedSections);
+    expect(JSON.stringify(incoming)).toContain('"id":"content_');
+    expect(changed(seedSections, incoming)).toBe(false);
+  });
+
+  it('treats a save of a Markdown import as unchanged', () => {
+    const markdown = renderTemplateMarkdown({ title: 'Technical SEO Audit', sections: seedSections });
+    const imported = normalizePortableTemplate(parseTemplateMarkdown(markdown));
+    expect(JSON.stringify(imported.sections)).not.toContain('"id"');
+    const stored = assignMissingStableTemplateIdentities(imported.sections as unknown[]);
+    expect(changed(stored, editorSave(stored))).toBe(false);
+  });
+
+  type EditorSections = Array<{
+    items: Array<{ contents: Array<Record<string, unknown> & { subItems?: Array<Record<string, unknown>> }> }>;
+  }>;
+  it.each([
+    ['a block value changes', (sections: EditorSections) => { sections[0].items[0].contents[0].value = 'Open robots.txt'; }],
+    ['blocks are reordered', (sections: EditorSections) => { sections[0].items[0].contents.reverse(); }],
+    ['a block is added', (sections: EditorSections) => {
+      sections[0].items[1].contents.push({ id: 'content-new', type: 'text', value: 'More' });
+    }],
+    ['a block is removed', (sections: EditorSections) => { sections[0].items[0].contents.splice(2, 1); }],
+    ['a block type changes', (sections: EditorSections) => { sections[0].items[0].contents[2].type = 'text'; }],
+    ['a Sub-task id changes', (sections: EditorSections) => {
+      sections[0].items[0].contents[1].subItems![0].id = 'st-9';
+    }],
+    ['a Sub-task title changes', (sections: EditorSections) => {
+      sections[0].items[0].contents[1].subItems![1].title = 'Sitemap directive';
+    }],
+  ])('still reports a change when %s', (_label, mutate) => {
+    const incoming = editorSave(seedSections) as EditorSections;
+    mutate(incoming);
+    expect(changed(seedSections, incoming)).toBe(true);
   });
 });
 

@@ -43,6 +43,7 @@ import {
 import { usePageVisit } from '@/hooks/usePageVisit';
 import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
+import { isStaleRecordError } from '@/lib/editConflicts';
 import { buildDefaultRunName, RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import {
@@ -176,12 +177,14 @@ const Templates = () => {
     setIsDeletingTemplate(true);
     try {
       await model.removeTemplate(templateToDelete);
-      toast.success('Template deleted');
+      toast.success('Template archived');
       setTemplateToDelete(null);
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : 'Failed to delete template.',
+        error instanceof Error ? error.message : 'Failed to archive template.',
       );
+      // Archived elsewhere: the list reloaded without it, so a retry could only fail again.
+      if (isStaleRecordError(error)) setTemplateToDelete(null);
     } finally {
       setIsDeletingTemplate(false);
     }
@@ -395,10 +398,11 @@ const Templates = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete template</DialogTitle>
+            <DialogTitle>Archive template</DialogTitle>
+            {/* DELETE archives it and makes it private; /dashboard/archive restores it. */}
             <DialogDescription>
-              Are you sure you want to delete this template? This removes it
-              from your library and cannot be undone.
+              The template moves to Archive, where it can be restored. A public
+              template becomes private.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -416,7 +420,7 @@ const Templates = () => {
               disabled={isDeletingTemplate}
               onClick={() => void handleDeleteTemplate()}
             >
-              {isDeletingTemplate ? 'Deleting...' : 'Delete'}
+              {isDeletingTemplate ? 'Archiving...' : 'Archive'}
             </Button>
           </DialogFooter>
         </DialogContent>

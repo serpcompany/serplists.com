@@ -44,6 +44,11 @@ pnpm run dev:stop   # stop them, including child processes
 ```
 
 The frontend and API move together as a port pair, preferring `8080` and `8788`.
+A port counts as free only when nothing accepts a connection on `127.0.0.1` or `::1`
+and it binds on `127.0.0.1`, `::1`, `0.0.0.0` and `::` in turn (`isPortAvailable` in
+`scripts/dev-auto-lib.mjs`): on Windows a bind to one address succeeds while another
+process holds the port on a different one, which is how Vite and Wrangler listen. The
+smoke runner and the Stripe listener's predicted target pick ports the same way.
 The chosen URLs are printed and saved in `tmp/dev-session.json`, and the launcher
 updates `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS`, `PORT`, and `VITE_API_URL` together
 (do not hand-edit one side; auth origins and CORS must match). Use

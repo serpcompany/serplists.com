@@ -12,6 +12,11 @@ export const isStaleRecordError = (error: unknown): boolean =>
 // The server's "Refresh before ..." text is misleading once the page refreshed by itself.
 export const getRevalidateRunErrorMessage = (error: unknown): string => {
   if (isStaleRecordError(error)) {
+    // The run is still there, but its template was archived, made private, or is not usable
+    // in the run's context; after the refresh the run no longer offers Revalidate.
+    if (isApiError(error) && error.code === "source_template_unavailable") {
+      return "This run's template is no longer available, so it can't be revalidated. The list was refreshed.";
+    }
     return isApiError(error) && error.status === 404
       ? "This run is no longer available. The list was refreshed."
       : "This run changed elsewhere. The list was refreshed; try again if it still needs revalidation.";
