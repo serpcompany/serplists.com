@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner';
 import { usePathname } from 'next/navigation';
 
+import { useIsClient } from '@/hooks/useIsClient';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 function resolveFrontendPort(): string {
@@ -32,10 +33,9 @@ export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
   const pathname = usePathname();
   const router = useAppRouter();
-  // Dev-only and browser-only (it shows the page's port), so it renders after mount: the
+  // Dev-only and browser-only (it shows the page's port), so it renders after hydration: the
   // server's HTML never differs from the first client render.
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  const mounted = useIsClient();
   const [isVisible, setIsVisible] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
 

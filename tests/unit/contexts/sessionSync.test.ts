@@ -75,9 +75,11 @@ function createTab(options: {
   const unauthorized = new Set<() => void>();
   const sync = createSessionSync({
     readSession,
-    getState: () => state,
+    initialState: state,
     setState: (update) => {
       state = update(state);
+      // As AuthProvider does once React shows the new state.
+      sync.observe(state);
     },
     notify,
     now: options.now,

@@ -28,6 +28,17 @@ export function handOffLoginEmail(
   }
 }
 
+/** Login: the address sign-up left, still there (the page reads it while rendering). */
+export function peekHandedOffLoginEmail(
+  storage: Pick<HandoffStorage, 'getItem'> | undefined = getSessionStorage(),
+): string | null {
+  try {
+    return storage?.getItem(HANDOFF_STORAGE_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Login: the address sign-up left, removed so it fills the form only once. */
 export function takeHandedOffLoginEmail(
   storage: HandoffStorage | undefined = getSessionStorage(),

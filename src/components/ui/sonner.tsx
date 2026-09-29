@@ -1,22 +1,12 @@
-import { useEffect, useState } from "react"
 import { Toaster as Sonner, toast } from "sonner"
 
-import {
-  applyStoredTheme,
-  subscribeToThemeChanges,
-  type SerpListsTheme,
-} from "@/lib/theme"
+import { useDocumentTheme } from "@/lib/theme"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  // Light until mounted, as the server renders it; the stored theme applies on mount.
-  const [theme, setTheme] = useState<SerpListsTheme>("light")
-
-  useEffect(() => {
-    setTheme(applyStoredTheme())
-    return subscribeToThemeChanges(setTheme)
-  }, [])
+  // Light in the server's render and hydration; the page's theme right after.
+  const theme = useDocumentTheme()
 
   return (
     <Sonner

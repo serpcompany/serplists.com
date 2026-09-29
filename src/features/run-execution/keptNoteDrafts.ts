@@ -99,7 +99,10 @@ export const useKeptRunNoteDrafts = ({
   const { user } = useAuth();
   const userId = user?.id;
   const latest = useRef({ userId, run, noteDrafts, restoreNoteDrafts });
-  latest.current = { userId, run, noteDrafts, restoreNoteDrafts };
+  // Before the restore effect below, which reads it.
+  useEffect(() => {
+    latest.current = { userId, run, noteDrafts, restoreNoteDrafts };
+  });
 
   const keepNoteDrafts = useCallback(() => {
     const { userId: owner, run: shown, noteDrafts: drafts } = latest.current;

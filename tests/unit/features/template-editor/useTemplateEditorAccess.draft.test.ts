@@ -29,6 +29,8 @@ vi.mock("react", async (importOriginal) => ({
     return fake.cells[index];
   },
   useCallback: (callback: unknown) => callback,
+  useMemo: (factory: () => unknown) => factory(),
+  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
   useEffect: (effect: () => void | (() => void), deps?: readonly unknown[]) => {
     const index = fake.cursor++;
     const previous = fake.cells[index] as EffectCell | undefined;
@@ -44,10 +46,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: { billingEnabled: true, limits: { maxTemplates: 1 } } }),
   useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
 }));
-vi.mock("react-router-dom", () => ({
-  useLocation: () => ({ pathname: "/dashboard/templates/new", search: "", hash: "" }),
-  useNavigate: () => vi.fn(),
-}));
+vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
 vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
 vi.mock("@/contexts/WorkspaceContext", () => ({
   useWorkspace: () => ({
@@ -74,6 +73,7 @@ import {
   type TemplateDraftStorage,
 } from "@/features/template-editor/templateDraftStore";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { navigation } from "../../../support/nextNavigation";
 
 const owner = { userId: "user-1", teamId: null };
 
@@ -120,10 +120,15 @@ const limitReached: SaveTemplateResult = {
   failure: { kind: "upgrade_required", message: "Template limit reached." },
 };
 
-// One render of the hook.
-const useRenderedAccess = () => {
-  fake.cursor = 0;
+// The editor, reduced to the hook under test.
+function Editor() {
   return useTemplateEditorAccess(options);
+}
+
+// One render of it under the fake React.
+const renderedAccess = () => {
+  fake.cursor = 0;
+  return Editor();
 };
 
 const unmount = () => {
@@ -132,15 +137,16 @@ const unmount = () => {
   }
 };
 
-// The editor as the user first sees it: the open effect has read the kept draft.
-const useOpenedEditor = () => {
-  useRenderedAccess();
-  return useRenderedAccess();
+// The editor as the user first sees it, once it has read the kept draft.
+const openedEditor = () => {
+  renderedAccess();
+  return renderedAccess();
 };
 
 let storage: ReturnType<typeof createStorage>;
 
 beforeEach(() => {
+  navigation.reset("/dashboard/templates/new");
   fake.cells = [];
   fake.cursor = 0;
   formValues = formB;
@@ -161,7 +167,7 @@ afterEach(() => {
 describe("useTemplateEditorAccess with a kept draft that was offered", () => {
   it("keeps an unrestored draft when a different template is created", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = useOpenedEditor();
+    const access = openedEditor();
     expect(access.draft?.values.title).toBe("Launch plan");
 
     access.settleDraft(saved, formB);
@@ -171,19 +177,19 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("clears the draft once the restored draft is created", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const restored = useOpenedEditor().restoreDraft();
+    const restored = openedEditor().restoreDraft();
     expect(restored?.values).toEqual(draftA);
 
-    useRenderedAccess().settleDraft(saved, { ...draftA, title: "Launch plan, edited" });
+    renderedAccess().settleDraft(saved, { ...draftA, title: "Launch plan, edited" });
 
     expect(readTemplateDraft(owner, storage)).toBeNull();
   });
 
   it("clears the draft when the restored create finishes after the editor closed", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = useOpenedEditor();
+    const access = openedEditor();
     access.restoreDraft();
-    const settle = useRenderedAccess().settleDraft;
+    const settle = renderedAccess().settleDraft;
     // The editor unmounts while the create saves.
     unmount();
 
@@ -194,17 +200,17 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("does not replace an unrestored draft when a different template is refused", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = useOpenedEditor();
+    const access = openedEditor();
 
     access.settleDraft(limitReached, formB);
 
     expect(readTemplateDraft(owner, storage)?.values).toEqual(draftA);
-    expect(useRenderedAccess().draft?.values.title).toBe("Launch plan");
+    expect(renderedAccess().draft?.values.title).toBe("Launch plan");
   });
 
   it("does not replace an unrestored draft to keep the form for an upgrade, sign-in or ended session", async () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = useOpenedEditor();
+    const access = openedEditor();
 
     // The leave guard stays up, so leaving with the form's work still asks.
     expect(access.keepDraft()).toBe(false);
@@ -217,20 +223,20 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("keeps the form's work once the offered draft is discarded", () => {
     saveTemplateDraft(owner, draftA, storage);
-    useOpenedEditor().discardDraft();
+    openedEditor().discardDraft();
     expect(readTemplateDraft(owner, storage)).toBeNull();
 
-    expect(useRenderedAccess().keepDraft()).toBe(true);
+    expect(renderedAccess().keepDraft()).toBe(true);
 
     expect(readTemplateDraft(owner, storage)?.values).toEqual(formB);
   });
 
   it("clears a draft this form kept once the template is created", () => {
-    const access = useOpenedEditor();
+    const access = openedEditor();
     access.settleDraft(limitReached, formB);
     expect(readTemplateDraft(owner, storage)?.values).toEqual(formB);
 
-    useRenderedAccess().settleDraft(saved, formB);
+    renderedAccess().settleDraft(saved, formB);
 
     expect(readTemplateDraft(owner, storage)).toBeNull();
   });

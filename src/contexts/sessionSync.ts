@@ -97,7 +97,8 @@ export function describeSessionChange(previous: SessionState, check: ConfirmedSe
 
 export function createSessionSync(deps: {
   readSession: () => Promise<SessionCheck>;
-  getState: () => SessionState;
+  // The state before the first observe().
+  initialState: SessionState;
   setState: (update: (current: SessionState) => SessionState) => void;
   notify: (message: string) => void;
   now?: () => number;
@@ -106,6 +107,8 @@ export function createSessionSync(deps: {
   beforeSessionLost?: () => void;
 }) {
   const now = deps.now ?? Date.now;
+  // The state this tab shows, as its provider last reported it (observe).
+  let shown = deps.initialState;
   // Session answers can arrive out of order. Each read takes a ticket when it starts, and its
   // answer is used only if no read that started later, and no sign-in or sign-out in this tab,
   // was applied first.
@@ -143,7 +146,7 @@ export function createSessionSync(deps: {
       return;
     }
     if (!acceptRead(ticket)) return;
-    const previous = deps.getState();
+    const previous = shown;
     const message = describeSessionChange(previous, check);
     if (endsSessionOf(previous, check)) deps.beforeSessionLost?.();
     deps.setState((current) => applySessionRecheck(check, current));
@@ -169,7 +172,7 @@ export function createSessionSync(deps: {
   };
 
   const onReport = ({ userId, profileChanged }: SessionReport) => {
-    const current = deps.getState();
+    const current = shown;
     if (current.status === 'loading') return;
     const sameUser = (current.user?.id ?? null) === userId;
     if (sameUser && !(profileChanged && userId)) return;
@@ -179,6 +182,11 @@ export function createSessionSync(deps: {
   return {
     beginRead,
     acceptRead,
+    // The provider reports the state it shows after each change (an effect), so re-checks
+    // compare an answer with what this tab shows.
+    observe: (state: SessionState) => {
+      shown = state;
+    },
     // This tab set the session itself (sign-in, sign-out, profile refresh): it wins over any
     // read still in flight.
     claim: () => {
@@ -194,7 +202,7 @@ export function createSessionSync(deps: {
     // Re-reads the session for a signed-in tab that has not read it for
     // SESSION_KEEPALIVE_INTERVAL_MS, never while another check runs. Returns whether it started.
     keepAlive: (): boolean => {
-      const current = deps.getState();
+      const current = shown;
       if (!current.user || current.status === 'loading' || running) return false;
       if (now() - lastReadAt < SESSION_KEEPALIVE_INTERVAL_MS) return false;
       void recheck();
@@ -238,13 +246,13 @@ export function createSessionSync(deps: {
         post = (report) => environment.writeStorage(SESSION_SYNC_STORAGE_KEY, JSON.stringify({ ...report, at: now() }));
       }
       stops.push(environment.onVisible(() => {
-        if (deps.getState().status !== 'loading' && now() - lastReadAt >= SESSION_RECHECK_INTERVAL_MS) void recheck();
+        if (shown.status !== 'loading' && now() - lastReadAt >= SESSION_RECHECK_INTERVAL_MS) void recheck();
       }));
       stops.push(environment.onRestored(() => {
-        if (deps.getState().status !== 'loading') void recheck();
+        if (shown.status !== 'loading') void recheck();
       }));
       stops.push(environment.onUnauthorized(() => {
-        const current = deps.getState();
+        const current = shown;
         if (!current.user || current.status === 'loading' || running) return;
         if (now() - lastUnauthorizedCheckAt < SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS) return;
         lastUnauthorizedCheckAt = now();

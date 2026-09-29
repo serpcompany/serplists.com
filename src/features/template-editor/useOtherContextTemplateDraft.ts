@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { PERSONAL_WORKSPACE_ID } from "@/contexts/workspaceSelection";
@@ -8,6 +8,7 @@ import {
   type StoredTemplateDraft,
 } from "@/features/template-editor/templateDraftStore";
 import { findOtherContextDraft } from "@/features/template-editor/templateEditorAccess";
+import { useIsClient } from "@/hooks/useIsClient";
 
 export type OtherContextTemplateDraft = {
   teamId: string | null;
@@ -29,13 +30,11 @@ export const useOtherContextTemplateDraft = ({
   userId?: string;
 }) => {
   const { activeTeamId, getPermissions, isWorkspaceLoading, selectWorkspace, teams } = useWorkspace();
-  const [found, setFound] = useState<OtherContextTemplateDraft | null>(null);
-
-  useEffect(() => {
-    if (!enabled || !userId) {
-      setFound(null);
-      return;
-    }
+  // Drafts are in this browser's storage: the server's render and hydration have none.
+  const isClient = useIsClient();
+  // Looked up again whenever the context, its Organizations or the user change.
+  const lookedUp = useMemo((): OtherContextTemplateDraft | null => {
+    if (!isClient || !enabled || !userId) return null;
     const nameOf = (teamId: string | null): string | undefined =>
       teamId ? teams.find((team) => team.id === teamId)?.name : "Personal";
     const other = findOtherContextDraft(listTemplateDraftContexts(userId), {
@@ -44,8 +43,11 @@ export const useOtherContextTemplateDraft = ({
       canCreateIn: (teamId) =>
         Boolean(nameOf(teamId)) && (!teamId || getPermissions(teamId).canEditTemplates),
     });
-    setFound(other ? { ...other, name: nameOf(other.teamId) ?? "" } : null);
-  }, [activeTeamId, enabled, getPermissions, isWorkspaceLoading, teams, userId]);
+    return other ? { ...other, name: nameOf(other.teamId) ?? "" } : null;
+  }, [activeTeamId, enabled, getPermissions, isClient, isWorkspaceLoading, teams, userId]);
+  // Discard hides the offer until the next lookup.
+  const [discarded, setDiscarded] = useState<OtherContextTemplateDraft | null>(null);
+  const found = lookedUp === discarded ? null : lookedUp;
 
   return {
     otherContextDraft: found,
@@ -58,7 +60,7 @@ export const useOtherContextTemplateDraft = ({
       if (found && userId) {
         clearTemplateDraft({ userId, teamId: found.teamId });
       }
-      setFound(null);
+      setDiscarded(lookedUp);
     },
   };
 };

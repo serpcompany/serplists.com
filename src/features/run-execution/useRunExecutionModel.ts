@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
@@ -454,7 +454,6 @@ export const useRunExecutionModel = (
   // Read when used: the page's updateRun (the Templates context's) and getCachedRun may
   // change identity whenever the cached lists do, and that must never reload the open run.
   const latestOptions = useRef(options);
-  latestOptions.current = options;
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
       apiClient: options.dependencies?.apiClient,
@@ -466,7 +465,11 @@ export const useRunExecutionModel = (
     [options.dependencies?.apiClient, options.dependencies?.origin, queryClient],
   );
   const latestDependencies = useRef(dependencies);
-  latestDependencies.current = dependencies;
+  // Before the effects below (the load reads both).
+  useLayoutEffect(() => {
+    latestOptions.current = options;
+    latestDependencies.current = dependencies;
+  });
   const [run, setRun] = useState<ChecklistRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -476,8 +479,8 @@ export const useRunExecutionModel = (
   const latestRun = useRef<ChecklistRun | null>(null);
   // Every save writes an audit event: refresh the Changelog once the saves settle.
   const [saveRun] = useState(() =>
-    createRunSaver(() => {
-      if (latestRun.current) void refreshRunHistory(queryClient, latestRun.current.id);
+    createRunSaver((latest) => {
+      if (latest) void refreshRunHistory(queryClient, latest.id);
     }),
   );
   // Drafts are read inside queued saves, so the ref always holds the latest value.
@@ -579,7 +582,8 @@ export const useRunExecutionModel = (
       onNotFound: () => setNotFound(true),
       reload: () => loadRunExecutionData({ runId: options.runId, shareToken }, dependencies),
     });
-  const saves = bindRunSaves({ dependencies, noteDrafts: () => latestNoteDrafts.current, shareToken });
+  // Bound when the user acts: queued saves read the drafts as they are when their turn comes.
+  const saves = () => bindRunSaves({ dependencies, noteDrafts: () => latestNoteDrafts.current, shareToken });
 
   return {
     counts,
@@ -591,7 +595,7 @@ export const useRunExecutionModel = (
       ),
     // Notes kept when the session ended (keptNoteDrafts.ts), back as unsaved drafts.
     restoreNoteDrafts: (drafts: NoteDrafts) => commitNoteDrafts({ ...latestNoteDrafts.current, ...drafts }),
-    createShare: () => enqueueSave(saves.share),
+    createShare: () => enqueueSave(saves().share),
     history: {
       data: history.data ?? null,
       isError: history.isError,
@@ -604,17 +608,17 @@ export const useRunExecutionModel = (
     notFound,
     progress: counts.progress,
     run,
-    saveTitle: (title: string) => enqueueSave(saves.title(title)),
-    saveItemNotes: (itemId: string, notes: string) => enqueueSave(saves.notes(itemId, notes)),
+    saveTitle: (title: string) => enqueueSave(saves().title(title)),
+    saveItemNotes: (itemId: string, notes: string) => enqueueSave(saves().notes(itemId, notes)),
     selectedData,
     selectedItemId,
     setSelectedItemId,
     // Stop sharing: the share link stops working and the run becomes private.
-    stopSharing: () => enqueueSave(saves.stopSharing),
-    completeRun: () => enqueueSave(saves.complete),
+    stopSharing: () => enqueueSave(saves().stopSharing),
+    completeRun: () => enqueueSave(saves().complete),
     // isCompleted is the value the user clicked on the run they saw.
     toggleItem: async (itemId: string, isCompleted: boolean) => {
-      const result = await enqueueSave(saves.toggleItem(itemId, isCompleted));
+      const result = await enqueueSave(saves().toggleItem(itemId, isCompleted));
       // Completing the selected task moves on to the next unfinished one, judged on the
       // selection when the save lands (an updater), not the one captured at the click.
       const saved = result.kind === 'ok' ? result.run : undefined;
@@ -622,6 +626,6 @@ export const useRunExecutionModel = (
       return result;
     },
     toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number, isCompleted: boolean) =>
-      enqueueSave(saves.toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted)),
+      enqueueSave(saves().toggleSubItem(itemId, contentIndex, subItemIndex, isCompleted)),
   };
 };

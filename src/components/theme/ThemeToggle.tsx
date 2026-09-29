@@ -1,13 +1,7 @@
-import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import {
-  applyStoredTheme,
-  subscribeToThemeChanges,
-  toggleDocumentTheme,
-  type SerpListsTheme,
-} from '@/lib/theme';
+import { toggleDocumentTheme, useDocumentTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 interface ThemeToggleProps {
@@ -16,17 +10,10 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) {
-  // The server cannot read the stored theme: the first render says light (the icons follow
-  // the page's class through CSS already), and the label follows the stored theme on mount.
-  const [theme, setTheme] = useState<SerpListsTheme>('light');
-
-  useEffect(() => {
-    setTheme(applyStoredTheme());
-    // Changes from other tabs are applied to the page before the label follows them.
-    return subscribeToThemeChanges(setTheme);
-  }, []);
-
-  const isDark = theme === 'dark';
+  // The server cannot read the stored theme: its render says light (the icons follow the
+  // page's class through CSS already), and the label follows the page's theme after
+  // hydration, and every change after that, from this tab or another.
+  const isDark = useDocumentTheme() === 'dark';
   const accessibleLabel = isDark ? 'Switch to light mode' : 'Switch to dark mode';
 
   return (
@@ -40,7 +27,7 @@ export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) 
       )}
       type="button"
       aria-label={accessibleLabel}
-      onClick={() => setTheme(toggleDocumentTheme())}
+      onClick={() => toggleDocumentTheme()}
     >
       <span className="relative h-4 w-4">
         <Sun className="absolute h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

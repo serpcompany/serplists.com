@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 import { getLocalStorage, safeLocalStorage } from '@/lib/browserStorage';
 
 // index.html's boot script reads the same key.
@@ -145,3 +147,15 @@ export const subscribeToThemeChanges = (
     target.removeEventListener('storage', handleStorage);
   };
 };
+
+const subscribeToDocumentTheme = (onStoreChange: () => void) => subscribeToThemeChanges(onStoreChange);
+const getClientTheme = (): SerpListsTheme => getDocumentTheme();
+const getServerTheme = (): SerpListsTheme => 'light';
+
+/**
+ * The theme the page shows, for a label or a component's theme prop. The server cannot read
+ * the stored theme, so its HTML (and hydration) says light; the document already shows the
+ * stored theme (the root layout's boot script), and the component follows it right after.
+ */
+export const useDocumentTheme = (): SerpListsTheme =>
+  useSyncExternalStore(subscribeToDocumentTheme, getClientTheme, getServerTheme);

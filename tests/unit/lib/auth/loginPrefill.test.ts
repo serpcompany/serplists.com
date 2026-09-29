@@ -7,6 +7,7 @@ import {
   handOffLoginEmail,
   readKeptLoginEmail,
   readLoginPrefill,
+  peekHandedOffLoginEmail,
   takeHandedOffLoginEmail,
 } from '@/lib/auth/loginPrefill';
 
@@ -38,8 +39,11 @@ describe('the sign-up email handoff', () => {
     const storage = memoryStorage();
     handOffLoginEmail('alice+new@example.com', storage);
 
+    expect(peekHandedOffLoginEmail(storage)).toBe('alice+new@example.com');
+    expect(peekHandedOffLoginEmail(storage)).toBe('alice+new@example.com');
     expect(takeHandedOffLoginEmail(storage)).toBe('alice+new@example.com');
     expect(takeHandedOffLoginEmail(storage)).toBeNull();
+    expect(peekHandedOffLoginEmail(storage)).toBeNull();
   });
 
   it('never throws when storage is blocked or full', () => {
@@ -54,6 +58,7 @@ describe('the sign-up email handoff', () => {
     };
 
     expect(() => handOffLoginEmail('a@b.c', blocked)).not.toThrow();
+    expect(peekHandedOffLoginEmail(blocked)).toBeNull();
     expect(takeHandedOffLoginEmail(blocked)).toBeNull();
     expect(takeHandedOffLoginEmail(undefined)).toBeNull();
   });

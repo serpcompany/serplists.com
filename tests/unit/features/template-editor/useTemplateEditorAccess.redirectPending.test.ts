@@ -29,6 +29,8 @@ vi.mock("react", async (importOriginal) => ({
     return fake.cells[index];
   },
   useCallback: (callback: unknown) => callback,
+  useMemo: (factory: () => unknown) => factory(),
+  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
   useEffect: (effect: () => void | (() => void)) => {
     const cleanup = effect();
     if (cleanup) fake.cleanups.push(cleanup);
@@ -39,10 +41,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: () => ({ data: { billingEnabled: true, limits: { maxTemplates: 1 } } }),
   useQueryClient: () => ({ invalidateQueries: fake.invalidateQueries }),
 }));
-vi.mock("react-router-dom", () => ({
-  useLocation: () => ({ pathname: "/dashboard/templates/new", search: "", hash: "" }),
-  useNavigate: () => vi.fn(),
-}));
+vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
 vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
 vi.mock("@/contexts/WorkspaceContext", () => ({
   useWorkspace: () => ({
@@ -74,6 +73,7 @@ vi.mock("@/lib/access-flow", () => ({
 }));
 
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { navigation } from "../../../support/nextNavigation";
 import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
 
 const pageshow = (persisted: boolean) => Object.assign(new Event("pageshow"), { persisted });
@@ -85,14 +85,20 @@ const options = {
   guardLeave: vi.fn(),
 };
 
-// One render of the hook, after the previous render's effects are cleaned up.
-const useRenderedAccess = () => {
+// The editor, reduced to the hook under test.
+function Editor() {
+  return useTemplateEditorAccess(options);
+}
+
+// One render of it under the fake React, after the previous render's effects are cleaned up.
+const renderedAccess = () => {
   for (const cleanup of fake.cleanups.splice(0)) cleanup();
   fake.cursor = 0;
-  return useTemplateEditorAccess(options);
+  return Editor();
 };
 
 beforeEach(() => {
+  navigation.reset("/dashboard/templates/new");
   fake.cells = [];
   fake.cursor = 0;
   fake.cleanups = [];
@@ -110,39 +116,39 @@ afterEach(() => {
 
 describe("useTemplateEditorAccess after Back from checkout", () => {
   it("keeps Upgrade busy while the browser leaves for Stripe", async () => {
-    await useRenderedAccess().startUpgrade();
+    await renderedAccess().startUpgrade();
 
-    expect(useRenderedAccess().isStartingCheckout).toBe(true);
+    expect(renderedAccess().isStartingCheckout).toBe(true);
     expect(options.allowLeave).toHaveBeenCalledTimes(1);
     expect(options.guardLeave).not.toHaveBeenCalled();
   });
 
   it("offers Upgrade again and refetches the plan when the page is restored", async () => {
-    await useRenderedAccess().startUpgrade();
-    useRenderedAccess();
+    await renderedAccess().startUpgrade();
+    renderedAccess();
 
     window.dispatchEvent(pageshow(true));
 
-    expect(useRenderedAccess().isStartingCheckout).toBe(false);
+    expect(renderedAccess().isStartingCheckout).toBe(false);
     expect(fake.invalidateQueries).toHaveBeenCalledWith({ queryKey: BILLING_STATUS_QUERY_PREFIX });
   });
 
   it("ignores an ordinary pageshow while the redirect is under way", async () => {
-    await useRenderedAccess().startUpgrade();
-    useRenderedAccess();
+    await renderedAccess().startUpgrade();
+    renderedAccess();
 
     window.dispatchEvent(pageshow(false));
 
-    expect(useRenderedAccess().isStartingCheckout).toBe(true);
+    expect(renderedAccess().isStartingCheckout).toBe(true);
     expect(fake.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("guards the page again when checkout did not start", async () => {
     fake.startBillingCheckout = vi.fn(async () => false);
 
-    await useRenderedAccess().startUpgrade();
+    await renderedAccess().startUpgrade();
 
-    expect(useRenderedAccess().isStartingCheckout).toBe(false);
+    expect(renderedAccess().isStartingCheckout).toBe(false);
     expect(options.guardLeave).toHaveBeenCalledTimes(1);
   });
 });

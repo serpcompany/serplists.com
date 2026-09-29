@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSaveFormState";
@@ -300,8 +300,11 @@ export const useTemplateEditorModel = (
   const [ownerSlug, setOwnerSlug] = useState<string | null | undefined>();
   const [ownership, setOwnership] = useState<TemplateOwnership | undefined>();
 
-  apiClientRef.current = dependencies?.apiClient;
-  currentIdRef.current = options.id;
+  // Before the effects below, which read them.
+  useLayoutEffect(() => {
+    apiClientRef.current = dependencies?.apiClient;
+    currentIdRef.current = options.id;
+  });
 
   useEffect(() => {
     mountedRef.current = true;

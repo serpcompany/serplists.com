@@ -54,6 +54,8 @@ type ConfirmedSessionCheck = Exclude<SessionCheck, { kind: 'unknown' }>;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const INITIAL_SESSION_STATE: SessionState = { user: null, session: null, status: 'loading' };
+
 const readSession = async (): Promise<SessionCheck> => {
   try {
     return classifySessionResult(await authClient.getSession());
@@ -63,17 +65,13 @@ const readSession = async (): Promise<SessionCheck> => {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<SessionState>({ user: null, session: null, status: 'loading' });
+  const [state, setState] = useState<SessionState>(INITIAL_SESSION_STATE);
   const { user, session, status: sessionStatus } = state;
   const isLoading = sessionStatus === 'loading';
   const isAuthenticated = !!user;
   const queryClient = useQueryClient();
   const settledUserIdRef = useRef<string | null>(null);
   const sessionCheckInFlightRef = useRef(false);
-  const stateRef = useRef(state);
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
 
   // Follows sign-ins and sign-outs in other tabs, which share this tab's session cookie, and
   // orders session answers so a slower check started earlier cannot overwrite a newer one
@@ -82,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [sessionSync] = useState(() =>
     createSessionSync({
       readSession,
-      getState: () => stateRef.current,
+      initialState: INITIAL_SESSION_STATE,
       setState,
       notify: (message) => toast(message),
       beforeSessionLost: () => {
@@ -90,6 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     }),
   );
+  useEffect(() => {
+    sessionSync.observe(state);
+  }, [sessionSync, state]);
   useEffect(() => sessionSync.connect(browserSessionSyncEnvironment()), [sessionSync]);
 
   // Sign-in, sign-out and profile refreshes in this tab. Sign-in and sign-out are announced to
@@ -214,12 +215,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signOutRef = useRef<(() => Promise<AuthActionResult>) | null>(null);
-  signOutRef.current ??= createSignOutRunner(
-    () => authClient.signOut(),
-    () => applyConfirmedSession({ kind: 'unauthenticated' }, { announce: true }),
+  // One runner for the provider's life (applyConfirmedSession never changes).
+  const [logout] = useState(() =>
+    createSignOutRunner(
+      () => authClient.signOut(),
+      () => applyConfirmedSession({ kind: 'unauthenticated' }, { announce: true }),
+    ),
   );
-  const logout = signOutRef.current;
 
   const refreshProfile = async (): Promise<boolean> => {
     const check = await readSession();

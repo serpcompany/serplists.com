@@ -317,13 +317,16 @@ export const UserProfileContent = ({
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
   const router = useAppRouter();
-  const [result, setResult] = useState<LoadUserProfileResult | null>(null);
   // Bumped by Try again; a retry starts from the loading state.
   const [reloadKey, setReloadKey] = useState(0);
+  // Each answer is kept with the request it answers, so another profile or a retry shows
+  // the loading state until its own answer arrives.
+  const request = `${reloadKey}:${username}`;
+  const [loaded, setLoaded] = useState<{ request: string; result: LoadUserProfileResult } | null>(null);
+  const result = loaded?.request === request ? loaded.result : null;
 
   useEffect(() => {
     let isCancelled = false;
-    setResult(null);
 
     void loadUserProfile(username).then((nextResult) => {
       if (isCancelled) return;
@@ -335,13 +338,13 @@ const UserProfile = () => {
         router.replace(canonicalPath);
         return;
       }
-      setResult(nextResult);
+      setLoaded({ request, result: nextResult });
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [reloadKey, router, username]);
+  }, [request, router, username]);
 
   return (
     <UserProfileContent

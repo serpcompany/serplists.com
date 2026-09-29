@@ -26,6 +26,7 @@ import {
   type TemplateEditorAccessNotice,
 } from "@/features/template-editor/templateEditorAccess";
 import { useOtherContextTemplateDraft } from "@/features/template-editor/useOtherContextTemplateDraft";
+import { useIsClient } from "@/hooks/useIsClient";
 import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
@@ -98,20 +99,29 @@ export const useTemplateEditorAccess = ({
   };
 
   // Offer a kept draft when the editor opens: a new template's for this context, or the
-  // user's own edits to this template.
-  useEffect(() => {
-    offeredDraftKey.current = null;
-    if (!userId) {
-      setDraft(null);
-    } else if (isCreate) {
-      const kept = readTemplateDraft({ userId, teamId: activeTeamId });
-      offeredDraftKey.current = kept ? getTemplateDraftKey({ userId, teamId: activeTeamId }) : null;
-      setDraft(kept);
-    } else {
-      setDraft(templateId ? readTemplateEditDraft({ userId, templateId }) : null);
+  // user's own edits to this template. Drafts are in this browser's storage, so the server's
+  // render and hydration offer none; the editor opens again for another template, context
+  // or user.
+  const isClient = useIsClient();
+  const opening = isClient ? `${isCreate}:${templateId ?? ""}:${userId ?? ""}:${activeTeamId ?? ""}` : null;
+  const [opened, setOpened] = useState<{ opening: string; offeredDraftKey: string | null } | null>(null);
+  if (opening !== null && opened?.opening !== opening) {
+    let kept: StoredTemplateDraft | null = null;
+    let offeredKey: string | null = null;
+    if (userId && isCreate) {
+      kept = readTemplateDraft({ userId, teamId: activeTeamId });
+      offeredKey = kept ? getTemplateDraftKey({ userId, teamId: activeTeamId }) : null;
+    } else if (userId && templateId) {
+      kept = readTemplateEditDraft({ userId, templateId });
     }
+    setOpened({ opening, offeredDraftKey: offeredKey });
+    setDraft(kept);
     setSaveNotice(null);
-  }, [isCreate, templateId, userId, activeTeamId]);
+  }
+  // Restore and Discard release the slot until the editor opens again.
+  useEffect(() => {
+    offeredDraftKey.current = opened?.offeredDraftKey ?? null;
+  }, [opened]);
   // A new template's draft kept in another context, offered with a switch to it.
   const otherContext = useOtherContextTemplateDraft({ enabled: isCreate && !draft, userId });
 

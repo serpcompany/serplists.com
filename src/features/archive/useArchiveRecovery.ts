@@ -21,6 +21,7 @@ import {
 // Restore follows the member's role (canRestoreArchiveItem).
 export function useArchiveRecovery() {
   const { user } = useAuth();
+  const userId = user?.id;
   const { activeTeamId, getPermissions, isWorkspaceLoading, workspaceScopeId } = useWorkspace();
   const permissions = getPermissions(activeTeamId);
   const canRestoreTemplates = canRestoreArchiveItem(permissions, 'template');
@@ -30,14 +31,14 @@ export function useArchiveRecovery() {
   const enabled = Boolean(user) && !isWorkspaceLoading;
 
   const templatesQuery = useQuery({
-    queryKey: queryKeys.archivedTemplates(user?.id, workspaceScopeId),
+    queryKey: queryKeys.archivedTemplates(userId, workspaceScopeId),
     queryFn: async () => parseArchiveItems(await api.getArchivedTemplates(params), 'template'),
     enabled,
     staleTime: 60 * 1000,
   });
 
   const runsQuery = useQuery({
-    queryKey: queryKeys.archivedRuns(user?.id, workspaceScopeId),
+    queryKey: queryKeys.archivedRuns(userId, workspaceScopeId),
     queryFn: async () => parseArchiveItems(await api.getArchivedChecklists(params), 'run'),
     enabled,
     staleTime: 60 * 1000,
@@ -60,7 +61,7 @@ export function useArchiveRecovery() {
             pending: pendingRef.current,
             restoreTemplate: (id) => api.restoreTemplate(id),
             restoreRun: (id) => api.restoreChecklist(id),
-            userId: user?.id,
+            userId,
             scopeId: workspaceScopeId,
           },
           item,
@@ -78,7 +79,7 @@ export function useArchiveRecovery() {
         });
       }
     },
-    [canRestoreRuns, canRestoreTemplates, queryClient, user?.id, workspaceScopeId],
+    [canRestoreRuns, canRestoreTemplates, queryClient, userId, workspaceScopeId],
   );
 
   return {

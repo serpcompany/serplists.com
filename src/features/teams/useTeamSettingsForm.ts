@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { syncTeamSettingsForm, type TeamSettingsFormValues } from './teamSettingsUpdate';
 
@@ -18,24 +18,25 @@ export function useTeamSettingsForm(saved: SavedTeamSettings | null) {
     saved ? { name: saved.name, slug: saved.slug } : EMPTY_FORM,
   );
   // The saved values the form last loaded or saved, for the Organization it shows.
-  const baselineRef = useRef<SavedTeamSettings | null>(saved);
+  const [baseline, setBaseline] = useState<SavedTeamSettings | null>(saved);
   const teamId = saved?.teamId;
   const savedName = saved?.name ?? '';
   const savedSlug = saved?.slug ?? '';
 
-  useEffect(() => {
+  // Follows a change to the saved values (or another Organization) as soon as it renders.
+  const [shown, setShown] = useState({ teamId, savedName, savedSlug });
+  if (shown.teamId !== teamId || shown.savedName !== savedName || shown.savedSlug !== savedSlug) {
+    setShown({ teamId, savedName, savedSlug });
     if (teamId === undefined) {
-      baselineRef.current = null;
+      setBaseline(null);
       setValues(EMPTY_FORM);
-      return;
+    } else {
+      const server = { name: savedName, slug: savedSlug };
+      const previous = baseline?.teamId === teamId ? baseline : null;
+      setBaseline({ teamId, ...server });
+      setValues((current) => syncTeamSettingsForm(current, previous, server));
     }
-
-    const server = { name: savedName, slug: savedSlug };
-    const previous = baselineRef.current;
-    const baseline = previous?.teamId === teamId ? previous : null;
-    baselineRef.current = { teamId, ...server };
-    setValues((current) => syncTeamSettingsForm(current, baseline, server));
-  }, [teamId, savedName, savedSlug]);
+  }
 
   return {
     values,
@@ -46,8 +47,8 @@ export function useTeamSettingsForm(saved: SavedTeamSettings | null) {
     // it saved (a field that no longer matches what was submitted) is kept.
     // A save for an Organization the form no longer shows changes nothing here.
     applySaved: (teamIdSaved: string, submitted: TeamSettingsFormValues, result: TeamSettingsFormValues) => {
-      if (baselineRef.current?.teamId !== teamIdSaved) return;
-      baselineRef.current = { teamId: teamIdSaved, ...result };
+      if (baseline?.teamId !== teamIdSaved) return;
+      setBaseline({ teamId: teamIdSaved, ...result });
       setValues((current) => syncTeamSettingsForm(current, submitted, result));
     },
   };

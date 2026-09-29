@@ -441,9 +441,9 @@ describe('a run completed while a toggle waits in the queue', () => {
 // The run Changelog refreshes once the saves settle, not once per click (each refresh reads
 // D1).
 describe('refreshing after saves', () => {
-  it('reports once when a burst of saves has finished and one of them saved', async () => {
+  it('reports once, with the latest run, when a burst of saves has finished and one of them saved', async () => {
     const server = createServer(buildRun(5));
-    const { context } = createPage(server, buildRun(5));
+    const { context, page } = createPage(server, buildRun(5));
     const onSaved = vi.fn();
     const saver = createRunSaver(onSaved);
     const saves = bindRunSaves({ dependencies: { apiClient: server.apiClient, updateRun: server.updateRun }, noteDrafts: () => ({}) });
@@ -456,9 +456,11 @@ describe('refreshing after saves', () => {
 
     expect(server.sent).toHaveLength(2);
     expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenLastCalledWith(page.latest);
 
     await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
     expect(onSaved).toHaveBeenCalledTimes(2);
+    expect(onSaved).toHaveBeenLastCalledWith(page.latest);
   });
 
   it('does not report when nothing was saved', async () => {

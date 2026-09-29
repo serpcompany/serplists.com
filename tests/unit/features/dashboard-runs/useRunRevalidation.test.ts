@@ -47,10 +47,15 @@ const settle = (runId: string, error?: Error) => {
 };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-// One render of the hook, as the runs list does on each change.
-const useRendered = () => {
-  fake.cursor = 0;
+// The runs list, reduced to the hook under test.
+function RunsList() {
   return useRunRevalidation(onRevalidateRun);
+}
+
+// One render of it under the fake React, as the runs list does on each change.
+const rendered = () => {
+  fake.cursor = 0;
+  return RunsList();
 };
 
 beforeEach(() => {
@@ -63,35 +68,35 @@ beforeEach(() => {
 
 describe('useRunRevalidation', () => {
   it('keeps each run busy until its own request finishes', async () => {
-    const first = useRendered().revalidate(runA);
-    const second = useRendered().revalidate(runB);
+    const first = rendered().revalidate(runA);
+    const second = rendered().revalidate(runB);
 
-    expect(useRendered().isRevalidating('run-a')).toBe(true);
-    expect(useRendered().isRevalidating('run-b')).toBe(true);
+    expect(rendered().isRevalidating('run-a')).toBe(true);
+    expect(rendered().isRevalidating('run-b')).toBe(true);
 
     settle('run-a');
     await first;
 
-    expect(useRendered().isRevalidating('run-a')).toBe(false);
-    expect(useRendered().isRevalidating('run-b')).toBe(true);
+    expect(rendered().isRevalidating('run-a')).toBe(false);
+    expect(rendered().isRevalidating('run-b')).toBe(true);
 
     settle('run-b');
     await second;
 
-    expect(useRendered().isRevalidating('run-b')).toBe(false);
+    expect(rendered().isRevalidating('run-b')).toBe(false);
     expect(toast.success).toHaveBeenCalledTimes(2);
   });
 
   // A second request would carry the same revision, and the API refuses one of the two
   // with 409 edit_conflict: a success and a "changed elsewhere" toast for one action.
   it('sends one request per run however often its Revalidate is pressed', async () => {
-    void useRendered().revalidate(runA);
-    void useRendered().revalidate(runB);
+    void rendered().revalidate(runA);
+    void rendered().revalidate(runB);
     settle('run-a');
     await flush();
 
-    void useRendered().revalidate(runB);
-    void useRendered().revalidate(runB);
+    void rendered().revalidate(runB);
+    void rendered().revalidate(runB);
     await flush();
 
     expect(onRevalidateRun.mock.calls.filter(([target]) => target.id === 'run-b')).toHaveLength(1);
@@ -100,18 +105,18 @@ describe('useRunRevalidation', () => {
   });
 
   it('frees only the run whose request failed', async () => {
-    const first = useRendered().revalidate(runA);
-    const second = useRendered().revalidate(runB);
+    const first = rendered().revalidate(runA);
+    const second = rendered().revalidate(runB);
 
     settle('run-b', new Error('Network error'));
     await second;
 
     expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(useRendered().isRevalidating('run-b')).toBe(false);
-    expect(useRendered().isRevalidating('run-a')).toBe(true);
+    expect(rendered().isRevalidating('run-b')).toBe(false);
+    expect(rendered().isRevalidating('run-a')).toBe(true);
 
     settle('run-a');
     await first;
-    expect(useRendered().isRevalidating('run-a')).toBe(false);
+    expect(rendered().isRevalidating('run-a')).toBe(false);
   });
 });

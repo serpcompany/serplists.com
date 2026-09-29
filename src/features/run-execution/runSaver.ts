@@ -36,9 +36,9 @@ const isEditConflict = (result: RunExecutionActionResult): boolean =>
 // Runs a run page's saves one at a time through the save queue (saveQueue.ts). When
 // another session saved first (409 edit_conflict), it shows that session's version,
 // so saves queued behind this one build on it, and retries this save once on it.
-// `onSaved` runs once the queue is idle after a save returned ok, so a burst of clicks
-// refreshes what reads the saved run (its Changelog) once rather than per click.
-export const createRunSaver = (onSaved?: () => void) => {
+// `onSaved` runs once the queue is idle after a save returned ok, with the latest run, so a
+// burst of clicks refreshes what reads the saved run (its Changelog) once rather than per click.
+export const createRunSaver = (onSaved?: (latest: ChecklistRun | null) => void) => {
   const queue = createSaveQueue();
   let running = 0;
   let saved = false;
@@ -82,7 +82,7 @@ export const createRunSaver = (onSaved?: () => void) => {
       running -= 1;
       if (running === 0 && saved) {
         saved = false;
-        onSaved?.();
+        onSaved?.(context.latest());
       }
     }
   };

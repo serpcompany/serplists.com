@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Eye,
@@ -16,6 +16,7 @@ import { needsFullPageLoad } from "@/lib/analyticsUrl";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
 import {
   buildKeptLoginState,
+  peekHandedOffLoginEmail,
   readKeptLoginEmail,
   readLoginPrefill,
   takeHandedOffLoginEmail,
@@ -46,6 +47,19 @@ function getVerificationFailure(search: string): string | null {
   return notice?.kind === "verification_failed" ? notice.message : null;
 }
 
+// The address to fill in (readLoginPrefill), from the live URL and this entry's state. It is
+// read, not taken, so rendering can read it: the effect below takes the handed-over address
+// and keeps it in this entry's state, so the value stays the same.
+const readPrefillEmail = (): string | null =>
+  readLoginPrefill(
+    window.location.search,
+    peekHandedOffLoginEmail() ?? readKeptLoginEmail(window.history.state),
+  ).email;
+const subscribeToHistory = (onChange: () => void) => {
+  window.addEventListener("popstate", onChange);
+  return () => window.removeEventListener("popstate", onChange);
+};
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,9 +73,25 @@ const Login = () => {
   const search = searchParams.toString();
   // Read from the URL during the first render so the resend option shows
   // immediately; it stays after the one-shot params are removed.
-  const [verificationFailure, setVerificationFailure] = useState<string | null>(() =>
-    getVerificationFailure(search),
-  );
+  const failureInUrl = getVerificationFailure(search);
+  const [verificationFailure, setVerificationFailure] = useState<string | null>(failureInUrl);
+  // A failed link opened later (the query changed) shows its resend option too.
+  const [seenFailure, setSeenFailure] = useState(failureInUrl);
+  if (seenFailure !== failureInUrl) {
+    setSeenFailure(failureInUrl);
+    if (failureInUrl) setVerificationFailure(failureInUrl);
+  }
+  // Fills the form when an address arrives: the server has no URL state or storage, so it
+  // and hydration render an empty field.
+  const prefillEmail = useSyncExternalStore(subscribeToHistory, readPrefillEmail, () => null);
+  const [filledEmail, setFilledEmail] = useState<string | null>(null);
+  if (filledEmail !== prefillEmail) {
+    setFilledEmail(prefillEmail);
+    if (prefillEmail) {
+      setEmail(prefillEmail);
+      setUnverifiedEmail(prefillEmail);
+    }
+  }
   // Where the user was headed (with its query and hash): the `next` parameter, which
   // also survives the email verification link.
   const returnPath = getReturnPath(searchParams);
@@ -78,14 +108,8 @@ const Login = () => {
     );
     const notice = getLoginNotice(currentSearch);
 
-    if (prefill.email) {
-      setEmail(prefill.email);
-      setUnverifiedEmail(prefill.email);
-    }
-
     // Stable ids keep a StrictMode double effect from stacking duplicate toasts.
     if (notice?.kind === "verification_failed") {
-      setVerificationFailure(notice.message);
       toast.error(notice.message, { id: "email-verification-failed" });
     } else if (notice?.kind === "verified") {
       toast.success(notice.message, { id: "email-verified" });

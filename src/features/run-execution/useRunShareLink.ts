@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { createShareLinkAndCopy } from '@/lib/shareLink';
@@ -25,9 +25,11 @@ export function useRunShareLink(runId: string | undefined, actions: RunShareActi
   // A change to private forgets the link, and it stays forgotten if the run is later shown
   // shared again (someone else's Share made a new token). The share result marks the run
   // public before the link is kept, so a new link is never forgotten.
-  useEffect(() => {
+  const [shownPublic, setShownPublic] = useState(isPublic);
+  if (shownPublic !== isPublic) {
+    setShownPublic(isPublic);
     if (!isPublic) setShareLink(null);
-  }, [isPublic]);
+  }
 
   const createShareLink = async () => {
     if (!runId) return;

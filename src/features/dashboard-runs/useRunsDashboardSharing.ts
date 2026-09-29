@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { createShareLinkAndCopy } from '@/lib/shareLink';
@@ -39,9 +39,11 @@ export function useRunsDashboardSharing({
 
   // Checked only when the list itself changes, so a link made before the list catches up
   // with the share (markRunShared marks the run public in it) is kept.
-  useEffect(() => {
+  const [checkedRuns, setCheckedRuns] = useState(runs);
+  if (checkedRuns !== runs) {
+    setCheckedRuns(runs);
     setSharedLink((current) => (current && !isLinkListedShared(current, runs) ? null : current));
-  }, [runs]);
+  }
 
   const shareRun = async (runId: string) => {
     if (sharingRunId.current) {

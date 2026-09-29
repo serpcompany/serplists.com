@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
@@ -48,10 +48,13 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
     staleTime: 30 * 1000,
   });
 
-  useEffect(() => {
+  // A link or conflict belongs to the Organization it was made in.
+  const [shownTeamId, setShownTeamId] = useState(activeTeamId);
+  if (shownTeamId !== activeTeamId) {
+    setShownTeamId(activeTeamId);
     setLink(null);
     setConflict(null);
-  }, [activeTeamId]);
+  }
 
   // refetch joins a first load still in flight, which predates the change; cancel it first.
   // Only active queries: an unobserved key keeps the previous user's queryFn.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -38,11 +38,9 @@ export const useTemplateEditPermission = (params: {
           });
   }
 
-  useEffect(() => {
-    if (permission === "editable") {
-      setOpened(true);
-    }
-  }, [permission]);
+  if (permission === "editable" && !opened) {
+    setOpened(true);
+  }
 
   return opened ? "editable" : permission;
 };

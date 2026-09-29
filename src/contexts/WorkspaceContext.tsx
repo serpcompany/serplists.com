@@ -119,6 +119,7 @@ export function WorkspaceProvider({
   children: React.ReactNode;
 }) {
   const { isLoading: isAuthLoading, sessionStatus, user } = useAuth();
+  const userId = user?.id;
   const queryClient = useQueryClient();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(
     readStoredWorkspaceId,
@@ -127,7 +128,7 @@ export function WorkspaceProvider({
   const selectionMemoryRef = useRef(createWorkspaceSelectionMemory());
 
   const teamsQuery = useQuery({
-    queryKey: ['teams', user?.id],
+    queryKey: ['teams', userId],
     queryFn: () => api.getTeams(),
     enabled: Boolean(user),
     staleTime: 60 * 1000,
@@ -152,19 +153,22 @@ export function WorkspaceProvider({
     return Array.from(mergedTeams.values());
   }, [optimisticTeams, queriedTeams]);
 
-  useEffect(() => {
-    setOptimisticTeams((currentTeams) =>
-      currentTeams.length === 0 ? currentTeams : [],
-    );
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (teamsQuery.isSuccess) {
+  // Teams remembered in this tab (created or joined) last until the next list the server
+  // sends, and never outlive the user who signed in.
+  const { dataUpdatedAt: teamsUpdatedAt, isSuccess: teamsSucceeded } = teamsQuery;
+  const [seenTeamsList, setSeenTeamsList] = useState({ userId, teamsUpdatedAt, teamsSucceeded });
+  if (
+    seenTeamsList.userId !== userId ||
+    seenTeamsList.teamsUpdatedAt !== teamsUpdatedAt ||
+    seenTeamsList.teamsSucceeded !== teamsSucceeded
+  ) {
+    setSeenTeamsList({ userId, teamsUpdatedAt, teamsSucceeded });
+    if (seenTeamsList.userId !== userId || teamsSucceeded) {
       setOptimisticTeams((currentTeams) =>
         currentTeams.length === 0 ? currentTeams : [],
       );
     }
-  }, [teamsQuery.dataUpdatedAt, teamsQuery.isSuccess]);
+  }
 
   const workspaces = useMemo<Workspace[]>(
     () => [
@@ -182,23 +186,27 @@ export function WorkspaceProvider({
     [teams],
   );
 
+  // Forget the stored context only on a confirmed sign-out. When the session check failed
+  // the user may still be signed in, so keep it for when the session comes back.
+  const signedOut = !isAuthLoading && !user && isConfirmedSignOut(sessionStatus);
+  const [seenSignedOut, setSeenSignedOut] = useState(false);
+  if (seenSignedOut !== signedOut) {
+    setSeenSignedOut(signedOut);
+    if (signedOut) {
+      setActiveWorkspaceId(PERSONAL_WORKSPACE_ID);
+    }
+  }
+
   useEffect(() => {
-    if (isAuthLoading) {
+    if (!signedOut) {
       return;
     }
+    resetWorkspaceSelection(selectionMemoryRef.current);
+    writeStoredWorkspaceId(PERSONAL_WORKSPACE_ID);
+  }, [signedOut]);
 
-    if (!user) {
-      // Forget the stored context only on a confirmed sign-out. When the session check failed
-      // the user may still be signed in, so keep it for when the session comes back.
-      if (!isConfirmedSignOut(sessionStatus)) {
-        return;
-      }
-      resetWorkspaceSelection(selectionMemoryRef.current);
-      setOptimisticTeams((currentTeams) =>
-        currentTeams.length === 0 ? currentTeams : [],
-      );
-      setActiveWorkspaceId(PERSONAL_WORKSPACE_ID);
-      writeStoredWorkspaceId(PERSONAL_WORKSPACE_ID);
+  useEffect(() => {
+    if (isAuthLoading || !user) {
       return;
     }
 
@@ -219,7 +227,6 @@ export function WorkspaceProvider({
   }, [
     activeWorkspaceId,
     isAuthLoading,
-    sessionStatus,
     teams,
     teamsFailed,
     teamsLoaded,
@@ -260,51 +267,51 @@ export function WorkspaceProvider({
         ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id),
       ]);
 
-      if (user?.id) {
+      if (userId) {
         // A teams request still in flight read the server before this change and would
         // drop the team when it lands. Cancelling reverts the query to its last data,
         // and the write below is kept as that data.
-        void queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
+        void queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
         // Only added to a list the server sent. With none (the first load failed or was
         // cancelled), a one-team list would read as a settled server list without the
         // stored Organization and move the tab to Personal; optimisticTeams shows the team
         // until the caller's refreshTeams() loads the list.
-        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+        queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
           currentTeams
             ? [team, ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id)]
             : currentTeams,
         );
       }
     },
-    [queryClient, user?.id],
+    [queryClient, userId],
   );
 
   const patchTeam = useCallback(
     (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => {
       setOptimisticTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
 
-      if (user?.id) {
-        queryClient.setQueryData<TeamSummary[]>(['teams', user.id], (currentTeams) =>
+      if (userId) {
+        queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
           currentTeams ? patchTeamSummary(currentTeams, teamId, patch) : currentTeams,
         );
       }
     },
-    [queryClient, user?.id],
+    [queryClient, userId],
   );
 
   const refreshTeams = useCallback(async () => {
-    if (!user?.id) {
+    if (!userId) {
       return [];
     }
 
     // fetchQuery joins a request already in flight, which predates the caller's write.
-    await queryClient.cancelQueries({ queryKey: ['teams', user.id], exact: true });
+    await queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
     return queryClient.fetchQuery({
-      queryKey: ['teams', user.id],
+      queryKey: ['teams', userId],
       queryFn: () => api.getTeams(),
       staleTime: 0,
     });
-  }, [queryClient, user?.id]);
+  }, [queryClient, userId]);
 
   const createTeam = useCallback(
     async (input: CreateTeamInput) => {
