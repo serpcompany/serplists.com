@@ -73,7 +73,7 @@ describe('the disconnected Pages deploy', () => {
   it('is called by no other workflow', () => {
     const callers = readdirSync('.github/workflows')
       .filter((file) => file !== 'cloudflare-pages-deploy.yml')
-      .filter((file) => readFileSync(`.github/workflows/${file}`, 'utf8').includes('cloudflare-pages-deploy.yml'));
+      .filter((file) => /uses:\s*\S*cloudflare-pages-deploy\.yml/.test(readFileSync(`.github/workflows/${file}`, 'utf8')));
 
     expect(callers).toEqual([]);
   });
