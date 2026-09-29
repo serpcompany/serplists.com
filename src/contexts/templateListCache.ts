@@ -1,7 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { isStaleRecordError } from '@/lib/editConflicts';
-import { dropTemplateHistory, refreshRunHistory, refreshTemplateHistory } from '@/lib/queryCache';
+import {
+  isTemplatePageOf,
+  markArchivedTemplateStale,
+  refreshRunHistory,
+  refreshTemplateHistory,
+} from '@/lib/queryCache';
 import { queryKindPrefix } from '@/lib/queryKeys';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -41,11 +46,15 @@ export const dropTemplateFromCatalog = (queryClient: QueryClient, templateId: st
 
 // Deleting a Template or Run archives it, so it moves from its list to the archive page.
 // Mark both stale for every user and context: the item may not belong to the active one.
-// An archived Template's Changelog cannot be loaded, so it is dropped.
+// The archived Template's own detail page and Changelog are only marked stale: reloading
+// them would ask for a template that is gone (see markArchivedTemplateStale).
 export const refreshAfterTemplateDelete = (queryClient: QueryClient, templateId: string): void => {
   dropTemplateFromCatalog(queryClient, templateId);
-  dropTemplateHistory(queryClient, templateId);
-  void queryClient.invalidateQueries({ queryKey: ['templates'] });
+  void queryClient.invalidateQueries({
+    queryKey: ['templates'],
+    predicate: (query) => !isTemplatePageOf(query, templateId),
+  });
+  void markArchivedTemplateStale(queryClient, templateId);
   void refreshRunLists(queryClient);
   void queryClient.invalidateQueries({ queryKey: queryKindPrefix('archivedTemplates') });
 };

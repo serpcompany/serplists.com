@@ -98,8 +98,11 @@ const usePrivateTemplateRecord = (
   });
   const queryKey = getTemplateDetailQueryKey(options.identifier, options.userId);
   const { refetch } = query;
-  // undefined: no answer yet. null: the server says the template is gone.
-  const hasAnswer = query.data !== undefined;
+  // undefined: no answer yet. null: the server says the template is gone. A cached gone
+  // answer that is being checked again (the template may have been restored since), or
+  // whose check failed, is not an answer yet.
+  const hasTemplate = Boolean(query.data);
+  const isGone = query.data === null && !query.isFetching && !query.isError;
 
   const reload = useCallback(() => {
     void refetch();
@@ -107,9 +110,9 @@ const usePrivateTemplateRecord = (
 
   return {
     loadError:
-      !hasAnswer && query.isError && !query.isFetching ? query.error.message : null,
-    loading: !hasAnswer && (query.isPending || query.isFetching),
-    notFound: query.data === null,
+      !hasTemplate && query.isError && !query.isFetching ? query.error.message : null,
+    loading: !hasTemplate && !isGone && (query.isPending || query.isFetching),
+    notFound: isGone,
     reload,
     template: query.data ?? null,
     updateTemplate: (update) =>

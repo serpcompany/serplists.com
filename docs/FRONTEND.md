@@ -142,8 +142,14 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   public template page loads its template from the API on every visit (bundled library
   templates excepted). The private detail page loads its template by id (slug as a
   fallback) with a query keyed under `['templates']`, so every template invalidation
-  (editor saves, visibility, Share, copies, archive, context switches) refetches it
-  while it is open and the next write sends the version the server holds. Both loads
+  (editor saves, visibility, Share, copies, context switches) refetches it
+  while it is open and the next write sends the version the server holds. Archiving a
+  template only marks its own detail and Changelog entries stale, since a reload would
+  ask for a template that is gone (`markArchivedTemplateStale` in
+  `src/lib/queryCache.ts`). Restoring one removes the detail entries no page shows that
+  hold it or a "gone" answer, so it opens with the spinner. A cached "gone" answer that
+  is being fetched again shows the spinner, and one whose fetch failed offers Try again,
+  never "not found". Both loads
   are keyed only on the template (and, for the private page, the viewer), so an
   unrelated re-render never reloads them. A background refetch, including the reload
   after a `409` edit conflict on Share or the visibility switch, swaps the template in

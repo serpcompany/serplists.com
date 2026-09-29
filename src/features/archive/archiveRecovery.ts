@@ -2,7 +2,21 @@ import type { QueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { queryKeys } from '@/lib/queryKeys';
+import { isTemplateDetailOf, isTemplateDetailQuery } from '@/lib/queryCache';
 import { refreshRunLists } from '@/contexts/templateListCache';
+
+// Detail pages no one is viewing that remember the restored template as gone (or hold it
+// from before the archive). Removed, the next visit loads it with a spinner instead of
+// showing "not found" first. A gone answer holds no id, and a page opened by slug has no
+// id in its key, so every unviewed gone answer goes.
+const forgetRestoredTemplate = (queryClient: QueryClient, templateId: string): void => {
+  queryClient.removeQueries({
+    predicate: (query) =>
+      query.getObserversCount() === 0 &&
+      (isTemplateDetailOf(query, templateId) ||
+        (isTemplateDetailQuery(query) && query.state.data === null)),
+  });
+};
 
 export type ArchiveKind = 'template' | 'run';
 
@@ -65,6 +79,7 @@ export async function restoreArchiveItem(
   try {
     if (item.kind === 'template') {
       await dependencies.restoreTemplate(item.id);
+      forgetRestoredTemplate(queryClient, item.id);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.archivedTemplates(userId, scopeId) }),
         queryClient.invalidateQueries({ queryKey: ['templates'] }),

@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { parseArchiveItems, restoreArchiveItem } from '@/features/archive/archiveRecovery';
+import { getTemplateDetailQueryKey } from '@/features/template-detail/templateDetailQuery';
 import { queryKeys } from '@/lib/queryKeys';
 
 const clients: QueryClient[] = [];
@@ -90,5 +91,34 @@ describe('restoreArchiveItem', () => {
 
     await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toThrow('Active run limit reached');
     expect(dependencies.pending.has('run-1')).toBe(false);
+  });
+});
+
+// A delete from the detail page could cache the archived template as gone (null). After a
+// restore the next visit showed "Template Not Found" until its refetch returned.
+describe('restoreArchiveItem and cached detail pages', () => {
+  it('forgets that the restored template was gone, so it opens with a spinner', async () => {
+    const { queryClient, dependencies } = setup();
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), null);
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-2'), { id: 'template-1' });
+    // Opened by slug: the key cannot name the id, and a gone answer holds no data.
+    queryClient.setQueryData(getTemplateDetailQueryKey('launch-qa', 'user-1'), null);
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-2', 'user-1'), { id: 'template-2' });
+
+    await restoreArchiveItem(dependencies, { id: 'template-1', kind: 'template' });
+
+    expect(queryClient.getQueryState(getTemplateDetailQueryKey('template-1', 'user-1'))).toBeUndefined();
+    expect(queryClient.getQueryState(getTemplateDetailQueryKey('template-1', 'user-2'))).toBeUndefined();
+    expect(queryClient.getQueryState(getTemplateDetailQueryKey('launch-qa', 'user-1'))).toBeUndefined();
+    expect(queryClient.getQueryData(getTemplateDetailQueryKey('template-2', 'user-1'))).toEqual({ id: 'template-2' });
+  });
+
+  it('leaves template detail pages alone when a run is restored', async () => {
+    const { queryClient, dependencies } = setup();
+    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), null);
+
+    await restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' });
+
+    expect(queryClient.getQueryData(getTemplateDetailQueryKey('template-1', 'user-1'))).toBeNull();
   });
 });

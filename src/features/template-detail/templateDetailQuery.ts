@@ -7,10 +7,12 @@ import type { TemplateDetailApiClient } from './templateDetailApi';
 
 /**
  * The private detail page's own template. The key sits under ['templates'], so every
- * template invalidation (editor saves, visibility, Share, copies, archive, context
- * switches) refetches it while the page is open, and the next write sends the version
- * the server holds. It has no Ownership Context: GET /api/templates/:id answers the
- * same in every context, and a context switch invalidates ['templates'] anyway.
+ * template invalidation (editor saves, visibility, Share, copies, context switches)
+ * refetches it while the page is open, and the next write sends the version the server
+ * holds. Archiving this template only marks it stale (markArchivedTemplateStale in
+ * src/lib/queryCache.ts matches this key layout). It has no Ownership Context:
+ * GET /api/templates/:id answers the same in every context, and a context switch
+ * invalidates ['templates'] anyway.
  */
 export const getTemplateDetailQueryKey = (
   identifier: string | undefined,

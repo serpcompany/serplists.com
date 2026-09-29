@@ -80,7 +80,8 @@ describe('private template detail record', () => {
   });
 
   it('reports a template the server says is gone as not found', () => {
-    const queryClient = new QueryClient();
+    // A fresh answer (the app keeps answers fresh for 60s), so nothing refetches it.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } });
     queryClient.setQueryData(key, null);
 
     const record = renderRecord(queryClient);
@@ -88,6 +89,34 @@ describe('private template detail record', () => {
     expect(record.notFound).toBe(true);
     expect(record.loading).toBe(false);
     expect(record.template).toBeNull();
+  });
+
+  // A cached "gone" answer (the template was archived, then restored elsewhere) is being
+  // checked again: wait for the answer instead of saying it does not exist.
+  it('shows loading, not not found, while a cached gone answer is refetched', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(key, null);
+    queryClient.getQueryCache().find({ queryKey: key })?.setState({ fetchStatus: 'fetching' });
+
+    const record = renderRecord(queryClient);
+
+    expect(record.loading).toBe(true);
+    expect(record.notFound).toBe(false);
+  });
+
+  it('offers Try again, not not found, when refetching a cached gone answer fails', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+    queryClient.setQueryData(key, null);
+    queryClient.getQueryCache().find({ queryKey: key })?.setState({
+      error: new Error('HTTP 503'),
+      status: 'error',
+    });
+
+    const record = renderRecord(queryClient);
+
+    expect(record.loadError).toBe('HTTP 503');
+    expect(record.notFound).toBe(false);
+    expect(record.loading).toBe(false);
   });
 
   it('applies an accepted change to the cached template only when it is still that template', () => {

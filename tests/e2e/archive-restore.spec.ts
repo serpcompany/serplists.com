@@ -96,3 +96,59 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
   await expect(archiveRow(page, runTitle)).toHaveCount(1, { timeout: 15_000 });
 });
+
+// Archiving from the template's own page refetched it while the page was still open: a
+// GET that could only 404, whose "gone" answer stayed cached, so the restored template
+// first opened as "Template Not Found".
+test('a template archived from its page opens normally once restored', async ({ page }) => {
+  await loginAsAdmin(page);
+  const title = `Archive detail template ${Date.now()}`;
+  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
+  const template = await apiRequest(page, '/templates', 'POST', { title, is_public: false, sections });
+  const templateId = template.body?.id as string;
+  const isDetailRead = (url: URL, method: string) =>
+    method === 'GET' && url.pathname.endsWith(`/api/templates/${templateId}`);
+
+  await page.goto(`/dashboard/templates/${templateId}`);
+  await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });
+
+  const readsAfterArchive: string[] = [];
+  page.on('request', (request) => {
+    if (isDetailRead(new URL(request.url()), request.method())) readsAfterArchive.push(request.url());
+  });
+  await page.getByRole('button', { name: 'Template actions' }).click();
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
+  const deleted = page.waitForResponse(
+    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
+  );
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Archive' }).click();
+  expect((await deleted).status()).toBe(200);
+  await expect(page).toHaveURL(/\/dashboard\/templates$/);
+  await page.waitForTimeout(500);
+  expect(readsAfterArchive).toEqual([]);
+
+  await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
+  const row = archiveRow(page, title);
+  await expect(row).toHaveCount(1, { timeout: 15_000 });
+  await row.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByText('Template restored')).toBeVisible();
+
+  // Hold the next read so a cached "gone" answer would show while it runs.
+  await page.route(
+    (url) => url.pathname.endsWith(`/api/templates/${templateId}`),
+    async (route) => {
+      if (route.request().method() === 'GET') await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await route.fallback();
+    },
+  );
+  // In-app navigation keeps the query cache.
+  await page.evaluate((to) => {
+    window.history.pushState({}, '', to);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, `/dashboard/templates/${templateId}`);
+  await page.waitForTimeout(700);
+  await expect(page.getByText('Template Not Found')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });
+
+  expect((await apiRequest(page, `/templates/${templateId}`, 'DELETE')).status).toBe(200);
+});

@@ -71,14 +71,17 @@ describe('refreshing history after a save', () => {
     expect(other).toHaveBeenCalledTimes(1);
   });
 
-  it('drops the Changelog of an archived Template instead of refetching it', async () => {
+  // Removing a Changelog the detail page still observes made it fetch again at once.
+  it('marks the Changelog of an archived Template stale instead of refetching it', async () => {
     const client = newClient();
     const key = queryKeys.templateHistoryFor('t1', 'u1');
-    client.setQueryData(key, { versions: [] });
+    const history = await openHistory(client, key);
 
     refreshAfterTemplateDelete(client, 't1');
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(client.getQueryData(key)).toBeUndefined();
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
   it('refetches the run Changelog after a run save or revalidate', async () => {
