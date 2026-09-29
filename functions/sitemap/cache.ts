@@ -61,16 +61,17 @@ const REVISION_DEPENDENCIES = {
 // (the key includes the page) and scan every public row just to return 404, so check the
 // page against that table by primary key first. Page 1 is always built: it holds the
 // landing entry, and a new database has no shard rows until the index is first built.
-async function isPublishedShard(env: Env, shard: SitemapShard): Promise<boolean> {
+// Returns the page number, or null for a page the index never published.
+async function publishedShardPage(env: Env, shard: SitemapShard): Promise<number | null> {
   const page = parsePage(shard.page);
-  if (page === null) return false;
-  if (page === 1) return true;
+  if (page === null) return null;
+  if (page === 1) return page;
   const rows = await createDb(env)
     .select({ page: sitemap_shard_revisions.page })
     .from(sitemap_shard_revisions)
     .where(and(eq(sitemap_shard_revisions.kind, shard.kind), eq(sitemap_shard_revisions.page, page)))
     .limit(1);
-  return rows.length > 0;
+  return rows.length > 0 ? page : null;
 }
 
 // Building a database sitemap scans every public Template or User, and D1 bills every
@@ -78,8 +79,10 @@ async function isPublishedShard(env: Env, shard: SitemapShard): Promise<boolean>
 // sitemap triggers bump one of the `sitemap_revisions` kinds it depends on, or a deploy
 // changes the bundled catalog, so a repeat request reads only the revision rows
 // (docs/design-docs/d1-cost.md). `build` receives only those kinds, so it cannot read one
-// its key ignores. The key drops the query string and leading zeros in page numbers, so
-// variants cannot bypass it, and shard routes pass their shard so pages the index never
+// its key ignores. The key's path comes from the sitemap and the parsed page number, never
+// from the request path: Pages Functions route ignoring case and allow a trailing slash
+// (`1.XML`, `1.xml/`), and the query string and leading zeros in the page vary too, so no
+// variant can bypass it. Shard routes pass their shard so pages the index never
 // published are refused before any build. That refusal is not cached anywhere, so a page
 // the index adds later is served.
 export async function cachedSitemap(
@@ -89,8 +92,11 @@ export async function cachedSitemap(
 ): Promise<Response> {
   const { request } = context;
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
-  if (sitemap !== 'index' && !(await isPublishedShard(context.env, sitemap))) {
-    return xmlResponse(request, renderUrlset([]), 404, 'no-store');
+  let keyPath = '/sitemap.xml';
+  if (sitemap !== 'index') {
+    const page = await publishedShardPage(context.env, sitemap);
+    if (page === null) return xmlResponse(request, renderUrlset([]), 404, 'no-store');
+    keyPath = `/sitemaps/${sitemap.kind}/${page}.xml`;
   }
   const kinds = REVISION_DEPENDENCIES[sitemap === 'index' ? 'index' : sitemap.kind];
   const allRevisions = await loadSitemapRevisions(context.env);
@@ -104,8 +110,7 @@ export async function cachedSitemap(
     kinds.map((kind) => [kind, revisions.get(kind) ?? null]),
     bundledCatalogVersion,
   ]));
-  const path = url.pathname.replace(/\/0+(?=\d)/g, '/');
-  const key = new Request(`${url.origin}${path}?v=${version}`);
+  const key = new Request(`${url.origin}${keyPath}?v=${version}`);
   const cache = typeof caches === 'undefined' ? undefined : caches.default;
 
   let response = await cache?.match(key);

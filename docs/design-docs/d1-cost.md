@@ -69,6 +69,10 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      must be bounded before the cache, or every new value is a miss: shard pages above
      1 that the index never published (no `sitemap_shard_revisions` row) get an uncached
      404 after a 1-row primary-key read, and page numbers above 50,000 read nothing.
+     Build the key from the parsed route values, never the request path: Pages
+     Functions match routes ignoring case and allow a trailing slash, so `1.XML`,
+     `1.xml/` and `01.xml` reach the same shard, and `cachedSitemap()` keys all of them
+     as `/sitemaps/<kind>/1.xml`.
    - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So does

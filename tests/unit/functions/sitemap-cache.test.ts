@@ -148,6 +148,28 @@ describe('cached sitemaps', () => {
     expect(build).toHaveBeenCalledTimes(2);
   });
 
+  // Pages Functions match routes ignoring case and allow one trailing slash, so every one
+  // of these reaches the same route with the same parsed page.
+  it('keys by the parsed sitemap and page, so case and trailing-slash variants share one entry', async () => {
+    const build = builder();
+    for (const [path, page] of [['1.xml', '1'], ['1.XML', '1'], ['1.xMl/', '1'], ['1.xml/', '1'], ['001.XML/', '001']]) {
+      await serve(build, `https://serplists.com/sitemaps/templates/${path}`, 'GET', { kind: 'templates', page });
+    }
+    expect(build).toHaveBeenCalledOnce();
+
+    publishedShards.push(['templates', 10]);
+    await serve(build, 'https://serplists.com/sitemaps/templates/10.XML', 'GET', { kind: 'templates', page: '10' });
+    await serve(build, 'https://serplists.com/sitemaps/templates/10.xml/', 'GET', { kind: 'templates', page: '10' });
+    expect(build).toHaveBeenCalledTimes(2);
+
+    const index = builder();
+    for (const url of ['https://serplists.com/sitemap.xml', 'https://serplists.com/sitemap.xml/', 'https://serplists.com/SITEMAP.XML']) {
+      await serve(index, url);
+    }
+    expect(index).toHaveBeenCalledOnce();
+    expect(cacheStore.size).toBe(3);
+  });
+
   it.each([
     ['templates', templatesShard],
     ['profiles', profilesShard],
