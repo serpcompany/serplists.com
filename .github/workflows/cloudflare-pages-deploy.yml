@@ -1,7 +1,10 @@
 name: Deploy to Cloudflare Pages
 
-# Called by ci.yml after the Quality Gate and schema parity jobs pass.
-# To deploy manually, run the CI workflow with "deploy" checked.
+# DISCONNECTED. The app now builds for Cloudflare Workers through OpenNext (`pnpm run
+# build:worker`), so `pnpm run build` no longer produces the ./dist this workflow deploys to
+# Pages. ci.yml no longer calls it, and its first step fails, so it cannot publish a broken
+# Pages deployment if a caller comes back by mistake. The Workers deploy (staging, then
+# production) replaces it at launch: docs/exec-plans/active/nextjs-migration.md, phase 4.
 on:
   workflow_call:
 
@@ -25,6 +28,11 @@ jobs:
       CLOUDFLARE_PAGES_PROJECT: serplists-com
       VITE_PERSONAL_RUN_MCP_ENABLED: ${{ github.ref_name == 'staging' && 'true' || 'false' }}
     steps:
+      - name: Refuse to deploy (disconnected)
+        run: |
+          echo "::error::The Pages deploy is disconnected: the app builds for Workers now (docs/exec-plans/active/nextjs-migration.md)."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v5
         with:

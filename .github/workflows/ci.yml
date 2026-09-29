@@ -1,7 +1,9 @@
 name: CI
 
 # One pipeline: every check must pass before anything deploys.
-# Pushes to staging/main deploy through cloudflare-pages-deploy.yml after the checks.
+# Nothing deploys from here while the app moves to Next.js on Workers: the Pages deploy
+# (cloudflare-pages-deploy.yml) has no caller, and the Workers deploy comes with the launch
+# (docs/exec-plans/active/nextjs-migration.md, phase 4).
 on:
   pull_request:
     branches:
@@ -12,11 +14,6 @@ on:
       - main
       - staging
   workflow_dispatch:
-    inputs:
-      deploy:
-        description: Deploy this ref to Cloudflare Pages after the checks pass
-        type: boolean
-        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -70,19 +67,21 @@ jobs:
       - name: Local D1 fixture integration
         run: pnpm run test:local-d1
 
+      # The OpenNext build (next build, then the Worker bundle) that the browser tests serve.
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:worker
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      # The build above, in workerd (opennextjs-cloudflare preview), on a D1 the runner seeds.
       - name: Smoke tests
         if: github.base_ref != 'main'
-        run: pnpm run test:smoke
+        run: pnpm run test:smoke -- --skip-build
 
       - name: Full end-to-end tests (promotions to main)
         if: github.base_ref == 'main'
-        run: pnpm run test:e2e:full
+        run: pnpm run test:e2e:full -- --skip-build
 
       - name: Upload Playwright evidence (traces, videos, screenshots)
         if: failure()
@@ -114,10 +113,3 @@ jobs:
 
       - name: Compare migrations with the Drizzle schema
         run: pnpm run check:db:drizzle-parity
-
-  deploy:
-    name: Deploy
-    needs: [quality, db-parity]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
-    uses: ./.github/workflows/cloudflare-pages-deploy.yml
-    secrets: inherit

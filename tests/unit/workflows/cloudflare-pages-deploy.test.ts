@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
@@ -61,6 +61,23 @@ const run = async (replies: Record<string, Reply[]>, overrides: Record<string, u
   });
   return { exitCode, output: lines.join('\n'), calls, sleeps };
 };
+
+// The app builds for Workers through OpenNext now, so `pnpm run build` makes no ./dist and a
+// Pages deploy of this code would publish a broken site. The workflow stays for its probe
+// (which the Workers deploy will reuse) but cannot run.
+describe('the disconnected Pages deploy', () => {
+  it('fails before it builds or deploys anything', () => {
+    expect(steps[0]?.run).toMatch(/\bexit 1\b/);
+  });
+
+  it('is called by no other workflow', () => {
+    const callers = readdirSync('.github/workflows')
+      .filter((file) => file !== 'cloudflare-pages-deploy.yml')
+      .filter((file) => readFileSync(`.github/workflows/${file}`, 'utf8').includes('cloudflare-pages-deploy.yml'));
+
+    expect(callers).toEqual([]);
+  });
+});
 
 describe('Cloudflare Pages deploy workflow', () => {
   it('probes the new deployment with the verify-deployment script', () => {
