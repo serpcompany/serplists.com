@@ -220,7 +220,7 @@ describe('navigation after a request', () => {
     const source = parseSource(path);
     const handlers = asyncHandlers(source);
 
-    expect(source.getFullText()).toContain('usePageVisit()');
+    expect(source.getFullText()).toMatch(/\busePageVisit\(/);
     for (const name of names) {
       const body = handlers.get(name);
       expect(body, name).toBeDefined();
@@ -252,7 +252,7 @@ describe('navigation after a request', () => {
     const unguarded = listSourceFiles('src').filter((file) => {
       if (file in DIRECT_CLICK_ONLY) return false;
       const source = readSource(file);
-      return REDIRECT_HELPER.test(source) && !source.includes('usePageVisit()');
+      return REDIRECT_HELPER.test(source) && !/\busePageVisit\(/.test(source);
     });
 
     expect(unguarded).toEqual([]);

@@ -219,7 +219,10 @@ let it ask, so the user is asked once.
   a `navigate()` from a page the user has left. Call `beginVisit()` from
   `usePageVisit` (`src/hooks/usePageVisit.ts`) when the action starts and check
   `visit.isCurrent()` after the request; it is false once the page unmounts or its
-  location changes (Back, a link, another id on the same page). The request's own
+  location changes (Back, a link, another id on the same page). The template editor
+  passes `{ endOn: "pathname" }`: the sidebar's New Template link on the new-template
+  page keeps the editor mounted at the same path, and a create in flight must still
+  finish and leave for My Templates. The request's own
   result stands: cache updates still happen. The template pages route Start Run,
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
@@ -229,7 +232,7 @@ let it ask, so the user is asked once.
   await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
   the visit has ended, a callback given to one of the visit helpers, or a call that is
   passed the visit), unless it is listed as ungated on purpose. It also fails when a
-  file uses a sign-in or checkout helper without `usePageVisit()`.
+  file uses a sign-in or checkout helper without calling `usePageVisit`.
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with
