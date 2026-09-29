@@ -1,13 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { getSessionStorage } from '@/lib/browserStorage';
-import { registerLeaveGuard } from '@/lib/navigation/leaveGuard';
 import type { ChecklistRun } from '@/types/checklist';
 
-import { RUN_NOTES_UNSAVED_MESSAGE, type NoteDrafts } from './noteDrafts';
+import type { NoteDrafts } from './noteDrafts';
 
 // Unsaved task notes, kept when the session ends in the background (a sign-out in another
 // tab, an expired or revoked session), which unmounts the run page without asking. The run
@@ -84,8 +83,9 @@ export const takeKeptRunNoteDrafts = (
   );
 };
 
-// Signing out asks before unsaved notes are lost, and a session that ends in the background
-// keeps them (leaveGuard.ts). The kept notes come back once this user opens the run again.
+// A session that ends in the background keeps unsaved notes: the page's leave guard
+// (useUnsavedChangesGuard) calls the returned function, which returns true when it kept
+// them. The kept notes come back once this user opens the run again.
 // `run` is the private run on the page (null for a shared run, which is not the user's).
 export const useKeptRunNoteDrafts = ({
   run,
@@ -95,30 +95,17 @@ export const useKeptRunNoteDrafts = ({
   run: ChecklistRun | null;
   noteDrafts: NoteDrafts;
   restoreNoteDrafts: (drafts: NoteDrafts) => void;
-}): void => {
+}): (() => boolean) => {
   const { user } = useAuth();
   const userId = user?.id;
   const latest = useRef({ userId, run, noteDrafts, restoreNoteDrafts });
   latest.current = { userId, run, noteDrafts, restoreNoteDrafts };
 
-  useEffect(() => {
-    let leaveAllowed = false;
-    return registerLeaveGuard({
-      message: RUN_NOTES_UNSAVED_MESSAGE,
-      shouldConfirm: () => !leaveAllowed && Object.keys(latest.current.noteDrafts).length > 0,
-      onLeaveConfirmed: () => {
-        leaveAllowed = true;
-      },
-      onLeaveCancelled: () => {
-        leaveAllowed = false;
-      },
-      onSessionEnding: () => {
-        const { userId: owner, run: shown, noteDrafts: drafts } = latest.current;
-        // A shared run's page is public: it stays open, with its notes, after a sign-out.
-        if (!shown) return true;
-        return Boolean(owner) && keepRunNoteDrafts({ userId: owner ?? '', runId: shown.id }, drafts, shown);
-      },
-    });
+  const keepNoteDrafts = useCallback(() => {
+    const { userId: owner, run: shown, noteDrafts: drafts } = latest.current;
+    // A shared run's page is public: it stays open, with its notes, after a sign-out.
+    if (!shown) return true;
+    return Boolean(owner) && keepRunNoteDrafts({ userId: owner ?? '', runId: shown.id }, drafts, shown);
   }, []);
 
   const runId = run?.id;
@@ -130,4 +117,6 @@ export const useKeptRunNoteDrafts = ({
     latest.current.restoreNoteDrafts(kept);
     toast('Your unsaved task notes were restored.');
   }, [runId, userId]);
+
+  return keepNoteDrafts;
 };

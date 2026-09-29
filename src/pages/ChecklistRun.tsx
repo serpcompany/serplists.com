@@ -35,11 +35,12 @@ import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { canFinishRun, getPrimaryTaskAction } from '@/features/run-execution/primaryTaskAction';
 import { useKeptRunNoteDrafts } from '@/features/run-execution/keptNoteDrafts';
-import { confirmLeaveWithUnsavedNotes, useUnsavedNotesWarning } from '@/features/run-execution/noteDrafts';
+import { RUN_NOTES_UNSAVED_MESSAGE } from '@/features/run-execution/noteDrafts';
 import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel';
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 import { usePageVisit } from '@/hooks/usePageVisit';
+import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -97,8 +98,10 @@ const ChecklistRunPage = () => {
   const displayRun = run;
   const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing });
-  useUnsavedNotesWarning(hasUnsavedNotes);
-  useKeptRunNoteDrafts({ run: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
+  const keepNoteDrafts = useKeptRunNoteDrafts({ run: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
+  // Every way out of the page asks once while task notes are unsaved: its own Runs and
+  // Back buttons, the app shell, browser Back/Forward, Sign out, and a reload or tab close.
+  const { allowLeave } = useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE, keepNoteDrafts);
 
   useEffect(() => {
     if (!notFound || loading) {
@@ -106,11 +109,13 @@ const ChecklistRunPage = () => {
     }
 
     toast.error('Run not found');
+    // The run is gone (deleted elsewhere, even during a save), so its notes cannot be saved.
+    allowLeave();
     navigate(
       isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath(),
       { replace: true },
     );
-  }, [isSharedRun, loading, navigate, notFound]);
+  }, [allowLeave, isSharedRun, loading, navigate, notFound]);
 
   useEffect(() => {
     if (!loadError) {
@@ -122,9 +127,7 @@ const ChecklistRunPage = () => {
 
   const leaveRun = () =>
     navigate(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
-  const handleBack = () => {
-    if (confirmLeaveWithUnsavedNotes(hasUnsavedNotes)) leaveRun();
-  };
+  const handleBack = leaveRun;
 
   // isCompleted is the value the user clicked on the run they saw (set, not flipped).
   const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
@@ -222,7 +225,8 @@ const ChecklistRunPage = () => {
       setIsCompleteDialogOpen(false);
       toast.success('Checklist completed! 🎉');
       // Only from this run: after Back or another run, it must not pull the user away.
-      // Completion saved every note draft, so leaving needs no confirmation.
+      // Completion saved every note draft, so the leave guard lets this through without
+      // asking. A note typed while the completion was saving still asks.
       if (visit.isCurrent()) {
         leaveRun();
       }

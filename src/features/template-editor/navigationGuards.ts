@@ -43,49 +43,12 @@ export const getTemplateEditorLeaveMessage = ({
   return isSaving ? EDITOR_SAVE_IN_PROGRESS_MESSAGE : EDITOR_UNSAVED_CHANGES_MESSAGE;
 };
 
-// For useBlocker: ask only when the editor route itself would change. A search or hash
-// change keeps the editor mounted, so nothing is lost.
-export const shouldBlockTemplateEditorTransition = ({
-  shouldBlock,
-  currentPath,
-  nextPath,
-}: {
-  shouldBlock: boolean;
-  currentPath: string;
-  nextPath: string;
-}): boolean => shouldBlock && currentPath !== nextPath;
-
-export const confirmTemplateEditorNavigation = (
-  shouldBlock: boolean,
-  confirmDialog: (message: string) => boolean = (message) =>
-    window.confirm(message),
-  message: string = EDITOR_UNSAVED_CHANGES_MESSAGE,
-): boolean => {
-  if (!shouldBlock) {
-    return true;
-  }
-
-  return confirmDialog(message);
-};
-
 // A draft generated from Clipy replaces the whole form (it has no undo), so unsaved work
 // needs a yes first. Asked before the request, so a no costs no generation.
 export const confirmReplaceTemplateDraft = (
   isDirty: boolean,
   confirmDialog: (message: string) => boolean = (message) => window.confirm(message),
 ): boolean => !isDirty || confirmDialog(EDITOR_REPLACE_DRAFT_MESSAGE);
-
-export const applyTemplateBeforeUnloadWarning = (
-  event: Pick<BeforeUnloadEvent, 'preventDefault' | 'returnValue'>,
-  shouldBlock: boolean,
-): void => {
-  if (!shouldBlock) {
-    return;
-  }
-
-  event.preventDefault();
-  event.returnValue = '';
-};
 
 // The editor remounts for each template and for the new-template form (TemplateEditorRoute),
 // so errors, selection, save state and in-flight saves never carry over between them.

@@ -1,5 +1,3 @@
-import { useEffect } from 'react';
-
 import type { ChecklistRun } from '@/types/checklist';
 
 // Unsaved task notes, by item id. A draft exists only while it differs from the saved
@@ -70,32 +68,3 @@ export const applyNoteDrafts = (
 });
 
 export const RUN_NOTES_UNSAVED_MESSAGE = 'You have unsaved task notes. Leave without saving?';
-
-export const confirmLeaveWithUnsavedNotes = (
-  hasUnsavedNotes: boolean,
-  confirmDialog: (message: string) => boolean = (message) => window.confirm(message),
-): boolean => !hasUnsavedNotes || confirmDialog(RUN_NOTES_UNSAVED_MESSAGE);
-
-export const applyUnsavedNotesWarning = (
-  event: Pick<BeforeUnloadEvent, 'preventDefault' | 'returnValue'>,
-  hasUnsavedNotes: boolean,
-): void => {
-  if (!hasUnsavedNotes) {
-    return;
-  }
-  event.preventDefault();
-  event.returnValue = '';
-};
-
-// Asks the browser to confirm closing or reloading the tab while notes are unsaved.
-export const useUnsavedNotesWarning = (hasUnsavedNotes: boolean): void => {
-  useEffect(() => {
-    if (!hasUnsavedNotes) {
-      return undefined;
-    }
-    const handleBeforeUnload = (event: BeforeUnloadEvent) =>
-      applyUnsavedNotesWarning(event, hasUnsavedNotes);
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedNotes]);
-};

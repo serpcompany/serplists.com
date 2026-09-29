@@ -51,7 +51,10 @@ scroll container must reset that element too.
 ## Unsaved changes
 
 A page that holds unsaved edits must ask before they are lost, whichever way the user
-leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
+leaves. `src/lib/navigation/useUnsavedChangesGuard.ts` covers every way out (the
+first three points below); the template editor (`useTemplateEditorLeaveGuard`) and
+the run page (unsaved task notes) use it. A page's own back buttons just navigate and
+let it ask, so the user is asked once.
 
 - `useBlocker` covers every route change: sidebar, header, account menu, in-page
   links, and browser Back/Forward. It asks only when the pathname changes.
@@ -82,8 +85,8 @@ leaves. The template editor (`useTemplateEditorLeaveGuard`) is the model:
   in `pendingUploads.ts`, disables Save ("Uploading...") until they finish, and asks
   before leaving with a message that says a file is still uploading.
 - A navigation the page starts after it has nothing left to lose (a create that
-  saved, or a checkout or sign-in redirect after the draft was kept) is allowed
-  without asking.
+  saved, completing a run, which saves every note, or a checkout or sign-in redirect
+  after the draft was kept) is allowed without asking.
 - An action on the page that replaces the whole form asks the same way. Generating a
   Clipy draft asks before the request when the form has unsaved changes
   (`confirmReplaceTemplateDraft`), locks the editor and Save while it runs so nothing

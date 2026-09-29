@@ -1,12 +1,11 @@
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { Route, Routes } from 'react-router-dom';
-import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import ChecklistRunPage from '@/pages/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
+
+import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
 
 const mockUseRunExecutionModel = vi.fn();
 
@@ -83,7 +82,7 @@ const baseRun: ChecklistRun = {
 };
 
 describe('ChecklistRunPage layout', () => {
-  it('renders the private run inside the shared dashboard shell with one persistent app sidebar', () => {
+  it('renders the private run inside the shared dashboard shell with one persistent app sidebar', async () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
       createShare: vi.fn(),
@@ -129,12 +128,9 @@ describe('ChecklistRunPage layout', () => {
       toggleSubItem: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/dashboard/runs/run-1">
-        <Routes>
-          <Route path="/dashboard/runs/:id" element={<ChecklistRunPage />} />
-        </Routes>
-      </StaticRouter>,
+    const html = await renderDataRoutes(
+      [{ path: '/dashboard/runs/:id', element: <ChecklistRunPage /> }],
+      '/dashboard/runs/run-1',
     );
 
     expect(html).toContain('Progress');
@@ -168,7 +164,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).not.toContain('More options');
   });
 
-  it('renders the shared run as the public copyable checklist flow', () => {
+  it('renders the shared run as the public copyable checklist flow', async () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { progress: 29, subTasksCompleted: 1, subTasksTotal: 4, tasksCompleted: 1, tasksTotal: 3 },
       createShare: vi.fn(),
@@ -202,12 +198,9 @@ describe('ChecklistRunPage layout', () => {
       toggleSubItem: vi.fn(),
     });
 
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/share/abc123">
-        <Routes>
-          <Route path="/share/:shareToken" element={<ChecklistRunPage />} />
-        </Routes>
-      </StaticRouter>,
+    const html = await renderDataRoutes(
+      [{ path: '/share/:shareToken', element: <ChecklistRunPage /> }],
+      '/share/abc123',
     );
 
     expect(html).toContain('Copy Link');
@@ -271,42 +264,42 @@ const renderRunPage = (
     toggleSubItem: vi.fn(),
   });
 
-  return renderToStaticMarkup(
-    <StaticRouter location={options.shared ? '/share/abc123' : '/dashboard/runs/run-1'}>
-      <Routes>
-        <Route path="/dashboard/runs/:id" element={<ChecklistRunPage />} />
-        <Route path="/share/:shareToken" element={<ChecklistRunPage />} />
-      </Routes>
-    </StaticRouter>,
+  // A data router, as in the app: the page guards unsaved notes with useBlocker.
+  return renderDataRoutes(
+    [
+      { path: '/dashboard/runs/:id', element: <ChecklistRunPage /> },
+      { path: '/share/:shareToken', element: <ChecklistRunPage /> },
+    ],
+    options.shared ? '/share/abc123' : '/dashboard/runs/run-1',
   );
 };
 
 describe('ChecklistRunPage completion', () => {
-  it('offers a working finish action on a fully ticked run that is still in progress', () => {
-    const html = renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-2' });
+  it('offers a working finish action on a fully ticked run that is still in progress', async () => {
+    const html = await renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-2' });
 
     expect(html).toContain('Finish Run');
     expect(html).toContain('Complete run');
     expect(html).toContain('In Progress');
   });
 
-  it('offers the finish action in the shared run view too', () => {
-    const html = renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-1', shared: true });
+  it('offers the finish action in the shared run view too', async () => {
+    const html = await renderRunPage(twoTaskRun([true, true]), { selectedItemId: 'item-1', shared: true });
 
     expect(html).toContain('Complete run');
   });
 
-  it('points the last task at the open task instead of a dead "Finish Run"', () => {
-    const html = renderRunPage(twoTaskRun([false, true]), { selectedItemId: 'item-2' });
+  it('points the last task at the open task instead of a dead "Finish Run"', async () => {
+    const html = await renderRunPage(twoTaskRun([false, true]), { selectedItemId: 'item-2' });
 
     expect(html).toContain('Next unfinished task');
     expect(html).not.toContain('Finish Run');
     expect(html).not.toContain('Complete run');
   });
 
-  it('offers no finish action on a completed run', () => {
-    const html = renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2' });
-    const sharedHtml = renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2', shared: true });
+  it('offers no finish action on a completed run', async () => {
+    const html = await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2' });
+    const sharedHtml = await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2', shared: true });
 
     expect(html).not.toContain('Finish Run');
     expect(html).not.toContain('Complete run');
@@ -326,8 +319,8 @@ describe('ChecklistRunPage on a completed run', () => {
     return run;
   };
 
-  it('locks every task and sub-task checkbox in the private view and keeps notes editable', () => {
-    const html = renderRunPage(completedRun(), { selectedItemId: 'item-1' });
+  it('locks every task and sub-task checkbox in the private view and keeps notes editable', async () => {
+    const html = await renderRunPage(completedRun(), { selectedItemId: 'item-1' });
 
     expect(html).not.toContain('Mark Complete');
     expect(checkboxes(html).length).toBeGreaterThan(0);
@@ -335,26 +328,26 @@ describe('ChecklistRunPage on a completed run', () => {
     expect(html).toContain('Save notes');
   });
 
-  it('locks them in the shared view too', () => {
-    const html = renderRunPage(completedRun(), { selectedItemId: 'item-1', shared: true });
+  it('locks them in the shared view too', async () => {
+    const html = await renderRunPage(completedRun(), { selectedItemId: 'item-1', shared: true });
 
     expect(checkboxes(html)).toHaveLength(3);
     expect(checkboxes(html).every((tag) => tag.includes('disabled=""'))).toBe(true);
     expect(html).toContain('Save notes');
   });
 
-  it('leaves the checkboxes of an in-progress run enabled', () => {
-    const html = renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1', shared: true });
+  it('leaves the checkboxes of an in-progress run enabled', async () => {
+    const html = await renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1', shared: true });
 
     expect(checkboxes(html).some((tag) => tag.includes('disabled=""'))).toBe(false);
   });
 });
 
 describe('ChecklistRunPage task notes', () => {
-  it('shows the unsaved draft for the selected task after moving between tasks', () => {
+  it('shows the unsaved draft for the selected task after moving between tasks', async () => {
     const run = twoTaskRun([true, false]);
     run.sections[0].items[0].notes = 'saved note';
-    const html = renderRunPage(run, {
+    const html = await renderRunPage(run, {
       noteDrafts: { 'item-1': 'Deployed build 42, see link' },
       selectedItemId: 'item-1',
     });
@@ -362,8 +355,8 @@ describe('ChecklistRunPage task notes', () => {
     expect(html).toContain('>Deployed build 42, see link</textarea>');
   });
 
-  it('shows the drafts in the shared run view too', () => {
-    const html = renderRunPage(twoTaskRun([false, false]), {
+  it('shows the drafts in the shared run view too', async () => {
+    const html = await renderRunPage(twoTaskRun([false, false]), {
       noteDrafts: { 'item-2': 'Guest note in progress' },
       selectedItemId: 'item-1',
       shared: true,
@@ -376,9 +369,9 @@ describe('ChecklistRunPage task notes', () => {
 describe('ChecklistRunPage Organization roles', () => {
   const organizationRun = (): ChecklistRun => ({ ...twoTaskRun([false, false]), teamId: 'acme' });
 
-  it('renders an Organization run read-only for a viewer, even from the Personal context', () => {
+  it('renders an Organization run read-only for a viewer, even from the Personal context', async () => {
     workspaceRoles.roles = { acme: 'viewer' };
-    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
 
     expect(html).toContain('View only');
     expect(html).not.toContain('Mark Complete');
@@ -388,16 +381,16 @@ describe('ChecklistRunPage Organization roles', () => {
     expect(html).toContain('readonly=""');
   });
 
-  it('treats a run of an Organization the user is not (yet) known to belong to as read-only', () => {
+  it('treats a run of an Organization the user is not (yet) known to belong to as read-only', async () => {
     workspaceRoles.roles = {};
-    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
 
     expect(html).not.toContain('Mark Complete');
   });
 
-  it('lets a runner execute, rename and share the Organization run', () => {
+  it('lets a runner execute, rename and share the Organization run', async () => {
     workspaceRoles.roles = { acme: 'runner' };
-    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
+    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
 
     expect(html).toContain('Mark Complete');
     expect(html).toContain('Rename');
@@ -406,9 +399,9 @@ describe('ChecklistRunPage Organization roles', () => {
     expect(html).not.toContain('View only');
   });
 
-  it('keeps the shared run editable for guests: the share link governs it, not roles', () => {
+  it('keeps the shared run editable for guests: the share link governs it, not roles', async () => {
     workspaceRoles.roles = {};
-    const html = renderRunPage(organizationRun(), { selectedItemId: 'item-1', shared: true });
+    const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1', shared: true });
 
     expect(html).toContain('Save notes');
     expect(html).not.toContain('View only');
@@ -444,8 +437,8 @@ describe('ChecklistRunPage task counts', () => {
     ],
   });
 
-  it('shows the same task total in the header, the progress block and the task list', () => {
-    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+  it('shows the same task total in the header, the progress block and the task list', async () => {
+    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
 
     expect(html.match(/0 of 3 tasks finished/g)).toHaveLength(2);
     expect(html).toContain('0 / 3 tasks');
@@ -453,15 +446,15 @@ describe('ChecklistRunPage task counts', () => {
     expect(html).not.toMatch(/(of|\/) 12/);
   });
 
-  it('fills the task list bar with the same overall progress as the header', () => {
-    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+  it('fills the task list bar with the same overall progress as the header', async () => {
+    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
 
     expect(html.match(/width:8%/g)).toHaveLength(2);
     expect(html).not.toContain('width:0%');
   });
 
-  it('counts tasks, not sub-tasks, in the shared view', () => {
-    const html = renderRunPage(runWithSubTasks(), { selectedItemId: 'a', shared: true });
+  it('counts tasks, not sub-tasks, in the shared view', async () => {
+    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a', shared: true });
 
     expect(html).toContain('0 of 3 tasks');
     expect(html).not.toMatch(/of 12/);
@@ -472,16 +465,16 @@ describe('ChecklistRunPage task checkboxes', () => {
   const taskCheckboxes = (html: string) =>
     (html.match(/<button[^>]*role="checkbox"[^>]*>/g) ?? []).filter((tag) => /aria-label="Mark /.test(tag));
 
-  it('names the task checkbox and shows its state in the private view', () => {
-    const html = renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1' });
+  it('names the task checkbox and shows its state in the private view', async () => {
+    const html = await renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1' });
 
     expect(taskCheckboxes(html)).toHaveLength(1);
     expect(taskCheckboxes(html)[0]).toContain('aria-label="Mark &quot;First task&quot; complete"');
     expect(taskCheckboxes(html)[0]).toContain('aria-checked="true"');
   });
 
-  it('names every task checkbox in the shared view', () => {
-    const html = renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1', shared: true });
+  it('names every task checkbox in the shared view', async () => {
+    const html = await renderRunPage(twoTaskRun([true, false]), { selectedItemId: 'item-1', shared: true });
     const [first, last] = taskCheckboxes(html);
 
     expect(taskCheckboxes(html)).toHaveLength(2);
