@@ -443,3 +443,6 @@ Each of these needs the user's approval, or happens with the domain move:
   empty list. It now shows the shared empty state ('No categories match "<query>"') with Clear
   search, which restores the list and the search field's focus. The rest of the page waits for
   step 2 of the restyle.
+- 2026-09-29: **My Templates' count.** Its subtitle read "1 templates in your library", and
+  "0 templates in your library" while the list loaded. It now says "1 template" or "N
+  templates", and shows no count until the list has loaded (nor after it failed to load).

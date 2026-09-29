@@ -195,11 +195,18 @@ const Templates = () => {
     }
   };
 
+  // No count until the list has loaded: a loading or failed list is not an empty one.
+  const templateCount = model.templates.length;
+  const countDescription =
+    model.loading || model.loadError
+      ? undefined
+      : `${templateCount} ${templateCount === 1 ? 'template' : 'templates'} in your library`;
+
   return (
     <DashboardContentShell>
       <DashboardPageHeader
         title="My Templates"
-        description={`${model.templates.length} templates in your library`}
+        description={countDescription}
         actions={
           model.canCreateTemplate ? (
             <Button type="button" onClick={model.openCreateTemplate}>

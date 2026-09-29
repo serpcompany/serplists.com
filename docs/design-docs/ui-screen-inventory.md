@@ -1138,7 +1138,8 @@ existing content, invent nothing):
   creating a Template; "Back to Templates" and the editor's back arrow; "Switch to
   <Organization>" on an invite.
 - **WHAT'S ON THE SCREEN:**
-  - Page header: "My Templates", "N templates in your library", "New Template" (role-limited).
+  - Page header: "My Templates", "1 template in your library" or "N templates in your library"
+    (no count while the list loads or when it failed to load), "New Template" (role-limited).
   - Toolbar: search "Search templates..."; a visibility select ("All", "Public", "Private"); a
     sort select ("Most Recent", "Alphabetical", "Most Tasks"); grid and list buttons ("Show
     templates in grid view", "Show templates in list view").

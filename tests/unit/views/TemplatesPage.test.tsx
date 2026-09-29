@@ -92,7 +92,7 @@ describe('Templates page', () => {
     expect(html).toContain('My Templates');
     expect(html).toContain('data-dashboard-content-shell="true"');
     expect(html).toContain('data-dashboard-page-header="true"');
-    expect(html).toContain('templates in your library');
+    expect(html).toContain('1 template in your library');
     expect(html).toContain('Search templates...');
     expect(html).toContain('role="combobox"');
     expect(html).toContain('Start Run');
@@ -315,5 +315,49 @@ describe('Templates page Start Run', () => {
     );
     await (runDialog.props?.onConfirm as (name: string) => Promise<void>)('Q3 vendor onboarding');
     expect(createRunFromTemplate).toHaveBeenCalledWith('Q3 vendor onboarding');
+  });
+});
+
+describe('Templates page count', () => {
+  const renderWith = (overrides: Record<string, unknown>) => {
+    mockUseDashboardTemplatesModel.mockReturnValue({
+      templates: [template()],
+      loading: false,
+      loadError: null,
+      isEmpty: false,
+      canCreateRun: true,
+      canCreateTemplate: true,
+      canEditTemplate: true,
+      canRunTemplate: true,
+      totalTemplateItems: 2,
+      selectedTemplate: null,
+      selectedTemplateId: '',
+      runLauncherOpen: false,
+      isCreatingRun: false,
+      openCreateTemplate: vi.fn(),
+      openRunLauncher: vi.fn(),
+      openTemplate: vi.fn(),
+      removeTemplate: vi.fn(),
+      closeRunLauncher: vi.fn(),
+      createRunFromTemplate: vi.fn(),
+      retryLoad: vi.fn(),
+      ...overrides,
+    });
+    navigation.reset('/dashboard/templates/');
+    return renderToStaticMarkup(<Templates />);
+  };
+
+  it('counts one template in the singular and more in the plural', () => {
+    expect(renderWith({ templates: [template()] })).toContain('1 template in your library');
+    expect(
+      renderWith({ templates: [template(), template({ id: 'template-2', title: 'Vendor onboarding' })] }),
+    ).toContain('2 templates in your library');
+    expect(renderWith({ templates: [], isEmpty: true })).toContain('0 templates in your library');
+  });
+
+  // Not "0 templates" while the list is on its way, or after it failed to load.
+  it('shows no count until the list has loaded', () => {
+    expect(renderWith({ templates: [], loading: true })).not.toContain('in your library');
+    expect(renderWith({ templates: [], loadError: new Error('HTTP 500') })).not.toContain('in your library');
   });
 });
