@@ -118,7 +118,7 @@ export const getInitialSelectedItemId = (
 
   for (const section of run.sections) {
     for (const item of section.items) {
-      if (!item.isCompleted) {
+      if (!isRunItemFinished(item)) {
         return item.id;
       }
     }
@@ -127,8 +127,8 @@ export const getInitialSelectedItemId = (
   return run.sections[0]?.items[0]?.id ?? null;
 };
 
-// After a task is completed, move to the next unfinished task after it, wrapping to
-// earlier ones; stay on it when every task is done.
+// After a task is completed, move to the next unfinished task after it (isRunItemFinished),
+// wrapping to earlier ones; stay on it when every task is done.
 export const getNextSelectedItemId = (
   run: ChecklistRun,
   completedItemId: string,
@@ -136,7 +136,7 @@ export const getNextSelectedItemId = (
   const items = run.sections.flatMap((section) => section.items);
   const index = items.findIndex((item) => item.id === completedItemId);
   const next = [...items.slice(index + 1), ...items.slice(0, Math.max(index, 0))].find(
-    (item) => !item.isCompleted,
+    (item) => !isRunItemFinished(item),
   );
   return next?.id ?? completedItemId;
 };
@@ -187,17 +187,14 @@ export const getSelectedRunItem = (
   return null;
 };
 
-// A ticked task can still hold an unfinished Sub-task (older runs, API writes), so the
-// completion prompt checks Sub-tasks too.
+// A task is finished when it is ticked and so is every Sub-task in all of its Sub-tasks
+// blocks. A ticked task can still hold an open Sub-task (older runs, API writes): it is not
+// finished, so the run opens on it, moving on leads to it, and the run cannot be completed.
+export const isRunItemFinished = (item: ChecklistItem): boolean =>
+  item.isCompleted === true && getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
+
 export const areAllRunItemsCompleted = (run: ChecklistRun): boolean =>
-  run.sections.every((section) =>
-    section.items.every((item) =>
-      item.isCompleted &&
-      (item.contents ?? []).every((content) =>
-        content.type !== 'subItems' || (content.subItems ?? []).every((subItem) => subItem.isCompleted),
-      ),
-    ),
-  );
+  run.sections.every((section) => section.items.every(isRunItemFinished));
 
 export const setSubItemsCompletion = (
   subItems: ChecklistSubItem[] | undefined,

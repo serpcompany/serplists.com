@@ -303,6 +303,20 @@ describe('ChecklistRunPage completion', () => {
     expect(html).not.toContain('Complete run');
   });
 
+  // Every task ticked, but the first still has an open Sub-task (older runs, API writes).
+  it('points the last task at a ticked task with an open Sub-task, never "Run completed"', async () => {
+    const run = twoTaskRun([true, true]);
+    run.sections[0].items[0].contents = [
+      { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Step one', isCompleted: false }] },
+    ];
+    const html = await renderRunPage(run, { selectedItemId: 'item-2' });
+
+    expect(html).toContain('In Progress');
+    expect(html).toContain('Next unfinished task');
+    expect(html).not.toContain('Run completed');
+    expect(html).not.toContain('Complete run');
+  });
+
   it('offers no finish action on a completed run', async () => {
     const html = await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2' });
     const sharedHtml = await renderRunPage(twoTaskRun([true, true], 'completed'), { selectedItemId: 'item-2', shared: true });

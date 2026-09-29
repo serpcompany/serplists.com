@@ -56,6 +56,59 @@ describe('getPrimaryTaskAction', () => {
   });
 });
 
+// A task can be ticked while one of its Sub-tasks is still open (runs saved before a task
+// followed its Sub-tasks, or written through the API). That task is not done and the run
+// cannot be finished yet, so the button leads to it and never reads "Run completed".
+describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open', () => {
+  const subTasks = (...done: boolean[]) => ({
+    type: 'subItems' as const,
+    value: '',
+    subItems: done.map((isCompleted, index) => ({ id: `sub-${index + 1}`, title: `Sub-task ${index + 1}`, isCompleted })),
+  });
+  // Every task ticked; the task at openIndex has a done Sub-tasks block and an open one.
+  const withOpenSubTask = (openIndex: number): ChecklistRun => {
+    const run = buildRun([true, true, true]);
+    run.sections[0].items[openIndex].contents = [subTasks(true), subTasks(true, false)];
+    return run;
+  };
+
+  it('leads from the last task to the earlier task with the open Sub-task', () => {
+    const run = withOpenSubTask(0);
+
+    expect(canFinishRun(run)).toBe(false);
+    expect(getPrimaryTaskAction(run, 'item-3', false)).toEqual({ kind: 'next_unfinished', itemId: 'item-1' });
+  });
+
+  it('offers Mark Complete on the task with the open Sub-task, also when it is the last task', () => {
+    expect(getPrimaryTaskAction(withOpenSubTask(2), 'item-3', false)).toEqual({ kind: 'complete_task' });
+    expect(getPrimaryTaskAction(withOpenSubTask(1), 'item-2', true)).toEqual({ kind: 'complete_task' });
+  });
+
+  it('still moves on from a done task that has a next one', () => {
+    expect(getPrimaryTaskAction(withOpenSubTask(2), 'item-1', true)).toEqual({ kind: 'next_task' });
+  });
+
+  it('treats a ticked task with an empty Sub-tasks block as done', () => {
+    const run = buildRun([true, true]);
+    run.sections[0].items[0].contents = [subTasks()];
+
+    expect(getPrimaryTaskAction(run, 'item-2', false)).toEqual({ kind: 'finish_run' });
+  });
+
+  it('never reads "Run completed" on a run that is still in progress', () => {
+    // Every combination of three tasks and one Sub-task each, ticked or not, on every task.
+    for (let mask = 0; mask < 64; mask += 1) {
+      const run = buildRun([0, 1, 2].map((index) => (mask & (1 << index)) !== 0));
+      run.sections[0].items.forEach((item, index) => {
+        item.contents = [subTasks((mask & (1 << (index + 3))) !== 0)];
+      });
+      run.sections[0].items.forEach((item, index) => {
+        expect(getPrimaryTaskAction(run, item.id, index < 2).kind, `mask ${mask}, ${item.id}`).not.toBe('run_completed');
+      });
+    }
+  });
+});
+
 describe('getPrimaryTaskAction for members who cannot update the run', () => {
   it('only navigates, and never offers to tick or finish', () => {
     expect(getPrimaryTaskAction(buildRun([false, false]), 'item-1', true, false)).toEqual({ kind: 'next_task' });
