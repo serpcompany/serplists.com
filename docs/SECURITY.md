@@ -82,6 +82,10 @@ Best-effort, per IP, in `functions/api/[[route]].ts`, before Better Auth dispatc
 - Sensitive writes (`POST`/`PUT`/`DELETE` under templates, checklists, uploads, the
   legacy Organization routes `teams`, and Run Key/MCP writes): 120 per minute.
 - MCP also limits each authenticated Run Key to 120 requests per minute.
+- Cloudflare WAF rate-limiting rule `MCP rate limit` (zone `serplists.com`, Free plan,
+  the zone's only rate-limiting slot): `http.host eq "serplists.com" and
+  starts_with(http.request.uri.path, "/api/mcp")`, 20 requests per 10 seconds per IP,
+  then Block for 10 seconds. Unlike the in-memory limits, it applies across all edges.
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is
