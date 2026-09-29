@@ -88,6 +88,52 @@ test('edits to an existing template are offered back after another tab signs out
   await callApi(page, `/templates/${created.id}`, 'DELETE');
 });
 
+// The kept edits were made on the version the editor had loaded. Restored, they save against
+// that version, so a save made elsewhere meanwhile ends in the edit conflict, not an overwrite.
+test('restored edits to a template saved elsewhere meanwhile get the edit conflict', async ({ page }) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const title = `Kept conflict QA ${Date.now()}`;
+  const created = await callApi<{ id: string }>(page, '/templates', 'POST', {
+    title,
+    sections: [{ id: `kept-conflict-${Date.now()}`, title: 'Checklist', items: [{ id: `kept-conflict-task-${Date.now()}`, title: 'Check DNS' }] }],
+    is_public: false,
+  });
+  const loaded = await callApi<{ version: number }>(page, `/templates/${created.id}`, 'GET');
+
+  await page.goto(`/dashboard/templates/${created.id}/edit`);
+  const titleField = page.getByPlaceholder('Enter template name...');
+  await expect(titleField).toHaveValue(title);
+  await titleField.fill(`${title} (draft)`);
+
+  // Another tab saves the template while these edits are unsaved: its version moves on.
+  await callApi(page, `/templates/${created.id}`, 'PUT', {
+    title: `${title} (saved elsewhere)`,
+    expected_version: loaded.version,
+  });
+
+  await signOutInAnotherTab(page);
+  await signInAgain(page);
+
+  await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${created.id}/edit`), { timeout: 30_000 });
+  await expect(titleField).toHaveValue(`${title} (saved elsewhere)`);
+  await page.getByRole('button', { name: 'Restore draft' }).click();
+  await expect(titleField).toHaveValue(`${title} (draft)`);
+
+  const saveResponse = page.waitForResponse(
+    (response) => response.url().includes(`/api/templates/${created.id}`) && response.request().method() === 'PUT',
+  );
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  const saved = await saveResponse;
+  expect(saved.request().postDataJSON()).toMatchObject({ expected_version: loaded.version });
+  expect(saved.status()).toBe(409);
+  await expect(page.getByRole('button', { name: 'Load latest version' })).toBeVisible();
+  const stored = await callApi<{ title: string }>(page, `/templates/${created.id}`, 'GET');
+  expect(stored.title).toBe(`${title} (saved elsewhere)`);
+
+  await callApi(page, `/templates/${created.id}`, 'DELETE');
+});
+
 test('unsaved task notes are offered back after another tab signs out', async ({ page }) => {
   test.setTimeout(120_000);
   await signIn(page);
