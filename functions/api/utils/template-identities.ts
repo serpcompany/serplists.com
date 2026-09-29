@@ -1,6 +1,7 @@
 // Stable ids for Template and run content: reading sections, tasks and Sub-tasks, checking
 // that a Template's ids are unique, and giving records that lack one an id (matched to the
 // previous content where possible, so run state follows it).
+import { isSectionedList } from '../../../src/lib/schemas/storedSections';
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -19,7 +20,8 @@ export const getArray = (value: unknown): unknown[] => Array.isArray(value) ? va
 export function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
   const records = values.filter(isRecord);
   if (records.length === 0) return [];
-  if (Array.isArray(records[0].items)) return records;
+  // The same rule as the payload check, so a first section with items: null stays a section.
+  if (isSectionedList(values)) return records;
 
   return [{
     id: '1',

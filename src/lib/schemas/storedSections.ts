@@ -49,6 +49,14 @@ type JsonRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * Whether stored content is a list of sections rather than a legacy flat task list: its
+ * first entry is an object with `items`, even `items: null`. The API's payload check and
+ * identity pass both use this, and the app's isSectionsShape reads it the same way.
+ */
+export const isSectionedList = (values: readonly unknown[]): boolean =>
+  isRecord(values[0]) && values[0].items !== undefined;
+
 const records = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
 
 const contentTypes = new Set<unknown>(CHECKLIST_CONTENT_TYPES);

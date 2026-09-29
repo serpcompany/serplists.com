@@ -123,7 +123,7 @@ Core D1 tables:
 
 JSON fields:
 
-- `templates.items` stores sectioned template content. The API normalizes legacy flat items into a single section.
+- `templates.items` stores sectioned template content. The API normalizes legacy flat items into a single section. A list is sectioned when its first entry is an object with `items`, even `items: null` (`isSectionedList` in `src/lib/schemas/storedSections.ts`); the payload check, the identity pass on Template writes and run reconciliation all use that rule.
 - `templates.category` stores a JSON array of category strings.
 - `templates.tags` stores a JSON array of tag strings.
 - `templates.rules` stores template rule metadata.

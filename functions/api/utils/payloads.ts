@@ -5,7 +5,7 @@ import {
   TEMPLATE_SLUG_PATTERN_MESSAGE,
 } from "../../../src/lib/schemas/templateFields";
 import { RUN_TITLE_MAX } from "../../../src/lib/schemas/templateLimits";
-import { findStoredSectionsIssue } from "../../../src/lib/schemas/storedSections";
+import { findStoredSectionsIssue, isSectionedList } from "../../../src/lib/schemas/storedSections";
 
 const boundedOptionalString = (max: number) => z.string().trim().max(max).optional();
 const boundedRequiredString = (max: number) => z.string().trim().min(1).max(max);
@@ -156,10 +156,7 @@ export function normalizeSectionsPayload(input: unknown): { sections: unknown[];
 
   if (parsed.length === 0) return { sections: [] };
 
-  const first = parsed[0] as Record<string, unknown> | null;
-  const isSectionsShape = !!first && typeof first === "object" && "items" in first;
-
-  if (isSectionsShape) {
+  if (isSectionedList(parsed)) {
     return { sections: parsed };
   }
 
