@@ -179,14 +179,19 @@ Common failures:
   from `tests/e2e/support/request-connections.ts`, which gives each of its requests a
   new connection; `tests/unit/e2e/request-connections.test.ts` fails if a Playwright
   upgrade undoes that.
-- Wrangler 4.54's dev proxy keeps its own connections to the worker the same way and
-  has no setting for it (TD-24 in the tech debt tracker): a non-GET it could not
-  forward gets `503 Your worker restarted mid-request` although the worker never
-  restarted, without CORS headers (the browser reports `Failed to fetch`), and a GET
-  is held until another request reaches the proxy. Specs set up and read their data
-  with `apiRequest()` or `apiJson()` from `tests/e2e/support/api-requests.ts`: they
-  call the API through Playwright's request client with the page's cookies, and send
-  a request again only when the proxy dropped it. A fetch inside `page.evaluate()`
+- Wrangler 4.54's dev proxy keeps its own connections to the worker the same way.
+  Unpatched, a request it forwarded on a connection being closed was lost: a non-GET
+  got `503 Your worker restarted mid-request` although nothing restarted, and a GET
+  was held until another request reached the proxy (cloudflare/workers-sdk#14641).
+  `patches/wrangler@4.54.0.patch`, which pnpm applies on install
+  (`pnpm.patchedDependencies` in `package.json`), makes the proxy forward such a
+  request once more when no response has started, and answer a real restart as one.
+  `tests/unit/e2e/wrangler-proxy-patch.test.ts` fails if the patch stops applying.
+  When you upgrade wrangler, check whether upstream fixed this; if not, re-create the
+  patch for the new version with `pnpm patch wrangler@<version>`.
+- Specs set up and read their data with `apiRequest()` or `apiJson()` from
+  `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
+  client with the page's cookies. A fetch inside `page.evaluate()`
   stays only where the page's own request is what the test checks, marked with an
   `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
   any other. `trackApiRequests()` in the same file waits for the page's own requests,

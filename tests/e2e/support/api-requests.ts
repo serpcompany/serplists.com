@@ -1,4 +1,4 @@
-import { errors, expect, type APIRequestContext, type Page, type Request } from '@playwright/test';
+import { expect, type APIRequestContext, type Page, type Request } from '@playwright/test';
 
 /** The API the browser tests run against, resolved as playwright.config.ts resolves it. */
 export const API_BASE_URL =
@@ -55,17 +55,6 @@ export type ApiResult<T> = { status: number; ok: boolean; body: T | null };
 
 type ApiInit = { method?: string; body?: unknown };
 
-// Wrangler 4.54's dev proxy (ProxyWorker) keeps its connections to the worker open between
-// requests, and workerd closes one that has been idle for 5 seconds. A request the proxy
-// sends on a connection just as it closes fails without reaching the worker; the proxy
-// then answers a non-GET with this 503 (the worker did not restart: it labels every
-// failed forward that way) and holds a GET until another request reaches it
-// (cloudflare/workers-sdk#14641).
-const PROXY_DROPPED_REQUEST = 'Your worker restarted mid-request';
-const MAX_ATTEMPTS = 3;
-// A GET with no answer for this long is sent again (which also releases the held one).
-const HELD_GET_TIMEOUT_MS = 10_000;
-
 function parseBody(text: string): unknown {
   if (text === '') return null;
   try {
@@ -80,14 +69,10 @@ function parseBody(text: string): unknown {
  * or clean up a test's data, or to read what the server stored. Returns the status and the
  * JSON body (null when there is none), and does not throw on an error status.
  *
- * Use this instead of page.evaluate(fetch): when the dev proxy drops a page's request (see
- * PROXY_DROPPED_REQUEST), a non-GET fails with "TypeError: Failed to fetch" (the 503 has no
- * CORS headers) and a GET waits for the next request. Playwright's request client sends
- * the context's cookies without a CORS preflight, and page.route() does not intercept it;
- * it opens a new connection for every request (request-connections.ts). A request is sent
- * again only when the proxy dropped it: the proxy's own 503 "worker restarted
- * mid-request", or a GET left unanswered. Every answer from the API itself is returned as
- * it is.
+ * Use this instead of page.evaluate(fetch): Playwright's request client sends the context's
+ * cookies without a CORS preflight, page.route() does not intercept it, and a failed call
+ * names the request instead of "TypeError: Failed to fetch". It opens a new connection for
+ * every request (request-connections.ts).
  *
  * A test whose subject is a fetch the page itself sends keeps it in page.evaluate and
  * marks it with an `e2e-in-page-fetch:` comment (tests/unit/e2e/e2e-setup-requests.test.ts).
@@ -97,26 +82,12 @@ export async function apiRequest<T = unknown>(
   path: string,
   { method = 'GET', body }: ApiInit = {},
 ): Promise<ApiResult<T>> {
-  const url = `${API_BASE_URL}${path}`;
-  const resendsWhenHeld = method === 'GET' || method === 'HEAD';
-
-  for (let attempt = 1; ; attempt += 1) {
-    const lastAttempt = attempt === MAX_ATTEMPTS;
-    let response;
-    try {
-      response = await owner.request.fetch(url, {
-        method,
-        ...(body === undefined ? {} : { data: body }),
-        ...(resendsWhenHeld && !lastAttempt ? { timeout: HELD_GET_TIMEOUT_MS } : {}),
-      });
-    } catch (error) {
-      if (resendsWhenHeld && !lastAttempt && error instanceof errors.TimeoutError) continue;
-      throw error;
-    }
-    const text = await response.text();
-    if (response.status() === 503 && text.startsWith(PROXY_DROPPED_REQUEST) && !lastAttempt) continue;
-    return { status: response.status(), ok: response.ok(), body: parseBody(text) as T | null };
-  }
+  const response = await owner.request.fetch(`${API_BASE_URL}${path}`, {
+    method,
+    ...(body === undefined ? {} : { data: body }),
+  });
+  const text = await response.text();
+  return { status: response.status(), ok: response.ok(), body: parseBody(text) as T | null };
 }
 
 /** Like apiRequest, but returns the JSON body and throws when the API answers with an error. */

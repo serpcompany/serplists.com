@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 
 // Browser tests set up and read their data with apiRequest()/apiJson() from
 // tests/e2e/support/api-requests.ts. A fetch run inside page.evaluate() goes through the
-// page, and when the local dev proxy drops it (docs/RELIABILITY.md, testing conventions)
-// the spec fails with "TypeError: Failed to fetch" though the product works.
+// page: it needs a CORS preflight, page.route() stubs can catch it, and any failure
+// reaches the spec as "TypeError: Failed to fetch" with no status or body.
 // A test whose subject is a fetch the page itself sends keeps it, with an
 // `e2e-in-page-fetch: <reason>` comment above the statement.
 

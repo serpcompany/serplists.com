@@ -179,5 +179,10 @@
     "xmllint-wasm": "5.3.0",
     "zod-to-json-schema": "^3.25.1"
   },
-  "packageManager": "pnpm@9.2.0+sha1.886364ebd6dae009284bebc56ed4296bb6dd557a"
+  "packageManager": "pnpm@9.2.0+sha1.886364ebd6dae009284bebc56ed4296bb6dd557a",
+  "pnpm": {
+    "patchedDependencies": {
+      "wrangler@4.54.0": "patches/wrangler@4.54.0.patch"
+    }
+  }
 }
