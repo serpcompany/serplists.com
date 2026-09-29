@@ -741,7 +741,6 @@ describe("personal run MCP handler", () => {
     it.each([
       ["an open task", runOf(task({ isCompleted: true, id: "task-0" }), task({ isCompleted: false })), ["task-1"]],
       ["a ticked task with an open Sub-task", runOf(task({ isCompleted: true, contents: subTasks(true, false) })), ["task-1"]],
-      ["a ticked task with an open direct Sub-task", runOf(task({ isCompleted: true, subItems: [{ id: "sub-9", title: "Old", isCompleted: false }] })), ["task-1"]],
       ["an unticked task whose Sub-tasks are done", runOf(task({ isCompleted: false, contents: subTasks(true, true) })), ["task-1"]],
       ["no tasks", personalRun({ items: JSON.stringify([{ id: "section-1", title: "Release", items: [] }]) }), []],
     ])("refuses a run with %s and writes nothing", async (_label, run, openTaskIds) => {
@@ -761,6 +760,17 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.structuredContent.details.openTaskCount).toBe(30);
       expect(body.result.structuredContent.details.openTaskIds).toHaveLength(20);
+    });
+
+    it("ignores open sub-items the run page never shows, on the task itself or on another block", async () => {
+      const body = await completeRun(runOf(task({
+        isCompleted: true,
+        subItems: [{ id: "sub-8", title: "Old", isCompleted: false }],
+        contents: [{ type: "text", value: "Steps", subItems: [{ id: "sub-9", title: "Hidden", isCompleted: false }] }, ...subTasks(true)],
+      })));
+
+      expect(body.result.isError).toBeUndefined();
+      expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ status: "completed" }));
     });
 
     it("completes a run whose every task and Sub-task is done, legacy completed keys included", async () => {

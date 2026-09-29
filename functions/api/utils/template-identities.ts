@@ -2,7 +2,7 @@
 // that a Template's ids are unique, giving records that lack one an id (matched to the
 // previous content where possible, so run state follows it), and giving stored content that
 // lacks ids, when it is read, the ids a save of it stores.
-import { isSectionedList } from '../../../src/lib/schemas/storedSections';
+import { getTaskSubTasks, isSectionedList, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
 import { normalizeSectionsPayload, parseJsonArray } from './payloads';
 
 export type JsonRecord = Record<string, unknown>;
@@ -32,13 +32,18 @@ export function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
   }];
 }
 
-export function getSubItems(item: JsonRecord): JsonRecord[] {
-  const direct = getArray(item.subItems).filter(isRecord);
-  const nested = getArray(item.contents)
-    .filter(isRecord)
-    .flatMap((content) => getArray(content.subItems).filter(isRecord));
-  return [...direct, ...nested];
-}
+// A task's Sub-tasks, the rows of its Sub-tasks blocks (getTaskSubTasks). Sub-items stored on
+// another block or on the task itself are not shown by the run page, so they get no id here and
+// are never matched, retired, ticked or counted.
+export const getSubItems = getTaskSubTasks;
+
+// A task's contents with each Sub-tasks block's list passed through `mapSubItems`, in order.
+export const mapSubTasksBlocks = (contents: unknown[], mapSubItems: (subItems: unknown[]) => unknown[]): unknown[] =>
+  contents.map((content) => (
+    isSubTasksBlock(content) && Array.isArray(content.subItems)
+      ? { ...content, subItems: mapSubItems(content.subItems) }
+      : content
+  ));
 
 export function validateStableTemplateIdentities(sections: unknown[]): string | null {
   const sectionIds = new Set<string>();
@@ -191,15 +196,7 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
         return {
           ...item,
           id: itemId,
-          ...(Array.isArray(item.subItems) ? { subItems: assignSubItems(item.subItems) } : {}),
-          ...(Array.isArray(item.contents)
-            ? {
-                contents: item.contents.map((content) => {
-                  if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
-                  return { ...content, subItems: assignSubItems(content.subItems) };
-                }),
-              }
-            : {}),
+          ...(Array.isArray(item.contents) ? { contents: mapSubTasksBlocks(item.contents, assignSubItems) } : {}),
         };
       }),
     };
@@ -221,7 +218,7 @@ const hasMissingIdentity = (sections: unknown[]): boolean => sections.filter(isR
     !getId(item) || getSubItems(item).some((subItem) => !getId(subItem))));
 
 // A stored task with the ids the identity pass gave it and its Sub-tasks (stableItem), in the
-// order getSubItems numbers them: its own, then each block's.
+// order getSubItems numbers them: each Sub-tasks block's, in turn.
 function withItemIds(item: JsonRecord, stableItem: JsonRecord): JsonRecord {
   const subItemIds = getSubItems(stableItem).map((subItem) => subItem.id);
   let subItemIndex = 0;
@@ -230,16 +227,7 @@ function withItemIds(item: JsonRecord, stableItem: JsonRecord): JsonRecord {
   return {
     ...item,
     id: stableItem.id,
-    ...(Array.isArray(item.subItems) ? { subItems: withIds(item.subItems) } : {}),
-    ...(Array.isArray(item.contents)
-      ? {
-          contents: item.contents.map((content) => (
-            isRecord(content) && Array.isArray(content.subItems)
-              ? { ...content, subItems: withIds(content.subItems) }
-              : content
-          )),
-        }
-      : {}),
+    ...(Array.isArray(item.contents) ? { contents: mapSubTasksBlocks(item.contents, withIds) } : {}),
   };
 }
 

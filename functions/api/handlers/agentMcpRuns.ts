@@ -1,4 +1,4 @@
-import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
+import { getTaskSubTasks, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { findOpenRunTasks } from "../utils/template-reconciliation";
 import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
@@ -123,15 +123,6 @@ function sectionTasks(section: JsonRecord): JsonRecord[] {
   return Array.isArray(section.items) ? section.items.filter(isRecord) : [];
 }
 
-function getSubtasks(task: JsonRecord): JsonRecord[] {
-  const direct = Array.isArray(task.subItems) ? task.subItems.filter(isRecord) : [];
-  const nested = Array.isArray(task.contents)
-    ? task.contents.filter(isRecord).flatMap((content) =>
-        Array.isArray(content.subItems) ? content.subItems.filter(isRecord) : [])
-    : [];
-  return [...direct, ...nested];
-}
-
 function findTask(sections: JsonRecord[], taskId: string): JsonRecord | null {
   for (const section of sections) {
     const task = sectionTasks(section).find((item) => item.id === taskId);
@@ -151,7 +142,8 @@ export function applyRunOperation(sections: JsonRecord[], operation: UpdateRunAr
     return;
   }
 
-  const subtasks = getSubtasks(task);
+  // The Sub-tasks the run page shows and counts, so a task an agent finishes reads as done there.
+  const subtasks = getTaskSubTasks(task);
   if (operation.operation === "set_task_completed") {
     task.isCompleted = operation.completed;
     for (const subtask of subtasks) subtask.isCompleted = operation.completed;

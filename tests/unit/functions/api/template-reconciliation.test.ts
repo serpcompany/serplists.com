@@ -295,10 +295,10 @@ describe('template run reconciliation', () => {
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
       reconcileRunSections(previous, next, []).sections[0].items[0] as Json;
-    const allSubTasks = (item: Json): Json[] => [
-      ...(item.subItems ?? []),
-      ...(item.contents ?? []).flatMap((content: Json) => content.subItems ?? []),
-    ];
+    // Only a Sub-tasks block's rows are Sub-tasks: the run page shows no other sub-items.
+    const allSubTasks = (item: Json): Json[] => (item.contents ?? [])
+      .filter((content: Json) => content.type === 'subItems')
+      .flatMap((content: Json) => content.subItems ?? []);
 
     it('reopens a completed task when the template adds a Sub-task to it', () => {
       const previous = run(true, subTasks(['short', true], ['long', true]));

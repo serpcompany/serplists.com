@@ -257,7 +257,7 @@ describe('mapChecklistToRun retired work', () => {
           title: 'Test checkout',
           isCompleted: true,
           notes: 'Passed on staging',
-          subItems: [{ id: 'qa-sub', title: 'Card payment', isCompleted: true }],
+          contents: [{ type: 'subItems', value: '', subItems: [{ id: 'qa-sub', title: 'Card payment', isCompleted: true }] }],
         }],
       },
     },
@@ -298,11 +298,15 @@ describe('mapChecklistToRun retired work', () => {
     }
   });
 
-  it('reads Sub-tasks from subItems content blocks too', () => {
+  it('reads Sub-tasks only from Sub-tasks blocks, the ones the run page showed', () => {
     const item = {
       id: 'copy-2',
       title: 'Write more copy',
-      contents: [{ type: 'subItems', value: '', subItems: [{ id: 'short', title: 'Short', isCompleted: true }] }],
+      subItems: [{ id: 'direct', title: 'Never shown', isCompleted: false }],
+      contents: [
+        { type: 'text', value: 'Steps', subItems: [{ id: 'on-text', title: 'Never shown', isCompleted: false }] },
+        { type: 'subItems', value: '', subItems: [{ id: 'short', title: 'Short', isCompleted: true }] },
+      ],
     };
     const [entry] = mapChecklistToRun(checklist([{ kind: 'item', sectionId: 's1', item }]), 'run-1').retiredItems ?? [];
 

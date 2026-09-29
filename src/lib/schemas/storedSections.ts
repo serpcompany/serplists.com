@@ -79,9 +79,24 @@ export function sanitizeStoredSubItems(value: unknown): JsonRecord[] {
   });
 }
 
+/** Whether a content block is a Sub-tasks block, the only kind whose sub-items are Sub-tasks. */
+export const isSubTasksBlock = (content: unknown): content is JsonRecord =>
+  isRecord(content) && content.type === "subItems";
+
+/**
+ * A stored task's Sub-tasks: the rows of its Sub-tasks blocks, the only sub-items the run page
+ * shows and counts. The API reads the same ones (progress, completion, Template identities
+ * and reconciliation, Run Keys), so the page and the API never disagree about a task. Sub-items
+ * stored on another block or on the task itself (older rows, direct writes) are not Sub-tasks.
+ */
+export function getTaskSubTasks(task: JsonRecord): JsonRecord[] {
+  return records(task.contents).filter(isSubTasksBlock).flatMap((content) => records(content.subItems));
+}
+
 /**
  * Content blocks safe to render and copy: entries that are not objects or have an unknown
- * type are dropped, a non-text value becomes "", and Sub-task lists are always arrays.
+ * type are dropped, a non-text value becomes "", and a Sub-tasks block's list is always an
+ * array. Sub-items on any other block are dropped: they are not Sub-tasks (getTaskSubTasks).
  */
 export function sanitizeStoredContents(value: unknown): JsonRecord[] {
   return records(value)
@@ -92,9 +107,8 @@ export function sanitizeStoredContents(value: unknown): JsonRecord[] {
           : key === "uploadType" || key === "fileName" ? isTextOrAbsent(entry)
             : true);
       next.value = typeof content.value === "string" ? content.value : "";
-      if (content.type === "subItems" || content.subItems !== undefined) {
-        next.subItems = sanitizeStoredSubItems(content.subItems);
-      }
+      if (content.type === "subItems") next.subItems = sanitizeStoredSubItems(content.subItems);
+      else delete next.subItems;
       return next;
     });
 }

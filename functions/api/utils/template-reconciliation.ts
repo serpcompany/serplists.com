@@ -6,6 +6,7 @@ import {
   getId,
   getSubItems,
   isRecord,
+  mapSubTasksBlocks,
   normalizeLegacySectionShape,
   type JsonRecord,
 } from './template-identities';
@@ -149,16 +150,7 @@ function withoutClaimed(records: unknown, claimed: Set<JsonRecord>): unknown[] {
 // A retired task without the Sub-tasks that moved to another task.
 function withoutMovedSubItems(item: JsonRecord, claimed: Set<JsonRecord>): JsonRecord {
   if (!getSubItems(item).some((subItem) => claimed.has(subItem))) return item;
-  const next = { ...item };
-  if (Array.isArray(item.subItems)) next.subItems = withoutClaimed(item.subItems, claimed);
-  if (Array.isArray(item.contents)) {
-    next.contents = item.contents.map((content) => (
-      isRecord(content) && Array.isArray(content.subItems)
-        ? { ...content, subItems: withoutClaimed(content.subItems, claimed) }
-        : content
-    ));
-  }
-  return next;
+  return { ...item, contents: mapSubTasksBlocks(getArray(item.contents), (list) => withoutClaimed(list, claimed)) };
 }
 
 // A removed section without the tasks and Sub-tasks that moved elsewhere; null when every
@@ -182,14 +174,7 @@ function reconcileItem(
   const reconcileSubItems = (list: unknown[]) =>
     list.filter(isRecord).map((subItem) => preserveRunState(subItem, subItemMatches.get(subItem)));
 
-  if (Array.isArray(templateItem.subItems)) next.subItems = reconcileSubItems(templateItem.subItems);
-  if (Array.isArray(templateItem.contents)) {
-    next.contents = templateItem.contents.map((content) => (
-      isRecord(content) && Array.isArray(content.subItems)
-        ? { ...content, subItems: reconcileSubItems(content.subItems) }
-        : content
-    ));
-  }
+  if (Array.isArray(templateItem.contents)) next.contents = mapSubTasksBlocks(templateItem.contents, reconcileSubItems);
 
   // A task is complete exactly when all its Sub-tasks are, the rule the run page and Run
   // Keys follow. So a new Sub-task (which arrives incomplete) reopens the task, and removing
@@ -341,7 +326,7 @@ export function calculateRunProgress(sections: unknown[]): number {
 
 /**
  * A run's tasks, and the ids of those that keep it from being completed: a task that is not
- * ticked, or one with a Sub-task (direct or in a Sub-tasks block) that is not. A run can be
+ * ticked, or one with a Sub-task (a row of its Sub-tasks blocks) that is not. A run can be
  * completed once it has tasks and none is open, the rule the run page's Complete run follows
  * (canFinishRun, which tests/unit/functions/api/run-completion-rule.test.ts keeps in step).
  * Runs saved before isCompleted existed store `completed`, read the same way.

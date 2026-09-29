@@ -50,6 +50,7 @@ back, including packs exported before this normalization existed. It keeps ids a
 fixes what the editor can save but the strict schema rejects:
 - a blank section title becomes `Section N` and a blank task title `Task N` (N is the position, as the editor outline shows it)
 - blank sub-tasks, sub-task blocks left empty, and image/video/file/embed blocks without a value are dropped
+- `subItems` on a text, image, video, file or embed block are dropped: only a `subItems` block's rows are Sub-tasks, the ones the app shows
 - sections without tasks are dropped, and an unknown `type` becomes `checklist`
 
 A template that still fails (for example one with no tasks) is left out of an export

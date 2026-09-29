@@ -37,15 +37,17 @@ function normalizeContents(contents: unknown[]): JsonRecord[] {
     }
 
     if (VALUE_CONTENT_TYPES.has(content.type) && isBlank(value)) return [];
-    return [{ ...content, value }];
+    // Only a Sub-tasks block's sub-items are Sub-tasks; the app never shows any other block's.
+    const { subItems: _notSubTasks, ...block } = content;
+    return [{ ...block, value }];
   });
 }
 
 /**
  * Makes stored or imported sections valid for the portable schema: blank section titles
  * become "Section N" and blank task titles "Task N" (N is the position, as the editor shows
- * it); blank sub-tasks, empty sub-task blocks, and media or embed blocks without a value are
- * dropped; sections left without tasks are dropped.
+ * it); blank sub-tasks, empty sub-task blocks, sub-items on any other block, and media or
+ * embed blocks without a value are dropped; sections left without tasks are dropped.
  */
 export function normalizePortableSections(sections: unknown): JsonRecord[] {
   if (!Array.isArray(sections)) return [];
