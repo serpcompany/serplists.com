@@ -85,6 +85,9 @@ test.describe("template limit upgrade path", () => {
     await stubCheckout(page);
 
     await page.goto("/dashboard/templates/new");
+    // Warned once the editor has counted the templates; a Save before that is refused by
+    // the API with its own message.
+    await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
     const title = page.getByPlaceholder("Enter template name...");
     await title.fill("Second template");
     await page.getByRole("button", { name: "Save", exact: true }).click();
