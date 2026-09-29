@@ -1,8 +1,8 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { VideoEmbed } from '@/components/shared/VideoEmbed';
+import { NativeVideoView, VideoEmbed } from '@/components/shared/VideoEmbed';
 
 describe('VideoEmbed', () => {
   it('frames a YouTube watch URL through the allowlisted embed player', () => {
@@ -43,11 +43,43 @@ describe('VideoEmbed', () => {
     expect(markup).not.toContain('<source');
     expect(markup).toContain('Your browser does not support embedded video.');
 
-    const first = VideoEmbed({ url: 'https://cdn.example.com/a.mp4' }) as React.ReactElement;
-    const second = VideoEmbed({ url: ' https://cdn.example.com/b.mp4 ' }) as React.ReactElement;
-    expect(first.type).toBe('video');
-    expect(first.key).toBe('https://cdn.example.com/a.mp4');
-    expect(second.key).toBe('https://cdn.example.com/b.mp4');
+    const player = (url: string) => NativeVideoView({ failed: false, onFail: vi.fn(), url }) as React.ReactElement;
+    expect(player('https://cdn.example.com/a.mp4').type).toBe('video');
+    expect(player('https://cdn.example.com/a.mp4').key).toBe('https://cdn.example.com/a.mp4');
+    expect(player('https://cdn.example.com/b.mp4').key).toBe('https://cdn.example.com/b.mp4');
+  });
+});
+
+// Any http(s) URL that is not YouTube or Clipy goes to the native player, including pages
+// such as a Vimeo or Loom link. The player could not play them and offered no way to them.
+describe('NativeVideoView', () => {
+  const pageUrl = 'https://vimeo.com/76979871';
+
+  it('links to the video once the player could not load it', () => {
+    const markup = renderToStaticMarkup(<NativeVideoView failed onFail={() => undefined} url={pageUrl} />);
+
+    expect(markup).not.toContain('<video');
+    expect(markup).toContain(`href="${pageUrl}"`);
+    expect(markup).toContain('target="_blank"');
+    expect(markup).toContain('rel="noopener noreferrer"');
+    expect(markup).toContain('Open video');
+  });
+
+  it('reports a load failure from the player that loads the URL, but not an error after it loaded', () => {
+    const onFail = vi.fn();
+    const video = NativeVideoView({ failed: false, onFail, url: pageUrl }) as React.ReactElement<{
+      onError: (event: unknown) => void;
+      src: string;
+    }>;
+    expect(video.type).toBe('video');
+    expect(video.props.src).toBe(pageUrl);
+
+    // A playing video whose connection drops keeps its player.
+    video.props.onError({ currentTarget: { readyState: 3 } });
+    expect(onFail).not.toHaveBeenCalled();
+
+    video.props.onError({ currentTarget: { readyState: 0 } });
+    expect(onFail).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -20,7 +20,9 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
   own `src` and its key, so a new URL (the next task's video, a URL being typed in the
   editor) always gets a new player: a player reads a `<source>` child only once. The run
   page also keys each task's blocks on the task, so no block carries over to the next task.
-  `tests/e2e/run-task-videos.spec.ts` checks this.
+  When the player cannot load the URL at all (a video page such as Vimeo or Loom, or
+  a missing file), the block shows the "Open video" link instead; an error after the
+  video loaded keeps the player. `tests/e2e/run-task-videos.spec.ts` checks this.
 
 Every iframe origin the helper can produce must be listed in `frame-src` in
 `public/_headers`; `tests/unit/security/headers.test.ts` checks this.
