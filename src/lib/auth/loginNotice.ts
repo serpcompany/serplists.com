@@ -58,7 +58,7 @@ export type LoginNotice =
 
 /**
  * Query parameters that only exist to trigger a notice once. `email` comes from
- * links sent before the address moved into router state; Login reads it with
+ * links sent before the address left the URL; Login reads it with
  * readLoginPrefill (src/lib/auth/loginPrefill.ts) before it is removed.
  */
 const ONE_SHOT_PARAMS = ["verified", "error", "verify_email", "email"] as const;

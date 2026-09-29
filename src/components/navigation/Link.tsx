@@ -6,6 +6,7 @@ import { forwardRef, type ComponentProps } from 'react';
 
 import { leavesPage } from '@/lib/navigation/leavesPage';
 import { confirmLeave } from '@/lib/navigation/leaveGuard';
+import { reportNavigation } from '@/lib/navigation/navigationSignal';
 
 type LinkProps = ComponentProps<typeof NextLink>;
 
@@ -26,10 +27,19 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
       ref={ref}
       href={href}
       onNavigate={(event) => {
-        onNavigate?.(event);
+        let cancelled = false;
+        onNavigate?.({
+          preventDefault: () => {
+            cancelled = true;
+            event.preventDefault();
+          },
+        });
+        if (cancelled) return;
         if (leavesPage(href, pathname) && !confirmLeave()) {
           event.preventDefault();
+          return;
         }
+        reportNavigation();
       }}
       {...props}
     />

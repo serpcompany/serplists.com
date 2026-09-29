@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Grid3X3,
   List,
@@ -52,14 +51,14 @@ import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
 
 const Templates = () => {
   const model = useDashboardTemplatesModel();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
   const beginVisit = usePageVisit();
   const [runName, setRunName] = useState('');
   // Set until the browser leaves for checkout; Back from Stripe clears it, so the
@@ -165,7 +164,7 @@ const Templates = () => {
     }
 
     await reportDashboardTemplateRunFailure(result, visit, {
-      navigateToLogin: () => navigateToLoginWithReturnPath(navigate, location),
+      navigateToLogin: () => navigateToLoginWithReturnPath(router.push),
       showError: (message) => toast.error(message),
       upgrade: startUpgrade,
     });

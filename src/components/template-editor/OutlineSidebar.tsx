@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { Search, Settings } from "lucide-react";
 
 import { SectionSidebar } from "@/components/template-editor/SectionSidebar";

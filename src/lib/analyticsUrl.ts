@@ -5,9 +5,10 @@
 // return path (src/lib/auth/returnPath.ts) that points at one of those, such as
 // /login?next=%2Fteam-invites%2F<token> after the email verification link.
 //
-// index.html inlines a copy of this rule, because the tag has to be decided before the app
-// bundle loads. tests/unit/security/gtmBootstrap.test.ts runs that copy against the same
-// locations as this function, so the two cannot drift apart.
+// The root layout inlines a copy of this rule (src/lib/analytics/tagManagerBootstrap.ts),
+// because the tag has to be decided before the app bundle loads.
+// tests/unit/security/gtmBootstrap.test.ts runs that copy against the same locations as
+// this function, so the two cannot drift apart.
 
 const SENSITIVE_PATH = /^\/(share|team-invites|reset-password)(\/|$)/i;
 const SENSITIVE_QUERY_KEYS = ['token', 'email', 'code', 'state'];
@@ -51,7 +52,7 @@ function isSensitiveReturnPath(value: string): boolean {
 const isTagManagerStartEvent = (entry: unknown): boolean =>
   typeof entry === 'object' && entry !== null && (entry as { event?: unknown }).event === 'gtm.js';
 
-/** The index.html bootstrap pushes the gtm.js event only when it loads the container. */
+/** The Tag Manager bootstrap pushes the gtm.js event only when it loads the container. */
 export function isTagManagerLoaded(win: object): boolean {
   const dataLayer: unknown = Reflect.get(win, 'dataLayer');
   return Array.isArray(dataLayer) && dataLayer.some(isTagManagerStartEvent);
@@ -59,7 +60,7 @@ export function isTagManagerLoaded(win: object): boolean {
 
 /**
  * A client-side navigation to a sensitive location would report its URL to the tags
- * already running in this document. A full page load of it skips them (index.html).
+ * already running in this document. A full page load of it skips them (the bootstrap).
  */
 export function needsFullPageLoad(pathname: string, search: string, win: object): boolean {
   return isSensitiveAnalyticsLocation(pathname, search) && isTagManagerLoaded(win);

@@ -1,5 +1,5 @@
 import { SIGN_OUT_FAILED_MESSAGE, type AuthActionResult } from '@/contexts/authSession';
-import { buildAuthLinkState, withReturnPath } from '@/lib/auth/returnPath';
+import { withReturnPath } from '@/lib/auth/returnPath';
 
 // The account menus call this: leave the page only once the server has ended the session,
 // otherwise keep the user where they are and show why sign-out failed.
@@ -17,7 +17,7 @@ export async function signOutAndLeave(options: {
   return false;
 }
 
-type NavigateToLogin = (to: string, options: { state?: { from: string } }) => void;
+type NavigateToLogin = (href: string) => unknown;
 
 /**
  * Signs out, then opens the login page with a way back to `returnPath` (on
@@ -39,8 +39,9 @@ export function signOutAndReturn({
 }): Promise<boolean> {
   return signOutAndLeave({
     logout,
-    onSignedOut: () =>
-      navigate(withReturnPath('/login', returnPath), { state: buildAuthLinkState(returnPath) }),
+    onSignedOut: () => {
+      navigate(withReturnPath('/login', returnPath));
+    },
     onError,
   });
 }

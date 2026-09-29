@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { usePathname, useSearchParams } from 'next/navigation';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { ChevronRight, Filter, Search } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
@@ -25,9 +25,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
-import { SEOHead } from '@/components/shared/SEOHead';
-import { TEMPLATE_LIBRARY_PAGE_TEXT } from '@/lib/publicPageMeta';
-import { buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
+import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -37,19 +37,68 @@ type ChecklistLibraryProps = {
   description?: string;
 };
 
-const PUBLIC_TEMPLATES_URL = buildSiteUrl('/templates');
+// The current history entry's state, which only the browser has: the server (and hydration)
+// sees none. Re-read on every render, so it follows the library's own URL writes.
+const subscribeToHistory = (onChange: () => void) => {
+  window.addEventListener('popstate', onChange);
+  return () => window.removeEventListener('popstate', onChange);
+};
+const readHistoryState = (): unknown => window.history.state;
+const readServerHistoryState = (): unknown => null;
 
+// While the catalog loads, and in the server's HTML: the page's layout, with no data yet.
+export const ChecklistLibrarySkeleton = () => (
+  <div className="bg-background">
+    <main className="mx-auto max-w-6xl px-4 py-8">
+      <div className="mb-10 space-y-3 text-center">
+        <Skeleton className="mx-auto h-9 w-56" />
+        <Skeleton className="mx-auto h-5 w-80 max-w-full" />
+      </div>
+
+      <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-2">
+        <Skeleton className="h-9 w-16 shrink-0" />
+        <Skeleton className="h-9 w-28 shrink-0" />
+        <Skeleton className="h-9 w-24 shrink-0" />
+      </div>
+
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Skeleton key={index} className="h-[320px] rounded-lg" />
+        ))}
+      </div>
+    </main>
+  </div>
+);
+
+// The library at /templates. Its title and description are the route's metadata
+// (src/app/(site)/templates/page.tsx); a caller with other text passes its own.
 const ChecklistLibrary = ({
   templateType,
   title,
   description,
 }: ChecklistLibraryProps) => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useAppRouter();
+  const historyState = useSyncExternalStore(
+    subscribeToHistory,
+    readHistoryState,
+    readServerHistoryState,
+  );
   const legacyCategoryRedirectPath = resolveLibraryLegacyRedirect(
     searchParams,
-    location.state,
+    historyState,
   );
+
+  // Decided on the live URL and entry state, never on the first render's (the server has
+  // no history state, so it would take every entry for an arrival).
+  useEffect(() => {
+    const path = resolveLibraryLegacyRedirect(
+      new URLSearchParams(window.location.search),
+      window.history.state,
+    );
+    if (path) router.replace(path);
+  }, [router, searchParams]);
   // The URL is the only source of the filters: this page stays mounted when a link or
   // Back/Forward changes it.
   const {
@@ -104,12 +153,13 @@ const ChecklistLibrary = ({
       const draft = changes.query;
       setSearchDraft((current) => ({ ...current, draft }));
     }
-    // The state marks this entry as written here, so a URL left with only a category
-    // does not trigger the legacy redirect.
-    setSearchParams(buildLibraryFilterParams({ categorySlug, query, sort }), {
-      replace: true,
-      state: LIBRARY_FILTER_UPDATE_STATE,
-    });
+    // Rewrites the URL in place (no request per keystroke). The state marks this entry as
+    // written here, so a URL left with only a category does not trigger the legacy redirect.
+    const nextSearch = buildLibraryFilterParams({ categorySlug, query, sort }).toString();
+    replaceCurrentUrl(
+      `${pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`,
+      LIBRARY_FILTER_UPDATE_STATE,
+    );
   };
 
   const handleResetFilters = () => {
@@ -119,48 +169,17 @@ const ChecklistLibrary = ({
       sort: DEFAULT_LIBRARY_SORT,
     });
   };
-  const seoHead = (
-    <SEOHead
-      title={title ?? TEMPLATE_LIBRARY_PAGE_TEXT.title}
-      description={description ?? TEMPLATE_LIBRARY_PAGE_TEXT.description}
-      keywords={['checklist templates', 'workflow templates', 'SOP templates']}
-      url={PUBLIC_TEMPLATES_URL}
-    />
-  );
-
+  // Leaving for the category page (the effect above); nothing to show meanwhile.
   if (legacyCategoryRedirectPath) {
-    return <Navigate replace to={legacyCategoryRedirectPath} />;
+    return null;
   }
 
   if (loading) {
-    return (
-      <div className="bg-background">
-        {seoHead}
-        <main className="mx-auto max-w-6xl px-4 py-8">
-          <div className="mb-10 space-y-3 text-center">
-            <Skeleton className="mx-auto h-9 w-56" />
-            <Skeleton className="mx-auto h-5 w-80 max-w-full" />
-          </div>
-
-          <div className="mb-8 flex items-center gap-2 overflow-x-auto pb-2">
-            <Skeleton className="h-9 w-16 shrink-0" />
-            <Skeleton className="h-9 w-28 shrink-0" />
-            <Skeleton className="h-9 w-24 shrink-0" />
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <Skeleton key={index} className="h-[320px] rounded-lg" />
-            ))}
-          </div>
-        </main>
-      </div>
-    );
+    return <ChecklistLibrarySkeleton />;
   }
 
   return (
     <div className="bg-background">
-      {seoHead}
       <main className="mx-auto max-w-6xl px-4 py-8">
         <div className="mb-10 text-center">
           <h1 className="mb-3 text-balance text-3xl font-bold text-foreground">

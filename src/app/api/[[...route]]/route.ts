@@ -3,12 +3,26 @@ import { getCloudflareContext } from '@opennextjs/cloudflare';
 import api from '@functions/api/[[route]]';
 import type { Env } from '@functions/api/types';
 
+// Next.js hands route handlers its own NextRequest, which workerd's Request constructor does
+// not take as its input; the API builds new Requests from this one (to set headers), so it
+// gets a plain copy with the same method, headers, body and abort signal.
+const toApiRequest = (request: Request): Request =>
+  new Request(request.url, {
+    method: request.method,
+    headers: request.headers,
+    body: request.method === 'GET' || request.method === 'HEAD' ? null : request.body,
+    redirect: request.redirect,
+    signal: request.signal,
+    // Required by Node.js (next dev) for a streamed body; workerd ignores it.
+    duplex: 'half',
+  } as RequestInit);
+
 // Every /api/* request goes to the API router in functions/api, unchanged: the same code the
 // Pages Functions ran, now in the Next.js Worker on the pages' own origin. The router answers
 // every method, including HEAD and OPTIONS (CORS preflight for agents and other origins).
 async function handle(request: Request): Promise<Response> {
   const { env } = await getCloudflareContext({ async: true });
-  return api.fetch(request, env as unknown as Env);
+  return api.fetch(toApiRequest(request), env as unknown as Env);
 }
 
 export { handle as DELETE, handle as GET, handle as HEAD, handle as OPTIONS, handle as PATCH, handle as POST, handle as PUT };

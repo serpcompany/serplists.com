@@ -27,9 +27,9 @@ export const useViewModePreference = ({
     () => buildViewModePreferenceKey(userId, surface),
     [surface, userId],
   );
-  const [viewMode, setViewModeState] = useState<ViewMode>(() =>
-    readViewModePreference(getBrowserStorage(), storageKey, defaultValue),
-  );
+  // The server has no storage, so the first render (the server's, and hydration) uses the
+  // default and the stored choice follows right after.
+  const [viewMode, setViewModeState] = useState<ViewMode>(defaultValue);
 
   useEffect(() => {
     setViewModeState(

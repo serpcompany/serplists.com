@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useId, useState, type DragEvent, type KeyboardEvent } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { ChevronDown, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";

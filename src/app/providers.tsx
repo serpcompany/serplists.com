@@ -5,7 +5,6 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { DocumentHeadProvider } from '@/components/shared/DocumentHeadProvider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/contexts/CloudflareAuthContext';
@@ -46,25 +45,23 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <DocumentHeadProvider>
-        <ErrorBoundary resetOnHistoryChange>
-          <TooltipProvider>
-            <AuthProvider>
-              <WorkspaceProvider>
-                <TemplatesProvider>
-                  <RootThemeSync />
-                  {/* Before the pages: it starts listening in an effect and drops toasts sent
-                      earlier, and a page can toast from its first effect (Login after the
-                      verification link). */}
-                  <Toaster />
-                  {children}
-                  <DevLoginBar />
-                </TemplatesProvider>
-              </WorkspaceProvider>
-            </AuthProvider>
-          </TooltipProvider>
-        </ErrorBoundary>
-      </DocumentHeadProvider>
+      <ErrorBoundary resetOnHistoryChange>
+        <TooltipProvider>
+          <AuthProvider>
+            <WorkspaceProvider>
+              <TemplatesProvider>
+                <RootThemeSync />
+                {/* Before the pages: it starts listening in an effect and drops toasts sent
+                    earlier, and a page can toast from its first effect (Login after the
+                    verification link). */}
+                <Toaster />
+                {children}
+                <DevLoginBar />
+              </TemplatesProvider>
+            </WorkspaceProvider>
+          </AuthProvider>
+        </TooltipProvider>
+      </ErrorBoundary>
     </QueryClientProvider>
   );
 }

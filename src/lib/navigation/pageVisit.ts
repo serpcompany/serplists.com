@@ -1,5 +1,5 @@
-// React Router still runs a navigate() captured by a page the user has already left:
-// a request that finishes late would pull them back to that page's destination. A page
+// The router still runs a navigation started by a page the user has already left: a
+// request that finishes late would pull them back to that page's destination. A page
 // visit lets an async action check, after each await, that the user is still on the
 // page that started it, at the same location, before moving them anywhere.
 export type PageVisit = {

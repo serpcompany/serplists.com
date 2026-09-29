@@ -1,7 +1,7 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle2, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -15,8 +15,10 @@ import {
   isInviteEmailMismatch,
 } from '@/features/teams/teamInviteMessages';
 import { useTeamInviteLink } from '@/features/teams/useTeamInviteLink';
-import { buildAuthLinkState, withReturnPath } from '@/lib/auth/returnPath';
+import { withReturnPath } from '@/lib/auth/returnPath';
 import { signOutAndReturn } from '@/features/auth/signOut';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
 import {
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
@@ -28,13 +30,12 @@ import { Link } from '@/components/navigation/Link';
 // on Accept, and switching the active context takes another on "Switch to".
 export default function TeamInviteAccept() {
   const { token } = useParams<{ token: string }>();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const router = useAppRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
   const preview = invite.preview;
   // Signing in, signing up, or switching accounts all come back to this path.
-  const invitePath = `${location.pathname}${location.search}${location.hash}`;
+  const invitePath = useCurrentPath();
   const [signOutOnce] = useState(createSingleFlight);
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -66,7 +67,7 @@ export default function TeamInviteAccept() {
       try {
         await signOutAndReturn({
           logout,
-          navigate,
+          navigate: router.push,
           returnPath: invitePath,
           onError: (message) => toast.error(message),
         });
@@ -77,7 +78,7 @@ export default function TeamInviteAccept() {
 
   const handleSwitch = (teamId: string) => {
     invite.switchToOrganization(teamId);
-    navigate(buildConsoleTemplatesPath());
+    router.push(buildConsoleTemplatesPath());
   };
 
   const renderJoined = (teamId: string, teamName: string, message: string) => (
@@ -88,7 +89,7 @@ export default function TeamInviteAccept() {
       </div>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => handleSwitch(teamId)}>Switch to {teamName}</Button>
-        <Button variant="outline" onClick={() => navigate(buildConsoleSettingsPath())}>
+        <Button variant="outline" onClick={() => router.push(buildConsoleSettingsPath())}>
           Organization settings
         </Button>
       </div>
@@ -149,15 +150,12 @@ export default function TeamInviteAccept() {
           </p>
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <Link href={withReturnPath('/login', invitePath)} state={buildAuthLinkState(invitePath)}>
+              <Link href={withReturnPath('/login', invitePath)}>
                 Log in to accept
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link
-                href={withReturnPath('/register', invitePath)}
-                state={buildAuthLinkState(invitePath)}
-              >
+              <Link href={withReturnPath('/register', invitePath)}>
                 Create an account
               </Link>
             </Button>

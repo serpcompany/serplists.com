@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { Archive, CheckCircle2, Circle } from 'lucide-react';
 
 import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';

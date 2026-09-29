@@ -182,7 +182,7 @@ export type CreatedAgentKey = {
 };
 
 class ApiClient {
-  private async request(endpoint: string, options: RequestInit = {}) {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -200,10 +200,10 @@ class ApiClient {
       throw createApiError(response.status, error);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
-  private async requestFormData(endpoint: string, formData: FormData) {
+  private async requestFormData<T>(endpoint: string, formData: FormData): Promise<T> {
     const headers: HeadersInit = {};
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -219,7 +219,7 @@ class ApiClient {
       throw createApiError(response.status, error);
     }
 
-    return response.json();
+    return response.json() as Promise<T>;
   }
 
   // Templates
@@ -275,7 +275,7 @@ class ApiClient {
     is_public?: boolean;
     categories?: string[];
     tags?: string[];
-  }) {
+  }): Promise<{ id: string; slug?: string }> {
     return this.request('/templates', {
       method: 'POST',
       body: JSON.stringify(template),
@@ -379,14 +379,14 @@ class ApiClient {
     items?: unknown[];
     sections?: unknown[];
     status?: string;
-  }) {
+  }): Promise<{ id: string }> {
     return this.request('/checklists', {
       method: 'POST',
       body: JSON.stringify(checklist),
     });
   }
 
-  async createChecklistRunShare(runId: string) {
+  async createChecklistRunShare(runId: string): Promise<{ shareToken: string }> {
     return this.request(`/checklists/run/${encodeURIComponent(runId)}/share`, {
       method: 'POST',
       body: JSON.stringify({}),
@@ -432,7 +432,7 @@ class ApiClient {
     progress?: number;
     completed_at?: string;
     expected_revision?: number;
-  }) {
+  }): Promise<{ revision?: number }> {
     return this.request(`/checklists/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -618,7 +618,7 @@ class ApiClient {
   }
 
   // Uploads (R2-backed)
-  async uploadToR2(params: { bucket: 'avatars' | 'template-images' | 'template-videos' | 'template-files'; file: File }) {
+  async uploadToR2(params: { bucket: 'avatars' | 'template-images' | 'template-videos' | 'template-files'; file: File }): Promise<{ url: string; fileName?: string; fileSize?: number }> {
     const formData = new FormData();
     formData.set('bucket', params.bucket);
     formData.set('file', params.file);

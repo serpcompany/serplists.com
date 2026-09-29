@@ -1,7 +1,7 @@
 'use client';
 
+import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -14,6 +14,7 @@ import {
   useTemplateEditorModel,
 } from "@/features/template-editor/useTemplateEditorModel";
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
+import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
 import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
@@ -91,7 +92,7 @@ type TemplateEditorFormProps = {
 // Mounted only once the template has loaded (see TemplateEditor), so the form, the
 // outline, and the header start from the loaded values.
 const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
-  const navigate = useNavigate();
+  const router = useAppRouter();
   const { user } = useAuth();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
@@ -194,7 +195,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
       // The create is saved (and the editor was locked meanwhile): nothing to lose.
       templateForm.reset(result.savedValues);
       allowLeave();
-      navigate(buildConsoleTemplatesPath());
+      router.push(buildConsoleTemplatesPath());
       return;
     }
 
@@ -221,7 +222,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         isSaving={model.isSaving}
         isGenerating={isGeneratingDraft}
         isUploading={hasPendingUploads}
-        onCancel={() => navigate(buildConsoleTemplatesPath())}
+        onCancel={() => router.push(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         templateSlug={model.templateSlug}
@@ -383,8 +384,8 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 // remounts the editor with the reloaded values. A viewer who cannot save this template
 // (their Organization role, or someone else's template) gets a notice instead.
 const TemplateEditor = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id } = useParams<{ id?: string }>();
+  const router = useAppRouter();
   const model = useTemplateEditorModel({ id });
   const permission = useTemplateEditPermission({
     isCreate: !id,
@@ -409,7 +410,7 @@ const TemplateEditor = () => {
         <AlertDescription>{model.loadError}</AlertDescription>
         </Alert>
         <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate(buildConsoleTemplatesPath())}>
+          <Button variant="outline" onClick={() => router.push(buildConsoleTemplatesPath())}>
             Back to Templates
           </Button>
         </div>

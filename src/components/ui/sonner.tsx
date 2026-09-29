@@ -3,7 +3,6 @@ import { Toaster as Sonner, toast } from "sonner"
 
 import {
   applyStoredTheme,
-  getStoredTheme,
   subscribeToThemeChanges,
   type SerpListsTheme,
 } from "@/lib/theme"
@@ -11,7 +10,8 @@ import {
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const [theme, setTheme] = useState<SerpListsTheme>(() => getStoredTheme())
+  // Light until mounted, as the server renders it; the stored theme applies on mount.
+  const [theme, setTheme] = useState<SerpListsTheme>("light")
 
   useEffect(() => {
     setTheme(applyStoredTheme())

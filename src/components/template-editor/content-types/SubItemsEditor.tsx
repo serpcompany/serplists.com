@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { type KeyboardEvent } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { ListCheck, Plus, Trash2 } from "lucide-react";

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
 import { Button } from "@/components/ui/button";
@@ -13,29 +13,30 @@ import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { readResetPasswordLink } from "@/lib/auth/resetPasswordLink";
 import { submitPasswordReset } from "@/lib/auth/passwordReset";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
+import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
+import { useAppRouter } from "@/lib/navigation/useAppRouter";
 
 import { Link } from '@/components/navigation/Link';
 
 const ResetPassword = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const router = useAppRouter();
   const { isAuthenticated, logout } = useAuth();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Read the link once: the token then leaves the URL, so later renders cannot see it there.
-  const [{ token, error }] = useState(() => readResetPasswordLink(location.search));
+  const [{ token, error }] = useState(() => readResetPasswordLink(search));
 
+  // Takes the token out of the address bar and history, keeping the page and its state.
   useEffect(() => {
-    const { searchWithoutToken } = readResetPasswordLink(location.search);
+    const { searchWithoutToken } = readResetPasswordLink(window.location.search);
     if (searchWithoutToken !== null) {
-      navigate(
-        { pathname: location.pathname, search: searchWithoutToken, hash: location.hash },
-        { replace: true },
-      );
+      replaceCurrentUrl(`${window.location.pathname}${searchWithoutToken}${window.location.hash}`);
     }
-  }, [location.hash, location.pathname, location.search, navigate]);
+  }, [search]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -67,7 +68,7 @@ const ResetPassword = () => {
         toast.error(result.message);
       } else {
         toast.success("Password updated. Please sign in again.");
-        navigate("/login", { replace: true });
+        router.replace("/login");
       }
     } finally {
       setIsSubmitting(false);

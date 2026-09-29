@@ -1,23 +1,25 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
 
 import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
-import { NotFoundHead } from '@/components/shared/NotFoundHead';
 import { Button } from '@/components/ui/button';
 
 import { Link } from '@/components/navigation/Link';
 
+// The 404 page. src/app/not-found.tsx renders it for unknown paths and notFound(), with its
+// title and noindex; a page that finds out in the browser that its record does not exist
+// renders it with <NoIndexMeta> (src/components/seo/NoIndexMeta.tsx).
 const NotFound = () => {
-  const location = useLocation();
+  const pathname = usePathname();
 
   useEffect(() => {
     console.error(
       '404 Error: User attempted to access non-existent route:',
-      location.pathname
+      pathname
     );
-  }, [location.pathname]);
+  }, [pathname]);
 
   return (
     <PageSection
@@ -26,13 +28,12 @@ const NotFound = () => {
       width="narrow"
     >
       {/* Render NotFound only once a lookup has settled, never while it is loading. */}
-      <NotFoundHead title="Page not found" />
       <Surface className="mx-auto w-full text-center" padding="xl" tone="glass">
         <PageHero
           align="center"
           eyebrow="404"
           title="That page does not exist"
-          description={`The route ${location.pathname} could not be found. Use the main navigation or head back to the home page.`}
+          description={`The route ${pathname} could not be found. Use the main navigation or head back to the home page.`}
         />
         <div className="mt-8 flex justify-center">
           <Button asChild>

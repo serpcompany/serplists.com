@@ -1,7 +1,7 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -20,7 +20,6 @@ import {
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
-import { SEOHead } from '@/components/shared/SEOHead';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -43,6 +42,7 @@ import { getTaskCheckboxLabel } from '@/features/run-execution/taskCheckboxLabel
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 import { usePageVisit } from '@/hooks/usePageVisit';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { isRunTitleChange } from '@/features/run-execution/runTitle';
 import { cn } from '@/lib/utils';
@@ -61,7 +61,7 @@ import { Link } from '@/components/navigation/Link';
 
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
-  const navigate = useNavigate();
+  const router = useAppRouter();
   // Completing awaits the save; it leaves for the list only if the user is still here.
   const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
@@ -116,11 +116,8 @@ const ChecklistRunPage = () => {
     toast.error('Run not found');
     // The run is gone (deleted elsewhere, even during a save), so its notes cannot be saved.
     allowLeave();
-    navigate(
-      isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath(),
-      { replace: true },
-    );
-  }, [allowLeave, isSharedRun, loading, navigate, notFound]);
+    router.replace(isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath());
+  }, [allowLeave, isSharedRun, loading, notFound, router]);
 
   useEffect(() => {
     if (!loadError) {
@@ -131,7 +128,7 @@ const ChecklistRunPage = () => {
   }, [loadError]);
 
   const leaveRun = () =>
-    navigate(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
+    router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
   const handleBack = leaveRun;
 
   // isCompleted is the value the user clicked on the run they saw (set, not flipped).
@@ -217,7 +214,6 @@ const ChecklistRunPage = () => {
   };
 
   const handleCopyCurrentLink = async () => {
-    if (typeof window === 'undefined') return;
     if (await copyTextToClipboard(window.location.href)) toast.success('Link copied to clipboard');
     else toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
@@ -418,15 +414,7 @@ const ChecklistRunPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {isSharedRun ? (
-        <SEOHead
-          title={displayRun.title}
-          description={`Shared checklist run for ${displayRun.title}`}
-          keywords={['shared checklist', 'checklist run']}
-          robots="noindex, nofollow"
-        />
-      ) : null}
-
+      {/* A shared run's title and noindex are the route's metadata (src/app/share). */}
       {isSharedRun ? (
         <>
           <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

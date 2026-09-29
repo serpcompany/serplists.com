@@ -11,7 +11,12 @@ class Analytics {
   private events: AnalyticsEvent[] = [];
   private isEnabled: boolean = true;
 
-  constructor() {
+  // The server renders client components too, where there is no window or history: there
+  // the instance records nothing, so no visitor's events are kept in a server module.
+  constructor(inBrowser: boolean) {
+    this.isEnabled = inBrowser;
+    if (!inBrowser) return;
+
     // Track page views automatically
     this.trackPageView();
     
@@ -115,14 +120,18 @@ class Analytics {
   }
 }
 
-// Global analytics instance
-export const analytics = new Analytics();
+const isBrowser = typeof window !== 'undefined';
+
+// Global analytics instance (it records only in the browser; see the constructor)
+export const analytics = new Analytics(isBrowser);
 
 // Error tracking setup
-window.addEventListener('error', (event) => {
-  analytics.trackError(new Error(event.message), 'window_error');
-});
+if (isBrowser) {
+  window.addEventListener('error', (event) => {
+    analytics.trackError(new Error(event.message), 'window_error');
+  });
 
-window.addEventListener('unhandledrejection', (event) => {
-  analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
-});
+  window.addEventListener('unhandledrejection', (event) => {
+    analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
+  });
+}

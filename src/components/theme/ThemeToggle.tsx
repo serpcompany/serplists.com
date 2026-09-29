@@ -4,7 +4,6 @@ import { Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   applyStoredTheme,
-  getStoredTheme,
   subscribeToThemeChanges,
   toggleDocumentTheme,
   type SerpListsTheme,
@@ -17,7 +16,9 @@ interface ThemeToggleProps {
 }
 
 export function ThemeToggle({ className, showLabel = false }: ThemeToggleProps) {
-  const [theme, setTheme] = useState<SerpListsTheme>(() => getStoredTheme());
+  // The server cannot read the stored theme: the first render says light (the icons follow
+  // the page's class through CSS already), and the label follows the stored theme on mount.
+  const [theme, setTheme] = useState<SerpListsTheme>('light');
 
   useEffect(() => {
     setTheme(applyStoredTheme());

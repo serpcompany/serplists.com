@@ -1,3 +1,11 @@
+// This data center's cache (`caches.default`), or undefined outside the Workers runtime
+// (next dev, unit tests). Typed here because the Next.js app compiles this module with the
+// DOM's CacheStorage, which has no `default`.
+export function defaultEdgeCache(): Cache | undefined {
+  if (typeof caches === 'undefined') return undefined;
+  return (caches as CacheStorage & { default?: Cache }).default;
+}
+
 // Serves a response from this data center's Cache API for `ttlSeconds`, so repeat
 // requests read nothing from D1 (docs/design-docs/d1-cost.md). Use it only for
 // responses that are identical for every visitor. The caller names the key (`keyPath`),
@@ -8,7 +16,7 @@ export async function withEdgeCache(
   ttlSeconds: number,
   build: () => Promise<Response>,
 ): Promise<Response> {
-  const cache = typeof caches === 'undefined' ? undefined : caches.default;
+  const cache = defaultEdgeCache();
   if (!cache || request.method !== 'GET') return build();
 
   const key = new Request(`${new URL(request.url).origin}${keyPath}`);

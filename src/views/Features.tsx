@@ -1,13 +1,7 @@
 'use client';
 
-import {
-  ArrowLeft,
-  CheckCircle,
-  ListChecks,
-  Share2,
-  UploadCloud,
-} from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+import { useParams } from 'next/navigation';
 
 import {
   IconBadge,
@@ -17,67 +11,15 @@ import {
 } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FEATURES, findFeature } from '@/data/publicFeatures';
 import { buildPublicFeaturePath, buildPublicTemplatesPath } from '@/lib/routes';
-import NotFound from './NotFound';
 
 import { Link } from '@/components/navigation/Link';
 
-const FEATURES = [
-  {
-    slug: "template-builder",
-    title: "Template Builder",
-    description: "Create reusable checklists with sections, instructions, and structured steps.",
-    icon: ListChecks,
-    bullets: [
-      "Build reusable SOPs with sections and tasks.",
-      "Add instructions, media, and structured sub-items.",
-      "Keep one source template for repeated execution.",
-    ],
-  },
-  {
-    slug: "checklist-runs",
-    title: "Checklist Runs",
-    description: "Run checklists, track progress, and keep work moving across items.",
-    icon: CheckCircle,
-    bullets: [
-      "Launch a new run from any saved template.",
-      "Track progress at the run level.",
-      "Keep execution separate from the reusable template.",
-    ],
-  },
-  {
-    slug: "public-sharing",
-    title: "Public Sharing",
-    description: "Publish templates to the community library and share links with anyone.",
-    icon: Share2,
-    bullets: [
-      "Publish templates to a public profile.",
-      "Share public template URLs with a stable structure.",
-      "Keep run-sharing separate from public template publishing.",
-    ],
-  },
-  {
-    slug: "import-export",
-    title: "Import + Export",
-    description: "Backup templates and move them between accounts (Pro).",
-    icon: UploadCloud,
-    bullets: [
-      "Export templates as portable JSON packs.",
-      "Import portable packs back into the app.",
-      "Keep reusable SOP content versionable in the repo.",
-    ],
-  },
-] as const;
-
+// /features and /features/<slug>. The route shows the 404 page for a slug with no feature.
 const Features = () => {
   const { featureSlug } = useParams<{ featureSlug?: string }>();
-  const feature = featureSlug
-    ? FEATURES.find((entry) => entry.slug === featureSlug)
-    : null;
-
-  if (featureSlug && !feature) {
-    return <NotFound />;
-  }
+  const feature = findFeature(featureSlug);
 
   if (feature) {
     const Icon = feature.icon;

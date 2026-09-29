@@ -1,7 +1,7 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -76,6 +76,9 @@ import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
+import { withReturnPath } from '@/lib/auth/returnPath';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { useCurrentPath } from '@/lib/navigation/useCurrentPath';
 import {
   buildConsoleRunPath,
   buildConsoleTemplateEditPath,
@@ -92,8 +95,9 @@ import { Link } from '@/components/navigation/Link';
 
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
+  // Where "Log in to copy template" brings the user back to.
+  const currentPath = useCurrentPath();
   // Actions below await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
@@ -187,7 +191,7 @@ const TemplateDetail = () => {
       isTeamWorkspace,
     });
 
-  const goToLogin = () => navigateToLoginWithReturnPath(navigate, location);
+  const goToLogin = () => navigateToLoginWithReturnPath(router.push);
 
   const handleStartRun = async (runName: string) => {
     const visit = beginVisit();
@@ -204,7 +208,7 @@ const TemplateDetail = () => {
         succeeded: ({ runId }) => {
           if (runId) {
             toast.success(getRunStartedMessage(otherDestination));
-            navigate(buildConsoleRunPath(runId));
+            router.push(buildConsoleRunPath(runId));
           }
         },
       });
@@ -262,7 +266,7 @@ const TemplateDetail = () => {
                 ? 'Template copied to this Organization'
                 : 'Template copied to your account',
           );
-          navigate(
+          router.push(
             templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
           );
         },
@@ -331,7 +335,7 @@ const TemplateDetail = () => {
       await deleteTemplate(displayTemplate.id);
       toast.success('Template deleted');
       if (visit.isCurrent()) {
-        navigate(buildConsoleTemplatesPath());
+        router.push(buildConsoleTemplatesPath());
       } else {
         // The user moved on (another template can keep this page mounted).
         setIsDeleting(false);
@@ -462,7 +466,7 @@ const TemplateDetail = () => {
         ) : null
       ) : copyButton.visible ? (
         <Button asChild variant="outline" size="sm" className="border-border">
-          <Link href="/login" state={{ from: location }}>
+          <Link href={withReturnPath('/login', currentPath)}>
             Log in to copy template
           </Link>
         </Button>

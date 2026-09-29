@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
@@ -32,6 +31,7 @@ import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { navigateToLoginWithReturnPath, startBillingCheckout } from "@/lib/access-flow";
 import { api } from "@/lib/api";
 import { BILLING_STATUS_QUERY_PREFIX, getBillingStatusQueryKey } from "@/lib/billing";
+import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type TemplateEditorAccessOptions = {
@@ -60,8 +60,7 @@ export const useTemplateEditorAccess = ({
 }: TemplateEditorAccessOptions) => {
   const { user } = useAuth();
   const { activeTeamId, isTeamWorkspace } = useWorkspace();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
     queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
@@ -195,7 +194,7 @@ export const useTemplateEditorAccess = ({
     if (keepDraft()) {
       allowLeave();
     }
-    navigateToLoginWithReturnPath(navigate, location);
+    navigateToLoginWithReturnPath(router.push);
   };
 
   // The draft stays stored until a save succeeds: the plan can still read Free for a

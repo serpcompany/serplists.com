@@ -1,12 +1,12 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageContainer, Surface } from '@/components/layout/page-shell';
-import { SEOHead } from '@/components/shared/SEOHead';
+import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
@@ -20,31 +20,28 @@ import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
 } from '@/lib/access-flow';
-import { resolveTemplatePageText } from '@/lib/publicPageMeta';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { TEMPLATE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
 import {
-  buildCanonicalPublicTemplatePath,
   buildConsoleRunPath,
   buildConsoleTemplatePath,
   buildConsoleTemplatesPath,
   buildPublicProfilePath,
   buildPublicTemplatesPath,
-  buildSiteUrl,
   resolvePublicTemplateOwnerSlug,
 } from '@/lib/routes';
 import { buildDefaultRunName } from '@/lib/runs/runName';
 
 import { Link } from '@/components/navigation/Link';
 
-const TEMPLATE_NOT_FOUND_DESCRIPTION =
-  'The template you are looking for does not exist or is no longer public.';
-
+// The page's title, description, canonical URL and robots come from the server
+// (src/server/pageMeta/templatePage.ts), which finds the template the same way.
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
     username: string;
     templateSlug: string;
   }>();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
   // Start Run and Save await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
@@ -114,7 +111,7 @@ const PublicTemplate = () => {
     });
 
   const followResult = {
-    loginRequired: () => navigateToLoginWithReturnPath(navigate, location),
+    loginRequired: () => navigateToLoginWithReturnPath(router.push),
     upgradeRequired: handleUpgrade,
   };
 
@@ -134,7 +131,7 @@ const PublicTemplate = () => {
         succeeded: ({ runId }) => {
           if (runId) {
             toast.success('Checklist run created');
-            navigate(buildConsoleRunPath(runId));
+            router.push(buildConsoleRunPath(runId));
           }
         },
       });
@@ -164,7 +161,7 @@ const PublicTemplate = () => {
               : 'Template saved to your account',
           );
           // Open the copy itself: it lives in the context it was saved to.
-          navigate(
+          router.push(
             templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
           );
         },
@@ -200,7 +197,6 @@ const PublicTemplate = () => {
   if (loadError && !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">
-        <SEOHead title="Unable to load template" />
         <Surface className="text-center" padding="xl" tone="glass">
           <h1 className="text-4xl font-semibold text-foreground">
             Unable to load template
@@ -220,20 +216,18 @@ const PublicTemplate = () => {
   }
 
   // The page is served with HTTP 200, so noindex is what keeps a gone template out of search.
+  // The server's metadata says so too; this tag covers a template that went away (or private)
+  // after the server rendered the page.
   if (notFound || !displayTemplate) {
     return (
       <PageContainer className="py-16" width="narrow">
-        <SEOHead
-          title="Template not found"
-          description={TEMPLATE_NOT_FOUND_DESCRIPTION}
-          robots="noindex, nofollow"
-        />
+        <NoIndexMeta follow={false} />
         <Surface className="text-center" padding="xl" tone="glass">
           <h1 className="text-4xl font-semibold text-foreground">
-            Template not found
+            {TEMPLATE_NOT_FOUND_PAGE_TEXT.title}
           </h1>
           <p className="mt-4 text-base leading-7 text-muted-foreground">
-            {TEMPLATE_NOT_FOUND_DESCRIPTION}
+            {TEMPLATE_NOT_FOUND_PAGE_TEXT.description}
           </p>
           <Button asChild className="mt-6">
             <Link href={buildPublicTemplatesPath()}>
@@ -246,22 +240,8 @@ const PublicTemplate = () => {
     );
   }
 
-  // The page also answers to other casings of the owner and to the template id, and visits
-  // carry tracking parameters. The canonical URL is the one the sitemap lists.
-  const canonicalPath = buildCanonicalPublicTemplatePath(displayTemplate);
-  // The same text the link preview gets from functions/seo/ before this page loads.
-  const pageText = resolveTemplatePageText(displayTemplate);
-
   return (
     <div className="pb-24">
-      <SEOHead
-        title={pageText.title}
-        description={pageText.description}
-        keywords={displayTemplate.categories || ['checklist', 'template']}
-        type="article"
-        publishedTime={displayTemplate.createdAt}
-        url={canonicalPath ? buildSiteUrl(canonicalPath) : undefined}
-      />
       <PublicTemplateView
         // A new template gets fresh view state (expanded sections, Saved).
         key={displayTemplate.id}

@@ -33,8 +33,16 @@ const collect = <T extends ts.Node>(root: ts.Node, test: (node: ts.Node) => node
   return found;
 };
 
-const calleeName = (call: ts.CallExpression): string =>
-  ts.isIdentifier(call.expression) ? call.expression.text : '';
+// A plain function's name, or `router.<method>` for the app router (useAppRouter).
+const calleeName = (call: ts.CallExpression): string => {
+  if (ts.isIdentifier(call.expression)) return call.expression.text;
+  const callee = call.expression;
+  return ts.isPropertyAccessExpression(callee) &&
+    ts.isIdentifier(callee.expression) &&
+    callee.expression.text === 'router'
+    ? `router.${callee.name.text}`
+    : '';
+};
 
 const isCallTo = (names: Set<string>) => (node: ts.Node): node is ts.CallExpression =>
   ts.isCallExpression(node) && names.has(calleeName(node));
@@ -69,6 +77,8 @@ const MOVES = new Set([
   'navigateTo',
   'navigateToLoginWithReturnPath',
   'reportDashboardTemplateRunFailure',
+  'router.push',
+  'router.replace',
   'startBillingCheckout',
   'startUpgrade',
 ]);
@@ -158,7 +168,7 @@ const ungatedMovesAfterAwait = (body: ts.Node): ts.CallExpression[] => {
 };
 
 // These handlers await a request and then move the user (to a new run or template,
-// back to a list, to sign-in or checkout). React Router still runs a navigate() from a
+// back to a list, to sign-in or checkout). The router still runs a navigation from a
 // page the user already left, so each one starts a page visit before the request and
 // acts on the result only while that visit is current (see usePageVisit).
 const HANDLERS: Array<[string, string[]]> = [

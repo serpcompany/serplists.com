@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -17,6 +17,7 @@ import {
 import { isBillingCustomerMissingError, isOpenSubscriptionConflictError } from "@/lib/api-errors";
 import { fetchPersonalBillingStatus, waitForPersonalPro } from "@/lib/billing-return";
 import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
+import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
 import { buildConsoleTemplateCreatePath } from "@/lib/routes";
 import { readTemplateDraft } from "@/features/template-editor/templateDraftStore";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,7 @@ export function BillingSection() {
   // Both stay set until the browser leaves for Stripe, and clear when Back restores the page.
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const [isOpeningPortal, setIsOpeningPortal] = useRedirectPending();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const billingReturn = searchParams.get("billing");
+  const billingReturn = useSearchParams().get("billing");
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
     queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
@@ -66,12 +66,12 @@ export function BillingSection() {
     : "Personal subscriptions are managed from Personal.";
 
   useEffect(() => {
+    // Only the one-shot ?billing= goes; the page stays, with the rest of its URL.
     const clearBillingReturn = () => {
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete("billing");
-        return next;
-      }, { replace: true });
+      const next = new URLSearchParams(window.location.search);
+      next.delete("billing");
+      const search = next.toString();
+      replaceCurrentUrl(`${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`);
     };
 
     if (billingReturn === "cancel") {
@@ -97,7 +97,7 @@ export function BillingSection() {
     return () => {
       cancelled = true;
     };
-  }, [billingReturn, queryClient, setSearchParams, userId]);
+  }, [billingReturn, queryClient, userId]);
 
   const handleUpgrade = async () => {
     if (isTeamWorkspace) {

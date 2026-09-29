@@ -26,7 +26,7 @@ const LEGACY_MAX_LINES = {
 };
 
 const TOAST_MESSAGE =
-  "The app shell (src/components/AppShell.tsx) mounts only the sonner Toaster, so toasts from any other toast store are never shown. " +
+  "The app's providers (src/app/providers.tsx) mount only the sonner Toaster, so toasts from any other toast store are never shown. " +
   "Import { toast } from 'sonner' instead.";
 
 const STORAGE_MESSAGE =

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from "react";
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,14 +12,15 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
 import { buildEmailVerifiedCallbackURL } from "@/lib/auth/loginNotice";
+import { handOffLoginEmail } from "@/lib/auth/loginPrefill";
 import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import {
-  buildAuthLinkState,
   getPostRegisterDestination,
   getReturnPath,
   withReturnPath,
 } from "@/lib/auth/returnPath";
+import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
 
 import { Link } from '@/components/navigation/Link';
@@ -33,11 +34,10 @@ const Register = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
   // Carried from the page that sent the user here (for example an invite link)
   // so a new account lands back there, including after email verification.
-  const returnPath = getReturnPath(location);
+  const returnPath = getReturnPath(useSearchParams());
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -66,13 +66,16 @@ const Register = () => {
         const requiresEmailVerification = Boolean(
           result.requiresEmailVerification || authStatus.emailVerificationRequired,
         );
-        const destination = getPostRegisterDestination({ email, requiresEmailVerification, returnPath });
         toast.success(
           requiresEmailVerification
             ? "Account created. Check your email to verify your address before signing in."
             : "Registration successful",
         );
-        navigate(destination.to, { replace: true, state: destination.state });
+        if (requiresEmailVerification) {
+          // The login page fills its form with the address; it never goes in the URL.
+          handOffLoginEmail(email);
+        }
+        router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath }));
       } else {
         toast.error(result.error ?? "Registration failed.");
       }
@@ -93,7 +96,6 @@ const Register = () => {
           Already have an account?{" "}
           <Link
             href={withReturnPath("/login", returnPath)}
-            state={buildAuthLinkState(returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign in

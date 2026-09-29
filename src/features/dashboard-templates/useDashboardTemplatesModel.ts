@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { usePageVisit } from '@/hooks/usePageVisit';
 import type { PageVisit } from '@/lib/navigation/pageVisit';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { getAccessFailure } from '@/lib/api-errors';
 import { resolveRunName } from '@/lib/runs/runName';
 import {
@@ -253,7 +253,7 @@ export const finishDashboardTemplateRun = (
 export const useDashboardTemplatesModel = (
   dependencies?: DashboardTemplatesModelDependencies,
 ) => {
-  const navigate = useNavigate();
+  const router = useAppRouter();
   const beginVisit = usePageVisit();
   const { user } = useAuth();
   const { activeTeamId, activeWorkspace, isTeamWorkspace } = useWorkspace();
@@ -269,7 +269,7 @@ export const useDashboardTemplatesModel = (
   const createRun = dependencies?.createRun ?? templateContext.createRun;
   const deleteTemplate =
     dependencies?.deleteTemplate ?? templateContext.deleteTemplate;
-  const navigateTo = dependencies?.navigate ?? navigate;
+  const navigateTo = dependencies?.navigate ?? router.push;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
     getInitialDashboardTemplateId(model.templates),
   );

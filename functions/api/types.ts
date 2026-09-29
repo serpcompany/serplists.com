@@ -1,7 +1,5 @@
 export interface Env {
   DB: D1Database;
-  // Cloudflare Pages binds the static site to every Function (functions/seo/ serves index.html).
-  ASSETS: Fetcher;
   D1_PROFILE?: string;
   JWT_SECRET?: string;
   BETTER_AUTH_SECRET?: string;

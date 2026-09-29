@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { templatePackModules } from '@/data/public-template-packs';
 import { parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -31,12 +32,7 @@ type RepoTemplateCreatePayload = {
   teamId?: string;
 };
 
-const repoTemplateModules = import.meta.glob(
-  '../data/public-template-packs/*.json',
-  {
-    eager: true,
-  },
-) as Record<string, RepoTemplateModule>;
+const repoTemplateModules = templatePackModules as Record<string, RepoTemplateModule>;
 
 const getSourceData = (value: unknown): unknown => {
   if (

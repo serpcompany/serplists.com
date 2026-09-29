@@ -1,7 +1,7 @@
 'use client';
 
+import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarDays,
@@ -17,15 +17,22 @@ import {
 import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { SEOHead } from '@/components/shared/SEOHead';
+import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import {
   loadUserProfile,
   type LoadUserProfileResult,
-  type ProfileSurfaceRecord,
   type UserProfileRecord,
 } from '@/features/profile/loadUserProfile';
+import {
+  buildProfileSummary,
+  calculateStats,
+  countTemplateItems,
+  getProfileDisplayName,
+} from '@/features/profile/profileSummary';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { PROFILE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicTemplatesPath,
@@ -36,22 +43,9 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
 
-type UserStats = {
-  averageItemsPerTemplate: number;
-  categoriesUsed: string[];
-  totalItems: number;
-  totalTemplates: number;
-};
-
 const NO_TEMPLATES: ChecklistTemplate[] = [];
 
-const countTemplateItems = (template: ChecklistTemplate) =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
-
 const formatStatValue = (value: number) => value.toLocaleString('en-US');
-
-const getProfileDisplayName = (profile: UserProfileRecord): string =>
-  profile.full_name?.trim() || `@${profile.username}`;
 
 const getProfileInitials = (profile: UserProfileRecord): string => {
   const source = profile.full_name?.trim() || profile.username.trim();
@@ -63,41 +57,6 @@ const getProfileInitials = (profile: UserProfileRecord): string => {
     .join('');
 
   return initials || 'SL';
-};
-
-const buildProfileSummary = (
-  profile: ProfileSurfaceRecord,
-  stats: UserStats,
-): string => {
-  if (profile.bio?.trim()) {
-    return profile.bio.trim();
-  }
-
-  if (stats.categoriesUsed.length) {
-    return `Public checklist templates from @${profile.username} covering ${stats.categoriesUsed
-      .slice(0, 3)
-      .join(', ')}.`;
-  }
-
-  return `Public checklist templates and repeatable workflow packs published by @${profile.username}.`;
-};
-
-const calculateStats = (templates: ChecklistTemplate[]): UserStats => {
-  const totalItems = templates.reduce(
-    (total, template) => total + countTemplateItems(template),
-    0,
-  );
-  const categoriesUsed = Array.from(
-    new Set(templates.flatMap((template) => template.categories || [])),
-  );
-
-  return {
-    totalTemplates: templates.length,
-    totalItems,
-    categoriesUsed,
-    averageItemsPerTemplate:
-      templates.length > 0 ? Math.round(totalItems / templates.length) : 0,
-  };
 };
 
 const getProfileWebsiteHref = (website: string) =>
@@ -138,7 +97,6 @@ export const UserProfileContent = ({
   if (result.kind === 'error') {
     return (
       <PublicPageContainer className="py-14">
-        <SEOHead title="Unable to load profile" />
         <EmptyState
           title="Unable to load profile"
           description={result.message}
@@ -151,17 +109,15 @@ export const UserProfileContent = ({
   }
 
   // The page is served with HTTP 200, so noindex is what keeps a gone profile out of search.
+  // The server's metadata says so too (src/server/pageMeta/profilePage.ts); this tag covers a
+  // profile that went away after the server rendered the page.
   if (!profile) {
     return (
       <PublicPageContainer className="py-14">
-        <SEOHead
-          title="Profile not found"
-          description="This profile does not exist."
-          robots="noindex, nofollow"
-        />
+        <NoIndexMeta follow={false} />
         <EmptyState
           title="User not found"
-          description="This profile does not exist."
+          description={PROFILE_NOT_FOUND_PAGE_TEXT.description}
           icon={Sparkles}
           className="min-h-0"
         />
@@ -201,10 +157,6 @@ export const UserProfileContent = ({
 
   return (
     <PublicPageContainer className="pb-16 pt-8">
-      <SEOHead
-        title={getProfileDisplayName(profile)}
-        description={buildProfileSummary(profile, stats)}
-      />
       <div className="mx-auto max-w-4xl">
         <section className="mb-10">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
@@ -364,7 +316,7 @@ export const UserProfileContent = ({
 
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
-  const navigate = useNavigate();
+  const router = useAppRouter();
   const [result, setResult] = useState<LoadUserProfileResult | null>(null);
   // Bumped by Try again; a retry starts from the loading state.
   const [reloadKey, setReloadKey] = useState(0);
@@ -380,7 +332,7 @@ const UserProfile = () => {
       const canonicalPath =
         nextResult.kind === 'ok' ? getCanonicalProfilePath(username, nextResult.profile.username) : null;
       if (canonicalPath) {
-        navigate(canonicalPath, { replace: true });
+        router.replace(canonicalPath);
         return;
       }
       setResult(nextResult);
@@ -389,7 +341,7 @@ const UserProfile = () => {
     return () => {
       isCancelled = true;
     };
-  }, [navigate, reloadKey, username]);
+  }, [reloadKey, router, username]);
 
   return (
     <UserProfileContent

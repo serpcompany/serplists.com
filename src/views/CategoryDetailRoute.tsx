@@ -1,14 +1,13 @@
 'use client';
 
-import { useParams } from 'react-router-dom';
+import { useParams } from 'next/navigation';
 
 import { buildCategorySlug } from '@/lib/routes';
 import CategoryDetail from '@/views/CategoryDetail';
 
-// Every category page is the same route, so an unkeyed <CategoryDetail /> would keep one
-// instance, with its search text and sort, when a Related Categories link or Back moves to
-// another category. The key is the normalized slug, the one the page shows, so another
-// letter case or Unicode form of the same category keeps the page.
+// Each category starts with an empty search and the default sort. Next.js already gives
+// every URL of this route its own page instance; the key, the normalized slug the page
+// shows, also restarts the page when it is reused for another category.
 const CategoryDetailRoute = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
   return <CategoryDetail key={buildCategorySlug(categorySlug ?? 'business')} />;

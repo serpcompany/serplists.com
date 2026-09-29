@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { AlertCircle, FileClock } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

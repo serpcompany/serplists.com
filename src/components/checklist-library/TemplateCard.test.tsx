@@ -1,6 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -22,13 +21,14 @@ const template = {
   viewCount: 1250,
 } satisfies ChecklistTemplate & { viewCount: number };
 
+// The app's Link reads the current pathname to decide whether a click leaves the page.
+const navigation = vi.hoisted(() => ({ pathname: '/' }));
+vi.mock('next/navigation', () => ({ usePathname: () => navigation.pathname }));
+
 describe('TemplateCard', () => {
   it('renders the v0 preview card metadata, direct links, passive category pills, and creator fallback', () => {
-    const markup = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <TemplateCard template={template} />
-      </StaticRouter>,
-    );
+    navigation.pathname = '/';
+    const markup = renderToStaticMarkup(<TemplateCard template={template} />);
 
     expect(markup).toContain('Launch');
     expect(markup).toContain('Marketing');
@@ -50,12 +50,11 @@ describe('TemplateCard', () => {
   });
 
   it('never links a template without a public URL back to the library', () => {
+    navigation.pathname = '/categories/launch';
     const markup = renderToStaticMarkup(
-      <StaticRouter location="/categories/launch">
-        <TemplateCard
-          template={{ ...template, ownerProfile: { full_name: 'No Handle' } }}
-        />
-      </StaticRouter>,
+      <TemplateCard
+        template={{ ...template, ownerProfile: { full_name: 'No Handle' } }}
+      />,
     );
 
     expect(markup).toContain('Website Launch Checklist');

@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import React, { useId, useRef, useState } from 'react';
 import { Button } from './button';
 import { Input } from './input';

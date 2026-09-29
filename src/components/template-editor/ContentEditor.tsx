@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useId, useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { Trash2 } from "lucide-react";

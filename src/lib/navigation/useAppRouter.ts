@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 
 import { confirmLeave } from './leaveGuard';
 import { leavesPage } from './leavesPage';
+import { reportNavigation } from './navigationSignal';
 
 type NavigateOptions = { scroll?: boolean };
 
@@ -31,6 +32,7 @@ export function useAppRouter(): AppRouter {
       (navigate: (href: string, options?: NavigateOptions) => void) =>
       (href: string, options?: NavigateOptions) => {
         if (leavesPage(href, pathname) && !confirmLeave()) return false;
+        reportNavigation();
         navigate(href, options);
         return true;
       };

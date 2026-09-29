@@ -2,7 +2,7 @@
 // Existing violations are recorded in .dependency-cruiser-known-violations.json and
 // tolerated; anything new fails. Fix violations rather than re-baselining.
 
-// Framework-free modules that both the React app and the Pages Functions API may import.
+// Framework-free modules that both the React app and the API (functions/) may import.
 // Only add a module here after confirming it has no React, DOM, or browser-only imports.
 const SHARED_FROM_SRC = [
   "^src/lib/schemas/",
@@ -17,9 +17,10 @@ const SHARED_FROM_SRC = [
   "^src/lib/seo/siteOrigin\\.ts$",
 ];
 
-// Pages Functions entry points (file-based routes).
-const PAGES_ROUTES =
-  "^functions/(api/\\[\\[route\\]\\]\\.ts$|sitemap\\.xml\\.ts$|sitemaps/|categories/|link-preview/)";
+// The Next.js app's entry points: route files (layouts, pages, route handlers) in src/app.
+// Server-only code lives there and in src/server, the only places that may import functions/.
+const APP_ROUTES = "^src/app/";
+const SERVER_SIDE = "^src/(app|server)/";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -40,16 +41,25 @@ module.exports = {
         "Modules shared with the API must not depend on React, UI, contexts, hooks, or the browser API client. " +
         "Keep shared code pure (types, Zod schemas, string helpers).",
       from: { path: SHARED_FROM_SRC },
-      to: { path: ["^node_modules/(react|react-dom|react-router-dom)/", "^src/(components|views|contexts|hooks|features)/", "^src/lib/api\\.ts$"] },
+      to: { path: ["^node_modules/(react|react-dom|next)/", "^src/(components|views|contexts|hooks|features|server)/", "^src/lib/api\\.ts$"] },
     },
     {
       name: "app-does-not-import-api-runtime",
       severity: "error",
       comment:
-        "The React app must not import server code from functions/. Call the API through src/lib/api.ts; " +
-        "share types or schemas via src/lib/schemas/.",
-      from: { path: "^src/" },
+        "Only the server side of the Next.js app (route files in src/app, and src/server) may import functions/. " +
+        "Pages, components and hooks call the API through src/lib/api.ts; share types or schemas via src/lib/schemas/.",
+      from: { path: "^src/", pathNot: SERVER_SIDE },
       to: { path: "^functions/" },
+    },
+    {
+      name: "client-code-does-not-import-server-modules",
+      severity: "error",
+      comment:
+        "src/server holds server-only code (D1, the Worker's bindings, request headers). Import it from route files " +
+        "in src/app (generateMetadata, route handlers), never from views, components, hooks or contexts.",
+      from: { path: "^src/", pathNot: SERVER_SIDE },
+      to: { path: "^src/server/" },
     },
     {
       name: "screens-do-not-call-transport",
@@ -106,12 +116,22 @@ module.exports = {
       name: "app-code-is-reachable",
       severity: "error",
       comment:
-        "This module is not reachable from src/main.tsx, so it is dead code that agents may copy or 'fix' by mistake. " +
-        "Delete it, or import it where it is needed. (Unused shadcn primitives in src/components/ui/ are exempt.)",
-      from: { path: "^src/main\\.tsx$" },
+        "This module is not reachable from any route file in src/app, so it is dead code that agents may copy or " +
+        "'fix' by mistake. Delete it, or import it where it is needed. (Unused shadcn primitives in " +
+        "src/components/ui/ are exempt.)",
+      from: { path: APP_ROUTES },
       to: {
         path: "^src/",
-        pathNot: ["\\.d\\.ts$", "\\.test\\.tsx?$", "^src/components/ui/", "^src/hooks/use-mobile\\.tsx$", ...SHARED_FROM_SRC],
+        pathNot: [
+          "\\.d\\.ts$",
+          "\\.test\\.tsx?$",
+          APP_ROUTES,
+          "^src/components/ui/",
+          "^src/hooks/use-mobile\\.tsx$",
+          // Read by next.config.ts, outside src/app.
+          "^src/lib/http/securityHeaders\\.ts$",
+          ...SHARED_FROM_SRC,
+        ],
         reachable: false,
       },
     },
@@ -119,9 +139,10 @@ module.exports = {
       name: "api-code-is-reachable",
       severity: "error",
       comment:
-        "This module is not reachable from any Pages Functions route, so it is dead code. Delete it or import it where needed.",
-      from: { path: PAGES_ROUTES },
-      to: { path: "^functions/", pathNot: ["\\.json$", PAGES_ROUTES], reachable: false },
+        "This module is not reachable from any route file in src/app (the API's route handler, the sitemaps, " +
+        "page metadata), so it is dead code. Delete it or import it where needed.",
+      from: { path: APP_ROUTES },
+      to: { path: "^functions/", pathNot: ["\\.json$"], reachable: false },
     },
     {
       name: "no-circular",

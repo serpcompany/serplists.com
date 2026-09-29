@@ -1,5 +1,4 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { Location, NavigateFunction } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
@@ -9,23 +8,19 @@ import {
   isApiError,
   isOpenSubscriptionConflictError,
 } from "@/lib/api-errors";
+import { withReturnPath } from "@/lib/auth/returnPath";
 import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
+import { currentLocationPath } from "@/lib/navigation/replaceCurrentUrl";
 
-type ReturnLocation = Pick<Location, "pathname" | "search" | "hash">;
+/** Opens another page of the app, like useAppRouter().push. */
+export type NavigateTo = (href: string) => unknown;
 
-export const navigateToLoginWithReturnPath = (
-  navigate: NavigateFunction,
-  location: ReturnLocation
-): void => {
-  navigate("/login", {
-    state: {
-      from: {
-        pathname: location.pathname,
-        search: location.search,
-        hash: location.hash,
-      },
-    },
-  });
+/**
+ * Opens the login page, which brings the user back to this page (with its query and hash)
+ * after sign-in. Call it while the user is still on the page (see usePageVisit).
+ */
+export const navigateToLoginWithReturnPath = (navigate: NavigateTo): void => {
+  navigate(withReturnPath("/login", currentLocationPath()));
 };
 
 const openBillingPortal = async (reason: string): Promise<boolean> => {
@@ -131,8 +126,8 @@ export const handleAccessFailure = async (
   options: {
     fallbackMessage: string;
     billingEnabled?: boolean;
-    navigate?: NavigateFunction;
-    location?: ReturnLocation;
+    // Opens the login page on a 401; without it a 401 is only shown.
+    navigate?: NavigateTo;
     // The page visit that sent the request (see usePageVisit). Once the user has left
     // that page, the failure is only shown: no sign-in or checkout redirect.
     isCurrent?: () => boolean;
@@ -141,8 +136,8 @@ export const handleAccessFailure = async (
   const failure = getAccessFailure(error, options.fallbackMessage);
   const stillHere = options.isCurrent?.() ?? true;
 
-  if (failure.kind === "auth_required" && options.navigate && options.location && stillHere) {
-    navigateToLoginWithReturnPath(options.navigate, options.location);
+  if (failure.kind === "auth_required" && options.navigate && stillHere) {
+    navigateToLoginWithReturnPath(options.navigate);
     return;
   }
 

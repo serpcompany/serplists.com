@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { ArrowLeft, Eye, Loader2, MoreHorizontal, Save } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';

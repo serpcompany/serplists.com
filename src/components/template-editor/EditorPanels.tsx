@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 import { ItemEditor } from "@/components/template-editor/ItemEditor";

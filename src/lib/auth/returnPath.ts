@@ -1,13 +1,11 @@
-import { createPath } from "react-router-dom";
-
-import { buildVerifyEmailLoginRedirect } from "@/lib/auth/loginPrefill";
+import { VERIFY_EMAIL_LOGIN_PATH } from "@/lib/auth/loginPrefill";
 import { buildConsoleHomePath } from "@/lib/routes";
 
 /**
- * Where to send someone after they sign in or sign up. Protected pages and the
- * invite page pass it as router state (`state.from`); the `next` query
- * parameter carries it through places history state cannot reach, such as the
- * email verification link or a new tab.
+ * Where to send someone after they sign in or sign up. Protected pages, the invite
+ * page and the auth pages' own links carry it in the `next` query parameter, which
+ * also survives the email verification link and a new tab. The login page reads it
+ * with getReturnPath, which sanitizes it, and follows only a path on its own origin.
  */
 
 export const RETURN_PATH_PARAM = "next";
@@ -84,41 +82,9 @@ function decodeURIComponentSafe(value: string): string {
   }
 }
 
-function returnPathFromState(state: unknown): string | null {
-  if (!state || typeof state !== "object") {
-    return null;
-  }
-
-  const from = (state as { from?: unknown }).from;
-  if (typeof from === "string") {
-    return sanitizeReturnPath(from);
-  }
-  if (!from || typeof from !== "object") {
-    return null;
-  }
-
-  const { pathname, search, hash } = from as { pathname?: unknown; search?: unknown; hash?: unknown };
-  if (typeof pathname !== "string") {
-    return null;
-  }
-
-  // createPath adds a missing "?" or "#" separator, so a Stripe return such as
-  // ?billing=success survives sign-in whichever form the location was saved in.
-  return sanitizeReturnPath(
-    createPath({
-      pathname,
-      search: typeof search === "string" ? search : "",
-      hash: typeof hash === "string" ? hash : "",
-    }),
-  );
-}
-
-/** Router state first, then the `next` query parameter. */
-export function getReturnPath(location: { state?: unknown; search?: string }): string | null {
-  return (
-    returnPathFromState(location.state) ??
-    sanitizeReturnPath(new URLSearchParams(location.search ?? "").get(RETURN_PATH_PARAM))
-  );
+/** The sanitized `next` parameter of a query, or null. */
+export function getReturnPath(search: string | URLSearchParams): string | null {
+  return sanitizeReturnPath(new URLSearchParams(search).get(RETURN_PATH_PARAM));
 }
 
 /** Adds the return path to an auth page link as `next`, encoded once. */
@@ -132,27 +98,21 @@ export function withReturnPath(path: string, returnPath: string | null): string 
   return `${url.pathname}${url.search}`;
 }
 
-export function buildAuthLinkState(returnPath: string | null): { from: string } | undefined {
-  return returnPath ? { from: returnPath } : undefined;
-}
-
+/**
+ * Where sign-up sends a new account. An account that must verify its email goes to the
+ * login page, which asks for that first; sign-up hands the address over in
+ * sessionStorage, never in the URL (src/lib/auth/loginPrefill.ts).
+ */
 export function getPostRegisterDestination({
-  email,
   requiresEmailVerification,
   returnPath,
 }: {
-  email: string;
   requiresEmailVerification: boolean;
   returnPath: string | null;
-}): { to: string; state: { email?: string; from?: string } | undefined } {
+}): string {
   if (requiresEmailVerification) {
-    // The address travels in router state, never in the URL (src/lib/auth/loginPrefill.ts).
-    const redirect = buildVerifyEmailLoginRedirect(email);
-    return {
-      to: withReturnPath(redirect.to, returnPath),
-      state: { ...redirect.state, ...buildAuthLinkState(returnPath) },
-    };
+    return withReturnPath(VERIFY_EMAIL_LOGIN_PATH, returnPath);
   }
 
-  return { to: returnPath ?? buildConsoleHomePath(), state: undefined };
+  return returnPath ?? buildConsoleHomePath();
 }

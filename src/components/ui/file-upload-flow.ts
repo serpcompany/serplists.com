@@ -17,7 +17,7 @@ const BUCKET_BY_TYPE: Record<FileUploadType, TemplateUploadBucket> = {
 
 export type UploadedFileInfo = { url: string; fileName?: string; fileSize?: number };
 
-// Feedback goes through sonner, the only toast renderer the app mounts (AppShell.tsx), so a
+// Feedback goes through sonner, the only toast renderer the app mounts (src/app/providers.tsx), so a
 // rejected upload always tells the user why.
 export const uploadSelectedFile = async ({
   file,

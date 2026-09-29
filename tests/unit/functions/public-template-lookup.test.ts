@@ -4,9 +4,9 @@ import type { Env } from '../../../functions/api/types';
 import { loadPublicTemplate } from '../../../functions/seo/public-template-lookup';
 import { SqliteD1 } from '../../support/sqlite-d1';
 
-// The link preview for /profile/<user>/<identifier> mirrors the page's lookup. Templates
-// saved before UUID slugs were refused can have a slug that looks like an id, and their
-// public URL is built from it, so an id miss falls back to the slug.
+// The server-rendered <head> of /profile/<user>/<identifier> mirrors the page's lookup.
+// Templates saved before UUID slugs were refused can have a slug that looks like an id, and
+// their public URL is built from it, so an id miss falls back to the slug.
 
 const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
@@ -15,8 +15,8 @@ let d1: SqliteD1;
 
 const insertTemplate = (id: string, slug: string, isPublic = true) =>
   d1.run(
-    `INSERT INTO templates (id, user_id, title, items, slug, is_public, created_at, owner_type)
-     VALUES (?, 'user-1', ?, '[]', ?, ?, '2026-01-01', 'user')`,
+    `INSERT INTO templates (id, user_id, title, items, slug, is_public, created_at, owner_type, category)
+     VALUES (?, 'user-1', ?, '[]', ?, ?, '2026-01-01', 'user', '["Planning"]')`,
     id,
     `Template ${slug}`,
     slug,
@@ -24,11 +24,7 @@ const insertTemplate = (id: string, slug: string, isPublic = true) =>
   );
 
 const lookup = (identifier: string) =>
-  loadPublicTemplate(
-    { DB: d1.binding } as unknown as Env,
-    new Request(`https://serplists.com/profile/alice/${identifier}`),
-    identifier,
-  );
+  loadPublicTemplate({ DB: d1.binding } as unknown as Env, 'https://serplists.com', identifier);
 
 beforeEach(() => {
   d1 = new SqliteD1();
@@ -45,6 +41,14 @@ describe('public template lookup for a UUID-shaped identifier', () => {
     const record = await lookup(UUID_SLUG);
 
     expect(record).toMatchObject({ id: TEMPLATE_ID, slug: UUID_SLUG, ownerUsername: 'alice' });
+  });
+
+  it('reads what the page names in its tags: the creation date and the categories', async () => {
+    insertTemplate(TEMPLATE_ID, 'weekly-review');
+
+    const record = await lookup('weekly-review');
+
+    expect(record).toMatchObject({ createdAt: '2026-01-01', categories: ['Planning'] });
   });
 
   it('reads the template with that id first, with one query', async () => {

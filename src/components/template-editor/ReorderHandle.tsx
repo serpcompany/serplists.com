@@ -1,3 +1,4 @@
+import type { JSX } from "react";
 import type { DragEvent, KeyboardEvent } from "react";
 import { GripVertical } from "lucide-react";
 

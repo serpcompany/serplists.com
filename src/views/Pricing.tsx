@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
-import { api } from '@/lib/api';
+import {
+  createPersonalCheckoutUrl,
+  fetchPersonalBillingStatus,
+} from '@/features/billing/pricingBilling';
 import { isApiError, isOpenSubscriptionConflictError } from '@/lib/api-errors';
 import {
   BILLING_STATUS_QUERY_PREFIX,
@@ -33,7 +36,7 @@ const Pricing = () => {
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
-    queryFn: () => api.getBillingStatus(),
+    queryFn: fetchPersonalBillingStatus,
     enabled: Boolean(user),
     retry: shouldRetryBillingStatus,
   });
@@ -50,8 +53,7 @@ const Pricing = () => {
   const handleUpgrade = async () => {
     setIsStartingCheckout(true);
     try {
-      const { url } = await api.createBillingCheckout();
-      window.location.href = url;
+      window.location.href = await createPersonalCheckoutUrl();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
       setIsStartingCheckout(false);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -14,7 +14,12 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { needsFullPageLoad } from "@/lib/analyticsUrl";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
-import { readLoginPrefill } from "@/lib/auth/loginPrefill";
+import {
+  buildKeptLoginState,
+  readKeptLoginEmail,
+  readLoginPrefill,
+  takeHandedOffLoginEmail,
+} from "@/lib/auth/loginPrefill";
 import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
@@ -29,7 +34,9 @@ import {
   getLoginNotice,
   stripLoginNoticeParams,
 } from "@/lib/auth/loginNotice";
-import { buildAuthLinkState, getReturnPath, toSameOriginPath, withReturnPath } from "@/lib/auth/returnPath";
+import { getReturnPath, toSameOriginPath, withReturnPath } from "@/lib/auth/returnPath";
+import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
+import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildConsoleSettingsPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
@@ -47,22 +54,29 @@ const Login = () => {
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const { login, isAuthenticated, isLoading } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useAppRouter();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
   // Read from the URL during the first render so the resend option shows
   // immediately; it stays after the one-shot params are removed.
   const [verificationFailure, setVerificationFailure] = useState<string | null>(() =>
-    getVerificationFailure(location.search),
+    getVerificationFailure(search),
   );
-  // Where the user was headed (with its query and hash), from router state or
-  // the `next` parameter that survives the email verification link.
-  const returnPath = getReturnPath(location);
+  // Where the user was headed (with its query and hash): the `next` parameter, which
+  // also survives the email verification link.
+  const returnPath = getReturnPath(searchParams);
   const from = returnPath ?? buildConsoleSettingsPath();
   const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
+  // Runs again whenever the query changes; `search` is only its trigger, the effect reads
+  // the live URL and this entry's state.
   useEffect(() => {
-    const prefill = readLoginPrefill(location.search, location.state);
-    const notice = getLoginNotice(location.search);
+    const currentSearch = window.location.search;
+    const prefill = readLoginPrefill(
+      currentSearch,
+      takeHandedOffLoginEmail() ?? readKeptLoginEmail(window.history.state),
+    );
+    const notice = getLoginNotice(currentSearch);
 
     if (prefill.email) {
       setEmail(prefill.email);
@@ -79,20 +93,21 @@ const Login = () => {
       toast.info(notice.message, { id: "verify-email-first" });
     }
 
-    // Drop the one-shot params so a reload or back navigation does not replay
-    // the notice. An email address from an old ?email= link moves into router
-    // state so it leaves the URL (in any letter case) but still prefills the form.
-    // The rerun that follows finds no params and does nothing.
+    // Drop the one-shot params so a reload or back navigation does not replay the notice.
+    // The address (from sign-up, or an old ?email= link, in any letter case) stays out of
+    // the URL but moves into this entry's state, so a reload still fills the form. The
+    // rerun that follows finds no params and changes nothing.
     const remainingSearch =
-      stripLoginNoticeParams(prefill.searchWithoutEmail ?? location.search) ?? prefill.searchWithoutEmail;
-    if (remainingSearch !== null) {
-      const state = typeof location.state === "object" && location.state !== null ? location.state : {};
-      navigate(
-        { pathname: location.pathname, search: remainingSearch, hash: location.hash },
-        { replace: true, state: prefill.email ? { ...state, email: prefill.email } : location.state },
+      stripLoginNoticeParams(prefill.searchWithoutEmail ?? currentSearch) ?? prefill.searchWithoutEmail;
+    const keptState = prefill.email ? buildKeptLoginState(prefill.email) : null;
+    const keepsEmail = prefill.email !== readKeptLoginEmail(window.history.state);
+    if (remainingSearch !== null || keepsEmail) {
+      replaceCurrentUrl(
+        `${window.location.pathname}${remainingSearch ?? currentSearch}${window.location.hash}`,
+        keptState,
       );
     }
-  }, [location.hash, location.pathname, location.search, location.state, navigate]);
+  }, [search]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -106,9 +121,9 @@ const Login = () => {
         window.location.replace(destination);
         return;
       }
-      navigate(destination, { replace: true });
+      router.replace(destination);
     }
-  }, [from, isAuthenticated, isLoading, navigate]);
+  }, [from, isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -182,7 +197,6 @@ const Login = () => {
           Don&apos;t have an account?{" "}
           <Link
             href={withReturnPath("/register", returnPath)}
-            state={buildAuthLinkState(returnPath)}
             className="font-medium text-primary hover:underline"
           >
             Sign up
@@ -191,7 +205,7 @@ const Login = () => {
       }
     >
         <form onSubmit={handleSubmit} className="space-y-4">
-          {import.meta.env.DEV ? (
+          {process.env.NODE_ENV !== "production" ? (
             <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
               <div className="grid grid-cols-2 gap-2">
                 <Button

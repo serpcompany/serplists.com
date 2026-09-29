@@ -1,5 +1,6 @@
 'use client';
 
+import type { JSX } from 'react';
 import React from 'react';
 import { Users, X } from 'lucide-react';
 
@@ -39,7 +40,7 @@ export function DevLoginBar(): JSX.Element | null {
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Only show in development
-  if (!import.meta.env.DEV || !mounted) return null;
+  if (process.env.NODE_ENV === 'production' || !mounted) return null;
 
   if (isBlankTemplateEditorRoute(pathname)) {
     return null;

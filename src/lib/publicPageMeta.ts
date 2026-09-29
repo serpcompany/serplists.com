@@ -1,8 +1,7 @@
-// How public pages describe themselves to search engines and link previews. Each page's
-// SEOHead reads these, and so do the Pages Functions that fill index.html's tags for
-// crawlers that do not run JavaScript (functions/seo/), so a shared link's preview says
-// what the page says. Keep it framework-free: it is in SHARED_FROM_SRC in
-// .dependency-cruiser.cjs, so import siblings by relative path.
+// How public pages describe themselves to search engines and link previews. The pages'
+// server metadata (src/app, src/server/pageMeta) reads these and the pages show the same
+// text, so a shared link's preview says what the page says. Keep it framework-free: it is in
+// SHARED_FROM_SRC in .dependency-cruiser.cjs, so import siblings by relative path.
 import { APP_BRAND_NAME } from './brand';
 
 /**
@@ -26,7 +25,26 @@ export const CATEGORY_INDEX_PAGE_TEXT = {
   description: 'Explore checklist templates organized by category.',
 } as const;
 
+export const TEMPLATE_NOT_FOUND_PAGE_TEXT = {
+  title: 'Template not found',
+  description: 'The template you are looking for does not exist or is no longer public.',
+} as const;
+
+export const PROFILE_NOT_FOUND_PAGE_TEXT = {
+  title: 'Profile not found',
+  description: 'This profile does not exist.',
+} as const;
+
 export const buildCategoryPageTitle = (categoryName: string): string => `${categoryName} Templates`;
+
+/** A category page's description: with its template count once the catalog has loaded. */
+export const describeCategoryPage = (
+  category: { name: string; description: string },
+  templateCount: number | null,
+): string =>
+  templateCount === null
+    ? `Templates for ${category.name}. ${category.description}`
+    : `${templateCount} templates for ${category.name}. ${category.description}`;
 
 /** The description of a category that is not one of the built-in ones. */
 export const describeUnlistedCategory = (categoryName: string): string =>

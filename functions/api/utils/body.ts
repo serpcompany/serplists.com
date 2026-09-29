@@ -1,4 +1,4 @@
-export async function isBodyWithinLimit(request: Request, maxBytes: number): Promise<boolean> {
+export async function isBodyWithinLimit(request: Pick<Request, 'body'>, maxBytes: number): Promise<boolean> {
   const body = request.body;
   if (!body) return true;
 

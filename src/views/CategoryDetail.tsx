@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Grid3X3, List, Search } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
@@ -27,11 +27,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
-import { SEOHead } from '@/components/shared/SEOHead';
+import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
-import { buildCategoryPageTitle } from '@/lib/publicPageMeta';
-import { buildCategorySlug, buildPublicCategoryPathForSlug, buildSiteUrl } from '@/lib/routes';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { buildCategorySlug, buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -46,7 +46,6 @@ const sortLabels: Record<CategorySort, string> = {
 
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
-const CATEGORY_BASE_URL = buildSiteUrl('/categories');
 
 const backToCategories = (
   <div className="mb-6 flex items-center gap-2 text-sm">
@@ -69,8 +68,11 @@ const templateGridSkeleton = (
   </div>
 );
 
+// The page's title, description and canonical URL come from the server
+// (src/server/pageMeta/categoryPage.ts), counted from the same catalog.
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
+  const router = useAppRouter();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<CategorySort>('popular');
@@ -89,6 +91,17 @@ const CategoryDetail = () => {
   );
   const categoryStats = categories.find((item) => item.slug === slug);
   const category = resolveCategoryPresentation(slug, categoryStats);
+  // A slug from before accented letters were folded, for a category that has a new one. Only
+  // known once the catalog has loaded.
+  const legacyCategory =
+    !category && !loading && !catalogError ? findCategoryByLegacySlug(categories, slug) : null;
+  const legacyCategoryPath = legacyCategory
+    ? buildPublicCategoryPathForSlug(legacyCategory.slug)
+    : null;
+
+  useEffect(() => {
+    if (legacyCategoryPath) router.replace(legacyCategoryPath);
+  }, [legacyCategoryPath, router]);
   const categoryTemplateCount = categoryStats?.count ?? 0;
   // Registry categories render before any public Template uses them; keep those empty
   // pages out of search results, but only once the catalog API has answered. Bundled
@@ -143,28 +156,22 @@ const CategoryDetail = () => {
         </div>
       );
     }
-    const legacyCategory = findCategoryByLegacySlug(categories, slug);
-    if (legacyCategory) {
-      return <Navigate replace to={buildPublicCategoryPathForSlug(legacyCategory.slug)} />;
+    if (legacyCategoryPath) {
+      return null;
     }
-    return <NotFound />;
+    return (
+      <>
+        <NoIndexMeta follow />
+        <NotFound />
+      </>
+    );
   }
 
   const Icon = category.icon;
 
   return (
     <div className="bg-background">
-      <SEOHead
-        title={buildCategoryPageTitle(category.name)}
-        description={
-          loading
-            ? `Templates for ${category.name}. ${category.description}`
-            : `${categoryTemplateCount} templates for ${category.name}. ${category.description}`
-        }
-        keywords={[category.name, 'checklist templates', 'workflow templates']}
-        url={`${CATEGORY_BASE_URL}/${encodeURIComponent(slug)}`}
-        robots={isEmptyCategory ? 'noindex, follow' : undefined}
-      />
+      {isEmptyCategory ? <NoIndexMeta follow /> : null}
       <main className="mx-auto max-w-6xl px-4 py-8">
         {backToCategories}
 
