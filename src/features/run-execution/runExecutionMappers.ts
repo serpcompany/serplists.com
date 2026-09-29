@@ -101,6 +101,20 @@ export const getInitialSelectedItemId = (
   return run.sections[0]?.items[0]?.id ?? null;
 };
 
+// After a task is completed, move to the next unfinished task after it, wrapping to
+// earlier ones; stay on it when every task is done.
+export const getNextSelectedItemId = (
+  run: ChecklistRun,
+  completedItemId: string,
+): string => {
+  const items = run.sections.flatMap((section) => section.items);
+  const index = items.findIndex((item) => item.id === completedItemId);
+  const next = [...items.slice(index + 1), ...items.slice(0, Math.max(index, 0))].find(
+    (item) => !item.isCompleted,
+  );
+  return next?.id ?? completedItemId;
+};
+
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
 ): {

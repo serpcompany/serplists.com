@@ -13,7 +13,7 @@ CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://staging.serp-check
 
 [env.production.vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
-PERSONAL_RUN_MCP_ENABLED = "false"
+PERSONAL_RUN_MCP_ENABLED = "true"
 CORS_ALLOWED_ORIGINS = "https://serplists.com"
 
 # Local development and production D1 binding. Preview deployments must not use

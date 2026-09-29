@@ -8,16 +8,19 @@ import {
 import { createDb } from './api/db';
 import type { Env } from './api/types';
 import {
-  buildDurableShardIndex, bundledInventoryLastmod, bundledTemplateEntries,
+  buildDurableShardIndex, bundledInventoryLastmod, bundledTemplateEntries, cachedSitemap,
   catalogPageEntry, isValidTemplateSlug, isValidUsername, loadCategoryEntries,
-  loadSitemapRevisions, methodNotAllowed, mostRecentLastmod, publicTemplateCondition,
-  renderSitemapIndex, requestSupportsSitemap, staticSitemapEntries,
+  mostRecentLastmod, publicTemplateCondition,
+  renderSitemapIndex, staticSitemapEntries,
   sitemapImplementationLastmod,
-  validTemplateSlugCondition, validUsernameCondition, xmlResponse, type SitemapEntry,
+  validTemplateSlugCondition, validUsernameCondition, xmlResponse,
+  type SitemapEntry, type SitemapRevisions,
 } from './sitemap/shared';
 
-export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
-  if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
+export const onRequest: PagesFunction<Env> = async (context) =>
+  cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions));
+
+async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapRevisions): Promise<Response> {
   const db = createDb(env);
   const profileRows = await db
     .select({
@@ -61,7 +64,6 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   });
 
   const categoryEntries = await loadCategoryEntries(env);
-  const revisions = await loadSitemapRevisions(env);
   const templateLanding = catalogPageEntry('/templates');
   const templateEntries = [{
     ...templateLanding,
@@ -77,4 +79,4 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       mostRecentLastmod(revisions.get('templates'), bundledInventoryLastmod('templates'), sitemapImplementationLastmod())),
   ];
   return xmlResponse(request, renderSitemapIndex(entries));
-};
+}

@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  D1_PROFILE?: string;
   JWT_SECRET?: string;
   BETTER_AUTH_SECRET?: string;
   AUTH_EMAIL_VERIFICATION_REQUIRED?: "true" | "false";

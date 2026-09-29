@@ -308,4 +308,31 @@ describe("repo template catalog", () => {
 
     expect(accountTemplates.filter((template) => template.id === "user-template-2")).toHaveLength(1);
   });
+
+  it("prefers the user's own copy over a cached catalog copy without reordering", () => {
+    const template = (id: string, title: string, version: number) => ({
+      id,
+      title,
+      description: "",
+      sections: [],
+      userId: "user-1",
+      createdAt: "2026-03-24T00:00:00.000Z",
+      updatedAt: "2026-03-24T00:00:00.000Z",
+      isPublic: true,
+      slug: id,
+      categories: [],
+      tags: [],
+      version,
+    });
+    const accountTemplates = mergeAccountTemplateCollections(
+      [template("first", "Cached title", 1), template("second", "Second", 1)],
+      [template("first", "Edited title", 2)],
+      "user-1",
+    );
+
+    expect(accountTemplates.map((entry) => [entry.id, entry.title])).toEqual([
+      ["first", "Edited title"],
+      ["second", "Second"],
+    ]);
+  });
 });

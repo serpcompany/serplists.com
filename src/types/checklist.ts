@@ -137,7 +137,7 @@ export interface TemplatesContextProps {
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
   updateTemplate: (template: TemplateSavePayload) => Promise<void>;
   deleteTemplate: (id: string) => Promise<void>;
-  createRun: (params: { templateId: string; runName?: string }) => Promise<ChecklistRun | null>;
+  createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
   updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
   deleteRun: (id: string) => Promise<void>;

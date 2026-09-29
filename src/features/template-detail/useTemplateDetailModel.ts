@@ -40,6 +40,7 @@ type CreateTemplate = (
 
 type CreateRun = (params: {
   runName?: string;
+  template?: ChecklistTemplate;
   templateId: string;
 }) => Promise<ChecklistRun | null>;
 
@@ -239,6 +240,7 @@ export const startTemplateRun = async (params: {
     const run = await params.createRun({
       templateId: params.template.id,
       runName: params.runName,
+      template: params.template,
     });
 
     if (!run?.id) {

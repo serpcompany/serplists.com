@@ -80,5 +80,6 @@ data; changing product wording or pricing; changing a rule in the core beliefs.
 ## Database changes
 
 - Read [database operations](docs/design-docs/database-operations.md) before changing the Drizzle schema, D1 migrations, or SQL-only database objects.
+- D1 bills rows scanned, not rows returned: follow the query rules in [D1 cost](docs/design-docs/d1-cost.md) and check new or changed queries with `pnpm run d1:profile`.
 - Run `pnpm run check:db:drizzle-parity` and `pnpm run db:schema:generate` after changing any of them (CI checks both).
 - Do not apply or commit the baseline currently proposed by `pnpm run db:generate`; Drizzle snapshot initialization is tracked separately.

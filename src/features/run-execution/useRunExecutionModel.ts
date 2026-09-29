@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
@@ -12,10 +12,12 @@ import {
   cloneRunSections,
   countRunExecutionItems,
   getInitialSelectedItemId,
+  getNextSelectedItemId,
   getSelectedRunItem,
   mapChecklistToRun,
   setSubItemsCompletion,
 } from './runExecutionMappers';
+import { createSaveQueue } from './saveQueue';
 
 type RunExecutionApiClient = Pick<
   typeof api,
@@ -92,6 +94,10 @@ export type RunExecutionActionResult =
       run?: ChecklistRun;
       shareUrl?: string;
       shouldPromptComplete?: boolean;
+    }
+  | {
+      // The same action was already pending (a double click); nothing was sent.
+      kind: 'ignored';
     }
   | {
       kind: 'shared_disabled';
@@ -487,6 +493,9 @@ export const useRunExecutionModel = (
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // The latest run, updated as soon as a save returns so the next queued save builds on it.
+  const latestRun = useRef<ChecklistRun | null>(null);
+  const [saveQueue] = useState(createSaveQueue);
 
   useEffect(() => {
     let cancelled = false;
@@ -510,16 +519,19 @@ export const useRunExecutionModel = (
       }
 
       if (result.kind === 'ok') {
+        latestRun.current = result.run;
         setRun(result.run);
         setSelectedItemId(result.selectedItemId);
         setLoadError(null);
         setNotFound(false);
       } else if (result.kind === 'error') {
+        latestRun.current = null;
         setRun(null);
         setSelectedItemId(null);
         setLoadError(result.message);
         setNotFound(false);
       } else {
+        latestRun.current = null;
         setRun(null);
         setSelectedItemId(null);
         setLoadError(null);
@@ -548,6 +560,7 @@ export const useRunExecutionModel = (
 
   const applyResult = (result: RunExecutionActionResult): RunExecutionActionResult => {
     if (result.kind === 'ok' && result.run) {
+      latestRun.current = result.run;
       setRun(result.run);
       setSelectedItemId((currentSelectedItemId) => {
         if (!currentSelectedItemId) {
@@ -564,15 +577,20 @@ export const useRunExecutionModel = (
     return result;
   };
 
+  // Saves go through one queue and build on the latest run (see saveQueue.ts).
+  const enqueueSave = async (
+    key: string,
+    save: (current: ChecklistRun) => Promise<RunExecutionActionResult>,
+  ): Promise<RunExecutionActionResult> =>
+    (await saveQueue(key, async () =>
+      applyResult(latestRun.current ? await save(latestRun.current) : { kind: 'not_found' }),
+    )) ?? { kind: 'ignored' };
+  const shareToken = options.shareToken;
+
   return {
     counts,
-    createShare: async () =>
-      applyResult(
-        await createRunExecutionShare(
-          { run, shareToken: options.shareToken },
-          dependencies,
-        ),
-      ),
+    createShare: () =>
+      enqueueSave('share', (current) => createRunExecutionShare({ run: current, shareToken }, dependencies)),
     history: {
       data: history.data ?? null,
       isError: history.isError,
@@ -585,73 +603,35 @@ export const useRunExecutionModel = (
     notFound,
     progress: counts.progress,
     run,
-    saveTitle: async (title: string) => {
-      if (!run) {
-        return { kind: 'not_found' } as RunExecutionActionResult;
-      }
-
-      return applyResult(
-        await saveRunExecutionTitle(
-          { run, shareToken: options.shareToken, title },
-          dependencies,
-        ),
-      );
-    },
-    saveItemNotes: async (itemId: string, notes: string) =>
-      applyResult(
-        await saveRunItemNotes(
-          { itemId, notes, run, shareToken: options.shareToken },
-          dependencies,
-        ),
+    saveTitle: (title: string) =>
+      enqueueSave(`title:${title}`, (current) => saveRunExecutionTitle({ run: current, shareToken, title }, dependencies)),
+    saveItemNotes: (itemId: string, notes: string) =>
+      enqueueSave(`notes:${itemId}:${notes}`, (current) =>
+        saveRunItemNotes({ itemId, notes, run: current, shareToken }, dependencies),
       ),
     selectedData,
     selectedItemId,
     setSelectedItemId,
-    completeRun: async () => {
-      if (!run) {
-        return { kind: 'not_found' } as RunExecutionActionResult;
-      }
-
-      return applyResult(
-        await completeRunExecution(
-          { run, shareToken: options.shareToken },
-          dependencies,
-        ),
-      );
-    },
+    completeRun: () =>
+      enqueueSave('complete', (current) => completeRunExecution({ run: current, shareToken }, dependencies)),
     toggleItem: async (itemId: string) => {
-      if (!run) {
-        return { kind: 'not_found' } as RunExecutionActionResult;
-      }
-
-      return applyResult(
-        await toggleRunItem(
-          { itemId, run, shareToken: options.shareToken },
-          dependencies,
-        ),
+      const result = await enqueueSave(`toggle:${itemId}`, (current) =>
+        toggleRunItem({ itemId, run: current, shareToken }, dependencies),
       );
-    },
-    toggleSubItem: async (
-      itemId: string,
-      contentIndex: number,
-      subItemIndex: number,
-    ) => {
-      if (!run) {
-        return { kind: 'not_found' } as RunExecutionActionResult;
+      // Completing the selected task moves on to the next unfinished one.
+      if (
+        result.kind === 'ok' &&
+        result.run &&
+        itemId === selectedItemId &&
+        getSelectedRunItem(result.run, itemId)?.item.isCompleted
+      ) {
+        setSelectedItemId(getNextSelectedItemId(result.run, itemId));
       }
-
-      return applyResult(
-        await toggleRunSubItem(
-          {
-            contentIndex,
-            itemId,
-            run,
-            shareToken: options.shareToken,
-            subItemIndex,
-          },
-          dependencies,
-        ),
-      );
+      return result;
     },
+    toggleSubItem: (itemId: string, contentIndex: number, subItemIndex: number) =>
+      enqueueSave(`toggle:${itemId}:${contentIndex}:${subItemIndex}`, (current) =>
+        toggleRunSubItem({ contentIndex, itemId, run: current, shareToken, subItemIndex }, dependencies),
+      ),
   };
 };

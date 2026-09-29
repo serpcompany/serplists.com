@@ -4,6 +4,8 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
 import { getEntitlementsForUser } from "../utils/entitlements";
+import { log } from "../utils/logger";
+import { failedAuthIsBlocked, limitPersonalRunKey, recordFailedAuth } from "../utils/mcp-limits";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -16,11 +18,6 @@ const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_RESULT_BYTES = 512 * 1024;
 const MAX_LIST_RESULTS = 100;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_REQUESTS = 120;
-const MAX_RATE_LIMIT_KEYS = 1_000;
-
-const rateLimitWindows = new Map<string, { count: number; resetsAt: number }>();
 
 type JsonRecord = Record<string, unknown>;
 type JsonRpcId = string | number | null;
@@ -291,26 +288,6 @@ function requestHostIsSafe(request: Request, env: Env): boolean {
   );
   if (allowedHosts.size > 0) return allowedHosts.has(requestUrl.host.toLowerCase());
   return false;
-}
-
-function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allowed: false; retryAfter: number } {
-  const now = Date.now();
-  let window = rateLimitWindows.get(identity.keyId);
-  if (!window || window.resetsAt <= now) {
-    window = { count: 0, resetsAt: now + RATE_LIMIT_WINDOW_MS };
-  }
-  window.count += 1;
-  rateLimitWindows.set(identity.keyId, window);
-
-  if (rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) {
-    for (const [key, candidate] of rateLimitWindows) {
-      if (candidate.resetsAt <= now || rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) rateLimitWindows.delete(key);
-      if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
-    }
-  }
-
-  if (window.count <= RATE_LIMIT_REQUESTS) return { allowed: true };
-  return { allowed: false, retryAfter: Math.max(1, Math.ceil((window.resetsAt - now) / 1000)) };
 }
 
 function parseStoredSections(value: unknown): JsonRecord[] {
@@ -783,6 +760,10 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     }
   }
 
+  if (failedAuthIsBlocked(request)) {
+    return rpcError(null, -32000, "Too many failed authentication attempts", undefined, 429);
+  }
+
   let identity: PersonalRunKeyIdentity | null;
   try {
     identity = await authenticatePersonalRunKey(request, env);
@@ -790,11 +771,17 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(null, -32603, "Internal error", undefined, 500);
   }
   if (!identity) {
+    recordFailedAuth(request);
     return rpcError(null, -32001, "Unauthorized", undefined, 401);
   }
 
-  const rateLimitResult = rateLimit(identity);
+  // The router sets X-Request-Id. Logging the key ID for every authenticated request, even
+  // malformed ones, lets an abused key be found and revoked.
+  const requestId = request.headers.get("X-Request-Id") ?? undefined;
+  log("info", "mcp_request", { requestId, keyId: identity.keyId });
+  const rateLimitResult = limitPersonalRunKey(identity);
   if (!rateLimitResult.allowed) {
+    log("warn", "mcp_rate_limited", { requestId, keyId: identity.keyId });
     const response = rpcError(null, -32000, "Rate limit exceeded", undefined, 429);
     response.headers.set("Retry-After", String(rateLimitResult.retryAfter));
     return response;
@@ -853,6 +840,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   if (payload.method === "tools/call") {
     const params = isRecord(payload.params) ? payload.params : {};
     if (typeof params.name !== "string") return rpcError(id, -32602, "Tool name is required");
+    log("info", "mcp_tool_call", { requestId, keyId: identity.keyId, toolName: boundedText(params.name, 64) });
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
       assertBoundedResult(data);
