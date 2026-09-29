@@ -5,14 +5,19 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 
 ## System
 
-- **Components:** shadcn/ui (Radix primitives) vendored in `src/components/ui/`,
-  configured by `components.json` (default style, slate base, CSS variables).
+- **Components:** shadcn/ui vendored in `src/components/ui/`, configured by
+  `components.json` (style `base-nova` on Base UI primitives, base color `neutral`, CSS
+  variables, `lucide` icons), as in the approved zenbujapanese.com stack.
   Reference: [shadcn/ui docs](references/shadcn-ui-llms.txt).
-- **Styling:** Tailwind CSS 3 with `tailwindcss-animate` and
-  `@tailwindcss/typography`. Theme tokens are CSS variables in `src/index.css`,
-  mapped in `tailwind.config.ts`. Merge classes with `cn` from `src/lib/utils.ts`.
+- **Styling:** Tailwind CSS 4 with `tw-animate-css`, `shadcn/tailwind.css` and
+  `@tailwindcss/typography`, all loaded by `src/app/globals.css`, which holds the shadcn
+  default theme tokens (neutral, light and dark) unchanged: no custom colors, fonts, radii
+  or effects. There is no `tailwind.config` file. Merge classes with `cn` from
+  `src/lib/utils.ts` (the `cn` package).
+- **Fonts:** Geist and Geist Mono through `next/font/google` in the root layout
+  (`src/app/layout.tsx`), exposed as `--font-sans` and `--font-geist-mono`.
 - **Markdown text:** `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`) renders
-  every Markdown block with `prose prose-sm`. `tailwind.config.ts` points the prose colors
+  every Markdown block with `prose prose-sm`. `src/app/globals.css` points the prose colors
   at the theme tokens, so no `dark:prose-invert` is needed, and turns off the backticks
   around inline code and the bullets on task lists. Single newlines stay line breaks
   (`whitespace-pre-line`); `src/lib/utils/markdownWhitespace.ts` removes the newlines

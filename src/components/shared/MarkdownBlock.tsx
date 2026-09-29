@@ -16,7 +16,7 @@ interface MarkdownBlockProps {
 
 /**
  * Author-written markdown (task text) with the typography styles configured in
- * tailwind.config.ts. `whitespace-pre-line` keeps single newlines as line breaks; raw HTML
+ * src/app/globals.css. `whitespace-pre-line` keeps single newlines as line breaks; raw HTML
  * is skipped and links go through safeUrl. Every markdown surface uses this component.
  */
 export function MarkdownBlock({ value, className }: MarkdownBlockProps) {

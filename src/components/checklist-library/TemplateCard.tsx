@@ -76,16 +76,16 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
       <div
         className={cn(
           'flex flex-1',
-          isHorizontal ? 'min-h-[12rem] flex-row' : 'flex-col',
+          isHorizontal ? 'min-h-48 flex-row' : 'flex-col',
         )}
       >
         <div
           className={cn(
-            'relative flex items-center justify-center bg-gradient-to-br from-secondary to-secondary/50',
+            'relative flex items-center justify-center bg-linear-to-br from-secondary to-secondary/50',
             isHorizontal ? 'w-44 shrink-0' : 'h-32',
           )}
         >
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-background shadow-xs">
             {getTemplateIcon(template)}
           </div>
 

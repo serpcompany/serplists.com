@@ -63,7 +63,7 @@ export function RunNotesEditor({
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs text-muted-foreground" aria-live="polite">
             {showSaved && !isDirty ? (
-              <span className="inline-flex items-center gap-1 text-success">
+              <span className="inline-flex items-center gap-1 text-foreground">
                 <Check className="h-3.5 w-3.5" /> Saved to this run
               </span>
             ) : (

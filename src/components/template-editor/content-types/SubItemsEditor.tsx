@@ -72,7 +72,7 @@ export function SubItemsEditor({
           <div className="flex items-center gap-2" key={subItemField.fieldId}>
             <Input
               aria-label={`Sub-task ${subItemIndex + 1}`}
-              className="flex-grow"
+              className="grow"
               data-subtask-content={contentIndex}
               data-subtask-item={itemIndex}
               data-subtask-section={sectionIndex}

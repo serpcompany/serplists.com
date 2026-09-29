@@ -32,9 +32,9 @@ function runThemeScript(stored: string | null | Error): { dark: boolean; keysRea
   return { dark: classes.has('dark'), keysRead };
 }
 
-const indexCss = readFileSync('src/index.css', 'utf8');
+const indexCss = readFileSync('src/app/globals.css', 'utf8');
 
-/** The lightness of an oklch(L 0 0) token in the `.dark` block of src/index.css. */
+/** The lightness of an oklch(L 0 0) token in the `.dark` block of src/app/globals.css. */
 const darkTokenLightness = (name: string): number => {
   const body = /\.dark\s*\{([^}]*)\}/.exec(indexCss)?.[1] ?? '';
   return Number(new RegExp(`--${name}:\\s*oklch\\(([\\d.]+) 0 0\\)`).exec(body)?.[1]);

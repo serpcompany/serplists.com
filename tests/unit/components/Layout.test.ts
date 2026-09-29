@@ -57,7 +57,7 @@ describe('Layout route contracts', () => {
     expect(html).toContain('Nested public child');
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain(
-      'mx-auto w-full px-4 max-w-[var(--layout-shell-max)] flex h-14 items-center justify-between gap-6',
+      'mx-auto w-full px-4 max-w-6xl flex h-14 items-center justify-between gap-6',
     );
   });
 

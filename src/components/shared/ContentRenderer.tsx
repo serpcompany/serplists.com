@@ -110,7 +110,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
                   Open Embedded Content
                 </a>
               ) : (
-                <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                <pre className="whitespace-pre-wrap wrap-break-word text-xs text-muted-foreground">
                   {content.value}
                 </pre>
               )}

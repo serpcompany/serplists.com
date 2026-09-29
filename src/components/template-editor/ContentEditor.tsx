@@ -172,7 +172,7 @@ export function ContentEditor({
 
   return (
     <div className="space-y-4">
-      <div className="sticky top-0 z-10 -mx-6 flex items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="sticky top-0 z-10 -mx-6 flex items-center justify-between border-b border-border bg-background/95 px-6 py-3 backdrop-blur-sm supports-backdrop-filter:bg-background/80">
         <h3 className="text-sm font-medium text-foreground">Content Blocks</h3>
         <ContentAddPanel
           onAddContent={handleAddContent}

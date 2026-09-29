@@ -8,7 +8,7 @@ import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/
 
 function CompletionState({ isCompleted }: { isCompleted: boolean }): JSX.Element {
   return isCompleted ? (
-    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-success">
+    <span className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground">
       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
       Completed
     </span>

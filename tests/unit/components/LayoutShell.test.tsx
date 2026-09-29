@@ -107,7 +107,7 @@ describe('Layout shell selection', () => {
     expect(html).toContain('data-app-shell="public"');
     expect(html).toContain('Profile child');
     expect(html).toContain(
-      'mx-auto w-full px-4 max-w-[var(--layout-shell-max)] flex h-14 items-center justify-between gap-6',
+      'mx-auto w-full px-4 max-w-6xl flex h-14 items-center justify-between gap-6',
     );
     expect(html).toContain('Build repeatable checklists');
   });

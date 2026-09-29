@@ -86,7 +86,7 @@ export function PublicTemplateContent({
                   {embedLink}
                 </a>
               ) : (
-                <span className="min-w-0 whitespace-pre-wrap break-words">{content.value}</span>
+                <span className="min-w-0 whitespace-pre-wrap wrap-break-word">{content.value}</span>
               )}
             </div>
           </div>

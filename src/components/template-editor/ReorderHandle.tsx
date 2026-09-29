@@ -41,7 +41,7 @@ export function ReorderHandle({
     <button
       aria-describedby={hintId}
       aria-label={`Drag ${label}`}
-      className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
+      className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-hidden focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
       data-reorder-handle={handleId}
       draggable
       onDragEnd={onDragEnd}

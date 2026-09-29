@@ -75,7 +75,7 @@ export function GenerateFromClipy({
   return (
     <section
       aria-labelledby="clipy-generator-title"
-      className="mx-4 mt-4 rounded-lg border border-border bg-card p-4 shadow-sm"
+      className="mx-4 mt-4 rounded-lg border border-border bg-card p-4 shadow-xs"
     >
       <div className="flex items-start gap-3">
         <Video aria-hidden="true" className="mt-0.5 h-5 w-5 text-primary" />

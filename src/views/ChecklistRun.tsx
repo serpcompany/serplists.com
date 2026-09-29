@@ -373,7 +373,7 @@ const ChecklistRunPage = () => {
       <div className="hidden min-w-[120px] xl:block">
         <div className="mb-2 h-2 overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full bg-success transition-all duration-300"
+            className="h-full bg-primary transition-all duration-300"
             style={{ width: `${displayProgress}%` }}
           />
         </div>
@@ -417,7 +417,7 @@ const ChecklistRunPage = () => {
       {/* A shared run's title and noindex are the route's metadata (src/app/share). */}
       {isSharedRun ? (
         <>
-          <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
             <PageContainer
               className="flex h-14 items-center justify-between gap-4"
               width="narrow"
@@ -463,7 +463,7 @@ const ChecklistRunPage = () => {
                       and verified without dashboard access.
                     </p>
                   </div>
-                  <div className="min-w-40 rounded-[var(--layout-card-radius)] border border-border bg-background p-4">
+                  <div className="min-w-40 rounded-lg border border-border bg-background p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                       Run progress
                     </p>
@@ -499,7 +499,7 @@ const ChecklistRunPage = () => {
                     {section.items.map((item, itemIndex) => (
                       <div
                         key={item.id}
-                        className="rounded-[var(--layout-card-radius)] border border-border bg-background"
+                        className="rounded-lg border border-border bg-background"
                       >
                         <div className="flex items-start gap-4 px-4 py-4">
                           <Checkbox

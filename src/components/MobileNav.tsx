@@ -186,7 +186,7 @@ export function MobileBottomNav() {
   return (
     <nav
       aria-label="Mobile console navigation"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60 md:hidden"
       data-mobile-bottom-nav="true"
     >
       <div className="flex h-16 items-center justify-around px-2">

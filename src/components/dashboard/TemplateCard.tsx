@@ -174,7 +174,7 @@ export function TemplateCard({
       {onStartRun ? (
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:hidden"
+          className="absolute inset-x-0 bottom-0 translate-y-full bg-linear-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:hidden"
         >
           <Button
             className="w-full"

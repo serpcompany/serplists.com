@@ -86,7 +86,7 @@ export default function TeamInviteAccept() {
   const renderJoined = (teamId: string, teamName: string, message: string) => (
     <>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 text-success" />
+        <CheckCircle2 className="h-4 w-4 text-foreground" />
         {message}
       </div>
       <div className="flex flex-wrap gap-2">

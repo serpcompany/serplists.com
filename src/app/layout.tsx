@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google';
 import type { ReactNode } from 'react';
 
-import '@/index.css';
+import './globals.css';
 import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { SITE_SOCIAL_IMAGE } from '@/lib/publicPageMeta';
@@ -9,6 +10,9 @@ import { isProductionSite } from '@/lib/seo/siteOrigin';
 import { THEME_BOOT_SCRIPT } from '@/lib/themeBootScript';
 
 import { Providers } from './providers';
+
+const geistSans = Geist({ variable: '--font-sans', subsets: ['latin'] });
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] });
 
 // The defaults every page starts from. A page's own metadata replaces them by name, so each
 // public page gets its own title, description and link preview in the HTML the server sends.
@@ -32,7 +36,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   const loadAnalytics = isProductionSite();
   return (
     // The theme script sets the html class before React hydrates.
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Plain scripts, so the browser runs them while it parses the page, before the first
             paint (next/script's beforeInteractive would wait for Next.js's runtime to load):
@@ -41,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         {loadAnalytics ? <script dangerouslySetInnerHTML={{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT }} /> : null}
       </head>
-      <body>
+      <body className="min-h-full">
         {loadAnalytics ? (
           <noscript>
             <iframe

@@ -29,7 +29,7 @@ export function AuthPageShell(props: {
       spacing="compact"
       width="shell"
     >
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-[calc(var(--layout-card-radius)+0.5rem)] border border-border bg-card shadow-sm lg:grid-cols-[minmax(0,0.92fr)_minmax(320px,0.8fr)]">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-card shadow-xs lg:grid-cols-[minmax(0,0.92fr)_minmax(320px,0.8fr)]">
         <Card className="rounded-none border-0 shadow-none">
           <CardHeader className="items-center space-y-3 px-6 py-8 text-center sm:px-8">
             <IconBadge size="md">

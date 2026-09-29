@@ -1,46 +1,64 @@
-import postcss, { type Rule } from 'postcss';
-import tailwindcss from 'tailwindcss';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
-import config from '../../../tailwind.config';
+import tailwindcss from '@tailwindcss/postcss';
+import postcss, { type Rule } from 'postcss';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 // Markdown text blocks are wrapped in `prose prose-sm`. Without @tailwindcss/typography those
 // classes produce no CSS, so Preflight strips list bullets and numbers, heading sizes and
-// link underlines from every rendered task description.
+// link underlines from every rendered task description. This builds the app's stylesheet
+// (src/app/globals.css) the way the Next.js build does.
+
+const repoRoot = path.resolve(__dirname, '../../..');
+const globalsPath = path.join(repoRoot, 'src/app/globals.css');
 
 let css = '';
-let rules: Rule[] = [];
+let rules: Array<{ rule: Rule; selector: string }> = [];
+
+// Tailwind v4 nests the plugin's element rules inside `.prose { ... }`: resolve each rule to
+// the selector it matches.
+const fullSelector = (rule: Rule): string => {
+  const parent = rule.parent;
+  if (!parent || parent.type !== 'rule') return rule.selector;
+  const parentSelector = fullSelector(parent as Rule);
+  return rule.selector.includes('&')
+    ? rule.selector.replace(/&/g, parentSelector)
+    : `${parentSelector} ${rule.selector}`;
+};
 
 beforeAll(async () => {
-  const result = await postcss([tailwindcss(config)]).process(
-    '@tailwind components;\n@tailwind utilities;',
-    { from: undefined },
+  const result = await postcss([tailwindcss({ base: repoRoot })]).process(
+    readFileSync(globalsPath, 'utf8'),
+    { from: globalsPath },
   );
   css = result.css;
   rules = [];
   result.root.walkRules((rule) => {
-    rules.push(rule);
+    rules.push({ rule, selector: fullSelector(rule) });
   });
-}, 60_000);
+}, 120_000);
 
 // The plugin appends `:not(:where([class~="not-prose"], ...))` to every element selector.
-const NOT_PROSE = /:not\(:where\(\[class~="not-prose"\],\[class~="not-prose"\] \*\)\)/g;
+const NOT_PROSE = /:not\(:where\(\[class~="not-prose"\],\s*\[class~="not-prose"\] \*\)\)/g;
 
+// Declarations in stylesheet order, so a later rule for the same selector wins, as it does in
+// the browser for the unlayered overrides in globals.css.
 const declarationsFor = (selector: string): Record<string, string> => {
   const declarations: Record<string, string> = {};
-  for (const rule of rules) {
-    if (rule.selector.replace(NOT_PROSE, '') !== selector) continue;
-    rule.walkDecls((decl) => {
-      declarations[decl.prop] = decl.value;
-    });
+  for (const { rule, selector: ruleSelector } of rules) {
+    if (ruleSelector.replace(NOT_PROSE, '').replace(/\s+/g, ' ') !== selector) continue;
+    for (const node of rule.nodes) {
+      if (node.type === 'decl') declarations[node.prop] = node.value;
+    }
   }
   return declarations;
 };
 
 describe('Tailwind typography for markdown blocks', () => {
   it('generates the prose classes used in src', () => {
-    expect(rules.some((rule) => rule.selector === '.prose')).toBe(true);
-    expect(rules.some((rule) => rule.selector === '.prose-sm')).toBe(true);
+    expect(rules.some(({ selector }) => selector === '.prose')).toBe(true);
+    expect(rules.some(({ selector }) => selector === '.prose-sm')).toBe(true);
   });
 
   it('restores list markers and link underlines that Preflight removes', () => {

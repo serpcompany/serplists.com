@@ -248,11 +248,11 @@ export function RunsDashboardView({
                   <div
                     className={cn(
                       'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                      isCompleted ? 'bg-success/10' : 'bg-primary/10',
+                      isCompleted ? 'bg-muted' : 'bg-primary/10',
                     )}
                   >
                     {isCompleted ? (
-                      <CheckCircle2 className="h-5 w-5 text-success" />
+                      <CheckCircle2 className="h-5 w-5 text-foreground" />
                     ) : (
                       <Play className="h-5 w-5 text-primary" />
                     )}
@@ -288,10 +288,7 @@ export function RunsDashboardView({
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-20 overflow-hidden rounded-full bg-secondary">
                         <div
-                          className={cn(
-                            'h-full transition-all duration-300',
-                            isCompleted ? 'bg-success' : 'bg-primary',
-                          )}
+                          className="h-full bg-primary transition-all duration-300"
                           style={{ width: `${run.progress}%` }}
                         />
                       </div>
@@ -304,7 +301,7 @@ export function RunsDashboardView({
                       className={cn(
                         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
                         isCompleted
-                          ? 'bg-success/10 text-success'
+                          ? 'bg-secondary text-secondary-foreground'
                           : 'bg-primary/10 text-primary',
                       )}
                     >

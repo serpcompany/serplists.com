@@ -5,11 +5,11 @@ export const pageContainerVariants = cva(
   {
     variants: {
       width: {
-        shell: 'max-w-[var(--layout-shell-max)]',
-        content: 'max-w-[var(--layout-content-max)]',
-        narrow: 'max-w-[var(--layout-narrow-max)]',
-        wide: 'max-w-[var(--layout-wide-max)]',
-        docs: 'max-w-[var(--layout-narrow-max)]',
+        shell: 'max-w-6xl',
+        content: 'max-w-6xl',
+        narrow: 'max-w-4xl',
+        wide: 'max-w-7xl',
+        docs: 'max-w-4xl',
       },
     },
     defaultVariants: {
@@ -50,14 +50,14 @@ export const surfaceVariants = cva(
     variants: {
       tone: {
         default:
-          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+          'rounded-xl border border-border bg-card shadow-none',
         glass:
-          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+          'rounded-xl border border-border bg-card shadow-none',
         metric:
-          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+          'rounded-xl border border-border bg-card shadow-none',
         console:
-          'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
-        docs: 'rounded-[var(--layout-card-radius)] border border-border bg-card shadow-none',
+          'rounded-xl border border-border bg-card shadow-none',
+        docs: 'rounded-xl border border-border bg-card shadow-none',
         flat: 'bg-transparent border-0 rounded-none shadow-none',
       },
       padding: {

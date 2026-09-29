@@ -149,7 +149,7 @@ export function PublicTemplateView({
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-14 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-14 z-40 border-b border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
           <Button asChild variant="ghost" size="sm" className="gap-2">
             <Link href={buildPublicTemplatesPath()}>
@@ -403,7 +403,7 @@ function SectionPreview({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-secondary/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-medium text-muted-foreground">

@@ -96,14 +96,14 @@ export function TaskExecutionPanel({
               aria-label={getTaskCheckboxLabel(task.title, taskIndex + 1)}
               disabled={!canTick}
               onClick={onSingleClick(() => onToggleTask(!isTaskComplete))}
-              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               role="checkbox"
               type="button"
             >
               {isTaskComplete ? (
                 <span
                   aria-hidden="true"
-                  className="flex h-6 w-6 items-center justify-center rounded-md border-success bg-success text-success-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border-primary bg-primary text-primary-foreground"
                 >
                   <Check className="h-4 w-4" />
                 </span>
@@ -112,7 +112,7 @@ export function TaskExecutionPanel({
               )}
             </button>
             <div className="flex-1">
-              <h2 className="text-xl font-semibold text-foreground focus:outline-none" tabIndex={-1}>
+              <h2 className="text-xl font-semibold text-foreground focus:outline-hidden" tabIndex={-1}>
                 {task.title}
               </h2>
               {task.description ? (

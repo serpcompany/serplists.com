@@ -86,7 +86,7 @@ export const UserProfileContent = ({
   if (!result) {
     return (
       <PublicPageContainer className="py-14">
-        <div className="glass-panel p-8">
+        <div className="rounded-xl border bg-card p-8 text-card-foreground">
           <LoadingSpinner message="Loading profile..." />
         </div>
       </PublicPageContainer>

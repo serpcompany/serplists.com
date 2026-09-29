@@ -11,13 +11,13 @@ import {
 describe('page-shell variants', () => {
   it('returns centralized width tokens for page containers', () => {
     expect(pageContainerVariants({ width: 'shell' })).toContain(
-      'max-w-[var(--layout-shell-max)]',
+      'max-w-6xl',
     );
     expect(pageContainerVariants({ width: 'content' })).toContain(
-      'max-w-[var(--layout-content-max)]',
+      'max-w-6xl',
     );
     expect(pageContainerVariants({ width: 'narrow' })).toContain(
-      'max-w-[var(--layout-narrow-max)]',
+      'max-w-4xl',
     );
   });
 

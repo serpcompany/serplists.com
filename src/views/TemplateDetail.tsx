@@ -416,10 +416,7 @@ const TemplateDetail = () => {
       </Button>
 
       {isPublic ? (
-        <Badge
-          variant="secondary"
-          className="bg-success/20 text-success hover:bg-success/20"
-        >
+        <Badge variant="secondary">
           <Globe className="mr-1 h-3 w-3" />
           Public
         </Badge>

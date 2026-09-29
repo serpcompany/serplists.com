@@ -224,7 +224,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 
   const siteHeader = (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
       <PageContainer
         className="flex h-14 items-center justify-between gap-6"
         width="shell"
@@ -294,7 +294,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <DashboardSidebar />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-14 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden">
+            <header className="sticky top-14 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm supports-backdrop-filter:bg-background/60 md:hidden">
               <MobileNav />
               <div className="min-w-0 flex-1 px-3">
                 <WorkspaceSwitcher />
@@ -325,7 +325,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         {publicTier !== 'minimal' ? (
           <>
             <div className="public-dot-grid pointer-events-none absolute inset-x-0 top-0 h-80 opacity-70" />
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-muted/30 via-background to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-linear-to-b from-muted/30 via-background to-transparent" />
           </>
         ) : null}
         <div className="relative">{content}</div>

@@ -62,8 +62,8 @@ export function RunTaskList({
                 >
                   <div className="flex h-5 w-5 items-center justify-center">
                     {isSectionComplete ? (
-                      <div className="flex h-4 w-4 items-center justify-center rounded-full bg-success">
-                        <Check className="h-2.5 w-2.5 text-success-foreground" />
+                      <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary">
+                        <Check className="h-2.5 w-2.5 text-primary-foreground" />
                       </div>
                     ) : (
                       <span className="text-xs font-medium text-muted-foreground">
@@ -105,13 +105,13 @@ export function RunTaskList({
                               <div
                                 className={cn(
                                   'flex h-3.5 w-3.5 items-center justify-center rounded-full',
-                                  isActive ? 'bg-primary-foreground' : 'bg-success',
+                                  isActive ? 'bg-primary-foreground' : 'bg-primary',
                                 )}
                               >
                                 <Check
                                   className={cn(
                                     'h-2 w-2',
-                                    isActive ? 'text-primary' : 'text-success-foreground',
+                                    isActive ? 'text-primary' : 'text-primary-foreground',
                                   )}
                                 />
                               </div>
@@ -156,7 +156,7 @@ export function RunTaskList({
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-secondary">
           <div
-            className="h-full bg-success transition-all duration-300"
+            className="h-full bg-primary transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
         </div>
