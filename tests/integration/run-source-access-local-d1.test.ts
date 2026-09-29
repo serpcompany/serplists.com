@@ -104,12 +104,22 @@ describe.sequential("run source access against local D1", () => {
   it("refuses to copy a now-private template into another user's run", async () => {
     const response = await revalidateAs("user-b", "b-from-private");
     expect(response.status).toBe(404);
+    // The run is still there; the code lets the page say its template is unavailable.
+    expect(await response.json()).toMatchObject({ code: "source_template_unavailable" });
     expect(await storedItems("b-from-private")).toBe(oldItems);
+  });
+
+  it("refuses to revalidate from an archived template, saying the template is unavailable", async () => {
+    const response = await revalidateAs("user-b", "b-from-archived");
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: "source_template_unavailable" });
+    expect(await storedItems("b-from-archived")).toBe(oldItems);
   });
 
   it("refuses to copy a member's Personal template into an Organization run for another member", async () => {
     const response = await revalidateAs("user-b", "org-from-a-personal");
     expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: "source_template_unavailable" });
     expect(await storedItems("org-from-a-personal")).toBe(oldItems);
   });
 

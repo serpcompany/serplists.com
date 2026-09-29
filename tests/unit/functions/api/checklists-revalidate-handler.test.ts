@@ -127,6 +127,7 @@ describe('run revalidation source access', () => {
 
     expect(response.status).toBe(404);
     expect(data.error).toBe('Source template not found');
+    expect(data.code).toBe('source_template_unavailable');
     expect(JSON.stringify(data)).not.toContain('Confidential');
     expectNothingWritten();
   });

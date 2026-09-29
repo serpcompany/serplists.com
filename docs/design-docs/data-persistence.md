@@ -106,7 +106,7 @@ History queries (the run and Template Changelogs) take their keys from `src/lib/
 
 - The run page refreshes the run Changelog once its save queue is idle after a save, not once per click (each refetch reads D1). Revalidating a run, and Share or Stop sharing on the runs list, refresh it too.
 - A Template Changelog key sits under `['templates']`, so every Template list invalidation (Share, visibility, archive, restore, a context switch) refreshes it. Saving a Template in the editor also refreshes every cached Changelog of that Template, whatever user or Organization loaded it. Archiving a Template marks its Changelog and detail entries stale without refetching them, since the template is gone (`markArchivedTemplateStale`).
-- Sharing a run (from the runs list or the run page) marks it public in every cached runs list as soon as the API returns, before the link is copied, then reloads the lists. A shared run cannot be revalidated, so its row stops offering Revalidate. A revalidate refused because the cached copy is stale (`409 edit_conflict` or `shared_run_conflict`, or a `404`) reloads the runs lists too.
+- Sharing a run (from the runs list or the run page) marks it public in every cached runs list as soon as the API returns, before the link is copied, then reloads the lists. A shared run cannot be revalidated, so its row stops offering Revalidate. A revalidate refused because the cached copy is stale (`409 edit_conflict` or `shared_run_conflict`, or a `404`) reloads the runs lists too; a `404 source_template_unavailable` means the run is still there but its template is not usable any more, so the reloaded row stops offering Revalidate.
 
 Organization lists are fetched by the legacy-named `WorkspaceContext` and keyed by current User ID.
 

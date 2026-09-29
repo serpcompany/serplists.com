@@ -380,9 +380,10 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
         .limit(1);
       // Same answer whether the template is gone or no longer usable here, so the
-      // response does not reveal that a private template exists.
+      // response does not reveal that a private template exists. The code tells the page
+      // the run itself is still there.
       if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
-        return jsonError('Source template not found', 404);
+        return jsonError('Source template not found', 404, { code: 'source_template_unavailable' });
       }
       // Revalidation always leaves the run in_progress, which reopens a completed run.
       if (isReopening(existingRun.status, 'in_progress')) {
