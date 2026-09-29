@@ -386,13 +386,55 @@ viewport and charset tags are global: they stay in `index.html` only, without `d
 
 Every page shares one link-preview image, `public/og-default.png` (1200x630), named by
 its absolute URL on `https://serplists.com` (`SITE_SOCIAL_IMAGE` in
-`src/lib/publicPageMeta.ts`). Social sites ignore SVG images and relative URLs. Link
-previews do not run JavaScript either, so for public template, category, `/categories` and
-`/templates` pages the Pages Functions in `functions/seo/` serve `index.html` with the page's
-title, description, `og:type`, canonical link and `og:url` already filled in (with
-`data-rh`, so `SEOHead` takes them over). The pages and those functions read their text
-from `src/lib/publicPageMeta.ts`; change it there, not in the page, so the preview and the
-page agree. A new public route with its own `SEOHead` text needs a matching function.
+`src/lib/publicPageMeta.ts`). Social sites ignore SVG images and relative URLs.
+
+### Link previews
+
+Link previews do not run JavaScript, so on their own a template, category, `/categories` or
+`/templates` link unfurls with `index.html`'s generic tags. The Pages Functions in
+`functions/link-preview/` serve `index.html` with that page's title, description,
+`og:type`, canonical link and `og:url` filled in (with `data-rh`, so `SEOHead` takes them
+over), at `/link-preview/<page path>`. They are not on the public paths. Cloudflare runs a
+Function for every request to a Function path and bills it as a Workers request, and a
+Function on `/profile/*` would run on every page load by a person, who gets the same tags
+from `SEOHead` anyway. `tests/unit/functions/function-routes.test.ts` fails if a Function is
+added on a public page path.
+
+A Cloudflare URL rewrite sends only link-preview bots to `/link-preview/`; everyone else
+gets the public path as a static file, for free. It is a zone setting, not code: without it,
+every link unfurls with the generic tags and the default image. To add or restore it:
+Cloudflare dashboard > `serplists.com` > Rules > Transform Rules > URL Rewrite (free on
+every plan; try it on `staging.serplists.com` first), with:
+
+- **Custom filter expression:**
+
+  ```
+  (http.host in {"serplists.com" "www.serplists.com"})
+  and (starts_with(http.request.uri.path, "/profile/")
+    or http.request.uri.path in {"/templates" "/categories"}
+    or (starts_with(http.request.uri.path, "/categories/") and not ends_with(http.request.uri.path, ".xml")))
+  and (http.user_agent contains "Slackbot" or http.user_agent contains "Twitterbot"
+    or http.user_agent contains "facebookexternalhit" or http.user_agent contains "Facebot"
+    or http.user_agent contains "LinkedInBot" or http.user_agent contains "Discordbot"
+    or http.user_agent contains "WhatsApp" or http.user_agent contains "TelegramBot"
+    or http.user_agent contains "SkypeUriPreview" or http.user_agent contains "Pinterest"
+    or http.user_agent contains "redditbot" or http.user_agent contains "Embedly"
+    or http.user_agent contains "Iframely" or http.user_agent contains "Mastodon"
+    or http.user_agent contains "Bluesky")
+  ```
+
+- **Path:** Rewrite to, Dynamic: `concat("/link-preview", http.request.uri.path)`.
+- **Query:** Preserve.
+
+iMessage fetches previews as `facebookexternalhit` and `Twitterbot`, so it is covered.
+Search engines are left out on purpose: they run the app's JavaScript and read `SEOHead`.
+An app whose preview bot is not listed gets the generic card; add its user agent to the
+expression when that matters.
+
+The pages and the preview functions read their text from `src/lib/publicPageMeta.ts`;
+change it there, not in the page, so the preview and the page agree. A new public route
+with its own `SEOHead` text needs a matching function under `functions/link-preview/` and
+its path in the rewrite rule.
 
 Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
 (`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render

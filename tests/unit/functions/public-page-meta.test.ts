@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { onRequest as categoryIndexPage } from '../../../functions/categories/index';
-import { onRequest as categoryPage } from '../../../functions/categories/[categorySlug]';
-import { onRequest as templatePage } from '../../../functions/profile/[username]/[templateSlug]';
-import { onRequest as templateLibraryPage } from '../../../functions/templates/index';
+import { onRequest as categoryIndexPage } from '../../../functions/link-preview/categories/index';
+import { onRequest as categoryPage } from '../../../functions/link-preview/categories/[categorySlug]';
+import { onRequest as templatePage } from '../../../functions/link-preview/profile/[username]/[templateSlug]';
+import { onRequest as templateLibraryPage } from '../../../functions/link-preview/templates/index';
 import type { Env } from '../../../functions/api/types';
 import { BUNDLED_TEMPLATE_OWNER } from '../../../functions/seo/public-page-meta';
 import { REPO_TEMPLATE_OWNER_SLUG } from '@/lib/repoTemplateCatalog';
@@ -12,9 +12,9 @@ import { FakeHTMLRewriter } from './fakeHtmlRewriter';
 
 // Link-preview crawlers (Slack, X, Facebook, LinkedIn, Discord, iMessage) do not run
 // JavaScript, so they only ever saw index.html's generic tags: every shared template,
-// category and library link unfurled as the same "SERP Lists" card. Pages Functions now
-// serve index.html for these routes with the page's own title, description, type and
-// canonical URL filled in.
+// category and library link unfurled as the same "SERP Lists" card. Pages Functions under
+// /link-preview/ serve index.html with the page's own title, description, type and
+// canonical URL filled in; a Cloudflare URL rewrite sends only link-preview bots there.
 
 const SHELL = readFileSync('index.html', 'utf8');
 

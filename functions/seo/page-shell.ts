@@ -8,6 +8,9 @@ import type { PublicPageMeta } from './public-page-meta';
 // canonical URL already in <head>. Link-preview crawlers (Slack, X, Facebook, LinkedIn,
 // Discord, iMessage) do not run JavaScript, so without this every shared link unfurled as
 // the same generic card. The tags carry data-rh, so the app's SEOHead takes them over.
+// Only the functions under functions/link-preview/ call this, and only link-preview bots
+// reach them (a Cloudflare URL rewrite, docs/FRONTEND.md): a Function on the public paths
+// themselves would run, and bill, on every page load by a person too.
 
 type PageContext = Pick<EventContext<Env, string, unknown>, 'request' | 'env'>;
 

@@ -17,7 +17,7 @@ the top-level map. Request flow, routes, and the data model are in the
 | Runs | `handlers/checklists.ts`, `handlers/checklists-shared.ts`, `utils/checklist-runs.ts`, `utils/run-access.ts`, `utils/run-completion.ts`, `utils/shared-run-merge.ts`, `utils/share-link-actors.ts`, `utils/template-access.ts` | `features/run-execution/`, `features/dashboard-runs/` |
 | Billing and entitlements | `handlers/billing.ts`, `handlers/stripe.ts`, `utils/entitlements.ts`, `utils/active-run-limit.ts`, `utils/guarded-insert.ts`, `utils/limit-reached.ts` | `lib/billing.ts`, `pages/Pricing.tsx` |
 | Agent access (Run Keys, MCP) | `handlers/agent-keys.ts`, `handlers/agentMcp.ts`, `utils/agent-mcp-host.ts`, `utils/personal-run-key.ts` | `components/account/AgentAccessSection.tsx` |
-| Public discovery and SEO | `functions/sitemap*`, `functions/categories/`, `functions/seo/` (link-preview tags on `functions/profile/`, `functions/categories/`, `functions/templates/`) | public `pages/`, `data/`, `lib/publicPageMeta.ts` |
+| Public discovery and SEO | `functions/sitemap*`, `functions/categories/`, `functions/seo/` (link-preview tags served by `functions/link-preview/`, which only link-preview bots reach through a Cloudflare URL rewrite; see docs/FRONTEND.md) | public `pages/`, `data/`, `lib/publicPageMeta.ts` |
 | Imports and uploads | `handlers/clipy.ts`, `handlers/uploads.ts` | `lib/schemas/portableTemplate*`, `components/TemplateBackup.tsx` |
 
 Legacy `team`/`workspace` identifiers in code mean Organization; see

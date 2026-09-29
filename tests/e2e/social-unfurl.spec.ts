@@ -1,9 +1,12 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 // Link-preview crawlers do not run JavaScript, so they read only the HTML the server
-// sends. Pages Functions (functions/seo/) fill in each public page's own title,
-// description, og:type and canonical URL. The page functions run under wrangler pages dev
-// (the API server here), not the Vite frontend, so these requests go to the API origin.
+// sends. A Cloudflare URL rewrite (docs/FRONTEND.md, Link previews) sends only those bots
+// from a public page to /link-preview/<page path>, where Pages Functions fill in the page's
+// own title, description, og:type and canonical URL. People get the public paths as static
+// files, which run no Function. These specs request /link-preview/ directly, as the rewrite
+// would. The functions run under wrangler pages dev (the API server here), not the Vite
+// frontend, so these requests go to the API origin.
 
 const API_ORIGIN = new URL(process.env.PLAYWRIGHT_API_URL ?? 'http://localhost:8788/api').origin;
 const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
@@ -26,7 +29,7 @@ async function fetchHead(request: APIRequestContext, path: string) {
 }
 
 test('a shared public template unfurls with its own title and a PNG card', async ({ request }) => {
-  const head = await fetchHead(request, '/profile/serp/ultimate-camping-checklist?utm_source=slack');
+  const head = await fetchHead(request, '/link-preview/profile/serp/ultimate-camping-checklist?utm_source=slack');
 
   expect(head.title).toBe('Ultimate Camping Checklist | SERP Lists');
   expect(head.meta('og:title')).toEqual(['Ultimate Camping Checklist | SERP Lists']);
@@ -43,18 +46,29 @@ test('a shared public template unfurls with its own title and a PNG card', async
 });
 
 test('category and library links unfurl with their own titles', async ({ request }) => {
-  expect((await fetchHead(request, '/categories/outdoor')).title).toBe('outdoor Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories/business')).title).toBe('Business &amp; Operations Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories')).title).toBe('Browse Template Categories | SERP Lists');
-  expect((await fetchHead(request, '/templates')).title).toBe('Discover Templates | SERP Lists');
+  expect((await fetchHead(request, '/link-preview/categories/outdoor')).title).toBe('outdoor Templates | SERP Lists');
+  expect((await fetchHead(request, '/link-preview/categories/business')).title).toBe('Business &amp; Operations Templates | SERP Lists');
+  expect((await fetchHead(request, '/link-preview/categories')).title).toBe('Browse Template Categories | SERP Lists');
+  expect((await fetchHead(request, '/link-preview/templates')).title).toBe('Discover Templates | SERP Lists');
 });
 
 test('an unknown template keeps the generic tags', async ({ request }) => {
   // e2e-unseeded-template: no Template has this slug.
-  const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere');
+  const head = await fetchHead(request, '/link-preview/profile/serp/no-such-template-anywhere');
 
   expect(head.title).toBe('SERP Lists');
   expect(head.canonical).toEqual([]);
+});
+
+// Every page load by a person used to run a Function (billed as a Workers request) just to
+// fill in tags only bots read. The public paths are static again; the tags come only through
+// the rewrite to /link-preview/.
+test('public pages are served as the static app page, without the preview function', async ({ request }) => {
+  for (const path of ['/profile/serp/ultimate-camping-checklist', '/categories/outdoor', '/categories', '/templates']) {
+    const head = await fetchHead(request, path);
+    expect(head.title, path).toBe('SERP Lists');
+    expect(head.canonical, path).toEqual([]);
+  }
 });
 
 test('the category sitemap still answers next to the category pages', async ({ request }) => {

@@ -19,7 +19,7 @@ const SHARED_FROM_SRC = [
 
 // Pages Functions entry points (file-based routes).
 const PAGES_ROUTES =
-  "^functions/(api/\\[\\[route\\]\\]\\.ts$|sitemap\\.xml\\.ts$|sitemaps/|categories/|profile/|templates/)";
+  "^functions/(api/\\[\\[route\\]\\]\\.ts$|sitemap\\.xml\\.ts$|sitemaps/|categories/|link-preview/)";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
