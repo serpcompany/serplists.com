@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
   SheetContent,
@@ -32,7 +33,7 @@ export const PublicMobileMenu = ({
   pathname: string;
   signedIn: boolean;
 }) => (
-  <div className="flex flex-col gap-4 p-4">
+  <div className="flex flex-col gap-4 px-4 pb-4">
     <nav aria-label="Site" className="flex flex-col gap-1">
       {publicHeaderLinks.map((item) => {
         const active = isPathWithin(pathname, item.href);
@@ -43,10 +44,8 @@ export const PublicMobileMenu = ({
             onClick={onNavigate}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'rounded-md px-3 py-2 text-sm font-medium transition-colors',
-              active
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+              buttonVariants({ variant: active ? 'secondary' : 'ghost' }),
+              'justify-start',
             )}
           >
             {item.label}
@@ -55,29 +54,26 @@ export const PublicMobileMenu = ({
       })}
     </nav>
 
-    <div className="border-t border-border pt-4">
-      <ThemeToggle showLabel />
-    </div>
+    <Separator />
+    <ThemeToggle showLabel />
 
     <div className="flex flex-col gap-2">
       {signedIn ? (
-        <Link
-          onClick={onNavigate}
-          href={buildConsoleHomePath()}
-          className={buttonVariants()}
-        >Dashboard</Link>
+        <Link href={buildConsoleHomePath()} onClick={onNavigate} className={buttonVariants()}>
+          Dashboard
+        </Link>
       ) : (
         <>
           <Link
-            onClick={onNavigate}
             href={buildLoginPath()}
-            className={buttonVariants({ variant: 'outline' })}
-          >Log in</Link>
-          <Link
             onClick={onNavigate}
-            href={buildRegisterPath()}
-            className={buttonVariants()}
-          >Get started</Link>
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            Log in
+          </Link>
+          <Link href={buildRegisterPath()} onClick={onNavigate} className={buttonVariants()}>
+            Get started
+          </Link>
         </>
       )}
     </div>
@@ -85,7 +81,7 @@ export const PublicMobileMenu = ({
 );
 
 // Below md the public header hides its nav and Log in, so this is how phone visitors
-// reach them. The console shell has its own MobileNav and never renders this.
+// reach them. The console shell has its own sidebar sheet and never renders this.
 export function PublicMobileNav() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -101,14 +97,21 @@ export function PublicMobileNav() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
-        render={<Button className="md:hidden" data-public-mobile-nav="trigger" size="icon" variant="ghost" />}
+        render={
+          <Button
+            className="md:hidden"
+            data-public-mobile-nav="trigger"
+            size="icon"
+            variant="ghost"
+          />
+        }
       >
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Open menu</span>
-        </SheetTrigger>
-      <SheetContent side="right" className="w-72 p-0">
-        <SheetHeader className="border-b border-border px-4 py-3">
-          <SheetTitle className="text-left">{APP_BRAND_NAME}</SheetTitle>
+        <Menu />
+        <span className="sr-only">Open menu</span>
+      </SheetTrigger>
+      <SheetContent side="right" className="w-72">
+        <SheetHeader>
+          <SheetTitle>{APP_BRAND_NAME}</SheetTitle>
         </SheetHeader>
         <PublicMobileMenu
           onNavigate={() => setOpen(false)}

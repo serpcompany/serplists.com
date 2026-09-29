@@ -33,7 +33,7 @@ describe('signOutAndLeave', () => {
 
   it('is what every sign-out control uses, so none navigates before the server answers', () => {
     const srcRoot = path.resolve(__dirname, '../../../../src');
-    for (const file of ['components/Layout.tsx', 'components/DevLoginBar.tsx']) {
+    for (const file of ['components/layout/AccountMenu.tsx', 'components/DevLoginBar.tsx']) {
       const source = readFileSync(path.join(srcRoot, file), 'utf8');
       expect(source, file).toContain('signOutAndLeave(');
       expect(source, file).not.toMatch(/^\s*logout\(\);/m);

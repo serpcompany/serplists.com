@@ -162,7 +162,7 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
     // The task footer sticks to the bottom of the window, which needs every box around it
     // to clip rather than scroll (a scroll container would hold the sticky footer instead).
-    expect(html).toMatch(/class="[^"]*\bsticky bottom-16\b[^"]*\bmd:bottom-0\b[^"]*" data-task-footer="true"/);
+    expect(html).toMatch(/class="[^"]*\bsticky bottom-0\b[^"]*" data-task-footer="true"/);
     expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-content-shell="true"/);
     expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-scroll-area="true"/);
     expect(html).not.toMatch(/class="[^"]*\boverflow-(auto|hidden)\b[^"]*" data-dashboard-(content-shell|scroll-area)="true"/);

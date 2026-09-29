@@ -2,10 +2,8 @@ import type { JSX } from 'react';
 import type { ReactNode } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 
-import {
-  IconBadge,
-  PageSection,
-} from '@/components/layout/page-shell';
+import { PageSection } from '@/components/layout/page-shell';
+import { IconTile } from '@/components/layout/IconTile';
 import {
   Card,
   CardContent,
@@ -32,9 +30,9 @@ export function AuthPageShell(props: {
       <div className="grid w-full max-w-5xl overflow-hidden rounded-xl border border-border bg-card shadow-xs lg:grid-cols-[minmax(0,0.92fr)_minmax(320px,0.8fr)]">
         <Card className="rounded-none border-0 shadow-none">
           <CardHeader className="items-center space-y-3 px-6 py-8 text-center sm:px-8">
-            <IconBadge size="md">
+            <IconTile size="md">
               <CheckCircle2 className="h-6 w-6" />
-            </IconBadge>
+            </IconTile>
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
                 {APP_BRAND_NAME}

@@ -2,12 +2,9 @@
 
 import { Mail, MessageCircle } from 'lucide-react';
 
-import {
-  IconBadge,
-  PageHero,
-  PageSection,
-  Surface,
-} from '@/components/layout/page-shell';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
+import { IconTile } from '@/components/layout/IconTile';
 import { buttonVariants } from '@/components/ui/button';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -27,9 +24,9 @@ const Contact = () => {
         <div className="grid gap-6 md:grid-cols-2">
           <Surface as="article" tone="docs">
             <CardHeader className="space-y-4">
-              <IconBadge>
+              <IconTile>
                 <Mail className="h-6 w-6" />
-              </IconBadge>
+              </IconTile>
               <div className="space-y-2">
                 <CardTitle>Email support</CardTitle>
                 <CardDescription>
@@ -48,9 +45,9 @@ const Contact = () => {
 
           <Surface as="article" tone="docs">
             <CardHeader className="space-y-4">
-              <IconBadge>
+              <IconTile>
                 <MessageCircle className="h-6 w-6" />
-              </IconBadge>
+              </IconTile>
               <div className="space-y-2">
                 <CardTitle>Product feedback</CardTitle>
                 <CardDescription>

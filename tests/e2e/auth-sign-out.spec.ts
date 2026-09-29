@@ -10,7 +10,7 @@ import { fillSignInForm } from './support/sign-in';
 const HOME_URL = /^https?:\/\/[^/]+\/(?:[?#].*)?$/;
 
 async function openAccountMenu(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('button', { name: 'Account menu' }).click();
 }
 
 test('a failed sign-out keeps the user signed in, and a later one signs them out for good', async ({ page }) => {

@@ -18,8 +18,7 @@ interface TaskHeaderRevealProps {
 // task inside it changes, so when taskId changes this scrolls the header into view and
 // focuses the task title, its one h2 (which needs tabIndex={-1}). See taskReveal.ts.
 //
-// The scroll margin keeps the header below the sticky headers: the 3.5rem site header, and
-// below md the 3.5rem context header under it (Layout.tsx).
+// The scroll margin keeps the header below the console's sticky 3.5rem top bar (AppShell.tsx).
 export function TaskHeaderReveal({ children, className, taskId }: TaskHeaderRevealProps) {
   const headerRef = useRef<HTMLDivElement>(null);
   const [reveal] = useState(createTaskRevealer);
@@ -43,7 +42,7 @@ export function TaskHeaderReveal({ children, className, taskId }: TaskHeaderReve
   }, [reveal, taskId]);
 
   return (
-    <div className={cn('scroll-mt-28 md:scroll-mt-14', className)} ref={headerRef}>
+    <div className={cn('scroll-mt-14', className)} ref={headerRef}>
       {children}
     </div>
   );

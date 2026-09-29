@@ -21,6 +21,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 }));
 
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { navigation } from '../../../support/nextNavigation';
 
@@ -36,8 +37,11 @@ const renderGate = () =>
 
 const renderSwitcher = () => {
   navigation.reset('/dashboard/templates');
+  // The switcher lives in the console sidebar.
   return renderToStaticMarkup(
-    <WorkspaceSwitcher />,
+    <SidebarProvider>
+      <WorkspaceSwitcher />
+    </SidebarProvider>,
   );
 };
 

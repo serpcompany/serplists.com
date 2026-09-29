@@ -1,21 +1,17 @@
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { HTMLAttributes } from 'react';
 import type { VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 import {
-  iconBadgeVariants,
   pageContainerVariants,
-  pageDescriptionClassName,
-  pageEyebrowClassName,
-  pageHeroVariants,
   pageSectionVariants,
-  pageTitleClassName,
   surfaceVariants,
 } from '@/components/layout/page-shell.styles';
 
 type PageContainerProps = HTMLAttributes<HTMLDivElement> &
   VariantProps<typeof pageContainerVariants>;
 
+// The page width (page-shell.styles.ts). Shells and page sections line up to it.
 export function PageContainer({
   children,
   className,
@@ -42,6 +38,7 @@ type PageSectionProps = HTMLAttributes<HTMLElement> &
     containerClassName?: string;
   };
 
+// A band of the page: vertical spacing around a PageContainer.
 export function PageSection({
   as: Component = 'section',
   children,
@@ -60,67 +57,12 @@ export function PageSection({
   );
 }
 
-type PageHeroProps = HTMLAttributes<HTMLDivElement> &
-  VariantProps<typeof pageHeroVariants> & {
-    actions?: ReactNode;
-    description?: ReactNode;
-    eyebrow?: ReactNode;
-    title: ReactNode;
-  };
-
-export function PageHero({
-  actions,
-  align,
-  className,
-  description,
-  eyebrow,
-  title,
-  ...props
-}: PageHeroProps) {
-  const centered = align === 'center';
-
-  return (
-    <div className={cn(pageHeroVariants({ align }), className)} {...props}>
-      {eyebrow ? (
-        <p className={pageEyebrowClassName}>{eyebrow}</p>
-      ) : null}
-      <h1
-        className={cn(
-          pageTitleClassName,
-          centered && 'mx-auto max-w-3xl',
-        )}
-      >
-        {title}
-      </h1>
-      {description ? (
-        <p
-          className={cn(
-            pageDescriptionClassName,
-            centered && 'mx-auto max-w-2xl',
-          )}
-        >
-          {description}
-        </p>
-      ) : null}
-      {actions ? (
-        <div
-          className={cn(
-            'flex flex-wrap gap-3',
-            centered && 'justify-center',
-          )}
-        >
-          {actions}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 type SurfaceProps = HTMLAttributes<HTMLElement> &
   VariantProps<typeof surfaceVariants> & {
     as?: 'article' | 'aside' | 'div' | 'section';
   };
 
+// A panel with the Card surface, for pages not yet built from the Card blocks.
 export function Surface({
   as: Component = 'div',
   children,
@@ -133,21 +75,5 @@ export function Surface({
     <Component className={cn(surfaceVariants({ padding, tone }), className)} {...props}>
       {children}
     </Component>
-  );
-}
-
-type IconBadgeProps = HTMLAttributes<HTMLDivElement> &
-  VariantProps<typeof iconBadgeVariants>;
-
-export function IconBadge({
-  children,
-  className,
-  size,
-  ...props
-}: IconBadgeProps) {
-  return (
-    <div className={cn(iconBadgeVariants({ size }), className)} {...props}>
-      {children}
-    </div>
   );
 }

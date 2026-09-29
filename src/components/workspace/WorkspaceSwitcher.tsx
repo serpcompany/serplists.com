@@ -1,6 +1,5 @@
-import { AlertTriangle, Check, ChevronDown, RotateCw, Settings, User, Users } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, RotateCw, Settings, User, Users } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { SidebarMenuButton, useSidebar } from '@/components/ui/sidebar';
 import { useWorkspace, type Workspace } from '@/contexts/WorkspaceContext';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { buildConsoleSettingsPath } from '@/lib/routes';
@@ -28,6 +28,8 @@ const getSwitcherLabel = (
   return { icon: activeWorkspace.type === 'team' ? Users : User, label: activeWorkspace.name };
 };
 
+// The Ownership Context switcher at the top of the console sidebar (the shadcn sidebar's
+// team switcher): Personal and each Organization, and a way back when Organizations fail.
 export function WorkspaceSwitcher() {
   const {
     activeWorkspace,
@@ -38,6 +40,7 @@ export function WorkspaceSwitcher() {
     workspaces,
     workspaceStatus,
   } = useWorkspace();
+  const { isMobile } = useSidebar();
   // While the stored Organization is unconfirmed the context falls back to Personal only for
   // display, so never label the tab "Personal" then.
   const isUnresolved = workspaceStatus === 'loading' || workspaceStatus === 'error';
@@ -47,70 +50,72 @@ export function WorkspaceSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button aria-label="Switch context" className="h-9 max-w-[220px] justify-start gap-2 rounded-md px-2" variant="outline" />}
+        render={
+          <SidebarMenuButton
+            aria-label="Switch context"
+            size="lg"
+            className="data-popup-open:bg-sidebar-accent data-popup-open:text-sidebar-accent-foreground"
+          />
+        }
       >
-          <ActiveIcon className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1 text-left">
-            <span className="block truncate text-sm font-medium">
-              {active.label}
-            </span>
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-        </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+        <span className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+          <ActiveIcon className="size-4" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left font-medium">{active.label}</span>
+        <ChevronsUpDown className="ml-auto" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-72"
+        side={isMobile ? 'bottom' : 'right'}
+        sideOffset={4}
+      >
         <DropdownMenuGroup>
-        <DropdownMenuLabel>Personal and Organizations</DropdownMenuLabel>
-        {workspaces.map((workspace) => {
-          const Icon = workspace.type === 'team' ? Users : User;
-          const selected = !isUnresolved && workspace.id === activeWorkspace.id;
+          <DropdownMenuLabel>Personal and Organizations</DropdownMenuLabel>
+          {workspaces.map((workspace) => {
+            const Icon = workspace.type === 'team' ? Users : User;
+            const selected = !isUnresolved && workspace.id === activeWorkspace.id;
 
-          return (
-            <DropdownMenuItem
-              key={workspace.id}
-              className="gap-3"
-              // After a failed teams load, Personal stays available as a way out.
-              disabled={isWorkspaceLoading && workspaceStatus !== 'error'}
-              onClick={() => selectWorkspace(workspace.id)}
-            >
-              <Icon className="h-4 w-4 text-muted-foreground" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">
-                  {workspace.name}
+            return (
+              <DropdownMenuItem
+                key={workspace.id}
+                className="gap-3"
+                // After a failed teams load, Personal stays available as a way out.
+                disabled={isWorkspaceLoading && workspaceStatus !== 'error'}
+                onClick={() => selectWorkspace(workspace.id)}
+              >
+                <Icon className="text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{workspace.name}</span>
+                  <span className="block text-xs text-muted-foreground capitalize">
+                    {workspace.type === 'team' ? workspace.role : 'Personal'}
+                  </span>
                 </span>
-                <span className="block text-xs capitalize text-muted-foreground">
-                  {workspace.type === 'team' ? workspace.role : 'Personal'}
-                </span>
-              </span>
-              <Check
-                className={cn(
-                  'h-4 w-4 text-primary',
-                  selected ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-            </DropdownMenuItem>
-          );
-        })}
+                <Check className={cn(selected ? 'opacity-100' : 'opacity-0')} />
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuGroup>
         {/* The active context works on, but a failed list must not read as "no Organizations". */}
         {teamsUnavailable && workspaceStatus !== 'error' ? (
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex items-center gap-3 font-normal text-muted-foreground">
-              <AlertTriangle className="h-4 w-4" />
+              <AlertTriangle className="size-4" />
               Couldn&apos;t load your Organizations
             </DropdownMenuLabel>
           </DropdownMenuGroup>
         ) : null}
         {workspaceStatus === 'error' || teamsUnavailable ? (
           <DropdownMenuItem className="gap-3" onClick={retryWorkspace}>
-            <RotateCw className="h-4 w-4 text-muted-foreground" />
+            <RotateCw className="text-muted-foreground" />
             Retry loading Organizations
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href={buildConsoleSettingsPath()} className="gap-3" />}>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-            Settings
-          </DropdownMenuItem>
+        <DropdownMenuItem className="gap-3" render={<Link href={buildConsoleSettingsPath()} />}>
+          <Settings className="text-muted-foreground" />
+          Settings
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

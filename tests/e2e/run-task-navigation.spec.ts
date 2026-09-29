@@ -40,7 +40,8 @@ async function deleteRun(page: Page, runId: string) {
 }
 
 // The sticky site header, plus the context header below md (768px).
-const stickyHeight = (width: number) => (width < 768 ? 112 : 56);
+// The console's top bar (AppShell.tsx) is the only sticky header, at every width.
+const STICKY_HEIGHT = 56;
 
 // The task footer stays in view at the bottom of the window, so scrolling it into view
 // moves nothing. Scroll to the end of the task, as someone reading it does.
@@ -49,12 +50,12 @@ async function scrollToTaskEnd(page: Page, title: string) {
   await expect(page.getByRole('heading', { level: 2, name: title })).not.toBeInViewport();
 }
 
-async function expectRevealed(page: Page, title: string, width: number) {
+async function expectRevealed(page: Page, title: string) {
   const heading = page.getByRole('heading', { level: 2, name: title });
   await expect(heading).toBeInViewport();
   await expect(heading).toBeFocused();
   const box = await heading.boundingBox();
-  expect(box?.y ?? 0).toBeGreaterThanOrEqual(stickyHeight(width));
+  expect(box?.y ?? 0).toBeGreaterThanOrEqual(STICKY_HEIGHT);
 }
 
 for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
@@ -72,7 +73,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
 
     await scrollToTaskEnd(page, 'Task A');
     await page.getByRole('button', { name: 'Mark Complete' }).click();
-    await expectRevealed(page, 'Task B', viewport.width);
+    await expectRevealed(page, 'Task B');
 
     // Ticking a sub-task keeps the task, so the page stays where it is.
     const subTask = page.getByRole('checkbox', { name: 'Check B one' });
@@ -87,11 +88,11 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
 
     await scrollToTaskEnd(page, 'Task B');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
-    await expectRevealed(page, 'Task C', viewport.width);
+    await expectRevealed(page, 'Task C');
 
     await scrollToTaskEnd(page, 'Task C');
     await page.getByRole('button', { name: 'Previous' }).click();
-    await expectRevealed(page, 'Task B', viewport.width);
+    await expectRevealed(page, 'Task B');
 
     await deleteRun(page, runId);
   });
@@ -109,7 +110,7 @@ test('the desktop task list opens a task at its title', async ({ page }) => {
   await page.evaluate((by) => window.scrollBy(0, by), (shell?.y ?? 0) - stickyHeight(1440) + 30);
 
   await page.locator('[data-run-progress-panel]').getByRole('button', { name: /Task C/ }).click();
-  await expectRevealed(page, 'Task C', 1440);
+  await expectRevealed(page, 'Task C');
 
   await deleteRun(page, runId);
 });

@@ -3,12 +3,9 @@
 import { ArrowLeft } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
-import {
-  IconBadge,
-  PageHero,
-  PageSection,
-  Surface,
-} from '@/components/layout/page-shell';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
+import { IconTile } from '@/components/layout/IconTile';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,9 +40,9 @@ const Features = () => {
 
           <Surface as="article" tone="docs">
             <CardHeader className="space-y-4">
-              <IconBadge size="lg">
+              <IconTile size="lg">
                 <Icon className="h-7 w-7" />
-              </IconBadge>
+              </IconTile>
               <div className="space-y-2">
                 <CardTitle className="text-3xl">{feature.title}</CardTitle>
                 <CardDescription className="text-base">
@@ -112,9 +109,9 @@ const Features = () => {
                   tone="docs"
                 >
                   <CardHeader className="space-y-4">
-                    <IconBadge>
+                    <IconTile>
                       <Icon className="h-6 w-6" />
-                    </IconBadge>
+                    </IconTile>
                     <div className="space-y-2">
                       <CardTitle>{featureItem.title}</CardTitle>
                       <CardDescription>

@@ -655,8 +655,8 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
   // The runs list opens a run at /run/<id>.
   const runUrl = new RegExp(`/runs?/${runId}/$`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
-  const accountMenu = page.locator('header').first().getByRole('button', { name: 'Account menu' });
-  const sidebarTemplates = page.getByRole('complementary').getByRole('link', { name: 'Templates', exact: true });
+  const accountMenu = page.getByRole('button', { name: 'Account menu' });
+  const sidebarTemplates = page.getByRole('navigation', { name: 'Dashboard' }).getByRole('link', { name: 'Templates', exact: true });
   const dialogs: string[] = [];
   let acceptDialogs = false;
   page.on('dialog', async (dialog) => {
@@ -776,7 +776,8 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
 // The task footer (Previous, Mark Complete, Next) stays at the bottom of the window: it is in
 // view without scrolling on a short task, and the Changelog, which grows by an entry after
 // every save, never moves it under the pointer. On phones it sits above the bottom navigation.
-for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390, height: 844, bottomNav: 65 }]) {
+// No bar covers the bottom of the window on phones: the console's navigation is a sidebar sheet.
+for (const viewport of [{ width: 1280, height: 720, bottomNav: 0 }, { width: 390, height: 844, bottomNav: 0 }]) {
   test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await loginAsAdmin(page);

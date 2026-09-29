@@ -218,8 +218,9 @@ describe('TaskExecutionPanel reveals the task it moves to', () => {
     const html = renderToStaticMarkup(renderPanel({ ...openTask, title: 'Review all page content' }, { kind: 'complete_task' }).tree);
 
     expect(html).toMatch(/<h2[^>]*tabindex="-1"[^>]*>Review all page content<\/h2>/);
-    // 3.5rem site header, plus the 3.5rem context header below md.
-    expect(html).toMatch(/class="[^"]*scroll-mt-28 md:scroll-mt-14[^"]*"/);
+    // The console's 3.5rem top bar (AppShell.tsx), at every width.
+    expect(html).toMatch(/class="[^"]*scroll-mt-14[^"]*"/);
+    expect(html).not.toContain('scroll-mt-28');
   });
 });
 

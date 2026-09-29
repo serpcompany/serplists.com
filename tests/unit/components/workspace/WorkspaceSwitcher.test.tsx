@@ -39,6 +39,7 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
   };
 });
 
+import { SidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { navigation } from '../../../support/nextNavigation';
 
@@ -47,8 +48,11 @@ vi.mock('next/link', async () => (await import('../../../support/nextNavigation'
 
 const renderSwitcher = () => {
   navigation.reset('/dashboard/settings');
+  // The switcher lives in the console sidebar.
   return renderToStaticMarkup(
-    <WorkspaceSwitcher />,
+    <SidebarProvider>
+      <WorkspaceSwitcher />
+    </SidebarProvider>,
   );
 };
 

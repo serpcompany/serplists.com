@@ -158,12 +158,12 @@ export function TaskExecutionPanel({
         </div>
       </div>
 
-      {/* Pinned to the bottom of the window (above the phone navigation bar) until the end
-          of the panel scrolls into view, so Mark Complete is in view on a short task and never
-          moves when the Changelog under the panel grows after a save. The page must not wrap
-          it in a scroll container (ChecklistRun.tsx). */}
+      {/* Pinned to the bottom of the window until the end of the panel scrolls into view, so
+          Mark Complete is in view on a short task and never moves when the Changelog under
+          the panel grows after a save. The page must not wrap it in a scroll container
+          (ChecklistRun.tsx). */}
       <div
-        className="sticky bottom-16 z-10 border-t border-border bg-card px-8 py-4 md:bottom-0"
+        className="sticky bottom-0 z-10 border-t border-border bg-card px-8 py-4"
         data-task-footer="true"
       >
         <div className="mx-auto flex max-w-2xl items-center justify-between">

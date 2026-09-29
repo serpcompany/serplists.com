@@ -3,7 +3,8 @@
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
-import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
 import { buttonVariants } from '@/components/ui/button';
 import { useIsClient } from '@/hooks/useIsClient';
 

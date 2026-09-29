@@ -1,7 +1,9 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
+// The page width every shell and page lines up to: the site header and footer, the sidebar
+// inset's content, and each page's sections.
 export const pageContainerVariants = cva(
-  'mx-auto w-full px-4',
+  'mx-auto w-full px-4 md:px-6',
   {
     variants: {
       width: {
@@ -24,7 +26,7 @@ export const pageSectionVariants = cva('', {
       compact: 'py-6',
       default: 'py-8',
       spacious: 'py-12',
-      hero: 'pb-8 pt-10 sm:pb-10 sm:pt-12',
+      hero: 'pb-10 pt-12 sm:pb-12 sm:pt-16',
     },
   },
   defaultVariants: {
@@ -32,11 +34,11 @@ export const pageSectionVariants = cva('', {
   },
 });
 
-export const pageHeroVariants = cva('space-y-4', {
+export const pageHeroVariants = cva('flex flex-col gap-4', {
   variants: {
     align: {
-      left: 'text-left',
-      center: 'text-center',
+      left: 'items-start text-left',
+      center: 'items-center text-center',
     },
   },
   defaultVariants: {
@@ -44,21 +46,18 @@ export const pageHeroVariants = cva('space-y-4', {
   },
 });
 
+// A panel with the shadcn Card surface, for the pages not yet built from the Card blocks.
 export const surfaceVariants = cva(
   'text-card-foreground',
   {
     variants: {
       tone: {
-        default:
-          'rounded-xl border border-border bg-card shadow-none',
-        glass:
-          'rounded-xl border border-border bg-card shadow-none',
-        metric:
-          'rounded-xl border border-border bg-card shadow-none',
-        console:
-          'rounded-xl border border-border bg-card shadow-none',
-        docs: 'rounded-xl border border-border bg-card shadow-none',
-        flat: 'bg-transparent border-0 rounded-none shadow-none',
+        default: 'rounded-xl bg-card ring-1 ring-foreground/10',
+        glass: 'rounded-xl bg-card ring-1 ring-foreground/10',
+        metric: 'rounded-xl bg-card ring-1 ring-foreground/10',
+        console: 'rounded-xl bg-card ring-1 ring-foreground/10',
+        docs: 'rounded-xl bg-card ring-1 ring-foreground/10',
+        flat: 'bg-transparent',
       },
       padding: {
         none: '',
@@ -75,33 +74,28 @@ export const surfaceVariants = cva(
   },
 );
 
-export const iconBadgeVariants = cva(
-  'inline-flex items-center justify-center rounded-full border border-primary/10 bg-primary/10 text-primary',
+// A square tile holding an icon: the shadcn muted media tile (EmptyMedia's icon variant) in
+// three sizes. The `card` tone sits a tile on a muted area, as in a card's media.
+export const iconTileVariants = cva(
+  "flex shrink-0 items-center justify-center rounded-lg text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       size: {
-        sm: 'h-10 w-10',
-        md: 'h-12 w-12',
-        lg: 'h-14 w-14',
+        sm: "size-8 [&_svg:not([class*='size-'])]:size-4",
+        md: "size-10 [&_svg:not([class*='size-'])]:size-5",
+        lg: "size-14 rounded-xl [&_svg:not([class*='size-'])]:size-6",
+      },
+      tone: {
+        muted: 'bg-muted',
+        card: 'bg-card ring-1 ring-foreground/10',
       },
     },
     defaultVariants: {
       size: 'md',
+      tone: 'muted',
     },
   },
 );
-
-export const pageEyebrowClassName =
-  'text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground';
-
-export const pageTitleClassName =
-  'text-3xl font-semibold tracking-tight text-foreground sm:text-4xl';
-
-export const pageDescriptionClassName =
-  'text-sm leading-6 text-muted-foreground sm:text-base sm:leading-7';
-
-export const sectionTitleClassName =
-  'text-2xl font-semibold tracking-tight text-foreground';
 
 export type PageContainerWidth = VariantProps<
   typeof pageContainerVariants
@@ -112,4 +106,4 @@ export type PageSectionSpacing = VariantProps<
 export type PageHeroAlign = VariantProps<typeof pageHeroVariants>['align'];
 export type SurfaceTone = VariantProps<typeof surfaceVariants>['tone'];
 export type SurfacePadding = VariantProps<typeof surfaceVariants>['padding'];
-export type IconBadgeSize = VariantProps<typeof iconBadgeVariants>['size'];
+export type IconTileSize = VariantProps<typeof iconTileVariants>['size'];

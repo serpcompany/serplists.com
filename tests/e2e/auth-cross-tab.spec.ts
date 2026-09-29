@@ -15,7 +15,7 @@ async function signIn(page: Page, user: TestUser) {
 }
 
 async function openAccountMenu(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('button', { name: 'Account menu' }).click();
 }
 
 async function signOut(page: Page) {

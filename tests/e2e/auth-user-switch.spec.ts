@@ -17,7 +17,7 @@ async function signIn(page: Page, user: TestUser) {
 }
 
 async function signOut(page: Page) {
-  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
 }

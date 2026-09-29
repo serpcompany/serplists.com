@@ -1,322 +1,34 @@
 'use client';
 
-import React, { useState } from 'react';
+import type { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
-import { toast } from 'sonner';
-import {
-  LayoutGrid,
-  LogOut,
-} from 'lucide-react';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button, buttonVariants } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { AppShell } from '@/components/layout/AppShell';
+import { SiteFooter } from '@/components/layout/SiteFooter';
+import { SiteHeader } from '@/components/layout/SiteHeader';
 import { RouteErrorBoundary } from '@/components/RouteErrorBoundary';
-import { signOutAndLeave } from '@/features/auth/signOut';
-import {
-  publicFooterGroups,
-  publicHeaderLinks,
-} from '@/components/layout/publicSiteLinks';
-import { cn } from '@/lib/utils';
-import { leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
-import { useAppRouter } from '@/lib/navigation/useAppRouter';
-import {
-  buildConsoleHomePath,
-  buildConsoleRunsPath,
-  buildConsoleTemplatesPath,
-  buildConsoleSettingsPath,
-  buildLoginPath,
-  buildPublicProfilePath,
-  buildRegisterPath,
-  isPathWithin,
-  resolvePublicRouteTier,
-  resolveRouteShell,
-} from '@/lib/routes';
-import { PageContainer } from '@/components/layout/page-shell';
-import { PublicMobileNav } from '@/components/layout/PublicMobileNav';
-import { DashboardSidebar } from '@/components/dashboard/DashboardSidebar';
-import { MobileBottomNav, MobileNav } from '@/components/MobileNav';
-import { APP_BRAND_NAME } from '@/lib/brand';
-import { ThemeToggle } from '@/components/theme/ThemeToggle';
-import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
-import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
-
-import { Link } from '@/components/navigation/Link';
+import { resolvePublicRouteTier, resolveRouteShell } from '@/lib/routes';
 
 interface LayoutProps {
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
-interface SiteFooterProps {
-  className?: string;
-}
-
-const BrandLink = ({ to }: { to: string }) => (
-  <Link href={to} className="inline-flex items-center gap-2">
-    <LayoutGrid className="h-5 w-5 text-primary" />
-    <span className="text-sm font-semibold text-foreground">
-      {APP_BRAND_NAME}
-    </span>
-  </Link>
-);
-
-const SiteFooter = ({ className }: SiteFooterProps) => (
-  <footer className={cn('border-t border-border bg-background', className)}>
-    <PageContainer
-      className="grid gap-10 py-12 lg:grid-cols-[1.2fr_repeat(3,minmax(0,0.72fr))]"
-      width="shell"
-    >
-      <div className="space-y-4">
-        <BrandLink to="/" />
-        <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-          Build repeatable checklists, publish them cleanly, and run them like
-          operations.
-        </p>
-      </div>
-
-      {publicFooterGroups.map((column) => (
-        <div key={column.title}>
-          <h3 className="text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            {column.title}
-          </h3>
-          <div className="mt-4 space-y-3">
-            {column.items.map((item) =>
-              item.external ? (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-sm text-muted-foreground transition hover:text-foreground"
-                >
-                  {item.label}
-                </a>
-              ) : (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className="block text-sm text-muted-foreground transition hover:text-foreground"
-                >
-                  {item.label}
-                </Link>
-              ),
-            )}
-          </div>
-        </div>
-      ))}
-    </PageContainer>
-  </footer>
-);
-
-export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout } = useAuth();
-  const router = useAppRouter();
+// Every page's frame, picked from the path: the console shell (the sidebar) for signed-in
+// pages, and the public shell (site header and footer) for the rest.
+export const Layout = ({ children }: LayoutProps) => {
   const pathname = usePathname();
   const shell = resolveRouteShell(pathname);
-  const publicTier = resolvePublicRouteTier(pathname);
   const content = <RouteErrorBoundary>{children}</RouteErrorBoundary>;
-  const shouldRenderFooter = publicTier !== 'minimal';
-
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  // Signing out unmounts the page, so a page with unsaved changes is asked first. If the
-  // server refuses the sign-out the user stays, and that page asks again next time.
-  const handleLogout = async () => {
-    await leaveAfterConfirmed(async () => {
-      setIsSigningOut(true);
-      try {
-        return await signOutAndLeave({
-          logout,
-          onSignedOut: () => router.push('/'),
-          onError: (message) => toast.error(message),
-        });
-      } finally {
-        setIsSigningOut(false);
-      }
-    });
-  };
-
-  const userInitial =
-    user?.name?.charAt(0)?.toUpperCase() ??
-    user?.email?.charAt(0)?.toUpperCase() ??
-    'U';
-
-  const accountMenu = (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" aria-label="Account menu" className="h-10 px-2 hover:bg-transparent" />}
-      >
-          <Avatar className="h-8 w-8 border border-border">
-            <AvatarFallback className="bg-secondary text-sm font-semibold text-foreground">
-              {userInitial}
-            </AvatarFallback>
-          </Avatar>
-        </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-64 rounded-lg border bg-popover p-2 text-popover-foreground"
-        sideOffset={10}
-      >
-        <div className="px-3 py-2">
-          <p className="font-medium text-popover-foreground">
-            {user?.name || 'Your account'}
-          </p>
-          <p className="text-sm text-muted-foreground">{user?.email}</p>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          render={<Link href={buildConsoleHomePath()} className="cursor-pointer rounded-md" />}
-        >
-            Dashboard
-          </DropdownMenuItem>
-        <DropdownMenuItem
-          render={<Link href={buildConsoleTemplatesPath()} className="cursor-pointer rounded-md" />}
-        >
-            My Templates
-          </DropdownMenuItem>
-        <DropdownMenuItem
-          render={<Link href={buildConsoleRunsPath()} className="cursor-pointer rounded-md" />}
-        >
-            My Runs
-          </DropdownMenuItem>
-        <DropdownMenuItem
-          render={<Link href={buildConsoleSettingsPath()} className="cursor-pointer rounded-md" />}
-        >
-            Settings
-          </DropdownMenuItem>
-        {user?.username ? (
-          <DropdownMenuItem
-            render={<Link href={buildPublicProfilePath(user.username)} target="_blank" rel="noopener noreferrer" className="cursor-pointer rounded-md" />}
-          >
-              Profile
-            </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          disabled={isSigningOut}
-          onClick={() => void handleLogout()}
-          className="cursor-pointer rounded-md text-destructive focus:bg-destructive/10 focus:text-destructive"
-        >
-          <LogOut className="mr-2 h-4 w-4" />
-          {isSigningOut ? 'Signing out...' : 'Sign out'}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-
-  const siteHeader = (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
-      <PageContainer
-        className="flex h-14 items-center justify-between gap-6"
-        width="shell"
-      >
-        <div className="flex min-w-0 items-center gap-3">
-          <BrandLink to="/" />
-          {user && shell === 'console' ? (
-            <div className="hidden md:block">
-              <WorkspaceSwitcher />
-            </div>
-          ) : null}
-        </div>
-
-        <nav className="hidden items-center gap-5 md:flex">
-          {publicHeaderLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'text-sm font-medium text-muted-foreground transition hover:text-foreground',
-                isPathWithin(pathname, item.href) &&
-                  'text-foreground',
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          {/* Below md the public shell moves the theme switch into its menu, so brand,
-              Get started and the menu button fit a 320px screen. */}
-          <ThemeToggle
-            className={shell === 'console' ? undefined : 'hidden md:inline-flex'}
-          />
-          {user ? (
-            accountMenu
-          ) : (
-            <>
-              <Link
-                href={buildLoginPath()}
-                className={cn(buttonVariants({ variant: 'ghost' }), 'hidden text-muted-foreground md:inline-flex')}
-              >Log in</Link>
-              <Link href={buildRegisterPath()} className={buttonVariants()}>Get started</Link>
-            </>
-          )}
-          {shell === 'console' ? null : <PublicMobileNav />}
-        </div>
-      </PageContainer>
-    </header>
-  );
 
   if (shell === 'console') {
-    return (
-      <div
-        className="min-h-screen bg-background text-foreground"
-        data-app-shell="console"
-      >
-        {siteHeader}
-
-        <div className="flex min-h-[calc(100vh-3.5rem)]">
-          <DashboardSidebar />
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-14 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm supports-backdrop-filter:bg-background/60 md:hidden">
-              <MobileNav />
-              <div className="min-w-0 flex-1 px-3">
-                <WorkspaceSwitcher />
-              </div>
-              <div className="w-10" />
-            </header>
-
-            <main className="min-w-0 flex-1 pb-20 md:pb-0">
-              <WorkspaceGate>{content}</WorkspaceGate>
-            </main>
-          </div>
-        </div>
-
-        <SiteFooter className="pb-20 md:pb-0" />
-        <MobileBottomNav />
-      </div>
-    );
+    return <AppShell>{content}</AppShell>;
   }
 
   return (
-    <div
-      className="min-h-screen bg-background text-foreground"
-      data-app-shell="public"
-    >
-      {siteHeader}
-
-      <main className="relative flex-1">
-        {publicTier !== 'minimal' ? (
-          <>
-            <div className="public-dot-grid pointer-events-none absolute inset-x-0 top-0 h-80 opacity-70" />
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-linear-to-b from-muted/30 via-background to-transparent" />
-          </>
-        ) : null}
-        <div className="relative">{content}</div>
-      </main>
-
-      {shouldRenderFooter ? (
-        <SiteFooter />
-      ) : null}
+    <div className="flex min-h-svh flex-col bg-background text-foreground" data-app-shell="public">
+      <SiteHeader />
+      <main className="flex-1">{content}</main>
+      {resolvePublicRouteTier(pathname) === 'minimal' ? null : <SiteFooter />}
     </div>
   );
 };

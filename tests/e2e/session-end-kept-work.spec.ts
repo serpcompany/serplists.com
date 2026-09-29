@@ -30,7 +30,7 @@ async function signInAgain(page: Page) {
 async function signOutInAnotherTab(page: Page) {
   const other = await page.context().newPage();
   await other.goto('/dashboard/templates/');
-  await other.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
+  await other.getByRole('button', { name: 'Account menu' }).click();
   await other.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(other.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
   await other.close();
@@ -139,7 +139,7 @@ test('unsaved task notes are offered back after another tab signs out', async ({
 
   // Signing out in this tab asks first.
   page.once('dialog', (dialog) => void dialog.dismiss());
-  await page.locator('header').first().getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await expect(notes).toHaveValue('Deployed build 42');

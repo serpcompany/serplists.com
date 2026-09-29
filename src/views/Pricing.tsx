@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
 import { QueryErrorNotice } from '@/components/shared/QueryListState';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

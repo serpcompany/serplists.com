@@ -12,7 +12,9 @@ import {
   Share2,
 } from 'lucide-react';
 
-import { IconBadge, PageHero, PageSection, Surface } from '@/components/layout/page-shell';
+import { IconTile } from '@/components/layout/IconTile';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -132,9 +134,9 @@ const Index = () => {
               <Surface key={step.title} as="article" tone="docs">
                 <CardHeader className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <IconBadge>
+                    <IconTile>
                       <Icon className="h-5 w-5" />
-                    </IconBadge>
+                    </IconTile>
                     <span className="text-4xl font-semibold tracking-tight text-muted-foreground/30">
                       {step.step}
                     </span>
@@ -158,9 +160,9 @@ const Index = () => {
             return (
               <Surface key={surface.title} as="article" tone="console">
                 <CardHeader className="space-y-4">
-                  <IconBadge>
+                  <IconTile>
                     <Icon className="h-5 w-5" />
-                  </IconBadge>
+                  </IconTile>
                   <div className="space-y-2">
                     <CardTitle>{surface.title}</CardTitle>
                     <CardDescription>{surface.description}</CardDescription>

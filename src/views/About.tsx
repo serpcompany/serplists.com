@@ -2,12 +2,9 @@
 
 import { ShieldCheck, Target, Users } from 'lucide-react';
 
-import {
-  IconBadge,
-  PageHero,
-  PageSection,
-  Surface,
-} from '@/components/layout/page-shell';
+import { PageSection, Surface } from '@/components/layout/page-shell';
+import { PageHero } from '@/components/layout/PageHero';
+import { IconTile } from '@/components/layout/IconTile';
 import { buttonVariants } from '@/components/ui/button';
 import { buildContactPath, buildPublicFeaturesPath } from '@/lib/routes';
 import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,9 +61,9 @@ const About = () => {
             return (
               <Surface key={value.title} as="article" tone="docs">
                 <CardHeader className="space-y-4">
-                  <IconBadge>
+                  <IconTile>
                     <Icon className="h-6 w-6" />
-                  </IconBadge>
+                  </IconTile>
                   <div className="space-y-2">
                     <CardTitle>{value.title}</CardTitle>
                     <CardDescription>{value.description}</CardDescription>

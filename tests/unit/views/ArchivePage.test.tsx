@@ -65,7 +65,8 @@ vi.mock('@/components/ui/sonner', () => ({
   Toaster: () => null,
 }));
 
-vi.mock('@/components/ui/tooltip', () => ({
+vi.mock('@/components/ui/tooltip', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/tooltip')>()),
   TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
