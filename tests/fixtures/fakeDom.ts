@@ -167,7 +167,8 @@ export const findByText = (container: FakeNode, nodeName: string, label: string)
   return node;
 };
 
-type ClickModifiers = { button?: number; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean };
+// `detail` is the click count: 2 for the second click of a double click (src/lib/utils/repeatClick.ts).
+type ClickModifiers = { button?: number; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; detail?: number };
 
 /**
  * A left click as the browser delivers it (or another button, or with modifier keys):

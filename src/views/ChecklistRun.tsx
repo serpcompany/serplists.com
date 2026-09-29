@@ -19,7 +19,7 @@ import {
   DashboardScrollArea,
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
-import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -67,6 +67,7 @@ const ChecklistRunPage = () => {
   const { updateRun } = useTemplates();
   const { getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
   const [isCompleteDialogOpen, setIsCompleteDialogOpen] = useState(false);
+  const [isCompletingRun, setIsCompletingRun] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState('');
 
@@ -127,9 +128,8 @@ const ChecklistRunPage = () => {
     toast.error(loadError);
   }, [loadError]);
 
-  const leaveRun = () =>
+  const handleBack = () =>
     router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
-  const handleBack = leaveRun;
 
   // isCompleted is the value the user clicked on the run they saw (set, not flipped).
   const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
@@ -218,18 +218,21 @@ const ChecklistRunPage = () => {
     else toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
 
+  // A signed-in owner or member then goes to My Runs; a guest on a share link stays, and the
+  // page shows the Run completed.
   const handleCompleteRun = async () => {
     const visit = beginVisit();
-    const result = await completeRun();
+    setIsCompletingRun(true);
+    const result = await completeRun().finally(() => setIsCompletingRun(false));
 
     if (result.kind === 'ok') {
       setIsCompleteDialogOpen(false);
-      toast.success('Checklist completed! 🎉');
+      toast.success('Run completed');
       // Only from this run: after Back or another run, it must not pull the user away.
       // Completion saved every note draft, so the leave guard lets this through without
       // asking. A note typed while the completion was saving still asks.
-      if (visit.isCurrent()) {
-        leaveRun();
+      if (!isSharedRun && visit.isCurrent()) {
+        router.push(buildConsoleRunsPath());
       }
       return;
     }
@@ -458,9 +461,11 @@ const ChecklistRunPage = () => {
                     <h2 className="mt-2 text-2xl font-semibold text-foreground">
                       {displayRun.title}
                     </h2>
+                    <Badge className="mt-2" variant={isRunCompleted ? 'default' : 'secondary'}>
+                      {isRunCompleted ? 'Completed' : 'In Progress'}
+                    </Badge>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      A read-only checklist run that can be copied, reviewed,
-                      and verified without dashboard access.
+                      Anyone with this link can tick tasks, add notes and complete this Run.
                     </p>
                   </div>
                   <div className="min-w-40 rounded-lg border border-border bg-background p-4">
@@ -655,7 +660,7 @@ const ChecklistRunPage = () => {
 
       <ShareLinkDialog
         copiedMessage="Share link copied to clipboard"
-        description="Anyone with this link can open this run without signing in."
+        description={RUN_SHARE_LINK_DESCRIPTION}
         onOpenChange={shareLinkState.setIsShareDialogOpen}
         open={shareLinkState.isShareDialogOpen}
         title="Share run"
@@ -663,7 +668,7 @@ const ChecklistRunPage = () => {
       />
 
       <RunCompleteDialog
-        isSharedRun={isSharedRun}
+        completing={isCompletingRun}
         onComplete={() => void handleCompleteRun()}
         onOpenChange={setIsCompleteDialogOpen}
         open={isCompleteDialogOpen}

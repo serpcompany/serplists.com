@@ -31,7 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   Select,
   SelectContent,
@@ -452,7 +452,7 @@ export function RunsDashboardView({
       </Dialog>
       <ShareLinkDialog
         copiedMessage="Share link copied"
-        description="Anyone with this link can open this run without signing in."
+        description={RUN_SHARE_LINK_DESCRIPTION}
         onOpenChange={setIsShareDialogOpen}
         open={isShareDialogOpen}
         title="Share run"

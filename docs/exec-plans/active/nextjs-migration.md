@@ -423,3 +423,13 @@ Each of these needs the user's approval, or happens with the domain move:
   still sends a visitor who is not signed in to sign in first. The dialog ignores the rest of
   the double click that opened it, as the Run complete dialog does, and a double click on its
   Start Run submits once.
+- 2026-09-29: **An honest Run complete dialog.** Its one button read "Return to Dashboard" or
+  "Return to Public Runs" (a page that does not exist) and completed the Run. It now asks
+  "Complete this Run?", says every task is done and that completing freezes the tasks, and
+  offers "Complete Run" and "Not yet" in theme colors; completing says "Run completed". The
+  owner or a member then goes to My Runs, while a guest on a share link stays on the shared
+  run, which shows a "Completed" badge. The double-click guard covers both buttons.
+- 2026-09-29: **Shared runs are not read-only.** The API always let a share link tick tasks and
+  Sub-tasks, write notes and complete the Run (never rename or delete it); the shared page
+  ("A read-only checklist run") and Home ("a clean read-only run") said otherwise. They, and
+  the Share run dialog, now say what anyone with the link can do. The API is unchanged.

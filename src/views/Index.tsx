@@ -57,7 +57,7 @@ const workflowSteps = [
     step: '3',
     title: 'Share the result',
     description:
-      'Send a clean read-only run or publish the template so others can trust and reuse the work.',
+      "Share a Run's link so anyone can tick tasks, add notes and complete it, or publish the template so others can trust and reuse the work.",
     icon: Share2,
   },
 ] as const;

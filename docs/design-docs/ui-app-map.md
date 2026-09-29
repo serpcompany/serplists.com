@@ -85,13 +85,14 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   save came first: "Save" → "Error" alert → "Load latest version".
 - **Run a checklist, complete it, share it:** My Templates → "Start Run" (card hover, card
   actions menu or list row) → Start a Run dialog → "Start Run" → Run page → task checkbox or
-  "Mark Complete" → "Next Task" → … → last task done → "Checklist Completed!" dialog →
-  "Return to Dashboard" (completes the Run) → My Runs. From Template detail or a public
+  "Mark Complete" → "Next Task" → … → last task done → "Complete this Run?" dialog →
+  "Complete Run" → My Runs ("Not yet" keeps the Run in progress, and "Complete run" stays on
+  the page). From Template detail or a public
   template page: "Start Run" → the same Start a Run dialog → "Start Run" → Run page. Share:
   Run page "Share"
   (or My Runs → "Run options" → "Share Run") → Share run dialog → copy the link. Guest:
-  Shared run → tick tasks, add notes → "Complete run" → "Checklist Completed!" → "Return to
-  Public Runs" → Template Library.
+  Shared run → tick tasks, add notes → "Complete this Run?" → "Complete Run" → the same Shared
+  run, now "Completed".
 - **Duplicate a Template:** Template detail → "Template actions" → "Duplicate" → Template
   detail of the copy ("Template duplicated"). Someone else's Public Template: "Copy to My
   Templates" (or "Copy to Organization") → Template detail of the copy.

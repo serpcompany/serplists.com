@@ -13,6 +13,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
+// A Run's share link: what anyone who has it may do (functions/api/handlers/checklists-shared.ts).
+export const RUN_SHARE_LINK_DESCRIPTION =
+  'Anyone with this link can open this Run without signing in, tick its tasks, add notes and complete it.';
+
 type ShareLinkFieldProps = {
   copiedMessage: string;
   url: string;

@@ -74,7 +74,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
   expect(saves).toEqual([200]);
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
-  await page.getByRole('button', { name: 'Return to Dashboard' }).dblclick();
+  await page.getByRole('button', { name: 'Complete Run' }).dblclick();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
   expect(saves).toEqual([200, 200, 200]);
@@ -92,12 +92,21 @@ test('a dismissed completion dialog can be reopened with Finish Run', async ({ p
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
-  await expect(page.getByRole('dialog', { name: 'Checklist Completed!' })).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Complete this Run?' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Every task is done. Completing the Run freezes its tasks');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
+  // "Not yet" keeps the Run in progress, and the page keeps offering Complete run.
   await page.getByRole('button', { name: 'Finish Run' }).click();
-  await page.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await dialog.getByRole('button', { name: 'Not yet' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect((await readRun(page, runId)).status).toBe('in_progress');
+
+  await page.getByRole('button', { name: 'Complete run' }).click();
+  await dialog.getByRole('button', { name: 'Complete Run' }).click();
+  await expect(page.getByText('Run completed', { exact: true }).first()).toBeVisible();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
@@ -123,7 +132,7 @@ test('a fully ticked run that is still in progress can be completed after a relo
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Complete run' }).click();
-  await page.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await page.getByRole('button', { name: 'Complete Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
@@ -220,7 +229,7 @@ test('a tick saved by another session is kept and this page can still save', asy
   saves.length = 0;
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
-  await expect(page.getByRole('dialog', { name: 'Checklist Completed!' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Complete this Run?' })).toBeVisible();
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
   expect(saves).toEqual([409, 200]);
   await expect(page.getByText(/changed (while|since|somewhere)/)).toHaveCount(0);
@@ -419,7 +428,7 @@ test('the rest of the double click that completes the last task keeps the comple
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   const point = await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
-  const dialog = page.getByRole('dialog', { name: 'Checklist Completed!' });
+  const dialog = page.getByRole('dialog', { name: 'Complete this Run?' });
   await expect(dialog).toBeVisible();
   // The rest of the double click lands on the overlay, outside the dialog.
   expect(isInside(await dialog.boundingBox(), point)).toBe(false);
@@ -430,7 +439,7 @@ test('the rest of the double click that completes the last task keeps the comple
   await expect(dialog).toBeVisible();
   expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
 
-  await dialog.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await dialog.getByRole('button', { name: 'Complete Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
 
@@ -719,13 +728,13 @@ test('completing a run saves an unsaved note and leaves without asking', async (
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
-  await expect(page.getByRole('dialog', { name: 'Checklist Completed!' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Complete this Run?' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await notes.fill('Signed off by QA');
   await page.getByRole('button', { name: 'Finish Run' }).click();
-  await page.getByRole('button', { name: 'Return to Dashboard' }).click();
+  await page.getByRole('button', { name: 'Complete Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(dialogs).toEqual([]);
 

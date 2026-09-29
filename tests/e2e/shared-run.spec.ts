@@ -99,6 +99,39 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
   await deleteRun(page, runId);
 });
 
+// The shared page says what a guest may do, and a guest who completes the Run stays on it.
+test('a share-link guest completes the Run and stays on it, which then reads Completed', async ({ browser, page }) => {
+  await loginAsAdmin(page);
+  const { runId, shareToken } = await createSharedRun(page, {
+    title: `Shared completion ${Date.now()}`,
+    sections: [{ id: 'done', title: 'Section', items: [
+      { id: 'done-a', title: 'Task A' },
+      { id: 'done-b', title: 'Task B' },
+    ] }],
+  });
+
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  await guest.goto(`/share/${shareToken}/`);
+  await expect(guest.getByText('Anyone with this link can tick tasks, add notes and complete this Run.')).toBeVisible();
+  await expect(guest.getByText(/read-only/i)).toHaveCount(0);
+  await guest.getByRole('checkbox', { name: 'Mark "Task A" complete' }).click();
+  await guest.getByRole('checkbox', { name: 'Mark "Task B" complete' }).click();
+
+  const dialog = guest.getByRole('dialog', { name: 'Complete this Run?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Complete Run' }).click();
+
+  await expect(guest.getByText('Run completed', { exact: true }).first()).toBeVisible();
+  await expect(guest).toHaveURL(new RegExp(`/share/${shareToken}/$`));
+  await expect(guest.getByText('Completed', { exact: true })).toBeVisible();
+  await expect(guest.getByRole('checkbox', { name: 'Mark "Task A" complete' })).toBeDisabled();
+  await expect.poll(async () => (await apiJson<{ status: string }>(page, `/checklists/${runId}`)).status).toBe('completed');
+
+  await guestContext.close();
+  await deleteRun(page, runId);
+});
+
 test('stopping a share from the runs list turns the guest link off', async ({ browser, page }) => {
   test.setTimeout(120_000);
   await loginAsAdmin(page);

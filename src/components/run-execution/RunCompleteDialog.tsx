@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Check, CheckCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,16 +12,21 @@ import {
 import { createJustOpenedGuard, onSingleClick } from '@/lib/utils/repeatClick';
 
 interface RunCompleteDialogProps {
-  isSharedRun: boolean;
+  // The completion is saving: both buttons wait.
+  completing?: boolean;
   onComplete: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }
 
+// Asks before completing a Run whose tasks are all done: completing freezes its tasks (the run
+// page and share links refuse to tick or untick them). "Not yet" keeps the Run in progress, and
+// the page keeps offering Complete run.
+//
 // Opens when the last task is ticked, often by a click whose double click is not over yet.
-// The rest of that double click lands on the overlay or on this dialog's button, so it
+// The rest of that double click lands on the overlay or on one of this dialog's buttons, so it
 // neither closes the dialog nor completes the run (see repeatClick.ts).
-export function RunCompleteDialog({ isSharedRun, onComplete, onOpenChange, open }: RunCompleteDialogProps) {
+export function RunCompleteDialog({ completing = false, onComplete, onOpenChange, open }: RunCompleteDialogProps) {
   const [{ markOpened, onOutsidePress }] = useState(() => createJustOpenedGuard());
 
   return (
@@ -37,20 +41,23 @@ export function RunCompleteDialog({ isSharedRun, onComplete, onOpenChange, open 
     >
       <DialogContent ref={markOpened}>
         <DialogHeader>
-          <DialogTitle>Checklist Completed!</DialogTitle>
+          <DialogTitle>Complete this Run?</DialogTitle>
           <DialogDescription>
-            Congratulations! You have completed all items in this checklist.
+            Every task is done. Completing the Run freezes its tasks: they can no longer be ticked
+            or unticked.
           </DialogDescription>
         </DialogHeader>
-        <div className="my-4 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-50">
-            <CheckCircle className="h-10 w-10 text-green-500" />
-          </div>
-        </div>
         <DialogFooter>
-          <Button onClick={onSingleClick(onComplete)}>
-            <Check className="mr-2 h-4 w-4" />
-            {isSharedRun ? 'Return to Public Runs' : 'Return to Dashboard'}
+          <Button
+            disabled={completing}
+            onClick={onSingleClick(() => onOpenChange(false))}
+            type="button"
+            variant="outline"
+          >
+            Not yet
+          </Button>
+          <Button disabled={completing} onClick={onSingleClick(onComplete)} type="button">
+            Complete Run
           </Button>
         </DialogFooter>
       </DialogContent>

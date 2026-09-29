@@ -1081,15 +1081,16 @@ existing content, invent nothing):
 ### Shared run
 
 - **SCREEN NAME:** Shared run (`/share/<token>/`)
-- **PURPOSE:** Let anyone with the link see a Run and tick its tasks without an account.
+- **PURPOSE:** Let anyone with the link work through a Run without an account: tick tasks
+  and Sub-tasks, write notes and complete it (never rename or delete it).
 - **HOW USER GETS HERE:** a share link someone copied from the Share run dialog.
 - **WHAT'S ON THE SCREEN:**
   - Its own sticky header, no site shell: an icon tile, the Run's title, "Shared run
     snapshot", "Copy Link" (outline).
-  - A summary card: eyebrow "Shared run snapshot", the title, "A read-only checklist run that
-    can be copied, reviewed, and verified without dashboard access.", a progress box ("Run
-    progress", "N%", "X of Y tasks"), a progress bar, and "Complete run" once every task is
-    done while the Run is in progress.
+  - A summary card: eyebrow "Shared run snapshot", the title, a status badge ("In Progress" or
+    "Completed"), "Anyone with this link can tick tasks, add notes and complete this Run.", a
+    progress box ("Run progress", "N%", "X of Y tasks"), a progress bar, and "Complete run" once
+    every task is done while the Run is in progress.
   - One card per section: title and "Complete" or "X/Y"; per task: a checkbox, the title
     (struck through when done), the description, content blocks (Sub-tasks have their own
     checkboxes), "Task notes" (placeholder "Add links, outcomes, or context for this
@@ -1100,8 +1101,8 @@ existing content, invent nothing):
 - **SECONDARY ACTIONS:** "Copy Link"; notes; "Complete run" → the [Run complete
   dialog](#run-complete-dialog); "Browse the Template Library".
 - **STATES:** loading (spinner); not found (toast "Run not found", then the Template Library);
-  load error ("Unable to load run", the message, "Back"); completed (checkboxes frozen; notes
-  stay editable); always noindex.
+  load error ("Unable to load run", the message, "Back"); completed ("Completed", checkboxes
+  frozen, notes stay editable; a guest who completes the Run stays on it); always noindex.
 - **NAVIGATION TYPE:** standalone page.
 - **PATTERN CHOICE (proposal):** the teardown layout of [Detail page](#detail-page) (one
   column, the progress as a facts strip); sections as [Bordered list
@@ -1114,9 +1115,14 @@ existing content, invent nothing):
     with checkbox; content blocks; notes editor; call-to-action card.
   - DATA FIELDS: Run (title, progress, task counts, status); section (title, completed and
     total); task (title, description, done, content blocks, notes).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Not restyled yet (step 2). The wording and status of 2026-09-29:
+  `tmp/design-review/decisions/shared-run-desktop-guest.png`, `shared-run-mobile-guest.png`,
+  `shared-run-complete-dialog-desktop-guest.png`, `shared-run-completed-desktop-guest.png` and
+  `shared-run-completed-mobile-guest.png`.
 - **NOTES:** Code: `src/views/ChecklistRun.tsx` (shared mode). Guests never see who owns the
-  Run, and never see its retired work.
+  Run, and never see its retired work. Until 2026-09-29 the page called itself "A read-only
+  checklist run", though guests could always tick, write notes and complete it
+  (`functions/api/handlers/checklists-shared.ts`).
 
 ### My Templates
 
@@ -1699,9 +1705,9 @@ replaced.
 - **HOW USER GETS HERE:** "Share" on the Run page; "Share Run" in My Runs' "Run options";
   "Share" on Template detail.
 - **WHAT'S ON THE SCREEN:** the title; the description ("Anyone with this link can open this
-  run without signing in." or "Share this template with others. They can view it and copy it
-  into their library."); a read-only link field ("Share link"); a copy button ("Copy share
-  link"); "Close".
+  Run without signing in, tick its tasks, add notes and complete it." or "Share this template
+  with others. They can view it and copy it into their library."); a read-only link field
+  ("Share link"); a copy button ("Copy share link"); "Close".
 - **PRIMARY ACTION:** copy the link.
 - **SECONDARY ACTIONS:** "Close".
 - **STATES:** copied (toast "Share link copied", "Share link copied to clipboard" or "Public
@@ -1720,27 +1726,36 @@ replaced.
 
 ### Run complete dialog
 
-- **SCREEN NAME:** Run complete dialog ("Checklist Completed!")
-- **PURPOSE:** Confirm completing a Run.
-- **HOW USER GETS HERE:** ticking the last open task; "Complete run"; "Finish Run".
-- **WHAT'S ON THE SCREEN:** "Checklist Completed!", "Congratulations! You have completed all
-  items in this checklist.", a large check icon, one button: "Return to Dashboard" (private
-  Run) or "Return to Public Runs" (shared Run).
-- **PRIMARY ACTION:** the button: it completes the Run (toast "Checklist completed!", with an
-  emoji) and leaves for [My Runs](#my-runs), or the [Template Library](#template-library) for
-  a shared Run.
-- **SECONDARY ACTIONS:** dismiss; the Run stays in progress and "Complete run" stays.
-- **STATES:** a save failure shows a toast and keeps the dialog.
+- **SCREEN NAME:** Run complete dialog ("Complete this Run?")
+- **PURPOSE:** Confirm completing a Run whose tasks are all done.
+- **HOW USER GETS HERE:** ticking the last open task; "Complete run"; "Finish Run". On the Run
+  page and on a shared run.
+- **WHAT'S ON THE SCREEN:** "Complete this Run?", "Every task is done. Completing the Run
+  freezes its tasks: they can no longer be ticked or unticked."; "Not yet" (outline), "Complete
+  Run" (primary); the close button.
+- **PRIMARY ACTION:** "Complete Run": completes the Run (toast "Run completed"); a signed-in
+  owner or member then goes to [My Runs](#my-runs), and a guest on a share link stays on the
+  [Shared run](#shared-run), which now reads "Completed".
+- **SECONDARY ACTIONS:** "Not yet", Escape or the close button: the Run stays in progress and
+  the page keeps offering "Complete run".
+- **STATES:** both buttons wait while the completion saves; a save failure shows a toast and
+  keeps the dialog; the rest of the double click that opened it neither closes it nor
+  completes the Run.
 - **NAVIGATION TYPE:** modal dialog.
-- **PATTERN CHOICE (proposal):** shadcn AlertDialog (confirm and cancel).
+- **PATTERN CHOICE (decided):** a shadcn Dialog with a confirm and a cancel button, in theme
+  colors (the user's decision of 2026-09-29).
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; icon; footer.
-  - COMPONENT TYPES: heading; paragraph; icon; primary button.
-  - DATA FIELDS: shared or private.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** The label says "Return" while the click completes the Run. There is no Public
-  Runs page.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, description, close button); footer (two buttons).
+  - COMPONENT TYPES: heading; muted paragraph; outline and primary buttons.
+  - DATA FIELDS: none.
+- **PROOF PASS:** Pass, against shadcn's Dialog (no reference screenshot):
+  `tmp/design-review/decisions/run-complete-dialog-desktop-signed-in.png`,
+  `run-complete-dialog-mobile-signed-in.png` and
+  `shared-run-complete-dialog-desktop-guest.png`.
+- **NOTES:** Code: `src/components/run-execution/RunCompleteDialog.tsx`. Until 2026-09-29 it
+  read "Checklist Completed!" with one button, "Return to Dashboard" or "Return to Public Runs",
+  that completed the Run; there is no Public Runs page.
 
 ### Delete confirmations
 
@@ -1903,10 +1918,6 @@ replaced.
 
 Found while reading the code; none is decided here.
 
-- The Run complete dialog's only button reads "Return to Dashboard" or "Return to Public Runs"
-  but completes the Run; there is no Public Runs page.
-- The shared run page calls itself "A read-only checklist run", yet guests can tick tasks, add
-  notes and complete the Run.
 - A missing path under `/dashboard/` renders the 404 page inside the console shell, also for
   a signed-out visitor: `src/app/not-found.tsx` renders the shell without the session check.
 - Categories shows nothing (no message) when a search matches no category.
