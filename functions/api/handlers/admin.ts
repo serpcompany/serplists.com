@@ -35,11 +35,19 @@ const overrideBodySchema = z
     message: "userId or email required",
   });
 
-function hasValidAdminSecret(request: Request, env: Env): boolean {
+const sha256 = async (value: string): Promise<Uint8Array> =>
+  new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+
+// Compares SHA-256 digests of both values in full, so the time a check takes says nothing
+// about how much of a guess matched or how long the secret is.
+async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean> {
   if (!env.ENTITLEMENTS_ADMIN_SECRET) return false;
   const provided = request.headers.get("X-Admin-Secret");
   if (!provided) return false;
-  return provided === env.ENTITLEMENTS_ADMIN_SECRET;
+  const [expected, actual] = await Promise.all([sha256(env.ENTITLEMENTS_ADMIN_SECRET), sha256(provided)]);
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) difference |= expected[index] ^ actual[index];
+  return difference === 0;
 }
 
 type Db = ReturnType<typeof createDb>;
@@ -115,30 +123,43 @@ async function handleOverride(request: Request, env: Env): Promise<Response> {
   });
 }
 
+const OVERRIDE_METHODS = "POST, DELETE";
+
 export async function handleAdmin(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const pathParts = url.pathname.split("/").filter(Boolean); // ["api", "admin", ...]
   const adminSubpath = pathParts.slice(2); // after /api/admin
 
-  if (!hasValidAdminSecret(request, env)) {
+  // The route and method are matched before the secret is read, so a request the endpoint
+  // does not serve (a GET, an unknown path) answers the same for a right and a wrong secret.
+  const isOverrideRoute = pathParts[1] === "admin"
+    && adminSubpath.length === 2
+    && adminSubpath[0] === "entitlements"
+    && adminSubpath[1] === "override";
+  if (!isOverrideRoute) {
+    return jsonError("Not Found", 404);
+  }
+  if (request.method !== "POST" && request.method !== "DELETE") {
+    const response = jsonError("Method Not Allowed", 405);
+    response.headers.set("Allow", OVERRIDE_METHODS);
+    return response;
+  }
+
+  if (!(await hasValidAdminSecret(request, env))) {
     return jsonError("Unauthorized", 401);
   }
 
   // POST /api/admin/entitlements/override
-  if (request.method === "POST" && adminSubpath[0] === "entitlements" && adminSubpath[1] === "override") {
+  if (request.method === "POST") {
     return handleOverride(request, env);
   }
 
   // DELETE /api/admin/entitlements/override?userId=...
-  if (request.method === "DELETE" && adminSubpath[0] === "entitlements" && adminSubpath[1] === "override") {
-    const userId = url.searchParams.get("userId");
-    if (!userId) return jsonError("userId required", 400);
+  const userId = url.searchParams.get("userId");
+  if (!userId) return jsonError("userId required", 400);
 
-    const db = createDb(env);
-    const { entitlement_overrides } = schema;
-    await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
-    return json({ success: true });
-  }
-
-  return jsonError("Not Found", 404);
+  const db = createDb(env);
+  const { entitlement_overrides } = schema;
+  await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
+  return json({ success: true });
 }

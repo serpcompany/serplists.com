@@ -234,8 +234,11 @@ Clients that share a /64 (some office or campus networks) share one budget.
   testing. This is deny-by-default: `functions/api/utils/auth-rate-limit.ts` matches
   the session-check allowlist on method and exact path.
 - Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
-  uploads, the legacy Organization routes `teams`, Run Key management under
-  `agent-keys`, and admin): 120 per minute.
+  uploads, the legacy Organization routes `teams`, and Run Key management under
+  `agent-keys`): 120 per minute.
+- Admin (every request under `/api/admin`, whatever its method): 10 per minute per IP
+  on deployed hosts (120 locally), in its own bucket. The endpoint checks a secret that
+  grants plans without payment, so every request counts as a guess, reads included.
 - MCP (`POST /api/mcp`): 240 per minute per IP, in its own bucket. MCP is JSON-RPC
   over POST, so every call counts, reads included; the separate bucket keeps a local
   agent from using up its owner's web saves on the same IP. It is also the only
@@ -290,10 +293,16 @@ debugging), authenticated by the `X-Admin-Secret` header. Because it bypasses
 billing, keep it disabled by default:
 
 1. Confirm the `entitlement_overrides` table exists (normal migration checks).
-2. Add `ENTITLEMENTS_ADMIN_SECRET` as a temporary Pages secret and redeploy.
+2. Generate a random `ENTITLEMENTS_ADMIN_SECRET` (for example `openssl rand -base64 32`;
+   never a memorable word), add it as a temporary Pages secret, and redeploy.
 3. Apply the override, then verify the D1 row and `GET /api/billing/status` for
    the user rather than trusting the command response.
-4. Remove the secret, redeploy, and confirm the endpoint returns `401`.
+4. Remove the secret, redeploy, and confirm a `POST` to the endpoint returns `401`.
+
+Only `POST` and `DELETE` on `/api/admin/entitlements/override` read the secret: any
+other method there gets `405` (with `Allow: POST, DELETE`) and any other path under
+`/api/admin` gets `404`, whatever the header holds, so no other request can test a
+guess. The secret is compared as SHA-256 digests, in full.
 
 The body is parsed strictly and an invalid one gets `400` with nothing written:
 

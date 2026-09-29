@@ -169,3 +169,43 @@ describe('POST /api/admin/entitlements/override', () => {
     expect((await getEntitlementsForUser(env, 'user-1')).plan).toBe('free');
   });
 });
+
+// The secret is checked only for a request the endpoint serves, so no other request can tell
+// a right guess from a wrong one (a GET is never counted against the write rate limit).
+describe('requests the admin endpoint does not serve', () => {
+  const env = { DB: {}, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET } as any;
+  const secrets: Array<[string, string | null]> = [['no secret', null], ['a wrong secret', 'not-the-secret'], ['the secret', ADMIN_SECRET]];
+  const send = (method: string, path: string, secret: string | null) => handleAdmin(
+    new Request(`http://localhost${path}`, { method, headers: secret ? { 'X-Admin-Secret': secret } : {} }),
+    env,
+  );
+
+  it.each(['GET', 'HEAD', 'PUT', 'PATCH', 'PROPFIND'])('answers %s on the override route the same whatever the secret', async (method) => {
+    for (const [label, secret] of secrets) {
+      const response = await send(method, '/api/admin/entitlements/override', secret);
+
+      expect(response.status, label).toBe(405);
+      expect(response.headers.get('Allow'), label).toBe('POST, DELETE');
+    }
+  });
+
+  it.each([
+    ['POST', '/api/admin/entitlements'],
+    ['POST', '/api/admin/entitlements/override/extra'],
+    ['GET', '/api/admin'],
+    ['POST', '/api/adminx/entitlements/override'],
+  ])('answers %s %s with 404 whatever the secret', async (method, path) => {
+    for (const [label, secret] of secrets) {
+      expect((await send(method, path, secret)).status, label).toBe(404);
+    }
+  });
+
+  it('still answers 401 to a DELETE with a wrong secret, and while the endpoint is disabled', async () => {
+    expect((await send('DELETE', '/api/admin/entitlements/override?userId=user-1', 'not-the-secret')).status).toBe(401);
+    const disabled = await handleAdmin(
+      new Request('http://localhost/api/admin/entitlements/override', { method: 'POST', headers: { 'X-Admin-Secret': ADMIN_SECRET } }),
+      { DB: {} } as any,
+    );
+    expect(disabled.status).toBe(401);
+  });
+});
