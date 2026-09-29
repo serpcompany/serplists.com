@@ -347,12 +347,15 @@ let it ask, so the user is asked once.
   (Upgrade to Pro, or Sign in) instead of plain error text. The new template's draft
   is kept in `sessionStorage` (`templateDraftStore.ts`, keyed by user and context)
   before any checkout or sign-in redirect, offered back on the new-template editor
-  and from the billing section, and cleared only when a save succeeds (even one that
-  finishes after the user left the editor) or the user discards it. A confirmed
-  sign-out returns the tab to Personal, so the new-template editor also offers a
-  draft kept in another context the user can still create templates in, with a
-  switch to that context (`useOtherContextTemplateDraft.ts`); the draft is restored,
-  and saved, only in the context it was written for.
+  and from the billing section, and cleared only when it is saved (even by a save
+  that finishes after the user left the editor) or the user discards it. Until the
+  user restores or discards an offered draft, a different template written in the
+  form neither clears nor replaces it, whether that template saves, is refused, or
+  is kept for an upgrade, sign-in or ended session; leaving with that other work
+  asks first. A confirmed sign-out returns the tab to Personal, so the new-template
+  editor also offers a draft kept in another context the user can still create
+  templates in, with a switch to that context (`useOtherContextTemplateDraft.ts`);
+  the draft is restored, and saved, only in the context it was written for.
 - Adding a content type or editor tab: [template content types](design-docs/template-content-types.md).
 
 ## Rendering user content

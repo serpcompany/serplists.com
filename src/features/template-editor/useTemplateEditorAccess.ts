@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -9,12 +9,14 @@ import { cloneTemplateEditorFormValues } from "@/features/template-editor/postSa
 import {
   clearTemplateDraft,
   clearTemplateEditDraft,
+  getTemplateDraftKey,
   readTemplateDraft,
   readTemplateEditDraft,
   saveTemplateDraft,
   saveTemplateEditDraft,
   settleTemplateDraftAfterSave,
   type StoredTemplateDraft,
+  type TemplateDraftOwner,
 } from "@/features/template-editor/templateDraftStore";
 import {
   countContextTemplates,
@@ -80,6 +82,11 @@ export const useTemplateEditorAccess = ({
   });
   const [saveNotice, setSaveNotice] = useState<TemplateEditorAccessNotice | null>(null);
   const [draft, setDraft] = useState<StoredTemplateDraft | null>(null);
+  // The key of a new template's draft offered when the editor opened and not yet
+  // restored or discarded. That slot is the kept draft's, not this form's: a different
+  // template saved, refused, or kept from here neither clears nor replaces it. A ref,
+  // so a save that finishes after the user left reads the latest answer.
+  const offeredDraftKey = useRef<string | null>(null);
   // Set until the browser leaves for checkout; Back from Stripe clears it (the leave
   // guard re-arms itself on the same restore).
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
@@ -94,10 +101,13 @@ export const useTemplateEditorAccess = ({
   // Offer a kept draft when the editor opens: a new template's for this context, or the
   // user's own edits to this template.
   useEffect(() => {
+    offeredDraftKey.current = null;
     if (!userId) {
       setDraft(null);
     } else if (isCreate) {
-      setDraft(readTemplateDraft({ userId, teamId: activeTeamId }));
+      const kept = readTemplateDraft({ userId, teamId: activeTeamId });
+      offeredDraftKey.current = kept ? getTemplateDraftKey({ userId, teamId: activeTeamId }) : null;
+      setDraft(kept);
     } else {
       setDraft(templateId ? readTemplateEditDraft({ userId, templateId }) : null);
     }
@@ -115,11 +125,19 @@ export const useTemplateEditorAccess = ({
         owner && !templatesLoading ? countContextTemplates(allTemplates, owner) : undefined,
     });
 
+  // False while an offered draft holds the slot (see offeredDraftKey).
+  const ownsDraftSlot = (draftOwner: TemplateDraftOwner): boolean =>
+    offeredDraftKey.current !== getTemplateDraftKey(draftOwner);
+
   // True when the draft is stored, so leaving the page loses nothing. Also runs when the
   // session ends in the background, while this render still holds the user who typed it.
+  // An offered draft is not replaced: the leave guard stays up and asks instead.
   const keepDraft = (): boolean => {
     if (isCreate && owner) {
-      return saveTemplateDraft(owner, cloneTemplateEditorFormValues(getValues()));
+      return (
+        ownsDraftSlot(owner) &&
+        saveTemplateDraft(owner, cloneTemplateEditorFormValues(getValues()))
+      );
     }
     return editOwner
       ? saveTemplateEditDraft(editOwner, {
@@ -139,7 +157,8 @@ export const useTemplateEditorAccess = ({
       clearTemplateEditDraft(editOwner);
       setDraft(null);
     }
-    if (!isCreate || !owner) {
+    // An offered draft that was not restored belongs to another template.
+    if (!isCreate || !owner || !ownsDraftSlot(owner)) {
       return;
     }
 
@@ -183,6 +202,10 @@ export const useTemplateEditorAccess = ({
   // moment after checkout, and that save would need the draft again.
   const restoreDraft = (): StoredTemplateDraft | null => {
     const restored = draft ? { ...draft, values: cloneTemplateEditorFormValues(draft.values) } : null;
+    if (restored) {
+      // The form now holds the draft, so a successful save clears it.
+      offeredDraftKey.current = null;
+    }
     setDraft(null);
     return restored;
   };
@@ -192,6 +215,7 @@ export const useTemplateEditorAccess = ({
       clearTemplateEditDraft(editOwner);
     } else if (owner) {
       clearTemplateDraft(owner);
+      offeredDraftKey.current = null;
     }
     setDraft(null);
   };

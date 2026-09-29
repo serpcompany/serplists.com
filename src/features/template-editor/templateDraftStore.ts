@@ -195,6 +195,8 @@ export const clearTemplateEditDraft = (
 // user can leave while it saves). A saved template clears its draft: restoring it
 // would create a duplicate. A save refused for a reason the user fixes elsewhere
 // (upgrade, sign in) keeps the values it sent. Any other failure leaves storage alone.
+// The editor calls this only for a draft its form holds: a kept draft it offered and
+// the user did not restore or discard belongs to another template, and stays.
 export const settleTemplateDraftAfterSave = (
   owner: TemplateDraftOwner,
   outcome: { saved: boolean; keepDraft: boolean; values: TemplateEditorFormValues },
