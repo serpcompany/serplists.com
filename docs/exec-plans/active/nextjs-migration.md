@@ -446,3 +446,8 @@ Each of these needs the user's approval, or happens with the domain move:
 - 2026-09-29: **My Templates' count.** Its subtitle read "1 templates in your library", and
   "0 templates in your library" while the list loaded. It now says "1 template" or "N
   templates", and shows no count until the list has loaded (nor after it failed to load).
+- 2026-09-29: **Kept as they are, by the user's choice:** icon tiles stay neutral (no custom
+  colors); the phone context switcher stays in the sidebar sheet; the Template editor's phone
+  layout comes with step 2, with every other screen's. The questions these changes raised are
+  in the screen inventory's [open questions](../../design-docs/ui-screen-inventory.md#open-questions),
+  and counts that still say "1 templates" are TD-24.

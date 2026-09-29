@@ -1929,13 +1929,43 @@ replaced.
 - **PROOF PASS:** Not restyled yet (step 2)
 - **NOTES:** TBD whether the Back and Forward guard can wait for an in-page dialog.
 
+## Decided on 2026-09-29
+
+The user answered the questions step 1 raised. The cards above describe the result.
+
+- Header dropdowns: yes. "Templates" (Template Library, Categories) and "Features" (the four
+  feature pages) are NavigationMenu dropdowns, the phone sheet groups them, and "Pricing" stays
+  a link ([Public shell](#public-shell), [Public menu sheet](#public-menu-sheet)).
+- "Updated <date>" on the [public template page](#public-template-page): yes.
+- Icon tiles stay neutral: no change.
+- The phone context switcher stays in the sidebar sheet: no change.
+- One Run URL: `/dashboard/runs/<id>/`; `/run/<id>` redirects there ([Run page](#run-page)).
+- A sign-in with no return path opens the console home, [My Templates](#my-templates).
+- The [account menu](#account-menu) drops "Dashboard" and keeps "My Templates".
+- One name, the Template Library, for `/templates/` ([Template Library](#template-library)).
+- One [Start a Run dialog](#start-a-run-dialog) everywhere a Run starts.
+- An honest [Run complete dialog](#run-complete-dialog): "Complete Run" and "Not yet".
+- The [shared run](#shared-run) page, Home and the Share run dialog say what guests can do.
+- The [404 page](#404-page) under `/dashboard/`: the console shell for a signed-in user, the
+  public shell for anyone else.
+- `/categories/` is linked from the header's Templates menu and the footer.
+- [Categories](#categories) says when a search matches nothing, with "Clear search".
+- The Template editor's phone layout, like every other screen's, is step 2 of the restyle.
+- My Templates counts in the singular and shows no count until its list loads.
+
 ## Open questions
 
-Found while reading the code; none is decided here.
+Found while making those changes; none is decided here.
 
-- The Template editor's outline has a fixed width and no phone layout.
-- The reference tints its icon tiles; step 1 keeps them neutral (no custom colors). The
-  category page already has a color per built-in category that the tiles could use.
-- On phones the console's context switcher sits in the sidebar sheet, so the active context
-  (Personal or an Organization) is no longer on screen at a glance, as it was in the old
-  phone bar. The phone top bar has room to show it.
+- "Library" still names a user's own Templates in places: "N templates in your library" (My
+  Templates), "Copy to Library" and "save it to your library" (the public template page), "copy
+  it into their library" (the Share Template dialog), "bootstrap your template library" (Import
+  Templates). Next to the Template Library, "Copy to Library" can read as publishing.
+- The header's "Features" menu lists the four feature pages, not the `/features/` overview,
+  which Home's "Explore Features" and "Back to Features" still reach. Add an overview item?
+- Pricing's Free plan lists "Browse public checklists" (the Template Library under another
+  name); pricing wording was left as it is.
+- The Start a Run toast says "Checklist run created" (or "Run started in <Organization>"), and
+  "Starting…" uses an ellipsis character where other buttons say "Saving..." or "Creating...".
+- The site header's "Templates" menu is the public library and Categories, while the console
+  sidebar's "Templates" is My Templates.
