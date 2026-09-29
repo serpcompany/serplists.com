@@ -8,13 +8,15 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildConsoleTemplatesPath } from '@/lib/routes';
 
 // Wraps one page, below the Router and the site header. A page that crashes shows this card in
-// its place while the header and navigation keep working, and going to another path clears it.
-// The reset key is the pathname, so pages that did not crash are never remounted.
+// its place while the header and navigation keep working, and any navigation clears it. The
+// reset key is the location key, which every navigation changes, even a link to the page that
+// crashed (the home link on My Templates or on '/'). ErrorBoundary resets only an error that is
+// showing, so pages that did not crash are never remounted.
 export function RouteErrorBoundary({ children }: { children: ReactNode }) {
-  const { pathname } = useLocation();
+  const location = useLocation();
 
   return (
-    <ErrorBoundary resetKey={pathname} fallback={({ reset }) => <RouteErrorFallback reset={reset} />}>
+    <ErrorBoundary resetKey={location.key} fallback={({ reset }) => <RouteErrorFallback reset={reset} />}>
       {children}
     </ErrorBoundary>
   );
