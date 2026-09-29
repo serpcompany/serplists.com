@@ -3,6 +3,12 @@
 The UI system and the conventions that keep screens consistent. Product wording
 rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
 
+The brief: Next.js, shadcn components in their default style (base-nova, neutral), modular
+and reusable blocks, no custom design. Page layouts follow https://aiuxplayground.com/. The
+[UI app map](design-docs/ui-app-map.md) lists every screen and flow, and the [UI screen
+inventory](design-docs/ui-screen-inventory.md) holds each screen's spec card, the reference
+pattern it follows, and its proof pass (SERP's UI runbook).
+
 ## System
 
 - **Components:** shadcn/ui vendored in `src/components/ui/`, configured by
@@ -38,20 +44,63 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   `Toaster` is mounted before the pages because it drops toasts sent before its own
   effect runs, such as a page's first-effect notice on a full page load
   (`tests/unit/components/ToasterPlacement.test.tsx`).
-- **Console layout:** `src/components/dashboard/DashboardContentShell.tsx` provides
+- **Console pages:** `src/components/dashboard/DashboardContentShell.tsx` provides
   `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
   `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New
   console screens compose these instead of new page chrome.
 - **Public header on phones:** below `md` the public shell hides its nav links, Log in
   and the theme switch, and `src/components/layout/PublicMobileNav.tsx` shows them in a
-  menu built from `publicHeaderLinks`, so a new header link reaches phones too. The
-  console shell uses its own `MobileNav` instead.
+  sheet built from `publicHeaderLinks`, so a new header link reaches phones too. Its
+  button sits before the brand. The console shell opens its sidebar as a sheet instead.
+
+## Shells and layout blocks
+
+Pages compose these blocks from `src/components/layout/`; they add no text of their own,
+and a page adds no one-off styling around them. Each is built from shadcn components.
+
+| Block | File | What it is |
+| --- | --- | --- |
+| Shell switch | `src/components/Layout.tsx` | Picks the console shell or the public shell from the path |
+| `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the site links in a `NavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
+| `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` |
+| `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and the site links), the page and the site footer |
+| `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. On phones it opens as its own sheet |
+| `AccountMenu`, `SidebarAccountMenu` | `AccountMenu.tsx` | The signed-in user's `DropdownMenu` (console pages, Profile, Sign out), from an avatar button in the header or the sidebar footer row; both are named "Account menu" |
+| `PageContainer`, `PageSection` | `page-shell.tsx` | The page width (`max-w-6xl`, `px-4 md:px-6`) and a band of vertical spacing |
+| `PageHero` | `PageHero.tsx` | Eyebrow (a `Badge`), large title, muted description, then actions, a `SearchField` and a row of chips |
+| `SearchField` | `SearchField.tsx` | An `InputGroup` search input with a leading icon; the page owns the value |
+| `SectionHeader` | `SectionHeader.tsx` | A section's title (with an optional eyebrow and description) and a "View all"-style link on the right; give it an `id` and its `PageSection` `aria-labelledby` to make the section a named region |
+| `CardGrid` | `CardGrid.tsx` | The responsive grid: 1, 2, then 3 columns (or 2 then 4 for tiles) |
+| `MediaCard` | `MediaCard.tsx` | A muted media area with an `IconTile` (and an optional corner badge or overlay), then the title and a muted description. With `href`, the title's link covers the card; links and buttons in its children stay clickable. `orientation="horizontal"` makes a list row with a thumbnail |
+| `ListCard` | `ListCard.tsx` | A bordered `Item` with an icon tile, title, description and trailing meta; a link when given `href`. `orientation="vertical"` is a category tile |
+| `CtaBanner` | `CtaBanner.tsx` | A muted panel: title and description on the left, buttons on the right |
+| `DetailPageLayout` | `DetailPageLayout.tsx` | `Breadcrumb` (Home, then the trail), a header (icon tile, title, description, meta, actions) with a panel beside it, then the content under a `Separator` |
+| `IconTile`, `BrandLink` | `IconTile.tsx`, `BrandLink.tsx` | The muted icon tile (sizes `sm`, `md`, `lg`; `tone="card"` on a muted area) and the brand mark and name |
+
+`Surface` (in `page-shell.tsx`) gives pages not yet rebuilt from these blocks the Card
+surface; step 2 of the restyle replaces it. The library's `TemplateCard`
+(`src/components/checklist-library/TemplateCard.tsx`) is a `MediaCard` for a public
+Template.
 
 ## Conventions
 
 - Use an existing primitive before adding one. Add to `src/components/ui/` only if
   the component is purely presentational (no app state, features, or API calls;
-  enforced by `deps:check`).
+  enforced by `deps:check`). Add shadcn components with the CLI
+  (`npx shadcn@latest add <name>`) and keep them as generated.
+- Base UI, not Radix: compose with the `render` prop (`<DropdownMenuTrigger
+  render={<Button variant="ghost" />}>`, `<DropdownMenuItem render={<Link href=... />}>`).
+  A link that looks like a button stays a link: `<Link className={buttonVariants(...)}>`
+  (Base UI's `Button` gives whatever it renders button semantics).
+- A `Select` shows its raw value unless it knows the labels: pass `items` (a value to label
+  map) or a function child to `SelectValue`. `onValueChange` may pass `null`.
+- A `DropdownMenuLabel` must sit inside a `DropdownMenuGroup`.
+- `AlertDialogAction` is a plain button: close the dialog yourself when the action should
+  close it (control `open`).
+- A `Switch` or `Checkbox` renders a `<span>` with a hidden input, which a sibling
+  `<Label htmlFor>` cannot name. Render it as a native button (`nativeButton
+  render={<button type="button" />}`) when a sibling label names it, as the Settings,
+  Import and editor switches do.
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
   inputs have a `Label`. The template grid/list toggle in `src/views/Templates.tsx`
   is the reference.
