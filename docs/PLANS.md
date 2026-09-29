@@ -22,6 +22,9 @@ have not been updated in 30 days.
   let agents work reliably in this repo.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
+- [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
+  the proposed migration that makes public Organization Template edits refresh cached
+  sitemaps (TD-23).
 - [UI decoupling](exec-plans/active/ui-decoupling.md): screens consume feature state instead of
   transport code.
 - [Upload quota and ownership](exec-plans/active/upload-quota-and-ownership.md): record uploads
