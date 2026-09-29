@@ -13,14 +13,10 @@ const QUIET_MS = 300;
  * called. `settled()` waits until none are left and none has started or ended for a
  * moment, and stops counting.
  *
- * The local API runs behind wrangler's dev proxy, which now and then drops a request that
- * arrives while the page has several of its own in flight. It answers 503 "Your worker
- * restarted mid-request" without CORS headers (a GET is held instead and never answered),
- * so a test's page.evaluate(fetch) fails with "TypeError: Failed to fetch". Signing in
- * lands on Account Settings, which loads its sections all at once, so a spec that calls
- * the API right after signing in waits for those requests first. A spec also waits here
- * when the next step must be the page's only request, such as a save meant to meet an
- * ended session.
+ * Signing in lands on Account Settings, which loads its sections all at once, so a spec
+ * that calls the API right after signing in lets those requests finish first. A spec also
+ * waits here when the next step must be the page's only request, such as a save meant to
+ * meet an ended session.
  */
 export function trackApiRequests(page: Page, apiBaseUrl: string) {
   const apiOrigin = new URL(apiBaseUrl).origin;
@@ -59,11 +55,15 @@ export type ApiResult<T> = { status: number; ok: boolean; body: T | null };
 
 type ApiInit = { method?: string; body?: unknown };
 
-// The dev proxy's own answer to a non-GET request it dropped (wrangler's ProxyWorker).
+// Wrangler 4.54's dev proxy (ProxyWorker) keeps its connections to the worker open between
+// requests, and workerd closes one that has been idle for 5 seconds. A request the proxy
+// sends on a connection just as it closes fails without reaching the worker; the proxy
+// then answers a non-GET with this 503 (the worker did not restart: it labels every
+// failed forward that way) and holds a GET until another request reaches it
+// (cloudflare/workers-sdk#14641).
 const PROXY_DROPPED_REQUEST = 'Your worker restarted mid-request';
 const MAX_ATTEMPTS = 3;
-// The proxy holds a GET it dropped until another request reaches it, so a GET with no
-// answer for this long is sent again (which also releases the held one).
+// A GET with no answer for this long is sent again (which also releases the held one).
 const HELD_GET_TIMEOUT_MS = 10_000;
 
 function parseBody(text: string): unknown {
@@ -80,11 +80,14 @@ function parseBody(text: string): unknown {
  * or clean up a test's data, or to read what the server stored. Returns the status and the
  * JSON body (null when there is none), and does not throw on an error status.
  *
- * Use this instead of page.evaluate(fetch), which the local dev proxy can drop (see
- * trackApiRequests). Playwright's request client sends the context's cookies without a
- * CORS preflight, and page.route() does not intercept it. A request is sent again only
- * when the proxy dropped it: the proxy's own 503 "worker restarted mid-request", or a GET
- * left unanswered. Every answer from the API itself is returned as it is.
+ * Use this instead of page.evaluate(fetch): when the dev proxy drops a page's request (see
+ * PROXY_DROPPED_REQUEST), a non-GET fails with "TypeError: Failed to fetch" (the 503 has no
+ * CORS headers) and a GET waits for the next request. Playwright's request client sends
+ * the context's cookies without a CORS preflight, and page.route() does not intercept it;
+ * it opens a new connection for every request (request-connections.ts). A request is sent
+ * again only when the proxy dropped it: the proxy's own 503 "worker restarted
+ * mid-request", or a GET left unanswered. Every answer from the API itself is returned as
+ * it is.
  *
  * A test whose subject is a fetch the page itself sends keeps it in page.evaluate and
  * marks it with an `e2e-in-page-fetch:` comment (tests/unit/e2e/e2e-setup-requests.test.ts).

@@ -170,10 +170,19 @@ Common failures:
   of those or creates its own Template; `tests/unit/e2e/seeded-template-paths.test.ts`
   fails on any other literal path unless an `e2e-unseeded-template:` comment says it
   is missing on purpose.
-- The local API runs behind wrangler's dev proxy, which now and then drops a request
-  that arrives while the page has several of its own in flight: a non-GET gets
-  `503 Your worker restarted mid-request` without CORS headers (the browser reports
-  `Failed to fetch`), and a GET is held unanswered. Specs set up and read their data
+- The local API runs on workerd (wrangler's dev server), which closes a keep-alive
+  connection that has been idle for 5 seconds; a request sent on it at that moment is
+  lost. Playwright's request client (`page.request`, the `request` fixture,
+  `route.fetch`) keeps idle connections with no limit of its own, so its request
+  failed with `socket hang up`. `playwright.config.ts` calls `disableRequestKeepAlive()`
+  from `tests/e2e/support/request-connections.ts`, which gives each of its requests a
+  new connection; `tests/unit/e2e/request-connections.test.ts` fails if a Playwright
+  upgrade undoes that.
+- Wrangler 4.54's dev proxy keeps its own connections to the worker the same way and
+  has no setting for it (TD-24 in the tech debt tracker): a non-GET it could not
+  forward gets `503 Your worker restarted mid-request` although the worker never
+  restarted, without CORS headers (the browser reports `Failed to fetch`), and a GET
+  is held until another request reaches the proxy. Specs set up and read their data
   with `apiRequest()` or `apiJson()` from `tests/e2e/support/api-requests.ts`: they
   call the API through Playwright's request client with the page's cookies, and send
   a request again only when the proxy dropped it. A fetch inside `page.evaluate()`
@@ -181,6 +190,11 @@ Common failures:
   `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
   any other. `trackApiRequests()` in the same file waits for the page's own requests,
   such as the several that Account Settings sends when signing in lands there.
+- To trace a failed request to the local API, open wrangler's debug log for that run:
+  every session writes one, with timestamps and the API's own `api_request` lines, to
+  `.wrangler/logs` in your home folder (`%APPDATA%\xdg.config\.wrangler\logs` on
+  Windows). Compare it with the times in the test's trace. A reload of the worker
+  shows there as `Reloading local server`.
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
   routes change.
