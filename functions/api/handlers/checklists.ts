@@ -273,7 +273,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
         return jsonError('Forbidden', 403);
       }
       if (!(typeof runRecord.deleted_at === 'string' && runRecord.deleted_at)) {
-        return jsonError('Checklist is not archived', 400);
+        return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
       }
 
       const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
@@ -318,7 +318,7 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
           if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
         }
         // A concurrent request restored it first.
-        return jsonError('Checklist is not archived', 400);
+        return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
       }
 
       return json({ success: true });

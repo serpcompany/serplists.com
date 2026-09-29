@@ -186,6 +186,8 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1/restore', 'POST');
 
     expect(result.status).toBe(400);
+    // The page refreshes its archive list on this code.
+    expect(result.body.code).toBe('not_archived');
     expectGuardedAudit(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 
@@ -232,6 +234,8 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleTemplates, 'templates/template-1/restore', 'POST');
 
     expect(result.status).toBe(400);
+    // The page refreshes its archive list on this code.
+    expect(result.body.code).toBe('not_archived');
     expectGuardedAudit(schema.templates, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 });

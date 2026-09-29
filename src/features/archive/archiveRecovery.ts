@@ -79,10 +79,26 @@ export const getArchiveListState = (query: {
 export const canRestoreArchiveItem = (permissions: ResourcePermissions, kind: ArchiveKind): boolean =>
   kind === 'template' ? permissions.canEditTemplates : permissions.canManage;
 
+// The item left the archive since the list loaded: another tab, a teammate or a concurrent
+// request restored it (not_archived), or it is gone or out of reach (404). Plan-limit and
+// role refusals leave it archived, so they are not stale.
+const isNoLongerArchivedError = (error: unknown): boolean =>
+  isApiError(error) && (error.code === 'not_archived' || error.status === 404);
+
 // Plan limits come back as a 403 with a code and the reason in the message. A 403 without a
 // code is a role refusal (the role changed since the page loaded), whose message is only
 // "Forbidden".
 export function describeRestoreError(error: unknown, kind: ArchiveKind): string {
+  if (isApiError(error) && error.code === 'not_archived') {
+    return kind === 'template'
+      ? 'This template was already restored. The list was refreshed.'
+      : 'This run was already restored. The list was refreshed.';
+  }
+  if (isApiError(error) && error.status === 404) {
+    return kind === 'template'
+      ? 'This template is no longer available. The list was refreshed.'
+      : 'This run is no longer available. The list was refreshed.';
+  }
   if (isApiError(error) && error.status === 403 && !error.code) {
     return kind === 'template'
       ? 'Your role in this Organization cannot restore templates.'
@@ -101,32 +117,49 @@ type RestoreDependencies = {
   scopeId: string;
 };
 
+// Refreshes the archive list the item left and the lists it returns to. Uses the user and
+// context the restore started in, so a context switch mid-request refreshes the right keys.
+function refreshAfterRestore(
+  { queryClient, scopeId, userId }: RestoreDependencies,
+  item: Pick<ArchiveItem, 'id' | 'kind'>,
+): Promise<unknown> {
+  if (item.kind === 'template') {
+    forgetRestoredTemplate(queryClient, item.id);
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.archivedTemplates(userId, scopeId) }),
+      queryClient.invalidateQueries({ queryKey: ['templates'] }),
+      refreshRunLists(queryClient),
+    ]);
+  }
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.archivedRuns(userId, scopeId) }),
+    refreshRunLists(queryClient),
+  ]);
+}
+
 // Restores one archived item and refreshes the lists it returns to. Resolves false without a
 // request when the same item is already being restored; rejects with the server's error.
+// When the item already left the archive, the lists are refreshed before rejecting, so its
+// row goes instead of offering a Restore that fails every time.
 export async function restoreArchiveItem(
   dependencies: RestoreDependencies,
   item: Pick<ArchiveItem, 'id' | 'kind'>,
 ): Promise<boolean> {
-  const { pending, queryClient, scopeId, userId } = dependencies;
+  const { pending } = dependencies;
   if (pending.has(item.id)) return false;
 
   pending.add(item.id);
   try {
-    if (item.kind === 'template') {
-      await dependencies.restoreTemplate(item.id);
-      forgetRestoredTemplate(queryClient, item.id);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.archivedTemplates(userId, scopeId) }),
-        queryClient.invalidateQueries({ queryKey: ['templates'] }),
-        refreshRunLists(queryClient),
-      ]);
-    } else {
-      await dependencies.restoreRun(item.id);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.archivedRuns(userId, scopeId) }),
-        refreshRunLists(queryClient),
-      ]);
+    try {
+      await (item.kind === 'template' ? dependencies.restoreTemplate(item.id) : dependencies.restoreRun(item.id));
+    } catch (error) {
+      if (isNoLongerArchivedError(error)) {
+        // A failed refresh must not replace the restore error the caller shows.
+        await refreshAfterRestore(dependencies, item).catch(() => {});
+      }
+      throw error;
     }
+    await refreshAfterRestore(dependencies, item);
     return true;
   } finally {
     pending.delete(item.id);

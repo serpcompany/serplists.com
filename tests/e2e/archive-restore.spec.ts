@@ -59,6 +59,37 @@ test('an archived template and run can be restored from the archive page', async
   await expect(page.getByText(runTitle)).toBeVisible({ timeout: 15_000 });
 });
 
+// Another tab or a teammate restored the item while this page still listed it. Restore here
+// failed with "Template is not archived" on every click and the row stayed until a reload.
+test('an item restored elsewhere leaves the archive when Restore finds it already restored', async ({ page }) => {
+  await loginAsAdmin(page);
+  const title = `Archive restored elsewhere ${Date.now()}`;
+  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
+  const template = await apiRequest<{ id: string }>(page, '/templates', {
+    method: 'POST',
+    body: { title, is_public: false, sections },
+  });
+  const templateId = template.body?.id as string;
+  expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
+
+  await page.goto('/dashboard/archive');
+  const row = archiveRow(page, title);
+  await expect(row).toHaveCount(1, { timeout: 15_000 });
+
+  // Restored elsewhere. The archive list is fresh for a minute, so this page still shows it.
+  expect((await apiRequest(page, `/templates/${templateId}/restore`, { method: 'POST' })).status).toBe(200);
+
+  const refused = page.waitForResponse(
+    (response) => response.url().includes(`/api/templates/${templateId}/restore`) && response.request().method() === 'POST',
+  );
+  await row.getByRole('button', { name: 'Restore' }).click();
+  expect((await refused).status()).toBe(400);
+  await expect(page.getByText('This template was already restored. The list was refreshed.')).toBeVisible();
+  await expect(archiveRow(page, title)).toHaveCount(0, { timeout: 15_000 });
+
+  expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
+});
+
 test('a deleted run appears in the archive without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runTitle = `Archive refresh run ${Date.now()}`;
