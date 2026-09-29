@@ -1,4 +1,6 @@
-import { Link, useLocation } from 'react-router-dom';
+'use client';
+
+import { usePathname } from 'next/navigation';
 import {
   Archive,
   FileText,
@@ -24,6 +26,8 @@ import {
 } from '@/lib/routes';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { APP_BRAND_NAME } from '@/lib/brand';
+
+import { Link } from '@/components/navigation/Link';
 
 const navItems = [
   {
@@ -62,10 +66,10 @@ const isActivePath = (pathname: string, href: string) =>
   (href === buildConsoleRunsPath() && pathname.startsWith('/run/'));
 
 export function DashboardSidebar() {
-  const location = useLocation();
+  const pathname = usePathname();
   const { canEditTemplates } = useWorkspace();
   const importTemplatesPath = buildConsoleTemplateImportPath();
-  const importTemplatesActive = isActivePath(location.pathname, importTemplatesPath);
+  const importTemplatesActive = isActivePath(pathname, importTemplatesPath);
 
   return (
     <aside className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
@@ -79,7 +83,7 @@ export function DashboardSidebar() {
       {canEditTemplates ? (
         <div className="p-3">
           <Button asChild className="w-full justify-start gap-2">
-            <Link to={buildConsoleTemplateCreatePath()}>
+            <Link href={buildConsoleTemplateCreatePath()}>
               <PlusCircle className="h-4 w-4" />
               New Template
             </Link>
@@ -90,7 +94,7 @@ export function DashboardSidebar() {
       <nav className="flex-1 px-3">
         <ul className="space-y-1">
           {navItems.map((item) => {
-            const active = isActivePath(location.pathname, item.href);
+            const active = isActivePath(pathname, item.href);
 
             return (
               <li key={item.href}>
@@ -104,7 +108,7 @@ export function DashboardSidebar() {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <Link to={item.href}>
+                  <Link href={item.href}>
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </Link>
@@ -118,7 +122,7 @@ export function DashboardSidebar() {
 
         <ul className="space-y-1">
           {secondaryNavItems.map((item) => {
-            const active = isActivePath(location.pathname, item.href);
+            const active = isActivePath(pathname, item.href);
 
             return (
               <li key={item.href}>
@@ -132,7 +136,7 @@ export function DashboardSidebar() {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  <Link to={item.href}>
+                  <Link href={item.href}>
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </Link>
@@ -150,7 +154,7 @@ export function DashboardSidebar() {
           variant={importTemplatesActive ? 'secondary' : 'outline'}
           className="w-full justify-start gap-2"
         >
-          <Link to={importTemplatesPath}>
+          <Link href={importTemplatesPath}>
             <Import className="h-4 w-4" />
             Import Templates
           </Link>

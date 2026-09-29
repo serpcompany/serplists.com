@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Users, X } from 'lucide-react';
 
@@ -17,7 +19,9 @@ import {
   isPublicTemplatesDiscoveryPath,
 } from '@/lib/routes';
 import { toast } from 'sonner';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
+
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 function resolveFrontendPort(): string {
   return typeof window === 'undefined' ? '' : window.location.port;
@@ -25,33 +29,37 @@ function resolveFrontendPort(): string {
 
 export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useAppRouter();
+  // Dev-only and browser-only (it shows the page's port), so it renders after mount: the
+  // server's HTML never differs from the first client render.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
   const [isVisible, setIsVisible] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
 
   // Only show in development
-  if (!import.meta.env.DEV) return null;
+  if (!import.meta.env.DEV || !mounted) return null;
 
-  if (isBlankTemplateEditorRoute(location.pathname)) {
+  if (isBlankTemplateEditorRoute(pathname)) {
     return null;
   }
 
-  if (isPublicTemplatesDiscoveryPath(location.pathname)) {
+  if (isPublicTemplatesDiscoveryPath(pathname)) {
     return null;
   }
 
   if (
-    location.pathname === '/' ||
-    location.pathname.startsWith('/categories') ||
-    location.pathname.startsWith('/profile/') ||
-    location.pathname.startsWith('/run/') ||
-    location.pathname.startsWith('/share/')
+    pathname === '/' ||
+    pathname.startsWith('/categories') ||
+    pathname.startsWith('/profile/') ||
+    pathname.startsWith('/run/') ||
+    pathname.startsWith('/share/')
   ) {
     return null;
   }
 
-  if (location.pathname.startsWith(buildConsoleHomePath())) {
+  if (pathname.startsWith(buildConsoleHomePath())) {
     return null;
   }
 
@@ -73,7 +81,7 @@ export function DevLoginBar(): JSX.Element | null {
       const result = await login(testUser.email, testUser.password);
       if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
-        navigate(buildConsoleHomePath());
+        router.push(buildConsoleHomePath());
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
@@ -91,7 +99,7 @@ export function DevLoginBar(): JSX.Element | null {
         logout,
         onSignedOut: () => {
           toast.success('Logged out');
-          navigate('/');
+          router.push('/');
         },
         onError: (message) => toast.error(message),
       });

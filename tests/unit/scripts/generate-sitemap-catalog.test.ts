@@ -16,13 +16,13 @@ const packPath = 'src/data/public-template-packs/foundational.json';
 const catalogPath = 'functions/sitemap/bundled-catalog.generated.json';
 // Every file the generator reads a git date from.
 const sourceFiles = [
-  'src/pages/Index.tsx',
-  'src/pages/Features.tsx',
-  'src/pages/Pricing.tsx',
-  'src/pages/About.tsx',
-  'src/pages/Contact.tsx',
-  'src/pages/ChecklistLibrary.tsx',
-  'src/pages/Categories.tsx',
+  'src/views/Index.tsx',
+  'src/views/Features.tsx',
+  'src/views/Pricing.tsx',
+  'src/views/About.tsx',
+  'src/views/Contact.tsx',
+  'src/views/ChecklistLibrary.tsx',
+  'src/views/Categories.tsx',
   'src/data/publicCategories.ts',
   ...SITEMAP_IMPLEMENTATION_SOURCES,
 ];

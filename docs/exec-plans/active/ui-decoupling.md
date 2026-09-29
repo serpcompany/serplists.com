@@ -8,7 +8,7 @@
 ## Progress
 
 Mechanical tracking: the `screens-do-not-call-transport` rule in `pnpm run deps:check`
-fails on any new direct `api` call from `src/pages` or `src/components`. Remaining
+fails on any new direct `api` call from `src/views` or `src/components`. Remaining
 legacy call sites are listed in `.dependency-cruiser-known-violations.json`.
 
 - [x] Task 1: legacy `api/client.ts` removed (2026-09-27). It was imported only by
@@ -113,11 +113,11 @@ Do now:
 
 High-value first targets:
 
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/TemplateEditor.tsx`
-- `src/pages/UserProfile.tsx` (done 2026-09-28: loads through `src/features/profile/loadUserProfile.ts`)
+- `src/views/PublicTemplate.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/TemplateEditor.tsx`
+- `src/views/UserProfile.tsx` (done 2026-09-28: loads through `src/features/profile/loadUserProfile.ts`)
 
 Expected result:
 

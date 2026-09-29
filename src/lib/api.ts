@@ -17,8 +17,7 @@ import {
 } from "@/lib/schemas/teamInvite";
 
 const API_BASE_URL = resolveApiBaseUrl({
-  isDev: import.meta.env.DEV,
-  configuredUrl: env.VITE_API_URL,
+  configuredUrl: env.NEXT_PUBLIC_API_URL,
   pageHostname: typeof window === 'undefined' ? undefined : window.location.hostname,
 });
 

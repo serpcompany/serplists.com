@@ -1,54 +1,38 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useRef } from 'react';
-import { type BlockerFunction, useBlocker, useLocation } from 'react-router-dom';
 
 import { registerLeaveGuard } from './leaveGuard';
 
 // Asks before a page's unsaved work is lost, whichever way the user leaves:
-// - any route change (sidebar, header, account menu, in-page links and buttons, and
-//   browser Back/Forward) through useBlocker, which needs the app's data router. It asks
-//   only when the pathname changes: a search or hash change keeps the page mounted;
-// - signing out, which unmounts the page, through the leave-guard registry;
+// - links and code that opens another page (sidebar, header, account menu, in-page links and
+//   buttons) through the leave-guard registry, which the app's Link and useAppRouter consult.
+//   They ask only when the pathname changes: a search or hash change keeps the page mounted;
+// - browser Back/Forward, through a same-URL history entry pushed above the page's own: the
+//   browser lands on the page's entry first (the URL does not change), and the page asks
+//   there before going on;
+// - signing out, which unmounts the page, through the same registry;
 // - reloads, tab closes, and external links through beforeunload.
-// A session that ends in the background unmounts the page without asking; `keepWork`
-// then keeps the work on this tab (see leaveGuard.ts) and returns true when it did.
+// A session that ends in the background unmounts the page without asking; `keepWork` then
+// keeps the work on this tab (see leaveGuard.ts) and returns true when it did.
 // `message` is the question asked in the app (browsers show their own on unload).
 export const useUnsavedChangesGuard = (
   shouldBlock: boolean,
   message: string,
   keepWork?: () => boolean,
 ) => {
-  // Set once the user chose to leave, or the page leaves on its own after its work was
-  // kept or saved, so the same exit is not questioned twice.
+  // Set once the user chose to leave, or the page leaves on its own after its work was kept
+  // or saved, so the same exit is not questioned twice.
   const leaveAllowedRef = useRef(false);
   const keepWorkRef = useRef(keepWork);
   keepWorkRef.current = keepWork;
-  const { pathname } = useLocation();
+  const pathname = usePathname();
 
   // A route that keeps the page mounted for another record starts guarded again.
   useEffect(() => {
     leaveAllowedRef.current = false;
   }, [pathname]);
-
-  const blockerFunction = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) =>
-      !leaveAllowedRef.current && shouldBlock && currentLocation.pathname !== nextLocation.pathname,
-    [shouldBlock],
-  );
-  const blocker = useBlocker(blockerFunction);
-
-  useEffect(() => {
-    if (blocker.state !== 'blocked') {
-      return;
-    }
-
-    // The router asks the blocker from the last render, so a page that saved its work and
-    // left in the same step is blocked on the old answer: it goes without a question.
-    if (!shouldBlock || leaveAllowedRef.current || window.confirm(message)) {
-      blocker.proceed();
-    } else {
-      blocker.reset();
-    }
-  }, [blocker, message, shouldBlock]);
 
   useEffect(
     () =>
@@ -65,6 +49,34 @@ export const useUnsavedChangesGuard = (
       }),
     [shouldBlock, message],
   );
+
+  // Browser Back/Forward. Next.js keeps its own router state in history entries, so the extra
+  // entry copies the current one: going back to it renders the same page.
+  useEffect(() => {
+    if (!shouldBlock) {
+      return undefined;
+    }
+
+    const holdPage = () => window.history.pushState(window.history.state, '', window.location.href);
+    holdPage();
+
+    const handlePopState = () => {
+      if (leaveAllowedRef.current) {
+        return;
+      }
+      if (window.confirm(message)) {
+        leaveAllowedRef.current = true;
+        window.history.back();
+      } else {
+        holdPage();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [shouldBlock, message]);
 
   useEffect(() => {
     if (!shouldBlock) {
@@ -85,8 +97,8 @@ export const useUnsavedChangesGuard = (
     };
   }, [shouldBlock]);
 
-  // allowLeave also covers a full-page redirect (checkout) once the work is kept
-  // elsewhere; guardLeave undoes it when that redirect did not happen.
+  // allowLeave also covers a full-page redirect (checkout) once the work is kept elsewhere;
+  // guardLeave undoes it when that redirect did not happen.
   const allowLeave = useCallback(() => {
     leaveAllowedRef.current = true;
   }, []);

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { FileText, List, Play, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,8 @@ import {
   buildConsoleTemplatePath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import { Link } from '@/components/navigation/Link';
 
 // Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 type TemplateListItemProps = {
@@ -40,7 +41,7 @@ export function TemplateListItem({
 
       <div className="min-w-0 flex-1">
         <Link
-          to={buildConsoleTemplatePath(template.id)}
+          href={buildConsoleTemplatePath(template.id)}
           className="text-sm font-medium text-foreground hover:underline"
         >
           {template.title}
@@ -72,7 +73,7 @@ export function TemplateListItem({
         ) : null}
         {canEdit ? (
           <Button variant="ghost" size="sm" asChild>
-            <Link to={buildConsoleTemplateEditPath(template.id)}>Edit</Link>
+            <Link href={buildConsoleTemplateEditPath(template.id)}>Edit</Link>
           </Button>
         ) : null}
         {onDelete ? (

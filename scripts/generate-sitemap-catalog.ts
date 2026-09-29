@@ -31,17 +31,17 @@ const outputPath = path.join(
   'functions/sitemap/bundled-catalog.generated.json',
 );
 const staticPageSources = [
-  { path: '/', sources: ['src/pages/Index.tsx'] },
-  { path: '/features', sources: ['src/pages/Features.tsx'] },
-  { path: '/features/template-builder', sources: ['src/pages/Features.tsx'] },
-  { path: '/features/checklist-runs', sources: ['src/pages/Features.tsx'] },
-  { path: '/features/public-sharing', sources: ['src/pages/Features.tsx'] },
-  { path: '/features/import-export', sources: ['src/pages/Features.tsx'] },
-  { path: '/pricing', sources: ['src/pages/Pricing.tsx'] },
-  { path: '/about', sources: ['src/pages/About.tsx'] },
-  { path: '/contact', sources: ['src/pages/Contact.tsx'] },
-  { path: '/templates', sources: ['src/pages/ChecklistLibrary.tsx'] },
-  { path: '/categories', sources: ['src/pages/Categories.tsx'] },
+  { path: '/', sources: ['src/views/Index.tsx'] },
+  { path: '/features', sources: ['src/views/Features.tsx'] },
+  { path: '/features/template-builder', sources: ['src/views/Features.tsx'] },
+  { path: '/features/checklist-runs', sources: ['src/views/Features.tsx'] },
+  { path: '/features/public-sharing', sources: ['src/views/Features.tsx'] },
+  { path: '/features/import-export', sources: ['src/views/Features.tsx'] },
+  { path: '/pricing', sources: ['src/views/Pricing.tsx'] },
+  { path: '/about', sources: ['src/views/About.tsx'] },
+  { path: '/contact', sources: ['src/views/Contact.tsx'] },
+  { path: '/templates', sources: ['src/views/ChecklistLibrary.tsx'] },
+  { path: '/categories', sources: ['src/views/Categories.tsx'] },
 ] as const;
 
 const optionalText = (value: unknown): string | undefined =>

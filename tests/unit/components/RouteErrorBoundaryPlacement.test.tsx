@@ -12,8 +12,8 @@ vi.mock('@/components/RouteErrorBoundary', () => ({
   ),
 }));
 
-vi.mock('@/pages/ChecklistRun', () => ({ default: () => <p>Shared run page</p> }));
-vi.mock('@/pages/NotFound', () => ({ default: () => <p>Missing page</p> }));
+vi.mock('@/views/ChecklistRun', () => ({ default: () => <p>Shared run page</p> }));
+vi.mock('@/views/NotFound', () => ({ default: () => <p>Missing page</p> }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,

@@ -10,7 +10,7 @@ through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)). Path aliases: `@/*` maps
 | Path | Role |
 | --- | --- |
 | `src/App.tsx`, `src/appRoutes.tsx`, `src/main.tsx` | Providers and the data router, the route tree, bootstrap |
-| `src/pages/` | Route screens: compose components and feature models |
+| `src/views/` | Route screens: compose components and feature models |
 | `src/components/` | Feature UI; `components/ui/` holds presentational primitives |
 | `src/features/*/` | Headless feature models (`use*Model.ts`) and mappers from API shapes to domain types |
 | `src/contexts/` | Auth, Ownership Context (legacy `WorkspaceContext`), Templates and Runs |
@@ -227,7 +227,7 @@ let it ask, so the user is asked once.
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
-  after the user has left. `tests/unit/pages/navigateAfterAwait.test.ts` scans `src/`
+  after the user has left. `tests/unit/views/navigateAfterAwait.test.ts` scans `src/`
   and fails when an async handler navigates, signs in or starts checkout after an
   await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
   the visit has ended, a callback given to one of the visit helpers, or a call that is
@@ -275,7 +275,7 @@ let it ask, so the user is asked once.
 - Use React Hook Form field arrays for sections, items, content blocks, and
   sub-items instead of a second nested state tree.
 - The editor page creates its form only after the template has loaded
-  (`TemplateEditorForm` in `src/pages/TemplateEditor.tsx`), so nothing mounts against
+  (`TemplateEditorForm` in `src/views/TemplateEditor.tsx`), so nothing mounts against
   the blank defaults. UI state about sections, such as which ones the outline has
   collapsed, is keyed by section id and never seeded from the sections present at
   mount: a Clipy draft, a restored draft, or a save replaces the sections with
@@ -437,7 +437,7 @@ with its own `SEOHead` text needs a matching function under `functions/link-prev
 its path in the rewrite rule.
 
 Cloudflare Pages serves `index.html` with a 200 for every unknown path, so the 404 page
-(`src/pages/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
+(`src/views/NotFound.tsx`) marks itself `noindex` and declares no canonical URL. Render
 `NotFound` only once a lookup has settled: a page whose data is still loading, or failed
 to load, shows a loading or retry state instead, so a real page never sends `noindex`.
 Never render `NotFound` next to an `SEOHead`. Do not add a top-level `404.html`; it turns

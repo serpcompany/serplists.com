@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiRequest } from './support/api-requests';
 
 // Start Run and Save on a public template page act once per click intent
-// (src/pages/PublicTemplate.tsx, src/components/template/PublicTemplateView.tsx).
+// (src/views/PublicTemplate.tsx, src/components/template/PublicTemplateView.tsx).
 
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
 

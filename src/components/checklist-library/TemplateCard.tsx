@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Eye, FileText, List, Play } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,6 +16,8 @@ import {
   getTemplateOwnerLabel,
   getTemplateSectionCount,
 } from '@/components/checklist-library/discovery-utils';
+
+import { Link } from '@/components/navigation/Link';
 
 interface TemplateCardProps {
   layout?: 'horizontal' | 'vertical';
@@ -96,7 +97,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
               className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100"
             >
               <Button asChild>
-                <Link tabIndex={-1} to={templatePath}>
+                <Link tabIndex={-1} href={templatePath}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Template
                 </Link>
@@ -120,7 +121,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
           ) : null}
 
           {templatePath ? (
-            <Link to={templatePath} className="block">
+            <Link href={templatePath} className="block">
               {summary}
             </Link>
           ) : (
@@ -141,7 +142,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             {ownerHandle ? (
               <Link
                 className="flex min-w-0 items-center gap-2 transition-colors hover:text-foreground"
-                to={buildPublicProfilePath(ownerHandle)}
+                href={buildPublicProfilePath(ownerHandle)}
               >
                 <Avatar className="h-5 w-5">
                   <AvatarImage src="" />
@@ -166,7 +167,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
 
             {templatePath ? (
               <Button asChild className="h-7 px-2 text-xs" size="sm" variant="ghost">
-                <Link to={templatePath}>
+                <Link href={templatePath}>
                   <Play className="mr-1 h-3 w-3" />
                   Start
                 </Link>

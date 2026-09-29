@@ -1,9 +1,10 @@
 import { AlertTriangle } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { DashboardEmptyState } from '@/components/dashboard/DashboardContentShell';
 import { isAuthRequiredError } from '@/lib/api-errors';
+
+import { Link } from '@/components/navigation/Link';
 
 interface ListLoadErrorStateProps {
   error: unknown;
@@ -28,7 +29,7 @@ export function ListLoadErrorState({ error, listName, onRetry }: ListLoadErrorSt
       action={
         signedOut ? (
           <Button asChild>
-            <Link to="/login">Sign in</Link>
+            <Link href="/login">Sign in</Link>
           </Button>
         ) : (
           <Button type="button" onClick={onRetry}>

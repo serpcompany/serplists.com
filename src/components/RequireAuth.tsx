@@ -1,44 +1,35 @@
-import type { ReactNode } from "react";
-import { useEffect } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/CloudflareAuthContext";
-import { resolveProtectedRouteAction } from "@/contexts/authSession";
-import { Button } from "@/components/ui/button";
-import { APP_BRAND_NAME } from "@/lib/brand";
-import { Loader2 } from "lucide-react";
+'use client';
 
-const RequireAuth = ({ children }: { children?: ReactNode }) => {
+import type { ReactNode } from 'react';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { resolveProtectedRouteAction } from '@/contexts/authSession';
+import { withReturnPath } from '@/lib/auth/returnPath';
+import { APP_BRAND_NAME } from '@/lib/brand';
+
+const RequireAuth = ({ children }: { children: ReactNode }) => {
   const { retrySession, sessionStatus } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   // Only a confirmed "no session" goes to /login. A failed session check keeps the page and
   // offers a retry, because the user's session may still be valid.
   const action = resolveProtectedRouteAction(sessionStatus);
 
   useEffect(() => {
-    if (action !== "redirect") {
+    if (action !== 'redirect') {
       return;
     }
 
-    navigate("/login", {
-      replace: true,
-      state: {
-        from: {
-          hash: location.hash,
-          pathname: location.pathname,
-          search: location.search,
-        },
-      },
-    });
-  }, [
-    action,
-    location.hash,
-    location.pathname,
-    location.search,
-    navigate,
-  ]);
+    // Login sends the user back here after signing in (the `next` parameter, sanitized there).
+    const { search, hash } = window.location;
+    router.replace(withReturnPath('/login', `${pathname}${search}${hash}`));
+  }, [action, pathname, router]);
 
-  if (action === "unavailable") {
+  if (action === 'unavailable') {
     return (
       <div
         className="flex h-screen flex-col items-center justify-center gap-4 px-4 text-center"
@@ -55,7 +46,7 @@ const RequireAuth = ({ children }: { children?: ReactNode }) => {
     );
   }
 
-  if (action !== "render") {
+  if (action !== 'render') {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -63,7 +54,7 @@ const RequireAuth = ({ children }: { children?: ReactNode }) => {
     );
   }
 
-  return children ? <>{children}</> : <Outlet />;
+  return <>{children}</>;
 };
 
 export default RequireAuth;

@@ -1,9 +1,10 @@
 import { Lock } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/routes";
+
+import { Link } from '@/components/navigation/Link';
 
 type TemplateEditorReadOnlyNoticeProps = {
   // The template the edit link was for; absent on the new-template route.
@@ -32,11 +33,11 @@ export function TemplateEditorReadOnlyNotice({ templateId, reason }: TemplateEdi
       <div className="mt-4 flex flex-wrap gap-2">
         {templateId ? (
           <Button asChild>
-            <Link to={buildConsoleTemplatePath(templateId)}>View template</Link>
+            <Link href={buildConsoleTemplatePath(templateId)}>View template</Link>
           </Button>
         ) : null}
         <Button asChild variant="outline">
-          <Link to={buildConsoleTemplatesPath()}>Back to Templates</Link>
+          <Link href={buildConsoleTemplatesPath()}>Back to Templates</Link>
         </Button>
       </div>
     </div>

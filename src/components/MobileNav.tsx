@@ -1,5 +1,7 @@
+'use client';
+
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 import {
   Archive,
   FileText,
@@ -40,6 +42,8 @@ import {
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
+import { Link } from '@/components/navigation/Link';
+
 const navItems = [
   { href: '/', icon: Home, title: 'Home' },
   { href: buildConsoleHomePath(), icon: LayoutGrid, title: 'Dashboard' },
@@ -76,7 +80,7 @@ const isActivePath = (pathname: string, href: string) =>
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-  const location = useLocation();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { canEditTemplates } = useWorkspace();
 
@@ -102,7 +106,7 @@ export function MobileNav() {
                 size="sm"
                 onClick={() => setOpen(false)}
               >
-                <Link to={buildConsoleTemplateCreatePath()}>
+                <Link href={buildConsoleTemplateCreatePath()}>
                   <Plus className="mr-2 h-4 w-4" />
                   New Template
                 </Link>
@@ -114,7 +118,7 @@ export function MobileNav() {
               size="sm"
               variant="outline"
             >
-              <Link to={buildPublicTemplatesPath()}>
+              <Link href={buildPublicTemplatesPath()}>
                 <Search className="h-4 w-4" />
               </Link>
             </Button>
@@ -123,12 +127,12 @@ export function MobileNav() {
 
         <nav className="flex-1 overflow-y-auto p-2">
           {navItems.map((item) => {
-            const active = isActivePath(location.pathname, item.href);
+            const active = isActivePath(pathname, item.href);
 
             return (
               <Link
                 key={item.href}
-                to={item.href}
+                href={item.href}
                 onClick={() => setOpen(false)}
                 className={cn(
                   'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -147,7 +151,7 @@ export function MobileNav() {
         <div className="border-t border-border p-4">
           <ThemeToggle showLabel className="mb-2" />
           <Link
-            to={buildConsoleSettingsPath()}
+            href={buildConsoleSettingsPath()}
             onClick={() => setOpen(false)}
             className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           >
@@ -169,8 +173,7 @@ export function MobileNav() {
 }
 
 export function MobileBottomNav() {
-  const location = useLocation();
-  const pathname = location.pathname;
+  const pathname = usePathname();
   const { canEditTemplates } = useWorkspace();
 
   if (pathname.includes('/edit') || pathname.includes('/new')) {
@@ -191,7 +194,7 @@ export function MobileBottomNav() {
             return (
               <Link
                 key={item.href}
-                to={item.href}
+                href={item.href}
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
               >
                 <item.icon className="h-5 w-5" />
@@ -202,7 +205,7 @@ export function MobileBottomNav() {
           return (
             <Link
               key={item.href}
-              to={item.href}
+              href={item.href}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
                 active ? 'text-foreground' : 'text-muted-foreground',

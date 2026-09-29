@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from 'react-router-dom';
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { QueryErrorNotice } from "@/components/shared/QueryListState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+
+import { Link } from '@/components/navigation/Link';
 
 export function BillingSection() {
   const { user } = useAuth();
@@ -170,7 +172,7 @@ export function BillingSection() {
             A template you could not save is kept on this tab.{" "}
             <Link
               className="font-medium text-primary underline-offset-4 hover:underline"
-              to={buildConsoleTemplateCreatePath()}
+              href={buildConsoleTemplateCreatePath()}
             >
               Resume template draft
             </Link>

@@ -79,6 +79,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
+    "@opennextjs/cloudflare": "^1.20.7",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-aspect-ratio": "^1.1.0",
@@ -122,10 +123,11 @@
     "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.462.0",
+    "next": "16.3.6",
     "next-themes": "^0.3.0",
-    "react": "^18.3.1",
+    "react": "^19.2.8",
     "react-day-picker": "^8.10.1",
-    "react-dom": "^18.3.1",
+    "react-dom": "^19.2.8",
     "react-helmet-async": "^2.0.5",
     "react-hook-form": "^7.53.0",
     "react-markdown": "^10.1.0",
@@ -133,6 +135,7 @@
     "react-router-dom": "^6.26.2",
     "recharts": "^2.12.7",
     "remark-gfm": "^4.0.1",
+    "server-only": "^0.0.1",
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
@@ -148,8 +151,8 @@
     "@tailwindcss/typography": "^0.5.15",
     "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.5.5",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vitest/ui": "^3.2.4",
@@ -160,6 +163,7 @@
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.8",
     "eslint": "^9.9.0",
+    "eslint-config-next": "16.3.6",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
@@ -175,14 +179,9 @@
     "typescript-eslint": "^8.0.1",
     "vite": "^5.4.1",
     "vitest": "^3.2.4",
-    "wrangler": "^4.54.0",
+    "wrangler": "^4.143.0",
     "xmllint-wasm": "5.3.0",
     "zod-to-json-schema": "^3.25.1"
   },
-  "packageManager": "pnpm@9.2.0+sha1.886364ebd6dae009284bebc56ed4296bb6dd557a",
-  "pnpm": {
-    "patchedDependencies": {
-      "wrangler@4.54.0": "patches/wrangler@4.54.0.patch"
-    }
-  }
+  "packageManager": "pnpm@9.2.0+sha1.886364ebd6dae009284bebc56ed4296bb6dd557a"
 }

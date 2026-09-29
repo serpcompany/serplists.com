@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiRequest } from './support/api-requests';
 
 // Deleting a Template or Run archives it. The archive page, opened from the console
-// navigation, lists archived items and restores them (src/pages/Archive.tsx).
+// navigation, lists archived items and restores them (src/views/Archive.tsx).
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login');

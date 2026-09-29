@@ -42,8 +42,8 @@ describe("pending flags that carry a billing redirect", () => {
       expect.arrayContaining([
         "src/components/account/BillingSection.tsx:isStartingCheckout",
         "src/components/account/BillingSection.tsx:isOpeningPortal",
-        "src/pages/Pricing.tsx:isStartingCheckout",
-        "src/pages/Templates.tsx:isStartingCheckout",
+        "src/views/Pricing.tsx:isStartingCheckout",
+        "src/views/Templates.tsx:isStartingCheckout",
         "src/features/template-editor/useTemplateEditorAccess.ts:isStartingCheckout",
       ]),
     );
@@ -60,7 +60,7 @@ describe("pending flags that carry a billing redirect", () => {
 // The plan may have changed at Stripe (or in another tab) before the user pressed Back.
 describe.each([
   "src/components/account/BillingSection.tsx",
-  "src/pages/Pricing.tsx",
+  "src/views/Pricing.tsx",
   "src/features/template-editor/useTemplateEditorAccess.ts",
 ])("%s", (file) => {
   it("refetches billing status when the page is restored", () => {

@@ -1,5 +1,4 @@
 import { AlertTriangle, Check, ChevronDown, RotateCw, Settings, User, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -14,6 +13,8 @@ import { useWorkspace, type Workspace } from '@/contexts/WorkspaceContext';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { buildConsoleSettingsPath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+
+import { Link } from '@/components/navigation/Link';
 
 type SwitcherLabel = { icon: typeof User; label: string };
 
@@ -106,7 +107,7 @@ export function WorkspaceSwitcher() {
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to={buildConsoleSettingsPath()} className="gap-3">
+          <Link href={buildConsoleSettingsPath()} className="gap-3">
             <Settings className="h-4 w-4 text-muted-foreground" />
             Settings
           </Link>

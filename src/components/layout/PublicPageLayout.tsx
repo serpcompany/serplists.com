@@ -1,9 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
 import { PageContainer } from '@/components/layout/page-shell';
 import { cn } from '@/lib/utils';
+
+import { Link } from '@/components/navigation/Link';
 
 interface PublicPageContainerProps {
   children: React.ReactNode;
@@ -50,7 +51,7 @@ export function PublicPageBackLink({
 }: PublicPageBackLinkProps) {
   return (
     <Link
-      to={to}
+      href={to}
       className={cn(
         'inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-foreground',
         className,

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   Clock,
@@ -68,6 +67,8 @@ import {
 } from '@/features/dashboard-runs/runTemplateLookup';
 import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
 import type { ResourcePermissions } from '@/lib/organizationPermissions';
+
+import { Link } from '@/components/navigation/Link';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
@@ -226,7 +227,7 @@ export function RunsDashboardView({
             action={
               !searchQuery ? (
               <Button asChild>
-                <Link to={buildConsoleTemplatesPath()}>Browse Templates</Link>
+                <Link href={buildConsoleTemplatesPath()}>Browse Templates</Link>
               </Button>
               ) : null
             }
@@ -259,7 +260,7 @@ export function RunsDashboardView({
 
                   <div className="min-w-0 flex-1">
                     <Link
-                      to={buildRunPath(run.id)}
+                      href={buildRunPath(run.id)}
                       className="text-left text-sm font-medium text-foreground hover:underline"
                     >
                       {run.title}
@@ -267,7 +268,7 @@ export function RunsDashboardView({
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       {template ? (
                         <Link
-                          to={buildConsoleTemplatePath(template.id)}
+                          href={buildConsoleTemplatePath(template.id)}
                           className="font-medium text-foreground/80 hover:text-foreground hover:underline"
                         >
                           From {template.title}
@@ -349,14 +350,14 @@ export function RunsDashboardView({
                     ) : null}
                     {!isCompleted ? (
                       <Button asChild size="sm">
-                        <Link to={buildRunPath(run.id)}>
+                        <Link href={buildRunPath(run.id)}>
                           <Play className="mr-1.5 h-3.5 w-3.5" />
                           Continue
                         </Link>
                       </Button>
                     ) : (
                       <Button variant="outline" size="sm" asChild>
-                        <Link to={buildRunPath(run.id)}>
+                        <Link href={buildRunPath(run.id)}>
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                           View
                         </Link>

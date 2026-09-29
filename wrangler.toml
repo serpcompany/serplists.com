@@ -1,7 +1,31 @@
+# The Worker that serves the Next.js app (pages and the API) through OpenNext. The top level
+# is local development; `preview` (staging) and `production` are deployed environments, and
+# bindings are not inherited, so each environment repeats them. See
+# docs/exec-plans/active/nextjs-migration.md.
 name = "serp-checklists"
-compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "dist"
+main = ".open-next/worker.js"
+compatibility_date = "2026-09-28"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[assets]
+binding = "ASSETS"
+directory = ".open-next/assets"
+
+[observability]
+enabled = true
+
+# OpenNext calls its own Worker for cache revalidation.
+[[services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists"
+
+[[env.preview.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists-preview"
+
+[[env.production.services]]
+binding = "WORKER_SELF_REFERENCE"
+service = "serp-checklists-production"
 
 [vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
@@ -54,4 +78,4 @@ bucket_name = "serp-checklists-uploads"
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
 
-# Production secrets should be set via Pages Secrets (e.g. `wrangler pages secret put JWT_SECRET`).
+# Secrets are set per Worker: `wrangler secret put <NAME> --env <preview|production>`.

@@ -5,10 +5,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ExternalLink, User } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { buildProfilePreviewPath } from '@/lib/routes';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
+
+import { Link } from '@/components/navigation/Link';
 
 interface ProfileData {
   email: string;
@@ -112,7 +113,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
             Public profile URL:{' '}
             {profilePreviewPath ? (
               <Link
-                to={profilePreviewPath}
+                href={profilePreviewPath}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-primary hover:underline"

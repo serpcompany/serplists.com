@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   LayoutGrid,
@@ -24,6 +26,7 @@ import {
 } from '@/components/layout/publicSiteLinks';
 import { cn } from '@/lib/utils';
 import { leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
+import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import {
   buildConsoleHomePath,
   buildConsoleRunsPath,
@@ -41,6 +44,8 @@ import { APP_BRAND_NAME } from '@/lib/brand';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
+
+import { Link } from '@/components/navigation/Link';
 
 interface LayoutProps {
   children?: React.ReactNode;
@@ -63,7 +68,7 @@ const isPathActive = (pathname: string, href: string): boolean => {
 };
 
 const BrandLink = ({ to }: { to: string }) => (
-  <Link to={to} className="inline-flex items-center gap-2">
+  <Link href={to} className="inline-flex items-center gap-2">
     <LayoutGrid className="h-5 w-5 text-primary" />
     <span className="text-sm font-semibold text-foreground">
       {APP_BRAND_NAME}
@@ -105,7 +110,7 @@ const SiteFooter = ({ className }: SiteFooterProps) => (
               ) : (
                 <Link
                   key={item.label}
-                  to={item.href}
+                  href={item.href}
                   className="block text-sm text-muted-foreground transition hover:text-foreground"
                 >
                   {item.label}
@@ -121,11 +126,11 @@ const SiteFooter = ({ className }: SiteFooterProps) => (
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const shell = resolveRouteShell(location.pathname);
-  const publicTier = resolvePublicRouteTier(location.pathname);
-  const content = <RouteErrorBoundary>{children ?? <Outlet />}</RouteErrorBoundary>;
+  const router = useAppRouter();
+  const pathname = usePathname();
+  const shell = resolveRouteShell(pathname);
+  const publicTier = resolvePublicRouteTier(pathname);
+  const content = <RouteErrorBoundary>{children}</RouteErrorBoundary>;
   const shouldRenderFooter = publicTier !== 'minimal';
 
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -138,7 +143,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       try {
         return await signOutAndLeave({
           logout,
-          onSignedOut: () => navigate('/'),
+          onSignedOut: () => router.push('/'),
           onError: (message) => toast.error(message),
         });
       } finally {
@@ -180,32 +185,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to={buildConsoleHomePath()} className="cursor-pointer rounded-md">
+          <Link href={buildConsoleHomePath()} className="cursor-pointer rounded-md">
             Dashboard
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link
-            to={buildConsoleTemplatesPath()}
+            href={buildConsoleTemplatesPath()}
             className="cursor-pointer rounded-md"
           >
             My Templates
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to={buildConsoleRunsPath()} className="cursor-pointer rounded-md">
+          <Link href={buildConsoleRunsPath()} className="cursor-pointer rounded-md">
             My Runs
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to={buildConsoleSettingsPath()} className="cursor-pointer rounded-md">
+          <Link href={buildConsoleSettingsPath()} className="cursor-pointer rounded-md">
             Settings
           </Link>
         </DropdownMenuItem>
         {user?.username ? (
           <DropdownMenuItem asChild>
             <Link
-              to={buildPublicProfilePath(user.username)}
+              href={buildPublicProfilePath(user.username)}
               target="_blank"
               rel="noopener noreferrer"
               className="cursor-pointer rounded-md"
@@ -246,10 +251,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {publicHeaderLinks.map((item) => (
             <Link
               key={item.href}
-              to={item.href}
+              href={item.href}
               className={cn(
                 'text-sm font-medium text-muted-foreground transition hover:text-foreground',
-                isPathActive(location.pathname, item.href) &&
+                isPathActive(pathname, item.href) &&
                   'text-foreground',
               )}
             >
@@ -273,10 +278,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 variant="ghost"
                 className="hidden text-muted-foreground md:inline-flex"
               >
-                <Link to="/login">Log in</Link>
+                <Link href="/login">Log in</Link>
               </Button>
               <Button asChild>
-                <Link to="/register">Get started</Link>
+                <Link href="/register">Get started</Link>
               </Button>
             </>
           )}

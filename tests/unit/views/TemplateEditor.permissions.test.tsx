@@ -1,0 +1,132 @@
+import React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { renderDataRoutes } from '../../fixtures/renderDataRoutes';
+import TemplateEditor from '@/views/TemplateEditor';
+import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+
+// Opening an edit link the viewer cannot save (a teammate's link for an Organization
+// viewer, another user's public template) shows why instead of a form whose every save
+// ends in "Forbidden".
+
+const mockModel = vi.fn();
+const workspace = {
+  activeTeamId: undefined as string | undefined,
+  canEditTemplates: true,
+  isWorkspaceLoading: false,
+  teams: [] as Array<{ id: string; role: string }>,
+};
+
+vi.mock('@/features/template-editor/useTemplateEditorModel', () => ({
+  useTemplateEditorModel: () => mockModel(),
+}));
+vi.mock('@/contexts/CloudflareAuthContext', () => ({
+  useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com', username: 'jane' } }),
+}));
+vi.mock('@/contexts/WorkspaceContext', () => ({
+  useWorkspace: () => workspace,
+}));
+vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
+  useTemplateEditorAccess: () => ({
+    draft: null,
+    discardDraft: vi.fn(),
+    handleSaveResult: vi.fn(() => false),
+    isStartingCheckout: false,
+    notice: null,
+    restoreDraft: vi.fn(),
+    settleDraft: vi.fn(),
+    signIn: vi.fn(),
+    startUpgrade: vi.fn(),
+  }),
+}));
+
+const loadedModel = (ownership: Record<string, unknown> | undefined) => ({
+  initialValues: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
+  isSaving: false,
+  loading: false,
+  loadError: null,
+  ownership,
+  save: vi.fn(),
+  templateSlug: 'launch-checklist',
+});
+
+const renderEdit = () =>
+  renderDataRoutes(
+    [{ path: '/dashboard/templates/:id/edit', element: <TemplateEditor /> }],
+    '/dashboard/templates/template-1/edit',
+  );
+const renderNew = () =>
+  renderDataRoutes(
+    [{ path: '/dashboard/templates/new', element: <TemplateEditor /> }],
+    '/dashboard/templates/new',
+  );
+const hasSaveButton = (html: string) => /<button[^>]*>(?:(?!<\/button>).)*Save(?:(?!<\/button>).)*<\/button>/.test(html);
+
+beforeEach(() => {
+  workspace.activeTeamId = undefined;
+  workspace.canEditTemplates = true;
+  workspace.isWorkspaceLoading = false;
+  workspace.teams = [];
+});
+
+describe('TemplateEditor permissions', () => {
+  it('shows an Organization viewer a read-only notice instead of the form', async () => {
+    workspace.teams = [{ id: 'team-1', role: 'viewer' }];
+    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+
+    const html = await renderEdit();
+
+    expect(html).toContain("You can&#x27;t edit this template");
+    expect(html).toContain('href="/dashboard/templates/template-1"');
+    expect(html).not.toContain('Launch checklist');
+    expect(hasSaveButton(html)).toBe(false);
+  });
+
+  it("shows the notice for another user's public template", async () => {
+    mockModel.mockReturnValue(loadedModel({ userId: 'someone-else', ownerType: 'user' }));
+
+    const html = await renderEdit();
+
+    expect(html).toContain("You can&#x27;t edit this template");
+    expect(hasSaveButton(html)).toBe(false);
+  });
+
+  it('opens the form for an Organization editor whose Organization is not active', async () => {
+    workspace.teams = [{ id: 'team-1', role: 'editor' }];
+    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+
+    const html = await renderEdit();
+
+    expect(html).not.toContain("You can&#x27;t edit this template");
+    expect(hasSaveButton(html)).toBe(true);
+  });
+
+  it('opens the form for the owner of a Personal template', async () => {
+    mockModel.mockReturnValue(loadedModel({ userId: 'user-1', ownerType: 'user' }));
+
+    expect(hasSaveButton(await renderEdit())).toBe(true);
+  });
+
+  it("waits for the viewer's Organizations before showing either", async () => {
+    workspace.isWorkspaceLoading = true;
+    mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
+
+    const html = await renderEdit();
+
+    expect(html).toContain('animate-spin');
+    expect(html).not.toContain("You can&#x27;t edit this template");
+    expect(hasSaveButton(html)).toBe(false);
+  });
+
+  it('shows the notice on the new-template route to a role that cannot create templates', async () => {
+    workspace.activeTeamId = 'team-1';
+    workspace.canEditTemplates = false;
+    workspace.teams = [{ id: 'team-1', role: 'runner' }];
+    mockModel.mockReturnValue(loadedModel(undefined));
+
+    const html = await renderNew();
+
+    expect(html).toContain("You can&#x27;t create templates here");
+    expect(hasSaveButton(html)).toBe(false);
+  });
+});

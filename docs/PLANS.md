@@ -22,6 +22,8 @@ have not been updated in 30 days.
   let agents work reliably in this repo.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
+- [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
+  Cloudflare Workers (OpenNext) and restyle it with default shadcn components.
 - [Sitemap revisions for Organization Templates](exec-plans/active/sitemap-organization-templates.md):
   the proposed migration that makes public Organization Template edits refresh cached
   sitemaps (TD-23).

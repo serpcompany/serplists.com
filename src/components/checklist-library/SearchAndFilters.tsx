@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Clock, Star, TrendingUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -8,6 +7,8 @@ import type {
   DiscoveryCategory,
   DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
+
+import { Link } from '@/components/navigation/Link';
 
 interface SearchAndFiltersProps {
   categories: DiscoveryCategory[];
@@ -94,7 +95,7 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
                   size="sm"
                   className="shrink-0"
                 >
-                  <Link to={categoryPath}>{category.name}</Link>
+                  <Link href={categoryPath}>{category.name}</Link>
                 </Button>
               );
             }

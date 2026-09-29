@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 // The public catalog (?scope=public) holds every public Template with its sections, and an
 // edge-cache miss reads all of them from D1 (docs/design-docs/d1-cost.md). Only pages that
 // display the catalog may load it. Adding a caller here is a deliberate, reviewed change.
-const CATALOG_CONSUMERS = ['src/hooks/useTemplateLibrary.ts', 'src/pages/Dashboard.tsx'];
+const CATALOG_CONSUMERS = ['src/hooks/useTemplateLibrary.ts', 'src/views/Dashboard.tsx'];
 
 const repoRoot = path.resolve(__dirname, '../../..');
 

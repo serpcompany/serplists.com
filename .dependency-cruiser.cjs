@@ -40,7 +40,7 @@ module.exports = {
         "Modules shared with the API must not depend on React, UI, contexts, hooks, or the browser API client. " +
         "Keep shared code pure (types, Zod schemas, string helpers).",
       from: { path: SHARED_FROM_SRC },
-      to: { path: ["^node_modules/(react|react-dom|react-router-dom)/", "^src/(components|pages|contexts|hooks|features)/", "^src/lib/api\\.ts$"] },
+      to: { path: ["^node_modules/(react|react-dom|react-router-dom)/", "^src/(components|views|contexts|hooks|features)/", "^src/lib/api\\.ts$"] },
     },
     {
       name: "app-does-not-import-api-runtime",
@@ -58,7 +58,7 @@ module.exports = {
         "Pages and components must not call src/lib/api.ts directly (type-only imports are fine). Put the call in a " +
         "feature hook or context (src/features/*, src/contexts/*) and pass data/actions down. " +
         "See docs/exec-plans/active/ui-decoupling.md.",
-      from: { path: "^src/(pages|components)/" },
+      from: { path: "^src/(views|components)/" },
       to: { path: "^src/lib/api\\.ts$", dependencyTypesNot: ["type-only"] },
     },
     {
@@ -68,7 +68,7 @@ module.exports = {
         "src/components/ui/ holds design-system primitives. They must not depend on app state, features, pages, " +
         "or the API client. Compose them in a feature component instead.",
       from: { path: "^src/components/ui/" },
-      to: { path: "^src/(contexts|features|pages|hooks/use(?!-mobile))|^src/lib/api\\.ts$" },
+      to: { path: "^src/(contexts|features|views|hooks/use(?!-mobile))|^src/lib/api\\.ts$" },
     },
     {
       name: "api-utils-do-not-import-handlers",

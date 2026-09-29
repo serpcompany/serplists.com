@@ -48,7 +48,7 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   the component is purely presentational (no app state, features, or API calls;
   enforced by `deps:check`).
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
-  inputs have a `Label`. The template grid/list toggle in `src/pages/Templates.tsx`
+  inputs have a `Label`. The template grid/list toggle in `src/views/Templates.tsx`
   is the reference.
 - A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
   keyboard focus (`group-focus-within:opacity-100`) and on touch screens: use

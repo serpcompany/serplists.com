@@ -1,5 +1,7 @@
+'use client';
+
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -16,6 +18,8 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildConsoleHomePath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+
+import { Link } from '@/components/navigation/Link';
 
 const isActiveLink = (pathname: string, href: string): boolean =>
   pathname === href || pathname.startsWith(`${href}/`);
@@ -38,7 +42,7 @@ export const PublicMobileMenu = ({
         return (
           <Link
             key={item.href}
-            to={item.href}
+            href={item.href}
             onClick={onNavigate}
             aria-current={active ? 'page' : undefined}
             className={cn(
@@ -61,15 +65,15 @@ export const PublicMobileMenu = ({
     <div className="flex flex-col gap-2">
       {signedIn ? (
         <Button asChild onClick={onNavigate}>
-          <Link to={buildConsoleHomePath()}>Dashboard</Link>
+          <Link href={buildConsoleHomePath()}>Dashboard</Link>
         </Button>
       ) : (
         <>
           <Button asChild onClick={onNavigate} variant="outline">
-            <Link to="/login">Log in</Link>
+            <Link href="/login">Log in</Link>
           </Button>
           <Button asChild onClick={onNavigate}>
-            <Link to="/register">Get started</Link>
+            <Link href="/register">Get started</Link>
           </Button>
         </>
       )}
@@ -81,13 +85,13 @@ export const PublicMobileMenu = ({
 // reach them. The console shell has its own MobileNav and never renders this.
 export function PublicMobileNav() {
   const [open, setOpen] = useState(false);
-  const location = useLocation();
+  const pathname = usePathname();
   const { user } = useAuth();
 
   // Close on any navigation, including browser back and forward.
   useEffect(() => {
     setOpen(false);
-  }, [location.pathname]);
+  }, [pathname]);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -108,7 +112,7 @@ export function PublicMobileNav() {
         </SheetHeader>
         <PublicMobileMenu
           onNavigate={() => setOpen(false)}
-          pathname={location.pathname}
+          pathname={pathname}
           signedIn={Boolean(user)}
         />
       </SheetContent>

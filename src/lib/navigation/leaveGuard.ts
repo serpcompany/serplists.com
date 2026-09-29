@@ -1,6 +1,6 @@
-// A page with unsaved changes registers a leave guard. Route changes are blocked by
-// the page itself (useBlocker); this covers actions that leave the page without a
-// navigation the page can block first, such as signing out, which unmounts it, and a
+// A page with unsaved changes registers a leave guard (useUnsavedChangesGuard). The app's
+// Link and useAppRouter ask it before opening another page; it also covers actions that
+// leave the page without a navigation, such as signing out, which unmounts it, and a
 // session that ends in the background, which unmounts it without asking.
 export type LeaveGuard = {
   message: string;

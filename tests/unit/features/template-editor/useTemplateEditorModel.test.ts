@@ -9,7 +9,7 @@ import {
   shouldLoadTemplateEditorRecord,
 } from "@/features/template-editor/useTemplateEditorModel";
 import { templateEditorFormSchema } from "@/lib/forms/templateEditorForm";
-import { shouldNavigateToTemplatesAfterSave } from "@/pages/TemplateEditor";
+import { shouldNavigateToTemplatesAfterSave } from "@/views/TemplateEditor";
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},

@@ -1,6 +1,3 @@
-/** The local API that `pnpm run dev` talks to when VITE_API_URL is not set. */
-const LOCAL_DEV_API_BASE_URL = 'http://localhost:8788/api';
-
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '::1', '[::1]', '0.0.0.0']);
 
 /** localhost, *.localhost, 127.0.0.0/8, ::1, and 0.0.0.0. */
@@ -22,22 +19,19 @@ export const isLoopbackUrl = (value: string): boolean => {
 };
 
 /**
- * The API base URL for this bundle. Deployed bundles use the same-origin `/api`
- * unless VITE_API_URL names another API. A loopback VITE_API_URL is honored only
- * when the page itself is served from a loopback host, so a bundle built on a
- * developer machine never sends a deployed site's traffic to the visitor's own
- * localhost.
+ * The API base URL for this bundle: the same-origin `/api`, where the Next.js app serves the
+ * API in development and in every deployment, unless NEXT_PUBLIC_API_URL names another API. A
+ * loopback NEXT_PUBLIC_API_URL is honored only when the page itself is served from a loopback
+ * host, so a bundle built on a developer machine never sends a deployed site's traffic to the
+ * visitor's own localhost.
  */
 export const resolveApiBaseUrl = ({
-  isDev,
   configuredUrl,
   pageHostname,
 }: {
-  isDev: boolean;
   configuredUrl: string | undefined;
   pageHostname: string | undefined;
 }): string => {
-  if (isDev) return configuredUrl ?? LOCAL_DEV_API_BASE_URL;
   if (!configuredUrl) return '/api';
   if (isLoopbackUrl(configuredUrl) && !(pageHostname && isLoopbackHostname(pageHostname))) {
     return '/api';

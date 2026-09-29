@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Bookmark,
@@ -28,6 +27,8 @@ import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+
+import { Link } from '@/components/navigation/Link';
 
 interface PublicTemplateViewProps {
   template: ChecklistTemplate;
@@ -151,7 +152,7 @@ export function PublicTemplateView({
       <header className="sticky top-14 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4">
           <Button asChild variant="ghost" size="sm" className="gap-2">
-            <Link to={buildPublicTemplatesPath()}>
+            <Link href={buildPublicTemplatesPath()}>
               <ArrowLeft className="h-4 w-4" />
               Back
             </Link>
@@ -227,7 +228,7 @@ export function PublicTemplateView({
                 return categoryPath ? (
                   <Link
                     key={category}
-                    to={categoryPath}
+                    href={categoryPath}
                     className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                   >
                     {category}
@@ -257,7 +258,7 @@ export function PublicTemplateView({
           <div className="flex flex-wrap items-center gap-6 text-sm text-muted-foreground">
             {ownerPath ? (
               <Link
-                to={ownerPath}
+                href={ownerPath}
                 className="flex items-center gap-2 transition-colors hover:text-foreground"
               >
                 <Avatar className="h-6 w-6">

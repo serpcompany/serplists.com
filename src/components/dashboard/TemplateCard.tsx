@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import {
   Copy,
   Edit3,
@@ -23,6 +22,8 @@ import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import { Link } from '@/components/navigation/Link';
 
 // Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 interface TemplateCardProps {
@@ -65,7 +66,7 @@ export function TemplateCard({
         <div className="mb-2 flex items-start justify-between">
           <div className="flex-1">
             <Link
-              to={buildConsoleTemplatePath(template.id)}
+              href={buildConsoleTemplatePath(template.id)}
               className="text-sm font-medium text-foreground hover:underline"
             >
               {template.title}
@@ -93,7 +94,7 @@ export function TemplateCard({
               <DropdownMenuContent align="end" className="w-40">
                 {canEdit ? (
                   <DropdownMenuItem asChild>
-                    <Link to={buildConsoleTemplateEditPath(template.id)}>
+                    <Link href={buildConsoleTemplateEditPath(template.id)}>
                       <Edit3 className="mr-2 h-4 w-4" />
                       Edit
                     </Link>

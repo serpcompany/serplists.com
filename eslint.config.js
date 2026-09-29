@@ -14,11 +14,11 @@ const LEGACY_MAX_LINES = {
   "functions/api/handlers/templates.ts": 1650,
   "functions/api/handlers/checklists.ts": 1200,
   "functions/api/handlers/teams.ts": 1100,
-  "src/pages/TemplateDetail.tsx": 900,
+  "src/views/TemplateDetail.tsx": 900,
   "functions/api/handlers/agentMcp.ts": 900,
   "src/lib/templates/templateMarkdown.ts": 750,
   "src/components/account/TeamSettingsSection.tsx": 600,
-  "src/pages/ChecklistRun.tsx": 700,
+  "src/views/ChecklistRun.tsx": 700,
   "src/features/run-execution/useRunExecutionModel.ts": 650,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
@@ -51,7 +51,7 @@ const CLIPBOARD_RESTRICTION = {
 
 export default tseslint.config(
   {
-    ignores: ["dist", "coverage", "playwright-report", "test-results", ".wrangler", "tmp"],
+    ignores: ["dist", "coverage", "playwright-report", "test-results", ".wrangler", "tmp", ".next", ".open-next", "next-env.d.ts", "cloudflare-env.d.ts"],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -77,8 +77,9 @@ export default tseslint.config(
     },
   },
   {
-    // Disable fast refresh warnings for UI components and contexts
-    files: ["**/components/ui/*.{ts,tsx}", "**/contexts/*.{ts,tsx}"],
+    // Disable fast refresh warnings for UI components, contexts, and Next.js route files (which
+    // export metadata, route segment config, and handlers by convention).
+    files: ["**/components/ui/*.{ts,tsx}", "**/contexts/*.{ts,tsx}", "src/app/**/*.{ts,tsx}"],
     rules: {
       "react-refresh/only-export-components": "off",
     },
@@ -139,7 +140,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/pages/**/*.tsx", "src/components/**/*.tsx", "src/features/**/*.{ts,tsx}"],
+    files: ["src/views/**/*.tsx", "src/components/**/*.tsx", "src/features/**/*.{ts,tsx}"],
     ignores: ["src/components/ui/**", "**/*.test.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [

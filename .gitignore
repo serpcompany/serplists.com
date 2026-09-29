@@ -56,3 +56,7 @@ tests/test-results
 coverage
 .playwright-mcp/
 tmp/
+
+# Next.js and OpenNext build output
+.open-next
+next-env.d.ts

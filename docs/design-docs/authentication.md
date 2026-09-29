@@ -12,7 +12,7 @@ Security rules and required secrets are in [SECURITY.md](../SECURITY.md).
 - `src/lib/auth-client.ts`: client (`credentials: "include"` plus the username plugin)
 - `src/contexts/CloudflareAuthContext.tsx`: auth state, login, and registration
 - `src/components/RequireAuth.tsx`: wraps authenticated `/dashboard/*` routes
-- `src/pages/Login.tsx` (dev quick-fill buttons), `Register.tsx`, `ResetPassword.tsx`,
+- `src/views/Login.tsx` (dev quick-fill buttons), `Register.tsx`, `ResetPassword.tsx`,
   `DashboardSettings.tsx`; `src/components/DevLoginBar.tsx` (dev only)
 
 Better Auth needs `AsyncLocalStorage`, so `wrangler.toml` sets
@@ -161,7 +161,7 @@ and user-facing failure states when a supporting service is unavailable.
   only the fields they write. The limits live in `src/lib/schemas/userProfileSchema.ts`,
   which `Register.tsx` and `ProfileSection.tsx` use for `maxLength`.
   Public profile and Template share URLs use the username, so Account Settings
-  lets a saved username change but not be cleared (`src/pages/accountProfileUpdates.ts`).
+  lets a saved username change but not be cleared (`src/views/accountProfileUpdates.ts`).
   Saving a new username or name refreshes the cached Template lists, which embed
   the owner's username, and Share always builds the link from the signed-in owner's
   current username. Links shared under an old username stop working after a rename.
