@@ -129,17 +129,25 @@ export const createFakeContainer = () => new FakeElement('div', HTML_NAMESPACE);
 
 /**
  * Gives React DOM a window while it commits (it reads the focused element) and turns on act().
- * Call from beforeAll, and call the returned function from afterAll.
+ * Call from beforeAll, and call the returned function from afterAll. A page that navigates
+ * passes the in-memory browser's window (`navigation.window` from
+ * tests/support/nextNavigation.tsx), whose location, history and events the page then uses.
  */
-export function installFakeDomGlobals(): () => void {
+export function installFakeDomGlobals(browserWindow?: object): () => void {
   const globals = globalThis as Record<string, unknown>;
   const saved = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-  globals.window = {
-    HTMLIFrameElement: class {},
-    document: fakeDocument,
-    addEventListener() {},
-    removeEventListener() {},
-  };
+  globals.window = Object.assign(
+    Object.create(browserWindow ?? { addEventListener() {}, removeEventListener() {} }),
+    {
+      HTMLIFrameElement: class {},
+      // React DOM preloads images it commits.
+      Image: class {
+        src = '';
+        decode = () => Promise.resolve();
+      },
+      document: fakeDocument,
+    },
+  );
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   return () => {
     globals.window = saved.window;
@@ -159,12 +167,22 @@ export const findByText = (container: FakeNode, nodeName: string, label: string)
   return node;
 };
 
-/** A left click as the browser delivers it: capture listeners on the root first, then bubble. */
-export const click = (container: FakeElement, target: FakeNode) => {
+type ClickModifiers = { button?: number; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean };
+
+/**
+ * A left click as the browser delivers it (or another button, or with modifier keys):
+ * capture listeners on the root first, then bubble.
+ */
+export const click = (container: FakeElement, target: FakeNode, modifiers: ClickModifiers = {}) => {
   const event = {
     type: 'click',
     target,
     button: 0,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...modifiers,
     defaultPrevented: false,
     timeStamp: Date.now(),
     preventDefault() {

@@ -1,32 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: refs and
+// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: refs, state and
 // callbacks are plain values, and effects run at once with their cleanups kept.
 const fake = vi.hoisted(() => ({
   cleanups: [] as Array<() => void>,
-  blockerFunction: null as null | ((args: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) => boolean),
 }));
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
   useRef: (initial: unknown) => ({ current: initial }),
+  useState: (initial: unknown) => [initial, () => undefined],
   useCallback: (callback: unknown) => callback,
+  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
   useEffect: (effect: () => void | (() => void)) => {
     const cleanup = effect();
     if (cleanup) fake.cleanups.push(cleanup);
   },
 }));
 
-vi.mock("react-router-dom", () => ({
-  useLocation: () => ({ pathname: "/dashboard/templates/new" }),
-  useBlocker: (blockerFunction: typeof fake.blockerFunction) => {
-    fake.blockerFunction = blockerFunction;
-    return { state: "unblocked", proceed: vi.fn(), reset: vi.fn() };
-  },
-}));
+vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
 
 import { useTemplateEditorLeaveGuard } from "@/features/template-editor/useTemplateEditorLeaveGuard";
-import { confirmLeave } from "@/lib/navigation/leaveGuard";
+import { confirmLeave, leavePage } from "@/lib/navigation/leaveGuard";
+import { navigation } from "../../../support/nextNavigation";
 
 const pageshow = (persisted: boolean) => Object.assign(new Event("pageshow"), { persisted });
 const beforeUnloadPrevented = (): boolean => {
@@ -36,11 +32,13 @@ const beforeUnloadPrevented = (): boolean => {
   window.dispatchEvent(event);
   return event.defaultPrevented;
 };
-const blocksSidebarClick = (): boolean =>
-  fake.blockerFunction!({
-    currentLocation: { pathname: "/dashboard/templates/new" },
-    nextLocation: { pathname: "/dashboard/templates" },
-  });
+// True when a sidebar link to another page would be held for the page to decide (the app's
+// Link hands it to leavePage) instead of opening at once.
+const blocksSidebarClick = (): boolean => {
+  const open = vi.fn();
+  leavePage("push", open);
+  return open.mock.calls.length === 0;
+};
 // True when signing out would ask first (the leave-guard registry).
 const signOutAsks = (): boolean => {
   const dialog = vi.fn(() => false);
@@ -50,8 +48,8 @@ const signOutAsks = (): boolean => {
 
 beforeEach(() => {
   fake.cleanups = [];
-  fake.blockerFunction = null;
-  vi.stubGlobal("window", new EventTarget());
+  navigation.reset("/dashboard/templates/new");
+  vi.stubGlobal("window", navigation.window);
 });
 
 afterEach(() => {

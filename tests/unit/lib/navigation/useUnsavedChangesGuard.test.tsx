@@ -1,224 +1,256 @@
-import React, { act, useState } from 'react';
+import React, { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { Link } from '@/components/navigation/Link';
 import { confirmLeave, keepGuardedWork, leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
+import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
+import { click, createFakeContainer, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
+import { navigation, RoutedPages } from '../../../support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 // A page with unsaved work asks before it is lost, whichever way the user leaves: a link or
-// browser Back/Forward (useBlocker, which needs a data router), Sign out (the leave-guard
-// registry) and a reload or tab close (beforeunload). The hook runs here under a real memory
-// data router, mounted with React DOM.
+// code that opens another page (the app's Link and useAppRouter), browser Back/Forward (a copy
+// of the page's history entry), Sign out (the leave-guard registry) and a reload or tab close
+// (beforeunload). The page runs under Next.js navigation (tests/support/nextNavigation.tsx),
+// mounted with React DOM; each route renders its own page, as the App Router does.
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const confirm = vi.fn<(message: string) => boolean>();
-const unloadListeners = new Set<(event: BeforeUnloadEvent) => void>();
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
+const probe: {
+  setDirty?: (dirty: boolean) => void;
+  guard?: ReturnType<typeof useUnsavedChangesGuard>;
+  router?: AppRouter;
+} = {};
 
+function RunPage({ dirty, keepWork }: { dirty: boolean; keepWork?: () => boolean }) {
+  const [isDirty, setDirty] = useState(dirty);
+  const router = useAppRouter();
+  const guard = useUnsavedChangesGuard(isDirty, MESSAGE, keepWork);
+  useEffect(() => {
+    probe.setDirty = setDirty;
+    probe.router = router;
+    probe.guard = guard;
+  }, [guard, router]);
+  return (
+    <main>
+      <Link href="/">Home</Link>
+      <Link href="/runs/r2">Next run</Link>
+      <Link href="/runs/r1?task=2#notes">Task 2</Link>
+    </main>
+  );
+}
+
+let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  globals.window = {
-    HTMLIFrameElement: class {},
-    document: fakeDocument,
-    confirm,
-    addEventListener: (type: string, listener: (event: BeforeUnloadEvent) => void) => {
-      if (type === 'beforeunload') unloadListeners.add(listener);
-    },
-    removeEventListener: (type: string, listener: (event: BeforeUnloadEvent) => void) => {
-      if (type === 'beforeunload') unloadListeners.delete(listener);
-    },
-  };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals(navigation.window);
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
+let container: FakeElement;
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
-  unloadListeners.clear();
-  confirm.mockReset();
 });
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+// A reload or tab close, as the browser announces it to the page.
+const beforeUnloadListeners = () => ({
+  fire: () => {
+    const event = new Event('beforeunload', { cancelable: true });
+    Object.defineProperty(event, 'returnValue', { value: 'unset', writable: true });
+    navigation.window.dispatchEvent(event);
+    return event as BeforeUnloadEvent;
+  },
+});
 
-function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWork?: () => boolean } = {}) {
-  const probe: {
-    setDirty?: (dirty: boolean) => void;
-    guard?: ReturnType<typeof useUnsavedChangesGuard>;
-  } = {};
-  function Page() {
-    const [isDirty, setDirty] = useState(dirty);
-    probe.setDirty = setDirty;
-    probe.guard = useUnsavedChangesGuard(isDirty, MESSAGE, keepWork);
-    return null;
-  }
-  const router = createMemoryRouter(
-    [
-      { path: '/', element: null },
-      { path: '/runs', element: null },
-      { path: '/runs/:id', element: <Page /> },
-    ],
-    { initialEntries: ['/runs', '/runs/r1'], initialIndex: 1 },
-  );
-  root = createRoot(fakeContainer as unknown as Element);
-  // As in the app, which does not opt in to v7_startTransition.
-  act(() => root?.render(<RouterProvider future={{ v7_startTransition: false }} router={router} />));
-  const navigate = async (to: string | number) => {
-    await act(async () => {
-      await (typeof to === 'number' ? router.navigate(to) : router.navigate(to));
-      await flush();
-    });
-  };
-  const at = () => `${router.state.location.pathname}${router.state.location.search}${router.state.location.hash}`;
-  return { navigate, at, probe, router };
+async function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWork?: () => boolean } = {}) {
+  navigation.reset('/runs/r1', { before: ['/runs'], routes: ['/', '/runs', '/runs/[id]'] });
+  container = createFakeContainer();
+  root = createRoot(container as unknown as HTMLElement);
+  await act(async () => {
+    root?.render(
+      <RoutedPages
+        pages={{
+          '/': <p>Home page</p>,
+          '/runs': <p>Runs page</p>,
+          '/runs/[id]': <RunPage dirty={dirty} keepWork={keepWork} />,
+        }}
+      />,
+    );
+  });
 }
 
-const unloadEvent = () => ({ preventDefault: vi.fn(), returnValue: 'unset' }) as unknown as BeforeUnloadEvent;
+const clickLink = (label: string) =>
+  act(async () => {
+    click(container, findByText(container, 'A', label));
+  });
+
+// Browser Back: the traversal lands on a later task, and so does what the page does then.
+const goBack = () =>
+  act(async () => {
+    navigation.window.history.back();
+    await navigation.settle();
+    await navigation.settle();
+  });
 
 describe('useUnsavedChangesGuard', () => {
   it('asks before a link or Back leaves the page, and stays when the user cancels', async () => {
-    const { navigate, at } = mountGuard();
-    confirm.mockReturnValue(false);
+    await mountGuard();
+    navigation.window.confirm.mockReturnValue(false);
 
-    await navigate('/');
-    expect(confirm).toHaveBeenCalledWith(MESSAGE);
-    expect(at()).toBe('/runs/r1');
+    await clickLink('Home');
+    expect(navigation.window.confirm).toHaveBeenCalledWith(MESSAGE);
+    expect(navigation.url()).toBe('/runs/r1');
 
-    await navigate(-1);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(at()).toBe('/runs/r1');
+    await goBack();
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(2);
+    expect(navigation.url()).toBe('/runs/r1');
+    expect(container.textContent).toContain('Next run');
 
-    confirm.mockReturnValue(true);
-    await navigate('/');
-    expect(confirm).toHaveBeenCalledTimes(3);
-    expect(at()).toBe('/');
+    // Still guarded: a second Back asks again.
+    await goBack();
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(3);
+    expect(navigation.url()).toBe('/runs/r1');
+
+    navigation.window.confirm.mockReturnValue(true);
+    await clickLink('Home');
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(4);
+    expect(navigation.url()).toBe('/');
+    expect(container.textContent).toBe('Home page');
+  });
+
+  it('leaves in one Back once the user confirms', async () => {
+    await mountGuard();
+
+    await goBack();
+
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs');
+    expect(container.textContent).toBe('Runs page');
   });
 
   it('asks once before moving to another page on the same route', async () => {
-    const { navigate, at } = mountGuard();
-    confirm.mockReturnValue(true);
+    await mountGuard();
 
-    await navigate('/runs/r2');
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(at()).toBe('/runs/r2');
+    await clickLink('Next run');
+
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs/r2');
   });
 
   it('lets a search or hash change through, and asks nothing when nothing is unsaved', async () => {
-    const guarded = mountGuard();
-    await guarded.navigate('/runs/r1?task=2#notes');
-    expect(guarded.at()).toBe('/runs/r1?task=2#notes');
-    expect(confirm).not.toHaveBeenCalled();
+    await mountGuard();
+    await clickLink('Task 2');
+    expect(navigation.url()).toBe('/runs/r1?task=2#notes');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
     act(() => root?.unmount());
 
-    const clean = mountGuard({ dirty: false });
-    await clean.navigate('/');
-    expect(clean.at()).toBe('/');
-    expect(confirm).not.toHaveBeenCalled();
+    await mountGuard({ dirty: false });
+    await clickLink('Home');
+    expect(navigation.url()).toBe('/');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
   });
 
   // Completing a run saves every note and navigates straight away, before the page has
-  // rendered without its drafts: the blocker still holds the old answer.
+  // rendered without its drafts: the page decides after that render, so it goes without asking.
   it('lets a navigation through without asking when the work was saved just before it', async () => {
-    const { at, probe, router } = mountGuard();
+    await mountGuard();
 
     await act(async () => {
       probe.setDirty?.(false);
-      await router.navigate('/runs');
-      await flush();
+      probe.router?.push('/runs');
     });
 
-    expect(confirm).not.toHaveBeenCalled();
-    expect(at()).toBe('/runs');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs');
+  });
+
+  it('still asks when work is unsaved after the step that navigated', async () => {
+    await mountGuard();
+    navigation.window.confirm.mockReturnValue(false);
+
+    let went: boolean | undefined;
+    await act(async () => {
+      went = probe.router?.push('/runs');
+    });
+
+    expect(went).toBe(false);
+    expect(navigation.window.confirm).toHaveBeenCalledWith(MESSAGE);
+    expect(navigation.url()).toBe('/runs/r1');
   });
 
   it('asks on Sign out with the page message, and does not ask again on the way out', async () => {
-    const { at, router } = mountGuard();
+    await mountGuard();
     const confirmDialog = vi.fn(() => true);
 
     await act(async () => {
       await leaveAfterConfirmed(async () => {
-        await router.navigate('/');
+        probe.router?.push('/');
         return true;
       }, confirmDialog);
-      await flush();
     });
 
     expect(confirmDialog).toHaveBeenCalledWith(MESSAGE);
-    expect(confirm).not.toHaveBeenCalled();
-    expect(at()).toBe('/');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/');
   });
 
   it('asks again after a sign-out the server refused', async () => {
-    const { navigate, at } = mountGuard();
+    await mountGuard();
 
     await act(async () => {
       await leaveAfterConfirmed(() => Promise.resolve(false), () => true);
     });
-    confirm.mockReturnValue(false);
-    await navigate('/');
+    navigation.window.confirm.mockReturnValue(false);
+    await clickLink('Home');
 
-    expect(confirm).toHaveBeenCalledWith(MESSAGE);
-    expect(at()).toBe('/runs/r1');
+    expect(navigation.window.confirm).toHaveBeenCalledWith(MESSAGE);
+    expect(navigation.url()).toBe('/runs/r1');
     expect(confirmLeave(() => false)).toBe(false);
   });
 
   it('lets the page leave once after allowLeave, and guards the next page again', async () => {
-    const { navigate, at, probe } = mountGuard();
+    await mountGuard();
     probe.guard?.allowLeave();
 
-    await navigate('/runs/r2');
-    expect(confirm).not.toHaveBeenCalled();
-    expect(at()).toBe('/runs/r2');
+    await clickLink('Next run');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs/r2');
 
-    confirm.mockReturnValue(false);
-    await navigate('/');
-    expect(confirm).toHaveBeenCalledTimes(1);
-    expect(at()).toBe('/runs/r2');
+    navigation.window.confirm.mockReturnValue(false);
+    await clickLink('Home');
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
+    expect(navigation.url()).toBe('/runs/r2');
 
     probe.guard?.allowLeave();
     probe.guard?.guardLeave();
-    await navigate('/');
-    expect(confirm).toHaveBeenCalledTimes(2);
+    await clickLink('Home');
+    expect(navigation.window.confirm).toHaveBeenCalledTimes(2);
   });
 
-  it('warns before a reload or tab close only while work is unsaved', () => {
-    const { probe } = mountGuard();
-    const warned = unloadEvent();
-    unloadListeners.forEach((listener) => listener(warned));
-    expect(warned.preventDefault).toHaveBeenCalled();
+  it('warns before a reload or tab close only while work is unsaved', async () => {
+    await mountGuard();
+    const unload = beforeUnloadListeners();
+
+    const warned = unload.fire();
+    expect(warned.defaultPrevented).toBe(true);
     expect(warned.returnValue).toBe('');
 
     probe.guard?.allowLeave();
-    const allowed = unloadEvent();
-    unloadListeners.forEach((listener) => listener(allowed));
-    expect(allowed.preventDefault).not.toHaveBeenCalled();
+    expect(unload.fire().defaultPrevented).toBe(false);
 
-    act(() => probe.setDirty?.(false));
-    expect(unloadListeners.size).toBe(0);
+    probe.guard?.guardLeave();
+    await act(async () => probe.setDirty?.(false));
+    expect(unload.fire().defaultPrevented).toBe(false);
   });
 
-  it('keeps the work when the session ends in the background, and stops guarding once unmounted', () => {
+  it('keeps the work when the session ends in the background, and stops guarding once unmounted', async () => {
     const keepWork = vi.fn(() => true);
-    mountGuard({ keepWork });
+    await mountGuard({ keepWork });
 
     expect(keepGuardedWork()).toBe(true);
     expect(keepWork).toHaveBeenCalledTimes(1);
@@ -228,6 +260,62 @@ describe('useUnsavedChangesGuard', () => {
     const confirmDialog = vi.fn(() => false);
     expect(confirmLeave(confirmDialog)).toBe(true);
     expect(confirmDialog).not.toHaveBeenCalled();
-    expect(unloadListeners.size).toBe(0);
+    expect(beforeUnloadListeners().fire().defaultPrevented).toBe(false);
+  });
+});
+
+// Back is guarded by a copy of the page's history entry. It is added once, and Back or a
+// navigation away takes it out of the way, so the history reads as it would without a guard.
+describe('useUnsavedChangesGuard history entry', () => {
+  it('adds one entry however often the work is saved and edited again', async () => {
+    await mountGuard();
+    expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/runs/r1']);
+
+    for (const dirty of [false, true, false, true]) {
+      await act(async () => probe.setDirty?.(dirty));
+    }
+
+    expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/runs/r1']);
+  });
+
+  it('goes back in one step once the work is saved', async () => {
+    await mountGuard();
+    await act(async () => probe.setDirty?.(false));
+
+    await goBack();
+
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.url()).toBe('/runs');
+  });
+
+  it('replaces the copy when a link leaves, so Back from the next page finds the page once', async () => {
+    await mountGuard();
+
+    await clickLink('Home');
+
+    expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/']);
+    expect(navigation.index()).toBe(2);
+  });
+
+  it('replaces the copy when code leaves after the work was saved', async () => {
+    await mountGuard();
+    await act(async () => probe.setDirty?.(false));
+
+    await act(async () => {
+      probe.router?.push('/');
+    });
+
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
+    expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/']);
+  });
+
+  it('adds nothing for a page that never held unsaved work', async () => {
+    await mountGuard({ dirty: false });
+    expect(navigation.entries()).toEqual(['/runs', '/runs/r1']);
+
+    await goBack();
+
+    expect(navigation.url()).toBe('/runs');
+    expect(navigation.window.confirm).not.toHaveBeenCalled();
   });
 });
