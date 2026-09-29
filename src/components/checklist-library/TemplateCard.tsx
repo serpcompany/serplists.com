@@ -88,10 +88,15 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
             {getTemplateIcon(template)}
           </div>
 
+          {/* A pointer shortcut only: the title and Start links reach the same page, so
+              this copy, invisible until hover, never takes focus. */}
           {templatePath ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100">
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 flex items-center justify-center bg-background/80 opacity-0 transition-opacity group-hover:opacity-100"
+            >
               <Button asChild>
-                <Link to={templatePath}>
+                <Link tabIndex={-1} to={templatePath}>
                   <Eye className="mr-2 h-4 w-4" />
                   View Template
                 </Link>

@@ -57,7 +57,9 @@ rules are in [PRODUCT_SENSE.md](PRODUCT_SENSE.md#writing-product-copy).
   hover-only class string there. A hover-only duplicate of an action that is
   reachable elsewhere leaves the tab order instead (`tabIndex={-1}` inside an
   `aria-hidden` wrapper), like the Start Run overlay in
-  `src/components/dashboard/TemplateCard.tsx`.
+  `src/components/dashboard/TemplateCard.tsx` and the View Template overlay in
+  `src/components/checklist-library/TemplateCard.tsx`
+  (`tests/unit/components/focusVisibility.ts` finds focusable elements hidden this way).
 - Anything that reorders by drag also reorders from the keyboard. The template
   editor's drag handles (`ReorderHandle`) move their section, task or content block
   one place with the Up and Down arrow keys, keep focus on the moved handle, and
