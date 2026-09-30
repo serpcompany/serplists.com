@@ -271,6 +271,18 @@ Each of these needs the user's approval, or happens with the domain move:
       The one failure, the completion dialog's double-click test, failed 1 in 5 reruns: the
       spec's own waits could push its second click past the 500 ms double-click window. It
       now clicks as soon as the dialog opens, and passed 10 of 10 (`e05b2897`).
+- [x] Merged `origin/staging` at `848a31a8` in `1d179028`: #250 (Personal Run MCP hardening),
+  #251 (promotion prep), #254/#255 (Run Key template tools) and #257 (per-key permissions),
+  keeping every bug-hunt fix and every staging feature (decision log, 2026-09-30); follow-ups
+  `a0577837` to `979dd935`. Agent Access gained the permission cards, with screenshots at
+  1440x900 and 390x844, light and dark, kept locally in `tmp/design-review/merge-staging/`.
+  Local D1 has migrations 0026 and 0027; production needs both (Left for launch). Gates:
+  `pnpm run verify` (5,276 unit tests); `pnpm run test:local-d1` (44 tests); the 7 browser
+  specs that touch Account Settings or Run Keys, on the production build: 22 of 23 passed, and
+  the one failure ("an invite opened in another account offers to sign out and come back to
+  it") fails the same way on the pre-merge commit `2675576e` when run alone, because wrangler's
+  dev proxy drops its invite POST (`Network connection lost`, cloudflare/workers-sdk#14641);
+  `pnpm run test:smoke` (24 of 24).
 
 ## Decision log
 
@@ -602,3 +614,17 @@ Each of these needs the user's approval, or happens with the domain move:
   categories", its hidden name before), on the Template Library ("Search templates"; it had
   no name) and on a category page ("Search" and "Sort by", as on My Templates). The wording
   is an open question in the screen inventory.
+- 2026-09-30: **Staging's Run Key work on this branch's code.** Staging moved the web
+  template create and update into `createTemplateForUser` and `updateTemplateForUser`; the
+  merge keeps that split with this branch's fixes inside, so Run Key writes get them too
+  (payload details, content limits, the capacity-checked insert, slug retries, required
+  versions, no-op saves, guarded audit-first batches, run reconcile events). The template
+  tools use this branch's MCP helpers (`agentMcpTools.ts`, `agentMcpRuns.ts`) instead of
+  staging's `utils/mcp-tools.ts`: one `ToolError` class, arguments that name the bad field and
+  treat null as absent, and sections read with the ids a save stores. Staging's
+  `utils/template-assets.ts` went: this branch had moved those helpers into `src/lib/schemas/`.
+  A Run Key edit's batch also requires the template to still be private, which closes
+  staging's TD-18; the capacity-checked insert had closed its TD-19. Its TD-16 and TD-20 became
+  TD-25 and TD-26 (TD-24 was used and closed here). The failed-authentication limit counts an
+  IPv6 client per /64, like the router's limits. The template update batch moved to
+  `utils/template-writes.ts`, keeping `templates.ts` under its line cap.
