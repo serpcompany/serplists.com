@@ -3,6 +3,7 @@
 // text, so a shared link's preview says what the page says. Keep it framework-free: it is in
 // SHARED_FROM_SRC in .dependency-cruiser.cjs, so import siblings by relative path.
 import { APP_BRAND_NAME } from './brand';
+import { formatCount } from './utils/pluralize';
 
 /**
  * The link-preview image for every page: public/og-default.png. It must be a PNG or JPEG
@@ -45,7 +46,7 @@ export const describeCategoryPage = (
 ): string =>
   templateCount === null
     ? `Templates for ${category.name}. ${category.description}`
-    : `${templateCount} templates for ${category.name}. ${category.description}`;
+    : `${formatCount(templateCount, 'template')} for ${category.name}. ${category.description}`;
 
 /** The description of a category that is not one of the built-in ones. */
 export const describeUnlistedCategory = (categoryName: string): string =>

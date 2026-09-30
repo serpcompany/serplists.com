@@ -39,6 +39,7 @@ import {
   getCanonicalProfilePath,
 } from '@/lib/routes';
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
@@ -299,8 +300,8 @@ export const UserProfileContent = ({
                       ) : null}
 
                       <div className="mt-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span>{template.sections.length} sections</span>
-                        <span>{countTemplateItems(template)} items</span>
+                        <span>{formatCount(template.sections.length, 'section')}</span>
+                        <span>{formatCount(countTemplateItems(template), 'item')}</span>
                       </div>
                     </Link>
                   </Card>

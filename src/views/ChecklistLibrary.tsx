@@ -43,6 +43,7 @@ import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 import { TEMPLATE_LIBRARY_PAGE_TEXT } from '@/lib/publicPageMeta';
 import { buildPublicCategoryPathForSlug } from '@/lib/routes';
+import { formatCount } from '@/lib/utils/pluralize';
 
 type ChecklistLibraryProps = {
   templateType?: 'checklist' | 'recipe';
@@ -149,7 +150,7 @@ const ChecklistLibrary = ({
       }),
     [searchQuery, selectedCategorySlug, sortBy, templates],
   );
-  const resultLabel = `${filteredTemplates.length} templates${
+  const resultLabel = `${formatCount(filteredTemplates.length, 'template')}${
     selectedCategoryName ? ` in ${selectedCategoryName}` : ''
   }`;
 
@@ -266,7 +267,7 @@ const ChecklistLibrary = ({
                 key={category.slug}
                 href={buildPublicCategoryPathForSlug(category.slug)}
                 icon={<Icon />}
-                meta={`${category.count} ${category.count === 1 ? 'template' : 'templates'}`}
+                meta={formatCount(category.count, 'template')}
                 orientation="vertical"
                 title={category.name}
               />

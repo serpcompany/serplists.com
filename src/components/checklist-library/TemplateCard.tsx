@@ -11,6 +11,7 @@ import {
 } from '@/lib/routes';
 import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
+import { formatCount, pluralize } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { generateSlug } from '@/utils/urlHelpers';
 import {
@@ -93,10 +94,10 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
       title={template.title}
     >
       <p className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span>{sectionCount} sections</span>
-        <span>{itemCount} tasks</span>
+        <span>{formatCount(sectionCount, 'section')}</span>
+        <span>{formatCount(itemCount, 'task')}</span>
         {typeof template.viewCount === 'number' ? (
-          <span className="ml-auto">{template.viewCount.toLocaleString()} views</span>
+          <span className="ml-auto">{template.viewCount.toLocaleString()} {pluralize(template.viewCount, 'view')}</span>
         ) : null}
       </p>
       <div className="flex items-center justify-between gap-2 border-t pt-3">

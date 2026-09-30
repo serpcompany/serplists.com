@@ -21,6 +21,7 @@ import { buildDiscoveryCategories } from '@/components/checklist-library/discove
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatCount } from '@/lib/utils/pluralize';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Empty,
@@ -169,7 +170,7 @@ const Categories = () => {
                             {category.name}
                           </h3>
                           <p className="mt-1 text-sm text-muted-foreground">
-                            {category.count} templates
+                            {formatCount(category.count, 'template')}
                           </p>
                         </CardContent>
                       </Card>
@@ -223,7 +224,7 @@ const Categories = () => {
                           </div>
                           <div className="flex items-center gap-4">
                             <Badge variant="secondary">
-                              {category.count} templates
+                              {formatCount(category.count, 'template')}
                             </Badge>
                             <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:translate-x-1" />
                           </div>

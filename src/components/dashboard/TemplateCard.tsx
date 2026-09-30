@@ -21,6 +21,7 @@ import {
 import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
@@ -149,8 +150,8 @@ export function TemplateCard({
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
-            <span>{sectionCount} sections</span>
-            <span>{taskCount} tasks</span>
+            <span>{formatCount(sectionCount, 'section')}</span>
+            <span>{formatCount(taskCount, 'task')}</span>
           </div>
           <div className="flex items-center gap-1">
             {template.isPublic ? (

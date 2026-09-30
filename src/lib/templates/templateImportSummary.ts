@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { isApiError } from "@/lib/api-errors";
 import type { PortableSkippedTemplate } from "@/lib/schemas/portableTemplatePack";
+import { formatCount } from "@/lib/utils/pluralize";
 import type { TemplateImportFailure, TemplateImportSummary } from "@/types/checklist";
 
 // POST /api/templates/backup answers with a TemplateImportSummary. When every template
@@ -67,7 +68,7 @@ export function getExportSummary(pack: unknown): PortableExportSummary {
   return { exported: templates.length, skipped: manifest?.skippedTemplates ?? [] };
 }
 
-const templateCount = (count: number): string => `${count} ${count === 1 ? "template" : "templates"}`;
+const templateCount = (count: number): string => formatCount(count, "template");
 
 /** The toast for an export: a warning naming each left-out template and its reason, an error when none was written. */
 export function formatExportSummaryMessage(summary: PortableExportSummary): { kind: "success" | "warning" | "error"; message: string } {

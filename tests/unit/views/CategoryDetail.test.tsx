@@ -94,7 +94,7 @@ describe('CategoryDetail with slugs that are Object.prototype keys', () => {
     expect(markup).toMatch(/<h1[^>]*>Constructor<\/h1>/);
     expect(markup).toContain('Templates filed under Constructor.');
     expect(markup).toContain('Site Setup Checklist');
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
   });
 
   it('keeps the built-in presentation for registry categories', () => {
@@ -144,7 +144,7 @@ describe('CategoryDetail for categories in other scripts', () => {
       expect(markup).not.toContain('That page does not exist');
       expect(markup).toContain('Guide Checklist');
       expect(markup).not.toContain('>Other<');
-      expect(markup).toContain('1 templates');
+      expect(markup).toMatch(/\b1 template\b/);
     },
   );
 
@@ -240,7 +240,7 @@ describe('CategoryDetail empty categories', () => {
     const markup = renderCategory('engineering');
 
     expect(markup).toContain('Code Review Checklist');
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
     expect(robotsIn(markup)).toBeUndefined();
   });
 });

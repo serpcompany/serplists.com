@@ -12,6 +12,7 @@ import { buildPublicTemplateSectionId } from '@/components/template/publicTempla
 import { cn } from '@/lib/utils';
 import { getSectionDisplayTitle, getSubItemDisplayTitle } from '@/lib/utils/checklistSections';
 import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
+import { formatCount } from '@/lib/utils/pluralize';
 import { safeUrl } from '@/lib/utils/safeUrl';
 import type {
   ChecklistItem,
@@ -249,7 +250,7 @@ export function PublicTemplateContent({
               </h3>
             </div>
             <div className="text-sm text-muted-foreground">
-              {section.items?.length ?? 0} tasks
+              {formatCount(section.items?.length ?? 0, 'task')}
             </div>
           </div>
 

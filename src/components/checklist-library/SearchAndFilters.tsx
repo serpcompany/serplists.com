@@ -3,6 +3,7 @@ import { Clock, Star, TrendingUp } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { formatCount } from '@/lib/utils/pluralize';
 import type {
   DiscoveryCategory,
   DiscoverySort,
@@ -145,7 +146,7 @@ export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
         searchSlot
       ) : (
         <p className="text-sm text-muted-foreground">
-          {resultLabel ?? `${resultCount} templates`}
+          {resultLabel ?? formatCount(resultCount, 'template')}
         </p>
       )}
 

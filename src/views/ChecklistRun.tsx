@@ -54,6 +54,7 @@ import {
 } from '@/lib/routes';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { countRunTasks, getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { formatCount } from '@/lib/utils/pluralize';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 import { RunNotesEditor } from '@/components/run-execution/RunNotesEditor';
 
@@ -413,7 +414,7 @@ const ChecklistRunPage = () => {
     displayRun.title
   );
   // Tasks only, like the task list and "Task N of M"; the percentage also weights sub-tasks.
-  const privateRunDescription = `${counts.tasksCompleted} of ${counts.tasksTotal} tasks finished`;
+  const privateRunDescription = `${counts.tasksCompleted} of ${formatCount(counts.tasksTotal, 'task')} finished`;
 
   return (
     <div className="min-h-screen bg-background">
@@ -476,7 +477,7 @@ const ChecklistRunPage = () => {
                       {progress}%
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {counts.tasksCompleted} of {counts.tasksTotal} tasks
+                      {counts.tasksCompleted} of {formatCount(counts.tasksTotal, 'task')}
                     </p>
                   </div>
                 </div>

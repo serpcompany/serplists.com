@@ -88,7 +88,7 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).toContain(
       'Browse hundreds of ready-to-use checklists created by the community',
     );
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
     expect(markup).toContain('Browse by Category');
     expect(markup).toContain('href="/profile/designops/website-launch-checklist/"');
     expect(markup).toContain('href="/categories/launch/"');
@@ -210,7 +210,7 @@ describe('ChecklistLibrary route behavior', () => {
 
     expect(markup).toContain('All Categories');
     expect(markup).toContain('Business &amp; Operations');
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
     expect(markup).toContain('Search templates...');
     expect(markup).toContain('Most Popular');
     expect(markup).toContain('Related Categories');
@@ -295,7 +295,7 @@ describe('Discovery pages while the catalog loads', () => {
 
     expect(markup).not.toContain('That page does not exist');
     expect(markup).toContain('Moving Day');
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
   });
 
   it('shows a retry state, not the 404 page, when the catalog failed to load', () => {

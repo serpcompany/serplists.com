@@ -27,6 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
+import { formatCount } from '@/lib/utils/pluralize';
 import {
   buildCanonicalPublicTemplatePath,
   buildConsoleTemplatesPath,
@@ -187,7 +188,7 @@ const Index = () => {
                   title={template.title}
                 >
                   <p className="text-sm text-muted-foreground">
-                    {countTemplateItems(template)} items in {template.sections.length} sections
+                    {formatCount(countTemplateItems(template), 'item')} in {formatCount(template.sections.length, 'section')}
                   </p>
                   {template.categories?.length ? (
                     <div className="flex flex-wrap gap-1.5">

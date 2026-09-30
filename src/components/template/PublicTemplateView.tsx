@@ -31,6 +31,7 @@ import {
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { formatCount } from '@/lib/utils/pluralize';
 import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
@@ -372,7 +373,7 @@ function SectionPreview({
             {index + 1}
           </span>
           <span className="truncate font-medium">{getSectionDisplayTitle(section, index)}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">{section.items.length} tasks</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{formatCount(section.items.length, 'task')}</span>
         </span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
       </CollapsibleTrigger>

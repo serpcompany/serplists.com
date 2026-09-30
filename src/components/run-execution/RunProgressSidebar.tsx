@@ -2,6 +2,7 @@ import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { countRunTasks, getSectionDisplayTitle } from '@/lib/utils/checklistSections';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
 interface RunProgressPanelProps {
@@ -151,7 +152,7 @@ export function RunTaskList({
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Overall Progress</span>
           <span className="font-medium text-foreground">
-            {completedTasks} / {totalTasks} tasks
+            {completedTasks} / {formatCount(totalTasks, 'task')}
           </span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-secondary">

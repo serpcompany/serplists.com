@@ -12,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistSection } from '@/types/checklist';
 
 // Tailwind's xl breakpoint, where the desktop progress panel (RunProgressPanel) takes over.
@@ -67,7 +68,7 @@ export function MobileRunProgress({
         <div>
           <p className="font-medium text-foreground">{progress}% complete</p>
           <p className="text-xs text-muted-foreground">
-            {completedTasks} of {totalTasks} tasks finished
+            {completedTasks} of {formatCount(totalTasks, 'task')} finished
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

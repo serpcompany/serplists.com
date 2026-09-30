@@ -5,6 +5,7 @@ import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
 } from '@/lib/routes';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
@@ -54,8 +55,8 @@ export function TemplateListItem({
       </div>
 
       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground md:gap-6">
-        <span>{sectionCount} sections</span>
-        <span>{taskCount} tasks</span>
+        <span>{formatCount(sectionCount, 'section')}</span>
+        <span>{formatCount(taskCount, 'task')}</span>
         <span>{template.isPublic ? 'Public' : 'Private'}</span>
       </div>
 

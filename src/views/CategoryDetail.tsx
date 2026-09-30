@@ -31,6 +31,7 @@ import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
+import { formatCount } from '@/lib/utils/pluralize';
 import {
   buildCategorySlug,
   buildPublicCategoriesPath,
@@ -107,6 +108,7 @@ const CategoryDetail = () => {
     if (legacyCategoryPath) router.replace(legacyCategoryPath);
   }, [legacyCategoryPath, router]);
   const categoryTemplateCount = categoryStats?.count ?? 0;
+  const categoryTemplateCountLabel = formatCount(categoryTemplateCount, 'template');
   // Registry categories render before any public Template uses them; keep those empty
   // pages out of search results, but only once the catalog API has answered. Bundled
   // Templates arrive first, so a count of 0 means nothing until then.
@@ -194,7 +196,7 @@ const CategoryDetail = () => {
               <Skeleton className="mt-3 h-5 w-24" />
             ) : (
               <Badge className="mt-3" variant="secondary">
-                {categoryTemplateCount} templates
+                {categoryTemplateCountLabel}
               </Badge>
             )}
           </div>

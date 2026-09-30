@@ -57,7 +57,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
 
   await page.reload();
   // The header and the phone progress strip (hidden at this width) both show the count.
-  await expect(page.getByText('0 of 1 tasks finished').first()).toBeVisible();
+  await expect(page.getByText('0 of 1 task finished').first()).toBeVisible();
   const retired = page.locator('[data-retired-run-items="true"]');
   await retired.getByText('Removed from Template (1)').click();
   await expect(retired.getByText('Check DNS')).toBeVisible();

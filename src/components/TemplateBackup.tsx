@@ -31,6 +31,7 @@ import {
 import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
 import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
 import { cn } from "@/lib/utils";
+import { formatCount } from "@/lib/utils/pluralize";
 import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
 import { TemplateImportPreview } from "@/components/TemplateImportPreview";
@@ -78,7 +79,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   // Until the list loads, the context may not be restored yet (an Organization reads as
   // Personal while it loads), so export and import wait and the counts show a dash.
   const backupControlsOff = !user || templatesLoading || !hasBackupAccess || !canEditTemplates;
-  const formatCount = (count: number) => (templatesLoading ? "–" : count);
+  const formatStatCount = (count: number) => (templatesLoading ? "–" : count);
   // One export at a time: a second click would scan every Template again and download a copy.
   const exportFlight = useSingleFlight();
   const isExporting = exportFlight.isRunning;
@@ -164,7 +165,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       onError: (message) => toast.error(message),
       onPreview: (result, fileName) => {
         setImportPreview({ ...result, fileName });
-        toast.success(`Preview: ${result.templates.length} templates ready to import`);
+        toast.success(`Preview: ${formatCount(result.templates.length, "template")} ready to import`);
       },
       parse: parseTemplatesFromFile,
       resetPreview: () => {
@@ -388,15 +389,15 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
             <ListLoadErrorState error={templatesError} listName="templates" onRetry={() => void refetchTemplates()} />
           ) : <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
             <div className="text-center">
-              <div className="text-2xl font-bold">{formatCount(ownedTemplates.length)}</div>
+              <div className="text-2xl font-bold">{formatStatCount(ownedTemplates.length)}</div>
               <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{formatCount(publicTemplateCount)}</div>
+              <div className="text-2xl font-bold text-green-600">{formatStatCount(publicTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Public</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{formatCount(privateTemplateCount)}</div>
+              <div className="text-2xl font-bold text-blue-600">{formatStatCount(privateTemplateCount)}</div>
               <div className="text-sm text-muted-foreground">Private</div>
             </div>
           </div>}

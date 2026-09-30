@@ -47,6 +47,7 @@ import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { isStaleRecordError } from '@/lib/editConflicts';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
+import { formatCount } from '@/lib/utils/pluralize';
 import {
   handleUpgradeRequiredForContext,
   navigateToLoginWithReturnPath,
@@ -200,7 +201,7 @@ const Templates = () => {
   const countDescription =
     model.loading || model.loadError
       ? undefined
-      : `${templateCount} ${templateCount === 1 ? 'template' : 'templates'} in your library`;
+      : `${formatCount(templateCount, 'template')} in your library`;
 
   return (
     <DashboardContentShell>

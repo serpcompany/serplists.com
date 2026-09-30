@@ -92,6 +92,7 @@ import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
 import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
 import { formatLocalDate, formatLocalDateTime } from '@/lib/utils/dbTimestamp';
+import { formatCount } from '@/lib/utils/pluralize';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -587,7 +588,7 @@ const TemplateDetail = () => {
                     {getSectionDisplayTitle(section, sectionIndex)}
                   </span>
                   <Badge variant="secondary" className="ml-auto">
-                    {section.items.length} tasks
+                    {formatCount(section.items.length, 'task')}
                   </Badge>
                 </div>
                 <div className="space-y-1 pb-3 pl-14 pr-4">

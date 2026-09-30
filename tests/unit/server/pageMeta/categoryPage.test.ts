@@ -58,7 +58,7 @@ describe('category page metadata', () => {
 
     expect(metadata.title).toEqual({ absolute: `Engineering & Development Templates | ${APP_BRAND_NAME}` });
     expect(metadata.description).toBe(
-      '1 templates for Engineering & Development. Checklists for code reviews, deployments, and development workflows',
+      '1 template for Engineering & Development. Checklists for code reviews, deployments, and development workflows',
     );
     expect(metadata.alternates?.canonical).toBe('https://serplists.com/categories/engineering/');
     expect(metadata.robots).toBe('index, follow');
@@ -85,7 +85,7 @@ describe('category page metadata', () => {
     const metadata = await generateMetadata(params('moving-day'));
 
     expect(metadata.title).toEqual({ absolute: `Moving Day Templates | ${APP_BRAND_NAME}` });
-    expect(metadata.description).toBe('1 templates for Moving Day. Templates filed under Moving Day.');
+    expect(metadata.description).toBe('1 template for Moving Day. Templates filed under Moving Day.');
   });
 
   it('counts the bundled library, which the API does not serve', async () => {

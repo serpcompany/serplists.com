@@ -132,7 +132,7 @@ describe('Categories page catalog states', () => {
     expect(markup).toContain('All Categories');
     expect(markup).toContain('href="/categories/outdoor/"');
     expect(markup).toContain('href="/categories/moving/"');
-    expect(markup).toContain('1 templates');
+    expect(markup).toMatch(/\b1 template\b/);
     expect(markup).not.toContain('aria-busy="true"');
     expect(markup).not.toContain('Could not load templates');
   });

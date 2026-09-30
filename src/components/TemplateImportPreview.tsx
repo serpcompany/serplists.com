@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ImportPreview } from "@/features/template-backup/importFileSelection";
 import { countImportPublicTemplates } from "@/lib/utils/templateBackup";
 import type { ImportVisibility } from "@/lib/utils/templateBackup";
+import { formatCount } from "@/lib/utils/pluralize";
 import { formatAssetSizeLimit, TEMPLATE_IMPORT_MAX_ASSET_BYTES } from "@/lib/schemas/templateAssetLimits";
 
 const ASSET_LIMIT = formatAssetSizeLimit(TEMPLATE_IMPORT_MAX_ASSET_BYTES);
@@ -45,7 +46,7 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
     </CardHeader>
     <CardContent className="space-y-4">
       <div className="flex items-center gap-4">
-        <Badge variant="secondary">{preview.templates.length} templates</Badge>
+        <Badge variant="secondary">{formatCount(preview.templates.length, "template")}</Badge>
         <Badge variant="outline">{countImportPublicTemplates(preview.templates, visibility)} public</Badge>
       </div>
 
@@ -56,7 +57,7 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
               <div className="font-medium">{template.title}</div>
               {template.description && <div className="text-muted-foreground truncate">{template.description}</div>}
               <div className="text-xs text-muted-foreground">
-                {template.sections.length} sections
+                {formatCount(template.sections.length, "section")}
               </div>
             </div>)}
         </div>
@@ -87,10 +88,10 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
               </p>
               <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
                 {exceedsTemplateLimit && <li>
-                    • {preview.templates.length} templates selected; limit is {maxTemplatesPerImport} per import
+                    • {formatCount(preview.templates.length, "template")} selected; limit is {maxTemplatesPerImport} per import
                   </li>}
                 {oversizedAssetCount > 0 && <li>
-                    • {oversizedAssetCount} asset{oversizedAssetCount === 1 ? "" : "s"} over {ASSET_LIMIT}; templates with them will not be imported
+                    • {formatCount(oversizedAssetCount, "asset")} over {ASSET_LIMIT}; templates with them will not be imported
                   </li>}
               </ul>
             </div>
