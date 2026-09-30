@@ -73,6 +73,8 @@ export const uploadFile = async (
 
 export { getUploadedAssetKey, isUploadedAssetUrl };
 
+export const uploadAvatar = (file: File) => api.uploadToR2({ bucket: 'avatars', file });
+
 /**
  * Deletes a replaced or removed avatar. Only avatars can be deleted: Templates,
  * versions, Runs and clones may still reference template media, so clearing or

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import {
@@ -20,6 +19,8 @@ import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirec
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
 import { buildConsoleTemplateCreatePath } from "@/lib/routes";
 import { readTemplateDraft } from "@/features/template-editor/templateDraftStore";
+import { createBillingPortalUrl, fetchBillingStatus } from "@/features/billing/billingSettings";
+import { createPersonalCheckoutUrl } from "@/features/billing/pricingBilling";
 import { Button } from "@/components/ui/button";
 import { QueryErrorNotice } from "@/components/shared/QueryListState";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export function BillingSection() {
   const billingReturn = useSearchParams().get("billing");
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id, activeTeamId),
-    queryFn: () => api.getBillingStatus(activeTeamId ? { teamId: activeTeamId } : undefined),
+    queryFn: () => fetchBillingStatus(activeTeamId),
     enabled: !!user,
     retry: false,
   });
@@ -111,8 +112,7 @@ export function BillingSection() {
     }
     setIsStartingCheckout(true);
     try {
-      const { url } = await api.createBillingCheckout();
-      window.location.href = url;
+      window.location.href = await createPersonalCheckoutUrl();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start checkout");
       setIsStartingCheckout(false);
@@ -135,8 +135,7 @@ export function BillingSection() {
     }
     setIsOpeningPortal(true);
     try {
-      const { url } = await api.createBillingPortal();
-      window.location.href = url;
+      window.location.href = await createBillingPortalUrl();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
       setIsOpeningPortal(false);

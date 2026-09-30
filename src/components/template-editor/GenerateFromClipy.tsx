@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { api } from "@/lib/api";
+import { generateTemplateDraftFromClipy } from "@/features/template-editor/clipyDraft";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type GenerateFromClipyProps = {
@@ -23,7 +23,7 @@ type GenerateFromClipyProps = {
 
 export function GenerateFromClipy({
   onGenerated,
-  generate = (url) => api.generateTemplateFromClipy(url),
+  generate = generateTemplateDraftFromClipy,
   confirmReplace = () => true,
   onGeneratingChange,
 }: GenerateFromClipyProps): JSX.Element {

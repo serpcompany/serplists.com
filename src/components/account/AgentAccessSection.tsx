@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Copy, KeyRound, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,12 +28,10 @@ import {
   ItemGroup,
   ItemTitle,
 } from '@/components/ui/item';
-import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { QueryListState } from '@/components/shared/QueryListState';
-import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
+import { useRunKeys } from '@/features/agent-access/useRunKeys';
+import type { AgentKey, CreatedAgentKey } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { queryKeys } from '@/lib/queryKeys';
-import { reloadQuery } from '@/lib/queryReload';
 import {
   DEFAULT_RUN_KEY_PERMISSIONS,
   RUN_KEY_PERMISSION_DETAILS,
@@ -42,8 +39,6 @@ import {
   toggleRunKeyPermission,
   type RunKeyPermission,
 } from '@/lib/schemas/runKeyPermissions';
-
-const agentMcpConnectionQueryKey = ['agent-mcp-connection'] as const;
 
 const hostOf = (url: string): string => {
   try {
@@ -362,25 +357,7 @@ export function AgentAccessSection() {
   const [createdKey, setCreatedKey] = useState<CreatedAgentKey | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
-  const queryClient = useQueryClient();
-
-  const userId = useAuth().user?.id;
-  const keysQuery = useQuery({
-    queryKey: queryKeys.agentKeys(userId),
-    queryFn: () => api.getAgentKeys(),
-    enabled: Boolean(userId),
-    staleTime: 30 * 1000,
-  });
-  // The server knows which hosts its MCP check accepts; until it answers, assume this one.
-  const connectionQuery = useQuery({
-    queryKey: agentMcpConnectionQueryKey,
-    queryFn: () => api.getAgentMcpConnection(),
-    staleTime: Infinity,
-  });
-  const mcpEndpoint = connectionQuery.data
-    ? connectionQuery.data.mcpEndpoint
-    : getAgentMcpEndpoint(typeof window === 'undefined' ? undefined : window.location.origin);
-  const mcpHostMismatch = connectionQuery.data?.hostMismatch ?? false;
+  const { keysQuery, mcpEndpoint, mcpHostMismatch, createKey, revokeKey, reloadKeys } = useRunKeys();
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -389,12 +366,12 @@ export function AgentAccessSection() {
 
     setIsCreating(true);
     try {
-      const result = await api.createAgentKey(name, permissions);
+      const result = await createKey(name, permissions);
       setCreatedKey(result);
       setKeyName('');
       setPermissions([...DEFAULT_RUN_KEY_PERMISSIONS]);
       // Show the new key at once; the list may still be loading from before the create.
-      await reloadQuery<AgentKey[]>(queryClient, queryKeys.agentKeys(userId), (keys = []) => [
+      await reloadKeys((keys = []) => [
         result.key,
         ...keys.filter((key) => key.id !== result.key.id),
       ]);
@@ -431,15 +408,15 @@ export function AgentAccessSection() {
   const handleRevoke = async (key: AgentKey) => {
     setRevokingKeyId(key.id);
     try {
-      await api.revokeAgentKey(key.id);
+      await revokeKey(key.id);
       if (createdKey?.key.id === key.id) setCreatedKey(null);
-      await reloadQuery(queryClient, queryKeys.agentKeys(userId));
+      await reloadKeys();
       toast.success('Run Key revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke Run Key');
       // The key may already be revoked (the response was lost, or another tab revoked it):
       // show its real state instead of a stale Active row.
-      await reloadQuery(queryClient, queryKeys.agentKeys(userId)).catch(() => {});
+      await reloadKeys().catch(() => {});
     } finally {
       setRevokingKeyId(null);
     }

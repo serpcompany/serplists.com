@@ -5,11 +5,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, User, X } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
-import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
+import { deleteUploadedAsset, uploadAvatar } from "@/lib/utils/fileUpload";
 import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 interface AvatarUploadProps {
@@ -62,7 +61,7 @@ export const AvatarUpload = ({
     setIsUploading(true);
 
     try {
-      const upload = await api.uploadToR2({ bucket: 'avatars', file });
+      const upload = await uploadAvatar(file);
       // authClient resolves with { error } on HTTP failures (429, 5xx) rather than throwing.
       const result = await authClient.updateUser({ image: upload.url });
       if (result?.error) {

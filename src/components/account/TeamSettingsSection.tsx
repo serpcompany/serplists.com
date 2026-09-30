@@ -7,11 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
+import type { TeamMember, TeamMemberStatus, TeamRole } from '@/lib/api';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
+import {
+  acceptIncomingTeamInvite,
+  saveTeamSettings,
+  transferTeamOwnership,
+  updateTeamMember,
+} from '@/features/teams/teamSettingsRequests';
 import { getTeamSettingsUpdate } from '@/features/teams/teamSettingsUpdate';
 import { useTeamSettingsForm } from '@/features/teams/useTeamSettingsForm';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
@@ -140,7 +146,7 @@ export function TeamSettingsSection() {
     setIsUpdatingTeam(true);
     try {
       await runTeamWrite({
-        write: () => api.updateTeam(teamId, update),
+        write: () => saveTeamSettings(teamId, update),
         onSaved: (result) => {
           // The response has the saved name and slug (the server may adjust the slug).
           const team = result?.team;
@@ -162,7 +168,7 @@ export function TeamSettingsSection() {
   const handleAcceptIncomingInvite = async (inviteId: string) => {
     setAcceptingIncomingInviteId(inviteId);
     try {
-      const acceptedInvite = await api.acceptIncomingTeamInvite(inviteId);
+      const acceptedInvite = await acceptIncomingTeamInvite(inviteId);
 
       if (acceptedInvite.team) {
         rememberTeam(acceptedInvite.team);
@@ -194,7 +200,7 @@ export function TeamSettingsSection() {
     setUpdatingMemberId(member.id);
     try {
       await runTeamWrite({
-        write: () => api.updateTeamMember(teamId, member.id, updates),
+        write: () => updateTeamMember(teamId, member.id, updates),
         onSaved: () => toast.success('Member updated'),
         // A status change revokes the member's pending invites.
         refreshes: [...memberChangeRefreshes, reload.invites],
@@ -227,7 +233,7 @@ export function TeamSettingsSection() {
     setTransferringOwnerMemberId(member.id);
     try {
       await runTeamWrite({
-        write: () => api.transferTeamOwnership(teamId, member.id),
+        write: () => transferTeamOwnership(teamId, member.id),
         onSaved: () => {
           // The previous owner is now an admin. Apply it now so the owner-only
           // controls go away even if the Organization list cannot be refetched.
