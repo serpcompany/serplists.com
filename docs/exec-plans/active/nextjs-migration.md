@@ -244,6 +244,10 @@ Each of these needs the user's approval, or happens with the domain move:
       MediaCard (`8a9d7f7f`), as did the view-mode test on template screens; `pnpm run
       test:smoke` (24 of 24); `pnpm run build:worker` (Worker 14,821 KiB, 3,051 KiB gzipped by
       `wrangler deploy --dry-run`, 19 KiB over step 2a).
+    - [x] The full browser suite on one worker after step 2: 264 of 265 passed in 29 minutes.
+      The one failure, the completion dialog's double-click test, failed 1 in 5 reruns: the
+      spec's own waits could push its second click past the 500 ms double-click window. It
+      now clicks as soon as the dialog opens, and passed 10 of 10 (`e05b2897`).
 
 ## Decision log
 
