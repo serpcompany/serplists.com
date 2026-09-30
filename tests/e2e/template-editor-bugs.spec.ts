@@ -539,7 +539,7 @@ test.describe("template editor regressions", () => {
     await page.getByLabel("Task Title").fill(taskTitle);
 
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Text" }).last().click();
+    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 
     await expect(
       page.getByPlaceholder("Enter text or markdown content"),
@@ -610,7 +610,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with image ${stamp}`);
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
 
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "photo.png",
@@ -663,7 +663,7 @@ test.describe("template editor regressions", () => {
     await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
 
     const urlField = page.getByLabel("Image URL");
     const preview = page.getByRole("img", { name: "Preview" });
@@ -693,7 +693,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with sub-tasks ${stamp}`);
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Sub-tasks", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Sub-tasks", exact: true }).click();
     await page.getByPlaceholder("Sub-task 1").fill("Check title");
     // Enter adds a blank sub-task below.
     await page.getByPlaceholder("Sub-task 1").press("Enter");
@@ -737,7 +737,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with embed ${stamp}`);
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Embed", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
 
     const field = page.getByLabel("Embed Code or URL");
     await field.click();
@@ -784,10 +784,10 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with blocks ${stamp}`);
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Text", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
     await page.getByPlaceholder("Enter text or markdown content").fill("Intro text");
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Embed", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
     await page.getByLabel("Embed Code or URL").fill(embedUrl);
 
     const handles = page.getByRole("button", { name: /^Drag (Text|Embed) block$/ });
@@ -857,7 +857,7 @@ test.describe("template editor regressions", () => {
     await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Image", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
     // Save the empty block first, so the form is clean when the file is picked.
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
@@ -1171,7 +1171,7 @@ test.describe("template editor regressions", () => {
       { name: "steps.gif", mimeType: "image/gif", buffer: animatedGif },
     ]) {
       await page.getByRole("button", { name: "Add Block" }).last().click();
-      await page.getByRole("button", { name: "Image", exact: true }).last().click();
+      await page.getByRole("menuitem", { name: "Image", exact: true }).click();
       await page.locator('input[type="file"][accept="image/*"]').last().setInputFiles(upload);
       await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
     }
@@ -1192,7 +1192,7 @@ test.describe("template editor regressions", () => {
       { name: "data.csv", mimeType: "application/vnd.ms-excel", buffer: Buffer.from("a,b\n1,2\n") },
     ]) {
       await page.getByRole("button", { name: "Add Block" }).last().click();
-      await page.getByRole("button", { name: "File", exact: true }).last().click();
+      await page.getByRole("menuitem", { name: "File", exact: true }).click();
       const input = page.locator('input[type="file"]').last();
       await expect(input).not.toHaveAttribute("accept", "*/*");
       await expect(input).toHaveAttribute("accept", /\.zip/);
@@ -1207,7 +1207,7 @@ test.describe("template editor regressions", () => {
       if (request.method() === "POST" && request.url().endsWith("/api/uploads")) uploadRequests += 1;
     });
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "File", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "File", exact: true }).click();
     await page.locator('input[type="file"]').last().setInputFiles({
       name: "page.html",
       mimeType: "text/html",
@@ -1241,7 +1241,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByLabel("Task Title").fill(`Task with file ${stamp}`);
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "File", exact: true }).last().click();
+    await page.getByRole("menuitem", { name: "File", exact: true }).click();
     await page.locator('input[type="file"]').last().setInputFiles({
       name: "report.pdf",
       mimeType: "application/pdf",

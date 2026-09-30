@@ -50,7 +50,7 @@ describe('OutlineSidebar', () => {
     expect(html).toContain('Template Settings');
     expect(html).toContain('Search &amp; SEO');
     expect(html).toContain('Sections');
-    expect(html).toContain('bg-sidebar');
+    expect(html).toContain('data-slot="template-outline"');
     expect(html).not.toContain('Setup');
   });
 });

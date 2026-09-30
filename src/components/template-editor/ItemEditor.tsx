@@ -32,7 +32,7 @@ export function ItemEditor({
   });
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       {showIntro ? (
         <div>
           <h2 className="text-lg font-semibold text-foreground">Task Details</h2>
@@ -56,7 +56,6 @@ export function ItemEditor({
               )
             }
             placeholder="What needs to be done..."
-            className="bg-input"
           />
         </Field>
 
@@ -76,7 +75,7 @@ export function ItemEditor({
             }
             placeholder="Add more context or instructions..."
             rows={2}
-            className="resize-none bg-input"
+            className="resize-none"
           />
         </Field>
       </FieldGroup>

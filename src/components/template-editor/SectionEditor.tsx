@@ -23,7 +23,7 @@ export function SectionEditor({
   });
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       {showIntro ? (
         <div>
           <h2 className="text-lg font-semibold text-foreground">
@@ -47,18 +47,13 @@ export function SectionEditor({
               })
             }
             placeholder="Enter section title..."
-            className="bg-input"
           />
         </Field>
       </FieldGroup>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Tasks in section</span>
-          <span className="text-sm font-medium text-foreground">
-            {section?.items.length ?? 0}
-          </span>
-        </div>
+      <div className="flex items-center justify-between rounded-lg border p-4 text-sm">
+        <span className="text-muted-foreground">Tasks in section</span>
+        <span className="font-medium">{section?.items.length ?? 0}</span>
       </div>
     </div>
   );

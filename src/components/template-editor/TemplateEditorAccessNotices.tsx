@@ -44,10 +44,10 @@ export function TemplateEditorAccessNotices({
   const otherDraftTitle = otherContextDraft?.draft.values.title.trim() || "Untitled Template";
 
   return (
-    <div className="space-y-3 px-4 py-4">
+    <div className="flex flex-col gap-3">
       {draft ? (
-        <Alert className="bg-card shadow-none">
-          <FileClock className="h-4 w-4" />
+        <Alert>
+          <FileClock />
           <AlertTitle>Unsaved template draft</AlertTitle>
           <AlertDescription>
             <p>
@@ -73,8 +73,8 @@ export function TemplateEditorAccessNotices({
       ) : null}
 
       {otherContextDraft ? (
-        <Alert className="bg-card shadow-none">
-          <FileClock className="h-4 w-4" />
+        <Alert>
+          <FileClock />
           <AlertTitle>Unsaved template draft in {otherContextDraft.name}</AlertTitle>
           <AlertDescription>
             <p>
@@ -94,8 +94,8 @@ export function TemplateEditorAccessNotices({
       ) : null}
 
       {notice ? (
-        <Alert className="border-destructive/40 bg-card shadow-none" variant="destructive">
-          <AlertCircle className="h-4 w-4" />
+        <Alert variant="destructive">
+          <AlertCircle />
           <AlertTitle>{notice.title}</AlertTitle>
           <AlertDescription>
             <p>{notice.message}</p>

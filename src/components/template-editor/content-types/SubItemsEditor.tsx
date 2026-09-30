@@ -5,7 +5,7 @@ import { ListCheck, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { FieldLegend, FieldSet } from "@/components/ui/field";
 import {
   createTemplateEditorSubItem,
   type TemplateEditorFormValues,
@@ -63,11 +63,11 @@ export function SubItemsEditor({
   }
 
   return (
-    <div>
-      <Label className="mb-3 flex items-center gap-2">
-        <ListCheck className="h-4 w-4" /> Sub-tasks
-      </Label>
-      <div className="space-y-2">
+    <FieldSet className="gap-3">
+      <FieldLegend className="mb-0 flex items-center gap-2" variant="label">
+        <ListCheck className="size-4" /> Sub-tasks
+      </FieldLegend>
+      <div className="flex flex-col gap-2">
         {subItemsFieldArray.fields.map((subItemField, subItemIndex) => (
           <div className="flex items-center gap-2" key={subItemField.fieldId}>
             <Input
@@ -95,7 +95,7 @@ export function SubItemsEditor({
               type="button"
               variant="ghost"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 />
             </Button>
           </div>
         ))}
@@ -106,10 +106,10 @@ export function SubItemsEditor({
           type="button"
           variant="outline"
         >
-          <Plus className="mr-1.5 h-4 w-4" />
+          <Plus data-icon="inline-start" />
           Add Sub-task
         </Button>
       </div>
-    </div>
+    </FieldSet>
   );
 }

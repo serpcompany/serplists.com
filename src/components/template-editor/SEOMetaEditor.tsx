@@ -2,7 +2,8 @@ import type { JSX } from "react";
 import { useId } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -65,7 +66,7 @@ export const SEOMetaEditor = ({
     seoDescription || description || "No description provided";
 
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-8">
       {showIntro ? (
         <div>
           <h2 className="text-lg font-semibold text-foreground">Search &amp; SEO</h2>
@@ -88,11 +89,8 @@ export const SEOMetaEditor = ({
               setValue("seoTitle", event.target.value, { shouldDirty: true })
             }
             placeholder="Title for search results..."
-            className="bg-input"
           />
-          <p className="mt-1 text-xs text-muted-foreground" id={ids.seoTitleHint}>
-            Leave blank to use the template name
-          </p>
+          <FieldDescription id={ids.seoTitleHint}>Leave blank to use the template name</FieldDescription>
         </Field>
 
         <Field>
@@ -106,11 +104,9 @@ export const SEOMetaEditor = ({
             }
             onBlur={handleSlugBlur}
             placeholder="my-template-slug"
-            className="bg-input font-mono text-sm"
+            className="font-mono"
           />
-          <p className="mt-1 text-xs text-muted-foreground" id={ids.seoUrlHint}>
-            The URL-friendly identifier for this template
-          </p>
+          <FieldDescription id={ids.seoUrlHint}>The URL-friendly identifier for this template</FieldDescription>
         </Field>
 
         <Field>
@@ -124,40 +120,44 @@ export const SEOMetaEditor = ({
             }
             placeholder="Description shown in search results..."
             rows={3}
-            className="resize-none bg-input"
+            className="resize-none"
           />
         </Field>
       </FieldGroup>
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-medium text-foreground">Preview</h3>
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-blue-400">{resolvedTitle}</p>
-          {preview.kind === "url" ? (
-            <p className="break-all text-xs text-muted-foreground">{preview.url}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              No public URL yet: the template owner needs a username, which they can set in
-              Settings.
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Preview</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium wrap-anywhere">{resolvedTitle}</p>
+            {preview.kind === "url" ? (
+              <p className="text-xs break-all text-muted-foreground">{preview.url}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                No public URL yet: the template owner needs a username, which they can set in
+                Settings.
+              </p>
+            )}
+            <p className="line-clamp-2 text-sm text-muted-foreground">
+              {resolvedDescription}
             </p>
-          )}
-          <p className="line-clamp-2 text-sm text-muted-foreground">
-            {resolvedDescription}
-          </p>
-        </div>
-        {isPublic === false ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            This template is private, so this page is not live. Turn on Public Template in
-            Template Settings to publish it.
-          </p>
-        ) : null}
-        {preview.kind === "url" && preview.mayGetSuffix ? (
-          <p className="mt-3 text-xs text-muted-foreground">
-            If another template already uses this URL, a short code is added to the end
-            when you save.
-          </p>
-        ) : null}
-      </div>
+          </div>
+          {isPublic === false ? (
+            <p className="text-xs text-muted-foreground">
+              This template is private, so this page is not live. Turn on Public Template in
+              Template Settings to publish it.
+            </p>
+          ) : null}
+          {preview.kind === "url" && preview.mayGetSuffix ? (
+            <p className="text-xs text-muted-foreground">
+              If another template already uses this URL, a short code is added to the end
+              when you save.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
     </div>
   );
 };

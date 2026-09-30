@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 
+import { DashboardContentShell } from "@/components/dashboard/DashboardContentShell";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/routes";
@@ -24,13 +25,13 @@ export function TemplateEditorReadOnlyNotice({ templateId, reason }: TemplateEdi
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <DashboardContentShell width="narrow">
       <Alert>
-        <Lock className="h-4 w-4" />
+        <Lock />
         <AlertTitle>{title}</AlertTitle>
         <AlertDescription>{message}</AlertDescription>
       </Alert>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2">
         {templateId ? (
           <Link
             href={buildConsoleTemplatePath(templateId)}
@@ -42,6 +43,6 @@ export function TemplateEditorReadOnlyNotice({ templateId, reason }: TemplateEdi
           className={buttonVariants({ variant: 'outline' })}
         >Back to Templates</Link>
       </div>
-    </div>
+    </DashboardContentShell>
   );
 }

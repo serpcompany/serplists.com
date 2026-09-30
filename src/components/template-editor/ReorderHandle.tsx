@@ -1,8 +1,15 @@
 import type { JSX } from "react";
 import type { DragEvent, KeyboardEvent } from "react";
-import { GripVertical } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
 
-import { handleKeyboardReorder, REORDER_KEYS_HINT } from "@/components/template-editor/reorder";
+import { Button } from "@/components/ui/button";
+import {
+  handleKeyboardReorder,
+  moveWithButton,
+  REORDER_KEYS_HINT,
+  type ReorderDirection,
+} from "@/components/template-editor/reorder";
+import { cn } from "@/lib/utils";
 
 interface ReorderHandleProps {
   // What the handle moves, e.g. "Section 1"; the handle is named "Drag Section 1".
@@ -20,7 +27,9 @@ interface ReorderHandleProps {
   onMoved: (announcement: string) => void;
 }
 
-// A drag handle that also moves its entry one place with the Up and Down arrow keys.
+// A drag handle that also moves its entry one place with the Up and Down arrow keys. HTML5
+// drag and drop needs a mouse, so a touch screen (a coarse pointer) shows the entry's Move up
+// and Move down buttons (ReorderMoveButtons) instead of the handle.
 export function ReorderHandle({
   label,
   index,
@@ -41,7 +50,7 @@ export function ReorderHandle({
     <button
       aria-describedby={hintId}
       aria-label={`Drag ${label}`}
-      className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded opacity-40 focus:outline-hidden focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hover:opacity-100 active:cursor-grabbing"
+      className="flex h-7 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing pointer-coarse:hidden"
       data-reorder-handle={handleId}
       draggable
       onDragEnd={onDragEnd}
@@ -49,8 +58,68 @@ export function ReorderHandle({
       onKeyDown={handleKeyDown}
       type="button"
     >
-      <GripVertical className="h-4 w-4 text-muted-foreground" />
+      <GripVertical className="size-4" />
     </button>
+  );
+}
+
+interface ReorderMoveButtonsProps {
+  // Classes for each button, such as the row actions' reveal.
+  buttonClassName?: string;
+  count: number;
+  // The entry's handle id (see ReorderHandle), which finds the moved entry's buttons again.
+  handleId: string;
+  index: number;
+  // What the buttons move: "Move Section 1 up".
+  label: string;
+  onMove: (fromIndex: number, toIndex: number) => void;
+  onMoved: (announcement: string) => void;
+}
+
+// Move up and Move down: reorder an entry by touch, or by any pointer without dragging. Each
+// moves the entry one place, keeps focus on it and announces the new position, as the handle's
+// arrow keys do.
+export function ReorderMoveButtons({
+  buttonClassName,
+  count,
+  handleId,
+  index,
+  label,
+  onMove,
+  onMoved,
+}: ReorderMoveButtonsProps): JSX.Element {
+  function move(direction: ReorderDirection): void {
+    const announcement = moveWithButton(direction, { count, handleId, index, label }, onMove);
+    if (announcement) onMoved(announcement);
+  }
+
+  return (
+    <>
+      <Button
+        aria-label={`Move ${label} up`}
+        className={cn("text-muted-foreground", buttonClassName)}
+        data-reorder-move={`${handleId}:up`}
+        disabled={index === 0}
+        onClick={() => move("up")}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <ArrowUp />
+      </Button>
+      <Button
+        aria-label={`Move ${label} down`}
+        className={cn("text-muted-foreground", buttonClassName)}
+        data-reorder-move={`${handleId}:down`}
+        disabled={index >= count - 1}
+        onClick={() => move("down")}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
+        <ArrowDown />
+      </Button>
+    </>
   );
 }
 

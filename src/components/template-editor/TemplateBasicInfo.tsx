@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -94,7 +94,6 @@ export const TemplateBasicInfo = ({
               setValue("title", event.target.value, { shouldDirty: true })
             }
             placeholder="Enter template name..."
-            className="bg-input"
           />
         </Field>
 
@@ -109,7 +108,7 @@ export const TemplateBasicInfo = ({
             }
             placeholder="Describe what this template helps accomplish..."
             rows={3}
-            className="resize-none bg-input"
+            className="resize-none"
           />
         </Field>
 
@@ -122,7 +121,7 @@ export const TemplateBasicInfo = ({
               if (value) setValue("templateType", value, { shouldDirty: true });
             }}
           >
-            <SelectTrigger className="bg-input" id={ids.templateType}>
+            <SelectTrigger className="w-full" id={ids.templateType}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -152,21 +151,23 @@ export const TemplateBasicInfo = ({
 
         <Field>
           <FieldLabel htmlFor={ids.tags}>Tags</FieldLabel>
-          <div className="mb-2 flex flex-wrap gap-2">
-            {(tags || []).map((tag) => (
-              <Badge key={tag} variant="outline" className="gap-1 pr-1">
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 rounded-full p-0.5 hover:bg-background/50"
-                  aria-label={`Remove tag ${tag}`}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
+          {tags?.length ? (
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <Badge key={tag} variant="outline" className="gap-1 pr-1">
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="ml-1 rounded-full p-0.5 hover:bg-muted"
+                    aria-label={`Remove tag ${tag}`}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <Input
               id={ids.tags}
@@ -180,36 +181,31 @@ export const TemplateBasicInfo = ({
                   addTag();
                 }
               }}
-              className="bg-input"
-            />
+              />
             <Button variant="outline" onClick={addTag} type="button">
               Add
             </Button>
           </div>
         </Field>
 
-        <Field>
-          <div className="flex items-center justify-between">
-            <div>
-              <FieldLabel className="mb-0" htmlFor={ids.isPublic}>
-                Public Template
-              </FieldLabel>
-              <p className="mt-1 text-xs text-muted-foreground" id={ids.isPublicHint}>
-                Make this template visible in the Template Library
-              </p>
-            </div>
-            <Switch
-              // A native button, so the Label's htmlFor names it.
-              nativeButton
-              render={<button type="button" />}
-              id={ids.isPublic}
-              aria-describedby={ids.isPublicHint}
-              checked={isPublic}
-              onCheckedChange={(checked) =>
-                setValue("isPublic", checked, { shouldDirty: true })
-              }
-            />
-          </div>
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor={ids.isPublic}>Public Template</FieldLabel>
+            <FieldDescription id={ids.isPublicHint}>
+              Make this template visible in the Template Library
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            // A native button, so the Label's htmlFor names it.
+            nativeButton
+            render={<button type="button" />}
+            id={ids.isPublic}
+            aria-describedby={ids.isPublicHint}
+            checked={isPublic}
+            onCheckedChange={(checked) =>
+              setValue("isPublic", checked, { shouldDirty: true })
+            }
+          />
         </Field>
       </FieldGroup>
     </div>

@@ -6,7 +6,7 @@ import { FormProvider, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ListTree } from "lucide-react";
 import { toast } from "sonner";
 import {
   resolveTemplateSaveFeedback,
@@ -16,7 +16,8 @@ import {
 import { useTemplateEditorState } from "@/hooks/useTemplateEditorState";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { TemplateHeader } from "@/components/template-editor/TemplateHeader";
-import { OutlineSidebar } from "@/components/template-editor/OutlineSidebar";
+import { TemplateEditorOutline } from "@/components/template-editor/TemplateEditorOutline";
+import { TemplatePreviewDialog } from "@/components/template-editor/TemplatePreviewDialog";
 import { EditorPanels } from "@/components/template-editor/EditorPanels";
 import { GenerateFromClipy } from "@/components/template-editor/GenerateFromClipy";
 import { buildConsoleTemplatesPath } from "@/lib/routes";
@@ -28,13 +29,11 @@ import {
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { PublicTemplateContent } from "@/components/template/PublicTemplateContent";
+  DashboardContentShell,
+  DashboardLoadingState,
+} from "@/components/dashboard/DashboardContentShell";
+import { PageContainer } from "@/components/layout/page-shell";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
   cloneTemplateEditorFormValues,
@@ -72,6 +71,16 @@ export const shouldLockTemplateEditorWhileSaving = (params: {
 
 type TemplateEditorModel = ReturnType<typeof useTemplateEditorModel>;
 
+// The width (Tailwind's lg) from which the outline sits beside the form; below it, it opens
+// in a sheet from the header's Outline button.
+const OUTLINE_BESIDE_FORM_QUERY = "(min-width: 1024px)";
+
+const TemplateEditorLoading = () => (
+  <DashboardContentShell>
+    <DashboardLoadingState />
+  </DashboardContentShell>
+);
+
 // The shared template mutations never toast, so the editor reports its own saves: a
 // success always, a failure only for a save the user left (the editor shows it inline).
 const showTemplateSaveToasts = (feedback: TemplateSaveFeedback) => {
@@ -94,6 +103,9 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const router = useAppRouter();
   const { user } = useAuth();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  // Below lg the outline is not beside the form: it opens in a sheet.
+  const isWide = useMediaQuery(OUTLINE_BESIDE_FORM_QUERY);
+  const [isOutlineOpen, setIsOutlineOpen] = useState(false);
   // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
   // A Clipy draft is being generated; it replaces the form when it arrives.
@@ -221,8 +233,11 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     model.reload();
   };
 
+  // A create that saves or a Clipy draft that generates locks the editor (see the fieldsets).
+  const isLocked =
+    shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) || isGeneratingDraft;
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-w-0 flex-col" data-template-editor="true">
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
@@ -231,15 +246,27 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
         onCancel={() => router.push(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
+        outlineTrigger={
+          isWide ? undefined : (
+            <Button
+              disabled={isLocked}
+              onClick={() => setIsOutlineOpen(true)}
+              type="button"
+              variant="outline"
+            >
+              <ListTree data-icon="inline-start" />
+              Outline
+            </Button>
+          )
+        }
         templateSlug={model.templateSlug}
         title={draftTitle || "New Template"}
       />
 
-      {/* Error Alert */}
-      {errors.length > 0 && (
-        <div className="px-4 py-4">
-          <Alert variant="destructive" className="border-destructive/40 bg-card shadow-none">
-            <AlertCircle className="h-4 w-4" />
+      <PageContainer className="flex flex-col gap-6 py-6">
+        {errors.length > 0 && (
+          <Alert variant="destructive">
+            <AlertCircle />
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>
               <ul className="list-inside list-disc">
@@ -254,130 +281,98 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
               ) : null}
             </AlertDescription>
           </Alert>
-        </div>
-      )}
+        )}
 
-      <TemplateEditorAccessNotices
-        draft={access.draft}
-        // The notices sit outside the locked fieldset: a restore during a create would be
-        // wiped when it finishes, and a Clipy draft arriving later would replace it.
-        draftActionsDisabled={
-          shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) ||
-          isGeneratingDraft
-        }
-        isStartingCheckout={access.isStartingCheckout}
-        notice={access.notice}
-        onDiscardDraft={access.discardDraft}
-        onRestoreDraft={() => {
-          // Work typed since the page opened is replaced only on a yes.
-          restoreKeptTemplateDraft({
-            hasUnsavedWork: templateForm.formState.isDirty || uploads.count() > 0,
-            takeDraft: access.restoreDraft,
-            apply: (restored) => {
-              // Against the blank (or loaded) defaults, so the restored draft counts as unsaved.
-              templateForm.reset(restored.values, { keepDefaultValues: true });
-              // Edits to an existing template save against the version they were made on.
-              if (id && restored.baseVersion !== undefined) {
-                model.setVersion(restored.baseVersion);
-              }
-              handleSelectTemplateInfo();
-            },
-          });
-        }}
-        onSignIn={access.signIn}
-        onUpgrade={() => void access.startUpgrade()}
-        otherContextDraft={access.otherContextDraft}
-        onSwitchToDraftContext={access.switchToDraftContext}
-        onDiscardOtherContextDraft={access.discardOtherContextDraft}
-      />
+        <TemplateEditorAccessNotices
+          draft={access.draft}
+          // The notices sit outside the locked fieldset: a restore during a create would be
+          // wiped when it finishes, and a Clipy draft arriving later would replace it.
+          draftActionsDisabled={isLocked}
+          isStartingCheckout={access.isStartingCheckout}
+          notice={access.notice}
+          onDiscardDraft={access.discardDraft}
+          onRestoreDraft={() => {
+            // Work typed since the page opened is replaced only on a yes.
+            restoreKeptTemplateDraft({
+              hasUnsavedWork: templateForm.formState.isDirty || uploads.count() > 0,
+              takeDraft: access.restoreDraft,
+              apply: (restored) => {
+                // Against the blank (or loaded) defaults, so the restored draft counts as unsaved.
+                templateForm.reset(restored.values, { keepDefaultValues: true });
+                // Edits to an existing template save against the version they were made on.
+                if (id && restored.baseVersion !== undefined) {
+                  model.setVersion(restored.baseVersion);
+                }
+                handleSelectTemplateInfo();
+              },
+            });
+          }}
+          onSignIn={access.signIn}
+          onUpgrade={() => void access.startUpgrade()}
+          otherContextDraft={access.otherContextDraft}
+          onSwitchToDraftContext={access.switchToDraftContext}
+          onDiscardOtherContextDraft={access.discardOtherContextDraft}
+        />
 
-      {/* A create leaves the page when it finishes, so edits made meanwhile could not
-          be kept: lock the editor until then. An update keeps them (see handleSave).
-          A generated Clipy draft replaces the form, so it is locked while that runs. */}
-      <fieldset
-        className="m-0 min-w-0 border-0 p-0"
-        disabled={
-          shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) ||
-          isGeneratingDraft
-        }
-      >
-        {!id ? (
-          <GenerateFromClipy
-            // Unsaved work (typed, restored, or an earlier draft) is replaced only on a yes.
-            confirmReplace={() => confirmReplaceTemplateDraft(templateForm.formState.isDirty)}
-            onGeneratingChange={setIsGeneratingDraft}
-            onGenerated={(draft) => {
-              // Against the blank defaults, so the draft counts as unsaved.
-              templateForm.reset(draft, { keepDefaultValues: true });
-              handleSelectTemplateInfo();
-            }}
-          />
-        ) : null}
-
-        <TemplateEditorUploadsContext.Provider value={uploads}>
-          <FormProvider {...templateForm}>
-            <div className="flex min-h-[calc(100vh-3.5rem)]">
-              <OutlineSidebar
-                selectedItemIndex={selectedItemIndex}
-                selectedSectionIndex={selectedSectionIndex}
-                showingSEO={showingSEO}
-                showingTemplateInfo={showingTemplateInfo}
-                onSelectItem={handleSelectItem}
-                onSelectSEO={handleSelectSEO}
-                onSelectSection={handleSelectSection}
-                onSelectTemplateInfo={handleSelectTemplateInfo}
-              />
-
-              <EditorPanels
-                publicOwnerSlug={resolveTemplateEditorOwnerSlug({
-                  isNew: !id,
-                  loadedOwnerSlug: model.ownerSlug,
-                  viewerUsername: user?.username,
-                })}
-                selectedItemIndex={selectedItemIndex}
-                selectedSectionIndex={selectedSectionIndex}
-                showingSEO={showingSEO}
-                showingTemplateInfo={showingTemplateInfo}
-              />
-            </div>
-          </FormProvider>
-        </TemplateEditorUploadsContext.Provider>
-      </fieldset>
-
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Template preview</DialogTitle>
-            <DialogDescription>
-              This preview reflects the current draft. Saving is not required.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg border border-border bg-card px-6">
-            <div className="border-b border-border py-6">
-              <h2 className="text-2xl font-semibold text-foreground">
-                {draftTitle || "Untitled Template"}
-              </h2>
-              {draftDescription ? (
-                <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">
-                  {draftDescription}
-                </p>
-              ) : null}
-            </div>
-            <PublicTemplateContent
-              initialExpandedItems={Object.fromEntries(
-                draftSections
-                  .flatMap((section, sectionIndex) =>
-                    section.items.map((_, itemIndex) => [
-                      `${sectionIndex}-${itemIndex}`,
-                      true,
-                    ]),
-                  ),
-              )}
-              sections={draftSections}
+        {/* A create leaves the page when it finishes, so edits made meanwhile could not
+            be kept: lock the editor until then. An update keeps them (see handleSave).
+            A generated Clipy draft replaces the form, so it is locked while that runs. */}
+        <fieldset className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0" disabled={isLocked}>
+          {!id ? (
+            <GenerateFromClipy
+              // Unsaved work (typed, restored, or an earlier draft) is replaced only on a yes.
+              confirmReplace={() => confirmReplaceTemplateDraft(templateForm.formState.isDirty)}
+              onGeneratingChange={setIsGeneratingDraft}
+              onGenerated={(draft) => {
+                // Against the blank defaults, so the draft counts as unsaved.
+                templateForm.reset(draft, { keepDefaultValues: true });
+                handleSelectTemplateInfo();
+              }}
             />
-          </div>
-        </DialogContent>
-      </Dialog>
+          ) : null}
+
+          <TemplateEditorUploadsContext.Provider value={uploads}>
+            <FormProvider {...templateForm}>
+              <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                <TemplateEditorOutline
+                  besideForm={isWide}
+                  locked={isLocked}
+                  onSheetOpenChange={setIsOutlineOpen}
+                  sheetOpen={isOutlineOpen}
+                  selectedItemIndex={selectedItemIndex}
+                  selectedSectionIndex={selectedSectionIndex}
+                  showingSEO={showingSEO}
+                  showingTemplateInfo={showingTemplateInfo}
+                  onSelectItem={handleSelectItem}
+                  onSelectSEO={handleSelectSEO}
+                  onSelectSection={handleSelectSection}
+                  onSelectTemplateInfo={handleSelectTemplateInfo}
+                />
+
+                <EditorPanels
+                  publicOwnerSlug={resolveTemplateEditorOwnerSlug({
+                    isNew: !id,
+                    loadedOwnerSlug: model.ownerSlug,
+                    viewerUsername: user?.username,
+                  })}
+                  selectedItemIndex={selectedItemIndex}
+                  selectedSectionIndex={selectedSectionIndex}
+                  showingSEO={showingSEO}
+                  showingTemplateInfo={showingTemplateInfo}
+                />
+              </div>
+            </FormProvider>
+          </TemplateEditorUploadsContext.Provider>
+        </fieldset>
+      </PageContainer>
+
+      <TemplatePreviewDialog
+        description={draftDescription}
+        onOpenChange={setIsPreviewOpen}
+        open={isPreviewOpen}
+        sections={draftSections}
+        title={draftTitle}
+      />
     </div>
   );
 };
@@ -399,36 +394,28 @@ const TemplateEditor = () => {
   });
 
   if (model.loading) {
-    return (
-      <div className="flex h-52 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TemplateEditorLoading />;
   }
 
   if (model.loadError) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Unable to load template</AlertTitle>
-        <AlertDescription>{model.loadError}</AlertDescription>
+      <DashboardContentShell width="narrow">
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Unable to load template</AlertTitle>
+          <AlertDescription>{model.loadError}</AlertDescription>
         </Alert>
-        <div className="mt-4">
+        <div>
           <Button variant="outline" onClick={() => router.push(buildConsoleTemplatesPath())}>
             Back to Templates
           </Button>
         </div>
-      </div>
+      </DashboardContentShell>
     );
   }
 
   if (permission === "checking") {
-    return (
-      <div className="flex h-52 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <TemplateEditorLoading />;
   }
 
   if (permission !== "editable") {

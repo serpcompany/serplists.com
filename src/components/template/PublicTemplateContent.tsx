@@ -46,21 +46,21 @@ export function PublicTemplateContent({
     switch (content.type) {
       case 'text':
         return content.value ? (
-          <div className="mt-3 border-l-2 border-border/70 pl-4">
+          <div className="mt-3 border-l-2 pl-4">
             <MarkdownBlock value={content.value} />
           </div>
         ) : null;
 
       case 'video':
         return content.value ? (
-          <div className="mt-3 overflow-hidden rounded-md border border-border/70">
+          <div className="mt-3 overflow-hidden rounded-md border">
             <VideoEmbed title="Template video preview" url={content.value} />
           </div>
         ) : null;
 
       case 'image':
         return content.value ? (
-          <div className="mt-3 overflow-hidden rounded-md border border-border/70">
+          <div className="mt-3 overflow-hidden rounded-md border">
             <img
               src={safeUrl(content.value)}
               alt={itemTitle}
@@ -74,9 +74,9 @@ export function PublicTemplateContent({
         // Shown as a link (a URL, or the src of pasted iframe code) or as text, never as HTML.
         const embedLink = getEmbedLinkUrl(content.value);
         return content.value ? (
-          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
+          <div className="mt-3 border-l-2 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Link2 className="h-4 w-4 shrink-0" />
+              <Link2 className="size-4 shrink-0" />
               {embedLink ? (
                 <a
                   href={embedLink}
@@ -101,9 +101,9 @@ export function PublicTemplateContent({
         const href = safeUrl(content.value);
         const fileLabel = content.fileName || 'File';
         return (
-          <div className="mt-3 border-l-2 border-border/70 pl-4 text-sm text-muted-foreground">
+          <div className="mt-3 border-l-2 pl-4 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
-              <File className="h-4 w-4" />
+              <File className="size-4 shrink-0" />
               <span className="font-medium text-foreground">{fileLabel}</span>
               {href ? (
                 <a
@@ -125,17 +125,17 @@ export function PublicTemplateContent({
 
       case 'subItems':
         return content.subItems?.length ? (
-          <div className="mt-4 space-y-2 border-l-2 border-border/70 pl-4">
+          <div className="mt-4 space-y-2 border-l-2 pl-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <ListTodo className="h-4 w-4" />
+              <ListTodo className="size-4" />
               Sub-steps
             </div>
             {content.subItems.map((subItem, index) => (
               <div
                 key={subItem.id || index}
-                className="flex items-center gap-2 text-sm text-foreground/90"
+                className="flex items-center gap-2 text-sm"
               >
-                <Checkbox disabled className="h-4 w-4" />
+                <Checkbox disabled />
                 <span>{getSubItemDisplayTitle(subItem, index)}</span>
               </div>
             ))}
@@ -166,32 +166,36 @@ export function PublicTemplateContent({
     return (
       <div key={item.id || itemIndex} className="py-4 first:pt-0 last:pb-0">
         <div className="flex items-start gap-3">
-          <Checkbox disabled className="mt-1 h-4 w-4 rounded-sm" />
+          <Checkbox disabled className="mt-1" />
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               {isExpandable ? (
+                // The title toggles the task too, and is the control a screen reader meets.
                 <button
+                  aria-hidden="true"
+                  tabIndex={-1}
                   type="button"
                   onClick={() => toggleItem(itemKey)}
-                  className="mt-1 rounded-md p-0.5 text-muted-foreground transition hover:bg-muted/40 hover:text-foreground"
+                  className="mt-1 rounded-md p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 >
                   {isExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="size-4" />
                   ) : (
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="size-4" />
                   )}
                 </button>
               ) : (
-                <span className="mt-1 h-4 w-4" />
+                <span className="mt-1 size-5 shrink-0" />
               )}
 
               <div className="min-w-0 flex-1">
                 <button
+                  aria-expanded={isExpandable ? Boolean(isExpanded) : undefined}
                   type="button"
                   onClick={() => isExpandable && toggleItem(itemKey)}
                   className={cn(
-                    'text-left text-base font-medium leading-6 text-foreground',
-                    isExpandable && 'transition hover:text-foreground/80',
+                    'text-left text-base leading-6 font-medium wrap-break-word',
+                    isExpandable && 'hover:underline',
                   )}
                 >
                   {item.title}
@@ -200,7 +204,7 @@ export function PublicTemplateContent({
                 {isExpanded ? (
                   <div className="mt-3 space-y-3">
                     {hasDescription ? (
-                      <p className="whitespace-pre-line text-sm leading-7 text-muted-foreground">
+                      <p className="text-sm leading-6 whitespace-pre-line text-muted-foreground">
                         {description}
                       </p>
                     ) : null}
@@ -233,29 +237,27 @@ export function PublicTemplateContent({
   }
 
   return (
-    <div className="divide-y divide-border/70">
+    <div className="divide-y">
       {sections.map((section, sectionIndex) => (
         <section
           key={section.id || sectionIndex}
           id={buildPublicTemplateSectionId(section, sectionIndex)}
-          className="py-6 first:pt-6 last:pb-6 scroll-mt-28"
+          className="scroll-mt-28 py-6"
         >
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                Section {sectionIndex + 1}
-              </div>
-              <h3 className="mt-2 text-xl font-semibold text-foreground">
+            <div className="flex min-w-0 flex-col gap-1">
+              <p className="text-xs text-muted-foreground">Section {sectionIndex + 1}</p>
+              <h3 className="text-lg font-semibold wrap-break-word">
                 {getSectionDisplayTitle(section, sectionIndex)}
               </h3>
             </div>
-            <div className="text-sm text-muted-foreground">
+            <p className="shrink-0 text-sm whitespace-nowrap text-muted-foreground">
               {formatCount(section.items?.length ?? 0, 'task')}
-            </div>
+            </p>
           </div>
 
           {section.items?.length ? (
-            <div className="mt-4 divide-y divide-border/60">
+            <div className="mt-4 divide-y">
               {section.items.map((item, itemIndex) =>
                 renderItem(item, sectionIndex, itemIndex),
               )}

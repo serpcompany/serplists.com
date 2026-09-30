@@ -2,7 +2,7 @@ import type { KeyboardEvent } from "react";
 
 // Reordering in the template editor. Sections, tasks and content blocks each have a drag
 // handle; the same handle also moves its entry with the arrow keys, because HTML5 drag
-// and drop needs a mouse.
+// and drop needs a mouse. Move up and Move down buttons do the same by touch.
 
 export const REORDER_KEYS_HINT = "Press the Up or Down arrow key to move it.";
 
@@ -70,6 +70,23 @@ export function handleKeyboardReorder(
   return describeMove(entry.label, toIndex, entry.count);
 }
 
+export type ReorderDirection = "up" | "down";
+
+// Moves the entry one place with its Move up or Move down button and returns what to
+// announce, or null at either end. Focus stays on the moved entry's button for the same
+// direction, or its other one when the move reached the end of the list.
+export function moveWithButton(
+  direction: ReorderDirection,
+  entry: KeyboardReorderEntry,
+  move: (fromIndex: number, toIndex: number) => void,
+): string | null {
+  const toIndex = direction === "up" ? entry.index - 1 : entry.index + 1;
+  if (toIndex < 0 || toIndex >= entry.count) return null;
+  move(entry.index, toIndex);
+  focusReorderMoveButton(entry.handleId, direction);
+  return describeMove(entry.label, toIndex, entry.count);
+}
+
 // The line a drop will land on: above or below the entry under the pointer.
 export function dropIndicatorClass(edge: "after" | "before" | null): string | undefined {
   if (edge === "before") {
@@ -93,5 +110,21 @@ export function focusReorderHandle(handleId: string): void {
         return;
       }
     }
+  });
+}
+
+// A move re-inserts the row, which can drop focus. Move buttons carry
+// data-reorder-move="<handleId>:<direction>"; a disabled one (the entry reached an end) hands
+// focus to the other direction.
+export function focusReorderMoveButton(handleId: string, direction: ReorderDirection): void {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  window.requestAnimationFrame(() => {
+    const find = (dir: ReorderDirection) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("[data-reorder-move]")).find(
+        (button) => button.dataset.reorderMove === `${handleId}:${dir}`,
+      );
+    const same = find(direction);
+    const target = same && !same.disabled ? same : find(direction === "up" ? "down" : "up");
+    target?.focus();
   });
 }

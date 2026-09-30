@@ -4,7 +4,7 @@ import { Search, Settings } from "lucide-react";
 import { SectionSidebar } from "@/components/template-editor/SectionSidebar";
 import { cn } from "@/lib/utils";
 
-interface OutlineSidebarProps {
+export interface OutlineSidebarProps {
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
   showingSEO: boolean;
@@ -13,8 +13,12 @@ interface OutlineSidebarProps {
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
   onSelectSEO: () => void;
   onSelectTemplateInfo: () => void;
+  // Called after the user picks an entry, so the phone's outline sheet can close.
+  onEntryPicked?: () => void;
 }
 
+// The template editor's outline: Template Settings and Search & SEO, then the sections and
+// their tasks. A column beside the form from lg up; below lg it opens in a sheet.
 export function OutlineSidebar({
   selectedSectionIndex,
   selectedItemIndex,
@@ -24,6 +28,7 @@ export function OutlineSidebar({
   onSelectItem,
   onSelectSEO,
   onSelectTemplateInfo,
+  onEntryPicked,
 }: OutlineSidebarProps): JSX.Element {
   const outlineSelectionActive = !showingSEO && !showingTemplateInfo;
   const modeButtons = [
@@ -42,26 +47,25 @@ export function OutlineSidebar({
   ] as const;
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r border-sidebar-border bg-sidebar">
-      <div className="border-b border-sidebar-border p-3">
-        <nav className="flex flex-col gap-1">
+    <div className="flex min-h-0 flex-col" data-slot="template-outline">
+      <div className="flex flex-col gap-1 border-b p-2">
         {modeButtons.map(({ active, icon: Icon, label, onClick }) => (
           <button
             key={label}
             type="button"
-            onClick={onClick}
+            onClick={() => {
+              onClick();
+              onEntryPicked?.();
+            }}
             className={cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+              "flex min-h-9 items-center gap-2 rounded-md px-2 text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              active ? "bg-muted font-medium" : "hover:bg-muted/50",
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="size-4 text-muted-foreground" />
             {label}
           </button>
         ))}
-        </nav>
       </div>
 
       <SectionSidebar
@@ -70,7 +74,8 @@ export function OutlineSidebar({
         selectedItemIndex={selectedItemIndex}
         onSelectSection={onSelectSection}
         onSelectItem={onSelectItem}
+        onEntryPicked={onEntryPicked}
       />
-    </aside>
+    </div>
   );
 }

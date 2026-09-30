@@ -128,8 +128,9 @@ describe('TemplateEditor page', () => {
     expect(html).toContain('Template Settings');
     expect(html).toContain('Search &amp; SEO');
     expect(html).toContain('Sections');
-    expect(html).toContain('bg-sidebar');
-    expect(html).toContain('max-w-2xl');
+    // The outline beside the form panel (a sheet below lg; the server renders the wide layout).
+    expect(html).toContain('data-slot="template-outline"');
+    expect(html).toContain('lg:grid-cols-[18rem_minmax(0,1fr)]');
     expect(html).not.toContain('text-4xl');
     expect(html).not.toContain('Add a section from the outline to start building this template.');
     expect(html).toContain('Generate from Clipy');

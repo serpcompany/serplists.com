@@ -30,7 +30,8 @@ describe('TemplateHeader', () => {
     expect(html).toContain('Editing');
     expect(html).toContain('Save');
     expect(html).toContain('Preview');
-    expect(html).toContain('sticky top-0 z-50');
+    // It sticks under the console's top bar.
+    expect(html).toContain('sticky top-14 z-30');
     expect(html).not.toContain('Template editor');
     expect(html).not.toContain('Draft');
     expect(html).not.toContain('Cancel');

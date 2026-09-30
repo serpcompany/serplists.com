@@ -28,7 +28,7 @@ async function openEditorPreview(page: Page) {
   await page.getByRole('button', { name: /add task to section 1/i }).click();
   await page.getByLabel('Task Title').fill('Markdown task');
   await page.getByRole('button', { name: 'Add Block' }).last().click();
-  await page.getByRole('button', { name: 'Text' }).last().click();
+  await page.getByRole('menuitem', { name: 'Text', exact: true }).click();
   await page.getByPlaceholder('Enter text or markdown content').fill(MARKDOWN);
   await page.getByRole('tab', { name: 'Preview' }).click();
 

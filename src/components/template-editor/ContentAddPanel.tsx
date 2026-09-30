@@ -1,7 +1,4 @@
 import type { JSX } from "react";
-import { useEffect, useRef } from "react";
-
-import { Button } from "@/components/ui/button";
 import {
   Code,
   File,
@@ -10,73 +7,49 @@ import {
   ListChecks,
   PanelRightOpen,
   Video,
+  type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { TemplateEditorContentType } from "@/lib/forms/templateEditorForm";
+
+const CONTENT_TYPES = [
+  { type: "text", icon: FileText, label: "Text" },
+  { type: "image", icon: Image, label: "Image" },
+  { type: "video", icon: Video, label: "Video" },
+  { type: "file", icon: File, label: "File" },
+  { type: "embed", icon: Code, label: "Embed" },
+  { type: "subItems", icon: ListChecks, label: "Sub-tasks" },
+] as const satisfies ReadonlyArray<{
+  type: TemplateEditorContentType;
+  icon: LucideIcon;
+  label: string;
+}>;
 
 interface ContentAddPanelProps {
-  showAddPanel: boolean;
-  onTogglePanel: () => void;
-  onAddContent: (
-    contentType: "text" | "image" | "video" | "file" | "embed" | "subItems",
-  ) => void;
+  onAddContent: (contentType: TemplateEditorContentType) => void;
 }
 
-export const ContentAddPanel = ({
-  showAddPanel,
-  onTogglePanel,
-  onAddContent,
-}: ContentAddPanelProps): JSX.Element => {
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const contentTypeButtons = [
-    { type: "text" as const, icon: FileText, label: "Text" },
-    { type: "image" as const, icon: Image, label: "Image" },
-    { type: "video" as const, icon: Video, label: "Video" },
-    { type: "file" as const, icon: File, label: "File" },
-    { type: "embed" as const, icon: Code, label: "Embed" },
-    { type: "subItems" as const, icon: ListChecks, label: "Sub-tasks" },
-  ];
-
-  useEffect(() => {
-    if (!showAddPanel) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      onTogglePanel();
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    return () => window.removeEventListener("pointerdown", handlePointerDown);
-  }, [onTogglePanel, showAddPanel]);
-
-  return (
-    <div ref={menuRef} className="relative inline-flex">
-      <Button variant="ghost" size="sm" onClick={onTogglePanel} type="button">
-        <PanelRightOpen className="mr-2 h-4 w-4" />
-        Add Block
-      </Button>
-
-      {showAddPanel ? (
-        <div className="absolute right-0 top-full z-50 mt-2 w-52 rounded-lg border border-border bg-popover p-1 shadow-lg">
-          {contentTypeButtons.map(({ type, icon: Icon, label }) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => onAddContent(type)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-popover-foreground hover:bg-accent",
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-};
+// Add Block: a shadcn DropdownMenu of the content block types a task can hold.
+export const ContentAddPanel = ({ onAddContent }: ContentAddPanelProps): JSX.Element => (
+  <DropdownMenu>
+    <DropdownMenuTrigger render={<Button size="sm" type="button" variant="outline" />}>
+      <PanelRightOpen data-icon="inline-start" />
+      Add Block
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      {CONTENT_TYPES.map(({ type, icon: Icon, label }) => (
+        <DropdownMenuItem key={type} onClick={() => onAddContent(type)}>
+          <Icon />
+          {label}
+        </DropdownMenuItem>
+      ))}
+    </DropdownMenuContent>
+  </DropdownMenu>
+);
