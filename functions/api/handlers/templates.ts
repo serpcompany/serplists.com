@@ -618,6 +618,9 @@ export async function updateTemplateForUser(
   ) {
     return jsonError('Template not found or unauthorized', 404);
   }
+  if (options.personalOnly && Boolean(existingTemplate.is_public)) {
+    return jsonError('Public templates can only be edited in SERP Lists', 403, { code: 'template_is_public' });
+  }
   if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
     return jsonError('Forbidden', 403);
   }

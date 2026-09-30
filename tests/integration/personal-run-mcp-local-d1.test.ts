@@ -49,8 +49,8 @@ async function rows<T extends JsonRecord>(sql: string, ...bindings: unknown[]): 
   return result.results;
 }
 
-function mcpRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
-  return new Request("http://localhost/api/mcp", {
+function mcpRequest(method: string, params?: unknown, id: number | undefined = 1, path = "/api/mcp"): Request {
+  return new Request(`http://localhost${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${rawKey}`,
@@ -475,6 +475,37 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
 
   it("keeps template writes inside the key owner's private personal templates", async () => {
     const sections = [{ title: "Section", items: [{ title: "Task" }] }];
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at)
+        VALUES ('member-a', 'team-a', 'user-a', 'owner', 'active', ?, ?)
+      `).bind("2026-09-19T02:40:00.000Z", "2026-09-19T02:40:00.000Z"),
+      env.DB.prepare(`
+        INSERT INTO templates (
+          id, user_id, title, items, is_public, created_at, version, type, owner_type,
+          team_id, created_by_user_id, content_version
+        ) VALUES ('template-public', 'user-a', 'Published SOP', ?, 1, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+      `).bind(JSON.stringify(sections), "2026-09-19T02:40:00.000Z"),
+    ]);
+
+    const publicRead = await bodyOf(await callTool("get_template", { templateId: "template-public" }));
+    expect((toolPayload(publicRead).template as JsonRecord).title).toBe("Published SOP");
+    const publicWrite = await bodyOf(await callTool("update_template", {
+      templateId: "template-public",
+      expectedVersion: 1,
+      title: "Defaced public SOP",
+    }));
+    expect(toolError(publicWrite)).toBe("template_is_public");
+
+    const viaQuery = await bodyOf(await handleAgentMcp(mcpRequest("tools/call", {
+      name: "create_template",
+      arguments: { title: "Created with teamId query", sections },
+    }, 1, "/api/mcp?teamId=team-a"), env as never));
+    const viaQueryId = (toolPayload(viaQuery).template as JsonRecord).id;
+    expect(await rows("SELECT owner_type, team_id, is_public FROM templates WHERE id = ?", viaQueryId)).toEqual([
+      { owner_type: "user", team_id: null, is_public: 0 },
+    ]);
+
     for (const templateId of ["template-b", "template-team"]) {
       const read = await bodyOf(await callTool("get_template", { templateId }));
       expect(toolError(read)).toBe("template_not_found");
@@ -487,11 +518,25 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       expect(((body.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
     }
 
-    expect(await rows("SELECT title FROM templates WHERE id IN ('template-b', 'template-team') ORDER BY id")).toEqual([
+    expect(await rows(
+      "SELECT title FROM templates WHERE id IN ('template-b', 'template-public', 'template-team') ORDER BY id",
+    )).toEqual([
       { title: "Other user's SOP" },
+      { title: "Published SOP" },
       { title: "Team SOP" },
     ]);
     expect(await rows("SELECT id FROM templates WHERE title = 'Escalation'")).toEqual([]);
+  });
+
+  it("reports a committed oversized create as success without its sections", async () => {
+    const body = await bodyOf(await callTool("create_template", {
+      title: "Oversized SOP",
+      sections: [{ title: "Long", items: [{ title: "Read", contents: [{ type: "text", value: "x".repeat(300_000) }] }] }],
+    }));
+    expect(toolError(body)).toBeUndefined();
+    expect(toolPayload(body).sectionsOmitted).toBe(true);
+    expect(toolPayload(body).template).not.toHaveProperty("sections");
+    expect(await rows("SELECT id FROM templates WHERE title = 'Oversized SOP'")).toHaveLength(1);
   });
 
   it("revokes immediately and cascades keys only with their owning user", async () => {

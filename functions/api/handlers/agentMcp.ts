@@ -847,6 +847,12 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
           ...(error.details ? { details: error.details } : {}),
         }, error.message, true);
       }
+      log("error", "mcp_tool_failed", {
+        requestId,
+        keyId: identity.keyId,
+        toolName: boundedText(params.name, 64),
+        error: boundedText(error instanceof Error ? error.message : String(error), 300),
+      });
       return rpcError(id, -32603, "Internal error");
     }
   }

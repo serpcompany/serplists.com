@@ -8,6 +8,8 @@ import { normalizeStringArray } from "../utils/payloads";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import { createTemplateForUser, updateTemplateForUser } from "./templates";
 
+const MAX_WRITE_RESULT_BYTES = 256 * 1024;
+
 const getTemplateArgs = z.object({
   templateId: z.string().trim().min(1),
 }).strict();
@@ -123,7 +125,7 @@ export const templateToolDefinitions = [
   },
   {
     name: "update_template",
-    description: "Update a personal template. Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs of the template pick up the change. Pass the latest version from get_template as expectedVersion to prevent lost updates.",
+    description: "Update a private personal template (public templates can only be edited in SERP Lists). Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs of the template pick up the change. Pass the latest version from get_template as expectedVersion to prevent lost updates.",
     inputSchema: {
       type: "object",
       properties: {
@@ -209,6 +211,15 @@ async function loadTemplate(env: Env, userId: string, templateId: string): Promi
   return { template: serializeTemplate(template as unknown as JsonRecord) };
 }
 
+// A write has already committed, so an oversized result must not come back as a
+// retryable error; drop the sections and let the caller read them with get_template.
+async function loadWrittenTemplate(env: Env, userId: string, templateId: string): Promise<JsonRecord> {
+  const result = await loadTemplate(env, userId, templateId);
+  if (new TextEncoder().encode(JSON.stringify(result)).byteLength <= MAX_WRITE_RESULT_BYTES) return result;
+  const { sections: _sections, ...summary } = result.template as JsonRecord;
+  return { template: summary, sectionsOmitted: true };
+}
+
 export async function getTemplate(
   env: Env,
   identity: PersonalRunKeyIdentity,
@@ -236,7 +247,7 @@ export async function createTemplate(
     { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
   if (typeof created.id !== "string") throw new Error("Template write returned no id");
-  return loadTemplate(env, identity.userId, created.id);
+  return loadWrittenTemplate(env, identity.userId, created.id);
 }
 
 export async function updateTemplate(
@@ -257,5 +268,5 @@ export async function updateTemplate(
     { ...changes, expected_version: expectedVersion },
     { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  return loadTemplate(env, identity.userId, templateId);
+  return loadWrittenTemplate(env, identity.userId, templateId);
 }
