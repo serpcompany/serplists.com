@@ -61,6 +61,7 @@ export function selectAuditEventHistory(db: Db, resourceType: 'template' | 'chec
 }
 
 type AuditEventHistoryRow = Awaited<ReturnType<typeof selectAuditEventHistory>>[number];
+type TemplateVersionHistoryRow = Awaited<ReturnType<typeof selectTemplateVersionHistory>>[number];
 
 function parseMetadata(value: string | null): unknown {
   if (!value) return null;
@@ -86,6 +87,40 @@ export function serializeHistoryEvent(row: AuditEventHistoryRow) {
       username: row.actor_username,
     },
   };
+}
+
+// A versioned write records its audit event in the same batch, with the same action and time.
+const writeKey = (action: string, createdAt: string) => `${action}|${createdAt}`;
+
+/**
+ * The API shape of a template's versions. Each carries the metadata of the audit event its
+ * write recorded, the field run history events carry, so the Changelog names the Run Key
+ * behind an Agent's edit and labels a Share. The event is looked up in `events`, the newest
+ * events read with the same limit, which hold the event of every version the Changelog shows;
+ * an older version, or one written before audit events, gets null.
+ */
+export function serializeTemplateVersionHistory(
+  rows: TemplateVersionHistoryRow[],
+  events: ReturnType<typeof serializeHistoryEvent>[],
+) {
+  const metadataByWrite = new Map(events.map((event) => [writeKey(event.action, event.createdAt), event.metadata]));
+  return rows.map((row) => {
+    const action = row.change_summary ?? 'template.versioned';
+    return {
+      id: row.id,
+      version: row.version,
+      action,
+      contentHash: row.content_hash,
+      createdAt: row.created_at,
+      metadata: metadataByWrite.get(writeKey(action, row.created_at)) ?? null,
+      actor: {
+        userId: row.changed_by_user_id,
+        email: row.actor_email,
+        name: row.actor_name,
+        username: row.actor_username,
+      },
+    };
+  });
 }
 
 /** `?limit=` for history lists: 1..100, defaulting to 50 when missing, empty, or not a number. */

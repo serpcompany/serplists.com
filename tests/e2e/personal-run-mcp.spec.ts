@@ -305,7 +305,14 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   expect(history.events.filter((event) => event.metadata?.personalRunKeyName === keyName).map(({ action }) => action).sort())
     .toEqual(['template.created', 'template.updated']);
 
+  // The template's Changelog names the key behind each write, as a run's Changelog does.
+  await page.goto(`/dashboard/templates/${encodeURIComponent(templateId)}/`);
+  await expect(page.getByText('Updated template v2')).toBeVisible();
+  await expect(page.getByText('Created template v1')).toBeVisible();
+  await expect(page.getByText(new RegExp(`^${keyName} via MCP · authorized by `))).toHaveCount(2);
+
   await apiJson(page, `/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
+  await page.goto('/dashboard/settings/');
   await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
   await page.getByRole('button', { name: 'Revoke key' }).click();
   await expect(keyRow.getByText('Revoked')).toBeVisible();

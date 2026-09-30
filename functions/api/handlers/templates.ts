@@ -29,6 +29,7 @@ import {
   selectAuditEventHistory,
   selectTemplateVersionHistory,
   serializeHistoryEvent,
+  serializeTemplateVersionHistory,
 } from '../utils/history-queries';
 import { insertRowWhere, rowExistsSql } from '../utils/guarded-insert';
 import { personalProRequiredResponse } from '../utils/limit-reached';
@@ -1177,24 +1178,13 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
           selectTemplateVersionHistory(db, templateId, historyLimit),
           selectAuditEventHistory(db, 'template', templateId, historyLimit),
         ]);
+        const events = eventRows.map(serializeHistoryEvent);
 
         return json({
           templateId,
           subject: getTemplateSubject(template as unknown as Record<string, unknown>, userId),
-          versions: versionRows.map((row) => ({
-            id: row.id,
-            version: row.version,
-            action: row.change_summary ?? 'template.versioned',
-            contentHash: row.content_hash,
-            createdAt: row.created_at,
-            actor: {
-              userId: row.changed_by_user_id,
-              email: row.actor_email,
-              name: row.actor_name,
-              username: row.actor_username,
-            },
-          })),
-          events: eventRows.map(serializeHistoryEvent),
+          versions: serializeTemplateVersionHistory(versionRows, events),
+          events,
         });
       } catch (error) {
         if (isMissingHistoryReadTableError(error)) {

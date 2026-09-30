@@ -129,6 +129,7 @@ export type TemplateHistoryVersion = {
   action: string;
   contentHash?: string | null;
   createdAt: string;
+  metadata?: unknown; // the metadata of the audit event its write recorded, as on events
   actor: TemplateHistoryActor;
 };
 

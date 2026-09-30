@@ -12,16 +12,19 @@ import type {
 
 const at = (minute: number) => `2026-07-03T12:${String(minute).padStart(2, '0')}:00.000Z`;
 
+// The API gives a version the metadata of the audit event its write recorded.
 const version = (
   id: string,
   versionNumber: number,
   action: string,
   minute: number,
+  metadata?: unknown,
 ): TemplateHistoryVersion => ({
   action,
   actor: { name: 'Alice' },
   createdAt: at(minute),
   id,
+  metadata,
   version: versionNumber,
 });
 
@@ -101,12 +104,43 @@ describe('buildTemplateHistoryTimeline', () => {
   it('labels the version a visibility change wrote by that change', () => {
     const timeline = buildTemplateHistoryTimeline(
       history(
-        [version('v3', 3, 'template.updated', 3), version('v2', 2, 'template.updated', 2)],
+        [version('v3', 3, 'template.updated', 3, { visibility: 'public' }), version('v2', 2, 'template.updated', 2)],
         [event('e3', 'template.updated', 3, { visibility: 'public' }), event('e2', 'template.updated', 2)],
       ),
     );
 
     expect(timeline.map((entry) => entry.label)).toEqual(['Made template public', 'Updated template v2']);
+  });
+
+  it("names the Run Key behind an Agent's change the way the run's Changelog does", () => {
+    const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
+    const timeline = buildTemplateHistoryTimeline(
+      history(
+        [
+          version('v2', 2, 'template.updated', 2, agent),
+          version('v1', 1, 'template.created', 1, agent),
+        ],
+        [
+          event('e3', 'template.deleted', 3),
+          event('e2', 'template.updated', 2, agent),
+          event('e1', 'template.created', 1, agent),
+        ],
+      ),
+    );
+
+    expect(timeline.map(({ label, actorName }) => [label, actorName])).toEqual([
+      ['Deleted template', 'Alice'],
+      ['Updated template v2', 'Codex SOP Writer via MCP · authorized by Alice'],
+      ['Created template v1', 'Codex SOP Writer via MCP · authorized by Alice'],
+    ]);
+  });
+
+  it("names an Agent's change that recorded no version by its Run Key too", () => {
+    const timeline = buildTemplateHistoryTimeline(
+      history([], [event('e1', 'template.updated', 1, { source: 'mcp', personalRunKeyName: 'Codex' }, 'Bob')]),
+    );
+
+    expect(timeline[0]?.actorName).toBe('Codex via MCP · authorized by Bob');
   });
 
   it('keeps an event that only shares its time with a version of another action', () => {

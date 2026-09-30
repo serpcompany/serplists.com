@@ -745,6 +745,61 @@ describe('TemplateDetail Changelog', () => {
     expect(html.indexOf('Restored template')).toBeLessThan(html.indexOf('Made template public'));
     expect(html.indexOf('Made template public')).toBeLessThan(html.indexOf('Created template v1'));
   });
+
+  it("names the Run Key behind an Agent's edit and the user who authorized it", () => {
+    const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
+    mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
+      history: {
+        data: {
+          events: [
+            {
+              action: 'template.updated',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-04T12:00:00.000Z',
+              id: 'event-2',
+              metadata: agent,
+            },
+            {
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-03T12:00:00.000Z',
+              id: 'event-1',
+            },
+          ],
+          subject: { id: 'user-1', type: 'user' },
+          templateId: 'tpl-1',
+          versions: [
+            {
+              action: 'template.updated',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-04T12:00:00.000Z',
+              id: 'version-2',
+              metadata: agent,
+              version: 2,
+            },
+            {
+              action: 'template.created',
+              actor: { name: 'John Example' },
+              createdAt: '2026-07-03T12:00:00.000Z',
+              id: 'version-1',
+              metadata: null,
+              version: 1,
+            },
+          ],
+        },
+        isError: false,
+        isLoading: false,
+      },
+    });
+
+    const html = renderTemplateDetail();
+
+    expect(html).toContain('Updated template v2');
+    expect(html).toContain('Codex SOP Writer via MCP · authorized by John Example');
+    expect(html.match(/via MCP/g)).toHaveLength(1);
+    expect(html.indexOf('Codex SOP Writer via MCP')).toBeLessThan(html.indexOf('Created template v1'));
+  });
 });
 
 describe('TemplateDetail stats', () => {

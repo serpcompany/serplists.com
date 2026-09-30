@@ -1032,6 +1032,8 @@ describe('Templates Handlers', () => {
         action: 'template.updated',
         version: 2,
         actor: expect.objectContaining({ name: 'Editor Example' }),
+        // The metadata of the audit event the same write recorded, as run history events carry.
+        metadata: { visibility: 'public' },
       }),
     );
     // Events come with the versions: a Share's event labels its version in the Changelog,
@@ -1087,6 +1089,59 @@ describe('Templates Handlers', () => {
     expect(data.events[0]).not.toHaveProperty('diff');
     expect(body.length).toBeLessThan(2_000);
     expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(2, 50);
+  });
+
+  it('gives each version the metadata of the audit event its write recorded, naming a Run Key', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const actor = { actor_email: 'owner@example.com', actor_name: 'Owner', actor_username: 'owner' };
+    const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
+    const version = (version: number, action: string, createdAt: string) => ({
+      id: `version-${version}`,
+      version,
+      changed_by_user_id: 'user-123',
+      content_hash: `hash-${version}`,
+      change_summary: action,
+      created_at: createdAt,
+      ...actor,
+    });
+    const event = (id: string, action: string, createdAt: string, metadata: unknown) => ({
+      id,
+      actor_user_id: 'user-123',
+      action,
+      metadata_json: metadata === null ? null : JSON.stringify(metadata),
+      request_id: `req-${id}`,
+      created_at: createdAt,
+      ...actor,
+    });
+    dbMocks.selectChain.orderBy
+      .mockReturnValueOnce(dbMocks.selectChain)
+      .mockReturnValueOnce(dbMocks.selectChain);
+    dbMocks.selectChain.limit
+      .mockResolvedValueOnce([{ id: 'template-1', title: 'Launch', items: '[]', version: 3, user_id: 'user-123', owner_type: 'user', team_id: null, is_public: false }])
+      .mockResolvedValueOnce([
+        version(3, 'template.updated', '2026-07-03T12:03:00.000Z'),
+        version(2, 'template.updated', '2026-07-03T12:02:00.000Z'),
+      ])
+      // The newest two events: version 2's event is older than both, and the Changelog's
+      // newest two entries (the archive and version 3) never show version 2.
+      .mockResolvedValueOnce([
+        event('audit-4', 'template.deleted', '2026-07-03T12:04:00.000Z', null),
+        event('audit-3', 'template.updated', '2026-07-03T12:03:00.000Z', agent),
+      ]);
+
+    const response = await handleTemplates(
+      new Request('http://localhost/api/templates/template-1/history?limit=2', { method: 'GET' }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.versions.map(({ version, metadata }: { version: number; metadata: unknown }) => [version, metadata])).toEqual([
+      [3, agent],
+      [2, null],
+    ]);
+    // The same metadata the run history's events carry.
+    expect(data.events[1]).toEqual(expect.objectContaining({ id: 'audit-3', metadata: agent }));
   });
 
   it('should not expose public template history to non-owners', async () => {

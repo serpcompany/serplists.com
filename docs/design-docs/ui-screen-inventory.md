@@ -1373,9 +1373,10 @@ existing content, invent nothing):
     "Private").
   - "Categories & Tags": the categories or "No categories assigned"; the tags or "No tags
     assigned".
-  - "Changelog" (roles that may see history): entries (label, who, date and time), or
-    "Loading template history...", "Template history is unavailable right now.", "No template
-    history has been recorded yet."
+  - "Changelog" (roles that may see history): entries (label, who, date and time; an
+    Agent's change names its Run Key, "<Run Key name> via MCP · authorized by <user>", as the
+    run's Changelog does), or "Loading template history...", "Template history is unavailable
+    right now.", "No template history has been recorded yet."
 - **PRIMARY ACTION:** "Start Run" → [Start a Run dialog](#start-a-run-dialog).
 - **SECONDARY ACTIONS:** "Share" → [Share link dialog](#share-link-dialog); "Edit" →
   [Template editor](#template-editor); the copy button; the visibility switch; "Template

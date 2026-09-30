@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
 import type {
-  TemplateHistoryActor,
   TemplateHistoryEvent,
   TemplateHistoryResponse,
   TemplateHistoryVersion,
 } from '@/lib/api';
-import { formatAuditAction, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
+import { formatAuditAction, getAuditActorName, TEMPLATE_HISTORY_LABELS } from '@/lib/auditLabels';
 import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
@@ -30,21 +29,24 @@ export const getTemplateHistoryQueryKey = (
 ) => queryKeys.templateHistoryFor(templateId ?? 'none', userId, teamId);
 
 // Share and the visibility switch change only is_public; the API marks that update's audit
-// event with metadata.visibility (history lists carry metadata, never diffs).
+// event with metadata.visibility (history lists carry metadata, never diffs), and gives the
+// version the write stored the same metadata.
 const visibilityChangeSchema = z.object({ visibility: z.enum(['public', 'private']) }).passthrough();
 
-const getVisibilityLabel = (event: TemplateHistoryEvent): string | null => {
-  if (event.action !== 'template.updated') return null;
-  const change = visibilityChangeSchema.safeParse(event.metadata);
+const getVisibilityLabel = (entry: TemplateHistoryVersion | TemplateHistoryEvent): string | null => {
+  if (entry.action !== 'template.updated') return null;
+  const change = visibilityChangeSchema.safeParse(entry.metadata);
   if (!change.success) return null;
   return change.data.visibility === 'public' ? 'Made template public' : 'Made template private';
 };
 
-const getActorName = (actor?: TemplateHistoryActor): string =>
-  actor?.name || actor?.username || actor?.email || 'Unknown user';
+// Who made the change, as the run's Changelog names it: an Agent's edit reads
+// "<Run Key name> via MCP · authorized by <user>".
+const getActorName = (entry: TemplateHistoryVersion | TemplateHistoryEvent): string =>
+  getAuditActorName(entry.actor, entry.metadata);
 
 const getVersionLabel = (version: TemplateHistoryVersion): string =>
-  `${formatAuditAction(TEMPLATE_HISTORY_LABELS, version.action)} v${version.version}`;
+  getVisibilityLabel(version) ?? `${formatAuditAction(TEMPLATE_HISTORY_LABELS, version.action)} v${version.version}`;
 
 const getEventLabel = (event: TemplateHistoryEvent): string =>
   getVisibilityLabel(event) ?? formatAuditAction(TEMPLATE_HISTORY_LABELS, event.action);
@@ -72,25 +74,19 @@ export const buildTemplateHistoryTimeline = (
   }
 
   const versionKeys = new Set(history.versions.map(getPairKey));
-  const visibilityLabels = new Map(
-    history.events.flatMap((event) => {
-      const label = getVisibilityLabel(event);
-      return label ? [[getPairKey(event), label] as const] : [];
-    }),
-  );
   const entries: RankedEntry[] = [
     ...history.versions.map((version) => ({
-      actorName: getActorName(version.actor),
+      actorName: getActorName(version),
       createdAt: version.createdAt,
       key: `version-${version.id}`,
-      label: visibilityLabels.get(getPairKey(version)) ?? getVersionLabel(version),
+      label: getVersionLabel(version),
       rank: 0,
       time: getTime(version.createdAt),
     })),
     ...history.events
       .filter((event) => !versionKeys.has(getPairKey(event)))
       .map((event) => ({
-        actorName: getActorName(event.actor),
+        actorName: getActorName(event),
         createdAt: event.createdAt,
         key: `event-${event.id}`,
         label: getEventLabel(event),
