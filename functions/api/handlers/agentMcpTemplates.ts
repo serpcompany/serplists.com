@@ -3,8 +3,9 @@ import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { describeErrorForLog, log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import { readTemplate, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
-import { createTemplateArgs, getTemplateArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
+import { applyTemplateOperation } from "./agentMcpTemplateEdits";
+import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
+import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
 import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
 import { createTemplateForUser, updateTemplateForUser } from "./templates";
 
@@ -45,8 +46,13 @@ export async function getOwnedTemplate(env: Env, userId: string, templateId: str
   return template;
 }
 
-function mcpAuditMetadata(identity: PersonalRunKeyIdentity): JsonRecord {
-  return { source: "mcp", personalRunKeyId: identity.keyId, personalRunKeyName: identity.name };
+function mcpAuditMetadata(identity: PersonalRunKeyIdentity, operation?: string): JsonRecord {
+  return {
+    source: "mcp",
+    ...(operation ? { operation } : {}),
+    personalRunKeyId: identity.keyId,
+    personalRunKeyName: identity.name,
+  };
 }
 
 async function readTemplateWrite(response: Response): Promise<JsonRecord> {
@@ -62,13 +68,15 @@ async function readTemplateWrite(response: Response): Promise<JsonRecord> {
 
 // A write has already committed, so its result must never come back as an error: the agent
 // would retry, and a retried create makes a duplicate. A template too large for one result
-// comes back without its sections; one that cannot be read back (archived since, or a failed
-// read) as the write's own summary. Either way the agent reads the rest with get_template.
+// comes back without its sections (with the section or task an operation changed, if it
+// fits); one that cannot be read back (archived since, or a failed read) as the write's own
+// summary. Either way the agent reads the rest with get_template.
 async function loadWrittenTemplate(
   request: Request,
   env: Env,
   identity: PersonalRunKeyIdentity,
   written: JsonRecord & { id: string },
+  changed: { sectionId?: string; taskId?: string } = {},
 ): Promise<JsonRecord> {
   let row: JsonRecord;
   try {
@@ -82,7 +90,7 @@ async function loadWrittenTemplate(
     });
     return { template: written, sectionsOmitted: true };
   }
-  return writtenTemplateResult(templateView(row));
+  return writtenTemplateResult(templateView(row), changed);
 }
 
 export async function getTemplate(
@@ -114,12 +122,50 @@ export async function createTemplate(
   return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
 }
 
+// An operation changes one section or task of the version the agent read. It is applied to
+// that version's sections, and the whole checklist is then saved as the editor saves it,
+// against the same version, so a change made in between fails with edit_conflict.
+async function updateTemplatePart(
+  request: Request,
+  env: Env,
+  identity: PersonalRunKeyIdentity,
+  rawArguments: unknown,
+): Promise<JsonRecord> {
+  const args = parseToolArguments(templateOperationArgs, rawArguments);
+  const stored = await getOwnedTemplate(env, identity.userId, args.templateId);
+  // The editor's own refusals, before the operation reads sections it could not save.
+  if (stored.is_public) throw new ToolError("Public templates can only be edited in SERP Lists", "template_is_public");
+  if (args.expectedVersion !== stored.version) {
+    throw new ToolError("Template changed since it was loaded. Refresh before saving again.", "edit_conflict", {
+      expectedVersion: args.expectedVersion,
+      currentVersion: stored.version,
+    });
+  }
+  const edit = applyTemplateOperation(templateSections(stored.items), args);
+
+  const updated = await readTemplateWrite(await updateTemplateForUser(
+    request,
+    env,
+    identity.userId,
+    args.templateId,
+    { sections: edit.sections, expected_version: args.expectedVersion },
+    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
+  ));
+  return loadWrittenTemplate(request, env, identity, {
+    id: args.templateId,
+    ...(typeof updated.version === "number" ? { version: updated.version } : {}),
+  }, { sectionId: edit.sectionId, taskId: edit.taskId });
+}
+
 export async function updateTemplate(
   request: Request,
   env: Env,
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
+  if (isRecord(rawArguments) && rawArguments.operation !== undefined && rawArguments.operation !== null) {
+    return updateTemplatePart(request, env, identity, rawArguments);
+  }
   const { templateId, expectedVersion, ...changes } = parseToolArguments(updateTemplateArgs, rawArguments);
 
   const updated = await readTemplateWrite(await updateTemplateForUser(

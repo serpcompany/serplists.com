@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { portableChecklistSectionSchema } from "../../../src/lib/schemas/checklistSchema";
+import {
+  portableChecklistItemContentSchema,
+  portableChecklistItemSchema,
+  portableChecklistSectionSchema,
+} from "../../../src/lib/schemas/checklistSchema";
 
 // The personal run MCP's template tools: their argument validators, their result bound, and
 // the definitions functions/api/handlers/agentMcpTools.ts advertises. Nothing here imports the
@@ -11,7 +15,7 @@ import { portableChecklistSectionSchema } from "../../../src/lib/schemas/checkli
 // (10,000 tokens plus 20%, which it counts as 4 bytes each: 48,000 bytes). 32KB is 8,192 of
 // Codex's tokens, and about 16,000 real ones even at 2 bytes a token (JSON dense with ids, or
 // text in other scripts). get_template reads a larger template in parts
-// (agentMcpTemplatePages.ts).
+// (agentMcpTemplatePages.ts), and update_template's operations edit it a part at a time.
 export const MAX_TEMPLATE_RESULT_BYTES = 32 * 1024;
 
 const idArg = z.string().trim().min(1);
@@ -51,6 +55,109 @@ export const updateTemplateArgs = z.object({
   "Provide at least one of title, description, sections, categories, or tags",
 );
 
+// The part of a section or task a replace operation changes: the fields it passes replace
+// the stored ones, and the ones it leaves out are kept.
+const sectionChangeArg = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1).optional(),
+  items: z.array(portableChecklistItemSchema).min(1).optional(),
+});
+const taskChangeArg = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  contents: z.array(portableChecklistItemContentSchema).optional(),
+});
+
+const operationBase = { templateId: idArg, expectedVersion: z.number().int().positive() };
+
+/**
+ * update_template's operations, each of which changes one section or task. A template too
+ * large to read in one result is read a section or task at a time, so it must be editable at
+ * the same size: an operation never sends more than get_template returned.
+ */
+export const templateOperationArgs = z.discriminatedUnion("operation", [
+  z.object({ ...operationBase, operation: z.literal("replace_section"), sectionId: idArg, section: sectionChangeArg }).strict(),
+  z.object({
+    ...operationBase,
+    operation: z.literal("insert_section"),
+    section: portableChecklistSectionSchema,
+    beforeSectionId: idArg.optional(),
+  }).strict(),
+  z.object({ ...operationBase, operation: z.literal("move_section"), sectionId: idArg, beforeSectionId: idArg.optional() }).strict(),
+  z.object({ ...operationBase, operation: z.literal("remove_section"), sectionId: idArg }).strict(),
+  z.object({ ...operationBase, operation: z.literal("replace_task"), taskId: idArg, task: taskChangeArg }).strict(),
+  z.object({
+    ...operationBase,
+    operation: z.literal("insert_task"),
+    task: portableChecklistItemSchema,
+    sectionId: idArg.optional(),
+    beforeTaskId: idArg.optional(),
+  }).strict(),
+  z.object({
+    ...operationBase,
+    operation: z.literal("move_task"),
+    taskId: idArg,
+    sectionId: idArg.optional(),
+    beforeTaskId: idArg.optional(),
+  }).strict(),
+  z.object({ ...operationBase, operation: z.literal("remove_task"), taskId: idArg }).strict(),
+]).superRefine((args, context) => {
+  const issue = (path: (string | number)[], message: string) => context.addIssue({ code: "custom", path, message });
+  if (args.operation === "replace_section") {
+    if (args.section.title === undefined && args.section.items === undefined) issue(["section"], "Pass title, items, or both");
+    if (args.section.id !== undefined && args.section.id !== args.sectionId) {
+      issue(["section", "id"], "A section keeps its id: leave it out or pass sectionId");
+    }
+  }
+  if (args.operation === "replace_task") {
+    const { title, description, contents } = args.task;
+    if (title === undefined && description === undefined && contents === undefined) {
+      issue(["task"], "Pass title, description, contents, or several of them");
+    }
+    if (args.task.id !== undefined && args.task.id !== args.taskId) {
+      issue(["task", "id"], "A task keeps its id: leave it out or pass taskId");
+    }
+  }
+  if ((args.operation === "insert_task" || args.operation === "move_task") && !args.sectionId && !args.beforeTaskId) {
+    issue(["sectionId"], "Pass sectionId, beforeTaskId, or both");
+  }
+});
+
+export type TemplateOperationArgs = z.infer<typeof templateOperationArgs>;
+
+const templateTaskProperties = {
+  id: { type: "string" },
+  title: { type: "string", minLength: 1 },
+  description: { type: "string" },
+  contents: {
+    type: "array",
+    items: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        type: { type: "string", enum: ["text", "image", "video", "file", "embed", "subItems"] },
+        value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
+        subItems: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { id: { type: "string" }, title: { type: "string", minLength: 1 } },
+            required: ["title"],
+          },
+        },
+      },
+      required: ["type"],
+    },
+  },
+} as const;
+
+const templateTasksJsonSchema = {
+  type: "array",
+  minItems: 1,
+  items: { type: "object", properties: templateTaskProperties, required: ["title"] },
+} as const;
+
 const templateSectionsJsonSchema = {
   type: "array",
   minItems: 1,
@@ -59,43 +166,7 @@ const templateSectionsJsonSchema = {
     + "progress follows it; omit ids for new ones.",
   items: {
     type: "object",
-    properties: {
-      id: { type: "string" },
-      title: { type: "string", minLength: 1 },
-      items: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string", minLength: 1 },
-            description: { type: "string" },
-            contents: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  type: { type: "string", enum: ["text", "image", "video", "file", "embed", "subItems"] },
-                  value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
-                  subItems: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: { id: { type: "string" }, title: { type: "string", minLength: 1 } },
-                      required: ["title"],
-                    },
-                  },
-                },
-                required: ["type"],
-              },
-            },
-          },
-          required: ["title"],
-        },
-      },
-    },
+    properties: { id: { type: "string" }, title: { type: "string", minLength: 1 }, items: templateTasksJsonSchema },
     required: ["title", "items"],
   },
 } as const;
@@ -105,6 +176,17 @@ const templateLabelsJsonSchema = {
   maxItems: 20,
   items: { type: "string", minLength: 1, maxLength: 80 },
 } as const;
+
+const TEMPLATE_OPERATIONS = [
+  "replace_section",
+  "insert_section",
+  "move_section",
+  "remove_section",
+  "replace_task",
+  "insert_task",
+  "move_task",
+  "remove_task",
+] as const satisfies readonly TemplateOperationArgs["operation"][];
 
 export const templateToolDefinitions = [
   {
@@ -159,10 +241,22 @@ export const templateToolDefinitions = [
   {
     name: "update_template",
     description: "Update a private personal template (public templates can only be edited in SERP Lists). "
-      + "Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs "
-      + "of the template pick up the change. Pass the latest version from get_template as expectedVersion to "
-      + "prevent lost updates. Returns the template whole when it fits in one result (32KB), otherwise its "
-      + "fields without sections (sectionsOmitted).",
+      + "Pass the latest version from get_template or the previous update_template as expectedVersion to "
+      + "prevent lost updates. Either replace the fields you pass: title, description, categories, tags, or "
+      + "sections (the whole checklist; a section left out is removed). Or change one part with operation, "
+      + "which never needs more than get_template returned, even for a template read in pages: "
+      + "replace_section needs sectionId and section (title, items, or both; items replace its tasks); "
+      + "insert_section needs section (title and items), added before beforeSectionId or at the end; "
+      + "move_section needs sectionId, moved before beforeSectionId or to the end; remove_section needs sectionId; "
+      + "replace_task needs taskId and task (title, description, contents, or several); insert_task needs task "
+      + "and sectionId or beforeTaskId (added before that task or at the end of the section); move_task needs "
+      + "taskId and sectionId or beforeTaskId; remove_task needs taskId. A field section or task leaves out is "
+      + "kept. Keep the id of every section, task, and subtask you keep so run progress follows it; new ones get "
+      + "ids. Returns the template whole when it fits in one result (32KB), otherwise its fields with "
+      + "sectionsOmitted and the section or task the operation changed; sectionId and taskId name it. "
+      + "In-progress private runs of the template pick up the change.",
+    // One flat object, as update_run's: model APIs reject a oneOf at the root of a tool schema.
+    // templateOperationArgs enforces which fields each operation needs.
     inputSchema: {
       type: "object",
       properties: {
@@ -173,6 +267,35 @@ export const templateToolDefinitions = [
         sections: templateSectionsJsonSchema,
         categories: templateLabelsJsonSchema,
         tags: templateLabelsJsonSchema,
+        operation: {
+          type: "string",
+          enum: TEMPLATE_OPERATIONS,
+          description: "Change one section or task instead of replacing fields; pass no field to replace with it.",
+        },
+        sectionId: {
+          type: "string",
+          description: "replace_section, move_section, remove_section: the section. insert_task, move_task: "
+            + "the section the task goes to.",
+        },
+        beforeSectionId: {
+          type: "string",
+          description: "insert_section, move_section: the section it goes before; leave out for the end.",
+        },
+        section: {
+          type: "object",
+          description: "replace_section: the fields to replace. insert_section: the new section.",
+          properties: { id: { type: "string" }, title: { type: "string", minLength: 1 }, items: templateTasksJsonSchema },
+        },
+        taskId: { type: "string", description: "replace_task, move_task, remove_task: the task." },
+        beforeTaskId: {
+          type: "string",
+          description: "insert_task, move_task: the task it goes before; leave out for the end of sectionId.",
+        },
+        task: {
+          type: "object",
+          description: "replace_task: the fields to replace. insert_task: the new task (title required).",
+          properties: templateTaskProperties,
+        },
       },
       required: ["templateId", "expectedVersion"],
       additionalProperties: false,

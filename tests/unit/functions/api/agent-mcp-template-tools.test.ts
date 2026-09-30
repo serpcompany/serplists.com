@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// get_template's pages over the MCP endpoint, with D1 mocked: what a client receives.
+// get_template's pages and update_template's operations over the MCP endpoint, with D1
+// mocked: what a client receives, and what an operation saves through the editor's code.
 const dbMocks = vi.hoisted(() => {
   const selectChain = { from: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
   const insertChain = { values: vi.fn(), select: vi.fn() };
@@ -32,6 +33,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { templateView } from "@functions/api/handlers/agentMcpTemplatePages";
 import { MAX_TEMPLATE_RESULT_BYTES } from "@functions/api/handlers/agentMcpTemplateTools";
+import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { readTemplateInFull } from "../../../support/templatePages";
@@ -128,12 +130,18 @@ describe("personal run MCP template tools", () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } } as never);
   });
 
-  it("advertises get_template's paging arguments", async () => {
+  it("advertises get_template's paging arguments and update_template's operations", async () => {
     const tools = ((await send("tools/list")).body.result as { tools: JsonRecord[] }).tools;
     const schema = (name: string) => tools.find((tool) => tool.name === name)?.inputSchema as JsonRecord;
 
     expect(Object.keys(schema("get_template").properties as JsonRecord)).toEqual(["templateId", "sectionId", "taskId", "cursor"]);
     expect(schema("get_template").required).toEqual(["templateId"]);
+    const update = schema("update_template");
+    expect((update.properties as JsonRecord).operation).toMatchObject({
+      enum: ["replace_section", "insert_section", "move_section", "remove_section", "replace_task", "insert_task", "move_task", "remove_task"],
+    });
+    expect(update.required).toEqual(["templateId", "expectedVersion"]);
+    for (const keyword of ["oneOf", "anyOf", "allOf"]) expect(update).not.toHaveProperty(keyword);
   });
 
   it("reads a template too large for one result in pages, each response within the bound", async () => {
@@ -174,5 +182,127 @@ describe("personal run MCP template tools", () => {
     const forged = (await rpc("get_template", { templateId: "template-1", cursor: "bm90LWEtY3Vyc29y" })).body;
     expect((forged.error as JsonRecord).code).toBe(-32602);
     expect(((forged.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
+  });
+
+  describe("update_template operations", () => {
+    const sections = () => [
+      { id: "s1", title: "Prepare", items: [task("t1"), task("t2")] },
+      { id: "s2", title: "Ship", items: [task("t3")] },
+    ];
+
+    // getOwnedTemplate, then updateTemplateForUser's read, then the result's read back.
+    function mockWrite(before: JsonRecord, after: JsonRecord) {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([before])
+        .mockResolvedValueOnce([before])
+        .mockResolvedValueOnce([after]);
+    }
+
+    const savedTemplate = () => dbMocks.updateChain.set.mock.calls
+      .map(([values]) => values as JsonRecord)
+      .find((values) => typeof values.items === "string");
+
+    it("saves the whole checklist with one task added, through the editor's code", async () => {
+      const before = templateRow(sections());
+      mockWrite(before, templateRow(sections(), { version: 5 }));
+
+      const { body } = await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        operation: "insert_task",
+        beforeTaskId: "t2",
+        task: { title: "Freeze merges" },
+      });
+      const result = resultOf(body);
+
+      expect(result.isError).toBeUndefined();
+      expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+      const saved = JSON.parse(String(savedTemplate()?.items)) as JsonRecord[];
+      const inserted = (saved[0].items as JsonRecord[])[1];
+      expect((saved[0].items as JsonRecord[]).map(({ id }) => id)).toEqual(["t1", inserted.id, "t2"]);
+      expect(inserted).toMatchObject({ id: expect.stringMatching(/^item_/), title: "Freeze merges" });
+      expect(saved[1]).toEqual(sections()[1]);
+      expect(savedTemplate()).toMatchObject({ version: 5, content_version: 4 });
+
+      // The template's history names the key and the operation.
+      const audit = vi.mocked(buildAuditEventValues).mock.calls.map(([values]) => values)
+        .find((values) => values.action === "template.updated");
+      expect(audit?.metadata).toEqual({ source: "mcp", operation: "insert_task", personalRunKeyId: "key-1", personalRunKeyName: "Codex" });
+      expect(result.structuredContent).toMatchObject({ template: { id: "template-1", version: 5 } });
+      expect(result.content[0].text).toMatch(/^Updated template "Release SOP"\./);
+    });
+
+    it("refuses a stale version, a public template, and an unknown section before writing", async () => {
+      storedRow(templateRow(sections()));
+      const stale = resultOf((await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 3,
+        operation: "remove_task",
+        taskId: "t1",
+      })).body);
+      expect(stale.structuredContent).toMatchObject({ error: "edit_conflict", details: { expectedVersion: 3, currentVersion: 4 } });
+
+      storedRow(templateRow(sections(), { is_public: true }));
+      const published = resultOf((await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        operation: "remove_task",
+        taskId: "t1",
+      })).body);
+      expect(published.structuredContent).toMatchObject({ error: "template_is_public" });
+
+      storedRow(templateRow(sections()));
+      const missing = resultOf((await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        operation: "move_section",
+        sectionId: "s9",
+      })).body);
+      expect(missing.structuredContent).toMatchObject({ error: "section_not_found", message: "Section not found (sectionId)" });
+
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+    });
+
+    it("returns a large template's fields and the changed task, within the bound", async () => {
+      const before = templateRow(largeSections());
+      const changed = largeSections();
+      changed[3].items[2] = { ...changed[3].items[2], title: "Rolled back" };
+      mockWrite(before, templateRow(changed, { version: 5 }));
+
+      const { raw, body } = await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        operation: "replace_task",
+        taskId: "t3-2",
+        task: { title: "Rolled back" },
+      });
+
+      expect(resultOf(body).structuredContent).toEqual({
+        template: templateView(templateRow(changed, { version: 5 })).header,
+        sectionsOmitted: true,
+        sectionId: "s3",
+        taskId: "t3-2",
+        task: changed[3].items[2],
+      });
+      expect(bytes(JSON.stringify(resultOf(JSON.parse(raw) as JsonRecord).structuredContent))).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+    });
+
+    it("treats a null operation as absent, replacing fields as before", async () => {
+      // updateTemplateForUser's read, then the result's read back.
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([templateRow(sections())])
+        .mockResolvedValueOnce([templateRow(sections(), { version: 5, title: "Release SOP v2" })]);
+
+      const result = resultOf((await rpc("update_template", {
+        templateId: "template-1",
+        expectedVersion: 4,
+        operation: null,
+        title: "Release SOP v2",
+      })).body);
+
+      expect(result.isError).toBeUndefined();
+      expect(result.structuredContent).toMatchObject({ template: { title: "Release SOP v2", version: 5 } });
+    });
   });
 });
