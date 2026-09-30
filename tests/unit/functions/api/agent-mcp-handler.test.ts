@@ -1,5 +1,6 @@
 import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +39,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
   return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
 });
 
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { handleAgentMcp, MCP_SERVER_VERSION } from "@functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { runView } from "@functions/api/handlers/agentMcpRunPages";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH, updateRunArgs } from "@functions/api/handlers/agentMcpTools";
@@ -273,6 +274,22 @@ describe("personal run MCP handler", () => {
     }), env);
     const body = await response.json() as any;
     expect(body.result.protocolVersion).toBe("2025-06-18");
+  });
+
+  it("names the server version, with release notes for agents in the product spec", async () => {
+    const response = await handleAgentMcp(rpcRequest("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "test-client", version: "1.0.0" },
+    }), env);
+    const body = await response.json() as any;
+    expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.3.0" });
+
+    // Agents already using the MCP learn what a new version changes from these notes.
+    const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
+    expect(spec).toContain("\n## MCP Changes For Agents\n");
+    const notes = spec.slice(spec.indexOf("\n## MCP Changes For Agents\n"));
+    expect(notes).toMatch(new RegExp(`^### ${MCP_SERVER_VERSION.replace(/\./g, "\\.")} `, "m"));
   });
 
   it("rejects invalid request ids and incomplete initialize parameters", async () => {

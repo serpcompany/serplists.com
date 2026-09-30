@@ -52,6 +52,9 @@ import {
 } from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
+// serverInfo's version: a minor bump when what tools take or return changes, with release notes
+// for agents in docs/product-specs/features.md ("MCP Changes For Agents").
+export const MCP_SERVER_VERSION = "0.3.0";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 
 type JsonRpcId = string | number | null;
@@ -544,7 +547,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "serp-lists-personal-runs", version: "0.2.0" },
+      serverInfo: { name: "serp-lists-personal-runs", version: MCP_SERVER_VERSION },
     });
   }
 

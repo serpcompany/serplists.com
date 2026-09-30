@@ -84,6 +84,20 @@ A missing page under `/dashboard/` answers 404 with the not-found page: in the c
 - Shared runs do not expose owner-only title editing or destructive actions, and the guest view does not reveal who owns or worked on the run.
 - Current run gating is plan-limit based through active-run limits.
 
+## MCP Changes For Agents
+
+Release notes for agents already using the Run Key MCP (`/api/mcp`), to quote when a version ships. The `initialize` result names the version (`serverInfo.version`, `MCP_SERVER_VERSION` in `functions/api/handlers/agentMcp.ts`), which goes up a minor version whenever what the tools take or return changes.
+
+### 0.3.0 (from 0.2.0)
+
+- **Every result stays within 32KB**, what MCP clients take from one call. A template or run too large for one result no longer fails with `result_too_large`: `get_template` and `get_run` return its outline instead (its fields, `sectionsOmitted`, and each section's id, title, `taskCount` and `bytes`), and `sectionId`, `taskId` and `nextCursor` read the rest.
+- **`get_run` reads a section or task the way `get_template` does**: `sectionId` returns `{ run, section }` and `taskId` returns `{ run, sectionId, task }`, a section too large for one result comes a page of tasks at a time (`firstTask`, `taskCount`), and anything larger on its own in `part`s of its JSON text. A run returned whole now includes its retired work (`retiredItems`); `retired: true` reads it on its own, all of it or one section's or task's.
+- **The lists page.** `list_templates` and `list_runs` no longer stop at 100 rows with `truncated`: while a result has `nextCursor`, call again with `cursor` set to it. Titles over 160 characters are cut; `get_template` and `get_run` return them whole.
+- **Writes return less.** `update_run` returns the run's fields without its sections, the changed task's `sectionId` and `taskId`, and that task when it fits (`taskOmitted` otherwise). `start_run`, `create_template` and `update_template` return the run or template whole only when it fits in one result, otherwise its fields with `sectionsOmitted`.
+- **`update_template` changes one part** with `operation`: `replace_section`, `insert_section`, `move_section`, `remove_section`, `replace_task`, `insert_task`, `move_task` or `remove_task`. `sections` still replaces the whole checklist; for a template read in pages, `operation` is the safe way to edit.
+- **Notes have a byte limit.** `update_run` refuses notes over 20,000 characters or 30KB (30,720 bytes) of UTF-8 with `invalid_arguments`, naming both limits.
+- **New refusals.** Completing a run (`set_run_status` `completed`) fails with `run_incomplete`, naming up to 20 open task ids, while a task or Sub-task is open, and `start_run` and `set_task_notes` fail with `content_too_large` past the web app's 896KB run content limit.
+
 ## Personal And Organization Contexts
 
 - Users always have a Personal context and can belong to Organizations.

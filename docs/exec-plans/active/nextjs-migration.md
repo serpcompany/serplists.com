@@ -86,6 +86,9 @@ The same as the approved reference:
    - A list of secrets per Worker.
    - A domain-move checklist.
    - ARCHITECTURE, FRONTEND, RELIABILITY and AGENTS updates.
+   - The promotion PR includes the release notes for agents in
+     [MCP Changes For Agents](../../product-specs/features.md#mcp-changes-for-agents): MCP 0.3.0
+     changes what the tools return for agents using the deployed 0.2.0.
 
 ## Open questions
 
@@ -306,6 +309,10 @@ Each of these needs the user's approval, or happens with the domain move:
   kept busy past a connection's 5-second mark, 3 of 20 POSTs were lost before and 0 of 20
   after (0 of 20 more sent right at the mark). Both tests passed 5 of 5 alone and their spec
   file passed, with no lost or resent request in wrangler's log.
+- [x] MCP follow-ups the user approved (decision log, 2026-09-30): `update_run` refuses notes
+  over 30KB of UTF-8 (`1f004ff8`), `update_template`'s description says plainly that `sections`
+  replaces the whole checklist (`dc6c2410`), and `initialize` reports server version 0.3.0,
+  with release notes for agents that the promotion PR includes (phase 4).
 
 ## Decision log
 
@@ -707,3 +714,12 @@ Each of these needs the user's approval, or happens with the domain move:
   its `sections` argument now say that `sections` replaces the whole checklist, removing
   whatever it leaves out, and that `operation` is the safe way to edit a template read in pages;
   `tests/unit/functions/api/agent-mcp-template-tools.test.ts` holds the description to it.
+- 2026-09-30: **MCP server 0.3.0, with release notes for agents.** Agents already use the
+  deployed MCP, 0.2.0 on staging and production, and this branch changes what its tools return,
+  so `initialize` reports 0.3.0, the next minor version (0.2.0 came with the template tools),
+  and [MCP Changes For Agents](../../product-specs/features.md#mcp-changes-for-agents) lists
+  the changes for the promotion PR to quote. They are written against what 0.2.0 returns, not
+  against this branch's earlier states: its `get_run` took only `runId`, returned no retired
+  work and failed with a bare `result_too_large` over 512KB, its `update_run` returned the
+  whole run, and it checked neither run completion nor run content size. A unit test keeps the
+  version and its notes together.
