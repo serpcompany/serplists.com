@@ -59,6 +59,10 @@ jobs:
         if: env.HAS_CLAUDE_TOKEN == 'true'
         run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
 
+      - name: Note when doc gardening starts
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        run: echo "GARDENING_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Garden docs with Claude
         id: garden
         if: env.HAS_CLAUDE_TOKEN == 'true'
@@ -99,12 +103,25 @@ jobs:
             --strict-mcp-config
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run docs:check),Bash(date:*)"
 
+      - name: Keep the doc gardening transcript
+        if: always() && env.HAS_CLAUDE_TOKEN == 'true' && steps.garden.outputs.execution_file != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: doc-gardening-transcript
+          path: ${{ steps.garden.outputs.execution_file }}
+          retention-days: 7
+          overwrite: true
+
       # Inline on purpose, like the review's guard: this job can mint an OIDC token, so it
       # runs no script from the checkout. tests/unit/workflows/maintenance.test.ts runs it.
+      # It checks the job's outcome: a gardening PR opened during the run, "No doc drift
+      # found", or an open gardening PR left alone. A denied tool only warns when Claude
+      # got there anyway (it often retries a refused command another way).
       - name: Fail if Claude could not finish
         if: env.HAS_CLAUDE_TOKEN == 'true'
         env:
           EXECUTION_FILE: ${{ steps.garden.outputs.execution_file }}
+          GITHUB_TOKEN: ${{ github.token }}
         shell: node {0}
         run: |
           const fs = require('node:fs');
@@ -114,24 +131,68 @@ jobs:
             console.log(`::error title=Doc gardening did not finish::${clean(message, 900)}`);
             process.exit(1);
           };
-          const file = process.env.EXECUTION_FILE;
-          if (!file || !fs.existsSync(file)) fail('Doc gardening wrote no execution log.');
-          let messages;
-          try {
-            messages = JSON.parse(fs.readFileSync(file, 'utf8'));
-          } catch (error) {
-            fail(`The execution log is not valid JSON: ${error.message}`);
-          }
-          if (!Array.isArray(messages)) fail('The execution log is not a list of messages.');
-          const result = messages.filter((entry) => entry && entry.type === 'result').pop();
-          if (!result) fail('The execution log has no result entry.');
-          console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${clean(result.result || '(nothing)', 400)}`);
-          if (result.is_error) fail(`Doc gardening ended with ${result.subtype || 'an error'}.`);
-          const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
-          const running = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
-          if (running.length) fail(`Doc gardening ended with ${running.length} background task(s) still running.`);
-          const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${clean(d.tool_input.command)})` : String(d.tool_name))))];
-          if (denied.length) fail(`Claude was denied ${denied.join(', ')}. Allow the tool in claude_args.`);
+          const readResult = () => {
+            const file = process.env.EXECUTION_FILE;
+            if (!file || !fs.existsSync(file)) fail('Doc gardening wrote no execution log.');
+            let messages;
+            try {
+              messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+            } catch (error) {
+              fail(`The execution log is not valid JSON: ${error.message}`);
+            }
+            if (!Array.isArray(messages)) fail('The execution log is not a list of messages.');
+            const result = messages.filter((entry) => entry && entry.type === 'result').pop();
+            if (!result) fail('The execution log has no result entry.');
+            return { messages, result };
+          };
+          // Open doc-gardening PRs into staging, oldest first.
+          const openGardeningPrs = async () => {
+            const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+            const response = await fetch(`${api}/pulls?state=open&base=staging&per_page=100`, {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!response.ok) throw new Error(`GET /pulls returned ${response.status}`);
+            return (await response.json()).filter((pr) => pr && pr.head && String(pr.head.ref).startsWith('chore/doc-gardening-'));
+          };
+          const main = async () => {
+            const { messages, result } = readResult();
+            const said = String(result.result || '');
+            console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${clean(said || '(nothing)', 400)}`);
+            if (result.is_error) fail(`Doc gardening ended with ${result.subtype || 'an error'}.`);
+            const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
+            const running = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
+            if (running.length) fail(`Doc gardening ended with ${running.length} background task(s) still running.`);
+            const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${clean(d.tool_input.command)})` : String(d.tool_name))))];
+
+            const startedAt = Date.parse(process.env.GARDENING_STARTED_AT || '');
+            if (Number.isNaN(startedAt)) fail('GARDENING_STARTED_AT is not set, so the check cannot tell whether this run opened a PR.');
+            let prs;
+            try {
+              prs = await openGardeningPrs();
+            } catch (error) {
+              fail(`Could not list the open PRs to check the outcome: ${error.message}`);
+            }
+            // Allow for clock skew between the runner and GitHub.
+            const opened = prs.filter((pr) => Date.parse(pr.created_at) >= startedAt - 30 * 1000);
+            let outcome = null;
+            if (opened.length > 0) outcome = `opened ${opened.map((pr) => `#${pr.number}`).join(', ')}`;
+            else if (/No doc drift found/i.test(said)) outcome = 'found no doc drift';
+            else if (prs.length > 0 && /already/i.test(said)) outcome = `left the open gardening PR #${prs[0].number} alone`;
+
+            if (!outcome) {
+              const reason = denied.length > 0 ? ` Claude was denied ${denied.join(', ')}; allow the tool in claude_args.` : '';
+              fail(`Doc gardening finished without opening a PR or reporting "No doc drift found".${reason}`);
+            }
+            if (denied.length > 0) {
+              console.log(`::warning title=Doc gardening was denied tools::Claude was denied ${clean(denied.join(', '), 600)} but still ${outcome}. Allow the tool in claude_args if the job needs it.`);
+            }
+            console.log(`Doc gardening ${outcome}.`);
+          };
+          main().catch((error) => fail(`The doc gardening check failed: ${error && error.message}`));
 
   report:
     runs-on: ubuntu-latest

@@ -128,9 +128,13 @@ debt in the baselines, oversized files, and open tech debt.
   week if a gardening PR is still open, and opens nothing when there is no drift.
   These PRs are small; skim and merge them. Claude code review skips them because
   a bot opens them. Like the review, the job keeps Claude's subagents in the foreground
-  (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`), and a check after it fails the job when
-  Claude left no log, ended in an error or with subagents still running, or was denied
-  a tool, and prints what Claude said (`tests/unit/workflows/maintenance.test.ts`).
+  (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`) and keeps Claude's transcript as a week-long
+  artifact. A check after it prints what Claude said and passes only on an outcome: a
+  gardening PR opened during the run, "No doc drift found", or an open gardening PR left
+  alone. It fails when Claude left no log, ended in an error or with subagents still
+  running, or reached none of those outcomes, and a denied tool only warns when Claude got
+  there anyway, since it often retries a refused command another way
+  (`tests/unit/workflows/maintenance.test.ts`).
 - **Report issue:** the full report is posted to the issue "Weekly repository
   maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment.
 
