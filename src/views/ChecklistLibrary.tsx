@@ -1,7 +1,7 @@
 'use client';
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react';
 import { Filter } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
@@ -37,6 +37,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { replaceCurrentUrl } from '@/lib/navigation/replaceCurrentUrl';
@@ -95,6 +96,7 @@ const ChecklistLibrary = ({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useAppRouter();
+  const searchId = useId();
   const historyState = useSyncExternalStore(
     subscribeToHistory,
     readHistoryState,
@@ -211,11 +213,15 @@ const ChecklistLibrary = ({
             'Browse hundreds of ready-to-use checklists created by the community'
           }
           search={
-            <SearchField
-              onChange={(event) => updateFilters({ query: event.target.value })}
-              placeholder="Search templates..."
-              value={syncedSearchDraft.draft}
-            />
+            <Field>
+              <FieldLabel htmlFor={searchId}>Search templates</FieldLabel>
+              <SearchField
+                id={searchId}
+                onChange={(event) => updateFilters({ query: event.target.value })}
+                placeholder="Search templates..."
+                value={syncedSearchDraft.draft}
+              />
+            </Field>
           }
           title={title ?? TEMPLATE_LIBRARY_PAGE_TEXT.title}
         />
