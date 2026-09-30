@@ -2,6 +2,7 @@ import { ListChecks } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { RunTaskList } from '@/components/run-execution/RunProgressSidebar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -61,29 +62,29 @@ export function MobileRunProgress({
 
   return (
     <section
-      className="border-b border-border bg-card px-4 py-4 sm:px-6 xl:hidden"
+      className="flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 xl:hidden"
       data-mobile-run-progress="true"
     >
-      <div className="mb-3 flex items-center justify-between gap-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <div>
-          <p className="font-medium text-foreground">{progress}% complete</p>
+          <p className="font-medium">{progress}% complete</p>
           <p className="text-xs text-muted-foreground">
             {completedTasks} of {formatCount(totalTasks, 'task')} finished
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {position ? (
-            <span className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
+            <Badge variant="secondary">
               Task {position.index + 1} of {position.total}
-            </span>
+            </Badge>
           ) : null}
           <Sheet open={isTaskListOpen} onOpenChange={setIsTaskListOpen}>
             <SheetTrigger
               render={<Button data-mobile-run-tasks-trigger="true" size="sm" type="button" variant="outline" />}
             >
-                <ListChecks className="h-4 w-4" />
-                Tasks
-              </SheetTrigger>
+              <ListChecks data-icon="inline-start" />
+              Tasks
+            </SheetTrigger>
             <SheetContent
               className="flex max-h-[85dvh] flex-col gap-0 p-0"
               // Start on the current task rather than the top of a long run.
@@ -93,7 +94,7 @@ export function MobileRunProgress({
               ref={contentRef}
               side="bottom"
             >
-              <SheetHeader className="border-b border-border px-4 py-3 pr-12 text-left">
+              <SheetHeader className="border-b pr-12">
                 <SheetTitle>Tasks</SheetTitle>
                 <SheetDescription>Open any task in this run.</SheetDescription>
               </SheetHeader>
@@ -112,7 +113,7 @@ export function MobileRunProgress({
           </Sheet>
         </div>
       </div>
-      <Progress value={progress} className="h-2" />
+      <Progress aria-label="Run progress" value={progress} />
     </section>
   );
 }

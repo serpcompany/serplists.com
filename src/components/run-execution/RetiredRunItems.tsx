@@ -43,7 +43,7 @@ function RetiredTask({ task, context }: { task: RetiredRunTask; context?: string
       </div>
       {context ? <p className="text-xs text-muted-foreground">{context}</p> : null}
       {task.notes ? (
-        <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-sm text-foreground">
+        <p className="mt-2 rounded-md bg-muted px-3 py-2 text-sm whitespace-pre-wrap wrap-break-word">
           {task.notes}
         </p>
       ) : null}
@@ -90,19 +90,22 @@ export function RetiredRunItems({ items }: { items: RetiredRunItem[] }): JSX.Ele
   if (items.length === 0) return null;
 
   return (
-    <section className="border-t border-border bg-background px-4 py-5 sm:px-6" data-retired-run-items="true">
-      <details className="mx-auto max-w-3xl">
-        <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-foreground">
-          <Archive className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+    <section
+      className="rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10"
+      data-retired-run-items="true"
+    >
+      <details className="group">
+        <summary className="flex cursor-pointer items-center gap-2 rounded-md text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+          <Archive className="size-4 text-muted-foreground" aria-hidden="true" />
           Removed from Template ({items.length})
         </summary>
         <p className="mt-2 text-xs text-muted-foreground">
           The Template no longer includes this work. It is kept here read-only, with its completion
           and notes, and does not count toward progress.
         </p>
-        <div className="mt-4 divide-y divide-border rounded-lg border border-border bg-card">
+        <div className="mt-4 divide-y">
           {items.map((entry, index) => (
-            <div key={`${entry.kind}:${entry.id}:${index}`} className="px-4 py-3">
+            <div key={`${entry.kind}:${entry.id}:${index}`} className="py-3 first:pt-0 last:pb-0">
               <RetiredEntry entry={entry} />
             </div>
           ))}

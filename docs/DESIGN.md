@@ -102,7 +102,7 @@ page, so a page's sticky parts stick to the window.
 | `ConfirmDialog` | `src/components/shared/ConfirmDialog.tsx` | The shadcn `AlertDialog` for a destructive action (Delete, Revoke): Cancel and the action, which waits while it runs |
 | `ShareLinkDialog` | `src/components/shared/ShareLinkDialog.tsx` | A created link in a read-only field with a Copy button |
 | `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
-| `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail |
+| `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail, the run page and Organization activity |
 
 ## Conventions
 

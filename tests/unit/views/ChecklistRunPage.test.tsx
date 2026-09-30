@@ -1,7 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { surfaceVariants } from '@/components/layout/page-shell.styles';
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
@@ -219,9 +218,9 @@ describe('ChecklistRunPage layout', () => {
       'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
     );
     expect(html).not.toContain('Create Your Own Copy');
-    // The shared page shell: its narrow container and its surfaces.
+    // The shared page shell: its narrow container and its cards.
     expect(html).toContain('data-page-container="narrow"');
-    expect(html).toContain(surfaceVariants({ padding: 'md' }));
+    expect(html).toContain('data-slot="card"');
     expect(html).not.toContain('Creating link...');
     expect(html).not.toContain('Overall Progress');
     expect(html).not.toContain('Changelog');

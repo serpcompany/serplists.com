@@ -1,5 +1,6 @@
 import { History } from 'lucide-react';
 
+import { ChangelogList } from '@/components/shared/ChangelogList';
 import { formatAuditAction, getAuditActorName, RUN_HISTORY_LABELS } from '@/lib/auditLabels';
 import { selectRunHistoryPreview } from '@/features/run-execution/runHistory';
 import type { RunExecutionHistoryState } from '@/features/run-execution/useRunExecutionModel';
@@ -15,53 +16,29 @@ const formatRunHistoryTime = (value?: string): string => {
   });
 };
 
+// The run page's Changelog, in the Changelog's rows.
 export function RunHistorySection({ history }: { history?: RunExecutionHistoryState }) {
   const runHistoryEntries = selectRunHistoryPreview(history?.data);
 
   return (
-    <section className="border-t border-border bg-background px-4 py-5 sm:px-6">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-4 flex items-center gap-2">
-          <History className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold text-foreground">
-            Changelog
-          </h2>
-        </div>
-        {history?.isLoading ? (
-          <p className="text-sm text-muted-foreground">
-            Loading run history...
-          </p>
-        ) : history?.isError ? (
-          <p className="text-sm text-muted-foreground">
-            Run history is unavailable right now.
-          </p>
-        ) : runHistoryEntries.length > 0 ? (
-          <div className="divide-y divide-border rounded-lg border border-border bg-card">
-            {runHistoryEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatAuditAction(RUN_HISTORY_LABELS, entry.action)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {getAuditActorName(entry.actor, entry.metadata)}
-                  </p>
-                </div>
-                <time className="text-xs text-muted-foreground">
-                  {formatRunHistoryTime(entry.createdAt)}
-                </time>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No run history has been recorded yet.
-          </p>
-        )}
-      </div>
+    <section className="flex flex-col gap-4 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10">
+      <h2 className="flex items-center gap-2 text-sm font-medium">
+        <History aria-hidden="true" className="size-4 text-muted-foreground" />
+        Changelog
+      </h2>
+      <ChangelogList
+        emptyLabel="No run history has been recorded yet."
+        entries={runHistoryEntries.map((entry) => ({
+          actor: getAuditActorName(entry.actor, entry.metadata),
+          key: entry.id,
+          label: formatAuditAction(RUN_HISTORY_LABELS, entry.action),
+          time: formatRunHistoryTime(entry.createdAt),
+        }))}
+        errorLabel="Run history is unavailable right now."
+        isError={Boolean(history?.isError)}
+        isLoading={Boolean(history?.isLoading)}
+        loadingLabel="Loading run history..."
+      />
     </section>
   );
 }

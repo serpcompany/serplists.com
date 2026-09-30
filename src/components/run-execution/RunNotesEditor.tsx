@@ -1,9 +1,10 @@
 import type { JSX } from 'react';
-import { useState } from 'react';
-import { Check, Loader2, MessageSquareText } from 'lucide-react';
+import { useId, useState } from 'react';
+import { Check, MessageSquareText } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
 // The draft lives in the run model (see noteDrafts.ts), not here, so it survives moving
@@ -18,6 +19,8 @@ interface RunNotesEditorProps {
   savedValue?: string;
 }
 
+// A task's notes: a labelled textarea, and a line that says where they are saved with the
+// Save notes button.
 export function RunNotesEditor({
   draft,
   label,
@@ -29,6 +32,7 @@ export function RunNotesEditor({
   const notes = draft ?? savedValue;
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const textareaId = useId();
 
   const isDirty = notes !== savedValue;
 
@@ -43,13 +47,14 @@ export function RunNotesEditor({
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-      <Label className="flex items-center gap-2">
-        <MessageSquareText className="h-4 w-4" />
+    <Field>
+      <FieldLabel htmlFor={textareaId}>
+        <MessageSquareText aria-hidden="true" className="size-4" />
         {label}
-      </Label>
+      </FieldLabel>
       <Textarea
         aria-label={label}
+        id={textareaId}
         onChange={(event) => {
           onDraftChange(event.target.value);
           setShowSaved(false);
@@ -60,11 +65,11 @@ export function RunNotesEditor({
         value={notes}
       />
       {readOnly ? null : (
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-xs text-muted-foreground" aria-live="polite">
             {showSaved && !isDirty ? (
               <span className="inline-flex items-center gap-1 text-foreground">
-                <Check className="h-3.5 w-3.5" /> Saved to this run
+                <Check aria-hidden="true" className="size-3.5" /> Saved to this run
               </span>
             ) : (
               'Only this run is updated.'
@@ -77,11 +82,11 @@ export function RunNotesEditor({
             type="button"
             variant="outline"
           >
-            {isSaving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+            {isSaving ? <Spinner aria-hidden="true" data-icon="inline-start" /> : null}
             Save notes
           </Button>
         </div>
       )}
-    </div>
+    </Field>
   );
 }

@@ -48,6 +48,8 @@ interface DashboardPageHeaderProps {
   // Badges under the description, such as a status.
   meta?: ReactNode;
   title: ReactNode;
+  // Takes the title's place while it is renamed: a labelled field.
+  titleEditor?: ReactNode;
 }
 
 // The page's title (its h1), a muted description and badges, with the page's actions on the
@@ -57,6 +59,7 @@ export function DashboardPageHeader({
   description,
   meta,
   title,
+  titleEditor,
 }: DashboardPageHeaderProps) {
   return (
     <header
@@ -64,7 +67,7 @@ export function DashboardPageHeader({
       data-dashboard-page-header="true"
     >
       <div className="flex min-w-0 flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight wrap-break-word">{title}</h1>
+        {titleEditor ?? <h1 className="text-2xl font-semibold tracking-tight wrap-break-word">{title}</h1>}
         {description ? (
           <p className="text-sm whitespace-pre-line text-muted-foreground">{description}</p>
         ) : null}
