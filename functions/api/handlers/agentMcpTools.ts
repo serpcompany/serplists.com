@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
-import { templateToolDefinitions } from "./agentMcpTemplateTools";
+import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcpTemplateTools";
 
 // Tool argument validators, the tool list advertised by the personal run MCP endpoint
 // (functions/api/handlers/agentMcp.ts), and the Run Key permission each tool needs.
@@ -24,6 +24,7 @@ export const MAX_TASK_NOTES_LENGTH = 20_000;
 
 export const listRunsArgs = z.object({
   status: z.enum(["in_progress", "completed"]).optional(),
+  cursor: cursorArg.optional(),
 }).strict();
 
 export const startRunArgs = z.object({
@@ -111,10 +112,17 @@ export const toolDefinitions = [
   },
   {
     name: "list_runs",
-    description: "List the authenticated user's active personal checklist runs.",
+    description: "List the authenticated user's active personal checklist runs, newest first: each run's id, "
+      + "templateId, title, status, progress, revision, and dates, without sections (get_run reads those). No "
+      + "result is larger than 32KB, so the list comes a page at a time (titles over 160 characters are cut). "
+      + "While a result has nextCursor, call list_runs with cursor set to it for the next page; the cursor keeps "
+      + "the status filter.",
     inputSchema: {
       type: "object",
-      properties: { status: { type: "string", enum: ["in_progress", "completed"] } },
+      properties: {
+        status: { type: "string", enum: ["in_progress", "completed"] },
+        cursor: cursorJsonSchema,
+      },
       additionalProperties: false,
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },

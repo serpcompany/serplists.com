@@ -7,8 +7,8 @@ import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agen
 // Run content helpers for the personal run MCP endpoint: parsing, serialization, the
 // operations update_run applies, and the size bounds that keep every result returnable.
 
-// The bound of the results that are not read in pages yet (TD-28): the run tools' and
-// list_templates'. The template tools' results stay within MAX_RESULT_BYTES (agentMcpPages.ts).
+// The bound of the results that are not read in pages yet (TD-28): the run tools'. The other
+// tools' results stay within MAX_RESULT_BYTES (agentMcpPages.ts).
 export const MAX_UNPAGED_RESULT_BYTES = 512 * 1024;
 // Largest run content (the sections JSON stored in checklist_runs.items) an MCP write may
 // produce. It stays well under MAX_UNPAGED_RESULT_BYTES so get_run can always return a run MCP

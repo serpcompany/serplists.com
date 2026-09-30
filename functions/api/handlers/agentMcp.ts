@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
@@ -41,6 +41,7 @@ import {
   updateRunAuditDiff,
   updateRunResult,
 } from "./agentMcpRuns";
+import { describeList, listRuns, listTemplates } from "./agentMcpLists";
 import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getOwnedTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
@@ -48,7 +49,6 @@ import {
   isReadOnlyTool,
   isRecord,
   keyAllowsTool,
-  listRunsArgs,
   parseToolArguments,
   startRunArgs,
   ToolError,
@@ -60,7 +60,6 @@ import {
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
-const MAX_LIST_RESULTS = 100;
 
 type JsonRpcId = string | number | null;
 
@@ -126,50 +125,6 @@ function acceptsMcpResponse(request: Request): boolean {
   if (!accept) return false;
   const values = accept.toLowerCase().split(",").map((value) => value.trim().split(";", 1)[0]);
   return values.includes("application/json") && values.includes("text/event-stream");
-}
-
-function summarizeTemplate(template: JsonRecord): JsonRecord {
-  return {
-    id: template.id,
-    title: template.title,
-    description: typeof template.description === "string"
-      ? boundedText(template.description, 500)
-      : template.description,
-    type: template.type,
-    contentVersion: template.content_version,
-    createdAt: template.created_at,
-    updatedAt: template.updated_at,
-  };
-}
-
-async function listTemplates(env: Env, identity: PersonalRunKeyIdentity): Promise<JsonRecord> {
-  const db = createDb(env);
-  const rows = await db
-    .select()
-    .from(schema.templates)
-    .where(and(
-      eq(schema.templates.user_id, identity.userId),
-      eq(schema.templates.owner_type, "user"),
-      isNull(schema.templates.team_id),
-      isNull(schema.templates.deleted_at),
-    ))
-    // A Template's updated_at stays NULL until its first edit, and SQLite sorts NULL
-    // last, so order by last change (edit, else creation). The id makes ties stable.
-    .orderBy(
-      desc(sql`coalesce(${schema.templates.updated_at}, ${schema.templates.created_at})`),
-      desc(schema.templates.id),
-    );
-
-  return {
-    templates: rows
-      .filter((row) => row.user_id === identity.userId
-        && row.owner_type === "user"
-        && row.team_id === null
-        && row.deleted_at === null)
-      .slice(0, MAX_LIST_RESULTS)
-      .map((row) => summarizeTemplate(row as unknown as JsonRecord)),
-    truncated: rows.length > MAX_LIST_RESULTS,
-  };
 }
 
 async function startRun(
@@ -239,34 +194,6 @@ async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promis
   const { limit, hit } = await checkActiveRunCapacity(env, owner, owner.userId);
   if (hit) throw new ToolError("Active run limit reached", "limit_reached", { ...hit });
   return limit;
-}
-
-async function listRuns(
-  env: Env,
-  identity: PersonalRunKeyIdentity,
-  rawArguments: unknown,
-): Promise<JsonRecord> {
-  const args = parseToolArguments(listRunsArgs, rawArguments);
-
-  const filters = [
-    eq(schema.checklist_runs.user_id, identity.userId),
-    isNull(schema.checklist_runs.team_id),
-    isNull(schema.checklist_runs.deleted_at),
-  ];
-  if (args.status) filters.push(eq(schema.checklist_runs.status, args.status));
-
-  const rows = await createDb(env)
-    .select()
-    .from(schema.checklist_runs)
-    .where(and(...filters))
-    .orderBy(desc(schema.checklist_runs.created_at));
-  return {
-    runs: rows
-      .filter((row) => row.user_id === identity.userId && row.team_id === null && row.deleted_at === null)
-      .slice(0, MAX_LIST_RESULTS)
-      .map((row) => summarizeRun(row as unknown as JsonRecord)),
-    truncated: rows.length > MAX_LIST_RESULTS,
-  };
 }
 
 async function getOwnedRun(env: Env, userId: string, runId: string): Promise<JsonRecord> {
@@ -494,8 +421,8 @@ async function callTool(
 
   switch (name) {
     case "list_templates": {
-      const data = await listTemplates(env, identity);
-      return { data, text: `Found ${(data.templates as unknown[]).length} personal template(s).` };
+      const data = await listTemplates(env, identity, rawArguments);
+      return { data, text: describeList(data, "template") };
     }
     case "get_template": {
       const data = await getTemplate(env, identity, rawArguments);
@@ -515,7 +442,7 @@ async function callTool(
     }
     case "list_runs": {
       const data = await listRuns(env, identity, rawArguments);
-      return { data, text: `Found ${(data.runs as unknown[]).length} personal run(s).` };
+      return { data, text: describeList(data, "run") };
     }
     case "get_run": {
       const data = await getRun(env, identity, rawArguments);

@@ -13,11 +13,20 @@ import {
 
 const idArg = z.string().trim().min(1);
 
+// The nextCursor of a paged result, for every tool that pages (agentMcpPages.ts).
+export const cursorArg = z.string().trim().min(1).max(4096);
+export const cursorJsonSchema = {
+  type: "string",
+  description: "The nextCursor of the previous result, to read what follows.",
+} as const;
+
+export const listTemplatesArgs = z.object({ cursor: cursorArg.optional() }).strict();
+
 export const getTemplateArgs = z.object({
   templateId: idArg,
   sectionId: idArg.optional(),
   taskId: idArg.optional(),
-  cursor: z.string().trim().min(1).max(512).optional(),
+  cursor: cursorArg.optional(),
 }).strict();
 
 // Template writes are private Personal templates only: no visibility, Organization, or slug
@@ -185,8 +194,15 @@ export const templateToolDefinitions = [
   {
     name: "list_templates",
     description: "List the authenticated user's active personal SOP templates, most recently edited or created "
-      + "first, up to 100 (truncated is true when there are more).",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      + "first: each template's id, title, description, type, contentVersion, and dates. No result is larger than "
+      + "32KB, so the list comes a page at a time (titles over 160 characters and descriptions over 500 are cut; "
+      + "get_template returns them whole). While a result has nextCursor, call list_templates with cursor set to "
+      + "it for the next page.",
+    inputSchema: {
+      type: "object",
+      properties: { cursor: cursorJsonSchema },
+      additionalProperties: false,
+    },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
@@ -206,7 +222,7 @@ export const templateToolDefinitions = [
         templateId: { type: "string" },
         sectionId: { type: "string", description: "Read only this section, in pages if it is too large for one result." },
         taskId: { type: "string", description: "Read only this task." },
-        cursor: { type: "string", description: "The nextCursor of the previous result, to read what follows." },
+        cursor: cursorJsonSchema,
       },
       required: ["templateId"],
       additionalProperties: false,

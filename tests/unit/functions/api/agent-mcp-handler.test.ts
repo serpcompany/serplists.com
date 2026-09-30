@@ -190,7 +190,7 @@ describe("personal run MCP handler", () => {
     dbMocks.db.batch.mockReset();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
+    dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue({ kind: "insert" });
     dbMocks.insertChain.select.mockReturnValue({ kind: "conditional-insert" });
@@ -331,7 +331,7 @@ describe("personal run MCP handler", () => {
     }), env);
     expect((await malformedResponse.json() as any).error.code).toBe(-32700);
 
-    dbMocks.selectChain.orderBy.mockRejectedValueOnce(new Error("sensitive database detail"));
+    dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("sensitive database detail"));
     const failed = await handleAgentMcp(callTool("list_templates"), env);
     const body = await failed.json() as any;
     expect(body.error).toEqual({ code: -32603, message: "Internal error" });
@@ -440,7 +440,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("does not expose another user's or a team's templates", async () => {
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: "owned",
         user_id: "user-1",
@@ -1424,7 +1424,7 @@ describe("personal run MCP handler", () => {
     const getBody = await getResponse.json() as any;
     expect(getBody.result.structuredContent.run.retiredItems).toEqual(retired);
 
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
     const listResponse = await handleAgentMcp(callTool("list_runs"), env);
     const listBody = await listResponse.json() as any;
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("retiredItems");
@@ -1731,7 +1731,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("keeps list_templates parseable when a description is cut at an emoji", async () => {
-      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
         ownedTemplateRow({ description: `${"a".repeat(498)}\u{1F680}${"b".repeat(60)}` }),
       ]);
 
@@ -1755,7 +1755,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("replaces lone surrogates already stored in template text", async () => {
-      dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+      dbMocks.selectChain.limit.mockResolvedValueOnce([
         ownedTemplateRow({ title: "Broken \uD83D title", description: "Half \uDE80 emoji" }),
       ]);
 
@@ -1802,7 +1802,7 @@ describe("personal run MCP handler", () => {
 
     it("logs an unexpected tool failure with the request id and tool name", async () => {
       const logs = captureLogs();
-      dbMocks.selectChain.orderBy.mockRejectedValueOnce(new Error("D1_ERROR: no such column: content_version"));
+      dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("D1_ERROR: no such column: content_version"));
 
       const response = await handleAgentMcp(withRequestId(callTool("list_templates")), env);
 

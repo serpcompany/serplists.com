@@ -87,6 +87,8 @@ function toolError(body: JsonRecord): string | undefined {
   return (toolPayload(body).error as string | undefined);
 }
 
+const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+
 const PROSE = "Confirm the owner, the rollback plan, and the customer notice — then record it. Überprüfen. 🚀 ";
 // Text of `length` characters, never cutting an emoji in half.
 const PROSE_CHARACTERS = Array.from(PROSE);
@@ -516,7 +518,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(await createdAudits()).toBe(auditsBefore + started.length);
   });
 
-  it("lists a never-edited template ahead of older edits when the list is cut to 100", async () => {
+  it("lists a never-edited template ahead of older edits, and the rest a page at a time", async () => {
     const insertTemplate = (id: string, createdAt: string, updatedAt: string | null) => env.DB.prepare(`
       INSERT INTO templates (
         id, user_id, title, items, is_public, created_at, updated_at, version, type, owner_type,
@@ -539,7 +541,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(ids.slice(0, 2)).toEqual(["imported-b", "imported-a"]);
     expect(ids).toContain("template-a");
     expect(ids).toHaveLength(100);
-    expect(payload.truncated).toBe(true);
+    expect(byteLength(payload)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+
+    // The oldest edits follow on the next page.
+    const next = toolPayload(await bodyOf(await callTool("list_templates", { cursor: payload.nextCursor }, 72)));
+    expect((next.templates as JsonRecord[]).map(({ id }) => id))
+      .toEqual(["edited-004", "edited-003", "edited-002", "edited-001", "edited-000"]);
+    expect(next).not.toHaveProperty("nextCursor");
   });
 
   it("creates and edits a private personal template and syncs its in-progress runs", async () => {
