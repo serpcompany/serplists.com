@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-import { DashboardEmptyState } from '@/components/dashboard/DashboardContentShell';
+import { DashboardContentShell, DashboardEmptyState } from '@/components/dashboard/DashboardContentShell';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
@@ -16,22 +16,24 @@ export function WorkspaceGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="px-4" data-workspace-error="true">
-      <DashboardEmptyState
-        icon={<AlertTriangle className="h-7 w-7" />}
-        title="Couldn't load your Organizations"
-        description="Your Organization opens once they load. Check your connection and try again, or continue in Personal."
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button type="button" onClick={retryWorkspace}>
-              Retry
-            </Button>
-            <Button type="button" variant="outline" onClick={() => selectWorkspace('personal')}>
-              Continue in Personal
-            </Button>
-          </div>
-        }
-      />
+    <div data-workspace-error="true">
+      <DashboardContentShell>
+        <DashboardEmptyState
+          icon={<AlertTriangle />}
+          title="Couldn't load your Organizations"
+          description="Your Organization opens once they load. Check your connection and try again, or continue in Personal."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button type="button" onClick={retryWorkspace}>
+                Retry
+              </Button>
+              <Button type="button" variant="outline" onClick={() => selectWorkspace('personal')}>
+                Continue in Personal
+              </Button>
+            </div>
+          }
+        />
+      </DashboardContentShell>
     </div>
   );
 }

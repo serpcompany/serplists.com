@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
-  Grid3X3,
+  LayoutGrid,
   List,
   Plus,
-  Search,
   SlidersHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,16 +19,12 @@ import {
   DashboardPageBody,
   DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { SearchField } from '@/components/layout/SearchField';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { ItemGroup } from '@/components/ui/item';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import {
   Select,
@@ -87,6 +82,7 @@ const Templates = () => {
     useState<VisibilityFilter>('all');
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null);
   const [isDeletingTemplate, setIsDeletingTemplate] = useState(false);
+  const fieldId = useId();
 
   const filteredTemplates = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -203,6 +199,8 @@ const Templates = () => {
       ? undefined
       : `${formatCount(templateCount, 'template')} in your library`;
 
+  const isFiltered = searchQuery !== '' || filterVisibility !== 'all';
+
   return (
     <DashboardContentShell>
       <DashboardPageHeader
@@ -211,7 +209,7 @@ const Templates = () => {
         actions={
           model.canCreateTemplate ? (
             <Button type="button" onClick={model.openCreateTemplate}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus data-icon="inline-start" />
               New Template
             </Button>
           ) : null
@@ -219,131 +217,131 @@ const Templates = () => {
       />
 
       <DashboardToolbar>
-        <div className="relative flex-1 lg:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+        <Field className="sm:w-auto sm:flex-1 lg:max-w-md">
+          <FieldLabel htmlFor={`${fieldId}-search`}>Search</FieldLabel>
+          <SearchField
+            groupClassName="h-8"
+            id={`${fieldId}-search`}
             placeholder="Search templates..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            className="pl-9"
           />
-        </div>
+        </Field>
 
-        <Select
-          items={VISIBILITY_FILTER_LABELS}
-          value={filterVisibility}
-          onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
-        >
-          <SelectTrigger className="w-full lg:w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(VISIBILITY_FILTER_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-end gap-3">
+          <Field className="flex-1 sm:w-36 sm:flex-none">
+            <FieldLabel htmlFor={`${fieldId}-visibility`}>Visibility</FieldLabel>
+            <Select
+              items={VISIBILITY_FILTER_LABELS}
+              value={filterVisibility}
+              onValueChange={(value) => setFilterVisibility(value as VisibilityFilter)}
+            >
+              <SelectTrigger className="w-full" id={`${fieldId}-visibility`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(VISIBILITY_FILTER_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
-        <Select
-          items={SORT_OPTION_LABELS}
-          value={sortBy}
-          onValueChange={(value) => setSortBy(value as SortOption)}
-        >
-          <SelectTrigger className="w-full lg:w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(SORT_OPTION_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <Field className="flex-1 sm:w-40 sm:flex-none">
+            <FieldLabel htmlFor={`${fieldId}-sort`}>Sort by</FieldLabel>
+            <Select
+              items={SORT_OPTION_LABELS}
+              value={sortBy}
+              onValueChange={(value) => setSortBy(value as SortOption)}
+            >
+              <SelectTrigger className="w-full" id={`${fieldId}-sort`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SORT_OPTION_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
 
-        <div className="flex items-center rounded-md border border-border">
-          <Button
-            aria-label="Show templates in grid view"
-            aria-pressed={viewMode === 'grid'}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={`h-8 w-8 rounded-none rounded-l-md ${
-              viewMode === 'grid' ? 'bg-secondary' : ''
-            }`}
-            onClick={() => setViewMode('grid')}
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </Button>
-          <Button
-            aria-label="Show templates in list view"
-            aria-pressed={viewMode === 'list'}
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={`h-8 w-8 rounded-none rounded-r-md ${
-              viewMode === 'list' ? 'bg-secondary' : ''
-            }`}
-            onClick={() => setViewMode('list')}
-          >
-            <List className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              aria-label="Show templates in grid view"
+              aria-pressed={viewMode === 'grid'}
+              type="button"
+              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setViewMode('grid')}
+            >
+              <LayoutGrid />
+            </Button>
+            <Button
+              aria-label="Show templates in list view"
+              aria-pressed={viewMode === 'list'}
+              type="button"
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setViewMode('list')}
+            >
+              <List />
+            </Button>
+          </div>
         </div>
       </DashboardToolbar>
 
       <DashboardPageBody>
-        <div className="space-y-8">
-          {model.loading ? (
-            <div className="text-sm text-muted-foreground">Loading templates...</div>
-          ) : model.loadError ? (
-            <ListLoadErrorState error={model.loadError} listName="templates" onRetry={model.retryLoad} />
-          ) : filteredTemplates.length === 0 ? (
-            <DashboardEmptyState
-              icon={<SlidersHorizontal className="h-7 w-7" />}
-              title="No templates found"
-              description={
-                searchQuery || filterVisibility !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'Create your first template to get started'
-              }
-              action={
-                model.canCreateTemplate && !searchQuery && filterVisibility === 'all' ? (
+        {model.loading ? (
+          <p className="text-sm text-muted-foreground">Loading templates...</p>
+        ) : model.loadError ? (
+          <ListLoadErrorState error={model.loadError} listName="templates" onRetry={model.retryLoad} />
+        ) : filteredTemplates.length === 0 ? (
+          <DashboardEmptyState
+            icon={<SlidersHorizontal />}
+            title="No templates found"
+            description={
+              isFiltered
+                ? 'Try adjusting your search or filters'
+                : 'Create your first template to get started'
+            }
+            action={
+              model.canCreateTemplate && !isFiltered ? (
                 <Button type="button" onClick={model.openCreateTemplate}>
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus data-icon="inline-start" />
                   Create Template
                 </Button>
-                ) : null
-              }
-            />
-          ) : viewMode === 'grid' ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredTemplates.map((template) => (
-                <TemplateCard
-                  key={template.id}
-                  canEdit={model.canEditTemplate}
-                  onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
-                  onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
-                  template={template}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredTemplates.map((template) => (
-                <TemplateListItem
-                  key={template.id}
-                  canEdit={model.canEditTemplate}
-                  onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
-                  onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
-                  template={template}
-                />
-              ))}
-            </div>
-          )}
-
-        </div>
+              ) : null
+            }
+          />
+        ) : viewMode === 'grid' ? (
+          <CardGrid>
+            {filteredTemplates.map((template) => (
+              <TemplateCard
+                key={template.id}
+                canEdit={model.canEditTemplate}
+                onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
+                onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
+                template={template}
+              />
+            ))}
+          </CardGrid>
+        ) : (
+          <ItemGroup className="gap-2">
+            {filteredTemplates.map((template) => (
+              <TemplateListItem
+                key={template.id}
+                canEdit={model.canEditTemplate}
+                onDelete={model.canEditTemplate ? setTemplateToDelete : undefined}
+                onStartRun={model.canRunTemplate ? model.openRunLauncher : undefined}
+                template={template}
+              />
+            ))}
+          </ItemGroup>
+        )}
       </DashboardPageBody>
 
       <RunNameDialog
@@ -354,43 +352,20 @@ const Templates = () => {
         loading={isLaunchingRun}
       />
 
-      <Dialog
-        open={templateToDelete !== null}
+      {/* Users see a delete. The API archives the template (making it private), and
+          /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
+      <ConfirmDialog
+        confirmLabel="Delete"
+        description="Are you sure you want to delete this template?"
+        onConfirm={() => void handleDeleteTemplate()}
         onOpenChange={(open) => {
-          if (!open && !isDeletingTemplate) {
-            setTemplateToDelete(null);
-          }
+          if (!open) setTemplateToDelete(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete template</DialogTitle>
-            {/* Users see a delete. The API archives the template (making it private), and
-                /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
-            <DialogDescription>
-              Are you sure you want to delete this template?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isDeletingTemplate}
-              onClick={() => setTemplateToDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isDeletingTemplate}
-              onClick={() => void handleDeleteTemplate()}
-            >
-              {isDeletingTemplate ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        open={templateToDelete !== null}
+        pending={isDeletingTemplate}
+        pendingLabel="Deleting..."
+        title="Delete template"
+      />
     </DashboardContentShell>
   );
 };

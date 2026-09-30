@@ -32,16 +32,16 @@ test('a deleted public template leaves My Templates after the catalog was loaded
   await navigateInApp(page, '/dashboard/templates/');
   await page.getByPlaceholder('Search templates...').fill(title);
   await page.getByRole('button', { name: 'Show templates in grid view' }).click();
-  const card = page.locator('div.group').filter({ has: page.getByRole('link', { name: title, exact: true }) });
+  const card = page.locator('article').filter({ has: page.getByRole('link', { name: title, exact: true }) });
   await expect(card).toHaveCount(1, { timeout: 15_000 });
 
   await card.hover();
-  await card.getByRole('button').first().click();
+  await card.getByRole('button', { name: `Actions for ${title}` }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
   );
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
 
   await expect(page.getByText('Template deleted')).toBeVisible();

@@ -1,6 +1,14 @@
-import { FileText, List, Play, Trash2 } from 'lucide-react';
+import { FileText, List, Pencil, Play, Trash2 } from 'lucide-react';
 
+import { IconTile } from '@/components/layout/IconTile';
 import { Button, buttonVariants } from '@/components/ui/button';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from '@/components/ui/item';
 import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
@@ -18,6 +26,8 @@ type TemplateListItemProps = {
   template: ChecklistTemplate;
 };
 
+// A Template in My Templates' list view: a bordered row (the shadcn Item) with its type icon,
+// title (a link to Template detail), description, counts and visibility, and its actions.
 export function TemplateListItem({
   canEdit = true,
   onDelete,
@@ -29,67 +39,58 @@ export function TemplateListItem({
     (count, section) => count + section.items.length,
     0,
   );
+  const TypeIcon = template.type === 'recipe' ? List : FileText;
+  const hasActions = Boolean(onStartRun || canEdit || onDelete);
 
   return (
-    <div className="group flex flex-col gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30 md:flex-row md:items-center">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-secondary">
-        {template.type === 'recipe' ? (
-          <List className="h-5 w-5 text-muted-foreground" />
-        ) : (
-          <FileText className="h-5 w-5 text-muted-foreground" />
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <Link
-          href={buildConsoleTemplatePath(template.id)}
-          className="text-sm font-medium text-foreground hover:underline"
-        >
-          {template.title}
-        </Link>
-        {template.description ? (
-          <p className="truncate text-xs text-muted-foreground">
-            {template.description}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground md:gap-6">
-        <span>{formatCount(sectionCount, 'section')}</span>
-        <span>{formatCount(taskCount, 'task')}</span>
-        <span>{template.isPublic ? 'Public' : 'Private'}</span>
-      </div>
-
-      {/* Hidden until hover only on devices that can hover: touch screens always show them. */}
-      <div className="flex items-center gap-2 md:transition-opacity md:[@media(hover:hover)]:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-        {onStartRun ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onStartRun(template.id)}
-          >
-            <Play className="mr-2 h-4 w-4" />
-            Start Run
-          </Button>
-        ) : null}
-        {canEdit ? (
+    <Item className="group" role="listitem" variant="outline">
+      <IconTile className="self-start" size="sm">
+        <TypeIcon />
+      </IconTile>
+      <ItemContent className="min-w-0">
+        <ItemTitle className="line-clamp-2">
           <Link
-            href={buildConsoleTemplateEditPath(template.id)}
-            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-          >Edit</Link>
-        ) : null}
-        {onDelete ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDelete(template.id)}
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            href={buildConsoleTemplatePath(template.id)}
+            className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
           >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-          </Button>
+            {template.title}
+          </Link>
+        </ItemTitle>
+        {template.description ? (
+          <ItemDescription className="line-clamp-1">{template.description}</ItemDescription>
         ) : null}
-      </div>
-    </div>
+        <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+          <span>{formatCount(sectionCount, 'section')}</span>
+          <span>{formatCount(taskCount, 'task')}</span>
+          <span>{template.isPublic ? 'Public' : 'Private'}</span>
+        </p>
+      </ItemContent>
+      {hasActions ? (
+        // Hidden until hover only on devices that can hover: touch screens always show them.
+        <ItemActions className="basis-full justify-end md:basis-auto md:transition-opacity md:[@media(hover:hover)]:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+          {onStartRun ? (
+            <Button onClick={() => onStartRun(template.id)} size="sm" type="button" variant="outline">
+              <Play data-icon="inline-start" />
+              Start Run
+            </Button>
+          ) : null}
+          {canEdit ? (
+            <Link
+              href={buildConsoleTemplateEditPath(template.id)}
+              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            >
+              <Pencil data-icon="inline-start" />
+              Edit
+            </Link>
+          ) : null}
+          {onDelete ? (
+            <Button onClick={() => onDelete(template.id)} size="sm" type="button" variant="destructive">
+              <Trash2 data-icon="inline-start" />
+              Delete
+            </Button>
+          ) : null}
+        </ItemActions>
+      ) : null}
+    </Item>
   );
 }

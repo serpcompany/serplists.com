@@ -160,3 +160,21 @@ describe('TemplateCard (My Templates grid)', () => {
     expect(overlayButton?.parent?.attrs['aria-hidden']).toBe('true');
   });
 });
+
+// Counts read "1 sections" and "1 tasks" (TD-24).
+describe('TemplateCard counts', () => {
+  it('counts one section and one task in the singular', () => {
+    navigation.reset('/dashboard/templates');
+    const html = renderToStaticMarkup(
+      <TemplateCard
+        template={{
+          ...template,
+          sections: [{ id: 'section-1', title: 'Launch prep', items: [{ id: 'item-1', title: 'Freeze content', description: '', contents: [] }] }],
+        }}
+      />,
+    );
+
+    expect(html).toContain('>1 section<');
+    expect(html).toContain('>1 task<');
+  });
+});

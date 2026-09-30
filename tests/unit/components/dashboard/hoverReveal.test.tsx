@@ -97,10 +97,13 @@ describe('dashboard hover-revealed controls', () => {
   });
 
   it('keeps the Start Run overlay a hover-only duplicate that touch screens never show', () => {
-    const overlay = classLists(rendered['the My Templates grid card']()).find(
-      (value) => isHoverRevealed(value) && value.includes('translate-y-full'),
-    );
+    // The overlay is the aria-hidden wrapper of the card's pointer-only Start Run button.
+    const overlay = rendered['the My Templates grid card']().match(
+      /<div aria-hidden="true" class="([^"]*)"><button/,
+    )?.[1];
 
+    expect(overlay).toBeDefined();
+    expect(isHoverRevealed(overlay!)).toBe(true);
     expect(overlay).toContain(HOVER_ONLY_DUPLICATE);
   });
 

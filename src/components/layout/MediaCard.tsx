@@ -5,6 +5,9 @@ import { Link } from '@/components/navigation/Link';
 import { cn } from '@/lib/utils';
 
 type MediaCardProps = {
+  // A control on the card's top right corner (over the media), such as an actions menu. It
+  // stays clickable above the card's link, and comes after the title in the tab order.
+  action?: ReactNode;
   // Over the media's top right corner, such as a count or a step number.
   badge?: ReactNode;
   // Anything under the text: meta, an owner, actions. Links and buttons here stay clickable
@@ -30,6 +33,7 @@ type MediaCardProps = {
 // A card in a grid or list: a muted media area holding an icon, and the title with a muted
 // description beside or below it. With an href, the whole card opens that page.
 export function MediaCard({
+  action,
   badge,
   children,
   clampDescription = false,
@@ -93,6 +97,7 @@ export function MediaCard({
           </div>
         ) : null}
       </div>
+      {action ? <div className="absolute top-2 right-2 z-10">{action}</div> : null}
     </article>
   );
 }

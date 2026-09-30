@@ -23,7 +23,7 @@ vi.mock('next/link', async () => (await import('../../support/nextNavigation')).
 // The API's DELETE only archives a Template: /dashboard/archive lists it and restores it.
 // My Templates must say so, not that it "cannot be undone" or leaves "your library" (an
 // Organization's Template is not in anyone's library). Drives the real page in list view;
-// only the page model, toasts and the Radix select and dialog portals are faked.
+// only the page model, toasts and the select and alert dialog portals are faked.
 
 const mockUseDashboardTemplatesModel = vi.fn();
 
@@ -35,16 +35,23 @@ vi.mock('@/hooks/useViewModePreference', () => ({
   useViewModePreference: () => ['list', vi.fn()],
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/ui/dialog', () => {
+vi.mock('@/components/ui/alert-dialog', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
+  type ButtonProps = { children?: ReactNode; disabled?: boolean; onClick?: () => void };
   return {
-    Dialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
+    AlertDialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
       open ? <div role="dialog">{children}</div> : null,
-    DialogContent: Pass,
-    DialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
-    DialogFooter: Pass,
-    DialogHeader: Pass,
-    DialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
+    AlertDialogAction: ({ children, disabled, onClick }: ButtonProps) => (
+      <button disabled={disabled} onClick={onClick} type="button">{children}</button>
+    ),
+    AlertDialogCancel: ({ children, disabled }: ButtonProps) => (
+      <button disabled={disabled} type="button">{children}</button>
+    ),
+    AlertDialogContent: Pass,
+    AlertDialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
+    AlertDialogFooter: Pass,
+    AlertDialogHeader: Pass,
+    AlertDialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
   };
 });
 vi.mock('@/components/ui/select', () => {

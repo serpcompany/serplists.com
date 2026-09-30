@@ -150,7 +150,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
   await row.hover();
   await row.getByRole('button', { name: 'Delete' }).click();
 
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('alertdialog');
   await expect(dialog.getByRole('heading', { name: 'Delete template' })).toBeVisible();
   await expect(dialog).toContainText('Are you sure you want to delete this template?');
   await expect(dialog).not.toContainText('cannot be undone');

@@ -80,9 +80,7 @@ test('grid cards name the actions menu and never focus the hidden Start Run shor
 
   const trigger = page.getByRole('button', { name: /^Actions for / }).first();
   await expect(trigger).toBeAttached();
-  const card = trigger.locator(
-    'xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " group ")][1]',
-  );
+  const card = trigger.locator('xpath=ancestor::article[1]');
 
   await card.getByRole('link').first().focus();
   await page.keyboard.press('Tab');
