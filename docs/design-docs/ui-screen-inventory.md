@@ -327,9 +327,11 @@ existing content, invent nothing):
     list (`publicHeaderItems` in `src/components/layout/publicSiteLinks.ts`), so a new link
     reaches the phone menu and the console's top bar too. Closed menus stay in the HTML,
     hidden, so crawlers find every page they link.
-  - Base UI's navigation menu keeps an empty "navigation" landmark (its popup) at the end of
-    the page while a menu is open; the menu's links are read inside the header's "Site"
-    navigation.
+  - The open menu's links are read inside the header's "Site" navigation (its trigger claims
+    them). Base UI renders the popup that holds them as a `<nav>`, which was left an empty,
+    unlabelled navigation landmark at the end of the page while a menu was open, so
+    `SiteNavigationMenu` composes the menu's root itself and renders the popup as a `div`
+    (`tests/e2e/site-navigation.spec.ts`).
   - The footer's empty "Network" column is left out.
 
 ### Signed-in console shell

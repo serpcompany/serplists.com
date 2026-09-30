@@ -19,6 +19,13 @@ test('the Templates menu opens the Template Library and Categories, and marks th
 
   await templates.click();
   await expect(templates).toHaveAttribute('aria-expanded', 'true');
+  // The open menu adds no landmark of its own: Base UI's popup was a <nav> whose links the
+  // trigger claims for the "Site" navigation, an empty, unlabelled navigation after the page.
+  await expect(openMenu(page).getByRole('link', { name: 'Categories', exact: true })).toBeVisible();
+  const unnamedNavigations = await page
+    .getByRole('navigation')
+    .evaluateAll((navs) => navs.filter((nav) => !nav.getAttribute('aria-label') && !nav.getAttribute('aria-labelledby')).length);
+  expect(unnamedNavigations).toBe(0);
   await openMenu(page).getByRole('link', { name: 'Categories', exact: true }).click();
   await expect(page).toHaveURL(/\/categories\/$/);
   // A link closes the menu it was picked from.
