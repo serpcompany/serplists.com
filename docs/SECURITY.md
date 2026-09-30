@@ -320,16 +320,14 @@ overhead) for uploads. Template and run content has its own, smaller limit
 (`src/lib/schemas/contentLimits.ts`, `413 content_too_large`), so no write stores content
 too large for its save route to accept again.
 The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns.
-`get_template`, `create_template` and `update_template` results stay within 32KB
-(`MAX_RESULT_BYTES` in
+Every tool result stays within 32KB (`MAX_RESULT_BYTES` in
 `functions/api/handlers/agentMcpPages.ts`), which MCP clients take whole: Claude
 Code sets a result over 25,000 tokens aside in a file, and Codex cuts the middle out of one
-over 48,000 bytes. `get_template` reads a larger template a part at a time, and
-`update_template` operations change one section or task, so no call sends or returns a whole
-large template. `list_templates` and `list_runs` return a page of at most 32KB and a cursor to
-the next. The run tools' results stay within
-512KB (`MAX_UNPAGED_RESULT_BYTES` in `functions/api/handlers/agentMcpRuns.ts`, TD-28), and an MCP run
-write stores at most 384KB of content.
+over 48,000 bytes. `get_template` and `get_run` read a larger template or run a part at a
+time, `list_templates` and `list_runs` return a page at a time with a cursor to the next, and
+`update_template` operations and `update_run` change one section or task, so no call returns a
+whole large template or run, and no edit needs one sent back. MCP run writes keep the same
+content limit as the web app's.
 The cap uses `Content-Length`, or counts streamed bytes when it is missing or
 malformed. Uploads are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file

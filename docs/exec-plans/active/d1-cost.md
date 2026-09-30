@@ -71,7 +71,11 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   composite indexes that cover the filter and sort, for example
   `(team_id, deleted_at, created_at)` and a partial index for archived rows. Replace
   the per-run template subquery with one lookup for the page. Target: Organization runs
-  12k to about the page size.
+  12k to about the page size. The Run Key lists (`list_templates`, `list_runs` in
+  `functions/api/handlers/agentMcpLists.ts`) already page with a keyset cursor, but each
+  page still reads and sorts all the owner's Personal rows through `idx_templates_owner`
+  or `idx_checklist_runs_user_id`; indexes on the owner and the sort (`coalesce(updated_at,
+  created_at), id` for templates, `created_at, id` for runs) would bound them too.
 
 ### 3. Writes
 

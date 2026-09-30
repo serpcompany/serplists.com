@@ -288,6 +288,14 @@ Each of these needs the user's approval, or happens with the domain move:
   `get_template` reads any template in results of at most 32KB and `update_template` changes
   one section or task (`2bd9dbcf` to `35dfff67`). A template 1KB under the 768KB limit reads
   back exactly in 31 calls on local D1.
+- [x] TD-28 is closed (decision log, 2026-09-30): every MCP result stays within 32KB.
+  `list_templates` and `list_runs` page with a keyset cursor; `get_run` reads any run the way
+  `get_template` reads a template, through the same pages (`agentMcpPages.ts`), with
+  `retired: true` for retired work and cursors that hold the run's revision; `start_run` and
+  `update_run` return a run too large for one result without its sections, and the changed task
+  when it fits. On local D1 a run 1.3KB under the 896KB run limit, with retired work, reads back
+  exactly in 41 calls, and each tool's largest result at the schemas' maximums stays within the
+  bound (`tests/unit/functions/api/agent-mcp-result-bounds.test.ts`).
 - [x] Wrangler's dev proxy no longer loses requests (decision log, 2026-09-30). "An invite
   opened in another account offers to sign out and come back to it" failed in 3 of 3 runs alone
   while the machine was busy (it passed 6 of 6 later on a quiet one), and the smoke invite test
@@ -663,6 +671,18 @@ Each of these needs the user's approval, or happens with the domain move:
   agent dropped would be removed. The whole-checklist `sections` stays for templates an agent
   can send whole; whether to refuse it for a template too large to read at once is left to the
   user. The other MCP results keep their 512KB bound (TD-28).
+- 2026-09-30: **Every MCP result within 32KB (TD-28).** One bound, `MAX_RESULT_BYTES`, now
+  covers every tool, and runs read through the pages templates use: an outline, a section a page
+  of whole tasks at a time, parts of anything larger, and a cursor that holds the run's revision,
+  so a read never mixes two revisions. A run's retired work reads on its own (`retired: true`), a
+  page of whole entries at a time, instead of beside each section: a page carrying both would
+  need two positions, and an entry without ids could only be read in a whole run. The lists page
+  with a keyset cursor on the order they already had; each page still sorts the owner's rows, as
+  the unpaged list did, until the D1 cost plan's list indexes. MCP run writes keep the app's run
+  content limit (896KB) instead of their own 384KB, which existed only so that `get_run` could
+  return what MCP wrote in one result. `update_run` notes stay at 20,000 characters a call, which
+  is up to 60KB of three-byte text, more than one result holds; capping a note by bytes, or an
+  operation that appends to notes, is left to the user.
 - 2026-09-30: **A relay that opens a new connection per request, not a resend.** The dev proxy
   lost more than requests sent at a connection's 5-second mark: workerd reads new requests and
   advances its timers only once it has run out of queued work, so while the worker is busy a
