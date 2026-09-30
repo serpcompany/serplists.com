@@ -847,7 +847,7 @@ describe('TemplateDetail page', () => {
     expect(html).toContain('Product Launch Checklist');
     expect(html).toContain('data-dashboard-content-shell="true"');
     expect(html).toContain('data-dashboard-page-header="true"');
-    expect(html).toContain('data-dashboard-scroll-area="true"');
+    expect(html).toContain('data-dashboard-page-body="true"');
     expect(html).toContain('Total Tasks');
     expect(html).toContain('Sections');
     expect(html).toContain('Template Structure');

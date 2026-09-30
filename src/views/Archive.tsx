@@ -4,7 +4,7 @@ import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySe
 import {
   DashboardContentShell,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 
 // Deleting a Template or Run archives it; this page lists the active context's archived items
@@ -15,9 +15,9 @@ const Archive = () => (
       title="Archive"
       description="Archived templates and runs. Restore one to put it back in your list."
     />
-    <DashboardScrollArea>
+    <DashboardPageBody>
       <ArchiveRecoverySection />
-    </DashboardScrollArea>
+    </DashboardPageBody>
   </DashboardContentShell>
 );
 

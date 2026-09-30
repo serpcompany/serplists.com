@@ -58,7 +58,7 @@ import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import {
   DashboardContentShell,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
@@ -354,9 +354,9 @@ const TemplateDetail = () => {
   if (loading) {
     return (
       <DashboardContentShell>
-        <DashboardScrollArea className="flex items-center justify-center">
+        <DashboardPageBody className="flex items-center justify-center">
           <LoadingSpinner message="Loading template..." />
-        </DashboardScrollArea>
+        </DashboardPageBody>
       </DashboardContentShell>
     );
   }
@@ -365,7 +365,7 @@ const TemplateDetail = () => {
   if (loadError && !displayTemplate) {
     return (
       <DashboardContentShell>
-        <DashboardScrollArea className="flex items-center justify-center">
+        <DashboardPageBody className="flex items-center justify-center">
           <Card className="p-8 text-center">
             <h2 className="mb-4 text-3xl font-bold">Unable to load template</h2>
             <p className="mb-6 text-muted-foreground">{loadError}</p>
@@ -377,7 +377,7 @@ const TemplateDetail = () => {
               >Back to Templates</Link>
             </div>
           </Card>
-        </DashboardScrollArea>
+        </DashboardPageBody>
       </DashboardContentShell>
     );
   }
@@ -395,14 +395,14 @@ const TemplateDetail = () => {
               </Link>
           }
         />
-        <DashboardScrollArea className="flex items-center justify-center">
+        <DashboardPageBody className="flex items-center justify-center">
           <Card className="p-8 text-center">
           <h2 className="mb-4 text-3xl font-bold">Template Not Found</h2>
           <p className="mb-6 text-muted-foreground">
             This template does not exist or you don&apos;t have access to it.
           </p>
         </Card>
-        </DashboardScrollArea>
+        </DashboardPageBody>
       </DashboardContentShell>
     );
   }
@@ -527,7 +527,7 @@ const TemplateDetail = () => {
         }
         actions={templateHeaderActions}
       />
-      <DashboardScrollArea>
+      <DashboardPageBody>
         <div className="mx-auto max-w-6xl space-y-8">
         {startRunRoleUnavailable ? (
           <WorkspaceErrorNotice id="template-workspace-error" message="Start Run waits until they load. Check your connection and try again." onRetry={retryWorkspace} />
@@ -765,7 +765,7 @@ const TemplateDetail = () => {
           ) : null}
         </div>
         </div>
-      </DashboardScrollArea>
+      </DashboardPageBody>
 
       <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
         <AlertDialogContent>

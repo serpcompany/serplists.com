@@ -17,7 +17,7 @@ import {
   DashboardContentShell,
   DashboardEmptyState,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
   DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
 import { Button } from '@/components/ui/button';
@@ -293,7 +293,7 @@ const Templates = () => {
         </div>
       </DashboardToolbar>
 
-      <DashboardScrollArea>
+      <DashboardPageBody>
         <div className="space-y-8">
           {model.loading ? (
             <div className="text-sm text-muted-foreground">Loading templates...</div>
@@ -344,7 +344,7 @@ const Templates = () => {
           )}
 
         </div>
-      </DashboardScrollArea>
+      </DashboardPageBody>
 
       <RunNameDialog
         open={model.runLauncherOpen}

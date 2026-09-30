@@ -164,8 +164,8 @@ describe('ChecklistRunPage layout', () => {
     // to clip rather than scroll (a scroll container would hold the sticky footer instead).
     expect(html).toMatch(/class="[^"]*\bsticky bottom-0\b[^"]*" data-task-footer="true"/);
     expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-content-shell="true"/);
-    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-scroll-area="true"/);
-    expect(html).not.toMatch(/class="[^"]*\boverflow-(auto|hidden)\b[^"]*" data-dashboard-(content-shell|scroll-area)="true"/);
+    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-page-body="true"/);
+    expect(html).not.toMatch(/class="[^"]*\boverflow-(auto|hidden)\b[^"]*" data-dashboard-(content-shell|page-body)="true"/);
     expect(html).not.toContain('data-run-progress-sidebar="true"');
     expect(html).not.toContain('border-r border-border bg-card xl:flex xl:w-64');
     // The old left-hand "Tasks" outline is gone; the mobile Tasks button is a different control.

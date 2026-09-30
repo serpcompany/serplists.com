@@ -16,7 +16,7 @@ import { PageContainer, Surface } from '@/components/layout/page-shell';
 import {
   DashboardContentShell,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
@@ -247,9 +247,9 @@ const ChecklistRunPage = () => {
     if (!isSharedRun) {
       return (
         <DashboardContentShell>
-          <DashboardScrollArea className="flex items-center justify-center">
+          <DashboardPageBody className="flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </DashboardScrollArea>
+          </DashboardPageBody>
         </DashboardContentShell>
       );
     }
@@ -265,7 +265,7 @@ const ChecklistRunPage = () => {
     if (!isSharedRun) {
       return (
         <DashboardContentShell>
-          <DashboardScrollArea className="flex items-center justify-center">
+          <DashboardPageBody className="flex items-center justify-center">
             <div className="text-center">
               <h2 className="text-xl font-semibold">
                 {loadError ? 'Unable to load run' : 'Run not found'}
@@ -277,7 +277,7 @@ const ChecklistRunPage = () => {
                 Back
               </Button>
             </div>
-          </DashboardScrollArea>
+          </DashboardPageBody>
         </DashboardContentShell>
       );
     }
@@ -583,7 +583,7 @@ const ChecklistRunPage = () => {
             description={privateRunDescription}
             actions={privateRunHeaderActions}
           />
-          <DashboardScrollArea className="overflow-clip p-0">
+          <DashboardPageBody className="overflow-clip p-0">
           {roleUnavailable ? (
             <div className="p-4">
               <WorkspaceErrorNotice id="run-workspace-error" message="This run's actions wait until they load. Check your connection and try again." onRetry={retryWorkspace} />
@@ -655,7 +655,7 @@ const ChecklistRunPage = () => {
               onSelectTask={(_, taskId) => setSelectedItemId(taskId)}
             />
           </div>
-          </DashboardScrollArea>
+          </DashboardPageBody>
         </DashboardContentShell>
       )}
 

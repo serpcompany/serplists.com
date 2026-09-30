@@ -22,7 +22,7 @@ import {
 import {
   DashboardContentShell,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 
 const Account = () => {
@@ -114,7 +114,7 @@ const Account = () => {
         title="Account Settings"
         description="Manage your profile, billing, and security settings."
       />
-      <DashboardScrollArea>
+      <DashboardPageBody>
         <div className="mx-auto grid max-w-4xl gap-6">
         {/* Profile Section */}
         <ProfileSection
@@ -136,7 +136,7 @@ const Account = () => {
 
         <SecuritySection />
         </div>
-      </DashboardScrollArea>
+      </DashboardPageBody>
     </DashboardContentShell>
   );
 };

@@ -44,10 +44,9 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   `Toaster` is mounted before the pages because it drops toasts sent before its own
   effect runs, such as a page's first-effect notice on a full page load
   (`tests/unit/components/ToasterPlacement.test.tsx`).
-- **Console pages:** `src/components/dashboard/DashboardContentShell.tsx` provides
-  `DashboardContentShell`, `DashboardPageHeader`, `DashboardToolbar`,
-  `DashboardScrollArea`, `DashboardEmptyState`, and `DashboardMetricCard`. New
-  console screens compose these instead of new page chrome.
+- **Console pages:** compose the console blocks in
+  `src/components/dashboard/DashboardContentShell.tsx` (see [Console
+  blocks](#console-blocks)) instead of new page chrome.
 - **Public header on phones:** below `md` the public shell hides its navigation, Log in
   and the theme switch, and `src/components/layout/PublicMobileNav.tsx` shows them in a
   sheet built from `publicHeaderItems` (each header menu becomes a labelled group of its
@@ -78,11 +77,29 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | `CtaBanner` | `CtaBanner.tsx` | A muted panel: title and description on the left, buttons on the right |
 | `DetailPageLayout` | `DetailPageLayout.tsx` | `Breadcrumb` (Home, then the trail), a header (icon tile, title, description, meta, actions) with a panel beside it, then the content under a `Separator` |
 | `IconTile`, `BrandLink` | `IconTile.tsx`, `BrandLink.tsx` | The muted icon tile (sizes `sm`, `md`, `lg`; `tone="card"` on a muted area) and the brand mark and name |
+| `Stat` | `Stat.tsx` | A figure over its muted label, with an optional icon tile: a detail page's stats panel |
 
 `Surface` (in `page-shell.tsx`) gives pages not yet rebuilt from these blocks the Card
 surface; step 2 of the restyle replaces it. The library's `TemplateCard`
 (`src/components/checklist-library/TemplateCard.tsx`) is a `MediaCard` for a public
 Template.
+
+### Console blocks
+
+Console pages (under `/dashboard/`) are built from these, then shadcn components (`Card`,
+`Item`, `Field`, `Alert`, `Badge`, `Progress`). The window scrolls, never a box inside the
+page, so a page's sticky parts stick to the window.
+
+| Block | File | What it is |
+| --- | --- | --- |
+| `DashboardContentShell` | `src/components/dashboard/DashboardContentShell.tsx` | The page: the page width (`PageContainer`, `content` or `narrow`) with its parts stacked |
+| `DashboardPageHeader` | same | The page's `h1`, a muted description and badges (`meta`), with the actions on the right (under the text on phones) |
+| `DashboardToolbar` | same | A row of labelled filter fields over a list, stacked on phones |
+| `DashboardPageBody` | same | The content under the header and toolbar |
+| `DashboardEmptyState` | same | The shadcn `Empty` with a heading: an empty list, a load error, a missing record |
+| `ListLoadErrorState` | `src/components/dashboard/ListLoadErrorState.tsx` | `DashboardEmptyState` for a list that failed to load: Retry, or Sign in when the session ended |
+| `ShareLinkDialog` | `src/components/shared/ShareLinkDialog.tsx` | A created link in a read-only field with a Copy button |
+| `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
 
 ## Conventions
 

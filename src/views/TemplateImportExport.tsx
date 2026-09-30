@@ -6,7 +6,7 @@ import { TemplateBackup } from '@/components/TemplateBackup';
 import {
   DashboardContentShell,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
 } from '@/components/dashboard/DashboardContentShell';
 
 const TemplateImportExport = () => (
@@ -22,11 +22,11 @@ const TemplateImportExport = () => (
       }
     />
 
-    <DashboardScrollArea>
+    <DashboardPageBody>
       <div className="max-w-4xl">
         <TemplateBackup />
       </div>
-    </DashboardScrollArea>
+    </DashboardPageBody>
   </DashboardContentShell>
 );
 

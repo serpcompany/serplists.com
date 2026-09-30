@@ -19,7 +19,7 @@ import {
   DashboardContentShell,
   DashboardEmptyState,
   DashboardPageHeader,
-  DashboardScrollArea,
+  DashboardPageBody,
   DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
 import {
@@ -203,7 +203,7 @@ export function RunsDashboardView({
         </Select>
       </DashboardToolbar>
 
-      <DashboardScrollArea>
+      <DashboardPageBody>
         {loading ? (
           <div className="space-y-2" aria-busy="true">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -413,7 +413,7 @@ export function RunsDashboardView({
             })}
           </div>
         )}
-      </DashboardScrollArea>
+      </DashboardPageBody>
 
       <Dialog
         open={runToDelete !== null}

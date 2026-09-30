@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   Bookmark,
   Check,
-  ChevronDown,
   Copy,
   FileText,
   List,
@@ -14,28 +13,21 @@ import { toast } from 'sonner';
 
 import { CtaBanner } from '@/components/layout/CtaBanner';
 import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
-import { IconTile } from '@/components/layout/IconTile';
+import { Stat } from '@/components/layout/Stat';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import {
   type WorkspaceErrorActions,
   WorkspaceErrorNotice,
 } from '@/components/workspace/WorkspaceErrorNotice';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { buildPublicCategoryPath, buildPublicTemplatesPath } from '@/lib/routes';
-import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
-import { formatCount } from '@/lib/utils/pluralize';
 import { formatLocalDate, normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
-import type { ChecklistItem, ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 import { getPublicTemplateSaveLabels } from './publicTemplateSaveLabels';
+import { TemplateSectionList } from './TemplateSectionList';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -109,9 +101,6 @@ export function PublicTemplateView({
   onStartRun,
   onSaveTemplate,
 }: PublicTemplateViewProps) {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(template.sections.map((section) => section.id)),
-  );
   const [isSaved, setIsSaved] = useState(false);
   const ownerName =
     template.ownerProfile?.full_name || template.ownerProfile?.username || 'Template Library';
@@ -121,18 +110,6 @@ export function PublicTemplateView({
   // it). Nothing when the date is unreadable.
   const lastUpdated = template.updatedAt || template.createdAt;
   const updatedDate = formatLocalDate(lastUpdated);
-
-  const setSectionOpen = (sectionId: string, open: boolean) => {
-    setExpandedSections((current) => {
-      const next = new Set(current);
-      if (open) {
-        next.add(sectionId);
-      } else {
-        next.delete(sectionId);
-      }
-      return next;
-    });
-  };
 
   const handleShare = async () => {
     if (typeof window === 'undefined') {
@@ -268,24 +245,15 @@ export function PublicTemplateView({
       }
       aside={
         <div className="grid grid-cols-3 gap-4">
-          <TemplateStat icon={<FileText />} label="Sections" value={template.sections.length} />
-          <TemplateStat icon={<List />} label="Tasks" value={totalItems} />
-          <TemplateStat icon={<Check />} label="Type" value={template.type ?? 'checklist'} />
+          <Stat icon={<FileText />} label="Sections" value={template.sections.length} />
+          <Stat icon={<List />} label="Tasks" value={totalItems} />
+          <Stat icon={<Check />} label="Type" value={template.type ?? 'checklist'} />
         </div>
       }
     >
       <section className="flex flex-col gap-4" id="included">
         <h2 className="text-xl font-semibold tracking-tight">What&apos;s included</h2>
-
-        {template.sections.map((section, sectionIndex) => (
-          <SectionPreview
-            key={section.id}
-            section={section}
-            index={sectionIndex}
-            isExpanded={expandedSections.has(section.id)}
-            onOpenChange={(open) => setSectionOpen(section.id, open)}
-          />
-        ))}
+        <TemplateSectionList sections={template.sections} />
       </section>
 
       {template.tags?.length ? (
@@ -328,86 +296,3 @@ export function PublicTemplateView({
   );
 }
 
-function TemplateStat({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <IconTile size="sm" tone="card">
-        {icon}
-      </IconTile>
-      <div>
-        <p className="text-2xl font-semibold capitalize">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-function SectionPreview({
-  section,
-  index,
-  isExpanded,
-  onOpenChange,
-}: {
-  section: ChecklistSection;
-  index: number;
-  isExpanded: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Collapsible
-      open={isExpanded}
-      onOpenChange={onOpenChange}
-      className="overflow-hidden rounded-xl ring-1 ring-foreground/10"
-    >
-      <CollapsibleTrigger className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50">
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-            {index + 1}
-          </span>
-          <span className="truncate font-medium">{getSectionDisplayTitle(section, index)}</span>
-          <span className="shrink-0 text-xs text-muted-foreground">{formatCount(section.items.length, 'task')}</span>
-        </span>
-        <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open:rotate-180" />
-      </CollapsibleTrigger>
-
-      <CollapsibleContent className="border-t px-4 py-3">
-        <ul className="flex flex-col gap-2">
-          {section.items.map((item, itemIndex) => (
-            <TaskPreviewItem key={item.id} item={item} index={itemIndex} />
-          ))}
-        </ul>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-function TaskPreviewItem({ item, index }: { item: ChecklistItem; index: number }) {
-  return (
-    <li className="flex items-start gap-3 py-1">
-      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border text-xs text-muted-foreground">
-        {index + 1}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm">{item.title}</p>
-        {item.description ? (
-          <p className="mt-0.5 text-xs leading-5 whitespace-pre-line text-muted-foreground">
-            {item.description}
-          </p>
-        ) : null}
-        {item.contents?.length ? (
-          <div className="mt-3 text-sm">
-            <ContentRenderer contents={item.contents} disabled />
-          </div>
-        ) : null}
-      </div>
-    </li>
-  );
-}
