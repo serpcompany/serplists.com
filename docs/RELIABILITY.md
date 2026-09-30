@@ -153,8 +153,10 @@ explicitly per environment, never inferred from the host.
   `env_validation_error` lines, the auth email throttle, and the Stripe webhook
   (which also stores that message in `stripe_webhook_events.error`) do this. The
   MCP endpoint (`/api/mcp`) answers tool failures with an HTTP 200 JSON-RPC error,
-  so look for its `mcp_tool_error`, `mcp_tool_invariant`, and `mcp_auth_error`
-  lines rather than a 5xx status.
+  so look for its `mcp_tool_error`, `mcp_tool_invariant`, `mcp_auth_error` and
+  `mcp_template_reload_error` lines rather than a 5xx status. Every authenticated
+  MCP request also logs `mcp_request` with its key id, a tool call `mcp_tool_call`
+  with the tool's name, and a key over its limit `mcp_rate_limited`.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
 - Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for
