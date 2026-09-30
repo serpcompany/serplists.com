@@ -47,7 +47,7 @@ describe("personal run key utility", () => {
 
   it("authenticates an active key using a read without recording discovery as use", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "key-1", userId: "user-1", name: "Codex", lastUsedAt: null },
+      { id: "key-1", userId: "user-1", name: "Codex", permissions: '["runs:write","bogus"]', lastUsedAt: null },
     ]);
 
     const identity = await authenticatePersonalRunKey(
@@ -57,7 +57,13 @@ describe("personal run key utility", () => {
       mockEnv,
     );
 
-    expect(identity).toEqual({ keyId: "key-1", userId: "user-1", name: "Codex", lastUsedAt: null });
+    expect(identity).toEqual({
+      keyId: "key-1",
+      userId: "user-1",
+      name: "Codex",
+      permissions: ["templates:read", "runs:read", "runs:write"],
+      lastUsedAt: null,
+    });
     expect(dbMocks.db.select).toHaveBeenCalledOnce();
     expect(dbMocks.db.update).not.toHaveBeenCalled();
   });

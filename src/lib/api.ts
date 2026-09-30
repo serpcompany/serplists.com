@@ -2,6 +2,7 @@ import { env } from "@/env";
 import { createApiError } from "@/lib/api-errors";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import type { RunKeyPermission } from "@/lib/schemas/runKeyPermissions";
 
 const DEV_API_BASE_URL = env.VITE_API_URL ?? 'http://localhost:8788/api';
 const API_BASE_URL = import.meta.env.DEV
@@ -173,6 +174,7 @@ export type AgentKey = {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  permissions: RunKeyPermission[];
   status: AgentKeyStatus;
 };
 
@@ -459,10 +461,10 @@ class ApiClient {
     return this.request('/agent-keys');
   }
 
-  async createAgentKey(name: string): Promise<CreatedAgentKey> {
+  async createAgentKey(name: string, permissions: RunKeyPermission[]): Promise<CreatedAgentKey> {
     return this.request('/agent-keys', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, permissions }),
     });
   }
 

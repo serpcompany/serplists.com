@@ -96,7 +96,7 @@ A code agent that acts through explicitly delegated access without becoming a Us
 _Avoid_: Agent user, machine profile
 
 **Run Key**:
-A revocable credential that authorizes an Agent to write private templates and operate runs within its permitted Personal or Organization scope.
+A revocable credential that authorizes an Agent to do what its permissions allow (read or write templates, read or write runs) within its permitted Personal or Organization scope. Permissions are chosen when the key is created and cannot be changed.
 _Avoid_: User session, agent account
 
 ### Visibility

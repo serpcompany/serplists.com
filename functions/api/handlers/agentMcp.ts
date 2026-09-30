@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { buildAuditEventValues } from "../utils/audit";
@@ -187,6 +188,24 @@ const toolDefinitions = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   },
 ] as const;
+
+type ToolName = (typeof toolDefinitions)[number]["name"];
+
+const toolPermissions: Record<ToolName, RunKeyPermission> = {
+  list_templates: "templates:read",
+  get_template: "templates:read",
+  create_template: "templates:write",
+  update_template: "templates:write",
+  start_run: "runs:write",
+  list_runs: "runs:read",
+  get_run: "runs:read",
+  update_run: "runs:write",
+};
+
+function keyAllowsTool(identity: PersonalRunKeyIdentity, name: string): boolean {
+  const permission = toolPermissions[name as ToolName];
+  return permission !== undefined && identity.permissions.includes(permission);
+}
 
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), {
@@ -676,6 +695,14 @@ async function callTool(
   name: string,
   rawArguments: unknown,
 ): Promise<{ data: JsonRecord; text: string }> {
+  if (!keyAllowsTool(identity, name)) {
+    if (!Object.prototype.hasOwnProperty.call(toolPermissions, name)) {
+      throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
+    }
+    const permission = toolPermissions[name as ToolName];
+    throw new ToolError(`This Run Key does not have the ${permission} permission`, "permission_denied", { permission });
+  }
+
   switch (name) {
     case "list_templates": {
       const data = await listTemplates(env, identity);
@@ -817,7 +844,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   if (payload.method === "ping") return rpcResult(id, {});
 
   if (payload.method === "tools/list") {
-    return rpcResult(id, { tools: toolDefinitions });
+    return rpcResult(id, { tools: toolDefinitions.filter((tool) => keyAllowsTool(identity, tool.name)) });
   }
 
   if (payload.method === "tools/call") {
