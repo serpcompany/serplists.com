@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
@@ -22,7 +22,7 @@ import { buildConsoleTemplateCreatePath } from "@/lib/routes";
 import { readTemplateDraft } from "@/features/template-editor/templateDraftStore";
 import { Button } from "@/components/ui/button";
 import { QueryErrorNotice } from "@/components/shared/QueryListState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
 import { Link } from '@/components/navigation/Link';
@@ -157,26 +157,58 @@ export function BillingSection() {
     </Button>
   );
 
+  // The plan's note, then its action in the card's footer.
+  let planNote: string | null = null;
+  let planAction: ReactNode = null;
+  if (isTeamWorkspace) {
+    planNote = teamBillingMessage;
+  } else if (planStatus !== "unknown") {
+    if (personalAction === "support") {
+      planNote = PLAN_MANAGED_BY_SUPPORT_MESSAGE;
+      planAction = billing.data?.canManageBilling ? manageButton : null;
+    } else if (personalAction === "manage") {
+      planAction = manageButton;
+    } else {
+      planAction = (
+        <Button
+          onClick={handleUpgrade}
+          disabled={billing.isLoading || !billingEnabled || isStartingCheckout}
+        >
+          {billing.isLoading
+            ? "Checking plan..."
+            : isStartingCheckout
+              ? "Opening checkout..."
+              : billingEnabled
+                ? `Upgrade to Pro — ${PRO_MONTHLY_PRICE_LABEL}`
+                : "Upgrade unavailable"}
+        </Button>
+      );
+    }
+  }
+  const attention = !isTeamWorkspace && planStatus !== "unknown" && personalAction === "manage"
+    ? subscriptionAttention
+    : null;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Billing</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="text-sm text-muted-foreground">
+      <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+        <p>
           Current {isTeamWorkspace ? "Organization" : "Personal"} plan: <span className="font-medium text-foreground">{planLabel}</span>
-        </div>
+        </p>
 
         {hasTemplateDraft ? (
-          <div className="text-sm text-muted-foreground">
+          <p>
             A template you could not save is kept on this tab.{" "}
             <Link
-              className="font-medium text-primary underline-offset-4 hover:underline"
+              className="font-medium text-primary underline underline-offset-4"
               href={buildConsoleTemplateCreatePath()}
             >
               Resume template draft
             </Link>
-          </div>
+          </p>
         ) : null}
 
         {billing.isError ? (
@@ -186,40 +218,13 @@ export function BillingSection() {
           />
         ) : null}
         {!billing.isError && !billingEnabled ? (
-          <div className="text-sm text-muted-foreground">Billing checkout is currently unavailable.</div>
+          <p>Billing checkout is currently unavailable.</p>
         ) : null}
 
-        {isTeamWorkspace ? (
-          <div className="text-sm text-muted-foreground">
-            {teamBillingMessage}
-          </div>
-        ) : planStatus === "unknown" ? null : personalAction === "support" ? (
-          <>
-            <div className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</div>
-            {billing.data?.canManageBilling ? manageButton : null}
-          </>
-        ) : personalAction === "manage" ? (
-          <>
-            {subscriptionAttention ? (
-              <div className="text-sm text-destructive">{subscriptionAttention}</div>
-            ) : null}
-            {manageButton}
-          </>
-        ) : (
-          <Button
-            onClick={handleUpgrade}
-            disabled={billing.isLoading || !billingEnabled || isStartingCheckout}
-          >
-            {billing.isLoading
-              ? "Checking plan..."
-              : isStartingCheckout
-                ? "Opening checkout..."
-                : billingEnabled
-                  ? `Upgrade to Pro — ${PRO_MONTHLY_PRICE_LABEL}`
-                  : "Upgrade unavailable"}
-          </Button>
-        )}
+        {planNote ? <p>{planNote}</p> : null}
+        {attention ? <p className="text-destructive">{attention}</p> : null}
       </CardContent>
+      {planAction ? <CardFooter>{planAction}</CardFooter> : null}
     </Card>
   );
 }
