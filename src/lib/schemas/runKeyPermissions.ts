@@ -13,7 +13,7 @@ export const RUN_KEY_PERMISSION_DETAILS: Record<RunKeyPermission, { label: strin
   "templates:read": { label: "Read templates", description: "List and read your personal templates." },
   "templates:write": {
     label: "Write templates",
-    description: "Create private personal templates and edit private ones. Never delete or publish.",
+    description: "Create and edit private personal templates; edits carry into your in-progress runs. Never delete or publish.",
   },
   "runs:read": { label: "Read runs", description: "List and read your personal runs." },
   "runs:write": {

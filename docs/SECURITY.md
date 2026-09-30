@@ -23,7 +23,8 @@
   rest with `permission_denied`. A stored value that fails to parse grants nothing.
   Templates a key creates are private; a key cannot delete or publish templates or
   edit a public one, and template edits use the web editor's code path, so they get
-  the same version check, history, and run sync.
+  the same version check, history, and run sync (a `templates:write` edit therefore
+  also updates the owner's in-progress private runs of that template).
   Keys are stored hashed, and each user can hold at most 10 active keys (enforced in
   one insert statement, so parallel requests cannot exceed it). Every authenticated
   MCP request logs `mcp_request` with its request ID and key ID, and tool calls also
