@@ -23,19 +23,26 @@ vi.mock('next/link', async () => (await import('../../../support/nextNavigation'
 
 // The API's DELETE only archives a run: /dashboard/archive lists it and restores it. The
 // runs list must say so, not that the action "cannot be undone". Drives the real view; only
-// toasts and the Radix menu, select and dialog portals are faked, so they render in place.
+// toasts and the menu, select and alert dialog portals are faked, so they render in place.
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/ui/dialog', () => {
+vi.mock('@/components/ui/alert-dialog', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
+  type ButtonProps = { children?: ReactNode; disabled?: boolean; onClick?: () => void };
   return {
-    Dialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
+    AlertDialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
       open ? <div role="dialog">{children}</div> : null,
-    DialogContent: Pass,
-    DialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
-    DialogFooter: Pass,
-    DialogHeader: Pass,
-    DialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
+    AlertDialogAction: ({ children, disabled, onClick }: ButtonProps) => (
+      <button disabled={disabled} onClick={onClick} type="button">{children}</button>
+    ),
+    AlertDialogCancel: ({ children, disabled }: ButtonProps) => (
+      <button disabled={disabled} type="button">{children}</button>
+    ),
+    AlertDialogContent: Pass,
+    AlertDialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
+    AlertDialogFooter: Pass,
+    AlertDialogHeader: Pass,
+    AlertDialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
   };
 });
 vi.mock('@/components/ui/dropdown-menu', () => {

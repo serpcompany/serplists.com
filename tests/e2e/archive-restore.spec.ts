@@ -116,7 +116,7 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   // Users see a delete; the run stays restorable from the archive, so the dialog never says
   // "cannot be undone".
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('alertdialog');
   await expect(dialog.getByRole('heading', { name: 'Delete run' })).toBeVisible();
   await expect(dialog).toContainText('Are you sure you want to delete this run?');
   await expect(dialog).not.toContainText('cannot be undone');
