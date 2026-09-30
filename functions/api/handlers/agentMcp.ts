@@ -11,29 +11,23 @@ import {
   markPersonalRunKeyUsed,
   type PersonalRunKeyIdentity,
 } from "../utils/personal-run-key";
+import { isRecord, parseStoredSections, ToolError, type JsonRecord } from "../utils/mcp-tools";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { calculateRunProgress } from "../utils/template-reconciliation";
+import {
+  createTemplate,
+  getOwnedTemplate,
+  getTemplate,
+  templateToolDefinitions,
+  updateTemplate,
+} from "./agentMcpTemplates";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_RESULT_BYTES = 512 * 1024;
 const MAX_LIST_RESULTS = 100;
 
-type JsonRecord = Record<string, unknown>;
 type JsonRpcId = string | number | null;
-
-class ToolError extends Error {
-  constructor(
-    message: string,
-    readonly code: string,
-    readonly details?: JsonRecord,
-  ) {
-    super(message);
-  }
-}
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isValidRequestId = (value: unknown): value is string | number =>
   typeof value === "string" || (typeof value === "number" && Number.isSafeInteger(value));
@@ -94,10 +88,11 @@ const updateRunArgs = z.discriminatedUnion("operation", [
 const toolDefinitions = [
   {
     name: "list_templates",
-    description: "List the authenticated user's active personal SOP templates. Templates are read-only.",
+    description: "List the authenticated user's active personal SOP templates.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  ...templateToolDefinitions,
   {
     name: "start_run",
     description: "Start a personal checklist run from one of the authenticated user's templates.",
@@ -290,11 +285,6 @@ function requestHostIsSafe(request: Request, env: Env): boolean {
   return false;
 }
 
-function parseStoredSections(value: unknown): JsonRecord[] {
-  const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
-  return normalized.sections.filter(isRecord);
-}
-
 function resetCompletionState(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(resetCompletionState);
   if (!isRecord(value)) return value;
@@ -424,26 +414,7 @@ async function startRun(
   if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
 
   const db = createDb(env);
-  const [template] = await db
-    .select()
-    .from(schema.templates)
-    .where(and(
-      eq(schema.templates.id, parsed.data.templateId),
-      eq(schema.templates.user_id, identity.userId),
-      eq(schema.templates.owner_type, "user"),
-      isNull(schema.templates.team_id),
-      isNull(schema.templates.deleted_at),
-    ))
-    .limit(1);
-  if (
-    !template
-    || template.user_id !== identity.userId
-    || template.owner_type !== "user"
-    || template.team_id !== null
-    || template.deleted_at !== null
-  ) {
-    throw new ToolError("Template not found", "template_not_found");
-  }
+  const template = await getOwnedTemplate(env, identity.userId, parsed.data.templateId);
 
   const entitlements = await getEntitlementsForUser(env, identity.userId);
   if (entitlements.plan === "free" && entitlements.limits.maxActiveRuns) {
@@ -710,6 +681,18 @@ async function callTool(
       const data = await listTemplates(env, identity);
       return { data, text: `Found ${(data.templates as unknown[]).length} personal template(s).` };
     }
+    case "get_template": {
+      const data = await getTemplate(env, identity, rawArguments);
+      return { data, text: `Loaded template "${boundedText((data.template as JsonRecord).title)}".` };
+    }
+    case "create_template": {
+      const data = await createTemplate(request, env, identity, rawArguments);
+      return { data, text: `Created template "${boundedText((data.template as JsonRecord).title)}".` };
+    }
+    case "update_template": {
+      const data = await updateTemplate(request, env, identity, rawArguments);
+      return { data, text: `Updated template "${boundedText((data.template as JsonRecord).title)}".` };
+    }
     case "start_run": {
       const data = await startRun(request, env, identity, rawArguments);
       return { data, text: `Started run "${boundedText((data.run as JsonRecord).title)}".` };
@@ -827,7 +810,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "serp-lists-personal-runs", version: "0.1.0" },
+      serverInfo: { name: "serp-lists-personal-runs", version: "0.2.0" },
     });
   }
 
