@@ -81,10 +81,10 @@ export function AgentAccessSectionView({
             Create a personal Run Key for a code agent to operate SOP runs in Personal.
           </p>
           <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-            <p className="font-medium">Fixed run-only permissions</p>
+            <p className="font-medium">Fixed personal permissions</p>
             <p className="mt-1 text-muted-foreground">
-              The key can read personal templates and list, start, read, and update personal runs. It cannot edit
-              templates, change your profile, access Organizations, or manage billing.
+              The key can read, create, and edit private personal templates and list, start, read, and update personal
+              runs. It cannot delete or publish templates, change your profile, access Organizations, or manage billing.
             </p>
           </div>
         </div>
