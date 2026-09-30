@@ -20,6 +20,8 @@ have not been updated in 30 days.
 
 - [Agent harness](exec-plans/active/agent-harness.md): mechanical checks, docs, and tooling that
   let agents work reliably in this repo.
+- [Harness hardening](exec-plans/active/harness-hardening.md): every verification the harness
+  engineering write-up recommends, no exceptions, and no code comments.
 - [D1 cost](exec-plans/active/d1-cost.md): bound rows read per request and cut write
   amplification.
 - [Next.js migration](exec-plans/active/nextjs-migration.md): move the app to Next.js on
