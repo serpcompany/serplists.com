@@ -2,7 +2,6 @@ import { AlertTriangle } from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 export type WorkspaceErrorActions = {
   onContinueInPersonal: () => void;
@@ -28,12 +27,12 @@ export function WorkspaceErrorNotice({
   }) {
   return (
     <Alert
-      className={cn('border-destructive/40 bg-card shadow-none', className)}
+      className={className}
       data-workspace-error="true"
       id={id}
       variant="destructive"
     >
-      <AlertTriangle className="h-4 w-4" />
+      <AlertTriangle />
       <AlertTitle>Couldn&apos;t load your Organizations</AlertTitle>
       <AlertDescription>
         <p>{message}</p>
