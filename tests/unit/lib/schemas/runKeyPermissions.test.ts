@@ -21,6 +21,12 @@ describe('Run Key permissions', () => {
     expect(DEFAULT_RUN_KEY_PERMISSIONS).toEqual(['templates:read', 'runs:read', 'runs:write']);
   });
 
+  it('treats writing runs as reading templates, because a new run copies template content', () => {
+    expect(withImpliedRunKeyPermissions(['runs:write'])).toEqual(['templates:read', 'runs:read', 'runs:write']);
+    expect(toggleRunKeyPermission(['templates:read', 'runs:read', 'runs:write'], 'templates:read', false))
+      .toEqual(['runs:read']);
+  });
+
   it('turns on the implied read and turns off writes that depend on a removed read', () => {
     expect(toggleRunKeyPermission(['runs:read'], 'templates:write', true)).toEqual([
       'templates:read',
@@ -37,6 +43,6 @@ describe('Run Key permissions', () => {
     expect(parseStoredRunKeyPermissions('not json')).toEqual([]);
     expect(parseStoredRunKeyPermissions('{"runs:read":true}')).toEqual([]);
     expect(parseStoredRunKeyPermissions(null)).toEqual([]);
-    expect(parseStoredRunKeyPermissions('["templates:delete","runs:write"]')).toEqual(['runs:read', 'runs:write']);
+    expect(parseStoredRunKeyPermissions('["templates:delete","runs:read"]')).toEqual(['runs:read']);
   });
 });

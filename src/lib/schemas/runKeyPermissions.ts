@@ -16,19 +16,23 @@ export const RUN_KEY_PERMISSION_DETAILS: Record<RunKeyPermission, { label: strin
     description: "Create private personal templates and edit private ones. Never delete or publish.",
   },
   "runs:read": { label: "Read runs", description: "List and read your personal runs." },
-  "runs:write": { label: "Write runs", description: "Start runs and update tasks, notes, and status." },
+  "runs:write": {
+    label: "Write runs",
+    description: "Start runs from your templates and update tasks, notes, and status. Needs Read templates.",
+  },
 };
 
-const IMPLIED_READ: Partial<Record<RunKeyPermission, RunKeyPermission>> = {
-  "templates:write": "templates:read",
-  "runs:write": "runs:read",
+// Starting a run copies the template's current content into the run, so writing runs
+// also reads templates.
+const IMPLIED_READS: Partial<Record<RunKeyPermission, readonly RunKeyPermission[]>> = {
+  "templates:write": ["templates:read"],
+  "runs:write": ["runs:read", "templates:read"],
 };
 
 export function withImpliedRunKeyPermissions(permissions: Iterable<RunKeyPermission>): RunKeyPermission[] {
   const granted = new Set<RunKeyPermission>(permissions);
   for (const permission of [...granted]) {
-    const implied = IMPLIED_READ[permission];
-    if (implied) granted.add(implied);
+    for (const implied of IMPLIED_READS[permission] ?? []) granted.add(implied);
   }
   return RUN_KEY_PERMISSIONS.filter((permission) => granted.has(permission));
 }
@@ -39,7 +43,7 @@ export function toggleRunKeyPermission(
   enabled: boolean,
 ): RunKeyPermission[] {
   if (enabled) return withImpliedRunKeyPermissions([...current, permission]);
-  return current.filter((granted) => granted !== permission && IMPLIED_READ[granted] !== permission);
+  return current.filter((granted) => granted !== permission && !IMPLIED_READS[granted]?.includes(permission));
 }
 
 // Stored values are parsed, not trusted: unknown entries are dropped and a malformed

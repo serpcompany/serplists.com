@@ -15,7 +15,9 @@
 - **Agents act through Run Keys**, revocable credentials limited to the owner's
   Personal templates and runs and, within that, to the permissions chosen when the
   key was created (`src/lib/schemas/runKeyPermissions.ts`): `templates:read`,
-  `templates:write`, `runs:read`, `runs:write`. Each write implies its read, new keys
+  `templates:write`, `runs:read`, `runs:write`. Each write implies its read, and
+  `runs:write` also implies `templates:read` because starting a run copies the
+  template's current content into the run. New keys
   default to everything except `templates:write`, and permissions cannot be edited
   afterwards. The MCP lists only the tools a key's permissions cover and refuses the
   rest with `permission_denied`. A stored value that fails to parse grants nothing.

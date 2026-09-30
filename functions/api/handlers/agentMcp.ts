@@ -695,7 +695,10 @@ async function callTool(
   name: string,
   rawArguments: unknown,
 ): Promise<{ data: JsonRecord; text: string }> {
-  if (Object.prototype.hasOwnProperty.call(toolPermissions, name) && !keyAllowsTool(identity, name)) {
+  if (!keyAllowsTool(identity, name)) {
+    if (!Object.prototype.hasOwnProperty.call(toolPermissions, name)) {
+      throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
+    }
     const permission = toolPermissions[name as ToolName];
     throw new ToolError(`This Run Key does not have the ${permission} permission`, "permission_denied", { permission });
   }

@@ -61,7 +61,7 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
-      permissions: ["runs:read", "runs:write"],
+      permissions: ["templates:read", "runs:read", "runs:write"],
       lastUsedAt: null,
     });
     expect(dbMocks.db.select).toHaveBeenCalledOnce();
