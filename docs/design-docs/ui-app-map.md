@@ -32,7 +32,8 @@ the labels the app shows. Product terms follow [PRODUCT_SENSE.md](../PRODUCT_SEN
   invite).
 - **Standalone page:** opened from a link outside the app, with no site shell.
 - **Modal dialog:** a centered dialog over the page; the page stays put.
-- **Sheet:** a panel that slides in from a screen edge (phone menus, the Run task list).
+- **Sheet:** a panel that slides in from a screen edge (phone menus, the Run task list, the
+  Template editor's outline below `lg`).
 - **Dropdown menu or popover:** a menu anchored to its trigger (account menu, context
   switcher, action menus, selects, Add Block).
 - **In-place state:** the page changes without a navigation (tabs of a panel, grid or list,
@@ -76,7 +77,9 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   (`?next=<path>`) → "Sign in" → that page.
 - **Create a Template:** My Templates → "New Template" (page header or sidebar) → Template
   editor → Template Settings fields → outline "Add section" and "Add task to <section>" →
-  Task Details → "Add Block" → "Save" → My Templates. On a new Template, "Generate from Clipy"
+  Task Details → "Add Block" → "Save" → My Templates. Below `lg` the outline is a sheet:
+  "Outline" in the editor's top bar → "Add section" or "Add task to <section>" (the sheet
+  closes on the new entry's form) → "Outline" again for the next. On a new Template, "Generate from Clipy"
   → "Generate draft" fills the form first. At the plan's Template limit: "Save" → notice
   → "Upgrade to Pro" → Stripe Checkout → back → "Restore draft" → "Save".
 - **Edit a Template:** My Templates → card actions menu → "Edit" (or the list row's "Edit")
@@ -190,7 +193,7 @@ Toasts (sonner) report results everywhere.
 | Path | Screen | Level | Overlays | In-place modes |
 | --- | --- | --- | --- | --- |
 | `/dashboard/templates/` | [My Templates](ui-screen-inventory.md#my-templates) | Root section (sidebar "Templates"; the console home) | Start a Run dialog; Delete template dialog; template actions menu; selects | Grid or list; search; visibility filter; sort |
-| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block popover; More actions menu; browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
+| `/dashboard/templates/new/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of My Templates | Template preview dialog; Add Block menu; More actions menu; Outline sheet (below `lg`); browser confirm | Editor panels (Template Settings, Search & SEO, Section Settings, Task Details); collapsible outline sections; Generate from Clipy; kept-draft notices; locked while a create saves |
 | `/dashboard/templates/<id>/` | [Template detail](ui-screen-inventory.md#template-detail) | Child page of My Templates | Start a Run dialog; Share link dialog; Delete template dialog; Template actions menu | Visibility switch; read-only controls for runners, viewers and other contexts |
 | `/dashboard/templates/<id>/edit/` | [Template editor](ui-screen-inventory.md#template-editor) | Child page of Template detail | As on create | As on create, without Clipy; conflict alert; read-only notice |
 | `/dashboard/runs/` | [My Runs](ui-screen-inventory.md#my-runs) | Root section (sidebar "Runs") | Share link dialog; Delete run dialog; Run options menu; status select | Status filter; search |

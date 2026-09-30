@@ -103,6 +103,8 @@ page, so a page's sticky parts stick to the window.
 | `ShareLinkDialog` | `src/components/shared/ShareLinkDialog.tsx` | A created link in a read-only field with a Copy button |
 | `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
 | `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail, the run page and Organization activity |
+| `RunPageHeader`, `SharedRunView` | `src/components/run-execution/` | The run page's header (the title, or a labelled "Run title" field while renaming; badges; progress from `xl`; the Run's actions), and the shared run page (its own header with Copy Link, a summary Card, a Card per section, the `CtaBanner`) |
+| `TemplateEditorOutline` | `src/components/template-editor/TemplateEditorOutline.tsx` | Where the editor's outline sits: a sticky Card beside the form from `lg`, a bottom `Sheet` below it (opened by the editor header's Outline button; picking or adding an entry closes it and moves focus to that entry's form) |
 
 ## Conventions
 
@@ -149,15 +151,19 @@ page, so a page's sticky parts stick to the window.
   never show: `[@media(hover:none)]:hidden`) and the View Template overlay in
   `src/components/checklist-library/TemplateCard.tsx`
   (`tests/unit/components/focusVisibility.ts` finds focusable elements hidden this way).
-- Anything that reorders by drag also reorders from the keyboard. The template
-  editor's drag handles (`ReorderHandle`) move their section, task or content block
-  one place with the Up and Down arrow keys, keep focus on the moved handle, and
-  announce the new position. A grab cursor goes only on a handle that works.
+- Anything that reorders by drag also reorders from the keyboard and by touch. The
+  template editor's drag handles (`ReorderHandle`) move their section, task or content
+  block one place with the Up and Down arrow keys, keep focus on the moved handle, and
+  announce the new position. HTML5 drag and drop needs a mouse, so on a coarse pointer (a
+  touch screen) the handle hides (`pointer-coarse:hidden`) and each entry shows Move up and
+  Move down buttons (`ReorderMoveButtons`), which move it one place, keep focus on the moved
+  entry's button and announce the new position; a fine pointer hides them
+  (`pointer-fine:hidden`). A grab cursor goes only on a handle that works.
 - A `Label` names its control through `htmlFor` and a matching `id`, including a
   `Switch`, and helper text is linked with `aria-describedby`. Controls repeated on
   each row of a list name the row in their accessible name ("Role for Alice
   (alice@example.com)"), so no two share one; `src/components/account/SecuritySection.tsx`
-  and the member list in `TeamSettingsSection.tsx` are the reference.
+  and the member list in `OrganizationMemberList.tsx` are the reference.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (add `--mobile`,
@@ -165,6 +171,13 @@ page, so a page's sticky parts stick to the window.
 - A control hidden at one width needs a way to reach it at the others. The run page's
   task column shows only at `xl`; below it, the progress block's Tasks button opens the
   same list (`RunTaskList`) in a sheet (`src/components/run-execution/MobileRunProgress.tsx`).
+  The template editor's outline sits beside the form from `lg`; below it, the editor
+  header's Outline button opens it in a sheet (`TemplateEditorOutline`), and Preview moves
+  into the header's More actions on phones.
+- A layout whose structure (not only its styling) changes at a breakpoint reads the width
+  with `useMediaQuery` (`src/hooks/useMediaQuery.ts`), which renders its server value until
+  the browser answers, so the page never mounts both layouts; the editor renders the
+  outline's Card or its Sheet this way. Plain CSS breakpoints stay the default.
 - Controls used again and again keep their place. The run page's task footer (Previous,
   Mark Complete, Next) is sticky at the bottom of the window until the end of the task
   panel scrolls into view, so content that grows under the panel (the Changelog, after

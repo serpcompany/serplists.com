@@ -204,7 +204,29 @@ Each of these needs the user's approval, or happens with the domain move:
     `tmp/design-review/decisions/`. Gates: `pnpm run verify` (5,239 unit tests), the 25 browser
     specs the changes touch on the production build (112 of 112), `pnpm run test:smoke` (24 of
     24).
-  - [ ] Step 2: the screens the inventory marks "Not restyled yet (step 2)".
+  - [ ] Step 2: the screens the inventory marks "Not restyled yet (step 2)", in two parts.
+    - [x] Step 2a: the signed-in console, the shared run and their overlays. The console page
+      blocks (`280b6184`); My Templates (`031a5998`), My Runs (`da759424`), Template detail
+      (`19cca04a`), Archive (`c3682e2f`), Import Templates (`354291dc`), Account Settings
+      (`0e63f69f`, `6c668037`), the run page and the shared run (`c727ac5e`, `5c94b25b`), and
+      the Template editor with a phone layout (`6aeec655`); the Organizations error as the
+      plain Alert (`4ee44a2f`) and outline link buttons' border (`a21bb2e5`). With them, the
+      brief's fixes: counts in the singular everywhere through one helper (TD-24,
+      `757bec35`), a 404 that logs no error (`945435a0`), and no empty navigation landmark
+      while a header menu is open (`c2811960`). Every step 2a card in the [screen
+      inventory](../../design-docs/ui-screen-inventory.md) has its proof pass, on screenshots
+      at 1440x900 and 390x844, light and dark, of each screen's states (filled, empty,
+      loading) and overlays, kept locally in `tmp/design-review/step2-console/`. Gates on the
+      final code: `pnpm run verify` (5,244 unit tests); the 45 browser specs the changes
+      touch, on the production build (175 tests), after two spec fixes (a loose "Edit"
+      locator that the new breadcrumb's title matched, `ba895fb7`, and the import summary
+      spec, which still expected a sign-in to open Account Settings, `cd865dfb`), with a new
+      spec for the editor on a phone (`63d9e44d`); `pnpm run test:smoke` (24 of 24); `pnpm run
+      build:worker` (Worker 14,711 KiB, 3,032 KiB gzipped by `wrangler deploy --dry-run`,
+      35 KiB over step 1).
+    - [ ] Step 2b: the public pages (Categories, a category page, Public Profile, Features and
+      the feature pages, Pricing, About, Contact), the auth pages, the Organization invite and
+      the 404 page's content.
 
 ## Decision log
 
@@ -459,3 +481,39 @@ Each of these needs the user's approval, or happens with the domain move:
   layout comes with step 2, with every other screen's. The questions these changes raised are
   in the screen inventory's [open questions](../../design-docs/ui-screen-inventory.md#open-questions),
   and counts that still say "1 templates" are TD-24.
+- 2026-09-29: **The Template editor on phones.** Below `lg` the editor is one column, and the
+  outline opens in a bottom sheet from an "Outline" button in the editor's top bar. Picking or
+  adding an entry closes the sheet and moves focus to that entry's form heading, scrolled into
+  view under the top bars. HTML5 drag and drop needs a mouse, so a touch screen shows Move up
+  and Move down buttons on every section, task and content block in place of the drag handle,
+  chosen by CSS on the pointer (`pointer-coarse`, `pointer-fine`); each move keeps focus on
+  the moved entry and is announced, as the arrow keys' moves are. A mouse still drags and the
+  keyboard still uses the arrow keys. On a phone, Preview moves into "More actions" and the
+  theme toggle leaves the top bar (the sidebar has one), so the title and Save keep their
+  room. Saving, validation, the unsaved-changes guard and the locks while a create saves or a
+  Clipy draft generates are unchanged; the sheet renders outside the page's locked fieldset,
+  so it has its own. Rejected: a separate phone editor (a second form to keep in step), and a
+  touch drag library (a new dependency, and dragging inside a scrolling sheet is fiddly).
+- 2026-09-29: **Every field shows its label.** The brief asks for visible labels on every
+  field, on phones too. The console's filters now show "Search", "Visibility", "Sort by" and
+  "Status"; fields only screen readers could name show theirs ("Public Clipy video link",
+  "Share link", "Run title", and a member's "Role" and "Status" on phones); the avatar's
+  hover-only "Upload avatar" and "Remove avatar" icons, which phones never showed, are
+  visible buttons. The new words are open questions in the screen inventory.
+- 2026-09-29: **Deletes ask in an alert dialog.** My Templates' and My Runs' delete dialogs
+  closed on a click outside; Template detail's was an alert dialog. All three, and Revoke Run
+  Key, now share `ConfirmDialog` (the shadcn AlertDialog, its action destructive and waiting
+  while it runs), which only Cancel or Escape closes.
+- 2026-09-29: **Account Settings stays one column.** Its card proposed a section nav or Tabs.
+  The page has no navigation today and the brief says to invent nothing, so it is one column
+  of shadcn Cards (an open question in the inventory).
+- 2026-09-29: **The Template preview keeps its renderer.** Its card proposed the public page's
+  "What's included" block. `PublicTemplateContent` carries tested behaviors (Clipy key-moment
+  images, the player's source link, file and embed links) that would have to move with it, so
+  step 2a only restyled it (an open question).
+- 2026-09-29: **`buttonVariants` merges its classes.** shadcn's base-nova button puts
+  `border-transparent` in its base classes and `border-border` in the outline variant.
+  `Button` merges them with `cn`, but a link styled with `buttonVariants` did not, so the
+  transparent border won and outline link buttons had no border in the light theme.
+  `buttonVariants` now merges; DESIGN.md lists it with the other changes to generated
+  components.

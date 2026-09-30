@@ -19,15 +19,23 @@ public template page with the shared blocks (listed in
 - WHAT'S ON THE SCREEN and STATES describe the code today. Quoted words are the labels the
   app shows.
 - PATTERN CHOICE names a [reference pattern](#reference-patterns). It is decided on a step 1
-  card and a proposal on a step 2 card.
-- STRUCTURE (phase 3) lists layout zones, component types and data fields. On a step 1 card
-  it is what step 1 built; on a step 2 card it is the structure the code has today.
+  card, built on a step 2a card, and a proposal on a card step 2b will restyle.
+- STRUCTURE (phase 3) lists layout zones, component types and data fields. On a card a step
+  restyled (step 1, or step 2a: the signed-in console, the shared run and their overlays) it
+  is what the step built; on a card step 2b will restyle it is the structure the code has
+  today.
 - PROOF PASS is the runbook's phase 5 check against the reference images: structural
   differences only (layout zones, component types, hierarchy, missing sections), not color
   or imagery. A step 1 card gives the result and the screenshots it was checked on. They
   are saved locally in `tmp/design-review/step1/` (git ignores it) as
   `<screen>-<desktop|mobile>-<light|dark>-<signed-in|signed-out>.png`: full pages at
-  1440x900 and 390x844. A step 2 card reads "Not restyled yet (step 2)".
+  1440x900 and 390x844. A step 2a card does the same with the screenshots in
+  `tmp/design-review/step2-console/` (also ignored), named
+  `<screen>[-<state>]-<desktop|mobile>-<light|dark>.png`: full pages, or the window for an
+  overlay, a loading state and the run page (whose footer sticks to the window), each with
+  its accessibility tree beside it (`.aria.yml`). The phone shots keep the touch screen's
+  coarse pointer, so they show what a phone shows. A card step 2b will restyle reads "Not
+  restyled yet (step 2)".
 
 ## Reference patterns
 
@@ -1095,7 +1103,7 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:**
   - Its own sticky header, no site shell: an icon tile, the Run's title, "Shared run
     snapshot", "Copy Link" (outline).
-  - A summary card: eyebrow "Shared run snapshot", the title, a status badge ("In Progress" or
+  - A summary card: a "Shared run snapshot" badge, the title, a status badge ("In Progress" or
     "Completed"), "Anyone with this link can tick tasks, add notes and complete this Run.", a
     progress box ("Run progress", "N%", "X of Y tasks"), a progress bar, and "Complete run" once
     every task is done while the Run is in progress.
@@ -1103,8 +1111,8 @@ existing content, invent nothing):
     (struck through when done), the description, content blocks (Sub-tasks have their own
     checkboxes), "Task notes" (placeholder "Add links, outcomes, or context for this
     run...", "Save notes", "Saved to this run").
-  - Closing card: "Want to run your own checklist?", "Browse public templates and start a fresh
-    run from a template that matches your workflow.", "Browse the Template Library".
+  - Closing banner: "Want to run your own checklist?", "Browse public templates and start a
+    fresh run from a template that matches your workflow.", "Browse the Template Library".
 - **PRIMARY ACTION:** tick a task.
 - **SECONDARY ACTIONS:** "Copy Link"; notes; "Complete run" → the [Run complete
   dialog](#run-complete-dialog); "Browse the Template Library".
@@ -1112,22 +1120,29 @@ existing content, invent nothing):
   load error ("Unable to load run", the message, "Back"); completed ("Completed", checkboxes
   frozen, notes stay editable; a guest who completes the Run stays on it); always noindex.
 - **NAVIGATION TYPE:** standalone page.
-- **PATTERN CHOICE (proposal):** the teardown layout of [Detail page](#detail-page) (one
-  column, the progress as a facts strip); sections as [Bordered list
-  cards](#bordered-list-cards) panels; the closing card as a [Call-to-action
-  banner](#call-to-action-banner). TBD whether it gets the site header.
+- **PATTERN CHOICE (built):** the teardown layout of [Detail page](#detail-page) (one
+  column), with the progress in the summary card; sections as [Bordered list
+  cards](#bordered-list-cards) panels; the closing card as the [Call-to-action
+  banner](#call-to-action-banner) block. It keeps its own header, without the site shell.
 - **REFERENCE IMAGES:** teardown-detail-1.png, prompts-2.png, home-7.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: sticky header; a narrow column: summary card, section cards, closing card.
-  - COMPONENT TYPES: icon tile; heading; progress box; progress bar; section card; task row
-    with checkbox; content blocks; notes editor; call-to-action card.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: sticky header (icon tile, title, "Copy Link"); a narrow column: the summary
+    Card, a Card per section, the CtaBanner.
+  - COMPONENT TYPES: icon tile; badges; heading; muted progress box; shadcn Progress; section
+    Card with a count badge; task row with a checkbox; content blocks; notes Field;
+    CtaBanner.
   - DATA FIELDS: Run (title, progress, task counts, status); section (title, completed and
     total); task (title, description, done, content blocks, notes).
-- **PROOF PASS:** Not restyled yet (step 2). The wording and status of 2026-09-29:
-  `tmp/design-review/decisions/shared-run-desktop-guest.png`, `shared-run-mobile-guest.png`,
-  `shared-run-complete-dialog-desktop-guest.png`, `shared-run-completed-desktop-guest.png` and
-  `shared-run-completed-mobile-guest.png`.
-- **NOTES:** Code: `src/views/ChecklistRun.tsx` (shared mode). Guests never see who owns the
+- **PROOF PASS:** Pass (step 2a): `shared-run-desktop-light.png`, `-desktop-dark`,
+  `-mobile-light` and `-mobile-dark` (a guest, signed out), against teardown-detail-1.png,
+  prompts-2.png and home-7.png. Present: one centered column under a slim header; a summary
+  block (title, status, progress); bordered section panels with a header row (title, count)
+  over their task rows; the closing banner (text left, button right; stacked on phones). The
+  teardown's facts strip is the summary card's progress box, and the reference has no
+  checkboxes or notes. The wording and status of 2026-09-29 are in
+  `tmp/design-review/decisions/` (`shared-run-*-guest.png`).
+- **NOTES:** Code: `src/views/ChecklistRun.tsx` (shared mode) renders
+  `src/components/run-execution/SharedRunView.tsx`. Guests never see who owns the
   Run, and never see its retired work. Until 2026-09-29 the page called itself "A read-only
   checklist run", though guests could always tick, write notes and complete it
   (`functions/api/handlers/checklists-shared.ts`).
@@ -1143,15 +1158,17 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Templates", "1 template in your library" or "N templates in your library"
     (no count while the list loads or when it failed to load), "New Template" (role-limited).
-  - Toolbar: search "Search templates..."; a visibility select ("All", "Public", "Private"); a
-    sort select ("Most Recent", "Alphabetical", "Most Tasks"); grid and list buttons ("Show
-    templates in grid view", "Show templates in list view").
-  - Grid (up to 4 columns): cards with a muted top holding the type icon; the title (a link to
-    Template detail); the description; an actions menu ("Actions for <title>"); up to 2
-    category chips and "+N"; "N sections", "N tasks"; "Public" or "Private"; a "Start Run"
-    bar on hover (pointer only).
-  - List: rows with an icon, title, description, "N sections", "N tasks", "Public" or
-    "Private", and "Start Run", "Edit", "Delete".
+  - Toolbar, each field with its label (stacked on phones): "Search" ("Search
+    templates..."); "Visibility" ("All", "Public", "Private"); "Sort by" ("Most Recent",
+    "Alphabetical", "Most Tasks"); grid and list buttons ("Show templates in grid view", "Show
+    templates in list view").
+  - Grid (1, 2, then 3 columns): cards with a muted top holding the type's icon tile and, on
+    its corner, the actions menu ("Actions for <title>"); up to 2 category badges and "+N";
+    the title (its link covers the card); the description; "N sections", "N tasks"; "Public"
+    or "Private"; a "Start Run" button over the muted top on hover (pointer only).
+  - List: rows with an icon tile, the title (a link), the description, "N sections", "N
+    tasks", "Public" or "Private", and "Start Run", "Edit", "Delete" (under the row on
+    phones; on hover, focus or touch from `md`).
 - **PRIMARY ACTION:** open a Template → [Template detail](#template-detail).
 - **SECONDARY ACTIONS:** "New Template" → [Template editor](#template-editor); "Start Run" →
   [Start a Run dialog](#start-a-run-dialog); "Edit"; "Delete" → [Delete
@@ -1163,19 +1180,29 @@ existing content, invent nothing):
   adjusting your search or filters"); role-limited actions (runners: Start Run only; viewers:
   none); grid or list (remembered per user).
 - **NAVIGATION TYPE:** root section (the console home).
-- **PATTERN CHOICE (proposal):** shadcn page header and toolbar (search input, selects, a
-  grid or list toggle group); cards with the muted top of [Section row over a card
-  grid](#section-row-over-a-card-grid); list mode as rows; empty and error states as shadcn
-  Empty.
+- **PATTERN CHOICE (built):** the console's page header and toolbar (labelled search and
+  selects, the grid and list buttons); `MediaCard`s with the muted top of [Section row over a
+  card grid](#section-row-over-a-card-grid), as in the Template Library; list mode as shadcn
+  `Item` rows; the empty and error states as the shadcn Empty; deletes through
+  `ConfirmDialog`.
 - **REFERENCE IMAGES:** prompts-4.png, home-2.png. The reference has no console.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header (title, count, action); toolbar; scrolling results.
-  - COMPONENT TYPES: search input; selects; toggle buttons; template card with an actions
-    menu; list row with buttons; empty state.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header (h1, count, New Template; the button under the text on phones);
+    toolbar; results (the grid or the list); empty or error state in their place.
+  - COMPONENT TYPES: labelled search field; labelled selects; toggle buttons with pressed
+    states; `MediaCard` with a corner actions menu and a hover overlay; `Item` row with
+    actions; shadcn Empty; `AlertDialog`.
   - DATA FIELDS: Template (type, title, description, categories, section count, task count,
     visibility); role permissions.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/Templates.tsx`. The list follows the active Ownership Context.
+- **PROOF PASS:** Pass (step 2a): `my-templates-grid`, `my-templates-list`,
+  `my-templates-empty`, `my-templates-loading`, `my-templates-card-menu` and
+  `my-templates-delete-dialog`, each `-desktop-light`, `-desktop-dark`, `-mobile-light` and
+  `-mobile-dark`, against prompts-4.png and home-2.png. Present: a header row over the
+  results with the search beside it; a grid of cards with a muted icon area, a category line,
+  the title and a 2-line description. The reference's chip row is the Visibility and Sort by
+  selects here, and its "Explore all N" heading the page's h1 and count.
+- **NOTES:** Code: `src/views/Templates.tsx`, `src/components/dashboard/TemplateCard.tsx` and
+  `TemplateListItem.tsx`. The list follows the active Ownership Context.
 
 ### Template detail
 
@@ -1184,16 +1211,18 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** a title on My Templates; "From <template>" on My Runs; after "Save"
   on a public template page or a copy; "View template" on the editor's read-only notice.
 - **WHAT'S ON THE SCREEN:**
-  - Page header: the title; the description (or "Review template structure, metadata, and run
-    actions."); actions: "Back" (ghost), a "Public" or "Private" badge, "Share" and "Edit"
+  - Breadcrumb: "My Templates" › the title.
+  - Header: the type's icon tile; the title; the description (or "Review template structure,
+    metadata, and run actions."); a "Public" or "Private" badge; actions: "Share" and "Edit"
     (roles that can edit), or a copy button for others ("Copy to Organization", "Copy to My
     Templates", "Upgrade to copy template", "Checking plan...", "Copying...", "Loading..."),
-    "Start Run", and "Template actions" (roles that can edit).
+    "Start Run", and "Template actions" (roles that can edit). Beside it (under it on phones),
+    the stats panel: "Total Tasks" and "Sections".
   - An Organization error notice when the role is unknown ("Start Run waits until they load.
     Check your connection and try again.", "Retry").
-  - Stat cards "Total Tasks" and "Sections".
-  - "Template Structure": numbered sections (title, "N tasks") with their tasks (title,
-    description, content blocks).
+  - "Template Structure": the public template page's section cards, always open: numbered
+    sections (title, "N tasks") with their numbered tasks (title, description, content
+    blocks).
   - "Details": "Created", "Last updated", "Visibility" (a switch labeled "Public" or
     "Private").
   - "Categories & Tags": the categories or "No categories assigned"; the tags or "No tags
@@ -1212,19 +1241,30 @@ existing content, invent nothing):
   "Creating..." while sharing; visibility toasts ("Template is now public", "Template is now
   private").
 - **NAVIGATION TYPE:** child page of My Templates.
-- **PATTERN CHOICE (proposal):** the [Detail page](#detail-page) block shared with the public
-  template page (breadcrumb My Templates › title, header with the actions, stats panel), then
-  shadcn cards for the structure, details, categories and tags, and Changelog.
+- **PATTERN CHOICE (built):** the [Detail page](#detail-page) block shared with the public
+  template page (`DetailPageLayout`: breadcrumb My Templates › title, header with the actions,
+  stats panel), then `TemplateSectionList` and shadcn Cards for the details, categories and
+  tags, and the Changelog (`ChangelogList`).
 - **REFERENCE IMAGES:** pattern-detail-1.png, pattern-detail-2.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header (title, description, actions); notice; 2 stat cards; structure
-    card; a 2-column grid of cards (Details, Categories & Tags); Changelog card.
-  - COMPONENT TYPES: badge; outline, ghost and dark primary buttons; dropdown menu; stat card;
-    numbered section list; switch with label; badge list; history list.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: breadcrumb; a two-column header (icon tile, title, description, badge,
+    actions; the stats panel on the right, under it on phones); notice; a separator; "Template
+    Structure"; a 2-column grid of Cards (Details, Categories & Tags; stacked on phones);
+    the Changelog Card.
+  - COMPONENT TYPES: breadcrumb; icon tile; badge; outline and primary buttons; dropdown
+    menu; `Stat`; section cards with numbered tasks; switch with label; badge list; `Item`
+    history rows; `AlertDialog`; Share link dialog.
   - DATA FIELDS: Template (title, description, visibility, sections and tasks, created and
     updated dates, categories, tags); history entries (label, actor, time); role permissions;
     plan state.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a): `template-detail`, `template-detail-loading`,
+  `template-detail-actions-menu`, `template-detail-delete-dialog` and
+  `template-detail-share-dialog`, each on desktop and phone, light and dark, against
+  pattern-detail-1.png and pattern-detail-2.png. Present: the breadcrumb row; a two-column
+  header (icon tile, big title, muted description, a row of outline buttons; a panel on the
+  right); a divider, then the content sections. Not built: the reference's section nav
+  beside the content (the sections follow one another); "Updated <date>" is "Last updated"
+  in Details, as before.
 - **NOTES:** Code: `src/views/TemplateDetail.tsx`. An Organization's Template follows the
   viewer's role while that Organization is active; from any other context it is read-only.
 
@@ -1237,9 +1277,10 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** "New Template" (page header or sidebar), "Create Template"; "Edit" on
   a card, a list row or Template detail; "Resume template draft" in Billing.
 - **WHAT'S ON THE SCREEN:**
-  - Editor header (sticky): back arrow ("Back to templates"), the draft's title ("New
-    Template" or "Untitled Template"), an "Editing" chip when editing, "Preview" (ghost),
-    "Save", a theme toggle, "More actions".
+  - Editor header (sticky under the console's top bar): back arrow ("Back to templates"),
+    the draft's title ("New Template" or "Untitled Template"), an "Editing" badge when editing
+    (from `sm`), "Outline" (below `lg`), "Preview" (from `sm`; in "More actions" on phones),
+    "Save", a theme toggle (from `sm`; the sidebar has it on phones), "More actions".
   - Notices when needed: "Error" with the problems (and "Load latest version" after a
     conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
     in <context>" ("Switch to <context>", "Discard"); plan or session notices ("Upgrade to Pro
@@ -1248,24 +1289,31 @@ existing content, invent nothing):
   - Create only: "Generate from Clipy" ("Paste a public Clipy video link to fill this editor
     with an unsaved, editable draft.", a URL field "https://clipy.online/video/…", "Generate
     draft").
-  - Outline (left): "Template Settings", "Search & SEO"; "Sections" with "Add section"; per
-    section: drag handle, collapse or expand, title, "Add task to <section>", "Remove
-    <section>"; per task: drag handle, title, "Remove <task>".
-  - Panel (right), titled by the selection:
+  - Outline: a card beside the form from `lg`, in view while the form scrolls; below `lg`, a
+    bottom sheet ("Outline") that the header's "Outline" opens and that closes on the picked
+    or added entry, moving focus to its form. "Template Settings", "Search & SEO";
+    "Sections" with "Add section"; per section: a drag handle ("Drag <section>"), collapse or
+    expand, the title, "Add task to <section>", "Remove <section>"; per task: a drag handle,
+    the title, "Remove <task>". On a touch screen the drag handles give way to "Move <entry>
+    up" and "Move <entry> down" buttons.
+  - Panel (beside the outline from `lg`, the page's one column below it), titled by the
+    selection:
     - "Template Settings": "Template Name", "Goal / Summary", "Template Type" ("Checklist",
       "Recipe"), "Categories" ("Select categories..."), "Tags" ("Add tag..."), "Public
       Template" switch ("Make this template visible in the public library").
     - "Search & SEO": "Search Title", "URL Slug", "Search Description", "Preview".
     - "Section Settings": "Section Title", "Tasks in section".
     - "Task Details": "Task Title", "Description (Optional)", "Content Blocks" with "Add
-      Block" and block cards (drag handle, type, remove), or "No content blocks yet".
+      Block" and block cards (drag handle, or "Move <type> block up" and "down" on a touch
+      screen; the type; "Remove <type> block"), or "No content blocks yet".
     - Prompts: "Select a task from the outline to edit its instructions and attached
       content." and "Add a section from the outline to start building this template."
 - **PRIMARY ACTION:** "Save". A create returns to [My Templates](#my-templates); an edit stays
   (toast).
 - **SECONDARY ACTIONS:** "Preview" → [Template preview dialog](#template-preview-dialog); "Add
-  Block" → [Add Block popover](#add-block-popover); "More actions" → "Discard changes"; the
-  back arrow; reorder by drag or arrow keys; "Generate draft".
+  Block" → [Add Block popover](#add-block-popover); "More actions" → "Discard changes" (and
+  "Preview" on phones); "Outline" (below `lg`); the back arrow; reorder by drag, the arrow
+  keys or the Move buttons; "Generate draft".
 - **STATES:** loading (spinner); load error ("Unable to load template", "Back to Templates");
   checking permission (spinner); read-only ("You can't edit this template" or "You can't
   create templates here", with the role or owner reason, "View template", "Back to
@@ -1273,23 +1321,36 @@ existing content, invent nothing):
   create saves or a Clipy draft generates; unsaved changes ([browser
   confirm](#browser-confirm-prompts)); conflict; plan limit; session ended; kept drafts.
 - **NAVIGATION TYPE:** child page; the panel changes in place with the outline selection.
-- **PATTERN CHOICE (proposal):** shadcn blocks: an editor top bar; a two-pane body (the
-  outline as a [Left category nav](#left-category-nav)-style list, the form panel with shadcn
-  Field groups and Cards); Dialog for the preview.
+- **PATTERN CHOICE (built):** an editor top bar; from `lg` a two-pane body (the outline as a
+  [Left category nav](#left-category-nav)-style column that stays in view, the form panel with
+  shadcn Field groups and Cards); below `lg` one column, with the outline in a Sheet; a Dialog
+  for the preview; a DropdownMenu for Add Block.
 - **REFERENCE IMAGES:** pattern-detail-2.png (section nav beside content). The reference has
   no editor.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: sticky editor header; notices; Clipy card (create); body: outline sidebar
-    (fixed width) and a scrolling panel (max width, centered).
-  - COMPONENT TYPES: icon button; chip; ghost and primary buttons; dropdown menu; alerts;
-    mode buttons; tree list with drag handles and row actions; form fields (input, textarea,
-    select, multi-select, tag input, switch); block cards; popover menu.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: sticky editor header; alerts and notices; the Clipy Card (create); body: from
+    `lg` the outline Card (18rem, sticky, scrolling on its own when long) beside the form
+    panel; below `lg` the form panel alone and the outline in a bottom Sheet.
+  - COMPONENT TYPES: icon button; badge; outline, ghost and primary buttons; dropdown menus;
+    Alerts; mode buttons; tree list with drag handles, Move buttons (touch) and row actions;
+    labelled Fields (input, textarea, select, multi-select, tag input, switch); block cards;
+    Empty; Sheet; Dialog.
   - DATA FIELDS: Template (title, description, type, categories, tags, public, search title,
     URL slug, search description); sections (title, tasks); tasks (title, description, content
     blocks); save state; kept drafts.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/TemplateEditor.tsx`. The outline has a fixed width and no phone
-  layout (TBD).
+- **PROOF PASS:** Pass (step 2a): `editor-new`, `editor-task` (a Template open on a task),
+  `editor-add-block-menu`, `editor-preview-dialog`, `editor-loading` and `editor-read-only`,
+  each on desktop and phone, light and dark, and `editor-outline-sheet-mobile-light` and
+  `-dark`, against pattern-detail-2.png. Present: a narrow nav column beside the content that
+  stays in view while the content scrolls, its active item marked. The reference's nav is a
+  plain link list; the outline also adds, removes, collapses and reorders its entries. On a
+  phone (390px) the page is one column with no sideways scroll, and every entry is reachable
+  from the Outline sheet.
+- **NOTES:** Code: `src/views/TemplateEditor.tsx`; the outline's placement is
+  `src/components/template-editor/TemplateEditorOutline.tsx`, the Move buttons
+  `ReorderMoveButtons` in `ReorderHandle.tsx`. A drag handle shows on a fine pointer (a mouse)
+  and the Move buttons on a coarse one (a touch screen), by CSS (`pointer-fine:hidden`,
+  `pointer-coarse:hidden`); the keyboard moves an entry with its handle's arrow keys.
 
 ### My Runs
 
@@ -1299,12 +1360,14 @@ existing content, invent nothing):
   completing a Run.
 - **WHAT'S ON THE SCREEN:**
   - Page header: "My Runs", "N in progress, M completed".
-  - Toolbar: search "Search runs..."; status select ("All Runs", "In Progress", "Completed").
-  - Rows: a status icon; the title (a link to `/dashboard/runs/<id>/`); meta ("From <template>"
-    as a link, "Started <date>", "Completed <date>"); a progress bar with "x/y"; a status chip
-    ("Completed" or "In Progress"); a "Needs revalidation", "Shared snapshot is out of date" or
-    "Shared" chip; actions: "Revalidate", "Stop sharing to update", "Continue" (primary) or
-    "View" (outline), and "Run options".
+  - Toolbar, each field with its label (stacked on phones): "Search" ("Search runs...");
+    "Status" ("All Runs", "In Progress", "Completed").
+  - Rows: a status icon tile; the title (a link to `/dashboard/runs/<id>/`); meta ("From
+    <template>" as a link, "Started <date>", "Completed <date>"); a progress bar with "x/y"; a
+    status badge ("Completed" or "In Progress"); a "Needs revalidation" or "Shared snapshot is
+    out of date" badge (outline, with a warning icon) or "Shared"; actions (under the row on
+    phones; on hover, focus or touch from `xl`): "Revalidate", "Stop sharing to update",
+    "Continue" (primary) or "View" (outline), and "Run options".
 - **PRIMARY ACTION:** "Continue" → [Run page](#run-page).
 - **SECONDARY ACTIONS:** "View"; "Revalidate"; "Stop sharing to update"; "Run options" →
   "Share Run", "Stop sharing", "Delete" ([Action menus](#action-menus)); search; filter.
@@ -1314,18 +1377,24 @@ existing content, invent nothing):
   search or filters"); "Revalidating...", "Stopping..."; actions follow the role in the Run's
   Organization.
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** shadcn page header and toolbar; rows as [List rows with
-  thumbnail](#list-rows-with-thumbnail) with the status icon in the thumbnail's place, or a
-  shadcn Table.
+- **PATTERN CHOICE (built):** the console's page header and toolbar; rows as [List rows with
+  thumbnail](#list-rows-with-thumbnail), shadcn `Item`s with the status icon tile in the
+  thumbnail's place (`RunListItem`); deletes through `ConfirmDialog`.
 - **REFERENCE IMAGES:** teardowns-3.png, teardowns-4.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header; toolbar; a list of row cards.
-  - COMPONENT TYPES: search input; select; row card (icon, text, progress, chips, buttons,
-    dropdown menu); skeleton rows; empty state.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header; toolbar; a list of rows.
+  - COMPONENT TYPES: labelled search field; labelled select; `Item` row (icon tile, text,
+    shadcn Progress, badges, buttons, dropdown menu); Skeleton rows; shadcn Empty;
+    `AlertDialog`; Share link dialog.
   - DATA FIELDS: Run (title, status, progress, task counts, started and completed dates,
     shared, stale); source Template (title, link); permissions.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/Dashboard.tsx` (the list view is RunsDashboardView). Rows link to
+- **PROOF PASS:** Pass (step 2a): `my-runs`, `my-runs-empty`, `my-runs-loading`,
+  `my-runs-options-menu` and `my-runs-delete-dialog`, each on desktop and phone, light and
+  dark, against teardowns-3.png and teardowns-4.png. Present: rows with a leading tile, a text
+  column (title, muted meta) and trailing controls. The reference's thumbnail is the status
+  icon tile and its trailing chevron the Run's actions.
+- **NOTES:** Code: `src/views/Dashboard.tsx` (the list view is RunsDashboardView, a row
+  `RunListItem`). Rows link to
   a Run's one URL, `/dashboard/runs/<id>/`, which Start Run opens too.
 
 ### Run page
@@ -1335,25 +1404,26 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** Start Run; the title, "Continue" or "View" on My Runs. The older
   `/run/<id>` address answers 308 with this one.
 - **WHAT'S ON THE SCREEN:**
-  - Page header: the title (an inline field while renaming); "X of Y tasks finished";
-    actions: "Runs" (back), "Rename" (or "Save title" and "Cancel"), a "Completed" or "In
-    Progress" badge, a "View only" badge, "Complete run" when every task is done, a progress
-    bar with "N%" (from `xl`), a "Shared" badge, "Share", "Stop sharing".
+  - Page header: the title (a labelled "Run title" field while renaming); "X of Y tasks
+    finished"; a "Completed" or "In Progress" badge, a "View only" badge, and from `xl` a
+    progress bar with "N%"; actions (under the text on phones): "Runs" (back), "Rename" (or
+    "Save title" and "Cancel"), "Complete run" when every task is done, a "Shared" badge,
+    "Share", "Stop sharing".
   - An Organization error notice when the role is unknown ("This run's actions wait until they
     load. Check your connection and try again.", "Retry").
   - Below `xl`: a progress block ("N% complete", "X of Y tasks finished", "Task N of M",
     "Tasks" → [Run tasks sheet](#run-tasks-sheet), a progress bar).
-  - Task panel: "<section> / Task N of M"; a task checkbox; the task's title and
-    description; content blocks, or "No additional content for this task"; "Task notes"
-    ("Save notes", "Saved to this run").
+  - Task panel (a bordered card): "<section> / Task N of M"; a task checkbox; the task's
+    title and description; content blocks, or "No additional content for this task"; "Task
+    notes" ("Save notes", "Saved to this run").
   - A footer pinned to the bottom of the window: "Previous", the primary action ("Mark
     Complete", "Next Task", "Next unfinished task", "Finish Run", "Run completed" or "View
-    only"), "Next".
+    only"), "Next" (on phones Previous and Next show only their arrows; their names stay).
   - "Removed from Template (N)" (collapsed; the retired work, read-only).
   - "Changelog": entries (label, who, time), or "Loading run history...", "Run history is
     unavailable right now.", "No run history has been recorded yet."
-  - From `xl`, a right column: "Progress", the task list by section, "Overall Progress" with
-    "X / Y tasks" and a bar.
+  - From `xl`, a right column that stays in view: "Progress", the task list by section,
+    "Overall Progress" with "X / Y tasks" and a bar.
 - **PRIMARY ACTION:** "Mark Complete".
 - **SECONDARY ACTIONS:** "Previous" and "Next"; pick a task; notes; "Rename"; "Share" →
   [Share link dialog](#share-link-dialog); "Stop sharing"; "Complete run" and "Finish Run" →
@@ -1365,22 +1435,31 @@ existing content, invent nothing):
   confirm](#browser-confirm-prompts)); "Creating link...", "Stopping..."; toasts ("Run title
   updated", "Sharing stopped. The old link no longer works.").
 - **NAVIGATION TYPE:** child page of My Runs.
-- **PATTERN CHOICE (proposal):** shadcn blocks: a page header with actions; a two-column body
-  (the task panel, and the task list as a [Left category nav](#left-category-nav)-style
-  column on the right); a sticky action bar; a Sheet for the task list on narrow screens.
+- **PATTERN CHOICE (built):** the console's page header with actions (`RunPageHeader`); a
+  two-column body from `xl` (the task panel, and the task list as a [Left category
+  nav](#left-category-nav)-style column on the right, in view while the task scrolls); a
+  sticky action bar; a Sheet for the task list below `xl`.
 - **REFERENCE IMAGES:** pattern-detail-2.png, pattern-detail-3.png. The reference has no run
   view.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header; notice; progress block (below `xl`); main column (task header,
-    content, notes, sticky footer, retired work, Changelog); right column (from `xl`).
-  - COMPONENT TYPES: inline title field; badges; buttons; progress bars; checkbox;
-    content blocks; notes editor (textarea, button, saved indicator); disclosure; history
-    list; task list (nav with current-task marker); sheet.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header; notice; progress Card (below `xl`); main column (the task
+    panel Card with its header, content, notes and sticky footer; retired work; the Changelog
+    Card); right column (from `xl`, sticky).
+  - COMPONENT TYPES: labelled title field; badges; buttons; shadcn Progress; checkbox;
+    content blocks; notes Field (textarea, button, saved indicator); disclosure; `Item`
+    history rows; task list (nav with current-task marker); Sheet.
   - DATA FIELDS: Run (title, status, progress, task counts, shared, sections, tasks, notes,
     retired work, history); selected task (section, position, title, description, content,
     done); permissions.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/ChecklistRun.tsx`. The same view renders the shared run.
+- **PROOF PASS:** Pass (step 2a): `run-page` and `run-page-changelog` (the window, at the
+  top and scrolled to the Changelog), `run-page-loading`, `run-share-dialog`, each on desktop
+  and phone, light and dark, and `run-tasks-sheet-mobile-light` and `-dark`, against
+  pattern-detail-2.png and pattern-detail-3.png. Present: a header row with actions; a
+  two-column body with a nav column that stays in view (on the right here, as before) and
+  the content; below `xl` one column. The reference has no action bar or checkboxes.
+- **NOTES:** Code: `src/views/ChecklistRun.tsx`, with `RunPageHeader`, `TaskExecutionPanel`,
+  `MobileRunProgress` and `RunProgressSidebar` in `src/components/run-execution/`. The same
+  view renders the shared run.
 
 ### Import Templates
 
@@ -1389,25 +1468,26 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** sidebar "Import Templates" (in the sidebar sheet on phones).
 - **WHAT'S ON THE SCREEN:**
   - Page header: "Import Templates", "Move checklist packs between environments or bootstrap
-    your template library from a portable JSON sample.", a "JSON packs" chip (from `sm`).
-  - One card, "Template JSON Import & Export", "Export portable template packs or import
-    compatible JSON files for <context>.", a "Portable packs" chip:
+    your template library from a portable JSON sample.", a "JSON packs" badge (from `sm`).
+  - Cards, one under another in the narrow page width. The first, "Template JSON Import &
+    Export", "Export portable template packs or import compatible JSON files for
+    <context>.", a "Portable packs" badge:
     - A plan notice when the plan does not allow it ("Pro feature" or "Paid Organization
       feature", "Upgrade to Pro" or "Upgrade unavailable"), or "Couldn't check your plan" with
       "Retry".
     - "Editor access required" for Organization roles that cannot edit.
     - Counts: "My Templates" (or "Organization Templates"), "Public", "Private".
-    - "Export Templates": a switch "Include public community templates" with its note;
-      "Export Portable Pack".
-    - "Import Templates": "Import visibility" ("Preserve visibility from file", "Force public",
-      "Force private") and "Templates missing a visibility flag default to private."; a file
-      field "Select a YAML, JSON, or Markdown template file"; "Need an example? Download
-      sample portable pack".
-    - After choosing a file, "Import Preview" (file name, "N templates", "N public", "Templates
-      to import:", warnings, "Import Policy (enforced)", "Import Notes:", "Confirm Import",
-      "Cancel").
-    - After an import, "Last Import Result" ("N attempted", "N imported", "N failed",
-      "Imported:", "Failed Templates").
+  - "Export Templates": a switch "Include public community templates" with its note;
+    "Export Portable Pack".
+  - "Import Templates": "Import visibility" ("Preserve visibility from file", "Force public",
+    "Force private") and "Templates missing a visibility flag default to private."; a file
+    field "Select a YAML, JSON, or Markdown template file"; "Need an example? Download sample
+    portable pack".
+  - After choosing a file, "Import Preview" (file name, "N templates", "N public", "Templates
+    to import:", warnings, "Import Policy (enforced)", "Import Notes:", "Confirm Import",
+    "Cancel").
+  - After an import, "Last Import Result" ("N attempted", "N imported", "N failed",
+    "Imported:", "Failed Templates").
 - **PRIMARY ACTION:** "Confirm Import".
 - **SECONDARY ACTIONS:** "Export Portable Pack"; "Download sample portable pack"; "Upgrade to
   Pro".
@@ -1416,18 +1496,26 @@ existing content, invent nothing):
   toasts ("Failed to export templates", "Failed to import templates", "Log in to export your
   templates").
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** shadcn page header and cards: an Export card and an Import
-  card with Field groups; the preview and result as cards.
+- **PATTERN CHOICE (built):** the console's page header and shadcn Cards: an overview card
+  (notices as Alerts, the counts as `Stat`s), an Export card and an Import card with Field
+  groups; the preview and the result as Cards, their Templates as `Item` rows and their
+  warnings, policy, notes and failures as Alerts.
 - **REFERENCE IMAGES:** none (the reference has no console).
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header; one card: notices, counts, Export section, Import section,
-    preview card, result card.
-  - COMPONENT TYPES: chip; notice; count trio; switch; buttons; select; file input; link
-    button; preview card with badges and lists; result card.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header; a narrow column of Cards: overview (notices, counts), Export,
+    Import, then the preview and the last result when there are any.
+  - COMPONENT TYPES: badges; Alerts; three `Stat`s; horizontal switch Field; buttons; labelled
+    select; labelled file input; link button; `Item` rows; card footer with Confirm Import and
+    Cancel.
   - DATA FIELDS: context name; Template counts; plan state; import visibility; file; preview
     (Templates, warnings, limits); result (attempted, imported, failed).
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/TemplateImportExport.tsx`. Import and export need a paid plan in
+- **PROOF PASS:** Pass (step 2a), against shadcn's Card and Field (the reference has no
+  console): `import`, `import-preview` (the sample pack picked) and `import-result` (after
+  Confirm Import), each on desktop and phone, light and dark. Present: every field has its
+  visible label and description, the notices and counts use theme colors only, and the
+  preview's Confirm Import and Cancel sit in the card's footer.
+- **NOTES:** Code: `src/views/TemplateImportExport.tsx`, `src/components/TemplateBackup.tsx`,
+  `TemplateImportPreview.tsx` and `TemplateImportResult.tsx`. Import and export need a paid plan in
   the active context.
 
 ### Archive
@@ -1436,9 +1524,9 @@ existing content, invent nothing):
 - **PURPOSE:** Restore deleted Templates and Runs of the active context.
 - **HOW USER GETS HERE:** sidebar "Archive" (in the sidebar sheet on phones).
 - **WHAT'S ON THE SCREEN:** page header "Archive", "Archived templates and runs. Restore one to
-  put it back in your list."; a chip "Loading" or "N archived"; two panels, side by side from
-  `lg`: "Archived templates" and "Archived runs" (each with its count); rows: the title,
-  "Archived <date>", "Restore".
+  put it back in your list.", with a "Loading" or "N archived" badge under it; two Cards, side
+  by side from `lg`: "Archived templates" and "Archived runs" (each with its count as a
+  badge); rows: the title, "Archived <date>", "Restore".
 - **PRIMARY ACTION:** "Restore".
 - **SECONDARY ACTIONS:** "Retry" on a failed list.
 - **STATES:** per list: "Loading archived templates..." (or runs); an error ("Couldn't load
@@ -1447,17 +1535,22 @@ existing content, invent nothing):
   above; the items stay listed); a restore the plan refuses shows the API's reason; an item restored
   elsewhere reloads the lists.
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** shadcn page header; two panels as in [Bordered list
+- **PATTERN CHOICE (built):** the console's page header; two panels as in [Bordered list
   cards](#bordered-list-cards) (prompts-2.png "By role": header row, list rows with a trailing
-  action).
+  action), shadcn Cards holding `Item` rows.
 - **REFERENCE IMAGES:** prompts-2.png, prompts-3.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header; count chip; a 2-column grid of panels.
-  - COMPONENT TYPES: panel (header with icon, title, count; rows); row (title, date, outline
-    button); error state.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header with the count badge; a 2-column grid of Cards (stacked below
+    `lg`).
+  - COMPONENT TYPES: Card (header with icon, title, count badge; rows); `Item` row (title,
+    date, outline button); `ListLoadErrorState`.
   - DATA FIELDS: archived item (title, archived date, kind); list state; role permissions.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/Archive.tsx`. Every "Delete" in the app moves the item here.
+- **PROOF PASS:** Pass (step 2a): `archive` and `archive-empty`, each on desktop and phone,
+  light and dark, against prompts-2.png and prompts-3.png. Present: bordered panels with a
+  header row (title, count) over list rows with a trailing action. Two panels here, not three,
+  and no "View all".
+- **NOTES:** Code: `src/views/Archive.tsx` and
+  `src/components/dashboard/ArchiveRecoverySection.tsx`. Every "Delete" in the app moves the item here.
 
 ### Account Settings
 
@@ -1468,13 +1561,14 @@ existing content, invent nothing):
   "Manage subscription" on Pricing.
 - **WHAT'S ON THE SCREEN:** page header "Account Settings", "Manage your profile, billing, and
   security settings."; stacked cards:
-  - "Profile Information": "Profile Picture" (avatar upload and remove); "Email" (disabled,
-    "Email cannot be changed"); "Full Name"; "Username" (after "@"); "Public profile URL:"
-    (a link); "Update Profile".
+  - "Profile Information": "Profile Picture" (the avatar with "Upload avatar" and "Remove
+    avatar" buttons, always shown); "Email" (disabled, "Email cannot be changed"); "Full
+    Name"; "Username" (after "@"); "Public profile URL:" (a link); "Update Profile" in the
+    card's footer.
   - "Billing": "Current Personal plan:" or "Current Organization plan:" with the plan;
     "Resume template draft" when a draft is kept; the status error with "Retry"; "Billing
     checkout is currently unavailable."; the Organization billing message; "Manage
-    subscription"; "Upgrade to Pro — $9/month".
+    subscription" or "Upgrade to Pro — $9/month" in the card's footer.
   - "Agent Access" (only where the Run Key UI is enabled): "Fixed run-only permissions";
     "Key name" ("Codex SOP Runner") and "Create Run Key"; a new key's panel ("Copy <name> and
     connect your agent", the secret, "Copy key", "I have saved this key"); "MCP connection"
@@ -1486,9 +1580,9 @@ existing content, invent nothing):
     description; for managers: a rename form ("Save Organization") and invites ("Invite
     email", "Role", "Create link", the link with a copy button, "Pending invites" with "New
     link" and revoke); "Owners and admins manage Organization settings, invites, and
-    activity." for others; "Members" (name, "You", email, role and status selects, "Make
-    owner"); "Activity". In Personal: "Create or select an Organization to share templates
-    and runs."
+    activity." for others; "Members" (name, "You", email, role and status selects, labelled
+    "Role" and "Status" on phones where they stack, "Make owner"); "Activity". In Personal:
+    "Create or select an Organization to share templates and runs."
   - "Leave Organization" (in an Organization, not its owner): "Leave <name> and return to your
     Personal context. …", "Leave Organization".
   - "Security": "Change password" ("Current password", "New password", "Confirm new password",
@@ -1506,18 +1600,26 @@ existing content, invent nothing):
   busy labels ("Updating...", "Creating...", "Saving...", "Accepting...", "Leaving...",
   "Opening billing...", "Revoking...", "Signing out...").
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** shadcn settings layout: a section nav ([Left category
-  nav](#left-category-nav)) or Tabs for Profile, Billing, Agent Access, Organizations and
-  Security; each section a Card with Field groups.
+- **PATTERN CHOICE (built):** each section a shadcn Card with Field groups, one column in the
+  narrow page width. The proposal's section nav ([Left category nav](#left-category-nav)) or
+  Tabs was not built: it would add navigation the page does not have (an open question).
 - **REFERENCE IMAGES:** patterns-2.png, pattern-detail-2.png (section nav). The reference has
   no settings.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: page header; one column of cards (max width, centered).
-  - COMPONENT TYPES: card; avatar upload; inputs; switches; selects; buttons; list rows;
-    notices; copy fields; alert dialog.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: page header; one column of Cards (the narrow page width): Profile
+    Information, Billing, Agent Access, Organizations, Leave Organization, Security.
+  - COMPONENT TYPES: Card with a footer; avatar with visible buttons; labelled Fields
+    (inputs, an InputGroup with "@", switches as horizontal Fields, selects); `Item` rows
+    (Run Keys, Organizations, invites, members); Alerts; copy InputGroups; `ChangelogList`
+    rows; `AlertDialog`.
   - DATA FIELDS: User (email, name, username, avatar); plan; Run Keys; Organizations (name,
     slug, role, members, invites, activity); password fields.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's Card and Field (the reference has no
+  settings): `settings-personal` (admin, Personal), `settings-organization-owner` (the owner
+  of an Organization: members, invites, activity), `settings-organization-editor` (an editor:
+  the role note and Leave Organization) and `settings-revoke-key-dialog`, each on desktop and
+  phone, light and dark. Present: every field has its visible label, every control is
+  reachable on a phone, and nothing scrolls sideways at 390px.
 - **NOTES:** Code: `src/views/Account.tsx` (the route renders `src/views/DashboardSettings.tsx`,
   which re-exports it). Issue #206 tracks splitting this page.
 
@@ -1725,20 +1827,24 @@ replaced.
 - **WHAT'S ON THE SCREEN:** the title; the description ("Anyone with this link can open this
   Run without signing in, tick its tasks, add notes and complete it." or "Share this template
   with others. They can view it and copy it into their library."); a read-only link field
-  ("Share link"); a copy button ("Copy share link"); "Close".
+  labelled "Share link", with its copy button ("Copy share link") inside it; "Close"; the
+  close button.
 - **PRIMARY ACTION:** copy the link.
 - **SECONDARY ACTIONS:** "Close".
 - **STATES:** copied (toast "Share link copied", "Share link copied to clipboard" or "Public
   link copied"); copy refused (toast "Couldn't copy the link. Select it and copy it
   manually.").
 - **NAVIGATION TYPE:** modal dialog.
-- **PATTERN CHOICE (proposal):** shadcn Dialog with a copy input group.
+- **PATTERN CHOICE (built):** shadcn Dialog with a labelled copy InputGroup
+  (`ShareLinkDialog`).
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; link row; footer.
-  - COMPONENT TYPES: read-only input; icon button; outline button.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, description, close button); the labelled link field; footer.
+  - COMPONENT TYPES: label; read-only InputGroup with an icon button; outline button.
   - DATA FIELDS: title; description; URL.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's Dialog: `template-detail-share-dialog` and
+  `run-share-dialog`, each on desktop and phone, light and dark. The field fits a 390px
+  screen (the link scrolls inside it) and the copy button stays in reach.
 - **NOTES:** While a Run is shared, Share on the same page shows its link again; a new share
   mints a new link and ends the old one.
 
@@ -1790,14 +1896,17 @@ replaced.
 - **SECONDARY ACTIONS:** "Cancel".
 - **STATES:** "Deleting..."; a failure toast; an item deleted elsewhere closes the dialog and
   reloads the list.
-- **NAVIGATION TYPE:** modal dialog (an alert dialog on Template detail).
-- **PATTERN CHOICE (proposal):** shadcn AlertDialog for all three, with a destructive action.
+- **NAVIGATION TYPE:** alert dialog (it does not close on a click outside).
+- **PATTERN CHOICE (built):** shadcn AlertDialog for all three, with a destructive action
+  (`ConfirmDialog`).
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header (title, question); footer (two buttons).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, question); footer (two buttons, stacked on phones).
   - COMPONENT TYPES: heading; paragraph; outline and destructive buttons.
   - DATA FIELDS: item kind; title (Template detail).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's AlertDialog: `my-templates-delete-dialog`,
+  `template-detail-delete-dialog` and `my-runs-delete-dialog`, each on desktop and phone,
+  light and dark.
 - **NOTES:** The API archives the item. The UI says Delete and never says it cannot be undone.
 
 ### Action menus
@@ -1807,23 +1916,25 @@ replaced.
 - **HOW USER GETS HERE:** "Actions for <title>" on a My Templates card; "Template actions" on
   Template detail; "Run options" on a My Runs row; "More actions" in the editor header.
 - **WHAT'S ON THE SCREEN:**
-  - Template card: "Edit", "Start Run", "Delete" (by role).
+  - Template card: "Edit", "Start Run", "Duplicate", "Delete" (by role).
   - Template detail: "Duplicate" ("Duplicating..."), "Export JSON" or "Upgrade to export",
     "Delete".
   - Run row: "Share Run", "Stop sharing" (a shared Run), "Delete" (by role).
-  - Editor: "Discard changes".
+  - Editor: "Preview" (phones), "Discard changes".
 - **PRIMARY ACTION:** the first item.
 - **SECONDARY ACTIONS:** the rest.
 - **STATES:** role-limited items; disabled while an action runs.
 - **NAVIGATION TYPE:** dropdown menu.
-- **PATTERN CHOICE (proposal):** shadcn DropdownMenu, the destructive item last after a
+- **PATTERN CHOICE (built):** shadcn DropdownMenu, the destructive item last after a
   separator.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
+- **STRUCTURE (built):**
   - LAYOUT ZONES: icon trigger; item list; separator; destructive item.
-  - COMPONENT TYPES: icon button; menu items with icons.
+  - COMPONENT TYPES: icon button; menu items with icons; destructive item.
   - DATA FIELDS: item; permissions; plan state (export).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's DropdownMenu: `my-templates-card-menu`,
+  `template-detail-actions-menu` and `my-runs-options-menu`, each on desktop and phone, light
+  and dark.
 - **NOTES:** On a card the trigger shows on hover, keyboard focus and touch screens.
 
 ### Template preview dialog
@@ -1837,15 +1948,19 @@ replaced.
 - **PRIMARY ACTION:** close.
 - **SECONDARY ACTIONS:** none.
 - **STATES:** follows the draft as typed.
-- **NAVIGATION TYPE:** modal dialog (large, scrolling).
-- **PATTERN CHOICE (proposal):** shadcn Dialog reusing the public template page's "What's
-  included" block.
+- **NAVIGATION TYPE:** modal dialog (large; its header stays while the draft scrolls).
+- **PATTERN CHOICE (built):** shadcn Dialog; the draft keeps its own renderer
+  (`PublicTemplateContent`, every task open). Reusing the public template page's "What's
+  included" block (`TemplateSectionList`) is left for later: that renderer's tested
+  behaviors (Clipy images and player, file and embed links) would move with it.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; a bordered preview (title, description, sections).
-  - COMPONENT TYPES: heading; paragraph; section and task list.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, description, close button); a scrolling body (the draft's
+    title and description, then its sections).
+  - COMPONENT TYPES: heading; paragraph; section and task list with disclosure.
   - DATA FIELDS: draft title, description, sections.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's Dialog: `editor-preview-dialog`, on
+  desktop and phone, light and dark. It fits a 390px screen (85% of the window's height).
 - **NOTES:** none.
 
 ### Add Block popover
@@ -1856,17 +1971,19 @@ replaced.
   blocks yet" box.
 - **WHAT'S ON THE SCREEN:** "Text", "Image", "Video", "File", "Embed", "Sub-tasks".
 - **PRIMARY ACTION:** pick a block type.
-- **SECONDARY ACTIONS:** click outside to close.
+- **SECONDARY ACTIONS:** Escape or a click outside to close.
 - **STATES:** open or closed.
-- **NAVIGATION TYPE:** popover menu.
-- **PATTERN CHOICE (proposal):** shadcn DropdownMenu.
+- **NAVIGATION TYPE:** dropdown menu.
+- **PATTERN CHOICE (built):** shadcn DropdownMenu (`ContentAddPanel`): its items are menu
+  items, reached with the arrow keys.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: trigger; a floating list.
-  - COMPONENT TYPES: ghost button; menu buttons with icons.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: trigger; a floating menu.
+  - COMPONENT TYPES: outline button; menu items with icons.
   - DATA FIELDS: block type (icon, label).
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Hand-built today (a positioned list of buttons).
+- **PROOF PASS:** Pass (step 2a), against shadcn's DropdownMenu: `editor-add-block-menu`, on
+  desktop and phone, light and dark.
+- **NOTES:** Until step 2a it was a hand-built positioned list of buttons.
 
 ### Run tasks sheet
 
@@ -1879,13 +1996,15 @@ replaced.
 - **SECONDARY ACTIONS:** close.
 - **STATES:** focus starts on the current task and returns to "Tasks" on close.
 - **NAVIGATION TYPE:** sheet.
-- **PATTERN CHOICE (proposal):** shadcn Sheet holding the same list as the `xl` column.
+- **PATTERN CHOICE (built):** shadcn Sheet holding the same list as the `xl` column.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; scrolling list.
-  - COMPONENT TYPES: sheet; grouped task list with a current marker.
-  - DATA FIELDS: sections; tasks (title, done, current).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (title, description, close button); scrolling list; "Overall
+    Progress" at the foot.
+  - COMPONENT TYPES: Sheet; grouped task list with a current marker; progress bar.
+  - DATA FIELDS: sections; tasks (title, done, current); progress.
+- **PROOF PASS:** Pass (step 2a), against shadcn's Sheet: `run-tasks-sheet-mobile-light` and
+  `-dark`.
 - **NOTES:** none.
 
 ### Revoke Run Key dialog
@@ -1899,13 +2018,15 @@ replaced.
 - **SECONDARY ACTIONS:** "Cancel".
 - **STATES:** "Revoking..." on the row's button; a failure toast ("Failed to revoke Run Key").
 - **NAVIGATION TYPE:** modal dialog (alert dialog).
-- **PATTERN CHOICE (proposal):** shadcn AlertDialog with a destructive action.
+- **PATTERN CHOICE (built):** shadcn AlertDialog with a destructive action
+  (`ConfirmDialog`).
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: header; footer.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header; footer (stacked on phones).
   - COMPONENT TYPES: heading; paragraph; cancel and destructive buttons.
   - DATA FIELDS: key name.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2a), against shadcn's AlertDialog: `settings-revoke-key-dialog`,
+  on desktop and phone, light and dark.
 - **NOTES:** none.
 
 ### Browser confirm prompts
@@ -1929,7 +2050,8 @@ replaced.
   tab-close prompt must stay the browser's.
 - **REFERENCE IMAGES:** none.
 - **STRUCTURE (current):** a native dialog.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Not restyled: step 2a kept the browser's prompts, since the editor's and
+  the run page's unsaved-changes guards stay as they are.
 - **NOTES:** TBD whether the Back and Forward guard can wait for an in-page dialog.
 
 ## Decided on 2026-09-29
@@ -1972,3 +2094,25 @@ Found while making those changes; none is decided here.
   "Starting…" uses an ellipsis character where other buttons say "Saving..." or "Creating...".
 - The site header's "Templates" menu is the public library and Categories, while the console
   sidebar's "Templates" is My Templates.
+
+Raised by step 2a (the signed-in console), none decided:
+
+- Labels the restyle made visible, so that every field has one: "Search", "Visibility" and
+  "Sort by" (My Templates), "Search" and "Status" (My Runs), "Run title" (renaming a Run),
+  "Share link" (the Share link dialog), "Public Clipy video link" (the editor), and "Role" and
+  "Status" on a member's selects on phones. The avatar's "Upload avatar" and "Remove avatar"
+  were hover-only icon buttons with those names; they are now visible buttons. Keep this
+  wording?
+- New wording for the editor on phones: "Outline" (the header button and the sheet's title),
+  and "Move <entry> up" and "Move <entry> down" on a touch screen.
+- Account Settings' card proposed a section nav or Tabs; step 2a kept one column of Cards.
+  Add one?
+- The Template preview dialog keeps its own renderer instead of the public page's "What's
+  included" block, which its card proposed. Move it over (with its tests)?
+- The delete confirmations are alert dialogs now, so a click outside no longer closes them
+  (Cancel or Escape does).
+- Card titles are `h3` headings, so a page's first card after its `h1` skips a level (the
+  editor's "Generate from Clipy", Import Templates, Account Settings).
+- On phones the editor's Preview moves into "More actions" and its theme toggle leaves the
+  top bar (the sidebar keeps one), and the run page's Previous and Next show only their
+  arrows.
