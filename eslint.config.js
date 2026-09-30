@@ -11,7 +11,6 @@ const MAX_LINES = 500;
 // Legacy files already over MAX_LINES, capped at roughly their current size.
 // Lower a cap when a file shrinks; never raise one. Split the file instead.
 const LEGACY_MAX_LINES = {
-  "functions/api/handlers/checklists.ts": 1200,
   "functions/api/handlers/teams.ts": 1100,
   "functions/api/handlers/agentMcp.ts": 610,
   "src/lib/templates/templateMarkdown.ts": 750,
