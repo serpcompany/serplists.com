@@ -43,10 +43,6 @@ vi.mock('sonner', () => ({
   },
 }));
 
-vi.mock('@/components/shared/LoadingSpinner', () => ({
-  LoadingSpinner: ({ message }: { message: string }) => <div>{message}</div>,
-}));
-
 const runs: ChecklistRun[] = [
   {
     id: 'run-5',

@@ -3,23 +3,34 @@
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpRight,
   CalendarDays,
   Eye,
   FileText,
   Link as LinkIcon,
+  List,
   ListChecks,
   MapPin,
   Play,
   Sparkles,
 } from 'lucide-react';
 
-import { PublicPageContainer } from '@/components/layout/PublicPageLayout';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
+import { MediaCard } from '@/components/layout/MediaCard';
+import { PageEmptyState, PageLoadingState } from '@/components/layout/PageState';
+import { SectionHeader } from '@/components/layout/SectionHeader';
+import { Stat } from '@/components/layout/Stat';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 import {
   loadUserProfile,
   type LoadUserProfileResult,
@@ -41,8 +52,6 @@ import {
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-import { Link } from '@/components/navigation/Link';
 
 const NO_TEMPLATES: ChecklistTemplate[] = [];
 
@@ -85,27 +94,18 @@ export const UserProfileContent = ({
   const joinedDate = formatMonthYear(profile?.created_at);
 
   if (!result) {
-    return (
-      <PublicPageContainer className="py-14">
-        <div className="rounded-xl border bg-card p-8 text-card-foreground">
-          <LoadingSpinner message="Loading profile..." />
-        </div>
-      </PublicPageContainer>
-    );
+    return <PageLoadingState label="Loading profile..." />;
   }
 
   // No noindex here: a crawler that hits a brief outage must not drop a live profile.
   if (result.kind === 'error') {
     return (
-      <PublicPageContainer className="py-14">
-        <EmptyState
-          title="Unable to load profile"
-          description={result.message}
-          icon={Sparkles}
-          className="min-h-0"
-          action={{ label: 'Try again', onClick: onRetry }}
-        />
-      </PublicPageContainer>
+      <PageEmptyState
+        actions={<Button onClick={onRetry}>Try again</Button>}
+        description={result.message}
+        icon={<Sparkles />}
+        title="Unable to load profile"
+      />
     );
   }
 
@@ -114,15 +114,14 @@ export const UserProfileContent = ({
   // profile that went away after the server rendered the page.
   if (!profile) {
     return (
-      <PublicPageContainer className="py-14">
+      <>
         <NoIndexMeta follow={false} />
-        <EmptyState
-          title="User not found"
+        <PageEmptyState
           description={PROFILE_NOT_FOUND_PAGE_TEXT.description}
-          icon={Sparkles}
-          className="min-h-0"
+          icon={<Sparkles />}
+          title="User not found"
         />
-      </PublicPageContainer>
+      </>
     );
   }
 
@@ -157,161 +156,114 @@ export const UserProfileContent = ({
   ];
 
   return (
-    <PublicPageContainer className="pb-16 pt-8">
-      <div className="mx-auto max-w-4xl">
-        <section className="mb-10">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-6">
-            <Avatar className="h-20 w-20 border border-border/70">
-              <AvatarImage src={profile.avatar_url || undefined} />
-              <AvatarFallback className="bg-muted text-2xl font-medium text-foreground">
-                {getProfileInitials(profile)}
-              </AvatarFallback>
-            </Avatar>
+    <DetailPageLayout
+      aside={
+        <div className="grid grid-cols-3 gap-4">
+          {statCards.map((card) => {
+            const Icon = card.icon;
+            return <Stat key={card.label} icon={<Icon />} label={card.label} value={card.value} />;
+          })}
+        </div>
+      }
+      description={buildProfileSummary(profile, stats)}
+      media={
+        <Avatar className="size-14">
+          <AvatarImage alt="" src={profile.avatar_url || undefined} />
+          <AvatarFallback className="text-lg">{getProfileInitials(profile)}</AvatarFallback>
+        </Avatar>
+      }
+      meta={
+        profile.location || profile.website || joinedDate ? (
+          <>
+            {profile.location ? (
+              <span className="inline-flex items-center gap-1.5">
+                <MapPin aria-hidden="true" className="size-4" />
+                {profile.location}
+              </span>
+            ) : null}
+            {profile.website ? (
+              <a
+                href={getProfileWebsiteHref(profile.website)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              >
+                <LinkIcon aria-hidden="true" className="size-4" />
+                {formatWebsiteLabel(profile.website)}
+              </a>
+            ) : null}
+            {joinedDate ? (
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarDays aria-hidden="true" className="size-4" />
+                Joined {joinedDate}
+              </span>
+            ) : null}
+          </>
+        ) : undefined
+      }
+      subtitle={`@${profile.username}`}
+      title={getProfileDisplayName(profile)}
+    >
+      <section aria-labelledby="public-templates">
+        <SectionHeader
+          description="Browse every public template published from this profile."
+          id="public-templates"
+          title="Public Templates"
+        />
 
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                {getProfileDisplayName(profile)}
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                @{profile.username}
-              </p>
-
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-foreground/90">
-                {buildProfileSummary(profile, stats)}
-              </p>
-
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                {profile.location ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <MapPin className="h-4 w-4" />
-                    {profile.location}
-                  </span>
-                ) : null}
-
-                {profile.website ? (
-                  <a
-                    href={getProfileWebsiteHref(profile.website)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                  >
-                    <LinkIcon className="h-4 w-4" />
-                    {formatWebsiteLabel(profile.website)}
-                  </a>
-                ) : null}
-
-                {joinedDate ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays className="h-4 w-4" />
-                    Joined {joinedDate}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            {statCards.map((card) => {
-              const Icon = card.icon;
-
+        {templates.length === 0 ? (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Sparkles />
+              </EmptyMedia>
+              <EmptyTitle>
+                <h3>No public templates</h3>
+              </EmptyTitle>
+              <EmptyDescription>
+                @{profile.username} has not published any public templates yet.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <CardGrid>
+            {templates.map((template) => {
+              const TypeIcon = template.type === 'recipe' ? List : FileText;
+              const categories = (template.categories || []).slice(0, 3);
               return (
-                <Card
-                  key={card.label}
-                  className="rounded-xl border-border/70 bg-card shadow-none"
+                <MediaCard
+                  key={template.id}
+                  clampDescription
+                  description={
+                    template.description || 'Public template pack published in this creator profile.'
+                  }
+                  eyebrow={
+                    categories.length ? (
+                      <span className="flex flex-wrap gap-1">
+                        {categories.map((category) => (
+                          <Badge key={category} variant="secondary">
+                            {category}
+                          </Badge>
+                        ))}
+                      </span>
+                    ) : undefined
+                  }
+                  href={buildCanonicalPublicTemplatePath(template) || buildPublicTemplatesPath()}
+                  icon={<TypeIcon />}
+                  title={template.title}
                 >
-                  <div className="p-5 text-center">
-                    <div className="flex items-center justify-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      <Icon className="h-4 w-4" />
-                      <span>{card.label}</span>
-                    </div>
-                    <p className="mt-3 text-2xl font-bold text-foreground">
-                      {card.value}
-                    </p>
-                  </div>
-                </Card>
+                  <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span>@{profile.username}</span>
+                    <span>{formatCount(template.sections.length, 'section')}</span>
+                    <span>{formatCount(countTemplateItems(template), 'item')}</span>
+                  </p>
+                </MediaCard>
               );
             })}
-          </div>
-        </section>
-
-        <section>
-          <div className="mb-6">
-            <h2 className="text-lg font-semibold text-foreground">
-              Public Templates
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Browse every public template published from this profile.
-            </p>
-          </div>
-
-          {templates.length === 0 ? (
-            <EmptyState
-              title="No public templates"
-              description={`@${profile.username} has not published any public templates yet.`}
-              icon={Sparkles}
-              className="min-h-0 rounded-lg border border-dashed"
-            />
-          ) : (
-            <div className="grid gap-6 sm:grid-cols-2">
-              {templates.map((template) => {
-                const templatePath =
-                  buildCanonicalPublicTemplatePath(template) ||
-                  buildPublicTemplatesPath();
-
-                return (
-                  <Card
-                    key={template.id}
-                    className="h-full rounded-xl border-border/70 shadow-none transition-colors hover:border-foreground/20"
-                  >
-                    <Link
-                      href={templatePath}
-                      className="group flex h-full flex-col gap-4 p-5"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <h3 className="line-clamp-2 text-base font-semibold text-foreground transition-colors group-hover:text-foreground">
-                            {template.title}
-                          </h3>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            @{profile.username}
-                          </p>
-                        </div>
-                        <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition group-hover:text-foreground" />
-                      </div>
-
-                      <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">
-                        {template.description ||
-                          'Public template pack published in this creator profile.'}
-                      </p>
-
-                      {(template.categories || []).length ? (
-                        <div className="flex flex-wrap gap-2">
-                          {(template.categories || [])
-                            .slice(0, 3)
-                            .map((category) => (
-                              <span
-                                key={category}
-                                className="inline-flex items-center rounded-full border border-border/70 px-2.5 py-1 text-xs font-medium text-muted-foreground"
-                              >
-                                {category}
-                              </span>
-                            ))}
-                        </div>
-                      ) : null}
-
-                      <div className="mt-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span>{formatCount(template.sections.length, 'section')}</span>
-                        <span>{formatCount(countTemplateItems(template), 'item')}</span>
-                      </div>
-                    </Link>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </PublicPageContainer>
+          </CardGrid>
+        )}
+      </section>
+    </DetailPageLayout>
   );
 };
 
