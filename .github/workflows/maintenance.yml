@@ -77,6 +77,8 @@ jobs:
             You are this repository's weekly doc gardener. Follow AGENTS.md.
             Goal: documentation that no longer matches the code gets fixed in one small PR.
 
+            0. First run `gh pr list --state open --search "docs: weekly doc gardening in:title"`.
+               If it lists a PR, stop and say that a gardening PR is already open, with its number.
             1. Read tmp/maintenance-report.md. Your work list is the "Docs check" failures,
                the "Docs to re-verify" list, and design docs flagged as stale under
                "Plans and scores". Handle at most 8 docs; start with the ones whose
@@ -90,10 +92,8 @@ jobs:
             4. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
                tests, workflows, baselines, or generated files in docs/generated/.
             5. Run `pnpm run docs:check`; it must pass.
-            6. If you changed nothing, stop and say "No doc drift found". Otherwise, unless
-               `gh pr list --state open --search "docs: weekly doc gardening in:title"`
-               already lists a PR (then stop and say so): create branch
-               chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with the
+            6. If you changed nothing, stop and say "No doc drift found". Otherwise create
+               branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with the
                message "docs: weekly doc gardening", push it, and open a PR into staging
                titled "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each
                doc you changed, what was wrong, and which code you checked it against, and
