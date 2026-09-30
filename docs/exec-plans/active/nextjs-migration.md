@@ -196,6 +196,14 @@ Each of these needs the user's approval, or happens with the domain move:
   - [x] Gates on the final code: `pnpm run verify` (5,157 unit tests); `pnpm run
     build:worker` (Worker 14,576 KiB, 2,997 KiB gzipped, 114 KiB over the phase 2
     measurement); `pnpm run test:smoke` (24 of 24).
+  - [x] The user's answers to step 1's open questions (decision log, 2026-09-29): header
+    menus, one Run URL, the console home after sign-in, the Template Library name, one Start a
+    Run dialog, an honest Run complete dialog, shared-run wording, the 404's shell, the
+    Categories empty search, "Updated <date>" and My Templates' count (`09770730` to
+    `3dd02d45`). Screenshots at 1440x900 and 390x844 are kept locally in
+    `tmp/design-review/decisions/`. Gates: `pnpm run verify` (5,239 unit tests), the 25 browser
+    specs the changes touch on the production build (112 of 112), `pnpm run test:smoke` (24 of
+    24).
   - [ ] Step 2: the screens the inventory marks "Not restyled yet (step 2)".
 
 ## Decision log
