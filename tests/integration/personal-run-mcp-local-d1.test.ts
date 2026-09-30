@@ -5,11 +5,14 @@ import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
+import { MAX_TEMPLATE_RESULT_BYTES } from "../../functions/api/handlers/agentMcpTemplateTools";
 import {
   createPersonalRunKeySecret,
   insertPersonalRunKeyWithinCap,
 } from "../../functions/api/utils/personal-run-key";
 import { execTool } from "../../scripts/lib/run-tool.mjs";
+import { contentSaveBytes, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
+import { readTemplateInFull } from "../support/templatePages";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -82,6 +85,41 @@ function toolPayload(body: JsonRecord): JsonRecord {
 
 function toolError(body: JsonRecord): string | undefined {
   return (toolPayload(body).error as string | undefined);
+}
+
+const PROSE = "Confirm the owner, the rollback plan, and the customer notice — then record it. Überprüfen. 🚀 ";
+// Text of `length` characters, never cutting an emoji in half.
+const PROSE_CHARACTERS = Array.from(PROSE);
+const prose = (length: number) =>
+  Array.from({ length }, (_, index) => PROSE_CHARACTERS[index % PROSE_CHARACTERS.length]).join("");
+const textTask = (id: string, textLength: number) => ({
+  id,
+  title: `Task ${id}`,
+  description: `Why ${id} matters`,
+  contents: [{ id: `${id}-text`, type: "text", value: prose(textLength) }],
+});
+
+// A template about 1KB under the 768KB content limit, as the app counts it: a section whose
+// second task grows to about 120KB (read in parts), a section of 130 tasks, about 90KB (read
+// in pages), and 22 sections of about 25KB (read whole). Reading it takes 31 calls.
+function nearLimitSections(): JsonRecord[] {
+  const sections: JsonRecord[] = [
+    { id: "guide", title: "Guide", items: [textTask("guide-intro", 400), textTask("guide-long", 90_000)] },
+    { id: "checks", title: "Checks", items: Array.from({ length: 130 }, (_, index) => textTask(`check-${index}`, 520)) },
+  ];
+  for (let index = 0; sections.length < 24; index += 1) {
+    sections.push({
+      id: `area-${index}`,
+      title: `Area ${index}`,
+      items: Array.from({ length: 16 }, (_, task) => textTask(`area-${index}-${task}`, 1_350)),
+    });
+  }
+  // Grow the long task until the template is about 1KB under the limit.
+  const block = ((sections[0].items as JsonRecord[])[1].contents as JsonRecord[])[0];
+  const bytesPerCharacter = new TextEncoder().encode(PROSE).byteLength / PROSE_CHARACTERS.length;
+  const room = TEMPLATE_CONTENT_MAX_BYTES - 1_000 - contentSaveBytes(sections);
+  block.value = prose(Array.from(String(block.value)).length + Math.floor(room / bytesPerCharacter));
+  return sections;
 }
 
 async function seedPreMigrationData(): Promise<void> {
@@ -660,6 +698,95 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(toolPayload(body).template).not.toHaveProperty("sections");
     expect(await rows("SELECT id FROM templates WHERE title = 'Oversized SOP'")).toHaveLength(1);
   });
+
+  it("reads a template near the 768KB limit back in full and edits it a part at a time", async () => {
+    const sections = nearLimitSections();
+    expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
+    expect(contentSaveBytes(sections)).toBeGreaterThan(TEMPLATE_CONTENT_MAX_BYTES - 16 * 1024);
+
+    const created = toolPayload(await bodyOf(await callTool("create_template", {
+      title: "Operations Handbook",
+      description: "Everything the on-call team checks",
+      sections,
+    })));
+    expect(created.sectionsOmitted).toBe(true);
+    const templateId = (created.template as JsonRecord).id as string;
+
+    const resultBytes: number[] = [];
+    const readTool = async (args: JsonRecord) => {
+      const body = await bodyOf(await callTool("get_template", args));
+      const result = body.result as JsonRecord;
+      expect(result.isError).toBeUndefined();
+      resultBytes.push(new TextEncoder().encode(JSON.stringify(result.structuredContent)).byteLength);
+      return result.structuredContent as JsonRecord;
+    };
+
+    // Every section, task, and field comes back, one bounded result at a time.
+    const { template, results } = await readTemplateInFull(readTool, templateId);
+    expect(template).toMatchObject({ id: templateId, title: "Operations Handbook", version: 1 });
+    expect(template.sections).toEqual(sections);
+    expect(Math.max(...resultBytes)).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+    // A few dozen calls, well within a Run Key's 120 a minute.
+    expect(results.length).toBeLessThan(40);
+    expect(results.some((result) => (result.part as JsonRecord | undefined)?.of === "task")).toBe(true);
+    expect(results.some((result) => typeof (result.section as JsonRecord | undefined)?.firstTask === "number")).toBe(true);
+    const guideCursor = (await readTool({ templateId, sectionId: "guide" })).nextCursor as string;
+    expect(typeof guideCursor).toBe("string");
+
+    const update = async (args: JsonRecord) => toolPayload(await bodyOf(await callTool("update_template", { templateId, ...args })));
+
+    // Each operation sends one task or section, never the whole template.
+    const replaced = await update({ expectedVersion: 1, operation: "replace_task", taskId: "check-7", task: { title: "Check the pager" } });
+    expect(replaced).toMatchObject({ sectionsOmitted: true, sectionId: "checks", taskId: "check-7", task: { title: "Check the pager" } });
+    expect(replaced.template).toMatchObject({ version: 2 });
+
+    const inserted = await update({
+      expectedVersion: 2,
+      operation: "insert_task",
+      beforeTaskId: "guide-long",
+      task: { title: "Read the summary first" },
+    });
+    const insertedId = inserted.taskId as string;
+    expect(insertedId).toMatch(/^item_/);
+    expect(inserted.task).toEqual({ id: insertedId, title: "Read the summary first" });
+
+    const moved = await update({ expectedVersion: 3, operation: "move_section", sectionId: "guide" });
+    expect(moved.template).toMatchObject({ version: 4 });
+    const removed = await update({ expectedVersion: 4, operation: "remove_task", taskId: "area-0-3" });
+    expect(removed.template).toMatchObject({ version: 5 });
+
+    const stale = await bodyOf(await callTool("update_template", {
+      templateId,
+      expectedVersion: 4,
+      operation: "remove_task",
+      taskId: "area-0-4",
+    }));
+    expect(toolError(stale)).toBe("edit_conflict");
+    const staleRead = await bodyOf(await callTool("get_template", { templateId, cursor: guideCursor }));
+    expect(toolError(staleRead)).toBe("edit_conflict");
+
+    // D1 holds the template with those four changes and nothing else.
+    const expected = structuredClone(sections);
+    const checks = expected[1].items as JsonRecord[];
+    checks[7] = { ...checks[7], title: "Check the pager" };
+    (expected[0].items as JsonRecord[]).splice(1, 0, { id: insertedId, title: "Read the summary first" });
+    expected.push(expected.shift() as JsonRecord);
+    (expected[1].items as JsonRecord[]).splice(3, 1);
+    const [stored] = await rows<JsonRecord>("SELECT items, version FROM templates WHERE id = ?", templateId);
+    expect(stored.version).toBe(5);
+    expect(JSON.parse(stored.items as string)).toEqual(expected);
+
+    const outline = await readTool({ templateId });
+    expect((outline.outline as JsonRecord[]).map(({ id }) => id).at(-1)).toBe("guide");
+    expect(await readTool({ templateId, taskId: insertedId })).toMatchObject({ sectionId: "guide", task: { id: insertedId } });
+
+    const history = await rows<JsonRecord>(
+      "SELECT metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? AND action = 'template.updated' ORDER BY created_at",
+      templateId,
+    );
+    expect(history.map(({ metadata_json }) => (JSON.parse(String(metadata_json)) as JsonRecord).operation))
+      .toEqual(["replace_task", "insert_task", "move_section", "remove_task"]);
+  }, 60_000);
 
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
