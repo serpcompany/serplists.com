@@ -977,7 +977,7 @@ test.describe("template editor regressions", () => {
 
     // Arrive through the app so browser Back stays inside the single-page app.
     await page.goto(`/dashboard/templates/${templateId}/`);
-    await page.getByRole("link", { name: "Edit" }).click();
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
     await expect(page).toHaveURL(editorUrl);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByLabel("Description (Optional)").fill(draft);
@@ -1445,7 +1445,7 @@ test.describe("template editor regressions", () => {
         body: { sections, expected_version: template.version },
       });
 
-      await page.getByRole("link", { name: "Edit" }).click();
+      await page.getByRole("link", { name: "Edit", exact: true }).click();
       await expect(page.getByText("Added elsewhere").first()).toBeVisible();
 
       await page.getByPlaceholder("Enter template name...").fill(`${title} edited`);
