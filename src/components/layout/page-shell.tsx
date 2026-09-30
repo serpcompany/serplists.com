@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import {
   pageContainerVariants,
   pageSectionVariants,
-  surfaceVariants,
 } from '@/components/layout/page-shell.styles';
 
 type PageContainerProps = HTMLAttributes<HTMLDivElement> &
@@ -53,27 +52,6 @@ export function PageSection({
       <PageContainer className={containerClassName} width={width}>
         {children}
       </PageContainer>
-    </Component>
-  );
-}
-
-type SurfaceProps = HTMLAttributes<HTMLElement> &
-  VariantProps<typeof surfaceVariants> & {
-    as?: 'article' | 'aside' | 'div' | 'section';
-  };
-
-// A panel with the Card surface, for pages not yet built from the Card blocks.
-export function Surface({
-  as: Component = 'div',
-  children,
-  className,
-  padding,
-  tone,
-  ...props
-}: SurfaceProps) {
-  return (
-    <Component className={cn(surfaceVariants({ padding, tone }), className)} {...props}>
-      {children}
     </Component>
   );
 }

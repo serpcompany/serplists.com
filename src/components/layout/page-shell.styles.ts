@@ -46,34 +46,6 @@ export const pageHeroVariants = cva('flex flex-col gap-4', {
   },
 });
 
-// A panel with the shadcn Card surface, for the pages not yet built from the Card blocks.
-export const surfaceVariants = cva(
-  'text-card-foreground',
-  {
-    variants: {
-      tone: {
-        default: 'rounded-xl bg-card ring-1 ring-foreground/10',
-        glass: 'rounded-xl bg-card ring-1 ring-foreground/10',
-        metric: 'rounded-xl bg-card ring-1 ring-foreground/10',
-        console: 'rounded-xl bg-card ring-1 ring-foreground/10',
-        docs: 'rounded-xl bg-card ring-1 ring-foreground/10',
-        flat: 'bg-transparent',
-      },
-      padding: {
-        none: '',
-        sm: 'p-4 sm:p-5',
-        md: 'p-6',
-        lg: 'p-8',
-        xl: 'p-10',
-      },
-    },
-    defaultVariants: {
-      tone: 'default',
-      padding: 'md',
-    },
-  },
-);
-
 // A square tile holding an icon: the shadcn muted media tile (EmptyMedia's icon variant) in
 // three sizes. The `card` tone sits a tile on a muted area, as in a card's media.
 export const iconTileVariants = cva(
@@ -104,6 +76,4 @@ export type PageSectionSpacing = VariantProps<
   typeof pageSectionVariants
 >['spacing'];
 export type PageHeroAlign = VariantProps<typeof pageHeroVariants>['align'];
-export type SurfaceTone = VariantProps<typeof surfaceVariants>['tone'];
-export type SurfacePadding = VariantProps<typeof surfaceVariants>['padding'];
 export type IconTileSize = VariantProps<typeof iconTileVariants>['size'];
