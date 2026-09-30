@@ -288,6 +288,16 @@ Each of these needs the user's approval, or happens with the domain move:
   `get_template` reads any template in results of at most 32KB and `update_template` changes
   one section or task (`2bd9dbcf` to `35dfff67`). A template 1KB under the 768KB limit reads
   back exactly in 31 calls on local D1.
+- [x] Wrangler's dev proxy no longer loses requests (decision log, 2026-09-30). "An invite
+  opened in another account offers to sign out and come back to it" failed in 3 of 3 runs alone
+  while the machine was busy (it passed 6 of 6 later on a quiet one), and the smoke invite test
+  failed once in the full suite (265 of 266): both lost the invite POST sent while the worker
+  was still answering the Organization's first API calls. `patches/wrangler@4.143.0.patch`
+  (`7b4e95f8`) relays the proxy to the worker over a new connection for every request, and
+  `tests/unit/e2e/wrangler-proxy-patch.test.ts` guards it. Through wrangler dev and a worker
+  kept busy past a connection's 5-second mark, 3 of 20 POSTs were lost before and 0 of 20
+  after (0 of 20 more sent right at the mark). Both tests passed 5 of 5 alone and their spec
+  file passed, with no lost or resent request in wrangler's log.
 
 ## Decision log
 
@@ -653,3 +663,13 @@ Each of these needs the user's approval, or happens with the domain move:
   agent dropped would be removed. The whole-checklist `sections` stays for templates an agent
   can send whole; whether to refuse it for a template too large to read at once is left to the
   user. The other MCP results keep their 512KB bound (TD-28).
+- 2026-09-30: **A relay that opens a new connection per request, not a resend.** The dev proxy
+  lost more than requests sent at a connection's 5-second mark: workerd reads new requests and
+  advances its timers only once it has run out of queued work, so while the worker is busy a
+  request can wait on an idle connection and lose to that connection's timer when it catches
+  up. POSTs sent 0.7 seconds before the mark were lost this way, so a keep-alive timeout under 5
+  seconds would not have been enough, and workerd has no setting for either timeout. Resending
+  what failed before a response (the 4.54 patch) was rejected: a resend can land on the next
+  idle connection, which is just as old, and it sends a POST twice if the first one did reach
+  the worker. The relay runs in wrangler's process, adds about 0.65 ms to a request, and gives
+  the worker a new connection for each one, which its idle timer never closes.
