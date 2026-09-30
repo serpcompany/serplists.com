@@ -38,12 +38,16 @@ interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
+  // The "Sub-tasks" heading's level: one below the task's own heading, or below the section
+  // the task is listed in when the task has none.
+  subtaskHeadingAs?: 'h3' | 'h4';
 }
 
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ 
   contents, 
   disabled = false,
   onSubItemToggle,
+  subtaskHeadingAs: SubtaskHeading = 'h4',
 }) => {
   if (!contents || contents.length === 0) {
     return (
@@ -121,7 +125,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <ListCheck className="h-5 w-5 text-muted-foreground" />
-                <h4 className="font-medium">Sub-tasks</h4>
+                <SubtaskHeading className="font-medium">Sub-tasks</SubtaskHeading>
               </div>
               <div className="space-y-2 pl-7">
                 {content.subItems.map((subItem: ChecklistSubItem, subItemIndex: number) => (

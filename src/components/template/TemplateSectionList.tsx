@@ -100,7 +100,7 @@ function TaskList({ items }: { items: ChecklistItem[] }) {
             ) : null}
             {item.contents?.length ? (
               <div className="mt-3 text-sm">
-                <ContentRenderer contents={item.contents} disabled />
+                <ContentRenderer contents={item.contents} disabled subtaskHeadingAs="h3" />
               </div>
             ) : null}
           </div>

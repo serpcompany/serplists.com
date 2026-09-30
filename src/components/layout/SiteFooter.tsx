@@ -24,7 +24,7 @@ export function SiteFooter({ className }: { className?: string }) {
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-3">
           {publicFooterGroups.map((column) => (
             <div key={column.title} className="flex flex-col gap-4">
-              <h3 className="text-sm font-medium text-foreground">{column.title}</h3>
+              <h2 className="text-sm font-medium text-foreground">{column.title}</h2>
               <ul className="flex flex-col gap-3">
                 {column.items.map((item) => (
                   <li key={item.label}>

@@ -132,6 +132,7 @@ export function TaskExecutionPanel({
             contents={task.contents}
             disabled={!canTick}
             onSubItemToggle={onToggleSubItem}
+            subtaskHeadingAs="h3"
           />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">

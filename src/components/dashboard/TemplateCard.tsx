@@ -59,6 +59,7 @@ export function TemplateCard({
 
   return (
     <MediaCard
+      titleAs="h2"
       action={
         hasMenuActions ? (
           <DropdownMenu>

@@ -142,6 +142,7 @@ const Index = () => {
                 description={step.description}
                 icon={<Icon />}
                 title={step.title}
+                titleAs="h2"
               />
             );
           })}

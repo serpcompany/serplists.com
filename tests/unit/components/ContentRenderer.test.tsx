@@ -201,3 +201,22 @@ describe('ContentRenderer file blocks', () => {
   });
 });
 
+
+// The "Sub-tasks" heading sits one level below the task (or section list) around it: an h4
+// under a shared run's h3 tasks, an h3 under the run page's h2 task title.
+describe('ContentRenderer Sub-tasks heading', () => {
+  const contents: ChecklistItemContent[] = [
+    { id: 'sub-1', type: 'subItems', value: '', subItems: [{ id: 'a', title: 'Check the title' }] },
+  ];
+
+  it('is an h4 by default', () => {
+    expect(renderToStaticMarkup(<ContentRenderer contents={contents} />)).toMatch(/<h4[^>]*>Sub-tasks<\/h4>/);
+  });
+
+  it('takes the level it is given', () => {
+    const markup = renderToStaticMarkup(<ContentRenderer contents={contents} subtaskHeadingAs="h3" />);
+
+    expect(markup).toMatch(/<h3[^>]*>Sub-tasks<\/h3>/);
+    expect(markup).not.toContain('<h4');
+  });
+});

@@ -30,11 +30,13 @@ interface TemplateCardProps {
     runCount?: number;
     viewCount?: number;
   };
+  // The title's heading level: h2 when the grid follows the page's h1.
+  titleAs?: 'h2' | 'h3';
 }
 
 // A public Template in the library and category grids: a MediaCard with its categories,
 // counts, owner and a Start link. The whole card opens the template's page.
-export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical', template }) => {
+export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical', template, titleAs }) => {
   const sectionCount = getTemplateSectionCount(template);
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
@@ -92,6 +94,7 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
         ) : undefined
       }
       title={template.title}
+      titleAs={titleAs}
     >
       <p className="flex items-center gap-3 text-xs text-muted-foreground">
         <span>{formatCount(sectionCount, 'section')}</span>

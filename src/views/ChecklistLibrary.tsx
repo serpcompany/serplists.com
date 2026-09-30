@@ -234,7 +234,7 @@ const ChecklistLibrary = ({
         {filteredTemplates.length > 0 ? (
           <CardGrid>
             {filteredTemplates.map((template) => (
-              <TemplateCard key={template.id} template={template} />
+              <TemplateCard key={template.id} template={template} titleAs="h2" />
             ))}
           </CardGrid>
         ) : catalogError ? null : (
@@ -244,7 +244,7 @@ const ChecklistLibrary = ({
                 <Filter />
               </EmptyMedia>
               <EmptyTitle>
-                <h3>No templates found</h3>
+                <h2>No templates found</h2>
               </EmptyTitle>
               <EmptyDescription>Try adjusting your search or filters</EmptyDescription>
             </EmptyHeader>

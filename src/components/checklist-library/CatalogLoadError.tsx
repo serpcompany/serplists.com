@@ -26,7 +26,7 @@ export const CatalogLoadError = ({
         <AlertCircle />
       </EmptyMedia>
       <EmptyTitle>
-        <h3>Could not load templates</h3>
+        <h2>Could not load templates</h2>
       </EmptyTitle>
       <EmptyDescription>Check your connection and try again.</EmptyDescription>
     </EmptyHeader>
