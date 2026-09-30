@@ -107,7 +107,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
                 <AlertTriangle className="w-6 h-6 text-destructive" />
               </div>
-              <CardTitle>Something went wrong</CardTitle>
+              <CardTitle as="h1">Something went wrong</CardTitle>
               <CardDescription>
                 An unexpected error occurred. Please try refreshing the page or contact support if the problem persists.
               </CardDescription>

@@ -28,7 +28,7 @@ const getActivityActorName = (event: TeamActivityEvent): string =>
 export function TeamActivityList({ query, onRetry }: TeamActivityListProps) {
   return (
     <section className="flex flex-col gap-3">
-      <h4 className="text-sm font-medium">Activity</h4>
+      <h3 className="text-sm font-medium">Activity</h3>
       <QueryListState
         query={query}
         loadingLabel="Loading activity..."

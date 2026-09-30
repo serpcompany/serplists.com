@@ -54,7 +54,7 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Profile Information</CardTitle>
+        <CardTitle as="h2">Profile Information</CardTitle>
       </CardHeader>
       <CardContent>
         <FieldGroup>

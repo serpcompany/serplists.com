@@ -251,7 +251,7 @@ export function TeamSettingsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Organizations</CardTitle>
+        <CardTitle as="h2">Organizations</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {incomingInvites.length > 0 ? (
@@ -305,7 +305,7 @@ export function TeamSettingsSection() {
         {isTeamWorkspace ? (
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-1">
-              <h4 className="text-sm font-medium wrap-anywhere">{activeWorkspace.name}</h4>
+              <h3 className="text-sm font-medium wrap-anywhere">{activeWorkspace.name}</h3>
               <p className="text-sm text-muted-foreground">
                 Your role: {formatRole(activeWorkspace.role)}
               </p>

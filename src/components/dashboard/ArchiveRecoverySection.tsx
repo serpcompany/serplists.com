@@ -59,7 +59,7 @@ function ArchiveList({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           {icon}
           {title}
         </CardTitle>

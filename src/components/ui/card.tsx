@@ -32,10 +32,15 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-// A heading, so card titles stay in the page's outline (shadcn's own renders a div).
-function CardTitle({ className, ...props }: React.ComponentProps<"h3">) {
+// A heading, so card titles stay in the page's outline (shadcn's own renders a div). It is an
+// h3 unless `as` names the level where the card sits: h2 for a card right under the page's h1.
+function CardTitle({
+  as: Heading = "h3",
+  className,
+  ...props
+}: React.ComponentProps<"h3"> & { as?: "h1" | "h2" | "h3" | "h4" }) {
   return (
-    <h3
+    <Heading
       data-slot="card-title"
       className={cn(
         "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",

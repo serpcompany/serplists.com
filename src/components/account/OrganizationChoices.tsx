@@ -20,7 +20,7 @@ type IncomingInviteListProps = {
 export function IncomingInviteList({ acceptingInviteId, invites, onAccept }: IncomingInviteListProps) {
   return (
     <section className="flex flex-col gap-3">
-      <h4 className="text-sm font-medium">Incoming invites</h4>
+      <h3 className="text-sm font-medium">Incoming invites</h3>
       <ItemGroup className="gap-2">
         {invites.map((invite) => (
           <Item key={invite.id} role="listitem" variant="outline">
@@ -63,7 +63,7 @@ type OrganizationListProps = {
 export function OrganizationList({ activeTeamId, onSelect, teams }: OrganizationListProps) {
   return (
     <section className="flex flex-col gap-3">
-      <h4 className="text-sm font-medium">Your Organizations</h4>
+      <h3 className="text-sm font-medium">Your Organizations</h3>
       <div className="flex flex-col gap-2">
         {teams.map((team) => {
           const selected = activeTeamId === team.id;

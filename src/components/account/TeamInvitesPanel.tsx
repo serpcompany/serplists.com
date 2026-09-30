@@ -182,7 +182,7 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
       ) : null}
 
       <section className="flex flex-col gap-3">
-        <h4 className="text-sm font-medium">Pending invites</h4>
+        <h3 className="text-sm font-medium">Pending invites</h3>
         <QueryListState
           query={invitesQuery}
           loadingLabel="Loading invites..."

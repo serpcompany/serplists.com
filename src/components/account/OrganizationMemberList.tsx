@@ -66,7 +66,7 @@ export function OrganizationMemberList({
 
   return (
     <section className="flex flex-col gap-3">
-      <h4 className="text-sm font-medium">Members</h4>
+      <h3 className="text-sm font-medium">Members</h3>
       <QueryListState
         query={membersQuery}
         loadingLabel="Loading members..."

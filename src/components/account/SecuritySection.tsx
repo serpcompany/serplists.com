@@ -86,7 +86,7 @@ export const SecuritySection: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Security</CardTitle>
+        <CardTitle as="h2">Security</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <FieldSet>

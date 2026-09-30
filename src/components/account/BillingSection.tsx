@@ -192,7 +192,7 @@ export function BillingSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Billing</CardTitle>
+        <CardTitle as="h2">Billing</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
         <p>

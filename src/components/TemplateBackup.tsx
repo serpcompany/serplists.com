@@ -235,7 +235,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   return <div className={cn("flex flex-col gap-6", className)} data-template-import-export="true">
     <Card>
       <CardHeader>
-        <CardTitle>Template JSON Import &amp; Export</CardTitle>
+        <CardTitle as="h2">Template JSON Import &amp; Export</CardTitle>
         <CardDescription>
           Export portable template packs or import compatible JSON files for {activeWorkspace.name}.
         </CardDescription>
@@ -279,7 +279,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     <Card>
       <CardHeader>
-        <CardTitle>Export Templates</CardTitle>
+        <CardTitle as="h2">Export Templates</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Field orientation="horizontal">
@@ -311,7 +311,7 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
 
     <Card>
       <CardHeader>
-        <CardTitle>Import Templates</CardTitle>
+        <CardTitle as="h2">Import Templates</CardTitle>
       </CardHeader>
       <CardContent>
         <FieldGroup>

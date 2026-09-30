@@ -93,7 +93,7 @@ export function AgentAccessSectionView({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Agent Access</CardTitle>
+        <CardTitle as="h2">Agent Access</CardTitle>
         <CardDescription>
           Create a personal Run Key for a code agent to operate SOP runs in Personal.
         </CardDescription>
@@ -220,7 +220,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <h4 className="text-sm font-medium">Personal Run Keys</h4>
+            <h3 className="text-sm font-medium">Personal Run Keys</h3>
             <p className="text-xs text-muted-foreground">
               Revoking a key immediately blocks future agent requests. Existing run history remains intact.
             </p>

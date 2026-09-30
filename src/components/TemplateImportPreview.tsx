@@ -40,7 +40,7 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
 }) => (
   <Card>
     <CardHeader>
-      <CardTitle className="flex items-center gap-2">
+      <CardTitle as="h2" className="flex items-center gap-2">
         <CheckCircle aria-hidden="true" className="size-4 text-muted-foreground" />
         Import Preview
       </CardTitle>
@@ -53,7 +53,7 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
       </div>
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium">Templates to import:</h4>
+        <h3 className="text-sm font-medium">Templates to import:</h3>
         <ItemGroup className="max-h-40 gap-1 overflow-y-auto">
           {preview.templates.map((template, index: number) => (
             <Item key={index} role="listitem" size="sm" variant="muted">

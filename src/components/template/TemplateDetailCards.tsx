@@ -30,7 +30,7 @@ export function TemplateDetailsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Details</CardTitle>
+        <CardTitle as="h2">Details</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="flex flex-col gap-4 text-sm">
@@ -77,7 +77,7 @@ export function TemplateCategoriesCard({ categories, tags }: { categories: strin
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Categories &amp; Tags</CardTitle>
+        <CardTitle as="h2">Categories &amp; Tags</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
@@ -126,7 +126,7 @@ export function TemplateHistoryCard({ className, entries, isError, isLoading }: 
   return (
     <Card className={className}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <History aria-hidden="true" className="size-4 text-muted-foreground" />
           Changelog
         </CardTitle>

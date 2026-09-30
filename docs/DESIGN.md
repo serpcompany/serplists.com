@@ -113,9 +113,11 @@ page, so a page's sticky parts stick to the window.
   enforced by `deps:check`). Add shadcn components with the CLI
   (`npx shadcn@latest add <name>`) and keep them as generated.
 - Four generated components carry a change; keep it when you regenerate them.
-  `CardTitle` (`card.tsx`) renders an `h3`, as it did before the move to base-nova, so card
-  titles stay in the page's outline. `buttonVariants` (`button.tsx`) merges its classes
-  with `cn`: unmerged, the base's `border-transparent` beats the outline variant's
+  `CardTitle` (`card.tsx`) renders a heading, so card titles stay in the page's outline: an
+  `h3`, as before the move to base-nova, unless `as` names the level where the card sits. A
+  card right under the page's `h1` passes `as="h2"`, and the headings inside it move up with
+  it (`tests/unit/components/ui/card.test.tsx`). `buttonVariants` (`button.tsx`) merges its
+  classes with `cn`: unmerged, the base's `border-transparent` beats the outline variant's
   `border-border`, and a link styled as an outline button showed no border in the light
   theme. The sonner `Toaster` (`sonner.tsx`) follows the app's
   theme (`useDocumentTheme`), not next-themes. `SelectTrigger`'s icon (`select.tsx`) has

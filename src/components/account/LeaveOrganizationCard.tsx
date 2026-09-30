@@ -36,7 +36,7 @@ export function LeaveOrganizationCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Leave Organization</CardTitle>
+        <CardTitle as="h2">Leave Organization</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">

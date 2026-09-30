@@ -79,7 +79,7 @@ export function GenerateFromClipy({
     <section aria-labelledby="clipy-generator-title">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2" id="clipy-generator-title">
+          <CardTitle as="h2" className="flex items-center gap-2" id="clipy-generator-title">
             <Video aria-hidden="true" className="size-4 text-muted-foreground" />
             Generate from Clipy
           </CardTitle>

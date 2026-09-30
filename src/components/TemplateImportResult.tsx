@@ -15,7 +15,7 @@ export function TemplateImportResult({ summary }: { summary: TemplateImportSumma
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           {hasFailures ? (
             <AlertCircle aria-hidden="true" className="size-4 text-muted-foreground" />
           ) : (
@@ -33,7 +33,7 @@ export function TemplateImportResult({ summary }: { summary: TemplateImportSumma
 
         {summary.successes.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <h4 className="text-sm font-medium">Imported:</h4>
+            <h3 className="text-sm font-medium">Imported:</h3>
             <ItemGroup className="max-h-32 gap-1 overflow-y-auto">
               {summary.successes.map((success) => (
                 <Item key={success.id} role="listitem" size="sm" variant="muted">
