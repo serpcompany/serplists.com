@@ -1,15 +1,23 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PageSection, Surface } from '@/components/layout/page-shell';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
 import { QueryErrorNotice } from '@/components/shared/QueryListState';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { usePageRestoredFromCache, useRedirectPending } from '@/hooks/useRedirectPending';
 import {
@@ -30,6 +38,48 @@ import {
 import { buildConsoleSettingsPath, buildRegisterPath } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
+
+const FREE_FEATURES = [
+  'Create templates with sections and items',
+  'Run checklists and track progress',
+  'Browse public checklists',
+];
+const PRO_FEATURES = [
+  'Import and export template backups',
+  'Save public templates to your account',
+  'Manage billing from account settings',
+];
+
+type PlanCardProps = {
+  // The plan's button, or what stands in for it (a plan check, a notice).
+  action: ReactNode;
+  description: ReactNode;
+  features: string[];
+  title: string;
+};
+
+// A plan: its name and price line, what it includes, and its action in the card's footer.
+function PlanCard({ action, description, features, title }: PlanCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1">
+        <ul className="flex flex-col gap-3 text-sm text-muted-foreground">
+          {features.map((feature) => (
+            <li key={feature} className="flex items-start gap-2">
+              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
+              {feature}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+      <CardFooter>{action}</CardFooter>
+    </Card>
+  );
+}
 
 const Pricing = () => {
   const { user } = useAuth();
@@ -80,94 +130,54 @@ const Pricing = () => {
         />
       </PageSection>
 
-      <PageSection className="pt-0" spacing="spacious">
-        <div className="grid gap-6 md:grid-cols-2">
-          <Surface as="article" tone="docs">
-            <CardHeader className="space-y-2">
-              <CardTitle>Free</CardTitle>
-              <CardDescription>
-                Core checklist building and runs.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Create templates with sections and items
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Run checklists and track progress
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Browse public checklists
-                </li>
-              </ul>
-              <div className="mt-6">
-                <Link
-                  href={buildRegisterPath()}
-                  className={buttonVariants({ variant: 'outline' })}
-                >Start Free</Link>
-              </div>
-            </CardContent>
-          </Surface>
+      <PageSection className="pt-0" spacing="spacious" width="narrow">
+        <CardGrid columns={2}>
+          <PlanCard
+            action={
+              <Link href={buildRegisterPath()} className={buttonVariants({ variant: 'outline' })}>
+                Start Free
+              </Link>
+            }
+            description="Core checklist building and runs."
+            features={FREE_FEATURES}
+            title="Free"
+          />
 
-          <Surface as="article" tone="glass">
-            <CardHeader className="space-y-2">
-              <CardTitle>Pro</CardTitle>
-              <CardDescription>
-                {PRO_MONTHLY_PRICE_LABEL}. Cancel anytime.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Import and export template backups
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Save public templates to your account
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="mt-0.5 h-4 w-4 text-primary" />
-                  Manage billing from account settings
-                </li>
-              </ul>
-              <div className="mt-6">
-                {!user ? (
-                  <Link href={buildRegisterPath()} className={buttonVariants()}>Get Started</Link>
-                ) : planStatus === 'unknown' ? (
-                  <QueryErrorNotice
-                    message={PLAN_UNKNOWN_MESSAGE}
-                    onRetry={() => void billing.refetch()}
-                  />
-                ) : personalAction === 'support' ? (
-                  <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
-                ) : personalAction === 'manage' ? (
-                  <Link
-                    href={buildConsoleSettingsPath()}
-                    className={buttonVariants()}
-                  >{billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}</Link>
-                ) : (
-                  <Button
-                    onClick={handleUpgrade}
-                    disabled={isCheckingPlan || billing.data?.billingEnabled === false || isStartingCheckout}
-                  >
-                    {isCheckingPlan
-                      ? 'Checking plan...'
-                      : isStartingCheckout
-                        ? 'Opening checkout...'
-                        : billing.data?.billingEnabled === false
-                          ? 'Upgrade unavailable'
-                          : `Upgrade — ${PRO_MONTHLY_PRICE_LABEL}`}
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Surface>
-        </div>
+          <PlanCard
+            action={
+              !user ? (
+                <Link href={buildRegisterPath()} className={buttonVariants()}>Get Started</Link>
+              ) : planStatus === 'unknown' ? (
+                <QueryErrorNotice
+                  message={PLAN_UNKNOWN_MESSAGE}
+                  onRetry={() => void billing.refetch()}
+                />
+              ) : personalAction === 'support' ? (
+                <p className="text-sm text-muted-foreground">{PLAN_MANAGED_BY_SUPPORT_MESSAGE}</p>
+              ) : personalAction === 'manage' ? (
+                <Link href={buildConsoleSettingsPath()} className={buttonVariants()}>
+                  {billing.data?.plan === 'pro' ? 'Manage Pro' : 'Manage subscription'}
+                </Link>
+              ) : (
+                <Button
+                  onClick={handleUpgrade}
+                  disabled={isCheckingPlan || billing.data?.billingEnabled === false || isStartingCheckout}
+                >
+                  {isCheckingPlan
+                    ? 'Checking plan...'
+                    : isStartingCheckout
+                      ? 'Opening checkout...'
+                      : billing.data?.billingEnabled === false
+                        ? 'Upgrade unavailable'
+                        : `Upgrade — ${PRO_MONTHLY_PRICE_LABEL}`}
+                </Button>
+              )
+            }
+            description={`${PRO_MONTHLY_PRICE_LABEL}. Cancel anytime.`}
+            features={PRO_FEATURES}
+            title="Pro"
+          />
+        </CardGrid>
 
         <p className="mt-10 text-center text-sm text-muted-foreground">
           Payments and subscription management are securely handled by Stripe.
