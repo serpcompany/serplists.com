@@ -19,7 +19,7 @@ import { betterAuthLogger } from "./utils/better-auth-logger";
 import { assertNotBlockedTestEmail } from "./utils/test-email-block";
 import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
 import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
-import { rejectOverlongNewPassword } from "./utils/password-length";
+import { rejectInvalidNewPassword } from "./utils/password-length";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
 
 function isSignUpRequest(request: Request | undefined): boolean {
@@ -139,7 +139,7 @@ export function createBetterAuth(env: Env, request: Request) {
     },
     plugins,
     hooks: {
-      before: rejectOverlongNewPassword,
+      before: rejectInvalidNewPassword,
     },
     databaseHooks: {
       user: {

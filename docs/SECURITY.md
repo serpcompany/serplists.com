@@ -30,9 +30,10 @@
   would be stored as its first 72 bytes. A Better Auth `hooks.before`
   (`functions/api/utils/password-length.ts`) rejects a longer new password at
   sign-up, change-password, reset-password and set-password on every host, before
-  anything is written. Sign-in is never limited: it would reveal which emails have
-  accounts, and passwords set before the limit keep working. The limits live in
-  `src/lib/schemas/passwordLimits.ts`, which the forms share.
+  anything is written, and answers a missing one with `400 Invalid password` (Better
+  Auth's sign-up would otherwise fail with a 500). Sign-in is never limited: it would
+  reveal which emails have accounts, and passwords set before the limit keep working.
+  The limits live in `src/lib/schemas/passwordLimits.ts`, which the forms share.
 - **Production blocks known test-email domains** at sign-up and sign-in. The
   router checks the email in sign-up and sign-in bodies, and Better Auth's
   `databaseHooks` (`user.create` and `session.create`) enforce it for every other

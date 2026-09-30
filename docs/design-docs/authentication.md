@@ -139,11 +139,11 @@ and user-facing failure states when a supporting service is unavailable.
 - Passwords: at least 10 characters and at most 72 UTF-8 bytes (bcrypt ignores
   anything longer; emoji are 4 bytes, accented letters 2). Better Auth enforces the
   character minimum, a `hooks.before` (`functions/api/utils/password-length.ts`)
-  rejects longer new passwords at sign-up, change-password and reset-password, and
-  production also rejects breached passwords. Sign-in never checks the length, so
-  passwords set before the limit still work. `Register.tsx`, `ResetPassword.tsx`,
-  and `SecuritySection.tsx` validate the same limits client-side through
-  `src/lib/schemas/passwordLimits.ts`.
+  rejects missing or longer new passwords at sign-up, change-password and
+  reset-password, and production also rejects breached passwords. Sign-in never checks
+  the length, so passwords set before the limit still work. `Register.tsx`,
+  `ResetPassword.tsx`, and `SecuritySection.tsx` validate the same limits client-side
+  through `src/lib/schemas/passwordLimits.ts`.
 - Profile: `name`, `username`, `avatar_url`; public lookup through
   `GET /api/profiles/by-username?username=...` and `GET /api/profiles/by-id?userId=...`.
   Both resolve only Users who have a username; `by-id` returns 404 for anyone else, so an

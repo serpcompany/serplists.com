@@ -95,6 +95,26 @@ describe('password byte limit', { timeout: 30_000 }, () => {
   });
 
   it.each([
+    ['no password', { email: EMAIL, name: 'John' }],
+    ['a password that is not text', { email: EMAIL, password: 12345678901, name: 'John' }],
+  ])('refuses a sign-up with %s and creates no account', async (_label, body) => {
+    const response = await authRequest('sign-up/email', { body });
+
+    expect(response.status).toBe(400);
+    expect(await errorMessage(response)).toBe('Invalid password');
+    expect(memory.db.users).toEqual([]);
+  });
+
+  it('refuses a change-password request without a newPassword and keeps the old password', async () => {
+    const cookie = sessionCookieFrom(await signUp(PASSWORD));
+
+    const response = await authRequest('change-password', { cookie, body: { currentPassword: PASSWORD } });
+
+    expect(response.status).toBe(400);
+    expect((await signIn(PASSWORD)).status).toBe(200);
+  });
+
+  it.each([
     ['73 ASCII characters', ascii(73), 400],
     ['19 emoji (38 characters, 76 bytes)', emoji(19), 400],
     ['72 ASCII characters', ascii(72), 200],
