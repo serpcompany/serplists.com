@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-09-28
+- **Last updated:** 2026-09-30
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -75,7 +75,9 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   `functions/api/handlers/agentMcpLists.ts`) already page with a keyset cursor, but each
   page still reads and sorts all the owner's Personal rows through `idx_templates_owner`
   or `idx_checklist_runs_user_id`; indexes on the owner and the sort (`coalesce(updated_at,
-  created_at), id` for templates, `created_at, id` for runs) would bound them too.
+  created_at), id` for templates, `created_at, id` for runs) would bound them too. Those
+  indexes are pending: they need a migration, and the user left them for later (decision
+  log, 2026-09-30).
 
 ### 3. Writes
 
@@ -173,3 +175,8 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
   shard's input without bumping its kind now serves that shard stale for up to the
   1-day `s-maxage`, where an unrelated bump used to hide it, so the migration test pins
   which kinds each trigger bumps.
+- 2026-09-30: Leave the Run Key lists' row reads for later. `list_templates` and `list_runs`
+  return a page at a time within the MCP result bound, but each page still reads and sorts
+  all the owner's Personal rows, as the unpaged lists did. Bounding the rows read needs the
+  owner-and-sort indexes in step 2, which take a migration; the user chose to leave them
+  pending, so that item stays open.
