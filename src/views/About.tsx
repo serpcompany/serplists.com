@@ -2,12 +2,12 @@
 
 import { ShieldCheck, Target, Users } from 'lucide-react';
 
-import { PageSection, Surface } from '@/components/layout/page-shell';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { MediaCard } from '@/components/layout/MediaCard';
+import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
-import { IconTile } from '@/components/layout/IconTile';
 import { buttonVariants } from '@/components/ui/button';
 import { buildContactPath, buildPublicFeaturesPath } from '@/lib/routes';
-import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -54,25 +54,21 @@ const About = () => {
       </PageSection>
 
       <PageSection className="pt-0" spacing="spacious">
-        <div className="grid gap-6 md:grid-cols-3">
+        <CardGrid>
           {VALUES.map((value) => {
             const Icon = value.icon;
 
             return (
-              <Surface key={value.title} as="article" tone="docs">
-                <CardHeader className="space-y-4">
-                  <IconTile>
-                    <Icon className="h-6 w-6" />
-                  </IconTile>
-                  <div className="space-y-2">
-                    <CardTitle>{value.title}</CardTitle>
-                    <CardDescription>{value.description}</CardDescription>
-                  </div>
-                </CardHeader>
-              </Surface>
+              <MediaCard
+                key={value.title}
+                description={value.description}
+                icon={<Icon />}
+                title={value.title}
+                titleAs="h2"
+              />
             );
           })}
-        </div>
+        </CardGrid>
       </PageSection>
     </>
   );
