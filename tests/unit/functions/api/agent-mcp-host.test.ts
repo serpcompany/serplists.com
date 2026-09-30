@@ -80,7 +80,12 @@ function initializeRequest(endpoint: string): Request {
 
 describe("advertised MCP endpoint", () => {
   beforeEach(() => {
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ keyId: "key-1", userId: "user-1", name: "Codex" });
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({
+      keyId: "key-1",
+      userId: "user-1",
+      name: "Codex",
+      permissions: ["templates:read", "runs:read", "runs:write"],
+    });
   });
 
   it("still rejects a per-deployment staging URL at the MCP endpoint", async () => {

@@ -105,7 +105,12 @@ describe('limit-guarded writes that lose the race', () => {
   });
 
   it('MCP start_run answers limit_reached', async () => {
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ keyId: 'key-1', userId: 'user-1', name: 'Agent' });
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({
+      keyId: 'key-1',
+      userId: 'user-1',
+      name: 'Agent',
+      permissions: ['templates:read', 'runs:read', 'runs:write'],
+    });
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([{ id: 'template-1', user_id: 'user-1', owner_type: 'user', team_id: null, deleted_at: null, title: 'SOP', items: JSON.stringify(sections), content_version: 1 }])
       .mockResolvedValueOnce([{ count: 2 }])
