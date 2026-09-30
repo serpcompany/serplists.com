@@ -47,21 +47,26 @@ jobs:
       # skill always comes from the base branch, and a PR cannot rewrite its own review.
       # The rules the skill checks against, and the earlier findings below, go outside the
       # checkout, into the system prompt of Claude and of every subagent it starts.
+      # The rules come from the base branch too: a PR must not weaken the rules it is
+      # reviewed against (say, drop "never log personal data" while logging an email).
       - name: Give the reviewer the repository rules
         if: env.HAS_REVIEW_TOKEN == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
+          git fetch --no-tags --depth=1 origin "$BASE_REF"
           {
             echo "# Repository rules for this review"
             echo
-            echo "This repository's rules are AGENTS.md and docs/design-docs/core-beliefs.md, copied below. Wherever a review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
+            echo "This repository's rules are AGENTS.md and docs/design-docs/core-beliefs.md as they are on the base branch ($BASE_REF), copied below. Review against these copies, not the versions in this pull request. Wherever a review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
             echo
             echo "## AGENTS.md"
             echo
-            cat AGENTS.md
+            git show FETCH_HEAD:AGENTS.md
             echo
             echo "## docs/design-docs/core-beliefs.md"
             echo
-            cat docs/design-docs/core-beliefs.md
+            git show FETCH_HEAD:docs/design-docs/core-beliefs.md
           } > "$RUNNER_TEMP/review-context.md"
 
       - name: Note when the review starts

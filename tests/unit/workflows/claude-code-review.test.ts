@@ -176,6 +176,11 @@ describe('Claude code review workflow', () => {
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
+    // From the base branch, so a PR cannot weaken the rules it is reviewed against.
+    expect(steps[rulesStep].env?.BASE_REF).toBe('${{ github.event.pull_request.base.ref }}');
+    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:AGENTS.md');
+    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
+    expect(steps[rulesStep].run).not.toMatch(/\bcat AGENTS\.md/);
     expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--strict-mcp-config');

@@ -171,9 +171,10 @@ nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<numbe
 - Rules: before Claude starts, the action replaces `CLAUDE.md`, the .claude folder, and
   .mcp.json with the base branch's copies (a PR's copies are untrusted) and deletes them
   when the base has none. So the skill always comes from the base branch, and a PR cannot
-  change how it is reviewed. The workflow copies `AGENTS.md`, [core beliefs](core-beliefs.md),
-  and the earlier findings into a file outside the checkout and appends it to the system
-  prompt of Claude and of every subagent. Keep review rules in those two files; do not
+  change how it is reviewed. The workflow copies `AGENTS.md` and [core beliefs](core-beliefs.md)
+  from the base branch too, so a PR cannot weaken the rules it is reviewed against, and adds
+  the earlier findings. It writes them to a file outside the checkout and appends it to the
+  system prompt of Claude and of every subagent. Keep review rules in those two files; do not
   commit a `CLAUDE.md`.
 - Subagents in the foreground: the skill reviews with three subagents at once (bugs, rules,
   and tests and docs), which Claude Code runs in the background by default. Claude then

@@ -11,7 +11,7 @@ The argument names the pull request: `<owner>/<repo>/pull/<number>` ($ARGUMENTS)
 
 ## 1. Check that it needs a review
 
-Run `gh pr view <number> --repo <owner>/<repo> --json state,isDraft,title,body,headRefOid`.
+Run `gh pr view <number> --repo <owner>/<repo> --json state,isDraft,title,body,headRefOid,baseRefName`.
 Stop without posting anything if the pull request is closed or a draft.
 
 ## 2. Gather what the review needs
@@ -54,8 +54,10 @@ Check every finding yourself against the code at the head commit:
 
 - **Each kept finding:** one inline comment with
   `mcp__github_inline_comment__create_inline_comment` on the line it concerns: a bold
-  one-line title, what is wrong and why, the rule quoted with a link when one applies, and
-  the fix.
+  one-line title, what is wrong and why, the rule quoted when one applies, and the fix.
+  Link a rule with a full URL to the base branch's copy,
+  `https://github.com/<owner>/<repo>/blob/<baseRefName>/<path>`, since relative links do
+  not resolve from a pull request comment.
 - **Then the summary**, one comment that each review updates in place:
   `gh pr comment <number> --repo <owner>/<repo> --edit-last --create-if-none --body "<summary>"`.
   The summary reads:
