@@ -1,9 +1,9 @@
 import React from 'react';
 
-import { Badge } from '@/components/ui/badge';
-import { buildPublicCategoryPathForSlug } from '@/lib/routes';
-
+import { SectionHeader } from '@/components/layout/SectionHeader';
 import { Link } from '@/components/navigation/Link';
+import { buttonVariants } from '@/components/ui/button';
+import { buildPublicCategoryPathForSlug } from '@/lib/routes';
 
 interface CategoryNavigationProps {
   categories: Array<{
@@ -14,6 +14,8 @@ interface CategoryNavigationProps {
   title?: string;
 }
 
+// Up to five other categories as chips (the library's category chips), under a category
+// page's templates.
 export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
   categories,
   currentCategorySlug,
@@ -28,17 +30,16 @@ export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
   }
 
   return (
-    <section className="mt-12">
-      <h2 className="mb-4 text-lg font-semibold text-foreground">{title}</h2>
+    <section aria-labelledby="related-categories" className="mt-12">
+      <SectionHeader id="related-categories" title={title} />
       <div className="flex flex-wrap gap-2">
         {relatedCategories.slice(0, 5).map((category) => (
-          <Link key={category.slug} href={buildPublicCategoryPathForSlug(category.slug)}>
-            <Badge
-              className="border-border px-3 py-1.5 hover:bg-muted"
-              variant="outline"
-            >
-              {category.name}
-            </Badge>
+          <Link
+            key={category.slug}
+            className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+            href={buildPublicCategoryPathForSlug(category.slug)}
+          >
+            {category.name}
           </Link>
         ))}
       </div>

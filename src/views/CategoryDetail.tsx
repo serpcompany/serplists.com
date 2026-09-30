@@ -1,13 +1,12 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Grid3X3, List, Search } from 'lucide-react';
+import { useEffect, useId, useMemo, useState } from 'react';
+import { FileX, SearchX } from 'lucide-react';
 
 import { CatalogLoadError } from '@/components/checklist-library/CatalogLoadError';
 import { CategoryNavigation } from '@/components/checklist-library/CategoryNavigation';
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
-import { SearchAndFilters } from '@/components/checklist-library/SearchAndFilters';
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
   buildDiscoveryCategories,
@@ -15,10 +14,17 @@ import {
   findCategoryByLegacySlug,
   type DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
+import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
+import { PageContainer } from '@/components/layout/page-shell';
+import { SearchField } from '@/components/layout/SearchField';
+import { Toolbar } from '@/components/layout/Toolbar';
+import { ViewModeToggle } from '@/components/layout/ViewModeToggle';
+import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import NotFound from '@/views/NotFound';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -26,51 +32,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
-import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
+import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
-import { formatCount } from '@/lib/utils/pluralize';
 import {
   buildCategorySlug,
   buildPublicCategoriesPath,
   buildPublicCategoryPathForSlug,
 } from '@/lib/routes';
-
-import { Link } from '@/components/navigation/Link';
+import { formatCount } from '@/lib/utils/pluralize';
+import NotFound from '@/views/NotFound';
 
 type CategorySort = DiscoverySort | 'name';
 
+// The sort options in the order the select lists them; the select shows the chosen label.
 const sortLabels: Record<CategorySort, string> = {
-  name: 'Name A-Z',
   popular: 'Most Popular',
   recent: 'Most Recent',
   trending: 'Trending',
+  name: 'Name A-Z',
 };
 
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
 
-const backToCategories = (
-  <div className="mb-6 flex items-center gap-2 text-sm">
-    <Link
-      className="flex items-center gap-1 text-muted-foreground hover:text-foreground"
-      href={buildPublicCategoriesPath()}
-    >
-      <ArrowLeft className="h-4 w-4" />
-      All Categories
-    </Link>
-  </div>
-);
+// The trail back to every category, before the category itself is known.
+const categoriesBreadcrumb = { href: buildPublicCategoriesPath(), label: 'All Categories' };
 
 const templateGridSkeleton = (
-  <div aria-busy="true" className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <CardGrid aria-busy="true">
     <span className="sr-only">Loading templates…</span>
     {Array.from({ length: 6 }).map((_, index) => (
-      <Skeleton key={index} className="h-[220px] rounded-lg" />
+      <Skeleton key={index} className="h-72 rounded-xl" />
     ))}
-  </div>
+  </CardGrid>
 );
 
 // The page's title, description and canonical URL come from the server
@@ -79,6 +77,7 @@ const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
   const router = useAppRouter();
   const { user } = useAuth();
+  const fieldId = useId();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<CategorySort>('popular');
   const [viewMode, setViewMode] = useViewModePreference({
@@ -113,7 +112,8 @@ const CategoryDetail = () => {
   // pages out of search results, but only once the catalog API has answered. Bundled
   // Templates arrive first, so a count of 0 means nothing until then.
   const isEmptyCategory = !loading && !catalogError && categoryTemplateCount === 0;
-  const emptyMessage = searchQuery.trim()
+  const isSearching = searchQuery.trim() !== '';
+  const emptyMessage = isSearching
     ? 'No templates found matching your search.'
     : 'No public templates in this category yet.';
 
@@ -141,25 +141,23 @@ const CategoryDetail = () => {
   if (!category) {
     if (loading || catalogError) {
       return (
-        <div className="bg-background">
-          <main className="mx-auto max-w-6xl px-4 py-8">
-            {backToCategories}
-            {catalogError ? (
-              <CatalogLoadError onRetry={retryCatalog} />
-            ) : (
-              <>
-                <div aria-busy="true" className="mb-8 flex items-start gap-6">
-                  <Skeleton className="h-16 w-16 shrink-0 rounded-2xl" />
-                  <div className="flex-1 space-y-3">
-                    <Skeleton className="h-8 w-64 max-w-full" />
-                    <Skeleton className="h-5 w-96 max-w-full" />
-                  </div>
-                </div>
-                {templateGridSkeleton}
-              </>
-            )}
-          </main>
-        </div>
+        <PageContainer width="shell" className="py-8 sm:py-10">
+          <PageBreadcrumb items={[categoriesBreadcrumb]} />
+          {catalogError ? (
+            // The failure is the whole page: its title is the page's h1.
+            <CatalogLoadError onRetry={retryCatalog} titleAs="h1" />
+          ) : (
+            <>
+              <div aria-busy="true" className="flex flex-col items-start gap-4">
+                <Skeleton className="size-14 rounded-xl" />
+                <Skeleton className="h-9 w-64 max-w-full" />
+                <Skeleton className="h-6 w-96 max-w-full" />
+              </div>
+              <Separator className="my-10" />
+              {templateGridSkeleton}
+            </>
+          )}
+        </PageContainer>
       );
     }
     if (legacyCategoryPath) {
@@ -176,125 +174,85 @@ const CategoryDetail = () => {
   const Icon = category.icon;
 
   return (
-    <div className="bg-background">
+    <>
       {isEmptyCategory ? <NoIndexMeta follow /> : null}
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        {backToCategories}
+      <DetailPageLayout
+        breadcrumbs={[categoriesBreadcrumb, { label: category.name }]}
+        description={category.description}
+        icon={<Icon />}
+        meta={
+          loading ? (
+            <Skeleton className="h-5 w-24" />
+          ) : (
+            <Badge variant="secondary">{categoryTemplateCountLabel}</Badge>
+          )
+        }
+        title={category.name}
+      >
+        <Toolbar className="mb-6">
+          <Field className="sm:w-auto sm:flex-1 lg:max-w-md">
+            <FieldLabel htmlFor={`${fieldId}-search`}>Search</FieldLabel>
+            <SearchField
+              groupClassName="h-8"
+              id={`${fieldId}-search`}
+              placeholder="Search templates..."
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </Field>
 
-        <div className="mb-8 flex items-start gap-6">
-          <div
-            className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${category.bgColor}`}
-          >
-            <Icon className={`h-8 w-8 ${category.color}`} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {category.name}
-            </h1>
-            <p className="mt-1 text-muted-foreground">{category.description}</p>
-            {loading ? (
-              <Skeleton className="mt-3 h-5 w-24" />
-            ) : (
-              <Badge className="mt-3" variant="secondary">
-                {categoryTemplateCountLabel}
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <SearchAndFilters
-          categories={[]}
-          onCategoryChange={() => undefined}
-          onSortChange={() => undefined}
-          resultCount={filteredTemplates.length}
-          searchSlot={
-            <div className="relative max-w-sm flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="border-border bg-card pl-10"
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search templates..."
-                value={searchQuery}
-              />
-            </div>
-          }
-          selectedCategorySlug={null}
-          sortBy="popular"
-          trailingControls={
-            <div className="flex items-center gap-2">
+          <div className="flex items-end gap-3">
+            <Field className="flex-1 sm:w-40 sm:flex-none">
+              <FieldLabel htmlFor={`${fieldId}-sort`}>Sort by</FieldLabel>
               <Select
+                items={sortLabels}
                 value={sortBy}
                 onValueChange={(value) => {
                   if (value && isCategorySort(value)) setSortBy(value);
                 }}
               >
-                <SelectTrigger className="w-40 border-border bg-card">
-                  <SelectValue>{sortLabels[sortBy]}</SelectValue>
+                <SelectTrigger className="w-full" id={`${fieldId}-sort`}>
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="popular">Most Popular</SelectItem>
-                  <SelectItem value="recent">Most Recent</SelectItem>
-                  <SelectItem value="trending">Trending</SelectItem>
-                  <SelectItem value="name">Name A-Z</SelectItem>
+                  {Object.entries(sortLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <div className="flex rounded-lg border border-border bg-card">
-                <button
-                  aria-label="Show templates in grid view"
-                  aria-pressed={viewMode === 'grid'}
-                  className={`inline-flex h-9 w-9 items-center justify-center ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setViewMode('grid')}
-                  type="button"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </button>
-                <button
-                  aria-label="Show templates in list view"
-                  aria-pressed={viewMode === 'list'}
-                  className={`inline-flex h-9 w-9 items-center justify-center ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setViewMode('list')}
-                  type="button"
-                >
-                  <List className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          }
-        />
+            </Field>
+            <ViewModeToggle onChange={setViewMode} value={viewMode} />
+          </div>
+        </Toolbar>
 
-        {catalogError ? (
-          <CatalogLoadError className="mt-6" onRetry={retryCatalog} />
-        ) : null}
+        {catalogError ? <CatalogLoadError className="mb-6" onRetry={retryCatalog} /> : null}
         {loading ? (
           templateGridSkeleton
         ) : filteredTemplates.length > 0 ? (
-          <div
-            className={
-              viewMode === 'grid'
-                ? 'mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
-                : 'mt-6 space-y-4'
-            }
-          >
+          <CardGrid columns={viewMode === 'list' ? 1 : 3}>
             {filteredTemplates.map((template) => (
               <TemplateCard
                 key={template.id}
                 layout={viewMode === 'list' ? 'horizontal' : 'vertical'}
                 template={template}
+                titleAs="h2"
               />
             ))}
-          </div>
+          </CardGrid>
         ) : catalogError ? null : (
-          <div className="mt-6 rounded-xl border border-border bg-card p-12 text-center">
-            <p className="text-muted-foreground">{emptyMessage}</p>
-          </div>
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">{isSearching ? <SearchX /> : <FileX />}</EmptyMedia>
+              <EmptyDescription>{emptyMessage}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
 
-        <CategoryNavigation
-          categories={categories}
-          currentCategorySlug={slug}
-        />
-      </main>
-    </div>
+        <CategoryNavigation categories={categories} currentCategorySlug={slug} />
+      </DetailPageLayout>
+    </>
   );
 };
 

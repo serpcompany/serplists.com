@@ -3,7 +3,6 @@ import { Clock, Star, TrendingUp } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { formatCount } from '@/lib/utils/pluralize';
 import type {
   DiscoveryCategory,
   DiscoverySort,
@@ -106,51 +105,4 @@ export const SortButtons: React.FC<SortButtonsProps> = ({ onSortChange, sortBy }
       );
     })}
   </div>
-);
-
-interface SearchAndFiltersProps extends CategoryChipsProps, SortButtonsProps {
-  resultCount: number;
-  resultLabel?: string;
-  searchSlot?: React.ReactNode;
-  trailingControls?: React.ReactNode;
-}
-
-// The category chips above a toolbar: the search field (or the result count) on the left
-// and the sort controls on the right.
-export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
-  categories,
-  onCategoryChange,
-  onSortChange,
-  resultCount,
-  resultLabel,
-  searchSlot,
-  selectedCategorySlug,
-  sortBy,
-  getCategoryPath,
-  trailingControls,
-}) => (
-  <section className="flex flex-col gap-6">
-    {categories.length > 0 ? (
-      <div className="flex items-center gap-2 overflow-x-auto pb-2">
-        <CategoryChips
-          categories={categories}
-          getCategoryPath={getCategoryPath}
-          onCategoryChange={onCategoryChange}
-          selectedCategorySlug={selectedCategorySlug}
-        />
-      </div>
-    ) : null}
-
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      {searchSlot ? (
-        searchSlot
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {resultLabel ?? formatCount(resultCount, 'template')}
-        </p>
-      )}
-
-      {trailingControls ?? <SortButtons onSortChange={onSortChange} sortBy={sortBy} />}
-    </div>
-  </section>
 );

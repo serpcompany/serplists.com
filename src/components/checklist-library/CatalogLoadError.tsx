@@ -16,9 +16,12 @@ import { cn } from '@/lib/utils';
 export const CatalogLoadError = ({
   className,
   onRetry,
+  titleAs: Title = 'h2',
 }: {
   className?: string;
   onRetry: () => void;
+  // h2 in place of a page's first section; h1 when the failure is the whole page.
+  titleAs?: 'h1' | 'h2';
 }) => (
   <Empty className={cn('border', className)} role="alert">
     <EmptyHeader>
@@ -26,7 +29,7 @@ export const CatalogLoadError = ({
         <AlertCircle />
       </EmptyMedia>
       <EmptyTitle>
-        <h2>Could not load templates</h2>
+        <Title>Could not load templates</Title>
       </EmptyTitle>
       <EmptyDescription>Check your connection and try again.</EmptyDescription>
     </EmptyHeader>
