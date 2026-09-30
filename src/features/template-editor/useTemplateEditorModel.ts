@@ -110,6 +110,11 @@ export const shouldNavigateToTemplatesAfterSave = (params: {
   result: SaveTemplateResult;
 }): boolean => params.result.success && !params.id;
 
+export const shouldLockTemplateEditorWhileSaving = (params: {
+  id?: string;
+  isSaving: boolean;
+}): boolean => params.isSaving && !params.id;
+
 // The editor shows save failures inline, so only a successful save gets a toast. The shared
 // template mutations never toast (see TemplatesContext), so this is the only one.
 export const getTemplateSaveSuccessMessage = (params: {

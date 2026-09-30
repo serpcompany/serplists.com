@@ -20,7 +20,8 @@ const workspace = {
   teams: [] as Array<{ id: string; role: string }>,
 };
 
-vi.mock('@/features/template-editor/useTemplateEditorModel', () => ({
+vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
   useTemplateEditorModel: () => mockModel(),
 }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({

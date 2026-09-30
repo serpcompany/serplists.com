@@ -7,9 +7,9 @@ import {
   loadTemplateEditorData,
   saveTemplateEditorData,
   shouldLoadTemplateEditorRecord,
+  shouldNavigateToTemplatesAfterSave,
 } from "@/features/template-editor/useTemplateEditorModel";
 import { templateEditorFormSchema } from "@/lib/forms/templateEditorForm";
-import { shouldNavigateToTemplatesAfterSave } from "@/views/TemplateEditor";
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},

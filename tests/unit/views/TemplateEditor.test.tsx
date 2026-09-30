@@ -29,7 +29,8 @@ const buildAccess = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-vi.mock('@/features/template-editor/useTemplateEditorModel', () => ({
+vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
   useTemplateEditorModel: (...args: unknown[]) =>
     mockUseTemplateEditorModel(...args),
 }));

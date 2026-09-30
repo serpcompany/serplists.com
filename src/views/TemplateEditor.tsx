@@ -10,6 +10,8 @@ import { AlertCircle, ListTree } from "lucide-react";
 import { toast } from "sonner";
 import {
   resolveTemplateSaveFeedback,
+  shouldLockTemplateEditorWhileSaving,
+  shouldNavigateToTemplatesAfterSave,
   type TemplateSaveFeedback,
   useTemplateEditorModel,
 } from "@/features/template-editor/useTemplateEditorModel";
@@ -34,7 +36,6 @@ import {
 } from "@/components/dashboard/DashboardContentShell";
 import { PageContainer } from "@/components/layout/page-shell";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import {
   cloneTemplateEditorFormValues,
   rebaseTemplateEditorFormAfterSave,
@@ -56,18 +57,6 @@ import { saveTemplateForVisit } from "@/features/template-editor/saveForVisit";
 import { TemplateEditorAccessNotices } from "@/components/template-editor/TemplateEditorAccessNotices";
 import { TemplateEditorReadOnlyNotice } from "@/components/template-editor/TemplateEditorReadOnlyNotice";
 import { useTemplateEditPermission } from "@/features/template-editor/useTemplateEditPermission";
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const shouldNavigateToTemplatesAfterSave = (params: {
-  id?: string;
-  result: SaveTemplateResult;
-}): boolean => params.result.success && !params.id;
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const shouldLockTemplateEditorWhileSaving = (params: {
-  id?: string;
-  isSaving: boolean;
-}): boolean => params.isSaving && !params.id;
 
 type TemplateEditorModel = ReturnType<typeof useTemplateEditorModel>;
 
