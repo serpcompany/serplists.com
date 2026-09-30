@@ -1,8 +1,19 @@
 import type { ReactNode } from 'react';
 import { FileText, ListChecks, RotateCcw } from 'lucide-react';
 
+import { DashboardPageHeader } from '@/components/dashboard/DashboardContentShell';
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from '@/components/ui/item';
 import type { ArchiveItem, ArchiveListState } from '@/features/archive/archiveRecovery';
 import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
 
@@ -31,6 +42,7 @@ type ArchiveListProps = {
   title: string;
 };
 
+// One kind of archived item: a Card with the list's title and count, and a row per item.
 function ArchiveList({
   canRestore,
   emptyLabel,
@@ -45,69 +57,63 @@ function ArchiveList({
   title,
 }: ArchiveListProps) {
   return (
-    <div className="border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
           {icon}
           {title}
-        </h2>
+        </CardTitle>
         {state === 'loaded' ? (
-          <span className="text-xs font-medium text-muted-foreground">
-            {items.length}
-          </span>
+          <CardAction>
+            <Badge variant="secondary">{items.length}</Badge>
+          </CardAction>
         ) : null}
-      </div>
+      </CardHeader>
 
-      {state === 'loading' ? (
-        <div className="px-4 py-5 text-sm text-muted-foreground">
-          Loading {listName}...
-        </div>
-      ) : state === 'error' ? (
-        <ListLoadErrorState error={error} listName={listName} onRetry={onRetry} />
-      ) : items.length === 0 ? (
-        <div className="px-4 py-5 text-sm text-muted-foreground">
-          {emptyLabel}
-        </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {items.map((item) => {
-            const restoring = restoringIds.has(item.id);
+      <CardContent>
+        {state === 'loading' ? (
+          <p className="text-sm text-muted-foreground">Loading {listName}...</p>
+        ) : state === 'error' ? (
+          <ListLoadErrorState error={error} listName={listName} onRetry={onRetry} titleAs="h3" />
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+        ) : (
+          <ItemGroup className="gap-0 divide-y">
+            {items.map((item) => {
+              const restoring = restoringIds.has(item.id);
 
-            return (
-              <div
-                key={item.id}
-                className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    {item.title}
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Archived {formatArchiveDate(item.archivedAt)}
-                  </div>
-                </div>
-                {canRestore ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={restoring}
-                    onClick={() => onRestore(item)}
-                    className="rounded-md"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    {restoring ? 'Restoring...' : 'Restore'}
-                  </Button>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+              return (
+                <Item key={item.id} className="rounded-none px-0" role="listitem" size="sm">
+                  <ItemContent className="min-w-0">
+                    <ItemTitle className="line-clamp-2 wrap-anywhere">{item.title}</ItemTitle>
+                    <ItemDescription>Archived {formatArchiveDate(item.archivedAt)}</ItemDescription>
+                  </ItemContent>
+                  {canRestore ? (
+                    <ItemActions>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={restoring}
+                        onClick={() => onRestore(item)}
+                      >
+                        <RotateCcw data-icon="inline-start" />
+                        {restoring ? 'Restoring...' : 'Restore'}
+                      </Button>
+                    </ItemActions>
+                  ) : null}
+                </Item>
+              );
+            })}
+          </ItemGroup>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
+// The Archive page's content: its header, with the number of archived items once both lists
+// have loaded, and the archived Templates and Runs of the active context.
 export function ArchiveRecoverySection() {
   const {
     archivedTemplates,
@@ -133,16 +139,14 @@ export function ArchiveRecoverySection() {
       : `${archiveCount} archived`;
 
   return (
-    <section className="space-y-4" data-archive-recovery-section="true">
-      {badge ? (
-        <div className="flex justify-end">
-          <span className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-            {badge}
-          </span>
-        </div>
-      ) : null}
+    <section className="flex flex-col gap-6" data-archive-recovery-section="true">
+      <DashboardPageHeader
+        title="Archive"
+        description="Archived templates and runs. Restore one to put it back in your list."
+        meta={badge ? <Badge variant="outline">{badge}</Badge> : undefined}
+      />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <ArchiveList
           title="Archived templates"
           canRestore={canRestoreTemplates}
@@ -150,7 +154,7 @@ export function ArchiveRecoverySection() {
           emptyLabel="No archived templates"
           error={templatesError}
           state={templatesState}
-          icon={<FileText className="h-4 w-4 text-muted-foreground" />}
+          icon={<FileText aria-hidden="true" className="size-4 text-muted-foreground" />}
           items={archivedTemplates}
           restoringIds={restoringIds}
           onRestore={(item) => void restore(item)}
@@ -163,7 +167,7 @@ export function ArchiveRecoverySection() {
           emptyLabel="No archived runs"
           error={runsError}
           state={runsState}
-          icon={<ListChecks className="h-4 w-4 text-muted-foreground" />}
+          icon={<ListChecks aria-hidden="true" className="size-4 text-muted-foreground" />}
           items={archivedRuns}
           restoringIds={restoringIds}
           onRestore={(item) => void restore(item)}

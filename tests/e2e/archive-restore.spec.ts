@@ -14,10 +14,9 @@ async function loginAsAdmin(page: Page) {
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
-// One archive row. The two archive lists sit in a grid of their own, so only the innermost
-// grid holding the title is a row.
+// One archive row: each archived item is a list item of its kind's list.
 function archiveRow(page: Page, title: string) {
-  return page.locator('div.grid').filter({ hasText: title }).filter({ hasNot: page.locator('div.grid') });
+  return page.getByRole('listitem').filter({ hasText: title });
 }
 
 test('an archived template and run can be restored from the archive page', async ({ page }) => {

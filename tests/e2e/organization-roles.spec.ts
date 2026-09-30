@@ -200,7 +200,7 @@ test('an Organization editor can restore archived Templates but not runs', async
 
   await page.goto('/dashboard/archive/');
   await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
-  const templateRow = page.locator('div.grid').filter({ hasText: 'Archived Playbook' }).filter({ hasNot: page.locator('div.grid') });
+  const templateRow = page.getByRole('listitem').filter({ hasText: 'Archived Playbook' });
   await expect(templateRow.getByRole('button', { name: 'Restore' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(1);
 });

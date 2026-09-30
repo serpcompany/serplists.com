@@ -77,7 +77,7 @@ export function RunListItem({
       </IconTile>
 
       <ItemContent className="min-w-0">
-        <ItemTitle className="line-clamp-2">
+        <ItemTitle className="line-clamp-2 wrap-anywhere">
           <Link
             href={runPath}
             className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"

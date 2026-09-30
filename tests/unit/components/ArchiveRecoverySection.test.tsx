@@ -109,7 +109,7 @@ describe('ArchiveRecoverySection restore by role', () => {
         <ArchiveRecoverySection />
       </QueryClientProvider>,
     );
-    const [templatesList, runsList] = html.split('Archived runs</h2>');
+    const [templatesList, runsList] = html.split('Archived runs</h3>');
     const restoreButtons = (list: string) => (list.match(/>Restore<\/button>/g) ?? []).length;
     return {
       html,

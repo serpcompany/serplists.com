@@ -73,7 +73,7 @@ export function MediaCard({
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {eyebrow ? <div className="text-xs font-medium text-muted-foreground">{eyebrow}</div> : null}
-        <Title className="text-base font-semibold tracking-tight text-balance">
+        <Title className="text-base font-semibold tracking-tight text-balance wrap-break-word">
           {href ? (
             <Link
               href={href}

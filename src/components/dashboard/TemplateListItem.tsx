@@ -48,7 +48,7 @@ export function TemplateListItem({
         <TypeIcon />
       </IconTile>
       <ItemContent className="min-w-0">
-        <ItemTitle className="line-clamp-2">
+        <ItemTitle className="line-clamp-2 wrap-anywhere">
           <Link
             href={buildConsoleTemplatePath(template.id)}
             className="rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
