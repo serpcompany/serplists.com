@@ -1,7 +1,6 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
 
 import { PageSection, Surface } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
@@ -19,13 +18,6 @@ const NotFound = () => {
   // every missing address. So the address is named only in the browser: the server's HTML
   // never names a wrong one, and matches the first client render.
   const route = useIsClient() ? `The route ${pathname}` : 'This route';
-
-  useEffect(() => {
-    console.error(
-      '404 Error: User attempted to access non-existent route:',
-      pathname
-    );
-  }, [pathname]);
 
   return (
     <PageSection

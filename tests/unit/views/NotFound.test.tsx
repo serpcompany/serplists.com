@@ -76,6 +76,27 @@ describe('NotFound page head', () => {
     }
   });
 
+  // A missing address is not an error in the app. The page logged one with console.error,
+  // which Next.js's dev overlay counts as an issue and agents reading the console take for a
+  // failure.
+  it('logs no error for a missing address', async () => {
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    try {
+      navigation.reset('/definitely-missing');
+      const container = createFakeContainer();
+      const root = createRoot(container as unknown as HTMLElement);
+      await act(async () => {
+        root.render(<NotFound />);
+      });
+      act(() => root.unmount());
+
+      expect(container.textContent).toBe('');
+      expect(console.error).not.toHaveBeenCalled();
+    } finally {
+      restoreGlobals();
+    }
+  });
+
   it('declares no canonical URL for the missing address', () => {
     navigation.reset('/definitely-missing');
     const html = renderToStaticMarkup(<NotFoundPage />);
