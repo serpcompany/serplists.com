@@ -42,7 +42,7 @@ jobs:
 
       - name: Setup pnpm
         if: env.HAS_CLAUDE_TOKEN == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         if: env.HAS_CLAUDE_TOKEN == 'true'
@@ -211,7 +211,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         uses: actions/setup-node@v5
