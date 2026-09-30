@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { getAuthStatus } from "@/lib/auth-client";
 import { buildEmailVerifiedCallbackURL } from "@/lib/auth/loginNotice";
@@ -31,8 +32,6 @@ const Register = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
   const router = useAppRouter();
@@ -95,104 +94,70 @@ const Register = () => {
       footer={
         <>
           Already have an account?{" "}
-          <Link
-            href={withReturnPath(buildLoginPath(), returnPath)}
-            className="font-medium text-primary hover:underline"
-          >
-            Sign in
-          </Link>
+          <Link href={withReturnPath(buildLoginPath(), returnPath)}>Sign in</Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Your name"
-            maxLength={USER_NAME_MAX_LENGTH}
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            required
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="name">Name</FieldLabel>
             <Input
+              id="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Your name"
+              maxLength={USER_NAME_MAX_LENGTH}
+              required
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              required
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <PasswordInput
               id="password"
-              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Enter your password"
-              className="pr-10"
               required
             />
-            <button
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              type="button"
-              onClick={() => setShowPassword((current) => !current)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        </div>
+          </Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <div className="relative">
-            <Input
+          <Field>
+            <FieldLabel htmlFor="confirmPassword">Confirm Password</FieldLabel>
+            <PasswordInput
               id="confirmPassword"
-              type={showConfirmPassword ? "text" : "password"}
+              toggleLabel="confirm password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Confirm your password"
-              className="pr-10"
               required
             />
-            <button
-              aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
-              type="button"
-              onClick={() => setShowConfirmPassword((current) => !current)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        </div>
+          </Field>
 
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating account...
-            </>
-          ) : (
-            "Create account"
-          )}
-        </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+                Creating account...
+              </>
+            ) : (
+              "Create account"
+            )}
+          </Button>
+        </FieldGroup>
       </form>
     </AuthPageShell>
   );

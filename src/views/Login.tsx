@@ -2,13 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  Mail,
-} from "lucide-react";
+import { Loader2, Lock, Mail, MailWarning } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -26,10 +20,12 @@ import {
   DEV_TEST_USER_DEFAULT_PASSWORD,
   DEV_TEST_USER_PASSWORD_RESET_COMMAND,
 } from "@/lib/auth/devUsers";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { PasswordInput } from "@/components/auth/PasswordInput";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import {
   buildEmailVerifiedCallbackURL,
   getLoginNotice,
@@ -46,6 +42,15 @@ import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildForgotPasswordPath, buildRegisterPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
+
+// The seeded personas the form can fill in, outside production.
+const DEV_PERSONAS = [
+  { email: "checklists@serp.co", label: "Fill SERP" },
+  { email: "admin@test.com", label: "Fill Admin" },
+  { email: "john@test.com", label: "Fill John" },
+  { email: "jane@test.com", label: "Fill Jane" },
+  { email: "bob@test.com", label: "Fill Bob" },
+];
 
 function getVerificationFailure(search: string): string | null {
   const notice = getLoginNotice(search);
@@ -68,7 +73,6 @@ const subscribeToHistory = (onChange: () => void) => {
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResendingVerification, setIsResendingVerification] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
@@ -224,86 +228,31 @@ const Login = () => {
       footer={
         <>
           Don&apos;t have an account?{" "}
-          <Link
-            href={withReturnPath(buildRegisterPath(), returnPath)}
-            className="font-medium text-primary hover:underline"
-          >
-            Sign up
-          </Link>
+          <Link href={withReturnPath(buildRegisterPath(), returnPath)}>Sign up</Link>
         </>
       }
     >
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
           {process.env.NODE_ENV !== "production" ? (
-            <div className="space-y-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-800 dark:bg-yellow-900/20">
+            <div className="flex flex-col gap-3 rounded-lg border border-dashed p-3">
               <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail("checklists@serp.co");
-                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-                  }}
-                  className="text-xs"
-                >
-                  <div className="mr-1 h-2 w-2 rounded-full bg-amber-500" />
-                  Fill SERP
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail("admin@test.com");
-                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-                  }}
-                  className="text-xs"
-                >
-                  <div className="mr-1 h-2 w-2 rounded-full bg-red-500" />
-                  Fill Admin
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail("john@test.com");
-                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-                  }}
-                  className="text-xs"
-                >
-                  <div className="mr-1 h-2 w-2 rounded-full bg-blue-500" />
-                  Fill John
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail("jane@test.com");
-                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-                  }}
-                  className="text-xs"
-                >
-                  <div className="mr-1 h-2 w-2 rounded-full bg-purple-500" />
-                  Fill Jane
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEmail("bob@test.com");
-                    setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
-                  }}
-                  className="text-xs"
-                >
-                  <div className="mr-1 h-2 w-2 rounded-full bg-green-500" />
-                  Fill Bob
-                </Button>
+                {DEV_PERSONAS.map((persona) => (
+                  <Button
+                    key={persona.email}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEmail(persona.email);
+                      setPassword(DEV_TEST_USER_DEFAULT_PASSWORD);
+                    }}
+                  >
+                    {persona.label}
+                  </Button>
+                ))}
               </div>
-              <p className="text-xs text-yellow-700 dark:text-yellow-300">
+              <p className="text-xs text-muted-foreground">
                 Default local seed password: <code>{DEV_TEST_USER_DEFAULT_PASSWORD}</code>. If you changed a persona password, run{" "}
                 <code>{DEV_TEST_USER_PASSWORD_RESET_COMMAND}</code>.
               </p>
@@ -311,99 +260,83 @@ const Login = () => {
           ) : null}
 
           {showResendVerification ? (
-            <div
-              role="status"
-              className="rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
-            >
-              {verificationFailure ?? "Verify your email before signing in."}
-            </div>
+            <Alert role="status">
+              <MailWarning />
+              <AlertTitle>{verificationFailure ?? "Verify your email before signing in."}</AlertTitle>
+            </Alert>
           ) : null}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+          <Field>
+            <FieldLabel htmlFor="email">Email</FieldLabel>
+            <InputGroup>
+              <InputGroupInput
                 id="email"
                 type="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
                 required
                 disabled={isSubmitting || isLoading}
               />
-            </div>
-          </div>
+              <InputGroupAddon>
+                <Mail />
+              </InputGroupAddon>
+            </InputGroup>
+          </Field>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
+          <Field>
+            <div className="flex items-center">
+              <FieldLabel htmlFor="password">Password</FieldLabel>
               <Link
                 href={buildForgotPasswordPath()}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="ml-auto text-sm underline-offset-4 hover:underline"
               >
                 Forgot password?
               </Link>
             </div>
+            <PasswordInput
+              id="password"
+              icon={<Lock />}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              disabled={isSubmitting || isLoading}
+            />
+          </Field>
 
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="pl-10 pr-10"
-                required
-                disabled={isSubmitting || isLoading}
-              />
-              <button
-                aria-label={showPassword ? "Hide password" : "Show password"}
+          <Field>
+            {showResendVerification ? (
+              <Button
                 type="button"
-                onClick={() => setShowPassword((current) => !current)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                variant="outline"
+                onClick={handleResendVerification}
+                disabled={isResendingVerification}
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
+                {isResendingVerification ? (
+                  <>
+                    <Loader2 data-icon="inline-start" className="animate-spin" />
+                    Resending verification…
+                  </>
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  "Resend verification email"
                 )}
-              </button>
-            </div>
-          </div>
+              </Button>
+            ) : null}
 
-          {showResendVerification ? (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResendVerification}
-              disabled={isResendingVerification}
-              className="w-full"
-            >
-              {isResendingVerification ? (
+            <Button type="submit" disabled={isSubmitting || isLoading}>
+              {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Resending verification…
+                  <Loader2 data-icon="inline-start" className="animate-spin" />
+                  Signing in...
                 </>
               ) : (
-                "Resend verification email"
+                "Sign in"
               )}
             </Button>
-          ) : null}
-
-          <Button type="submit" className="w-full" disabled={isSubmitting || isLoading}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              "Sign in"
-            )}
-          </Button>
-        </form>
+          </Field>
+        </FieldGroup>
+      </form>
     </AuthPageShell>
   );
 };

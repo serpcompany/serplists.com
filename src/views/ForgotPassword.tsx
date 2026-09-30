@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from "react";
+import { Loader2, MailCheck } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 import { authClient, getAuthStatus } from "@/lib/auth-client";
 import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import { buildLoginPath, buildResetPasswordPath } from "@/lib/routes";
@@ -51,39 +52,41 @@ const ForgotPassword = () => {
       description="We'll email you a link to reset your password."
       footer={
         <>
-          Remembered it?{" "}
-          <Link href={buildLoginPath()} className="font-medium text-primary hover:underline">
-            Back to sign in
-          </Link>
+          Remembered it? <Link href={buildLoginPath()}>Back to sign in</Link>
         </>
       }
     >
       {submitted ? (
-        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          Check your inbox for a reset link. If it doesn&apos;t show up, check spam or try again.
-        </div>
+        <Alert role="status">
+          <MailCheck />
+          <AlertTitle>
+            Check your inbox for a reset link. If it doesn&apos;t show up, check spam or try again.
+          </AlertTitle>
+        </Alert>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending link...
-              </>
-            ) : (
-              "Send reset link"
-            )}
-          </Button>
+        <form onSubmit={handleSubmit}>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="email">Email</FieldLabel>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </Field>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 data-icon="inline-start" className="animate-spin" /> Sending link...
+                </>
+              ) : (
+                "Send reset link"
+              )}
+            </Button>
+          </FieldGroup>
         </form>
       )}
     </AuthPageShell>

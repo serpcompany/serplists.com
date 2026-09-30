@@ -98,6 +98,15 @@ export class FakeElement extends FakeNode {
   getAttribute(name: string) {
     return this.attributes.get(name) ?? null;
   }
+
+  // Element.closest for a tag name ('button'), which some components' click handlers call.
+  closest(selector: string): FakeElement | null {
+    const tagName = selector.toUpperCase();
+    for (let node: FakeNode | null = this; node; node = node.parentNode) {
+      if (node instanceof FakeElement && node.nodeName === tagName) return node;
+    }
+    return null;
+  }
 }
 
 class FakeDocument extends FakeNode {

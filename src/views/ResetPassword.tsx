@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Loader2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AuthPageShell } from "@/components/auth/AuthPageShell";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { readResetPasswordLink } from "@/lib/auth/resetPasswordLink";
@@ -83,17 +84,12 @@ const ResetPassword = () => {
       <AuthPageShell
         title="Reset link expired"
         description="That reset link is no longer valid."
-        footer={
-          <>
-            <Link href={buildForgotPasswordPath()} className="font-medium text-primary hover:underline">
-              Request a new link
-            </Link>
-          </>
-        }
+        footer={<Link href={buildForgotPasswordPath()}>Request a new link</Link>}
       >
-        <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          Please request a new reset email to continue.
-        </div>
+        <Alert role="status">
+          <TriangleAlert />
+          <AlertTitle>Please request a new reset email to continue.</AlertTitle>
+        </Alert>
       </AuthPageShell>
     );
   }
@@ -104,45 +100,44 @@ const ResetPassword = () => {
       description="Choose a new password for your account."
       footer={
         <>
-          Remembered it?{" "}
-          <Link href={buildLoginPath()} className="font-medium text-primary hover:underline">
-            Back to sign in
-          </Link>
+          Remembered it? <Link href={buildLoginPath()}>Back to sign in</Link>
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="password">New password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            placeholder="••••••••"
-            required
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating password...
-            </>
-          ) : (
-            "Update password"
-          )}
-        </Button>
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="password">New password</FieldLabel>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </Field>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 data-icon="inline-start" className="animate-spin" /> Updating password...
+              </>
+            ) : (
+              "Update password"
+            )}
+          </Button>
+        </FieldGroup>
       </form>
     </AuthPageShell>
   );
