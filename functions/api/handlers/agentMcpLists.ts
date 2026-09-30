@@ -116,8 +116,8 @@ export function selectRunPage(
 
 type Listing<Row> = {
   name: "templates" | "runs";
+  // The page's LIST_PAGE_ROWS rows and one more, when there is one.
   rows: Row[];
-  // The rows are the page's LIST_PAGE_ROWS and one more, if there is one.
   owned: (row: Row) => boolean;
   summarize: (row: Row) => JsonRecord;
   cursor: (row: Row) => ListCursor;
