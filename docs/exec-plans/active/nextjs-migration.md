@@ -1,7 +1,7 @@
 # Next.js migration
 
 - **Status:** active
-- **Last updated:** 2026-09-29
+- **Last updated:** 2026-09-30
 - **Goal:** Replace the Vite single-page app with a Next.js app on the stack approved for
   zenbujapanese.com (`apps/web` in the zenbujapanese monorepo), with full functionality and
   normal web-app behavior, and restyle the whole app after aiuxplayground.com using default
@@ -102,6 +102,29 @@ Each of these needs the user's approval, or happens with the domain move:
   run `node scripts/check-site-standards.mjs <workers.dev URL> <staging|production>` against
   the deployment (it sends the smoke-test header), and against the canonical host after the
   domain move.
+  - Keep the Pages workflow's gate that refuses to deploy while migrations are pending:
+    `pnpm run verify:prod:d1` before a production deploy, `pnpm run verify:staging` before a
+    staging one, with the Cloudflare secrets (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`,
+    `CLOUDFLARE_API_KEY`) in their environment.
+  - Build both environments with `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED=true`. Staging's #250
+    set the Vite name of this flag, `VITE_PERSONAL_RUN_MCP_ENABLED: "true"`, for every build in
+    the (now disconnected) Pages workflow. Next.js inlines `NEXT_PUBLIC_*` values when it
+    builds, so without it Agent Access stays hidden on the deployed hosts. The server flag
+    `PERSONAL_RUN_MCP_ENABLED = "true"` is already set for `preview` and `production` in
+    `wrangler.toml`.
+- **Production D1 migrations 0026 and 0027** (a human-approved step): production has not
+  applied `0026_tune_indexes_for_d1_reads.sql` or `0027_add_personal_run_key_permissions.sql`.
+  Apply 0027 before the promotion deploy that ships per-key Run Key permissions (staging #257):
+  the deploy's pending-migration gate refuses to deploy until it is applied
+  (`check:prod:d1-schema` requires `personal_run_keys.permissions`), and code without the
+  column fails the Run Key list and every MCP request with `no such column: permissions`. Back
+  up, then `pnpm run verify:prod:d1`, `pnpm run db:migrate:d1:prod` and `pnpm run
+  check:prod:d1-schema`, with `CLOUDFLARE_ACCOUNT_ID` set to SERP's account ([database
+  operations](../../design-docs/database-operations.md#applying-migrations)). Check staging's
+  database the same way (`pnpm run verify:staging`) before the first Workers deploy there.
+- **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../SECURITY.md#rate-limits))
+  matches requests by host and path, so it should keep applying once `serplists.com` points at
+  the Worker; confirm it after the domain move.
 - **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
   `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
   the move from the Pages project, and `wrangler.jsonc` with the `preview` environment renamed

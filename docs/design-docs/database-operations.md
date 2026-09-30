@@ -67,6 +67,17 @@ pnpm run db:migrate:d1:prod
 pnpm run check:prod:d1-schema
 ```
 
+Every remote command (the staging and production scripts, and any `wrangler d1 ... --remote`)
+acts on the Cloudflare account Wrangler is signed in to. When your login spans several
+accounts, set `CLOUDFLARE_ACCOUNT_ID` to SERP's account first; otherwise Wrangler asks which
+account to use, or stops with an error where it cannot ask. The ID is not written in this
+repository: take it from the team's password manager, or ask a maintainer.
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID=<SERP account ID>      # PowerShell: $env:CLOUDFLARE_ACCOUNT_ID = "<SERP account ID>"
+pnpm run verify:prod:d1
+```
+
 `verify:staging` and `verify:prod:d1` are non-destructive: they check bindings,
 list migration state, and detect schema drift without applying anything. If
 `check:prod:d1-schema` fails, production is missing tables, columns, named indexes
