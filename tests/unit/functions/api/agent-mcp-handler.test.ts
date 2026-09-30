@@ -41,7 +41,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { runView } from "@functions/api/handlers/agentMcpRunPages";
-import { updateRunArgs } from "@functions/api/handlers/agentMcpTools";
+import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH, updateRunArgs } from "@functions/api/handlers/agentMcpTools";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
@@ -1239,11 +1239,12 @@ describe("personal run MCP handler", () => {
     });
 
     it("counts notes by UTF-8 bytes, not characters", async () => {
-      // Room for 20,000 characters of ASCII, but not for 20,000 three-byte characters.
-      const sections = largeSections(RUN_CONTENT_MAX_BYTES - 48 * 1024);
+      // Room for 20,000 characters of ASCII, but not for 10,000 three-byte characters (30,000
+      // bytes, within the notes limit).
+      const sections = largeSections(RUN_CONTENT_MAX_BYTES - 32 * 1024);
       const room = RUN_CONTENT_MAX_BYTES - contentSaveBytes(sections);
       expect(room).toBeGreaterThan(20_000);
-      expect(room).toBeLessThan(60_000);
+      expect(room).toBeLessThan(30_000);
       const setNotes = (notes: string) => {
         dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
         return handleAgentMcp(callTool("update_run", {
@@ -1255,7 +1256,7 @@ describe("personal run MCP handler", () => {
         }), env).then(toolBody);
       };
 
-      expect((await setNotes("界".repeat(20_000))).result.structuredContent.error).toBe("content_too_large");
+      expect((await setNotes("界".repeat(10_000))).result.structuredContent.error).toBe("content_too_large");
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
       expect((await setNotes("n".repeat(20_000))).result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
@@ -1406,14 +1407,17 @@ describe("personal run MCP handler", () => {
     });
 
     it("names a changed task too large for one result instead of returning it", async () => {
-      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
+      // Short notes on a task whose own content, from its template, is too large for one result.
+      const [section] = JSON.parse(personalRun().items as string);
+      section.items[0].contents.unshift({ id: "guide", type: "text", value: "Read the runbook first. ".repeat(1_500) });
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify([section]), revision: 2 })]);
 
       const body = await toolBody(await handleAgentMcp(callTool("update_run", {
         runId: "run-1",
         expectedRevision: 2,
         operation: "set_task_notes",
         taskId: "task-1",
-        notes: "界".repeat(20_000),
+        notes: "Evidence",
       }), env));
 
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
@@ -1458,6 +1462,93 @@ describe("personal run MCP handler", () => {
         run: { id: "run-1", revision: 1 },
         section: expect.objectContaining({ id: "section-1", title: "Release" }),
       });
+    });
+  });
+
+  describe("the notes update_run writes", () => {
+    const utf8Bytes = (text: string) => new TextEncoder().encode(text).byteLength;
+
+    const setNotes = async (notes: string, run = personalRun()) => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
+      return toolBody(await handleAgentMcp(callTool("update_run", {
+        runId: "run-1",
+        expectedRevision: 1,
+        operation: "set_task_notes",
+        taskId: "task-1",
+        notes,
+      }), env));
+    };
+
+    it("keeps the limits in the advertised schema", async () => {
+      expect(MAX_TASK_NOTES_BYTES).toBe(30 * 1024);
+      const tools = (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
+      const updateRun = tools.find((tool: any) => tool.name === "update_run");
+      expect(updateRun.inputSchema.properties.notes).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
+      for (const text of [updateRun.description, updateRun.inputSchema.properties.notes.description]) {
+        expect(text).toContain("at most 20,000 characters and 30KB (30,720 bytes of UTF-8)");
+      }
+    });
+
+    it.each([
+      ["20,000 characters of ASCII", "n".repeat(MAX_TASK_NOTES_LENGTH)],
+      ["30KB of three-byte text", "界".repeat(MAX_TASK_NOTES_BYTES / 3)],
+      ["30KB of emoji (four bytes and two characters each)", "🚀".repeat(MAX_TASK_NOTES_BYTES / 4)],
+    ])("writes %s and returns it in one result, as get_run reads it back", async (_notes, notes) => {
+      expect(notes.length).toBeLessThanOrEqual(MAX_TASK_NOTES_LENGTH);
+      expect(utf8Bytes(notes)).toBeLessThanOrEqual(MAX_TASK_NOTES_BYTES);
+
+      const written = await setNotes(notes);
+      expect(written.result.isError).toBeUndefined();
+      expect(written.result.structuredContent).toEqual({
+        run: expect.objectContaining({ id: "run-1", revision: 2 }),
+        sectionId: "section-1",
+        taskId: "task-1",
+        task: expect.objectContaining({ id: "task-1", notes }),
+      });
+
+      const stored = dbMocks.updateChain.set.mock.calls[0][0].items as string;
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: stored, revision: 2 })]);
+      const read = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "task-1" }), env));
+      expect(read.result.structuredContent).toEqual({
+        run: { id: "run-1", revision: 2 },
+        sectionId: "section-1",
+        task: expect.objectContaining({ id: "task-1", notes }),
+      });
+    });
+
+    it.each([
+      ["one byte over 30KB", `${"界".repeat(MAX_TASK_NOTES_BYTES / 3)}n`, "10,241 characters and 30,721 bytes"],
+      ["of three-byte text far under 20,000 characters", "界".repeat(10_241), "10,241 characters and 30,723 bytes"],
+      ["of four-byte emoji", "🚀".repeat(MAX_TASK_NOTES_BYTES / 4 + 1), "15,362 characters and 30,724 bytes"],
+      ["over 20,000 characters", "n".repeat(MAX_TASK_NOTES_LENGTH + 1), "20,001 characters and 20,001 bytes"],
+    ])("refuses notes %s, naming both limits, before reading the run", async (_notes, notes, size) => {
+      const body = await setNotes(notes);
+
+      expect(body.error.code).toBe(-32602);
+      expect(body.error.data.code).toBe("invalid_arguments");
+      expect(body.error.message).toBe("notes: Too long: notes can be at most 20,000 characters and 30KB (30,720 bytes "
+        + `of UTF-8); these are ${size}. Send shorter notes`);
+      expect(body.error.data.details.issues).toEqual([{ path: "notes", message: body.error.message.slice("notes: ".length) }]);
+      expect(dbMocks.db.select).not.toHaveBeenCalled();
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it("replaces longer notes written in the web app, which get_run reads in parts", async () => {
+      const [section] = JSON.parse(personalRun().items as string);
+      section.items[0].notes = "界".repeat(40_000);
+      const run = personalRun({ items: JSON.stringify([section]) });
+
+      dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
+      const read = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "task-1" }), env));
+      expect(read.result.structuredContent.part).toMatchObject({ of: "task", from: 0 });
+      expect(typeof read.result.structuredContent.nextCursor).toBe("string");
+
+      const replaced = await setNotes("Rollback verified; details in the incident doc.", run);
+      expect(replaced.result.isError).toBeUndefined();
+      expect(replaced.result.structuredContent.task).toEqual(expect.objectContaining({
+        id: "task-1",
+        notes: "Rollback verified; details in the incident doc.",
+      }));
     });
   });
 

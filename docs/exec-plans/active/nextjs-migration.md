@@ -693,3 +693,11 @@ Each of these needs the user's approval, or happens with the domain move:
   idle connection, which is just as old, and it sends a POST twice if the first one did reach
   the worker. The relay runs in wrangler's process, adds about 0.65 ms to a request, and gives
   the worker a new connection for each one, which its idle timer never closes.
+- 2026-09-30: **Agent notes within 30KB.** The user chose to cap the notes one `update_run`
+  writes by bytes: notes over 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES`) fail with
+  `invalid_arguments`, as notes over 20,000 characters already did, and the message names both
+  limits and the notes' size. 20,000 characters of three-byte text (Chinese, Japanese) is about
+  60KB, so an agent could write notes it could never read back in one 32KB result; 30KB leaves
+  room for the task and run around them. Only what an agent sends is checked: notes written in
+  the web app can be longer, `get_run` reads them in parts, and an agent can replace them with
+  shorter ones. No operation appends to notes.

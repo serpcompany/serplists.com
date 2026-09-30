@@ -22,6 +22,30 @@ export const isRecord = (value: unknown): value is JsonRecord =>
 
 export const MAX_TASK_NOTES_LENGTH = 20_000;
 
+/**
+ * The most notes one update_run writes, in UTF-8 bytes. 20,000 characters of three-byte text
+ * (Chinese, Japanese) is about 60KB, more than one result holds (MAX_RESULT_BYTES, 32KB, in
+ * agentMcpPages.ts); 30KB leaves room for the task and run around the notes, so an agent reads
+ * back what it wrote in one call. Notes written in the web app can be longer: get_run reads them
+ * in parts, and an agent can replace them with notes within the limit.
+ */
+export const MAX_TASK_NOTES_BYTES = 30 * 1024;
+
+const formatNumber = (value: number) => value.toLocaleString("en-US");
+const TASK_NOTES_LIMITS = `${formatNumber(MAX_TASK_NOTES_LENGTH)} characters and ${MAX_TASK_NOTES_BYTES / 1024}KB `
+  + `(${formatNumber(MAX_TASK_NOTES_BYTES)} bytes of UTF-8)`;
+
+// Either limit's refusal names both, and the notes' size, so an agent knows how far to cut them.
+const taskNotesArg = z.string().superRefine((notes, context) => {
+  const bytes = new TextEncoder().encode(notes).byteLength;
+  if (notes.length <= MAX_TASK_NOTES_LENGTH && bytes <= MAX_TASK_NOTES_BYTES) return;
+  context.addIssue({
+    code: "custom",
+    message: `Too long: notes can be at most ${TASK_NOTES_LIMITS}; `
+      + `these are ${formatNumber(notes.length)} characters and ${formatNumber(bytes)} bytes. Send shorter notes`,
+  });
+});
+
 export const listRunsArgs = z.object({
   status: z.enum(["in_progress", "completed"]).optional(),
   cursor: cursorArg.optional(),
@@ -61,7 +85,7 @@ export const updateRunArgs = z.discriminatedUnion("operation", [
     expectedRevision: z.number().int().positive(),
     operation: z.literal("set_task_notes"),
     taskId: z.string().trim().min(1),
-    notes: z.string().max(MAX_TASK_NOTES_LENGTH),
+    notes: taskNotesArg,
   }).strict(),
   z.object({
     runId: z.string().trim().min(1),
@@ -165,7 +189,9 @@ export const toolDefinitions = [
     name: "update_run",
     description: "Update one explicit part of a personal run. Pass the latest expectedRevision to prevent lost updates. "
       + "Each operation takes its own fields: set_task_completed needs taskId and completed; "
-      + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes; "
+      + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes, "
+      + `which replace the task's notes and can be at most ${TASK_NOTES_LIMITS}, so they fit in one result `
+      + "(get_run returns longer notes written in SERP Lists in parts); "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
       + "(it fails with run_incomplete, naming open taskIds, otherwise). Leave out fields the operation does not use. "
       + "Returns the run's fields with its new revision and, after a task operation, the changed task (sectionId "
@@ -196,7 +222,7 @@ export const toolDefinitions = [
         notes: {
           type: "string",
           maxLength: MAX_TASK_NOTES_LENGTH,
-          description: "Required for set_task_notes. Replaces the task's notes.",
+          description: `Required for set_task_notes. Replaces the task's notes: at most ${TASK_NOTES_LIMITS}.`,
         },
         status: {
           type: "string",

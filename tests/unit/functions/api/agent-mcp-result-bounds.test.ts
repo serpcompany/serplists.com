@@ -13,7 +13,7 @@ vi.mock("@functions/api/utils/personal-run-key", () => ({
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
-import { toolDefinitions } from "@functions/api/handlers/agentMcpTools";
+import { MAX_TASK_NOTES_BYTES, toolDefinitions } from "@functions/api/handlers/agentMcpTools";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import {
   contentSaveBytes,
@@ -115,8 +115,8 @@ function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fie
 }
 
 // A run at the limits: content just under the run limit, with 20,000-character notes (the most
-// update_run writes) and a 200,000-character note (the web app writes any length), and about 1MB
-// of retired work beside it, within the 2MB a D1 row holds.
+// characters update_run writes) and a 200,000-character note (the web app writes any length),
+// and about 1MB of retired work beside it, within the 2MB a D1 row holds.
 function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
   const runTask = (id: string, notes: number) => ({ ...task(id, 200), isCompleted: false, notes: prose(notes) });
   const sections: JsonRecord[] = [
@@ -217,14 +217,15 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
 
   async update_run() {
     const { sections, retired } = maximumRun();
-    // Room for one more 20,000-character note.
+    // Room for notes at the most bytes update_run writes.
     (sections[0].items as JsonRecord[]).splice(0, 2);
     insertRun("maximum", sections, retired, { title: costly(1_000) });
     const base = { runId: "maximum" };
+    const longestNotes = "界".repeat(MAX_TASK_NOTES_BYTES / 3);
     return [
       await call("update_run", { ...base, expectedRevision: 1, operation: "set_task_completed", taskId: "huge-note", completed: true }),
       await call("update_run", { ...base, expectedRevision: 2, operation: "set_subtask_completed", taskId: "note-5", subtaskId: "note-5-sub", completed: true }),
-      await call("update_run", { ...base, expectedRevision: 3, operation: "set_task_notes", taskId: "note-6", notes: prose(20_000) }),
+      await call("update_run", { ...base, expectedRevision: 3, operation: "set_task_notes", taskId: "note-6", notes: longestNotes }),
       await call("update_run", { ...base, expectedRevision: 4, operation: "set_task_notes", taskId: "area-0-0", notes: costly(5_000) }),
       await call("update_run", { ...base, expectedRevision: 5, operation: "set_run_status", status: "in_progress" }),
     ];

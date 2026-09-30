@@ -327,7 +327,9 @@ over 48,000 bytes. `get_template` and `get_run` read a larger template or run a 
 time, `list_templates` and `list_runs` return a page at a time with a cursor to the next, and
 `update_template` operations and `update_run` change one section or task, so no call returns a
 whole large template or run, and no edit needs one sent back. MCP run writes keep the same
-content limit as the web app's.
+content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
+30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
+agent writes come back in one result.
 The cap uses `Content-Length`, or counts streamed bytes when it is missing or
 malformed. Uploads are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file

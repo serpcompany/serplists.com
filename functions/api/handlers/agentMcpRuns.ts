@@ -170,7 +170,7 @@ export function updateRunAuditDiff(args: UpdateRunArgs, existing: JsonRecord, up
     revision: { from: typeof existing.revision === "number" ? existing.revision : 1, to: updates.revision },
   };
   if (change.operation === "set_task_notes") {
-    // Notes can be 20,000 characters of user content; the run row holds them.
+    // Notes can be 30KB of user content (MAX_TASK_NOTES_BYTES); the run row holds them.
     delete diff.notes;
     diff.notesLength = change.notes.length;
   }
