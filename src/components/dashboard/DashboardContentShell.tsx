@@ -10,6 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
+import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 // The console's page blocks (docs/DESIGN.md): a console page is a DashboardContentShell
@@ -117,8 +118,9 @@ interface DashboardEmptyStateProps {
   description: ReactNode;
   icon?: ReactNode;
   title: ReactNode;
-  // The title's heading level: h3 inside a card that has its own title.
-  titleAs?: 'h2' | 'h3';
+  // The title's heading level: h1 when the state is the whole page (a record that failed to
+  // load or does not exist), h3 inside a card that has its own title.
+  titleAs?: 'h1' | 'h2' | 'h3';
 }
 
 // An empty, error or not-found state in place of a list or a page (the shadcn Empty).
@@ -140,5 +142,18 @@ export function DashboardEmptyState({
       </EmptyHeader>
       {action ? <EmptyContent>{action}</EmptyContent> : null}
     </Empty>
+  );
+}
+
+// A page or panel that is loading: the shadcn Spinner, with what is loading under it.
+export function DashboardLoadingState({ label }: { label?: string }) {
+  return (
+    <div
+      className="flex flex-1 flex-col items-center justify-center gap-3 py-16 text-sm text-muted-foreground"
+      data-dashboard-loading-state="true"
+    >
+      <Spinner className="size-6" />
+      {label ? <p>{label}</p> : null}
+    </div>
   );
 }

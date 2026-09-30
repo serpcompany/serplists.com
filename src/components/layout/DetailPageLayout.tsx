@@ -25,6 +25,8 @@ type DetailPageLayoutProps = {
   aside?: ReactNode;
   // The trail after Home; the last one is the current page and is not a link.
   breadcrumbs: DetailBreadcrumb[];
+  // False leaves Home out of the trail, for a console page whose trail starts at its section.
+  breadcrumbHome?: boolean;
   // The page's content, under a separator.
   children?: ReactNode;
   className?: string;
@@ -42,6 +44,7 @@ type DetailPageLayoutProps = {
 export function DetailPageLayout({
   actions,
   aside,
+  breadcrumbHome = true,
   breadcrumbs,
   children,
   className,
@@ -55,17 +58,19 @@ export function DetailPageLayout({
     <PageContainer width="shell" className={cn('py-8 sm:py-10', className)} data-slot="detail-page">
       <Breadcrumb className="mb-8">
         <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href={buildHomePath()} />}>
-              <House className="size-4" aria-hidden="true" />
-              <span className="sr-only">Home</span>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
+          {breadcrumbHome ? (
+            <BreadcrumbItem>
+              <BreadcrumbLink render={<Link href={buildHomePath()} />}>
+                <House className="size-4" aria-hidden="true" />
+                <span className="sr-only">Home</span>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+          ) : null}
           {breadcrumbs.map((crumb, index) => {
             const last = index === breadcrumbs.length - 1;
             return (
               <Fragment key={index}>
-                <BreadcrumbSeparator />
+                {breadcrumbHome || index > 0 ? <BreadcrumbSeparator /> : null}
                 <BreadcrumbItem>
                   {last || !crumb.href ? (
                     <BreadcrumbPage className="line-clamp-1">{crumb.label}</BreadcrumbPage>

@@ -3,63 +3,37 @@
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import {
+  AlertCircle,
   ArrowLeft,
-  Calendar,
-  ChevronRight,
-  Clock,
-  Copy,
-  Download,
+  FileQuestion,
+  FileText,
   Globe,
-  History,
   Layers,
+  List,
   ListChecks,
   Lock,
-  MoreHorizontal,
-  Pencil,
-  PlayCircle,
-  Share2,
-  Tag,
-  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+  DashboardContentShell,
+  DashboardEmptyState,
+  DashboardLoadingState,
+} from '@/components/dashboard/DashboardContentShell';
+import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
+import { Stat } from '@/components/layout/Stat';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { TemplateDetailActions } from '@/components/template/TemplateDetailActions';
+import {
+  TemplateCategoriesCard,
+  TemplateDetailsCard,
+  TemplateHistoryCard,
+} from '@/components/template/TemplateDetailCards';
+import { TemplateSectionList } from '@/components/template/TemplateSectionList';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
-import { Switch } from '@/components/ui/switch';
-import { ContentRenderer } from '@/components/shared/ContentRenderer';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import { ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
-import {
-  DashboardContentShell,
-  DashboardPageHeader,
-  DashboardPageBody,
-} from '@/components/dashboard/DashboardContentShell';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { WorkspaceErrorNotice } from '@/components/workspace/WorkspaceErrorNotice';
@@ -90,9 +64,7 @@ import {
 import { getTemplateActionPermissions } from '@/lib/organizationPermissions';
 import { isRepoTemplate } from '@/lib/repoTemplateCatalog';
 import { getRunStartedMessage, getTemplateDuplicatedMessage, nameOtherTemplateDestination } from '@/lib/templateDestination';
-import { getSectionDisplayTitle } from '@/lib/utils/checklistSections';
-import { formatLocalDate, formatLocalDateTime } from '@/lib/utils/dbTimestamp';
-import { formatCount } from '@/lib/utils/pluralize';
+import { formatLocalDate } from '@/lib/utils/dbTimestamp';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -354,30 +326,34 @@ const TemplateDetail = () => {
   if (loading) {
     return (
       <DashboardContentShell>
-        <DashboardPageBody className="flex items-center justify-center">
-          <LoadingSpinner message="Loading template..." />
-        </DashboardPageBody>
+        <DashboardLoadingState label="Loading template..." />
       </DashboardContentShell>
     );
   }
+
+  const backToTemplates = (
+    <Link href={buildConsoleTemplatesPath()} className={buttonVariants({ variant: 'outline' })}>
+      <ArrowLeft data-icon="inline-start" />
+      Back to Templates
+    </Link>
+  );
 
   // A failed request is not a missing template: say so and let the user retry.
   if (loadError && !displayTemplate) {
     return (
       <DashboardContentShell>
-        <DashboardPageBody className="flex items-center justify-center">
-          <Card className="p-8 text-center">
-            <h2 className="mb-4 text-3xl font-bold">Unable to load template</h2>
-            <p className="mb-6 text-muted-foreground">{loadError}</p>
-            <div className="flex justify-center gap-2">
+        <DashboardEmptyState
+          icon={<AlertCircle />}
+          title="Unable to load template"
+          titleAs="h1"
+          description={loadError}
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
               <Button onClick={reload}>Try again</Button>
-              <Link
-                href={buildConsoleTemplatesPath()}
-                className={buttonVariants({ variant: 'outline' })}
-              >Back to Templates</Link>
+              {backToTemplates}
             </div>
-          </Card>
-        </DashboardPageBody>
+          }
+        />
       </DashboardContentShell>
     );
   }
@@ -385,412 +361,119 @@ const TemplateDetail = () => {
   if (notFound || !displayTemplate) {
     return (
       <DashboardContentShell>
-        <DashboardPageHeader
+        <DashboardEmptyState
+          icon={<FileQuestion />}
           title="Template Not Found"
+          titleAs="h1"
           description="This template does not exist or you do not have access to it."
-          actions={
-            <Link href={buildConsoleTemplatesPath()} className={buttonVariants()}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Templates
-              </Link>
-          }
+          action={backToTemplates}
         />
-        <DashboardPageBody className="flex items-center justify-center">
-          <Card className="p-8 text-center">
-          <h2 className="mb-4 text-3xl font-bold">Template Not Found</h2>
-          <p className="mb-6 text-muted-foreground">
-            This template does not exist or you don&apos;t have access to it.
-          </p>
-        </Card>
-        </DashboardPageBody>
       </DashboardContentShell>
     );
   }
 
-  const templateHeaderActions = (
-    <>
-      <Link
-        href={buildConsoleTemplatesPath()}
-        className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'text-muted-foreground')}
-      >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
-        </Link>
-
-      {isPublic ? (
-        <Badge variant="secondary">
-          <Globe className="mr-1 h-3 w-3" />
-          Public
-        </Badge>
-      ) : (
-        <Badge variant="secondary">
-          <Lock className="mr-1 h-3 w-3" />
-          Private
-        </Badge>
-      )}
-
-      {canEditTemplate ? (
-        <>
-          {permissions.canShare ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShare}
-              disabled={isChangingVisibility}
-              className="border-border"
-            >
-              <Share2 className="mr-2 h-4 w-4" />
-              {isCreatingShare ? 'Creating...' : 'Share'}
-            </Button>
-          ) : null}
-          {/* The loaded id, never the route param: this page also opens by slug, the editor only by id. */}
-          <Link
-            href={buildConsoleTemplateEditPath(displayTemplate.id)}
-            className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'border-border')}
-          >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </Link>
-        </>
-      ) : user ? (
-        copyButton.visible ? (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCloneTemplate}
-            disabled={copyButton.disabled}
-            className="border-border"
-          >
-            <Copy className="mr-2 h-4 w-4" />
-            {copyButton.label}
-          </Button>
-        ) : null
-      ) : copyButton.visible ? (
-        <Link
-          href={withReturnPath(buildLoginPath(), currentPath)}
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'border-border')}
-        >
-            Log in to copy template
-          </Link>
-      ) : null}
-
-      {canStartRun || !user ? (
-        <Button
-          size="sm"
-          onClick={() => setRunDialogOpen(true)}
-          className="bg-foreground text-background hover:bg-foreground/90"
-        >
-          <PlayCircle className="mr-2 h-4 w-4" />
-          Start Run
-        </Button>
-      ) : null}
-
-      {canEditTemplate ? (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button aria-label="Template actions" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" />}
-          >
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            {permissions.canDuplicate ? (
-              <DropdownMenuItem onClick={handleCloneTemplate} disabled={isCloningTemplate}>
-                <Copy className="mr-2 h-4 w-4" />
-                {isCloningTemplate ? 'Duplicating...' : 'Duplicate'}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem onClick={handleExport} disabled={billingState.isLoading}>
-              <Download className="mr-2 h-4 w-4" />
-              {getTemplateExportLabel(billingState)}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setArchiveDialogOpen(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ) : null}
-    </>
-  );
+  const TypeIcon = displayTemplate.type === 'recipe' ? List : FileText;
 
   return (
-    <DashboardContentShell>
-      <DashboardPageHeader
+    <>
+      <DetailPageLayout
+        breadcrumbHome={false}
+        breadcrumbs={[
+          { href: buildConsoleTemplatesPath(), label: 'My Templates' },
+          { label: displayTemplate.title },
+        ]}
+        notice={
+          startRunRoleUnavailable ? (
+            <WorkspaceErrorNotice id="template-workspace-error" message="Start Run waits until they load. Check your connection and try again." onRetry={retryWorkspace} />
+          ) : undefined
+        }
+        icon={<TypeIcon />}
         title={displayTemplate.title}
         description={
           displayTemplate.description ||
           'Review template structure, metadata, and run actions.'
         }
-        actions={templateHeaderActions}
-      />
-      <DashboardPageBody>
-        <div className="mx-auto max-w-6xl space-y-8">
-        {startRunRoleUnavailable ? (
-          <WorkspaceErrorNotice id="template-workspace-error" message="Start Run waits until they load. Check your connection and try again." onRetry={retryWorkspace} />
-        ) : null}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <ListChecks className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {totalTasks}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Tasks</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        meta={
+          <Badge variant="secondary">
+            {isPublic ? <Globe data-icon="inline-start" /> : <Lock data-icon="inline-start" />}
+            {isPublic ? 'Public' : 'Private'}
+          </Badge>
+        }
+        actions={
+          <TemplateDetailActions
+            canDuplicate={permissions.canDuplicate}
+            canEdit={canEditTemplate}
+            canShare={permissions.canShare}
+            copyButton={copyButton}
+            // The loaded id, never the route param: this page also opens by slug, the editor only by id.
+            editHref={buildConsoleTemplateEditPath(displayTemplate.id)}
+            exportDisabled={billingState.isLoading}
+            exportLabel={getTemplateExportLabel(billingState)}
+            isChangingVisibility={isChangingVisibility}
+            isCloning={isCloningTemplate}
+            isCreatingShare={isCreatingShare}
+            isSignedIn={Boolean(user)}
+            loginHref={withReturnPath(buildLoginPath(), currentPath)}
+            onClone={() => void handleCloneTemplate()}
+            onDelete={() => setArchiveDialogOpen(true)}
+            onExport={() => void handleExport()}
+            onShare={() => void handleShare()}
+            onStartRun={() => setRunDialogOpen(true)}
+            showStartRun={canStartRun || !user}
+          />
+        }
+        aside={
+          <div className="grid grid-cols-2 gap-4">
+            <Stat icon={<ListChecks />} label="Total Tasks" value={totalTasks} />
+            <Stat icon={<Layers />} label="Sections" value={displayTemplate.sections.length} />
+          </div>
+        }
+      >
+        <section aria-labelledby="template-structure" className="flex flex-col gap-4">
+          <h2 className="text-xl font-semibold tracking-tight" id="template-structure">
+            Template Structure
+          </h2>
+          <TemplateSectionList collapsible={false} sections={displayTemplate.sections} />
+        </section>
 
-          <Card className="border-border bg-card">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                  <Layers className="h-5 w-5 text-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold text-foreground">
-                    {displayTemplate.sections.length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Sections</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="border-border bg-card">
-          <CardHeader className="border-b border-border px-6 py-4">
-            <CardTitle className="text-base">Template Structure</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {displayTemplate.sections.map((section, sectionIndex) => (
-              <div
-                key={section.id}
-                className={
-                  sectionIndex < displayTemplate.sections.length - 1
-                    ? 'border-b border-border'
-                    : ''
-                }
-              >
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <div className="flex h-6 w-6 items-center justify-center rounded bg-muted text-xs font-medium text-foreground">
-                    {sectionIndex + 1}
-                  </div>
-                  <span className="font-medium text-foreground">
-                    {getSectionDisplayTitle(section, sectionIndex)}
-                  </span>
-                  <Badge variant="secondary" className="ml-auto">
-                    {formatCount(section.items.length, 'task')}
-                  </Badge>
-                </div>
-                <div className="space-y-1 pb-3 pl-14 pr-4">
-                  {section.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-lg border border-transparent py-2"
-                    >
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <ChevronRight className="h-3 w-3" />
-                        <span>{item.title}</span>
-                      </div>
-                      {item.description ? (
-                        <p className="mt-1 whitespace-pre-line pl-5 text-sm text-muted-foreground">
-                          {item.description}
-                        </p>
-                      ) : null}
-                      {item.contents?.length ? (
-                        <div className="mt-3 rounded-lg border border-border bg-background p-3">
-                          <ContentRenderer contents={item.contents} disabled />
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-border bg-card">
-            <CardHeader className="border-b border-border px-6 py-4">
-              <CardTitle className="text-base">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4" />
-                  Created
-                </div>
-                <span className="text-sm text-foreground">{createdDate}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  Last updated
-                </div>
-                <span className="text-sm text-foreground">{updatedDate}</span>
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Globe className="h-4 w-4" />
-                  Visibility
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    // A native button, so the Label's htmlFor names it.
-                    nativeButton
-                    render={<button type="button" />}
-                    id="template-visibility"
-                    checked={isPublic}
-                    disabled={!canEditTemplate || isChangingVisibility}
-                    onCheckedChange={handleTogglePublic}
-                  />
-                  <Label
-                    htmlFor="template-visibility"
-                    className="text-sm text-foreground"
-                  >
-                    {isPublic ? 'Public' : 'Private'}
-                  </Label>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader className="border-b border-border px-6 py-4">
-              <CardTitle className="text-base">Categories &amp; Tags</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 p-4">
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Categories
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {displayTemplate.categories?.length ? (
-                    displayTemplate.categories.map((category) => (
-                      <Badge key={category} variant="secondary">
-                        {category}
-                      </Badge>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No categories assigned
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Tags
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {displayTemplate.tags?.length ? (
-                    displayTemplate.tags.map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant="outline"
-                        className="border-border"
-                      >
-                        <Tag className="mr-1 h-3 w-3" />
-                        {tag}
-                      </Badge>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No tags assigned
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+          <TemplateDetailsCard
+            createdDate={createdDate}
+            isPublic={isPublic}
+            onVisibilityChange={(nextIsPublic) => void handleTogglePublic(nextIsPublic)}
+            updatedDate={updatedDate}
+            visibilityDisabled={!canEditTemplate || isChangingVisibility}
+          />
+          <TemplateCategoriesCard
+            categories={displayTemplate.categories ?? []}
+            tags={displayTemplate.tags ?? []}
+          />
           {canViewTemplateHistory ? (
-            <Card className="border-border bg-card lg:col-span-2">
-              <CardHeader className="border-b border-border px-6 py-4">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <History className="h-4 w-4 text-muted-foreground" />
-                  Changelog
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                {history?.isLoading ? (
-                  <p className="text-sm text-muted-foreground">
-                    Loading template history...
-                  </p>
-                ) : history?.isError ? (
-                  <p className="text-sm text-muted-foreground">
-                    Template history is unavailable right now.
-                  </p>
-                ) : historyEntries.length > 0 ? (
-                  <div className="divide-y divide-border">
-                    {historyEntries.map((entry) => (
-                      <div
-                        key={entry.key}
-                        className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            {entry.label}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {entry.actorName}
-                          </p>
-                        </div>
-                        <time className="text-xs text-muted-foreground">
-                          {formatLocalDateTime(entry.createdAt)}
-                        </time>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No template history has been recorded yet.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <TemplateHistoryCard
+              className="lg:col-span-2"
+              entries={historyEntries}
+              isError={Boolean(history?.isError)}
+              isLoading={Boolean(history?.isLoading)}
+            />
           ) : null}
         </div>
-        </div>
-      </DashboardPageBody>
+      </DetailPageLayout>
 
-      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete template</AlertDialogTitle>
-            {/* Users see a delete. The API archives the template (making it private), and
-                /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
-            <AlertDialogDescription>
-              Are you sure you want to delete &quot;{displayTemplate.title}&quot;?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setArchiveDialogOpen(false);
-                void handleDelete();
-              }}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Users see a delete. The API archives the template (making it private), and
+          /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
+      <ConfirmDialog
+        confirmLabel="Delete"
+        description={`Are you sure you want to delete "${displayTemplate.title}"?`}
+        onConfirm={() => {
+          setArchiveDialogOpen(false);
+          void handleDelete();
+        }}
+        onOpenChange={setArchiveDialogOpen}
+        open={archiveDialogOpen}
+        pending={isDeleting}
+        pendingLabel="Deleting..."
+        title="Delete template"
+      />
 
       <ShareLinkDialog
         copiedMessage="Public link copied"
@@ -808,7 +491,7 @@ const TemplateDetail = () => {
         onConfirm={handleStartRun}
         loading={isCreatingRun}
       />
-    </DashboardContentShell>
+    </>
   );
 };
 

@@ -1,7 +1,7 @@
+import { useId } from 'react';
 import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
 // A Run's share link: what anyone who has it may do (functions/api/handlers/checklists-shared.ts).
@@ -22,9 +28,12 @@ type ShareLinkFieldProps = {
   url: string;
 };
 
-// Shows a created share link with a Copy button. The copy runs straight from the click,
-// which Safari requires, and the link stays visible if the browser refuses the copy.
+// Shows a created share link with a Copy button in the field (a shadcn InputGroup). The copy
+// runs straight from the click, which Safari requires, and the link stays visible if the
+// browser refuses the copy.
 export function ShareLinkField({ copiedMessage, url }: ShareLinkFieldProps) {
+  const inputId = useId();
+
   const handleCopy = async () => {
     if (await copyTextToClipboard(url)) {
       toast.success(copiedMessage);
@@ -34,25 +43,22 @@ export function ShareLinkField({ copiedMessage, url }: ShareLinkFieldProps) {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Input
-        aria-label="Share link"
-        readOnly
-        value={url}
-        onFocus={(event) => event.currentTarget.select()}
-        className="border-border bg-muted"
-      />
-      <Button
-        aria-label="Copy share link"
-        variant="outline"
-        size="icon"
-        onClick={() => void handleCopy()}
-        className="shrink-0 border-border"
-        type="button"
-      >
-        <Copy className="h-4 w-4" />
-      </Button>
-    </div>
+    <Field>
+      <FieldLabel htmlFor={inputId}>Share link</FieldLabel>
+      <InputGroup>
+        <InputGroupInput
+          id={inputId}
+          readOnly
+          value={url}
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <InputGroupAddon align="inline-end">
+          <InputGroupButton aria-label="Copy share link" onClick={() => void handleCopy()} size="icon-xs">
+            <Copy />
+          </InputGroupButton>
+        </InputGroupAddon>
+      </InputGroup>
+    </Field>
   );
 }
 
@@ -73,24 +79,13 @@ export function ShareLinkDialog({
 }: ShareLinkDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-border bg-card">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <ShareLinkField copiedMessage={copiedMessage} url={url} />
-        </div>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className="border-border"
-            type="button"
-          >
-            Close
-          </Button>
-        </DialogFooter>
+        <ShareLinkField copiedMessage={copiedMessage} url={url} />
+        <DialogFooter showCloseButton />
       </DialogContent>
     </Dialog>
   );

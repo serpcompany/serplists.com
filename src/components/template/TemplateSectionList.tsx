@@ -68,12 +68,17 @@ export function TemplateSectionList({ collapsible = true, sections }: TemplateSe
 
 function SectionHeading({ index, section }: { index: number; section: ChecklistSection }) {
   return (
-    <span className="flex min-w-0 items-center gap-3">
+    <span className="flex min-w-0 items-start gap-3">
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
         {index + 1}
       </span>
-      <span className="truncate font-medium">{getSectionDisplayTitle(section, index)}</span>
-      <span className="shrink-0 text-xs text-muted-foreground">{formatCount(section.items.length, 'task')}</span>
+      {/* The title wraps rather than cut off on a phone; the count follows it. */}
+      <span className="min-w-0 pt-0.5 wrap-break-word">
+        <span className="font-medium">{getSectionDisplayTitle(section, index)}</span>
+        <span className="ml-2 text-xs whitespace-nowrap text-muted-foreground">
+          {formatCount(section.items.length, 'task')}
+        </span>
+      </span>
     </span>
   );
 }

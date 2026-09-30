@@ -17,11 +17,12 @@ interface MarkdownBlockProps {
 /**
  * Author-written markdown (task text) with the typography styles configured in
  * src/app/globals.css. `whitespace-pre-line` keeps single newlines as line breaks; raw HTML
- * is skipped and links go through safeUrl. Every markdown surface uses this component.
+ * is skipped and links go through safeUrl, and a long word or URL wraps instead of widening
+ * the page. Every markdown surface uses this component.
  */
 export function MarkdownBlock({ value, className }: MarkdownBlockProps) {
   return (
-    <div className={cn('prose prose-sm max-w-none whitespace-pre-line', className)}>
+    <div className={cn('prose prose-sm max-w-none whitespace-pre-line wrap-break-word', className)}>
       <ReactMarkdown
         remarkPlugins={REMARK_PLUGINS}
         rehypePlugins={REHYPE_PLUGINS}

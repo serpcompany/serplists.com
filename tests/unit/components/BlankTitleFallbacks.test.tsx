@@ -124,6 +124,6 @@ describe('blank section and sub-task titles', () => {
       />,
     );
 
-    expect(html).toMatch(/<span class="truncate font-medium">Section 2<\/span>/);
+    expect(html).toMatch(/<span class="font-medium">Section 2<\/span>/);
   });
 });

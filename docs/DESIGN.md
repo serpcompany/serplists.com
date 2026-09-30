@@ -75,7 +75,7 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | `MediaCard` | `MediaCard.tsx` | A muted media area with an `IconTile` (and an optional corner badge or overlay), then the title and a muted description. With `href`, the title's link covers the card; links and buttons in its children stay clickable, and so does an `action` (an actions menu) on the card's top right corner, which follows the title in the tab order. `orientation="horizontal"` makes a list row with a thumbnail |
 | `ListCard` | `ListCard.tsx` | A bordered `Item` with an icon tile, title, description and trailing meta; a link when given `href`. `orientation="vertical"` is a category tile |
 | `CtaBanner` | `CtaBanner.tsx` | A muted panel: title and description on the left, buttons on the right |
-| `DetailPageLayout` | `DetailPageLayout.tsx` | `Breadcrumb` (Home, then the trail), a header (icon tile, title, description, meta, actions) with a panel beside it, then the content under a `Separator` |
+| `DetailPageLayout` | `DetailPageLayout.tsx` | `Breadcrumb` (Home, then the trail; `breadcrumbHome={false}` starts a console page's trail at its section), a header (icon tile, title, description, meta, actions) with a panel beside it, then the content under a `Separator`: the public template page and template detail |
 | `IconTile`, `BrandLink` | `IconTile.tsx`, `BrandLink.tsx` | The muted icon tile (sizes `sm`, `md`, `lg`; `tone="card"` on a muted area) and the brand mark and name |
 | `Stat` | `Stat.tsx` | A figure over its muted label, with an optional icon tile: a detail page's stats panel |
 
@@ -96,11 +96,13 @@ page, so a page's sticky parts stick to the window.
 | `DashboardPageHeader` | same | The page's `h1`, a muted description and badges (`meta`), with the actions on the right (under the text on phones) |
 | `DashboardToolbar` | same | A row of labelled filter fields over a list, stacked on phones |
 | `DashboardPageBody` | same | The content under the header and toolbar |
-| `DashboardEmptyState` | same | The shadcn `Empty` with a heading: an empty list, a load error, a missing record |
+| `DashboardEmptyState` | same | The shadcn `Empty` with a heading: an empty list, a load error, a missing record (an `h1` when it is the whole page) |
+| `DashboardLoadingState` | same | The shadcn `Spinner` over what is loading |
 | `ListLoadErrorState` | `src/components/dashboard/ListLoadErrorState.tsx` | `DashboardEmptyState` for a list that failed to load: Retry, or Sign in when the session ended |
 | `ConfirmDialog` | `src/components/shared/ConfirmDialog.tsx` | The shadcn `AlertDialog` for a destructive action (Delete, Revoke): Cancel and the action, which waits while it runs |
 | `ShareLinkDialog` | `src/components/shared/ShareLinkDialog.tsx` | A created link in a read-only field with a Copy button |
 | `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
+| `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail |
 
 ## Conventions
 
