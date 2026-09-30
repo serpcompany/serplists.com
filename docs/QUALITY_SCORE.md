@@ -18,7 +18,7 @@ changes are risky or slow. D = needs attention before building on it.
 | Templates | A | B | D | A | `templates.ts` handler is about 1,600 lines (TD-8) |
 | Runs | B | C | C | B | `checklists.ts` is about 1,200 lines; `ChecklistRun.tsx` is near its cap |
 | Billing and entitlements | B | B | B | A | Only 3 e2e specs exercise paid flows |
-| Agent access (Run Keys, MCP) | B | B | C | D | No module doc for Run Keys and MCP; `agentMcp.ts` is about 900 lines |
+| Agent access (Run Keys, MCP) | B | B | C | D | No module doc for Run Keys and MCP; `agentMcp.ts` is about 700 lines |
 | Public discovery and SEO | B | B | B | B | Sitemap `lastmod` depends on full git history in CI (now configured) |
 | Imports and uploads | B | C | C | B | Clipy input parsed by hand; `TemplateBackup.tsx` is about 640 lines |
 
