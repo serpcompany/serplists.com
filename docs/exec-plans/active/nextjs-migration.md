@@ -283,6 +283,11 @@ Each of these needs the user's approval, or happens with the domain move:
   it") fails the same way on the pre-merge commit `2675576e` when run alone, because wrangler's
   dev proxy drops its invite POST (`Network connection lost`, cloudflare/workers-sdk#14641);
   `pnpm run test:smoke` (24 of 24).
+- [x] Run Key follow-ups on the merged template tools (decision log, 2026-09-30): the template
+  Changelog names the Run Key behind an Agent's edit (`fc0fd8a4`), and TD-27 is closed:
+  `get_template` reads any template in results of at most 32KB and `update_template` changes
+  one section or task (`2bd9dbcf` to `35dfff67`). A template 1KB under the 768KB limit reads
+  back exactly in 31 calls on local D1.
 
 ## Decision log
 
@@ -628,3 +633,23 @@ Each of these needs the user's approval, or happens with the domain move:
   TD-25 and TD-26 (TD-24 was used and closed here). The failed-authentication limit counts an
   IPv6 client per /64, like the router's limits. The template update batch moved to
   `utils/template-writes.ts`, keeping `templates.ts` under its line cap.
+- 2026-09-30: **The template Changelog names the Run Key from the audit event.** A version
+  row records only the user; the audit event its write records holds the key. The history API
+  gives each version that event's `metadata` (the field run history events carry), looked up in
+  the events it already reads with the same limit, which always hold the event of every version
+  the Changelog shows, so D1 reads nothing more. Joining `audit_events` in the version query
+  was rejected: up to 8 more rows read on every template page.
+- 2026-09-30: **MCP template results within 32KB, and edits a part at a time (TD-27).**
+  get_template's 512KB bound was far past what clients take whole: Claude Code sets a result
+  over 25,000 tokens aside in a file (`MAX_MCP_OUTPUT_TOKENS`), and Codex cuts the middle out of
+  one over its model's 10,000 tokens plus 20%, counted as 4 bytes each. So get_template,
+  create_template and update_template results stay within 32KB, and a larger template reads as
+  an outline, a section or task at a time, pages of whole tasks, and parts of JSON text for
+  anything larger on its own, so every template that can exist reads in full. Capping what
+  MCP writes may store was rejected: web and older templates would still be unreadable.
+  Cursors hold the version, so pages never mix versions. `update_template` gained operations
+  on one section or task: taking the whole checklist back from a template read in pages would
+  need more than any one result (and more than a model writes in one call), and anything the
+  agent dropped would be removed. The whole-checklist `sections` stays for templates an agent
+  can send whole; whether to refuse it for a template too large to read at once is left to the
+  user. The other MCP results keep their 512KB bound (TD-28).

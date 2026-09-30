@@ -9,13 +9,13 @@ import {
 // the definitions functions/api/handlers/agentMcpTools.ts advertises. Nothing here imports the
 // MCP handlers, so every handler module can import it.
 
-// The largest template tool result, in bytes of the JSON clients receive, so that MCP clients
-// take every result whole. Claude Code sets a result over MAX_MCP_OUTPUT_TOKENS (25,000 tokens
-// by default) aside in a file, and Codex cuts the middle out of one over its model's budget
-// (10,000 tokens plus 20%, which it counts as 4 bytes each: 48,000 bytes). 32KB is 8,192 of
-// Codex's tokens, and about 16,000 real ones even at 2 bytes a token (JSON dense with ids, or
-// text in other scripts). get_template reads a larger template in parts
-// (agentMcpTemplatePages.ts), and update_template's operations edit it a part at a time.
+// The largest get_template, create_template or update_template result, in bytes of the JSON
+// clients receive, so that MCP clients take every one whole. Claude Code sets a result over
+// MAX_MCP_OUTPUT_TOKENS (25,000 tokens by default) aside in a file, and Codex cuts the middle
+// out of one over its model's budget (10,000 tokens plus 20%, which it counts as 4 bytes each:
+// 48,000 bytes). 32KB is 8,192 of Codex's tokens, and about 16,000 real ones even at 2 bytes a
+// token (JSON dense with ids, or text in other scripts). get_template reads a larger template
+// in parts (agentMcpTemplatePages.ts), and update_template's operations edit it a part at a time.
 export const MAX_TEMPLATE_RESULT_BYTES = 32 * 1024;
 
 const idArg = z.string().trim().min(1);
