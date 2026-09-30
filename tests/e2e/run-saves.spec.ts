@@ -428,11 +428,17 @@ test('the rest of the double click that completes the last task keeps the comple
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   const point = await pointAt(page, 'Mark Complete');
   await clickHere(page, 1);
-  const dialog = page.getByRole('dialog', { name: 'Complete this Run?' });
-  await expect(dialog).toBeVisible();
-  // The rest of the double click lands on the overlay, outside the dialog.
-  expect(isInside(await dialog.boundingBox(), point)).toBe(false);
+  // The rest of a double click follows the first click within the double-click interval,
+  // and the dialog ignores an outside press only within DOUBLE_CLICK_MS of opening. So the
+  // second click goes as soon as the dialog is in the page: waiting for it to be visible and
+  // measuring it first took over 500 ms on a busy machine, which is no longer a double click.
+  await page.waitForFunction(() => document.querySelector('[role="dialog"]') !== null, undefined, {
+    polling: 'raf',
+  });
   await clickHere(page, 2);
+  const dialog = page.getByRole('dialog', { name: 'Complete this Run?' });
+  // The rest of the double click landed on the overlay, outside the dialog.
+  expect(isInside(await dialog.boundingBox(), point)).toBe(false);
 
   // A dismissed dialog animates out; give it time before checking it stayed.
   await page.waitForTimeout(400);
