@@ -1715,11 +1715,16 @@ existing content, invent nothing):
     "Resume template draft" when a draft is kept; the status error with "Retry"; "Billing
     checkout is currently unavailable."; the Organization billing message; "Manage
     subscription" or "Upgrade to Pro — $9/month" in the card's footer.
-  - "Agent Access" (only where the Run Key UI is enabled): "Fixed run-only permissions";
-    "Key name" ("Codex SOP Runner") and "Create Run Key"; a new key's panel ("Copy <name> and
-    connect your agent", the secret, "Copy key", "I have saved this key"); "MCP connection"
-    (the endpoint with a copy button); "Personal Run Keys" (name, "Active" or "Revoked",
-    prefix, created and last used, "Revoke"), or "No Run Keys yet."
+  - "Agent Access" (only where the Run Key UI is enabled): "Permissions are fixed when you
+    create a key" (make a new key to change them; no key can delete or publish templates,
+    change the profile, reach Organizations or billing); "Key name" ("Codex SOP Runner");
+    "Permissions": a card per permission with its checkbox, title and description ("Read
+    templates", "Write templates", "Read runs", "Write runs"), all but "Write templates"
+    ticked for a new key, and unticking a read also unticks the writes that need it;
+    "Create Run Key"; a new key's panel ("Copy <name> and connect your agent", the secret,
+    "Copy key", "I have saved this key"); "MCP connection" (the endpoint with a copy
+    button); "Personal Run Keys" (name, "Active" or "Revoked", prefix, the key's
+    permissions as badges, created and last used, "Revoke"), or "No Run Keys yet."
   - "Organizations": "Incoming invites" ("Accept"); a create form ("Organization name",
     "Slug", "Create Organization"); "Your Organizations" (name, role, "Selected" or
     "Select"); for the active Organization: its name, "Your role: <role>", the role's
@@ -1743,8 +1748,9 @@ existing content, invent nothing):
 - **STATES:** Personal or Organization context; role-limited Organization controls (owners and
   admins manage); "Couldn't load your Organizations." with "Retry"; members, invites, keys and
   activity each load or fail on their own ("Loading members...", "Couldn't load members.");
-  busy labels ("Updating...", "Creating...", "Saving...", "Accepting...", "Leaving...",
-  "Opening billing...", "Revoking...", "Signing out...").
+  no Run Key permission ticked: "Choose at least one permission." and "Create Run Key"
+  disabled; busy labels ("Updating...", "Creating...", "Saving...", "Accepting...",
+  "Leaving...", "Opening billing...", "Revoking...", "Signing out...").
 - **NAVIGATION TYPE:** root section.
 - **PATTERN CHOICE (built):** each section a shadcn Card with Field groups, one column in the
   narrow page width. The proposal's section nav ([Left category nav](#left-category-nav)) or
@@ -1755,19 +1761,33 @@ existing content, invent nothing):
   - LAYOUT ZONES: page header; one column of Cards (the narrow page width): Profile
     Information, Billing, Agent Access, Organizations, Leave Organization, Security.
   - COMPONENT TYPES: Card with a footer; avatar with visible buttons; labelled Fields
-    (inputs, an InputGroup with "@", switches as horizontal Fields, selects); `Item` rows
-    (Run Keys, Organizations, invites, members); Alerts; copy InputGroups; `ChangelogList`
-    rows; `AlertDialog`.
-  - DATA FIELDS: User (email, name, username, avatar); plan; Run Keys; Organizations (name,
-    slug, role, members, invites, activity); password fields.
+    (inputs, an InputGroup with "@", switches as horizontal Fields, selects); a FieldSet of
+    checkbox choice cards (a `FieldLabel` around a horizontal `Field`: `Checkbox`,
+    `FieldTitle`, `FieldDescription`) for Run Key permissions; `Item` rows (Run Keys with
+    outline `Badge`s for their permissions, Organizations, invites, members); Alerts; copy
+    InputGroups; `ChangelogList` rows; `AlertDialog`.
+  - DATA FIELDS: User (email, name, username, avatar); plan; Run Keys (name, prefix, status,
+    permissions, created and last used); Organizations (name, slug, role, members, invites,
+    activity); password fields.
 - **PROOF PASS:** Pass (step 2a), against shadcn's Card and Field (the reference has no
   settings): `settings-personal` (admin, Personal), `settings-organization-owner` (the owner
   of an Organization: members, invites, activity), `settings-organization-editor` (an editor:
   the role note and Leave Organization) and `settings-revoke-key-dialog`, each on desktop and
   phone, light and dark. Present: every field has its visible label, every control is
-  reachable on a phone, and nothing scrolls sideways at 390px.
+  reachable on a phone, and nothing scrolls sideways at 390px. Run Key permissions (staging
+  #257, merged 2026-09-30), against shadcn's Field choice cards: the Agent Access card as
+  john on desktop and phone, light and dark, with an active key that may write templates
+  and a revoked one (`tmp/design-review/merge-staging/agent-access-desktop-light.png`,
+  `-phone-light`, `-desktop-dark`, `-phone-dark`), with "Write templates" ticked
+  (`agent-access-create-write-templates-desktop-light.png`) and with nothing ticked
+  (`agent-access-no-permission-desktop-light.png`). Present: each permission shows its
+  title and description; Tab from "Key name" reaches the four checkboxes in order, then
+  "Create Run Key", and Space ticks one; the cards stack in one column and nothing scrolls
+  sideways at 390px.
 - **NOTES:** Code: `src/views/Account.tsx` (the route renders `src/views/DashboardSettings.tsx`,
-  which re-exports it). Issue #206 tracks splitting this page.
+  which re-exports it); Agent Access is `src/components/account/AgentAccessSection.tsx`, and
+  the permission names and rules are `src/lib/schemas/runKeyPermissions.ts`. Issue #206
+  tracks splitting this page.
 
 ### 404 page
 
