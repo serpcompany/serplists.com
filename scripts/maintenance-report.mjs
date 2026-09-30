@@ -52,19 +52,6 @@ sections.push(
     : staleDocs.map(({ doc, changed }) => `- \`${doc}\`: ${changed.slice(0, 5).map((ref) => `\`${ref}\``).join(", ")}${changed.length > 5 ? `, +${changed.length - 5} more` : ""}`).join("\n"),
 );
 
-// 3. Recorded debt (ratchets)
-const suppressions = JSON.parse(read("eslint-suppressions.json"));
-const suppressionCounts = {};
-for (const rules of Object.values(suppressions)) {
-  for (const [rule, { count }] of Object.entries(rules)) suppressionCounts[rule] = (suppressionCounts[rule] ?? 0) + count;
-}
-sections.push(
-  "## Recorded debt",
-  "Burn these down; never add to them.",
-  "| Source | Rule | Count |\n| --- | --- | --- |\n" +
-    Object.entries(suppressionCounts).map(([rule, count]) => `| ESLint suppressions | \`${rule}\` | ${count} |`).join("\n"),
-);
-
 // 4. Oversized files
 const oversized = walk("src", (file) => /\.(ts|tsx)$/.test(file))
   .concat(walk("functions", (file) => file.endsWith(".ts")))
@@ -109,7 +96,7 @@ sections.push(
   "## This week's checklist",
   [
     "- [ ] Fix any docs-check failures and re-verify the docs listed above against the code.",
-    "- [ ] Pay down one recorded-debt item or oversized file in a small PR (prune the baseline it came from).",
+    "- [ ] Pay down one tech debt item or oversized file in a small PR.",
     "- [ ] Update or close stale active plans; move finished plans to `docs/exec-plans/completed/`.",
     "- [ ] Re-grade `docs/QUALITY_SCORE.md` if the code in a domain changed materially.",
     "- [ ] If a new failure pattern appeared in recent PRs, add it to `docs/design-docs/core-beliefs.md` and, where possible, a lint or check.",

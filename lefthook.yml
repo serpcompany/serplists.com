@@ -7,7 +7,7 @@ pre-commit:
       run: node scripts/secret-scan.mjs {staged_files}
     lint:
       glob: "*.{ts,tsx,js,mjs,cjs}"
-      run: pnpm exec eslint --no-warn-ignored --pass-on-unpruned-suppressions {staged_files}
+      run: pnpm exec eslint --no-warn-ignored {staged_files}
 
 pre-push:
   commands:
