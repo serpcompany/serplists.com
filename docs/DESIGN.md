@@ -63,26 +63,41 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | Shell switch | `src/components/Layout.tsx` | Picks the console shell or the public shell from the path, unless it is given one: the 404 page's `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives the console shell only to a signed-in user on a missing console path, after the session check |
 | `SiteHeader` | `SiteHeader.tsx` | Sticky header: `BrandLink`, the `SiteNavigationMenu`, the theme toggle, Log in and Get started or the `AccountMenu`, and `PublicMobileNav` (a `Sheet`) below `md` |
 | `SiteNavigationMenu` | `SiteNavigationMenu.tsx` | The site's `NavigationMenu` ("Site"), from `publicHeaderItems` in `publicSiteLinks.ts`: "Templates" and "Features" open dropdowns of their pages (a title and a muted description per link), "Pricing" is a link. The current page's link and its menu are marked. Closed menus stay in the HTML, hidden (`keepMounted`), so crawlers find their links. It composes shadcn's root itself to render Base UI's menu popup as a `div`: as a `<nav>`, whose links the trigger claims, it was an empty, unlabelled landmark |
-| `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` (Templates, Company, Support) |
+| `SiteFooter` | `SiteFooter.tsx` | Brand and blurb, then the link columns from `publicSiteLinks.ts` (Templates, Company, Support), each titled by an `h2` |
 | `AppShell` | `AppShell.tsx` | The console: `SidebarProvider`, `AppSidebar`, and a `SidebarInset` with a sticky top bar (`SidebarTrigger` and, from `md` up, the `SiteNavigationMenu` aligned right), the page and the site footer |
 | `AppSidebar` | `AppSidebar.tsx` | shadcn `Sidebar`, collapsible to icons: brand and `WorkspaceSwitcher`; New Template and the console links in a `Dashboard` navigation landmark; the theme toggle and `SidebarAccountMenu`. Its rows are 44px tall, full-size targets (32px squares when collapsed). On phones it opens as its own sheet |
 | `AccountMenu`, `SidebarAccountMenu` | `AccountMenu.tsx` | The signed-in user's `DropdownMenu` (console pages, Profile, Sign out), from an avatar button in the header or the sidebar footer row; both are named "Account menu" |
 | `PageContainer`, `PageSection` | `page-shell.tsx` | The page width (`max-w-6xl`, `px-4 md:px-6`) and a band of vertical spacing |
-| `PageHero` | `PageHero.tsx` | Eyebrow (a `Badge`), large title, muted description, then actions, a `SearchField` and a row of chips |
-| `SearchField` | `SearchField.tsx` | An `InputGroup` search input with a leading icon; the page owns the value |
+| `PageHero` | `PageHero.tsx` | Eyebrow (a `Badge`), large title (the page's `h1`), muted description, then actions, a search (a `Field` with its visible label over a `SearchField`) and a row of chips |
+| `SearchField` | `SearchField.tsx` | An `InputGroup` search input with a leading icon; the page owns the value and gives it a visible `FieldLabel` |
+| `PageBreadcrumb` | `PageBreadcrumb.tsx` | shadcn's `Breadcrumb`: Home (an icon), then the trail; an item with an `href` is a link and the one without is the page. `home={false}` starts a console page's trail at its section |
+| `Toolbar` | `Toolbar.tsx` | The row of filters over a list: labelled fields (search, selects) and view buttons side by side, stacked on phones (My Templates, My Runs, a category page) |
+| `ViewModeToggle` | `ViewModeToggle.tsx` | The grid and list buttons over a list of Templates ("Show templates in grid view" and "in list view", pressed while on) |
+| `PageEmptyState`, `PageLoadingState` | `PageState.tsx` | A public page whose record failed to load or does not exist (the shadcn `Empty` in the narrow width, its title the page's `h1`, and its actions), and one while it loads (the shadcn `Spinner` over what is loading): the public template page and a Public Profile |
 | `SectionHeader` | `SectionHeader.tsx` | A section's title (with an optional eyebrow and description) and a "View all"-style link on the right; give it an `id` and its `PageSection` `aria-labelledby` to make the section a named region |
-| `CardGrid` | `CardGrid.tsx` | The responsive grid: 1, 2, then 3 columns (or 2 then 4 for tiles) |
-| `MediaCard` | `MediaCard.tsx` | A muted media area with an `IconTile` (and an optional corner badge or overlay), then the title and a muted description. With `href`, the title's link covers the card; links and buttons in its children stay clickable, and so does an `action` (an actions menu) on the card's top right corner, which follows the title in the tab order. `orientation="horizontal"` makes a list row with a thumbnail |
-| `ListCard` | `ListCard.tsx` | A bordered `Item` with an icon tile, title, description and trailing meta; a link when given `href`. `orientation="vertical"` is a category tile |
+| `CardGrid` | `CardGrid.tsx` | The responsive grid: 1, 2, then 3 columns (or 2 then 4 for tiles; `columns={1}` is a list of wide cards) |
+| `MediaCard` | `MediaCard.tsx` | A muted media area with an `IconTile` (and an optional corner badge or overlay), then the title (an `h3`, or `titleAs="h2"` when the grid follows the page's `h1`) and a muted description. With `href`, the title's link covers the card; links and buttons in its children stay clickable, and so does an `action` (an actions menu) on the card's top right corner, which follows the title in the tab order. `orientation="horizontal"` makes a list row with a thumbnail |
+| `ListCard` | `ListCard.tsx` | A bordered `Item` with an icon tile, title, description and trailing meta; a link when given `href`, or with `actions` (buttons on the right, under the text on phones) when not. `titleAs` makes the title a heading, for cards that are a page's sections (Contact). `orientation="vertical"` is a category tile |
 | `CtaBanner` | `CtaBanner.tsx` | A muted panel: title and description on the left, buttons on the right |
-| `DetailPageLayout` | `DetailPageLayout.tsx` | `Breadcrumb` (Home, then the trail; `breadcrumbHome={false}` starts a console page's trail at its section), a header (icon tile, title, description, meta, actions) with a panel beside it, then the content under a `Separator`: the public template page and template detail |
+| `DetailPageLayout` | `DetailPageLayout.tsx` | `PageBreadcrumb` (optional; `breadcrumbHome={false}` starts a console page's trail at its section), a header (an icon tile, or other `media` such as an avatar; the `h1` and a `subtitle`; description, meta, actions) with a panel beside it, then the content under a `Separator`: the public template page, template detail, a category page, a feature page and a Public Profile. The header is a `div`: the site header stays the page's only `<header>` |
 | `IconTile`, `BrandLink` | `IconTile.tsx`, `BrandLink.tsx` | The muted icon tile (sizes `sm`, `md`, `lg`; `tone="card"` on a muted area) and the brand mark and name |
 | `Stat` | `Stat.tsx` | A figure over its muted label, with an optional icon tile: a detail page's stats panel |
 
-`Surface` (in `page-shell.tsx`) gives pages not yet rebuilt from these blocks the Card
-surface; step 2 of the restyle replaces it. The library's `TemplateCard`
-(`src/components/checklist-library/TemplateCard.tsx`) is a `MediaCard` for a public
-Template.
+The library's `TemplateCard` (`src/components/checklist-library/TemplateCard.tsx`) is a
+`MediaCard` for a public Template, and `CatalogLoadError` next to it the shadcn `Empty` for a
+failed catalog (an `h2` in place of a page's first section, `titleAs="h1"` when it is the
+whole page).
+
+### Sign-in blocks
+
+The sign-in pages and the Organization invite share one frame, shadcn's login block, in
+`src/components/auth/`.
+
+| Block | File | What it is |
+| --- | --- | --- |
+| `AuthCard` | `AuthCard.tsx` | A `Card` centered in the window: an icon tile, an optional eyebrow, the page's `h1` and description, the content (a form of shadcn `Field`s, or a message) and a footer line (`FieldDescription`), with an optional `aside` in a muted column beside it from `lg` (hidden below it). The Organization invite has no aside |
+| `AuthPageShell` | `AuthPageShell.tsx` | `AuthCard` for Log in, Register, Forgot password and Reset password: the brand as the eyebrow and "Built for repeatable work" as the aside |
+| `PasswordInput` | `PasswordInput.tsx` | A password `InputGroup` with an optional leading icon and a button that shows or hides it, named after its field ("Show password", "Hide confirm password"); each field shows or hides on its own |
 
 ### Console blocks
 
@@ -94,8 +109,7 @@ page, so a page's sticky parts stick to the window.
 | --- | --- | --- |
 | `DashboardContentShell` | `src/components/dashboard/DashboardContentShell.tsx` | The page: the page width (`PageContainer`, `content` or `narrow`) with its parts stacked |
 | `DashboardPageHeader` | same | The page's `h1`, a muted description and badges (`meta`), with the actions on the right (under the text on phones) |
-| `DashboardToolbar` | same | A row of labelled filter fields over a list, stacked on phones |
-| `DashboardPageBody` | same | The content under the header and toolbar |
+| `DashboardPageBody` | same | The content under the header and the filters (the layout `Toolbar`) |
 | `DashboardEmptyState` | same | The shadcn `Empty` with a heading: an empty list, a load error, a missing record (an `h1` when it is the whole page) |
 | `DashboardLoadingState` | same | The shadcn `Spinner` over what is loading |
 | `ListLoadErrorState` | `src/components/dashboard/ListLoadErrorState.tsx` | `DashboardEmptyState` for a list that failed to load: Retry, or Sign in when the session ended |
@@ -139,8 +153,16 @@ page, so a page's sticky parts stick to the window.
   render={<button type="button" />}`) when a sibling label names it, as the Settings,
   Import and editor switches do.
 - Every icon-only button has an `aria-label`, toggles expose `aria-pressed`, and
-  inputs have a `Label`. The template grid/list toggle in `src/views/Templates.tsx`
-  is the reference.
+  inputs have a `Label`. The template grid/list toggle (`ViewModeToggle`) is the
+  reference.
+- Every field shows its label, on phones too: a `FieldLabel` bound to the field, never only
+  a placeholder or an `aria-label` (a hero's search too: "Search categories", "Search
+  templates").
+- A page has one `h1` and its headings never skip a level. A card, grid or section right
+  under the `h1` titles itself with an `h2` (`CardTitle as="h2"`, `titleAs="h2"` on
+  `MediaCard`, `ListCard` and `CtaBanner`), and the headings inside it follow one level
+  down. `tests/e2e/heading-outline.spec.ts` reads the outline of the public and console
+  pages.
 - A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
   keyboard focus (`group-focus-within:opacity-100`) and on touch screens: use
   `HOVER_REVEAL_CLASS` (`src/components/ui/hover-reveal.ts`; the template editor's

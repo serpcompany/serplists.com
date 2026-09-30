@@ -204,7 +204,7 @@ Each of these needs the user's approval, or happens with the domain move:
     `tmp/design-review/decisions/`. Gates: `pnpm run verify` (5,239 unit tests), the 25 browser
     specs the changes touch on the production build (112 of 112), `pnpm run test:smoke` (24 of
     24).
-  - [ ] Step 2: the screens the inventory marks "Not restyled yet (step 2)", in two parts.
+  - [x] Step 2: the screens the inventory marked "Not restyled yet (step 2)", in two parts.
     - [x] Step 2a: the signed-in console, the shared run and their overlays. The console page
       blocks (`280b6184`); My Templates (`031a5998`), My Runs (`da759424`), Template detail
       (`19cca04a`), Archive (`c3682e2f`), Import Templates (`354291dc`), Account Settings
@@ -224,9 +224,26 @@ Each of these needs the user's approval, or happens with the domain move:
       spec for the editor on a phone (`63d9e44d`); `pnpm run test:smoke` (24 of 24); `pnpm run
       build:worker` (Worker 14,711 KiB, 3,032 KiB gzipped by `wrangler deploy --dry-run`,
       35 KiB over step 1).
-    - [ ] Step 2b: the public pages (Categories, a category page, Public Profile, Features and
-      the feature pages, Pricing, About, Contact), the auth pages, the Organization invite and
-      the 404 page's content.
+    - [x] Step 2b: the public pages, the sign-in pages, the Organization invite and the 404
+      page's content. Card titles take the heading level of where they sit (`f33d4784`), and
+      the other pages' skipped levels are fixed (`d75ba5f7`); the sign-in pages on shadcn's
+      login block (`48852222`) and the invite on the same card (`f41fcd1c`); Categories
+      (`0c24ab72`); the filter toolbar and view buttons as layout blocks (`8c59de94`); a
+      category page (`66725f27`) and the Public Profile (`821f9a37`) as detail pages, with the
+      template page's loading and missing states shared (`44c2a7e0`); Features and the feature
+      pages (`5e2c8746`), Pricing (`e3e2fbb5`), About (`6a5659ca`), Contact (`049cd5a7`) and
+      the 404 page (`7aa1752a`); the Template Library's search labelled (`48c9aaef`). Every
+      step 2b card in the [screen inventory](../../design-docs/ui-screen-inventory.md) has its
+      proof pass, on screenshots at 1440x900 and 390x844, light and dark, signed out and
+      signed in where the page differs, of each screen's states (form errors and successes,
+      loading, errors, empty) kept locally in `tmp/design-review/step2-public/`.
+      `tests/e2e/heading-outline.spec.ts` reads the heading outline of the public and console
+      pages (`b6799d10`). Gates on the final code: `pnpm run verify` (5,255 unit tests); the 21
+      browser specs the changes touch, on the production build (72 tests): 71 passed, and the
+      Public Profile's layout test, which measured the old cards, passed once it followed the
+      MediaCard (`8a9d7f7f`), as did the view-mode test on template screens; `pnpm run
+      test:smoke` (24 of 24); `pnpm run build:worker` (Worker 14,821 KiB, 3,051 KiB gzipped by
+      `wrangler deploy --dry-run`, 19 KiB over step 2a).
 
 ## Decision log
 
@@ -517,3 +534,44 @@ Each of these needs the user's approval, or happens with the domain move:
   transparent border won and outline link buttons had no border in the light theme.
   `buttonVariants` now merges; DESIGN.md lists it with the other changes to generated
   components.
+- 2026-09-29: **Card titles take their heading level.** `CardTitle` rendered an `h3` everywhere,
+  so a card right under a page's `h1` skipped a level (Account Settings, Import Templates,
+  Archive, template detail, the editor's Generate from Clipy, the invite page, which had no
+  `h1` at all). It stays an `h3` by default and takes `as` for the level where the card sits:
+  the console's cards pass `h2` and their inner headings move to `h3`, and the app's crash
+  card is its `h1`. The generated component keeps this one prop (DESIGN.md). The same audit
+  fixed the other skips: Home's workflow steps, the library's and My Templates' cards and
+  the library's empty and failed states are `h2`s; Sub-tasks sits one level under its task
+  or section list; the footer's column titles are `h2`s, so a page whose last heading is its
+  `h1` never jumps to `h3`. A browser spec reads the outline of the public and console
+  pages, and every step 2b screenshot was checked for it.
+- 2026-09-29: **The sign-in pages on shadcn's login block.** Log in, Register, Forgot password
+  and Reset password share `AuthCard`, the two-column form of the block: the form in one
+  column and, from `lg`, the existing "Built for repeatable work" aside in the muted column
+  where the block shows an image (kept, since dropping it would drop content; an open
+  question). The password fields are `PasswordInput` on the shadcn InputGroup with the same
+  show and hide names; the amber verification notice and the dashed message boxes are Alerts
+  (the notice stays a polite status); the development persona buttons lost their colored
+  dots. The Organization invite uses `AuthCard` without the aside; its title is now the page's
+  `h1`, its buttons stack across the card, and its errors are Alerts. Categories, the
+  category page and the invite each nested a second `<main>` in the shell's; none does now.
+- 2026-09-29: **Detail pages for a category, a feature and a Public Profile.** They use
+  `DetailPageLayout`, whose breadcrumb is now its own block (`PageBreadcrumb`). A feature
+  page's breadcrumb "Features" replaces "Back to Features", as the template page's "Template
+  Library" replaced "Back"; a category page's breadcrumb keeps the back link's words, "All
+  Categories". A profile has no section to trail back to, so its breadcrumb is left out, and
+  `DetailPageLayout` gained `media` (the avatar) and a `subtitle` (the handle). Its header is
+  a `div`: inside `<main>` a `<header>` is no landmark, and the parity test holds a public
+  page to one `<header>`, the site's.
+- 2026-09-29: **Blocks from the patterns that repeat.** The console's filter row
+  (`DashboardToolbar`) became the layout block `Toolbar`, which a category page shares with
+  My Templates and My Runs, with `ViewModeToggle` for the grid and list buttons; the
+  template page's loading and missing states are `PageLoadingState` and `PageEmptyState`,
+  which the Public Profile uses too; `ListCard` takes a heading level and actions (Contact),
+  and `CardGrid` one column (a category page's list view). What nothing used any more went:
+  `Surface`, `PublicPageLayout`, the shared `EmptyState` and `LoadingSpinner`, the
+  `SearchAndFilters` wrapper, and the category colors in `categoryPresentation.ts`.
+- 2026-09-29: **Every public field shows its label.** The search on Categories ("Search
+  categories", its hidden name before), on the Template Library ("Search templates"; it had
+  no name) and on a category page ("Search" and "Sort by", as on My Templates). The wording
+  is an open question in the screen inventory.

@@ -8,7 +8,9 @@ are kept outside the repository.
 
 Step 1 restyled the public shell, the signed-in shell, Home, the Template Library and the
 public template page with the shared blocks (listed in
-[DESIGN.md](../DESIGN.md#shells-and-layout-blocks)); step 2 restyles the rest.
+[DESIGN.md](../DESIGN.md#shells-and-layout-blocks)). Step 2 restyled the rest: step 2a the
+signed-in console, the shared run and their overlays, step 2b the other public pages, the
+sign-in pages, the Organization invite and the 404 page.
 
 ## How to read a card
 
@@ -19,11 +21,10 @@ public template page with the shared blocks (listed in
 - WHAT'S ON THE SCREEN and STATES describe the code today. Quoted words are the labels the
   app shows.
 - PATTERN CHOICE names a [reference pattern](#reference-patterns). It is decided on a step 1
-  card, built on a step 2a card, and a proposal on a card step 2b will restyle.
-- STRUCTURE (phase 3) lists layout zones, component types and data fields. On a card a step
-  restyled (step 1, or step 2a: the signed-in console, the shared run and their overlays) it
-  is what the step built; on a card step 2b will restyle it is the structure the code has
-  today.
+  card and built on a step 2 card; the one proposal left is the browser's own confirm
+  prompts, which stay the browser's.
+- STRUCTURE (phase 3) lists layout zones, component types and data fields: what the step
+  built.
 - PROOF PASS is the runbook's phase 5 check against the reference images: structural
   differences only (layout zones, component types, hierarchy, missing sections), not color
   or imagery. A step 1 card gives the result and the screenshots it was checked on. They
@@ -34,13 +35,16 @@ public template page with the shared blocks (listed in
   `<screen>[-<state>]-<desktop|mobile>-<light|dark>.png`: full pages, or the window for an
   overlay, a loading state and the run page (whose footer sticks to the window), each with
   its accessibility tree beside it (`.aria.yml`). The phone shots keep the touch screen's
-  coarse pointer, so they show what a phone shows. A card step 2b will restyle reads "Not
-  restyled yet (step 2)".
+  coarse pointer, so they show what a phone shows. A step 2b card does the same with the
+  screenshots in `tmp/design-review/step2-public/` (also ignored): signed out unless the
+  name says `-signed-in`, and each state a script set up (a hanging request for loading, a
+  failed one for an error, an invite or a billing status answered by the script) is named on
+  its card.
 
 ## Reference patterns
 
 Structure only, from the screenshots: no color, brand or imagery. USED BY names the app
-screens that follow the pattern (decided for step 1, proposed for step 2).
+screens that follow the pattern (decided for step 1, built in step 2).
 
 ### Site header
 
@@ -73,7 +77,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **DATA FIELDS:** title; subtitle; search placeholder; chip labels.
 - **USED BY:** [Home](#home), [Template Library](#template-library) (decided);
   [Categories](#categories), [Features](#features), [Pricing](#pricing), [About](#about),
-  [Contact](#contact), [404 page](#404-page) (proposed).
+  [Contact](#contact), [404 page](#404-page) (built in step 2b).
 
 ### Category tiles
 
@@ -83,7 +87,7 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   top left, the name at the bottom left, the count at the bottom right.
 - **DATA FIELDS:** icon; name; item count.
 - **USED BY:** [Template Library](#template-library) "Browse by Category" (decided, 4
-  columns); [Categories](#categories) "Popular Categories" (proposed).
+  columns); [Categories](#categories) "Popular Categories" (built in step 2b).
 
 ### Section row over a card grid
 
@@ -99,8 +103,9 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   and name, home-2.png); title (1–2 lines); muted description (2 lines) or muted meta
   ("Updated Sep 1", "12 min read · Jul 14").
 - **USED BY:** [Home](#home) workflow steps and "Starter library", [Template
-  Library](#template-library) cards (decided); [Features](#features), [About](#about),
-  [Public Profile](#public-profile), [My Templates](#my-templates) (proposed).
+  Library](#template-library) cards (decided); [My Templates](#my-templates) (built in step
+  2a); [Features](#features), [About](#about), [Public Profile](#public-profile) (built in
+  step 2b).
 
 ### Bordered list cards
 
@@ -115,9 +120,9 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   small tinted round icon tile or an avatar; title; optional sub line; a trailing chevron on
   panel rows.
 - **DATA FIELDS:** icon; title (1–2 lines); optional sub line (a star rating and count).
-- **USED BY:** [Home](#home) product surfaces (decided); [Categories](#categories) "All
-  Categories", [Contact](#contact), [Archive](#archive), [Shared run](#shared-run) sections
-  (proposed).
+- **USED BY:** [Home](#home) product surfaces (decided); [Archive](#archive), [Shared
+  run](#shared-run) sections (built in step 2a); [Categories](#categories) "All Categories",
+  [Contact](#contact) (built in step 2b).
 
 ### Filterable grid
 
@@ -130,7 +135,8 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **DATA FIELDS:** title; search placeholder; chip labels and the selected chip; per card:
   category, title, description.
 - **USED BY:** [Template Library](#template-library) (decided, with search and chips in the
-  hero); [Category page](#category-page), [My Templates](#my-templates) (proposed).
+  hero); [My Templates](#my-templates) (built in step 2a); [Category page](#category-page)
+  (built in step 2b).
 
 ### List rows with thumbnail
 
@@ -142,8 +148,8 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   320×200 in patterns), a text column, a trailing chevron.
 - **DATA FIELDS:** thumbnail; meta line (product icon and name, a category, or "Skill · Sep
   17"); title; muted meta ("12 screens · June 16, 2026") or a 2-line description.
-- **USED BY:** [My Runs](#my-runs) rows, [Category page](#category-page) list view
-  (proposed).
+- **USED BY:** [My Runs](#my-runs) rows (built in step 2a), [Category page](#category-page)
+  list view (built in step 2b).
 
 ### Detail page
 
@@ -169,9 +175,10 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
   pill button; side panel; facts strip; callout; bullet list; numbered row; definition row.
 - **DATA FIELDS:** breadcrumb items; icon; title; description; updated date; share targets;
   panel title and content; section titles; facts (label, value).
-- **USED BY:** [Public template page](#public-template-page) (decided); [Feature
-  page](#feature-page), [Template detail](#template-detail), [Category page](#category-page)
-  header, [Public Profile](#public-profile) header, [Shared run](#shared-run) (proposed).
+- **USED BY:** [Public template page](#public-template-page) (decided); [Template
+  detail](#template-detail), [Shared run](#shared-run) (built in step 2a); [Feature
+  page](#feature-page), [Category page](#category-page) header, [Public
+  Profile](#public-profile) header (built in step 2b).
 
 ### Left category nav
 
@@ -186,8 +193,9 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **COMPONENT TYPES:** vertical link list (active item bold, hairline dividers); icon tile;
   heading; outline pill button; card; list row; filter tile.
 - **DATA FIELDS:** category names (nav); per block: icon, title, subtitle, items.
-- **USED BY:** [Account Settings](#account-settings) section nav, [Template
-  editor](#template-editor) outline, [Run page](#run-page) task list (proposed).
+- **USED BY:** [Template editor](#template-editor) outline, [Run page](#run-page) task list
+  (built in step 2a); [Account Settings](#account-settings) section nav (proposed, not
+  built: an open question).
 
 ### FAQ accordion
 
@@ -220,7 +228,8 @@ screens that follow the pattern (decided for step 1, proposed for step 2).
 - **COMPONENT TYPES:** banner card; icon tile; heading; muted paragraph; pill button.
 - **DATA FIELDS:** icon; title; description; button label.
 - **USED BY:** [Home](#home) closing card (decided: a bordered banner card with two buttons);
-  [Categories](#categories) closing card, [Shared run](#shared-run) closing card (proposed).
+  [Shared run](#shared-run) closing card (built in step 2a); [Categories](#categories) closing
+  card (built in step 2b).
 
 ### Other reference patterns
 
@@ -246,7 +255,8 @@ existing content, invent nothing):
 - On detail pages: the LinkedIn and X share buttons, and the section nav (the public template
   page's old section nav was removed on purpose,
   `tests/unit/components/PublicTemplateView.test.tsx`). The "Updated <date>" line is copied
-  on the public template page since 2026-09-29.
+  on the public template page since 2026-09-29. A Public Profile has no breadcrumb: it has no
+  section to trail back to.
 - The reference's tinted icon tiles: icon tiles use the neutral muted token (no custom
   colors).
 
@@ -341,6 +351,8 @@ existing content, invent nothing):
     `SiteNavigationMenu` composes the menu's root itself and renders the popup as a `div`
     (`tests/e2e/site-navigation.spec.ts`).
   - The footer's empty "Network" column is left out.
+  - The footer's column titles are h2s since step 2b, so a page whose last heading is its h1
+    (My Runs, a sign-in page on a phone) never skips a level into them.
 
 ### Signed-in console shell
 
@@ -421,26 +433,38 @@ existing content, invent nothing):
 
 - **SCREEN NAME:** Auth card frame
 - **PURPOSE:** The shared frame of [Log in](#log-in), [Register](#register), [Forgot
-  password](#forgot-password) and [Reset password](#reset-password).
-- **HOW USER GETS HERE:** through those four pages.
-- **WHAT'S ON THE SCREEN:** a wide bordered card, centered in the window. Left: an icon
-  badge, the "SERP Lists" eyebrow, the page title, a description, the form, a footer line
-  with a link. Right, from `lg` up: an aside with "Built for repeatable work", "Create the
-  template once. Run it cleanly every time.", a paragraph, and 3 check-marked points.
+  password](#forgot-password) and [Reset password](#reset-password), and, without its aside,
+  of the [Organization invite](#organization-invite).
+- **HOW USER GETS HERE:** through those pages.
+- **WHAT'S ON THE SCREEN:** one card centered in the window. Its first column: an icon tile,
+  the "SERP Lists" eyebrow, the page's title (its h1), a description, the form, and a footer
+  line with a link. Beside it from `lg` up, a muted column: "Built for repeatable work",
+  "Create the template once. Run it cleanly every time.", a paragraph, and 3 check-marked
+  points.
 - **PRIMARY ACTION:** the form's submit button.
 - **SECONDARY ACTIONS:** the footer link.
 - **STATES:** set by each page.
 - **NAVIGATION TYPE:** frame for child pages.
-- **PATTERN CHOICE (proposal):** centered card form: a single bordered card with the heading,
-  description and fields (shadcn's login block). TBD whether the aside stays.
+- **PATTERN CHOICE (built):** shadcn's login block in its two-column form: one Card with the
+  form in a column and a muted column beside it, which holds the existing aside where the
+  block shows an image (`AuthCard`; `AuthPageShell` for the four sign-in pages). The aside
+  stays, hidden below `lg` as before (an open question).
 - **REFERENCE IMAGES:** none (the reference has no auth pages); type scale from home-1.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: a centered card, two columns at `lg` (form, aside).
-  - COMPONENT TYPES: icon badge; eyebrow; heading; muted paragraph; labeled inputs (some with
-    a leading icon or a show/hide button); full-width primary button; footer link; check list.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: one card centered in the window under the site header; from `lg` two
+    columns, the form column (header, content, footer line) and the muted aside; one column
+    below `lg`.
+  - COMPONENT TYPES: icon tile; eyebrow; heading; muted paragraph; shadcn Field groups
+    (labels, inputs, InputGroups with a leading icon or a show and hide button); full-width
+    buttons; Alert; a footer line with a link; a check-marked list.
   - DATA FIELDS: title; description; footer text and link; aside title, text and points.
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/components/auth/AuthPageShell.tsx`.
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block (the reference has no auth
+  pages), on every sign-in and invite screenshot below: one card centered in the window, the
+  header centered over the form, the footer line under it, and the aside beside it from
+  `lg`; on a phone (390px) one column with no sideways scroll.
+- **NOTES:** Code: `src/components/auth/AuthCard.tsx` and
+  `src/components/auth/AuthPageShell.tsx`; the password fields are
+  `src/components/auth/PasswordInput.tsx`.
 
 ## Screens
 
@@ -533,8 +557,8 @@ existing content, invent nothing):
   Run; the breadcrumb's "Template Library" on a template page.
 - **WHAT'S ON THE SCREEN:**
   - Hero: title "Template Library", "Browse hundreds of ready-to-use checklists created by
-    the community", the search input "Search templates...", and the category chips: "All" and
-    one per category (a category chip links to its category page).
+    the community", the search, labelled "Search templates" ("Search templates..."), and the
+    category chips: "All" and one per category (a category chip links to its category page).
   - A toolbar: the result count ("N templates", or "N templates in <category>") and the sort
     buttons "Popular", "Trending", "Recent" (the current one pressed).
   - Template cards, up to 3 columns: a muted media area with the Template's type icon (a
@@ -600,6 +624,9 @@ existing content, invent nothing):
   - Category icons exist for the built-in categories; others get a default icon.
   - The card keeps its hover "View Template" shortcut (hidden from the keyboard and
     assistive technology, as before).
+  - Step 2b gave the search its visible label, "Search templates" (it had no name at all),
+    and made the cards' titles, the empty state's and the failed catalog's h2s, as they
+    follow the page's h1.
 
 ### Public template page
 
@@ -700,39 +727,51 @@ existing content, invent nothing):
 - **SCREEN NAME:** Categories ("Browse Categories", `/categories/`)
 - **PURPOSE:** List the template categories with their counts.
 - **HOW USER GETS HERE:** "Categories" in the header's "Templates" menu, the phone menu
-  sheet and the footer's "Templates" column; "All Categories" on a category page; the console
-  sidebar's "Categories".
-- **WHAT'S ON THE SCREEN:** title "Browse Categories" and "Explore templates organized by
-  category to find exactly what you need."; search "Search categories..." (named "Search
-  categories"); "Popular
-  Categories": 4 tiles (colored icon tile, name, "N templates"); "All Categories": rows (icon
-  tile, name, description, a "N templates" badge, chevron); a closing card "Can't find what
-  you're looking for?", "Create your own template from scratch and share it with the
-  community.", "Create Template" (→ `/dashboard/templates/new/`).
+  sheet and the footer's "Templates" column; "All Categories" in a category page's
+  breadcrumb; the console sidebar's "Categories".
+- **WHAT'S ON THE SCREEN:**
+  - Hero: title "Browse Categories", "Explore templates organized by category to find exactly
+    what you need.", and the search, labelled "Search categories" ("Search categories...").
+  - "Popular Categories": 4 tiles (icon tile, name, "N templates"), each a link to its page.
+  - "All Categories": rows in 2 columns (icon tile, name, description, a "N templates" badge,
+    chevron), each a link.
+  - Closing banner: "Can't find what you're looking for?", "Create your own template from
+    scratch and share it with the community.", "Create Template" (→
+    `/dashboard/templates/new/`).
 - **PRIMARY ACTION:** a category → [Category page](#category-page).
 - **SECONDARY ACTIONS:** search; "Clear search"; "Create Template".
 - **STATES:** loading (4 tile and 6 row skeletons, "Loading categories…" for screen readers);
-  catalog error ("Could not load templates", "Try again") in place of both lists; a search with
-  no match: the shared empty state in place of "All Categories"' rows ('No categories match
-  "<query>"', "Clear search", which brings back every category and the search field's focus).
+  catalog error ("Could not load templates", "Try again") in place of both lists; a search
+  with no match: the shared empty state in place of "All Categories"' rows ('No categories
+  match "<query>"', "Clear search", which brings back every category and the search field's
+  focus).
 - **NAVIGATION TYPE:** child page.
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero) with the search input; [Category
-  tiles](#category-tiles) for "Popular Categories"; [Bordered list
+- **PATTERN CHOICE (built):** [Page hero](#page-hero) with the labelled search; [Category
+  tiles](#category-tiles) for "Popular Categories" (the library's tiles); [Bordered list
   cards](#bordered-list-cards) with chevrons for "All Categories"; [Call-to-action
   banner](#call-to-action-banner) for the closing card.
 - **REFERENCE IMAGES:** prompts-1.png, home-1.png, prompts-2.png, prompts-3.png, home-7.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: a left-aligned header (title, description); search; tile grid (2 columns, 4
-    at `lg`); row list; closing card.
-  - COMPONENT TYPES: search input; tile card; list row card with a badge and chevron;
-    call-to-action card.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero (title, description, labelled search); "Popular Categories"
+    (a section header over a 4-column tile grid, 2 on phones); "All Categories" (a section
+    header over a 2-column grid of list cards, 1 on phones); the closing banner.
+  - COMPONENT TYPES: `PageHero`; a Field with `SearchField`; `SectionHeader`; `ListCard`
+    (vertical tiles; rows with a badge and a chevron); shadcn Empty; `CatalogLoadError`;
+    Skeleton; `CtaBanner`.
   - DATA FIELDS: category (icon, name, description, template count).
-- **PROOF PASS:** Not restyled yet (step 2). The empty search of 2026-09-29:
-  `tmp/design-review/decisions/categories-empty-search-desktop-signed-out.png` and
-  `categories-empty-search-mobile-signed-out.png`.
+- **PROOF PASS:** Pass (step 2b): `categories`, `categories-empty-search`,
+  `categories-loading` and `categories-error`, each `-desktop-light`, `-desktop-dark`,
+  `-mobile-light` and `-mobile-dark`, and `categories-signed-in-*`, against prompts-1.png,
+  home-1.png, prompts-2.png, prompts-3.png and home-7.png. Present in the reference's order
+  and types: a centered hero with a wide search; a row of 4 category tiles (icon, name,
+  count; 2 columns on phones); bordered list cards with a trailing chevron; a closing banner
+  (text left, button right; stacked on phones). The reference's tiles are tinted and ours
+  neutral (the user's choice of 2026-09-29); its list panels have header rows with "View
+  all", where one section here lists every category.
 - **NOTES:** Code: `src/views/Categories.tsx`. "Create Template" sends a signed-out visitor to
   Log in. Built-in categories have descriptions; others read "Community templates for this
-  workflow area".
+  workflow area". "Search categories" named the search before step 2b (its `aria-label`); now
+  it is the field's visible label.
 
 ### Category page
 
@@ -741,33 +780,59 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** a library category chip or "Browse by Category" tile; a Categories
   tile or row; a category chip on a template page; "Related Categories";
   `/templates/?category=<slug>`.
-- **WHAT'S ON THE SCREEN:** "All Categories" (back link); header: colored icon tile, the
-  name, the description, a "N templates" badge; toolbar: search "Search templates...", sort
-  select ("Most Popular", "Most Recent", "Trending", "Name A-Z"), grid and list buttons ("Show
-  templates in grid view", "Show templates in list view"); template cards (the library card,
-  laid out horizontally in list view); "Related Categories": up to 5 outline chips.
+- **WHAT'S ON THE SCREEN:**
+  - Breadcrumb: Home › "All Categories" › the category.
+  - Header: the category's icon tile, name and description, and a "N templates" badge.
+  - Toolbar: "Search" ("Search templates..."), "Sort by" ("Most Popular", "Most Recent",
+    "Trending", "Name A-Z"), the grid and list buttons ("Show templates in grid view", "Show
+    templates in list view").
+  - The library's template cards, 3 columns (in list view, one column of wide cards with the
+    media beside the text from `sm`).
+  - "Related Categories": up to 5 category chips.
 - **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
-- **SECONDARY ACTIONS:** search; sort; grid or list; a related category; "All Categories".
-- **STATES:** loading (header and 6 card skeletons); catalog error; empty: "No public
-  templates in this category yet." (noindex) or "No templates found matching your search.";
-  an unknown category: the [404 page](#404-page) view (noindex, HTTP 200); an old slug
-  replaces itself with the current one; grid or list (remembered per user).
+- **SECONDARY ACTIONS:** search; sort; grid or list; a related category; "All Categories" and
+  Home in the breadcrumb.
+- **STATES:** loading (the count's and 6 cards' skeletons, "Loading templates…" for screen
+  readers); a category only the catalog knows, while it loads (the breadcrumb and skeletons)
+  or after it failed (the breadcrumb, then "Could not load templates" as the page's h1, with
+  "Try again"); a category the bundled Templates know whose catalog failed ("Could not load
+  templates" over those Templates); empty: "No public templates in this category yet."
+  (noindex) or "No templates found matching your search."; an unknown category: the [404
+  page](#404-page) view (noindex, HTTP 200); an old slug replaces itself with the current
+  one; grid or list (remembered per user).
 - **NAVIGATION TYPE:** child page; push to the template page.
-- **PATTERN CHOICE (proposal):** a [Detail page](#detail-page) header (breadcrumb Home ›
-  Categories › name, icon tile, title, description, count) over a [Filterable
-  grid](#filterable-grid) (search, sort, grid or list, 3-column template cards; list view as
-  [List rows with thumbnail](#list-rows-with-thumbnail)); related categories as a chip row.
-- **REFERENCE IMAGES:** pattern-detail-1.png, patterns-2.png, prompts-4.png,
-  teardowns-3.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: back link; header (icon tile, title, description, count badge); toolbar
-    (search, sort select, view toggle); grid or list; related chips.
-  - COMPONENT TYPES: link; icon tile; badge; search input; select; toggle buttons; template
-    card (vertical or horizontal); chip.
-  - DATA FIELDS: category (name, icon, description, count); template card (as in the library).
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/CategoryDetail.tsx`. Each category opens with an empty search
-  and the default sort.
+- **PATTERN CHOICE (built):** a [Detail page](#detail-page) header (`DetailPageLayout`: the
+  breadcrumb, icon tile, title, description, the count as a badge) over a [Filterable
+  grid](#filterable-grid) (the `Toolbar` with the labelled search and sort and
+  `ViewModeToggle`, then the library's template cards; list view as [List rows with
+  thumbnail](#list-rows-with-thumbnail)); "Related Categories" as a section header over a
+  chip row.
+- **REFERENCE IMAGES:** pattern-detail-1.png, patterns-2.png, prompts-4.png, teardowns-3.png.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: breadcrumb; header (icon tile, title, description, count badge); a
+    separator; toolbar (search, sort, view buttons; stacked on phones); the results (grid,
+    list, empty or error); "Related Categories" (heading, chips).
+  - COMPONENT TYPES: `PageBreadcrumb`; icon tile; badge; labelled `SearchField`; labelled
+    Select; `ViewModeToggle`; `TemplateCard` (vertical or horizontal); shadcn Empty;
+    `CatalogLoadError`; Skeleton; `SectionHeader`; chip links.
+  - DATA FIELDS: category (name, icon, description, count); template card (as in the
+    library).
+- **PROOF PASS:** Pass (step 2b): `category` (outdoor), `category-list`, `category-sort` (the
+  select open), `category-no-match`, `category-empty` (Business & Operations),
+  `category-loading`, `category-error`, `category-catalog-only-loading`,
+  `category-catalog-only-error` (SEO) and `category-unknown`, each on desktop and phone,
+  light and dark, and `category-signed-in-*`, against pattern-detail-1.png, prompts-4.png and
+  teardowns-3.png. Present: the breadcrumb row (home icon › section › item); a header with a
+  large icon tile, big title, muted description and a meta line; a divider; a filter row
+  over a 3-column grid of cards with a muted icon area, a category line, title and 2-line
+  description; in list view, rows with the thumbnail on the left. The reference's filter
+  chips are the sort select and the view buttons here (the page is one category already),
+  and it has no related-categories row.
+- **NOTES:** Code: `src/views/CategoryDetail.tsx` and
+  `src/components/checklist-library/CategoryNavigation.tsx`. Each category opens with an
+  empty search and the default sort. "Search" and "Sort by" are visible labels since step 2b
+  (the search had no name, and the select was named by its value); "All Categories" moved
+  from a back link into the breadcrumb, with the same words and destination.
 
 ### Public Profile
 
@@ -775,12 +840,15 @@ existing content, invent nothing):
 - **PURPOSE:** Show a Profile Owner and their Public Templates.
 - **HOW USER GETS HERE:** the owner link on a template card or template page; the account
   menu's "Profile" (a new tab); the "Public profile URL" link in Account Settings.
-- **WHAT'S ON THE SCREEN:** avatar; name; "@username"; a summary; meta (location, website
-  link, "Joined <month year>"); 3 stat cards ("Templates"; "Total Views" or "Checklist Items";
-  "Total Runs" or "Categories"); "Public Templates" with "Browse every public template
-  published from this profile."; 2-column template cards (title, "@username", an arrow icon,
-  the description or "Public template pack published in this creator profile.", up to 3
-  category chips, "N sections", "N items").
+- **WHAT'S ON THE SCREEN:**
+  - Header: the avatar; the name; "@username"; a summary; meta (location, website link,
+    "Joined <month year>").
+  - Beside it (under it on phones), a panel with 3 stats: "Templates"; "Total Views" or
+    "Checklist Items"; "Total Runs" or "Categories".
+  - "Public Templates" with "Browse every public template published from this profile.";
+    template cards in the card grid (up to 3 category badges, the title, the description or
+    "Public template pack published in this creator profile.", then "@username", "N
+    sections", "N items").
 - **PRIMARY ACTION:** a template card → [Public template page](#public-template-page).
 - **SECONDARY ACTIONS:** the website link (a new tab).
 - **STATES:** loading ("Loading profile..."); error ("Unable to load profile", the message,
@@ -788,48 +856,66 @@ existing content, invent nothing):
   Templates ("No public templates", "@<user> has not published any public templates yet.");
   another letter case of the username replaces itself with the stored one.
 - **NAVIGATION TYPE:** child page.
-- **PATTERN CHOICE (proposal):** a [Detail page](#detail-page) header (the avatar in the icon
-  tile's place, big title, handle, summary, meta row) with the stats as its right panel or
-  facts strip; [Section row over a card grid](#section-row-over-a-card-grid) for "Public
-  Templates", with the shared template card.
+- **PATTERN CHOICE (built):** a [Detail page](#detail-page) header (`DetailPageLayout` with no
+  breadcrumb: the avatar in the icon tile's place, the big title, the handle, the summary,
+  the meta row) with the stats as its right panel, as on the template page; [Section row
+  over a card grid](#section-row-over-a-card-grid) for "Public Templates", with `MediaCard`s;
+  the template page's page states (`PageEmptyState`, `PageLoadingState`).
 - **REFERENCE IMAGES:** pattern-detail-1.png, teardown-detail-1.png, home-2.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: profile header (avatar, text column); a row of 3 stat cards; section
-    header; 2-column card grid.
-  - COMPONENT TYPES: avatar; heading; meta items with icons; stat card; card link; chip.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: header (avatar, name, handle, summary, meta) with the stats panel beside
+    it; a separator; "Public Templates" (a section header over the card grid or the empty
+    state).
+  - COMPONENT TYPES: avatar; heading; muted lines; meta items with icons; external link;
+    `Stat` panel; `SectionHeader`; `MediaCard` (its link covers the card) with badges; shadcn
+    Empty; Spinner.
   - DATA FIELDS: profile (name, username, avatar, summary, location, website, joined date,
-    stats); Template (title, description, categories, section count, item count, URL).
-- **PROOF PASS:** Not restyled yet (step 2)
+    stats); Template (title, description, type, categories, section count, item count, URL).
+- **PROOF PASS:** Pass (step 2b): `profile` (serp), `profile-no-templates`,
+  `profile-not-found`, `profile-loading` and `profile-error`, each on desktop and phone,
+  light and dark, and `profile-signed-in-*`, against pattern-detail-1.png,
+  teardown-detail-1.png and home-2.png. Present: a two-column header (a media tile, big
+  title, muted lines, a meta row; a panel on the right); a divider; a section row (title,
+  description) over a 3-column grid of cards with a muted icon area, a category line, title
+  and 2-line description. The reference's breadcrumb is left out: a profile has no section
+  to trail back to. The cards are `MediaCard`s like the library's rather than the library's
+  card itself, which would change their words ("N tasks", "Start", the owner).
 - **NOTES:** Code: `src/views/UserProfile.tsx`. Only Users have Public Profiles today;
-  Organization Public Profiles do not exist yet.
+  Organization Public Profiles do not exist yet. The avatar image is decorative (`alt=""`)
+  beside the name. Until step 2b the cards had no media area and a trailing arrow icon, in 2
+  columns.
 
 ### Features
 
 - **SCREEN NAME:** Features (`/features/`)
 - **PURPOSE:** Summarize what the product does.
-- **HOW USER GETS HERE:** "Explore Features" on Home and About; "Back to Features" on a
-  feature page. The header's "Features" menu lists the feature pages, not this overview, and
-  shows as the current section here.
+- **HOW USER GETS HERE:** "Explore Features" on Home and About; "Features" in a feature
+  page's breadcrumb. The header's "Features" menu lists the feature pages, not this
+  overview, and shows as the current section here.
 - **WHAT'S ON THE SCREEN:** hero: eyebrow "Features", title "Features that keep work
   consistent.", "Build checklists once, then run them repeatedly with confidence. SERP Lists
   focuses on clarity, repeatability, and simple sharing.", "See Pricing" (primary), "Browse the
-  Template Library" (outline); 4 linked feature cards in 2 columns (icon, title, description,
-  "View the feature details and related workflows."): "Template Builder", "Checklist Runs",
-  "Public Sharing", "Import + Export".
+  Template Library" (outline); 4 feature cards in 2 columns, each a link (the icon in a muted
+  media area, title, description, "View the feature details and related workflows."):
+  "Template Builder", "Checklist Runs", "Public Sharing", "Import + Export".
 - **PRIMARY ACTION:** a feature card → [Feature page](#feature-page).
 - **SECONDARY ACTIONS:** "See Pricing"; "Browse the Template Library".
 - **STATES:** static.
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero); [Section row over a card
-  grid](#section-row-over-a-card-grid) (a muted top with the feature icon, then title and
-  description).
+- **PATTERN CHOICE (built):** [Page hero](#page-hero); [Section row over a card
+  grid](#section-row-over-a-card-grid) without its header row: `MediaCard`s (a muted top with
+  the feature icon, then title and description).
 - **REFERENCE IMAGES:** prompts-1.png, prompts-2.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: hero; a 2-column card grid.
-  - COMPONENT TYPES: eyebrow; heading; paragraph; buttons; linked card (icon badge, title,
-    description, footer text).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero; a 2-column card grid (1 on phones).
+  - COMPONENT TYPES: `PageHero` (eyebrow, heading, paragraph, buttons); `MediaCard` with
+    `href` (media, title as an h2, description, a muted line).
   - DATA FIELDS: feature (slug, icon, title, description).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b): `features-desktop-light`, `-desktop-dark`, `-mobile-light`
+  and `-mobile-dark`, and `features-signed-in-*`, against prompts-1.png and prompts-2.png.
+  Present: the centered hero with its buttons; a grid of cards with a muted media area
+  holding the icon, then the title and a muted description. 2 columns for 4 cards, where the
+  reference's rows hold 3.
 - **NOTES:** Code: `src/views/Features.tsx`; content in `src/data/publicFeatures.ts`.
 
 ### Feature page
@@ -839,22 +925,34 @@ existing content, invent nothing):
 - **HOW USER GETS HERE:** the header's "Features" menu (and its group in the phone menu
   sheet); a card on Features. The slugs are `template-builder`, `checklist-runs`,
   `public-sharing` and `import-export`.
-- **WHAT'S ON THE SCREEN:** "Back to Features" (ghost); a card: large icon badge, title,
-  description, 3 bullets, "Browse the Template Library" (primary), "See Pricing" (outline).
+- **WHAT'S ON THE SCREEN:** breadcrumb: Home › "Features" › the feature; header: the icon
+  tile, title, description, "Browse the Template Library" (primary), "See Pricing"
+  (outline); beside it (under it on phones), a panel with the feature's 3 points,
+  check-marked.
 - **PRIMARY ACTION:** "Browse the Template Library" → [Template Library](#template-library).
-- **SECONDARY ACTIONS:** "See Pricing"; "Back to Features".
+- **SECONDARY ACTIONS:** "See Pricing"; "Features" and Home in the breadcrumb.
 - **STATES:** an unknown slug shows the [404 page](#404-page) view (titled "Page not found",
   noindex, HTTP 200).
 - **NAVIGATION TYPE:** child page.
-- **PATTERN CHOICE (proposal):** [Detail page](#detail-page): breadcrumb (Home › Features ›
-  title) in place of "Back to Features", icon tile, big title, description, bullets, actions.
+- **PATTERN CHOICE (built):** [Detail page](#detail-page) (`DetailPageLayout`): the
+  breadcrumb in place of "Back to Features" (the same destination), the icon tile, big title,
+  description and actions, and the points in the panel beside the header.
 - **REFERENCE IMAGES:** pattern-detail-1.png, teardown-detail-1.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: back link; one card.
-  - COMPONENT TYPES: ghost link; icon badge; heading; paragraph; bullet list; buttons.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: breadcrumb; a two-column header: the icon tile, title, description and
+    buttons on the left, the points panel on the right (under them on phones).
+  - COMPONENT TYPES: `PageBreadcrumb`; icon tile; heading; paragraph; primary and outline
+    link buttons; a check-marked list in a muted panel.
   - DATA FIELDS: feature (icon, title, description, bullets).
-- **PROOF PASS:** Not restyled yet (step 2)
-- **NOTES:** Code: `src/views/Features.tsx` (one view for both routes).
+- **PROOF PASS:** Pass (step 2b): `feature-template-builder`, `feature-checklist-runs`,
+  `feature-public-sharing`, `feature-import-export` and `feature-unknown`, each on desktop
+  and phone, light and dark, and `feature-template-builder-signed-in-*`, against
+  pattern-detail-1.png. Present: the breadcrumb row; a two-column header (a large icon tile,
+  big title, muted description, a row of buttons; a rounded panel on the right). A feature
+  has no content under its header, so there is no divider or body, and the reference's
+  share buttons are not copied.
+- **NOTES:** Code: `src/views/Features.tsx` (one view for both routes). The breadcrumb's
+  "Features" replaces "Back to Features" (an open question).
 
 ### Pricing
 
@@ -864,11 +962,11 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:** hero: eyebrow "Pricing", title "Simple pricing for checklist
   workflows.", "Start with the free plan and upgrade when you need advanced template
   management."; plan card "Free" ("Core checklist building and runs."; "Create templates with
-  sections and items", "Run checklists and track progress", "Browse public checklists"; "Start
-  Free" outline → Register); plan card "Pro" ("$9/month. Cancel anytime."; "Import and export
-  template backups", "Save public templates to your account", "Manage billing from account
-  settings"; the Pro action); "Payments and subscription management are securely handled by
-  Stripe."
+  sections and items", "Run checklists and track progress", "Browse public checklists";
+  "Start Free" outline → Register); plan card "Pro" ("$9/month. Cancel anytime."; "Import and
+  export template backups", "Save public templates to your account", "Manage billing from
+  account settings"; the Pro action); "Payments and subscription management are securely
+  handled by Stripe."
 - **PRIMARY ACTION:** the Pro action; for a Free User "Upgrade — $9/month" → Stripe Checkout.
 - **SECONDARY ACTIONS:** "Start Free".
 - **STATES (the Pro action):** signed out: "Get Started" (→ Register); "Checking plan..."
@@ -877,14 +975,26 @@ existing content, invent nothing):
   Pro" or "Manage subscription" (→ Account Settings); "Opening checkout..."; billing off:
   "Upgrade unavailable". A failed checkout shows a toast.
 - **NAVIGATION TYPE:** root section.
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero); 2-column bordered plan cards (title,
-  price line, check list, button), like the cards in [Filterable grid](#filterable-grid).
+- **PATTERN CHOICE (built):** [Page hero](#page-hero); 2 shadcn Cards side by side in the
+  narrow width, like the bordered cards of [Filterable grid](#filterable-grid): the plan's
+  name (an h2) and price line in the header, a check list, and the action in the card's
+  footer.
 - **REFERENCE IMAGES:** prompts-1.png, prompts-4.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: hero; 2-column plan cards; a footnote.
-  - COMPONENT TYPES: plan card (title, muted line, check list, button); notice with retry.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero; a 2-column grid of plan Cards (stacked on phones); a
+    footnote.
+  - COMPONENT TYPES: Card (header with title and description, content with a check list,
+    footer with the action); outline and primary buttons; Alert with Retry.
   - DATA FIELDS: plan (name, description, features, action label and state).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b): `pricing-signed-out`, `pricing-free` (billing is off on the
+  local stack: "Upgrade unavailable"), `pricing-upgrade`, `pricing-opening-checkout`,
+  `pricing-checkout-failed` (the toast), `pricing-checking`, `pricing-unknown`,
+  `pricing-support` and `pricing-manage-pro` (a paid Pro plan, answered by the script: the
+  seeded Pro users' plans are managed by support), each on desktop and phone, light and
+  dark, against
+  prompts-1.png and prompts-4.png. Present: the centered hero; bordered cards with a title, a
+  muted line and their content. The reference's cards are text-only; a plan card adds its
+  action in the card's footer.
 - **NOTES:** Code: `src/views/Pricing.tsx`. A plan label never shows before the plan loads.
 
 ### About
@@ -895,22 +1005,25 @@ existing content, invent nothing):
 - **WHAT'S ON THE SCREEN:** hero: eyebrow "About", title "Build repeatable work that feels easy
   to discover and execute.", "SERP Lists helps teams and solo operators turn repeatable work
   into checklists that are easy to run, track, and share.", "Explore Features" (primary),
-  "Contact Us" (outline); 3 value cards (icon, title, description): "Clarity",
-  "Consistency", "Community".
+  "Contact Us" (outline); 3 value cards (the icon in a muted media area, title,
+  description): "Clarity", "Consistency", "Community".
 - **PRIMARY ACTION:** "Explore Features" → [Features](#features).
 - **SECONDARY ACTIONS:** "Contact Us" → [Contact](#contact).
 - **STATES:** static.
 - **NAVIGATION TYPE:** root section (footer).
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero); [Section row over a card
-  grid](#section-row-over-a-card-grid) without the header row (3 cards, a muted top with the
-  icon).
+- **PATTERN CHOICE (built):** [Page hero](#page-hero); [Section row over a card
+  grid](#section-row-over-a-card-grid) without the header row: 3 `MediaCard`s with the icon in
+  their muted top.
 - **REFERENCE IMAGES:** home-1.png, prompts-1.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: hero; a 3-column card grid.
-  - COMPONENT TYPES: eyebrow; heading; paragraph; buttons; card (icon badge, title,
-    description).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero; a 3-column card grid (1 on phones, 2 from `sm`).
+  - COMPONENT TYPES: `PageHero` (eyebrow, heading, paragraph, buttons); `MediaCard` (media,
+    title as an h2, description).
   - DATA FIELDS: value (icon, title, description).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b): `about-desktop-light`, `-desktop-dark`, `-mobile-light` and
+  `-mobile-dark`, and `about-signed-in-*`, against home-1.png and prompts-1.png. Present: the
+  centered hero with two buttons; a 3-column grid of cards with a muted media area, a title
+  and a muted description.
 - **NOTES:** Code: `src/views/About.tsx`.
 
 ### Contact
@@ -928,14 +1041,20 @@ existing content, invent nothing):
 - **SECONDARY ACTIONS:** "Share feedback".
 - **STATES:** static.
 - **NAVIGATION TYPE:** root section (footer).
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero); [Bordered list
-  cards](#bordered-list-cards) (icon tile, title, description, action).
+- **PATTERN CHOICE (built):** [Page hero](#page-hero); [Bordered list
+  cards](#bordered-list-cards): `ListCard`s with the icon tile, the title (an h2), the
+  description and the email link on the right.
 - **REFERENCE IMAGES:** home-1.png, home-3.png, home-4.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: hero; a 2-column card grid.
-  - COMPONENT TYPES: card (icon badge, title, description, button).
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: centered hero; two list cards, one under the other, in the narrow width.
+  - COMPONENT TYPES: `ListCard` (icon tile, heading, description, a link button on the
+    right; under the text on phones).
   - DATA FIELDS: channel (icon, title, description, button label, mailto link).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b): `contact-desktop-light`, `-desktop-dark`, `-mobile-light`
+  and `-mobile-dark`, and `contact-signed-in-*`, against home-1.png, home-3.png and
+  home-4.png. Present: the centered hero; bordered rounded cards with a small icon tile, a
+  title and a sub line. The reference's cards sit two to a row; ours are full rows so each
+  keeps its button beside the text.
 - **NOTES:** Code: `src/views/Contact.tsx`.
 
 ### Log in
@@ -962,18 +1081,26 @@ existing content, invent nothing):
   resend verification.", the notice, the resend button); "Resending verification…"; a failed
   verification link (notice and toast); verified (toast "Email verified. You can sign in
   now."); `?verify_email=1` (toast "Verify your email first, then sign in."); the email
-  prefilled after sign-up; already signed in (redirects to `next` or My Templates).
+  prefilled after sign-up; signed in (toast "Login successful", then `next` or My Templates);
+  already signed in (redirects to `next` or My Templates).
 - **NAVIGATION TYPE:** child page (auth flow).
-- **PATTERN CHOICE (proposal):** centered card form ([auth card frame](#auth-card-frame)).
+- **PATTERN CHOICE (built):** the [auth card frame](#auth-card-frame): a form of shadcn
+  Fields, the email in an InputGroup with its mail icon, the password in `PasswordInput` with
+  its lock icon, the notice as an Alert (a polite status, as before).
 - **REFERENCE IMAGES:** none (the reference has no auth pages).
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: the auth card frame; a single form column.
-  - COMPONENT TYPES: button grid (development only); status notice; labeled inputs with a
-    leading icon; password toggle; full-width buttons; footer link.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: the auth card frame; one form column.
+  - COMPONENT TYPES: button grid in a dashed box (development only); Alert; labelled
+    InputGroups with a leading icon; the password's show or hide button; full-width buttons;
+    footer link.
   - DATA FIELDS: email; password; notice text; return path.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block: `login`,
+  `login-password-shown`, `login-error` (the toast), `login-verification-failed` and
+  `login-success` (the toast over My Templates), each on desktop and phone, light and dark.
+  Every field has its visible label, the form fits a 390px screen, and the development panel
+  uses theme colors only.
 - **NOTES:** Code: `src/views/Login.tsx`. One-shot query parameters (notices, the email) leave
-  the address bar once read.
+  the address bar once read. The development persona buttons lost their colored dots.
 
 ### Register
 
@@ -993,13 +1120,18 @@ existing content, invent nothing):
   support."); success ("Account created. Check your email to verify your address before
   signing in." or "Registration successful"); a failure toast.
 - **NAVIGATION TYPE:** child page (auth flow).
-- **PATTERN CHOICE (proposal):** centered card form ([auth card frame](#auth-card-frame)).
+- **PATTERN CHOICE (built):** the [auth card frame](#auth-card-frame): a form of shadcn
+  Fields, the two passwords in `PasswordInput`, each with its own show or hide button.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: the auth card frame; a single form column.
-  - COMPONENT TYPES: labeled inputs; password toggles; full-width primary button; footer link.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: the auth card frame; one form column.
+  - COMPONENT TYPES: labelled inputs; password InputGroups with a show or hide button;
+    full-width primary button; footer link.
   - DATA FIELDS: name; email; password; password confirmation; return path.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block: `register`, `register-error`
+  ("Passwords do not match", the confirmation shown) and `register-success` (the toast and
+  the verification notice on Log in; the sign-up was answered by the script, so no account
+  was made), each on desktop and phone, light and dark.
 - **NOTES:** Code: `src/views/Register.tsx`. The return path (`next`) survives email
   verification.
 
@@ -1020,13 +1152,16 @@ existing content, invent nothing):
   sent (toast "If an account exists, a reset link has been sent." and the inbox message in
   place of the form).
 - **NAVIGATION TYPE:** child page of Log in.
-- **PATTERN CHOICE (proposal):** centered card form ([auth card frame](#auth-card-frame)).
+- **PATTERN CHOICE (built):** the [auth card frame](#auth-card-frame); the inbox message is
+  an Alert in the form's place.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: the auth card frame; a form, or a message box.
-  - COMPONENT TYPES: labeled input; full-width primary button; dashed message box; footer link.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: the auth card frame; the form, or the message.
+  - COMPONENT TYPES: labelled input; full-width primary button; Alert; footer link.
   - DATA FIELDS: email.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block: `forgot-password`,
+  `forgot-password-error` (email unavailable) and `forgot-password-sent`, each on desktop and
+  phone, light and dark.
 - **NOTES:** Code: `src/views/ForgotPassword.tsx`.
 
 ### Reset password
@@ -1044,13 +1179,17 @@ existing content, invent nothing):
   reused link: "Reset link expired", "That reset link is no longer valid.", "Please request a
   new reset email to continue.", footer "Request a new link".
 - **NAVIGATION TYPE:** flow page from the reset email.
-- **PATTERN CHOICE (proposal):** centered card form ([auth card frame](#auth-card-frame)).
+- **PATTERN CHOICE (built):** the [auth card frame](#auth-card-frame); the expired link's
+  message is an Alert.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: the auth card frame; a form, or the expired message.
-  - COMPONENT TYPES: labeled inputs; full-width primary button; dashed message box; footer link.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: the auth card frame; the form, or the expired message.
+  - COMPONENT TYPES: labelled inputs; full-width primary button; Alert; footer link.
   - DATA FIELDS: new password; confirmation; token (read once, then removed from the URL).
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block: `reset-password`,
+  `reset-password-error` ("Passwords do not match"), `reset-password-success` (the toast on
+  Log in; the reset was answered by the script) and `reset-password-expired`, each on desktop
+  and phone, light and dark.
 - **NOTES:** Code: `src/views/ResetPassword.tsx`. A reload after the token left the URL shows
   the expired state.
 
@@ -1060,14 +1199,15 @@ existing content, invent nothing):
 - **PURPOSE:** Show an Organization invite and accept or decline it.
 - **HOW USER GETS HERE:** an invite link a manager created in Account Settings; back from Log in
   or Register after "Log in to accept" or "Create an account".
-- **WHAT'S ON THE SCREEN:** a centered card titled "Organization Invite" with a people icon.
-  The body depends on the state:
+- **WHAT'S ON THE SCREEN:** the auth card frame without its aside: a people icon over the
+  title "Organization Invite" (the page's h1). The body depends on the state, its buttons
+  across the card, one under another:
   - Signed out: "Log in with the invited email address to see and accept this invite. New
     here? Create an account with that email address.", "Log in to accept" (primary), "Create
     an account" (outline).
   - Invite: the Organization's name; "<inviter> invited you to join as <Role>."; "Accepting
     does not change your current context. Switch to the Organization when you want to work in
-    it."; "Accept invite" (primary), "Decline" (outline); an error line under them when a
+    it."; "Accept invite" (primary), "Decline" (outline); an error Alert under them when a
     response fails.
   - Accepted: "Invite accepted."; "Switch to <Organization>" (primary), "Organization
     settings" (outline).
@@ -1080,19 +1220,25 @@ existing content, invent nothing):
   declined. You did not join <Organization>.", "Open templates"); a different account ("You're
   signed in as <email>. This invite was sent to a different email address. Sign out, then log
   in or create an account with the invited email address to accept it.", "Sign out and
-  continue", "Signing out..."); an invite error (the reason, "Open settings").
+  continue", "Signing out..."); an invite error (the reason in an Alert, "Open settings").
 - **NAVIGATION TYPE:** flow page (public shell).
-- **PATTERN CHOICE (proposal):** centered card, like the [auth card frame](#auth-card-frame)
-  without its aside.
+- **PATTERN CHOICE (built):** the [auth card frame](#auth-card-frame) without its aside
+  (`AuthCard`): the waiting lines with the shadcn Spinner, the errors as destructive Alerts.
 - **REFERENCE IMAGES:** none.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: one centered card (title, body, button row).
-  - COMPONENT TYPES: card; status line with a spinner or check icon; paragraphs; primary and
-    outline buttons; error text.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: one centered card: the header (icon tile, title), the state's body, its
+    buttons stacked.
+  - COMPONENT TYPES: card; status line with a Spinner or check icon; paragraphs; full-width
+    primary and outline buttons; destructive Alert.
   - DATA FIELDS: Organization name; inviter name or email; role; the signed-in email; state.
-- **PROOF PASS:** Not restyled yet (step 2)
+- **PROOF PASS:** Pass (step 2b), against shadcn's login block: `invite-signed-out`,
+  `invite`, `invite-loading`, `invite-responding`, `invite-response-error`,
+  `invite-accepted`, `invite-declined`, `invite-already-member`, `invite-wrong-account` and
+  `invite-error`, each on desktop and phone, light and dark (the invite's API answered by the
+  script for Acme Operations). Every state fits a 390px screen with its buttons in reach.
 - **NOTES:** Code: `src/views/TeamInviteAccept.tsx`. The path keeps its legacy name. Accepting
-  never switches the active context by itself.
+  never switches the active context by itself. Until step 2b the title was a card title and
+  the page had no h1, inside a second `<main>`.
 
 ### Shared run
 
@@ -1629,9 +1775,9 @@ existing content, invent nothing):
 - **PURPOSE:** Say the address is not a page and offer a way home.
 - **HOW USER GETS HERE:** any path no route matches (HTTP 404); an unknown feature slug or
   category (HTTP 200, noindex).
-- **WHAT'S ON THE SCREEN:** a centered card: eyebrow "404", "That page does not exist", "The
-  route <path> could not be found. Use the main navigation or head back to the home page." (the
-  server's HTML says "This route"), "Return to home".
+- **WHAT'S ON THE SCREEN:** a centered page hero: eyebrow "404", "That page does not exist",
+  "The route <path> could not be found. Use the main navigation or head back to the home
+  page." (the server's HTML says "This route"), "Return to home".
 - **PRIMARY ACTION:** "Return to home" → [Home](#home).
 - **SECONDARY ACTIONS:** the shell's navigation.
 - **STATES:** the shell: the public shell for anyone not signed in and on public paths; the
@@ -1639,14 +1785,18 @@ existing content, invent nothing):
   check answers (the server's HTML and the first render in the browser are the public shell).
   Titled "Page not found", `noindex, follow`, no canonical URL.
 - **NAVIGATION TYPE:** system page.
-- **PATTERN CHOICE (proposal):** [Page hero](#page-hero) (eyebrow, title, description, one
+- **PATTERN CHOICE (built):** [Page hero](#page-hero) (eyebrow, title, description, one
   button) with no card.
 - **REFERENCE IMAGES:** home-1.png.
-- **STRUCTURE (current):**
-  - LAYOUT ZONES: a centered card filling the window's height.
-  - COMPONENT TYPES: eyebrow; heading; paragraph; primary button.
+- **STRUCTURE (built):**
+  - LAYOUT ZONES: a centered hero.
+  - COMPONENT TYPES: `PageHero` (eyebrow badge, heading, paragraph, primary link button).
   - DATA FIELDS: the missing path.
-- **PROOF PASS:** Not restyled yet (step 2). The shells of 2026-09-29 under `/dashboard/`:
+- **PROOF PASS:** Pass (step 2b): `not-found` (public shell) and `not-found-console` (john,
+  signed in, on `/dashboard/definitely-missing/`), each on desktop and phone, light and dark,
+  and the feature and category 404s above (`feature-unknown`, `category-unknown`), against
+  home-1.png. Present: the centered hero (eyebrow, big title, muted text, one button). The
+  shells of 2026-09-29 under `/dashboard/`:
   `tmp/design-review/decisions/not-found-dashboard-desktop-signed-out.png`,
   `not-found-dashboard-desktop-signed-in.png`, `not-found-dashboard-mobile-signed-out.png` and
   `not-found-dashboard-mobile-signed-in.png`.
@@ -2087,7 +2237,8 @@ Found while making those changes; none is decided here.
   it into their library" (the Share Template dialog), "bootstrap your template library" (Import
   Templates). Next to the Template Library, "Copy to Library" can read as publishing.
 - The header's "Features" menu lists the four feature pages, not the `/features/` overview,
-  which Home's "Explore Features" and "Back to Features" still reach. Add an overview item?
+  which Home's "Explore Features" and a feature page's breadcrumb still reach. Add an
+  overview item?
 - Pricing's Free plan lists "Browse public checklists" (the Template Library under another
   name); pricing wording was left as it is.
 - The Start a Run toast says "Checklist run created" (or "Run started in <Organization>"), and
@@ -2111,8 +2262,26 @@ Raised by step 2a (the signed-in console), none decided:
   included" block, which its card proposed. Move it over (with its tests)?
 - The delete confirmations are alert dialogs now, so a click outside no longer closes them
   (Cancel or Escape does).
-- Card titles are `h3` headings, so a page's first card after its `h1` skips a level (the
-  editor's "Generate from Clipy", Import Templates, Account Settings).
 - On phones the editor's Preview moves into "More actions" and its theme toggle leaves the
   top bar (the sidebar keeps one), and the run page's Previous and Next show only their
   arrows.
+
+Raised by step 2b (the public and sign-in pages), none decided:
+
+- Labels the restyle made visible: "Search categories" (Categories; it was the field's
+  hidden name), "Search templates" (the Template Library, whose search had no name at all),
+  and "Search" and "Sort by" (a category page, as on My Templates). Keep this wording?
+- A feature page's breadcrumb says "Features" where its back link said "Back to Features"
+  (the same destination, as the template page's "Template Library" replaced "Back"); a
+  category page's breadcrumb keeps the back link's "All Categories".
+- The sign-in pages keep "Built for repeatable work" beside the form from `lg` (hidden on
+  phones, as before), in the muted column of shadcn's two-column login block. Keep it, or use
+  the block's single card?
+- A Public Profile's cards are `MediaCard`s with the profile's own words ("N items",
+  "@username", its fallback description) rather than the library's card ("N tasks", "Start",
+  the owner). Use the library's card there?
+- Muted text on a muted panel (the sign-in aside, the stats panel, the call-to-action banner)
+  is the shadcn neutral theme's own pair, about 4.3:1 in the light theme, under WCAG AA's
+  4.5:1 for small text. Keep the theme's tokens there?
+- The Organization invite's buttons stack across the card in every state, as the sign-in
+  forms' buttons do, where they sat side by side.

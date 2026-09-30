@@ -129,11 +129,12 @@ Each step is a screen, and a quoted label is the control that moves the user on.
   My Runs → "Run options" → "Delete" → "Delete run" dialog → Archive → "Restore".
 - **Browse by category:** Template Library → a category chip or a "Browse by Category"
   tile → Category page → template card → Public template page. Or Categories → a tile or
-  row → Category page.
+  row → Category page → "All Categories" in its breadcrumb (or a "Related Categories" chip).
 - **Public Profile:** Public template page → owner name → Public Profile → template card →
   Public template page. Signed in: account menu → "Profile" (opens a new tab).
 - **Features:** header "Features" menu → a Feature page → "Browse the Template Library" or
-  "See Pricing". Or Home "Explore Features" → Features → a feature card → Feature page.
+  "See Pricing". Or Home "Explore Features" → Features → a feature card → Feature page →
+  "Features" in its breadcrumb → Features.
 - **Upgrade and billing:** Pricing → "Upgrade — $9/month" → Stripe Checkout → back →
   Account Settings → Billing → "Manage subscription" → Stripe Customer Portal. Or Account
   Settings → "Upgrade to Pro — $9/month".
@@ -162,9 +163,9 @@ Toasts (sonner) report results everywhere.
 | --- | --- | --- | --- | --- |
 | `/` | [Home](ui-screen-inventory.md#home) | Root section (brand link) | Shell overlays | Primary button: "Get Started" signed out, "Open Dashboard" signed in |
 | `/templates/` | [Template Library](ui-screen-inventory.md#template-library) | Root section (header "Templates" menu and footer "Templates" column: "Template Library"; sidebar "Template Library") | Shell overlays | Search, category filter and sort (Popular, Trending, Recent) kept in the URL; skeleton; empty; catalog error |
-| `/categories/` | [Categories](ui-screen-inventory.md#categories) | Root section (header "Templates" menu and footer "Templates" column: "Categories"; sidebar "Categories"; a category page's "All Categories") | Shell overlays | Category search, and an empty state with "Clear search" when nothing matches; skeletons; catalog error |
+| `/categories/` | [Categories](ui-screen-inventory.md#categories) | Root section (header "Templates" menu and footer "Templates" column: "Categories"; sidebar "Categories"; "All Categories" in a category page's breadcrumb) | Shell overlays | Category search, and an empty state with "Clear search" when nothing matches; skeletons; catalog error |
 | `/categories/<slug>/` | [Category page](ui-screen-inventory.md#category-page) | Child page of the library and Categories | Shell overlays; sort select | Grid or list; search; sort; skeleton; empty; catalog error; an unknown category shows the 404 view |
-| `/features/` | [Features](ui-screen-inventory.md#features) | Child page (Home "Explore Features", a feature page's "Back to Features"; the header's "Features" menu marks it) | Shell overlays | None |
+| `/features/` | [Features](ui-screen-inventory.md#features) | Child page (Home "Explore Features", "Features" in a feature page's breadcrumb; the header's "Features" menu marks it) | Shell overlays | None |
 | `/features/<slug>/` | [Feature page](ui-screen-inventory.md#feature-page) | Root section (header "Features" menu) and child page of Features | Shell overlays | An unknown slug shows the 404 view |
 | `/pricing/` | [Pricing](ui-screen-inventory.md#pricing) | Root section (header "Pricing") | Shell overlays | The Pro card's action follows the plan state |
 | `/about/` | [About](ui-screen-inventory.md#about) | Root section (footer "About") | Shell overlays | None |
