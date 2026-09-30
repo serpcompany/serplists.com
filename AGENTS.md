@@ -57,8 +57,7 @@ Details: [development environment](docs/design-docs/development-environment.md).
 
 - Follow [core beliefs](docs/design-docs/core-beliefs.md). Lint and dependency
   errors include the fix; read the message before changing code.
-- Never add entries to `eslint-suppressions.json`,
-  `.dependency-cruiser-known-violations.json`, or the file-size caps in
+- Never add entries to `eslint-suppressions.json` or the file-size caps in
   `eslint.config.js` to make a change pass. Those files only shrink.
 - Parse external data with Zod at the boundary; do not guess shapes.
 - API code logs with `log()` from `functions/api/utils/logger.ts`, never personal data.

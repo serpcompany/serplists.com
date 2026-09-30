@@ -15,5 +15,5 @@ screenshot before and after. For bugs, show the reproduction failing first. -->
 - [ ] Docs updated where behavior changed (`docs/`, `ARCHITECTURE.md`)
 - [ ] Exec plan progress and decision log updated (multi-step work only)
 - [ ] Shortcuts recorded in `docs/exec-plans/tech-debt-tracker.md`
-- [ ] No new entries in `eslint-suppressions.json`, `.dependency-cruiser-known-violations.json`, or the file-size caps
+- [ ] No new entries in `eslint-suppressions.json` or the file-size caps
 - [ ] Database changes: `pnpm run check:db:drizzle-parity` passes and `docs/generated/db-schema.md` is regenerated (see `docs/design-docs/database-operations.md`)

@@ -23,12 +23,6 @@ function lastCommitTime(file) {
 // A missing folder (docs/exec-plans/active/ with every plan completed) has no files.
 const walk = (dir, predicate) => walkFiles(repoRoot, dir, predicate);
 
-function countBy(items, key) {
-  const counts = {};
-  for (const item of items) counts[key(item)] = (counts[key(item)] ?? 0) + 1;
-  return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-}
-
 const sections = [];
 
 // 1. Docs check
@@ -59,7 +53,6 @@ sections.push(
 );
 
 // 3. Recorded debt (ratchets)
-const knownViolations = JSON.parse(read(".dependency-cruiser-known-violations.json"));
 const suppressions = JSON.parse(read("eslint-suppressions.json"));
 const suppressionCounts = {};
 for (const rules of Object.values(suppressions)) {
@@ -69,10 +62,7 @@ sections.push(
   "## Recorded debt",
   "Burn these down; never add to them.",
   "| Source | Rule | Count |\n| --- | --- | --- |\n" +
-    [
-      ...countBy(knownViolations, (violation) => violation.rule.name).map(([rule, count]) => `| dependency-cruiser | \`${rule}\` | ${count} |`),
-      ...Object.entries(suppressionCounts).map(([rule, count]) => `| ESLint suppressions | \`${rule}\` | ${count} |`),
-    ].join("\n"),
+    Object.entries(suppressionCounts).map(([rule, count]) => `| ESLint suppressions | \`${rule}\` | ${count} |`).join("\n"),
 );
 
 // 4. Oversized files

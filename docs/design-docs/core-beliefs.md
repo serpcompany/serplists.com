@@ -42,8 +42,6 @@ Existing violations are recorded, not ignored:
 
 - ESLint: `eslint-suppressions.json`. Fixing a suppressed violation makes ESLint
   report the suppression as unused; run `pnpm exec eslint . --prune-suppressions`.
-- dependency-cruiser: `.dependency-cruiser-known-violations.json`. After fixing
-  violations, refresh it with `pnpm run deps:baseline` and confirm the file only shrank.
 - File size: legacy caps live in `eslint.config.js`. Lower a cap when a file shrinks.
 
 Never add new entries to a baseline to make a change pass. Fix the code, or stop

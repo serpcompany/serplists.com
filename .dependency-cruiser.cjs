@@ -1,6 +1,4 @@
 // Architecture rules for `pnpm run deps:check`. See ARCHITECTURE.md for the layer map.
-// Existing violations are recorded in .dependency-cruiser-known-violations.json and
-// tolerated; anything new fails. Fix violations rather than re-baselining.
 
 // Framework-free modules that both the React app and the API (functions/) may import.
 // Only add a module here after confirming it has no React, DOM, or browser-only imports.

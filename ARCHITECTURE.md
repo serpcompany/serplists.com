@@ -58,9 +58,8 @@ Shared (imported by both sides)
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
 - runtime code importing tests or devDependencies; circular imports
 
-Violations that predate a rule are listed in
-`.dependency-cruiser-known-violations.json`. They are debt to burn down, not
-precedent: never re-baseline to make new code pass.
+There is no baseline of known violations: every violation fails the check, so fix
+the code rather than the rule.
 
 Other invariants (Zod at API boundaries, structured logging, product vocabulary,
 file size) are listed with their enforcement in

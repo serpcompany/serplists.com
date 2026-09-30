@@ -145,8 +145,8 @@ Work the issue in small PRs, one item each:
 1. **Docs:** anything the gardening PR left unresolved; update its "Last verified"
    date in [the design-docs index](index.md).
 2. **Debt:** fix a few baseline entries, then shrink the baseline
-   (`pnpm run deps:baseline`, `pnpm exec eslint . --prune-suppressions`) and confirm
-   the diff only removes entries.
+   (`pnpm exec eslint . --prune-suppressions`) and confirm the diff only removes
+   entries.
 3. **Size:** split one oversized file and lower its cap in `eslint.config.js`.
 4. **Plans:** update stale active plans or move finished ones to `completed/`.
 5. **Scores:** re-grade [QUALITY_SCORE.md](../QUALITY_SCORE.md) rows whose code changed.

@@ -184,7 +184,7 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Area | Scripts |
 | --- | --- |
 | Run | `setup`, `dev`, `dev:all`, `dev:api`, `dev:auto`, `dev:stop`, `build`, `build:worker`, `preview`, `cf-typegen`, `ui:snap` |
-| Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `deps:check`, `deps:baseline`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report`, `sre:dup` |
+| Checks | `verify`, `verify:release`, `lint`, `typecheck`, `typecheck:env`, `check:repo`, `docs:check`, `deps:check`, `secret:scan`, `schema:portable:check`, `templates:check`, `db:schema:check`, `sitemap:check`, `maintenance:report`, `sre:dup` |
 | Tests | `test`, `test:run`, `test:unit`, `test:local-d1`, `test:coverage`, `test:smoke`, `test:e2e`, `test:e2e:full`, `test:e2e:ui` |
 | Generators | `schema:portable:generate`, `db:schema:generate`, `sitemap:generate`, `headers:generate` (the build's `public/_headers`), `templates:generate`, `templates:render-markdown`, `docs:references` |
 | Local D1 | `d1:profile`, `db:reset`, `db:seed`, `db:seed:official:local`, `db:migrate:d1:local`, `db:migrations:list:local`, `db:query`, `db:cleanup:local`, `db:reset:test-user-passwords`, `db:generate`, `check:db:drizzle-parity` |
