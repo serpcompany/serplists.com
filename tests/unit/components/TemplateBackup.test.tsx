@@ -110,7 +110,7 @@ const exportButton = (html: string) =>
 const exportingButton = (html: string) => getTag(html, /<button(?:(?!<button).)*Exporting\.\.\./);
 const includePublicSwitch = (html: string) => getTag(html, /<button[^>]*id="include-public-templates"[^>]*>/);
 const statValues = (html: string) =>
-  Array.from(html.matchAll(/<div class="text-2xl font-bold[^"]*">([^<]*)<\/div>/g), (match) => match[1]);
+  Array.from(html.matchAll(/<p class="text-2xl font-semibold[^"]*">([^<]*)<\/p>/g), (match) => match[1]);
 const isDisabled = (tag: string) => {
   expect(tag).not.toBe('');
   return /\sdisabled=""/.test(tag);

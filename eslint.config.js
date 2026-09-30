@@ -21,7 +21,6 @@ const LEGACY_MAX_LINES = {
   "src/features/run-execution/useRunExecutionModel.ts": 650,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 650,
-  "src/components/TemplateBackup.tsx": 530,
 };
 
 const TOAST_MESSAGE =

@@ -1,8 +1,10 @@
 import React from "react";
-import { AlertCircle, CheckCircle, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle, Info, Upload } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/components/ui/item";
 import type { ImportPreview } from "@/features/template-backup/importFileSelection";
 import { countImportPublicTemplates } from "@/lib/utils/templateBackup";
 import type { ImportVisibility } from "@/lib/utils/templateBackup";
@@ -36,101 +38,98 @@ export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
   preview,
   visibility,
 }) => (
-  <Card className="border-dashed">
-    <CardHeader className="pb-3">
-      <CardTitle className="text-base flex items-center gap-2">
-        <CheckCircle className="h-4 w-4 text-green-600" />
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <CheckCircle aria-hidden="true" className="size-4 text-muted-foreground" />
         Import Preview
-        <span className="truncate text-sm font-normal text-muted-foreground">{preview.fileName}</span>
       </CardTitle>
+      <CardDescription className="wrap-anywhere">{preview.fileName}</CardDescription>
     </CardHeader>
-    <CardContent className="space-y-4">
-      <div className="flex items-center gap-4">
+    <CardContent className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{formatCount(preview.templates.length, "template")}</Badge>
         <Badge variant="outline">{countImportPublicTemplates(preview.templates, visibility)} public</Badge>
       </div>
 
-      <div className="space-y-2">
-        <h4 className="font-medium">Templates to import:</h4>
-        <div className="max-h-40 overflow-y-auto space-y-1">
-          {preview.templates.map((template, index: number) => <div key={index} className="text-sm p-2 bg-muted rounded">
-              <div className="font-medium">{template.title}</div>
-              {template.description && <div className="text-muted-foreground truncate">{template.description}</div>}
-              <div className="text-xs text-muted-foreground">
-                {formatCount(template.sections.length, "section")}
-              </div>
-            </div>)}
-        </div>
+      <div className="flex flex-col gap-2">
+        <h4 className="text-sm font-medium">Templates to import:</h4>
+        <ItemGroup className="max-h-40 gap-1 overflow-y-auto">
+          {preview.templates.map((template, index: number) => (
+            <Item key={index} role="listitem" size="sm" variant="muted">
+              <ItemContent className="min-w-0">
+                <ItemTitle className="line-clamp-2 wrap-anywhere">{template.title}</ItemTitle>
+                {template.description ? (
+                  <ItemDescription className="line-clamp-1">{template.description}</ItemDescription>
+                ) : null}
+                <ItemDescription className="text-xs">
+                  {formatCount(template.sections.length, "section")}
+                </ItemDescription>
+              </ItemContent>
+            </Item>
+          ))}
+        </ItemGroup>
       </div>
 
-      {preview.warnings.length > 0 && <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium text-amber-800 dark:text-amber-200">
-                Import Warnings
-              </p>
-              <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
-                {preview.warnings.map((warning, index: number) => <li key={index}>
-                    • {warning.templateTitle}: {warning.message}
-                  </li>)}
-              </ul>
-            </div>
-          </div>
-        </div>}
-
-      {(exceedsTemplateLimit || oversizedAssetCount > 0) && <div className="bg-sky-50 dark:bg-sky-900/20 p-3 rounded-lg">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-sky-600 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium text-sky-800 dark:text-sky-200">
-                Import Policy (enforced)
-              </p>
-              <ul className="text-sky-700 dark:text-sky-300 mt-1 space-y-1">
-                {exceedsTemplateLimit && <li>
-                    • {formatCount(preview.templates.length, "template")} selected; limit is {maxTemplatesPerImport} per import
-                  </li>}
-                {oversizedAssetCount > 0 && <li>
-                    • {formatCount(oversizedAssetCount, "asset")} over {ASSET_LIMIT}; templates with them will not be imported
-                  </li>}
-              </ul>
-            </div>
-          </div>
-        </div>}
-
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-medium text-yellow-800 dark:text-yellow-200">
-              Import Notes:
-            </p>
-            <ul className="text-yellow-700 dark:text-yellow-300 mt-1 space-y-1">
-              <li>• Templates will be assigned new unique IDs</li>
-              <li>• Visibility follows your selection above</li>
-              <li>• Existing templates won&apos;t be affected</li>
-              <li>• Slugs will be regenerated to avoid conflicts</li>
-              <li>• Uploaded assets are not copied; re-upload if needed</li>
-              <li>• Limit: max {maxTemplatesPerImport} templates per import (enforced)</li>
-              <li>• Limit: assets up to {ASSET_LIMIT} each, the upload limit (checked when size is provided)</li>
+      {preview.warnings.length > 0 ? (
+        <Alert>
+          <AlertCircle />
+          <AlertTitle>Import Warnings</AlertTitle>
+          <AlertDescription>
+            <ul className="flex flex-col gap-1">
+              {preview.warnings.map((warning, index: number) => (
+                <li key={index}>• {warning.templateTitle}: {warning.message}</li>
+              ))}
             </ul>
-          </div>
-        </div>
-      </div>
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-      <div className="flex gap-2">
-        <Button
-          onClick={onConfirm}
-          disabled={confirmDisabled}
-          className="flex items-center gap-2"
-        >
-          <Upload className="h-4 w-4" />
-          {isImporting ? "Importing..." : "Confirm Import"}
-        </Button>
-        <Button variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
+      {exceedsTemplateLimit || oversizedAssetCount > 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Import Policy (enforced)</AlertTitle>
+          <AlertDescription>
+            <ul className="flex flex-col gap-1">
+              {exceedsTemplateLimit ? (
+                <li>
+                  • {formatCount(preview.templates.length, "template")} selected; limit is {maxTemplatesPerImport} per import
+                </li>
+              ) : null}
+              {oversizedAssetCount > 0 ? (
+                <li>
+                  • {formatCount(oversizedAssetCount, "asset")} over {ASSET_LIMIT}; templates with them will not be imported
+                </li>
+              ) : null}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Alert>
+        <Info />
+        <AlertTitle>Import Notes:</AlertTitle>
+        <AlertDescription>
+          <ul className="flex flex-col gap-1">
+            <li>• Templates will be assigned new unique IDs</li>
+            <li>• Visibility follows your selection above</li>
+            <li>• Existing templates won&apos;t be affected</li>
+            <li>• Slugs will be regenerated to avoid conflicts</li>
+            <li>• Uploaded assets are not copied; re-upload if needed</li>
+            <li>• Limit: max {maxTemplatesPerImport} templates per import (enforced)</li>
+            <li>• Limit: assets up to {ASSET_LIMIT} each, the upload limit (checked when size is provided)</li>
+          </ul>
+        </AlertDescription>
+      </Alert>
     </CardContent>
+    <CardFooter className="flex-wrap gap-2">
+      <Button onClick={onConfirm} disabled={confirmDisabled}>
+        <Upload data-icon="inline-start" />
+        {isImporting ? "Importing..." : "Confirm Import"}
+      </Button>
+      <Button variant="outline" onClick={onCancel}>
+        Cancel
+      </Button>
+    </CardFooter>
   </Card>
 );

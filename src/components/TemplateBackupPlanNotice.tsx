@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AlertCircle } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { BillingStatusState } from "@/lib/billing";
@@ -15,16 +16,16 @@ type TemplateBackupPlanNoticeProps = {
   onUpgrade: () => void;
 };
 
-const Notice = ({ children, title }: { children: ReactNode; title: string }) => (
-  <div className="rounded-lg border p-4 bg-muted/50">
-    <div className="flex items-start gap-3">
-      <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
-      <div className="space-y-1">
-        <div className="font-medium">{title}</div>
-        {children}
-      </div>
-    </div>
-  </div>
+// A shadcn Alert with the notice's title, text and its one action.
+const Notice = ({ action, children, title }: { action?: ReactNode; children: ReactNode; title: string }) => (
+  <Alert>
+    <AlertCircle />
+    <AlertTitle>{title}</AlertTitle>
+    <AlertDescription>
+      <p>{children}</p>
+      {action ? <div className="mt-2">{action}</div> : null}
+    </AlertDescription>
+  </Alert>
 );
 
 /**
@@ -39,13 +40,15 @@ export const TemplateBackupPlanNotice = ({
 }: TemplateBackupPlanNoticeProps) => {
   if (billing.status === "error") {
     return (
-      <Notice title="Couldn't check your plan">
-        <div className="text-sm text-muted-foreground">
-          Import and export still work. Retry to load your plan details.
-        </div>
-        <Button className="mt-2" variant="outline" onClick={onRetry}>
-          Retry
-        </Button>
+      <Notice
+        action={
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        }
+        title="Couldn't check your plan"
+      >
+        Import and export still work. Retry to load your plan details.
       </Notice>
     );
   }
@@ -55,19 +58,21 @@ export const TemplateBackupPlanNotice = ({
   }
 
   return (
-    <Notice title={isTeamWorkspace ? "Paid Organization feature" : "Pro feature"}>
-      <div className="text-sm text-muted-foreground">
-        {isTeamWorkspace
-          ? ORGANIZATION_BACKUP_UPGRADE_MESSAGE
-          : billing.billingEnabled
-            ? "Template import/export is available on Pro."
-            : BILLING_UNAVAILABLE_MESSAGE}
-      </div>
-      {!isTeamWorkspace ? (
-        <Button className="mt-2" onClick={onUpgrade} disabled={!billing.billingEnabled}>
-          {billing.billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
-        </Button>
-      ) : null}
+    <Notice
+      action={
+        !isTeamWorkspace ? (
+          <Button size="sm" onClick={onUpgrade} disabled={!billing.billingEnabled}>
+            {billing.billingEnabled ? "Upgrade to Pro" : "Upgrade unavailable"}
+          </Button>
+        ) : undefined
+      }
+      title={isTeamWorkspace ? "Paid Organization feature" : "Pro feature"}
+    >
+      {isTeamWorkspace
+        ? ORGANIZATION_BACKUP_UPGRADE_MESSAGE
+        : billing.billingEnabled
+          ? "Template import/export is available on Pro."
+          : BILLING_UNAVAILABLE_MESSAGE}
     </Notice>
   );
 };

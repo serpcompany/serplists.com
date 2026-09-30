@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, FileText, AlertCircle, CheckCircle } from "lucide-react";
+import { AlertCircle, Download } from "lucide-react";
+import { Stat } from "@/components/layout/Stat";
 import { useTemplateLists } from "@/contexts/TemplatesContext";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
@@ -17,6 +18,7 @@ import { IMPORT_VISIBILITY_LABELS, type ImportVisibility } from "@/lib/utils/tem
 import type { ChecklistTemplate, TemplateImportSummary } from "@/types/checklist";
 import type { PageVisit } from "@/lib/navigation/pageVisit";
 import { exportTemplatePack } from "@/features/template-backup/exportTemplatePack";
+import { buildSampleTemplate } from "@/features/template-backup/sampleTemplate";
 import { usePublicCatalogLoader } from "@/features/template-backup/publicCatalogLoader";
 import { selectImportFile } from "@/features/template-backup/importFileSelection";
 import type { ImportPreview } from "@/features/template-backup/importFileSelection";
@@ -26,7 +28,7 @@ import { useBillingStatus } from "@/hooks/useBillingStatus";
 import { usePageVisit } from "@/hooks/usePageVisit";
 import { useSingleFlight } from "@/hooks/useSingleFlight";
 import {
-  formatExportSummaryMessage, formatImportFailure, formatImportSummaryMessage, getImportSummaryFromError,
+  formatExportSummaryMessage, formatImportSummaryMessage, getImportSummaryFromError,
 } from "@/lib/templates/templateImportSummary";
 import { MAX_TEMPLATES_PER_IMPORT } from "@/lib/templates/templateImportLimits";
 import { isPersonalTemplateOf } from "@/lib/templates/templateOwnership";
@@ -35,6 +37,7 @@ import { formatCount } from "@/lib/utils/pluralize";
 import { countOversizedTemplateAssets } from "@/lib/schemas/templateAssetLimits";
 import { ORGANIZATION_BACKUP_UPGRADE_MESSAGE, TemplateBackupPlanNotice } from "@/components/TemplateBackupPlanNotice";
 import { TemplateImportPreview } from "@/components/TemplateImportPreview";
+import { TemplateImportResult } from "@/components/TemplateImportResult";
 import { ListLoadErrorState } from "@/components/dashboard/ListLoadErrorState";
 
 interface TemplateBackupProps {
@@ -220,310 +223,142 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   };
   const handleCancelImport = () => setImportPreview(null);
   const downloadSampleTemplate = () => {
-    const sampleTemplate: ChecklistTemplate = {
-      id: "sample-template-001",
-      title: "Moving Checklist",
-      description: "A comprehensive checklist to help you organize your move and ensure nothing is forgotten.",
-      userId: "sample",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isPublic: true,
-      slug: "moving-checklist-sample",
-      categories: ["moving", "packing"],
-      tags: ["relocation", "organization", "home"],
-      sections: [{
-        id: "section-planning",
-        title: "Planning Phase (8 weeks before)",
-        items: [{
-          id: "item-research",
-          title: "Research moving companies",
-          description: "Get quotes from at least 3 different moving companies",
-          contents: [{
-            id: "content-tips",
-            type: "text",
-            value: "**Tips for choosing a moving company:**\n\n- Check online reviews and BBB ratings\n- Verify licensing and insurance\n- Get written estimates\n- Ask about additional fees"
-          }]
-        }, {
-          id: "item-budget",
-          title: "Create moving budget",
-          description: "Plan all expenses including movers, supplies, and unexpected costs",
-          contents: []
-        }, {
-          id: "item-timeline",
-          title: "Create moving timeline",
-          description: "Plan key milestones and deadlines",
-          contents: [{
-            id: "content-timeline",
-            type: "subItems",
-            value: "",
-            subItems: [{
-              id: "sub-1",
-              title: "8 weeks: Start planning and research"
-            }, {
-              id: "sub-2",
-              title: "6 weeks: Book moving company"
-            }, {
-              id: "sub-3",
-              title: "4 weeks: Start packing non-essentials"
-            }, {
-              id: "sub-4",
-              title: "2 weeks: Confirm all arrangements"
-            }, {
-              id: "sub-5",
-              title: "1 week: Pack essentials box"
-            }]
-          }]
-        }]
-      }, {
-        id: "section-preparation",
-        title: "Preparation Phase (4 weeks before)",
-        items: [{
-          id: "item-declutter",
-          title: "Declutter and organize",
-          description: "Sort through belongings and decide what to keep, donate, or discard",
-          contents: []
-        }, {
-          id: "item-supplies",
-          title: "Gather packing supplies",
-          description: "Collect boxes, tape, bubble wrap, labels, and markers",
-          contents: [{
-            id: "content-supplies",
-            type: "subItems",
-            value: "",
-            subItems: [{
-              id: "supply-1",
-              title: "Moving boxes (various sizes)"
-            }, {
-              id: "supply-2",
-              title: "Packing tape"
-            }, {
-              id: "supply-3",
-              title: "Bubble wrap or newspaper"
-            }, {
-              id: "supply-4",
-              title: "Labels and permanent markers"
-            }, {
-              id: "supply-5",
-              title: "Stretch wrap for furniture"
-            }]
-          }]
-        }, {
-          id: "item-change-address",
-          title: "Change address with important services",
-          description: "Update your address with banks, utilities, and subscription services",
-          contents: []
-        }]
-      }, {
-        id: "section-moving-day",
-        title: "Moving Day",
-        items: [{
-          id: "item-essentials",
-          title: "Pack essentials box",
-          description: "Keep important items easily accessible",
-          contents: []
-        }, {
-          id: "item-inventory",
-          title: "Create inventory list",
-          description: "Document all items being moved",
-          contents: []
-        }, {
-          id: "item-final-walkthrough",
-          title: "Final walkthrough",
-          description: "Check all rooms, closets, and storage areas",
-          contents: []
-        }]
-      }]
-    };
+    const sampleTemplate = buildSampleTemplate();
     const sampleBackup = exportPortableTemplatesToJSON([sampleTemplate], "Sample Export");
     downloadBackupFile(sampleBackup, "sample-moving-checklist-portable.json");
     toast.success("Sample portable template pack downloaded. You can import it to preview the new JSON format.");
   };
   const publicTemplateCount = ownedTemplates.filter(t => t.isPublic).length;
   const privateTemplateCount = ownedTemplates.filter(t => !t.isPublic).length;
-  return <section
-    className={cn("rounded-xl border border-border bg-card p-6", className)}
-    data-template-import-export="true"
-  >
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <FileText className="h-5 w-5 text-muted-foreground" />
-          Template JSON Import & Export
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+  const includePublicDescriptionId = "include-public-templates-description";
+  const importVisibilityId = "template-import-visibility";
+  return <div className={cn("flex flex-col gap-6", className)} data-template-import-export="true">
+    <Card>
+      <CardHeader>
+        <CardTitle>Template JSON Import &amp; Export</CardTitle>
+        <CardDescription>
           Export portable template packs or import compatible JSON files for {activeWorkspace.name}.
-        </p>
-      </div>
-      <div className="w-fit rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-secondary-foreground">
-        Portable packs
-      </div>
-    </div>
+        </CardDescription>
+        <CardAction>
+          <Badge variant="outline">Portable packs</Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {user ? (
+          <TemplateBackupPlanNotice
+            billing={billing}
+            isTeamWorkspace={isTeamWorkspace}
+            onRetry={billing.refetch}
+            onUpgrade={() => void handleUpgrade()}
+          />
+        ) : null}
 
-    <div className="mt-6 space-y-6">
-          {user ? (
-            <TemplateBackupPlanNotice
-              billing={billing}
-              isTeamWorkspace={isTeamWorkspace}
-              onRetry={billing.refetch}
-              onUpgrade={() => void handleUpgrade()}
-            />
-          ) : null}
+        {user && isTeamWorkspace && !canEditTemplates ? (
+          <Alert>
+            <AlertCircle />
+            <AlertTitle>Editor access required</AlertTitle>
+            <AlertDescription>
+              You can view this Organization, but importing or exporting templates requires editor access.
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
-          {user && isTeamWorkspace && !canEditTemplates ? (
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-medium">Editor access required</div>
-                  <div className="text-sm text-muted-foreground">
-                    You can view this Organization, but importing or exporting templates requires editor access.
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {/* Current Templates Stats; a failed list is not zero templates. Export still
-              works: the server's pack decides what this context owns. */}
-          {templatesError ? (
-            <ListLoadErrorState error={templatesError} listName="templates" onRetry={() => void refetchTemplates()} />
-          ) : <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
-            <div className="text-center">
-              <div className="text-2xl font-bold">{formatStatCount(ownedTemplates.length)}</div>
-              <div className="text-sm text-muted-foreground">{workspaceTemplateLabel}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{formatStatCount(publicTemplateCount)}</div>
-              <div className="text-sm text-muted-foreground">Public</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{formatStatCount(privateTemplateCount)}</div>
-              <div className="text-sm text-muted-foreground">Private</div>
-            </div>
-          </div>}
-
-          <Separator />
-
-	          {/* Export Section */}
-	          <div className="space-y-4">
-	            <h3 className="text-lg font-semibold">Export Templates</h3>
-              <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
-                <div>
-                  <Label htmlFor="include-public-templates" className="text-sm font-medium">
-                    Include public community templates
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Exports your templates plus any public templates you can see into the portable pack format.
-                  </p>
-                </div>
-                <Switch
-                  // A native button, so the Label's htmlFor names it.
-                  nativeButton
-                  render={<button type="button" />}
-                  id="include-public-templates"
-                  checked={includePublicTemplates}
-                  onCheckedChange={setIncludePublicTemplates}
-                  disabled={backupControlsOff || isExporting}
-                />
-              </div>
-	            <Button onClick={handleExportAll} className="flex items-center gap-2" disabled={backupControlsOff || isExporting} aria-busy={isExporting}>
-	              <Download className="h-4 w-4" />
-	              {isExporting ? "Exporting..." : "Export Portable Pack"}
-	            </Button>
-	          </div>
-
-          <Separator />
-
-	          {/* Import Section */}
-	          <div className="space-y-4">
-	            <h3 className="text-lg font-semibold">Import Templates</h3>
-              <div className="space-y-2">
-                <Label>Import visibility</Label>
-                <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose visibility" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(IMPORT_VISIBILITY_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Templates missing a visibility flag default to private.
-                </p>
-              </div>
-	            <div className="space-y-2">
-	              <Label htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</Label>
-	              <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || backupControlsOff} />
-	              <p className="text-sm text-muted-foreground">
-	                Need an example?{" "}
-	                <Button variant="link" className="p-0 h-auto text-primary" onClick={downloadSampleTemplate}>
-	                  Download sample portable pack
-	                </Button>
-	              </p>
-	            </div>
-
-            {importPreview && (
-              <TemplateImportPreview
-                confirmDisabled={isImporting || templatesLoading || exceedsTemplateLimit}
-                exceedsTemplateLimit={exceedsTemplateLimit}
-                isImporting={isImporting}
-                maxTemplatesPerImport={MAX_TEMPLATES_PER_IMPORT}
-                onCancel={handleCancelImport}
-                onConfirm={handleConfirmImport}
-                oversizedAssetCount={importOversizeAssets}
-                preview={importPreview}
-                visibility={importVisibility}
-              />
-            )}
-
-            {lastImportSummary && <Card className="border-dashed">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    {lastImportSummary.failed.length > 0 ? <AlertCircle className="h-4 w-4 text-amber-600" /> : <CheckCircle className="h-4 w-4 text-green-600" />}
-                    Last Import Result
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="secondary">{lastImportSummary.total} attempted</Badge>
-                    <Badge variant="outline">{lastImportSummary.imported} imported</Badge>
-                    {lastImportSummary.failed.length > 0 ? <Badge variant="destructive">{lastImportSummary.failed.length} failed</Badge> : null}
-                  </div>
-
-                  {lastImportSummary.successes.length > 0 ? <div className="space-y-2">
-                      <h4 className="font-medium">Imported:</h4>
-                      <div className="max-h-32 overflow-y-auto space-y-1">
-                        {lastImportSummary.successes.map((success) => <div key={success.id} className="text-sm p-2 bg-muted rounded">
-                            <div className="font-medium">{success.title}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {success.visibility} • /{success.slug}
-                            </div>
-                          </div>)}
-                      </div>
-                    </div> : null}
-
-                  {lastImportSummary.failed.length > 0 ? <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5" />
-                        <div className="text-sm">
-                          <p className="font-medium text-amber-800 dark:text-amber-200">
-                            Failed Templates
-                          </p>
-                          <ul className="text-amber-700 dark:text-amber-300 mt-1 space-y-1">
-                            {lastImportSummary.failed.map((failure) => <li key={`${failure.index}-${failure.title}`}>
-                                • {formatImportFailure(failure)}
-                              </li>)}
-                          </ul>
-                        </div>
-                      </div>
-                    </div> : null}
-                </CardContent>
-              </Card>}
+        {/* Current Templates Stats; a failed list is not zero templates. Export still
+            works: the server's pack decides what this context owns. */}
+        {templatesError ? (
+          <ListLoadErrorState error={templatesError} listName="templates" onRetry={() => void refetchTemplates()} titleAs="h3" />
+        ) : (
+          <div className="grid grid-cols-3 gap-4" aria-busy={templatesLoading}>
+            <Stat label={workspaceTemplateLabel} value={formatStatCount(ownedTemplates.length)} />
+            <Stat label="Public" value={formatStatCount(publicTemplateCount)} />
+            <Stat label="Private" value={formatStatCount(privateTemplateCount)} />
           </div>
-    </div>
-  </section>;
+        )}
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Export Templates</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="include-public-templates">Include public community templates</FieldLabel>
+            <FieldDescription id={includePublicDescriptionId}>
+              Exports your templates plus any public templates you can see into the portable pack format.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            // A native button, so the Label's htmlFor names it.
+            nativeButton
+            render={<button type="button" />}
+            id="include-public-templates"
+            aria-describedby={includePublicDescriptionId}
+            checked={includePublicTemplates}
+            onCheckedChange={setIncludePublicTemplates}
+            disabled={backupControlsOff || isExporting}
+          />
+        </Field>
+        <div>
+          <Button onClick={handleExportAll} disabled={backupControlsOff || isExporting} aria-busy={isExporting}>
+            <Download data-icon="inline-start" />
+            {isExporting ? "Exporting..." : "Export Portable Pack"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>Import Templates</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor={importVisibilityId}>Import visibility</FieldLabel>
+            <Select items={IMPORT_VISIBILITY_LABELS} value={importVisibility} onValueChange={(value) => setImportVisibility(value as ImportVisibility)}>
+              <SelectTrigger className="w-full sm:w-72" id={importVisibilityId}>
+                <SelectValue placeholder="Choose visibility" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(IMPORT_VISIBILITY_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>Templates missing a visibility flag default to private.</FieldDescription>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="template-file-input">Select a YAML, JSON, or Markdown template file</FieldLabel>
+            <Input id="template-file-input" type="file" accept=".json,.md,.markdown,.yaml,.yml" onChange={handleFileSelect} disabled={isImporting || backupControlsOff} />
+            <FieldDescription>
+              Need an example?{" "}
+              <Button variant="link" className="h-auto p-0" onClick={downloadSampleTemplate} type="button">
+                Download sample portable pack
+              </Button>
+            </FieldDescription>
+          </Field>
+        </FieldGroup>
+      </CardContent>
+    </Card>
+
+    {importPreview ? (
+      <TemplateImportPreview
+        confirmDisabled={isImporting || templatesLoading || exceedsTemplateLimit}
+        exceedsTemplateLimit={exceedsTemplateLimit}
+        isImporting={isImporting}
+        maxTemplatesPerImport={MAX_TEMPLATES_PER_IMPORT}
+        onCancel={handleCancelImport}
+        onConfirm={handleConfirmImport}
+        oversizedAssetCount={importOversizeAssets}
+        preview={importPreview}
+        visibility={importVisibility}
+      />
+    ) : null}
+
+    {lastImportSummary ? <TemplateImportResult summary={lastImportSummary} /> : null}
+  </div>;
 };
