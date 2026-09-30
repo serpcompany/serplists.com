@@ -50,7 +50,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { handleTemplates, updateTemplateForUser } from '@functions/api/handlers/templates';
+import { handleTemplates } from '@functions/api/handlers/templates';
+import { updateTemplateForUser } from '@functions/api/handlers/template-update';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 

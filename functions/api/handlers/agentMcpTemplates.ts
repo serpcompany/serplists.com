@@ -7,7 +7,8 @@ import { applyTemplateOperation } from "./agentMcpTemplateEdits";
 import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
 import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
-import { createTemplateForUser, updateTemplateForUser } from "./templates";
+import { createTemplateForUser } from "./template-create";
+import { updateTemplateForUser } from "./template-update";
 
 // The personal run MCP's template tools. Writes go through the web editor's code
 // (createTemplateForUser, updateTemplateForUser), so they get its validation, template limit,
