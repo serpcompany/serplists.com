@@ -9,9 +9,9 @@ import {
   DashboardEmptyState,
   DashboardPageBody,
   DashboardPageHeader,
-  DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
 import { SearchField } from '@/components/layout/SearchField';
+import { Toolbar } from '@/components/layout/Toolbar';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
 import { buttonVariants } from '@/components/ui/button';
@@ -133,7 +133,7 @@ export function RunsDashboardView({
         description={`${inProgressCount} in progress, ${completedCount} completed`}
       />
 
-      <DashboardToolbar>
+      <Toolbar>
         <Field className="sm:w-auto sm:flex-1 lg:max-w-md">
           <FieldLabel htmlFor={`${fieldId}-search`}>Search</FieldLabel>
           <SearchField
@@ -164,7 +164,7 @@ export function RunsDashboardView({
             </SelectContent>
           </Select>
         </Field>
-      </DashboardToolbar>
+      </Toolbar>
 
       <DashboardPageBody>
         {loading ? (

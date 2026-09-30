@@ -14,7 +14,8 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 // The console's page blocks (docs/DESIGN.md): a console page is a DashboardContentShell
-// holding a DashboardPageHeader, an optional DashboardToolbar and the page's content. The
+// holding a DashboardPageHeader, an optional Toolbar (src/components/layout/Toolbar.tsx) and
+// the page's content. The
 // window scrolls, never a box inside the page, so sticky parts of a page stick to the window.
 
 interface DashboardContentShellProps {
@@ -79,23 +80,6 @@ export function DashboardPageHeader({
         </div>
       ) : null}
     </header>
-  );
-}
-
-interface DashboardToolbarProps {
-  children: ReactNode;
-  className?: string;
-}
-
-// The row of filters over a list: labelled fields side by side, stacked on phones.
-export function DashboardToolbar({ children, className }: DashboardToolbarProps) {
-  return (
-    <div
-      className={cn('flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end', className)}
-      data-dashboard-toolbar="true"
-    >
-      {children}
-    </div>
   );
 }
 

@@ -1,12 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
-import {
-  LayoutGrid,
-  List,
-  Plus,
-  SlidersHorizontal,
-} from 'lucide-react';
+import { Plus, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
@@ -17,10 +12,11 @@ import {
   DashboardEmptyState,
   DashboardPageHeader,
   DashboardPageBody,
-  DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
 import { CardGrid } from '@/components/layout/CardGrid';
 import { SearchField } from '@/components/layout/SearchField';
+import { Toolbar } from '@/components/layout/Toolbar';
+import { ViewModeToggle } from '@/components/layout/ViewModeToggle';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -216,7 +212,7 @@ const Templates = () => {
         }
       />
 
-      <DashboardToolbar>
+      <Toolbar>
         <Field className="sm:w-auto sm:flex-1 lg:max-w-md">
           <FieldLabel htmlFor={`${fieldId}-search`}>Search</FieldLabel>
           <SearchField
@@ -269,30 +265,9 @@ const Templates = () => {
             </Select>
           </Field>
 
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              aria-label="Show templates in grid view"
-              aria-pressed={viewMode === 'grid'}
-              type="button"
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => setViewMode('grid')}
-            >
-              <LayoutGrid />
-            </Button>
-            <Button
-              aria-label="Show templates in list view"
-              aria-pressed={viewMode === 'list'}
-              type="button"
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => setViewMode('list')}
-            >
-              <List />
-            </Button>
-          </div>
+          <ViewModeToggle onChange={setViewMode} value={viewMode} />
         </div>
-      </DashboardToolbar>
+      </Toolbar>
 
       <DashboardPageBody>
         {model.loading ? (
