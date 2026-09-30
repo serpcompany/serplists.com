@@ -1,16 +1,30 @@
 import { z } from "zod";
 import { portableChecklistSectionSchema } from "../../../src/lib/schemas/checklistSchema";
 
-// The personal run MCP's template tools: their argument validators and the definitions
-// functions/api/handlers/agentMcpTools.ts advertises. Nothing here imports the MCP
-// handlers, so every handler module can import it.
+// The personal run MCP's template tools: their argument validators, their result bound, and
+// the definitions functions/api/handlers/agentMcpTools.ts advertises. Nothing here imports the
+// MCP handlers, so every handler module can import it.
+
+// The largest template tool result, in bytes of the JSON clients receive, so that MCP clients
+// take every result whole. Claude Code sets a result over MAX_MCP_OUTPUT_TOKENS (25,000 tokens
+// by default) aside in a file, and Codex cuts the middle out of one over its model's budget
+// (10,000 tokens plus 20%, which it counts as 4 bytes each: 48,000 bytes). 32KB is 8,192 of
+// Codex's tokens, and about 16,000 real ones even at 2 bytes a token (JSON dense with ids, or
+// text in other scripts). get_template reads a larger template in parts
+// (agentMcpTemplatePages.ts).
+export const MAX_TEMPLATE_RESULT_BYTES = 32 * 1024;
+
+const idArg = z.string().trim().min(1);
+
+export const getTemplateArgs = z.object({
+  templateId: idArg,
+  sectionId: idArg.optional(),
+  taskId: idArg.optional(),
+  cursor: z.string().trim().min(1).max(512).optional(),
+}).strict();
 
 // Template writes are private Personal templates only: no visibility, Organization, or slug
 // fields (.strict() refuses them).
-export const getTemplateArgs = z.object({
-  templateId: z.string().trim().min(1),
-}).strict();
-
 const templateTitleArg = z.string().trim().min(1).max(160);
 const templateDescriptionArg = z.string().max(5000);
 const templateSectionsArg = z.array(portableChecklistSectionSchema).min(1).max(100);
@@ -25,7 +39,7 @@ export const createTemplateArgs = z.object({
 }).strict();
 
 export const updateTemplateArgs = z.object({
-  templateId: z.string().trim().min(1),
+  templateId: idArg,
   expectedVersion: z.number().int().positive(),
   title: templateTitleArg.optional(),
   description: templateDescriptionArg.optional(),
@@ -102,10 +116,23 @@ export const templateToolDefinitions = [
   },
   {
     name: "get_template",
-    description: "Read a personal template, including its sections, tasks, subtasks, ids, and version.",
+    description: "Read a personal template: its sections, tasks, subtasks, ids, and version. No result is larger "
+      + "than 32KB, what MCP clients take from one call, so a larger template comes back as an outline instead "
+      + "(sectionsOmitted, and outline: each section's id, title, taskCount, and bytes). Read a section with "
+      + "sectionId, or one task with taskId. A section too large for one result comes back a page of tasks at a "
+      + "time (section.firstTask and section.taskCount say which), and anything too large for a result on its "
+      + "own, such as a very long task, comes back as part: pieces of its JSON text to join in order. While a "
+      + "result has nextCursor, call get_template with templateId and cursor set to it for the rest. A cursor "
+      + "reads the version it started from: once the template changes it fails with edit_conflict, so start again "
+      + "without it.",
     inputSchema: {
       type: "object",
-      properties: { templateId: { type: "string" } },
+      properties: {
+        templateId: { type: "string" },
+        sectionId: { type: "string", description: "Read only this section, in pages if it is too large for one result." },
+        taskId: { type: "string", description: "Read only this task." },
+        cursor: { type: "string", description: "The nextCursor of the previous result, to read what follows." },
+      },
       required: ["templateId"],
       additionalProperties: false,
     },
@@ -113,7 +140,8 @@ export const templateToolDefinitions = [
   },
   {
     name: "create_template",
-    description: "Create a private personal template.",
+    description: "Create a private personal template. Returns it whole when it fits in one result (32KB); "
+      + "otherwise its fields without sections (sectionsOmitted), to read with get_template.",
     inputSchema: {
       type: "object",
       properties: {
@@ -133,7 +161,8 @@ export const templateToolDefinitions = [
     description: "Update a private personal template (public templates can only be edited in SERP Lists). "
       + "Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs "
       + "of the template pick up the change. Pass the latest version from get_template as expectedVersion to "
-      + "prevent lost updates.",
+      + "prevent lost updates. Returns the template whole when it fits in one result (32KB), otherwise its "
+      + "fields without sections (sectionsOmitted).",
     inputSchema: {
       type: "object",
       properties: {

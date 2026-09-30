@@ -43,6 +43,7 @@ import {
   updateRunResult,
   utf8ByteLength,
 } from "./agentMcpRuns";
+import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getOwnedTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
   getRunArgs,
@@ -503,7 +504,7 @@ async function callTool(
     }
     case "get_template": {
       const data = await getTemplate(env, identity, rawArguments);
-      return { data, text: `Loaded template "${boundedText((data.template as JsonRecord).title)}".` };
+      return { data, text: describeTemplateRead(data) };
     }
     case "create_template": {
       const data = await createTemplate(request, env, identity, rawArguments);

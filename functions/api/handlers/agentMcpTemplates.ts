@@ -1,12 +1,9 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { describeErrorForLog, log } from "../utils/logger";
-import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray } from "../utils/payloads";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import { withStableTemplateIdentities } from "../utils/template-identities";
-import { jsonByteLength } from "./agentMcpRuns";
+import { readTemplate, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
 import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
 import { createTemplateForUser, updateTemplateForUser } from "./templates";
@@ -14,11 +11,8 @@ import { createTemplateForUser, updateTemplateForUser } from "./templates";
 // The personal run MCP's template tools. Writes go through the web editor's code
 // (createTemplateForUser, updateTemplateForUser), so they get its validation, template limit,
 // version check, history, and in-progress run sync, restricted to the key owner's private
-// Personal templates.
-
-// A write has committed before its result is read back, so the result stays well under the
-// MCP result bound (MAX_RESULT_BYTES); a larger template comes back without its sections.
-const MAX_WRITE_RESULT_BYTES = 256 * 1024;
+// Personal templates. Every result stays within MAX_TEMPLATE_RESULT_BYTES
+// (agentMcpTemplatePages.ts).
 
 const templateWriteErrorCodes: Record<number, string> = {
   400: "invalid_template",
@@ -51,30 +45,6 @@ export async function getOwnedTemplate(env: Env, userId: string, templateId: str
   return template;
 }
 
-// The sections an agent reads and sends back. Entries stored without ids get the ids a save
-// stores, as the web editor reads them, so run progress follows them through update_template;
-// text fields are always text.
-function templateSections(items: unknown): JsonRecord[] {
-  const { sections } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
-  return sanitizeStoredSections(withStableTemplateIdentities(sections));
-}
-
-function serializeTemplate(template: JsonRecord): JsonRecord {
-  return {
-    id: template.id,
-    title: template.title,
-    description: template.description,
-    type: template.type,
-    categories: normalizeStringArray(template.category),
-    tags: normalizeStringArray(template.tags),
-    sections: templateSections(template.items),
-    version: typeof template.version === "number" ? template.version : 1,
-    contentVersion: template.content_version,
-    createdAt: template.created_at,
-    updatedAt: template.updated_at,
-  };
-}
-
 function mcpAuditMetadata(identity: PersonalRunKeyIdentity): JsonRecord {
   return { source: "mcp", personalRunKeyId: identity.keyId, personalRunKeyName: identity.name };
 }
@@ -90,24 +60,19 @@ async function readTemplateWrite(response: Response): Promise<JsonRecord> {
   );
 }
 
-async function loadTemplate(env: Env, userId: string, templateId: string): Promise<JsonRecord> {
-  const template = await getOwnedTemplate(env, userId, templateId);
-  return { template: serializeTemplate(template as unknown as JsonRecord) };
-}
-
 // A write has already committed, so its result must never come back as an error: the agent
-// would retry, and a retried create makes a duplicate. An oversized template comes back
-// without its sections; one that cannot be read back (archived since, or a failed read) as
-// the write's own summary. Either way the agent reads it in full with get_template.
+// would retry, and a retried create makes a duplicate. A template too large for one result
+// comes back without its sections; one that cannot be read back (archived since, or a failed
+// read) as the write's own summary. Either way the agent reads the rest with get_template.
 async function loadWrittenTemplate(
   request: Request,
   env: Env,
   identity: PersonalRunKeyIdentity,
   written: JsonRecord & { id: string },
 ): Promise<JsonRecord> {
-  let result: JsonRecord;
+  let row: JsonRecord;
   try {
-    result = await loadTemplate(env, identity.userId, written.id);
+    row = await getOwnedTemplate(env, identity.userId, written.id) as unknown as JsonRecord;
   } catch (error) {
     log("warn", "mcp_template_reload_error", {
       requestId: request.headers.get("X-Request-Id") ?? undefined,
@@ -117,9 +82,7 @@ async function loadWrittenTemplate(
     });
     return { template: written, sectionsOmitted: true };
   }
-  if (jsonByteLength(result) <= MAX_WRITE_RESULT_BYTES) return result;
-  const { sections: _sections, ...summary } = result.template as JsonRecord;
-  return { template: summary, sectionsOmitted: true };
+  return writtenTemplateResult(templateView(row));
 }
 
 export async function getTemplate(
@@ -127,8 +90,9 @@ export async function getTemplate(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const args = parseToolArguments(getTemplateArgs, rawArguments);
-  return loadTemplate(env, identity.userId, args.templateId);
+  const { templateId, ...read } = parseToolArguments(getTemplateArgs, rawArguments);
+  const template = await getOwnedTemplate(env, identity.userId, templateId);
+  return readTemplate(templateView(template as unknown as JsonRecord), read);
 }
 
 export async function createTemplate(
