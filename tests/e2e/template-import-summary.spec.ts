@@ -7,7 +7,8 @@ async function signInAsAdmin(page: Page) {
   await page.goto("/login/");
   await fillSignInForm(page, 'admin');
   await page.getByRole("button", { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(/\/dashboard\/settings/);
+  // A sign-in with no return path opens the console home.
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 }
 
 test("template import API returns structured per-template failures for rejected imports", async ({ page }) => {
