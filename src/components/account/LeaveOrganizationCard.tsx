@@ -1,4 +1,3 @@
-import { LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -37,17 +36,15 @@ export function LeaveOrganizationCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <LogOut className="h-5 w-5" />
-          Leave Organization
-        </CardTitle>
+        <CardTitle>Leave Organization</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           Leave {name} and return to your Personal context. Templates and Runs you created stay
           with the Organization. An admin can invite you again later.
         </p>
         <Button
+          className="sm:shrink-0"
           type="button"
           variant="destructive"
           disabled={isLeaving}

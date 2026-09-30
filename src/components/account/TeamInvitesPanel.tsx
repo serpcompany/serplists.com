@@ -1,11 +1,26 @@
 import { useState, type FormEvent } from 'react';
-import { Copy, Link2, Trash2 } from 'lucide-react';
+import { Copy, Info, Link2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
 import { QueryListState } from '@/components/shared/QueryListState';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from '@/components/ui/input-group';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from '@/components/ui/item';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { assignableRoles, formatInviteExpiration, formatRole } from '@/components/account/teamSettingsFormat';
 import { inviteEmailAfterLink, type AssignableTeamRole } from '@/features/teams/teamInviteLinks';
@@ -89,9 +104,9 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
 
   return (
     <>
-      <form className="grid gap-3 md:grid-cols-[1fr_160px_auto]" onSubmit={handleCreateInvite}>
-        <div className="space-y-2">
-          <Label htmlFor="team-invite-email">Invite email</Label>
+      <form className="grid gap-3 md:grid-cols-[1fr_10rem_auto] md:items-end" onSubmit={handleCreateInvite}>
+        <Field>
+          <FieldLabel htmlFor="team-invite-email">Invite email</FieldLabel>
           <Input
             id="team-invite-email"
             type="email"
@@ -99,11 +114,11 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
             onChange={(event) => setInviteEmail(event.target.value)}
             placeholder="teammate@example.com"
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="team-invite-role">Role</Label>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="team-invite-role">Role</FieldLabel>
           <Select value={inviteRole} onValueChange={(value) => setInviteRole(value as AssignableTeamRole)}>
-            <SelectTrigger id="team-invite-role">
+            <SelectTrigger className="w-full" id="team-invite-role">
               <SelectValue>{(role: AssignableTeamRole) => formatRole(role)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -114,79 +129,82 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex items-end">
-          <Button type="submit" disabled={linkBusy} className="w-full">
-            <Link2 className="mr-2 h-4 w-4" />
-            {isCreating ? 'Creating...' : 'Create link'}
-          </Button>
-        </div>
+        </Field>
+        <Button type="submit" disabled={linkBusy}>
+          <Link2 data-icon="inline-start" />
+          {isCreating ? 'Creating...' : 'Create link'}
+        </Button>
       </form>
 
       {conflict ? (
-        <div role="status" className="space-y-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
-          <p className="text-foreground">
-            An invite is already pending for {conflict.email}, and its link can&apos;t be shown again.
-            Create a new link that invites them as {formatRole(conflict.role)}? The previous link will
-            stop working.
-          </p>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={linkBusy}
-              onClick={() => void handleNewLink(conflict.inviteId, conflict.role)}
-            >
-              <Link2 className="mr-2 h-4 w-4" />
-              {reissuingInviteId === conflict.inviteId ? 'Creating...' : 'Create new link'}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={dismissConflict}>
-              Cancel
-            </Button>
-          </div>
-        </div>
+        <Alert role="status">
+          <Info />
+          <AlertDescription className="flex flex-col gap-3">
+            <p className="text-foreground">
+              An invite is already pending for {conflict.email}, and its link can&apos;t be shown again.
+              Create a new link that invites them as {formatRole(conflict.role)}? The previous link will
+              stop working.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={linkBusy}
+                onClick={() => void handleNewLink(conflict.inviteId, conflict.role)}
+              >
+                <Link2 data-icon="inline-start" />
+                {reissuingInviteId === conflict.inviteId ? 'Creating...' : 'Create new link'}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={dismissConflict}>
+                Cancel
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
       {link ? (
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Invite link for {link.email}</div>
-          <div className="flex items-center gap-2">
-            <Input aria-label="Invite link" readOnly value={link.url} />
-            <Button
-              aria-label="Copy invite link"
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => void handleCopyInvite(link.url)}
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <Field>
+          <FieldLabel className="wrap-anywhere" htmlFor="team-invite-link">Invite link for {link.email}</FieldLabel>
+          <InputGroup>
+            <InputGroupInput aria-label="Invite link" id="team-invite-link" readOnly value={link.url} />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                aria-label="Copy invite link"
+                onClick={() => void handleCopyInvite(link.url)}
+                size="icon-xs"
+              >
+                <Copy />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        </Field>
       ) : null}
 
-      <div className="space-y-3">
-        <div className="text-sm font-medium text-foreground">Pending invites</div>
+      <section className="flex flex-col gap-3">
+        <h4 className="text-sm font-medium">Pending invites</h4>
         <QueryListState
           query={invitesQuery}
           loadingLabel="Loading invites..."
           loadErrorLabel="Couldn't load pending invites."
           refreshErrorLabel="Couldn't refresh pending invites. Showing the last loaded list."
           onRetry={() => void reloadInvites()}
-          empty={<div className="text-sm text-muted-foreground">No pending invites.</div>}
+          empty={<p className="text-sm text-muted-foreground">No pending invites.</p>}
         >
-          <div className="divide-y rounded-md border border-border">
+          <ItemGroup className="gap-2">
             {invites.map((invite) => (
-              <div key={invite.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_120px_160px_auto]">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium text-foreground">{invite.email}</div>
-                  <div className="truncate text-xs text-muted-foreground">
+              <Item key={invite.id} role="listitem" variant="outline">
+                <ItemContent className="min-w-0">
+                  <ItemTitle className="wrap-anywhere">{invite.email}</ItemTitle>
+                  <ItemDescription className="wrap-anywhere">
                     Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
+                  </ItemDescription>
+                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    <span>{formatRole(invite.role)}</span>
+                    <span>{formatInviteExpiration(invite.expires_at)}</span>
                   </div>
-                </div>
-                <div className="text-sm capitalize text-muted-foreground">{formatRole(invite.role)}</div>
-                <div className="text-sm text-muted-foreground">{formatInviteExpiration(invite.expires_at)}</div>
-                <div className="flex items-center justify-end gap-1">
+                </ItemContent>
+                <ItemActions>
                   <Button
                     aria-label={`New link for ${invite.email}`}
                     title="Create a new link for this invite. The previous link stops working."
@@ -196,25 +214,25 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
                     disabled={linkBusy}
                     onClick={() => void handleNewLink(invite.id)}
                   >
-                    <Link2 className="mr-1 h-4 w-4" />
+                    <Link2 data-icon="inline-start" />
                     {reissuingInviteId === invite.id ? 'Creating...' : 'New link'}
                   </Button>
                   <Button
                     aria-label={`Revoke invite for ${invite.email}`}
                     type="button"
                     variant="ghost"
-                    size="icon"
+                    size="icon-sm"
                     disabled={revokingInviteId === invite.id}
                     onClick={() => void handleRevokeInvite(invite.id)}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 />
                   </Button>
-                </div>
-              </div>
+                </ItemActions>
+              </Item>
             ))}
-          </div>
+          </ItemGroup>
         </QueryListState>
-      </div>
+      </section>
     </>
   );
 }

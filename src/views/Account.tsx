@@ -109,14 +109,12 @@ const Account = () => {
   };
 
   return (
-    <DashboardContentShell>
+    <DashboardContentShell width="narrow">
       <DashboardPageHeader
         title="Account Settings"
         description="Manage your profile, billing, and security settings."
       />
       <DashboardPageBody>
-        <div className="mx-auto grid max-w-4xl gap-6">
-        {/* Profile Section */}
         <ProfileSection
           profileData={profileData}
           savedUsername={user?.username}
@@ -135,7 +133,6 @@ const Account = () => {
         <LeaveOrganizationCard />
 
         <SecuritySection />
-        </div>
       </DashboardPageBody>
     </DashboardContentShell>
   );

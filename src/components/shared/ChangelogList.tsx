@@ -9,6 +9,26 @@ export type ChangelogEntry = {
   time: string;
 };
 
+// History rows, newest first: what changed and who changed it, with the time on the right
+// (under them on phones).
+export function ChangelogRows({ entries }: { entries: ChangelogEntry[] }) {
+  return (
+    <ItemGroup className="gap-0 divide-y">
+      {entries.map((entry) => (
+        <Item key={entry.key} className="rounded-none px-0 first:pt-0 last:pb-0" role="listitem" size="sm">
+          <ItemContent className="min-w-0">
+            <ItemTitle className="line-clamp-none">{entry.label}</ItemTitle>
+            <ItemDescription className="wrap-anywhere">{entry.actor}</ItemDescription>
+          </ItemContent>
+          <ItemActions className="basis-full text-xs text-muted-foreground sm:basis-auto">
+            <time>{entry.time}</time>
+          </ItemActions>
+        </Item>
+      ))}
+    </ItemGroup>
+  );
+}
+
 type ChangelogListProps = {
   emptyLabel: string;
   entries: ChangelogEntry[];
@@ -18,8 +38,8 @@ type ChangelogListProps = {
   loadingLabel: string;
 };
 
-// A record's history, newest first: what changed and who changed it, with the time on the
-// right (under them on phones). Template detail's and the run page's Changelog.
+// A record's history with its loading, error and empty lines: template detail's and the run
+// page's Changelog.
 export function ChangelogList({
   emptyLabel,
   entries,
@@ -32,19 +52,5 @@ export function ChangelogList({
   if (isError) return <p className="text-sm text-muted-foreground">{errorLabel}</p>;
   if (entries.length === 0) return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
 
-  return (
-    <ItemGroup className="gap-0 divide-y">
-      {entries.map((entry) => (
-        <Item key={entry.key} className="rounded-none px-0 first:pt-0 last:pb-0" role="listitem" size="sm">
-          <ItemContent className="min-w-0">
-            <ItemTitle className="line-clamp-none">{entry.label}</ItemTitle>
-            <ItemDescription>{entry.actor}</ItemDescription>
-          </ItemContent>
-          <ItemActions className="basis-full text-xs text-muted-foreground sm:basis-auto">
-            <time>{entry.time}</time>
-          </ItemActions>
-        </Item>
-      ))}
-    </ItemGroup>
-  );
+  return <ChangelogRows entries={entries} />;
 }

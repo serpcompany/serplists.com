@@ -3,22 +3,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, Copy, KeyRound, Trash2, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Empty, EmptyDescription } from '@/components/ui/empty';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from '@/components/ui/item';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { QueryListState } from '@/components/shared/QueryListState';
 import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
@@ -93,28 +93,24 @@ export function AgentAccessSectionView({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="h-5 w-5" />
-          Agent Access
-        </CardTitle>
+        <CardTitle>Agent Access</CardTitle>
+        <CardDescription>
+          Create a personal Run Key for a code agent to operate SOP runs in Personal.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            Create a personal Run Key for a code agent to operate SOP runs in Personal.
-          </p>
-          <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-            <p className="font-medium">Fixed run-only permissions</p>
-            <p className="mt-1 text-muted-foreground">
-              The key can read personal templates and list, start, read, and update personal runs. It cannot edit
-              templates, change your profile, access Organizations, or manage billing.
-            </p>
-          </div>
-        </div>
+      <CardContent className="flex flex-col gap-6">
+        <Alert>
+          <Bot />
+          <AlertTitle>Fixed run-only permissions</AlertTitle>
+          <AlertDescription>
+            The key can read personal templates and list, start, read, and update personal runs. It cannot edit
+            templates, change your profile, access Organizations, or manage billing.
+          </AlertDescription>
+        </Alert>
 
-        <form className="space-y-3" onSubmit={onCreate}>
-          <div className="space-y-2">
-            <Label htmlFor="agent-key-name">Key name</Label>
+        <form onSubmit={onCreate}>
+          <Field>
+            <FieldLabel htmlFor="agent-key-name">Key name</FieldLabel>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="agent-key-name"
@@ -124,104 +120,107 @@ export function AgentAccessSectionView({
                 maxLength={80}
                 autoComplete="off"
               />
-              <Button type="submit" disabled={isCreating || !keyName.trim()}>
-                <KeyRound className="mr-2 h-4 w-4" />
+              <Button className="sm:shrink-0" type="submit" disabled={isCreating || !keyName.trim()}>
+                <KeyRound data-icon="inline-start" />
                 {isCreating ? 'Creating...' : 'Create Run Key'}
               </Button>
             </div>
-          </div>
+          </Field>
         </form>
 
         {createdKey ? (
-          <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-4" data-testid="created-agent-key">
-            <div className="flex gap-3">
-              <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-              <div className="min-w-0 flex-1 space-y-3">
-                <div>
-                  <p className="font-medium">Copy {createdKey.key.name} and connect your agent</p>
-                  <p className="text-sm text-muted-foreground">
-                    This secret is shown once and cannot be recovered. Store it as{' '}
-                    <code className="font-mono">SERPLISTS_RUN_KEY</code>, then use the MCP connection below.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    aria-label="New Run Key secret"
-                    className="font-mono text-xs"
-                    value={createdKey.secret}
-                    readOnly
-                    onFocus={(event) => event.currentTarget.select()}
-                  />
-                  <Button type="button" variant="outline" onClick={onCopySecret}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy key
-                  </Button>
-                </div>
+          <Alert data-testid="created-agent-key">
+            <TriangleAlert />
+            <AlertTitle>Copy {createdKey.key.name} and connect your agent</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3">
+              <p>
+                This secret is shown once and cannot be recovered. Store it as{' '}
+                <code className="font-mono">SERPLISTS_RUN_KEY</code>, then use the MCP connection below.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  aria-label="New Run Key secret"
+                  className="font-mono text-xs"
+                  value={createdKey.secret}
+                  readOnly
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+                <Button className="sm:shrink-0" type="button" variant="outline" onClick={onCopySecret}>
+                  <Copy data-icon="inline-start" />
+                  Copy key
+                </Button>
+              </div>
+              <div>
                 <Button type="button" size="sm" variant="ghost" onClick={onDismissSecret}>
                   I have saved this key
                 </Button>
               </div>
-            </div>
-          </div>
+            </AlertDescription>
+          </Alert>
         ) : null}
 
-        <div className="space-y-3 rounded-lg border p-4">
-          <div>
-            <h3 className="text-sm font-medium">MCP connection</h3>
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>MCP connection</CardTitle>
             {mcpEndpoint ? (
-              <p className="text-xs text-muted-foreground">
+              <CardDescription>
                 Add this Streamable HTTP server to Codex, Claude, or another MCP client.
-              </p>
+              </CardDescription>
             ) : null}
-          </div>
-          {mcpHostMismatch ? (
-            <p className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 text-xs">
-              {mcpEndpoint
-                ? `Agents can't connect through this address, so this endpoint uses ${hostOf(mcpEndpoint)}.`
-                : "Agents can't connect through this address. Open Agent Access from this site's main address to get the MCP endpoint."}
-            </p>
-          ) : null}
-          {mcpEndpoint ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="agent-mcp-endpoint">Endpoint</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="agent-mcp-endpoint"
-                    aria-label="SERP Lists MCP endpoint"
-                    className="font-mono text-xs"
-                    value={mcpEndpoint}
-                    readOnly
-                    onFocus={(event) => event.currentTarget.select()}
-                  />
-                  <Button type="button" variant="outline" onClick={onCopyEndpoint}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copy endpoint
-                  </Button>
-                </div>
-              </div>
-              <div className="space-y-2 text-xs text-muted-foreground">
-                <p>
-                  <span className="font-medium text-foreground">Codex:</span> set the copied secret in the{' '}
-                  <code className="font-mono">SERPLISTS_RUN_KEY</code> environment variable, then add this to{' '}
-                  <code className="font-mono">~/.codex/config.toml</code>:
-                </p>
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs text-foreground"><code>{`[mcp_servers.serplists]
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {mcpHostMismatch ? (
+              <Alert>
+                <TriangleAlert />
+                <AlertDescription>
+                  {mcpEndpoint
+                    ? `Agents can't connect through this address, so this endpoint uses ${hostOf(mcpEndpoint)}.`
+                    : "Agents can't connect through this address. Open Agent Access from this site's main address to get the MCP endpoint."}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {mcpEndpoint ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="agent-mcp-endpoint">Endpoint</FieldLabel>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="agent-mcp-endpoint"
+                      aria-label="SERP Lists MCP endpoint"
+                      className="font-mono text-xs"
+                      value={mcpEndpoint}
+                      readOnly
+                      onFocus={(event) => event.currentTarget.select()}
+                    />
+                    <Button className="sm:shrink-0" type="button" variant="outline" onClick={onCopyEndpoint}>
+                      <Copy data-icon="inline-start" />
+                      Copy endpoint
+                    </Button>
+                  </div>
+                </Field>
+                <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+                  <p>
+                    <span className="font-medium text-foreground">Codex:</span> set the copied secret in the{' '}
+                    <code className="font-mono">SERPLISTS_RUN_KEY</code> environment variable, then add this to{' '}
+                    <code className="font-mono">~/.codex/config.toml</code>:
+                  </p>
+                  <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs text-foreground"><code>{`[mcp_servers.serplists]
 url = "${mcpEndpoint}"
 bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
-                <p>
-                  <span className="font-medium text-foreground">Claude or another MCP client:</span> choose Streamable
-                  HTTP, use the endpoint above, and set the Authorization header to{' '}
-                  <code className="font-mono">Bearer &lt;your Run Key&gt;</code>.
-                </p>
-              </div>
-            </>
-          ) : null}
-        </div>
+                  <p>
+                    <span className="font-medium text-foreground">Claude or another MCP client:</span> choose Streamable
+                    HTTP, use the endpoint above, and set the Authorization header to{' '}
+                    <code className="font-mono">Bearer &lt;your Run Key&gt;</code>.
+                  </p>
+                </div>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
 
-        <div className="space-y-3">
-          <div>
-            <h3 className="text-sm font-medium">Personal Run Keys</h3>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <h4 className="text-sm font-medium">Personal Run Keys</h4>
             <p className="text-xs text-muted-foreground">
               Revoking a key immediately blocks future agent requests. Existing run history remains intact.
             </p>
@@ -234,74 +233,58 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
             refreshErrorLabel="Couldn't refresh your Run Keys. Showing the last loaded list."
             onRetry={onRetry}
             empty={
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No Run Keys yet.
-              </div>
+              <Empty className="border p-4">
+                <EmptyDescription>No Run Keys yet.</EmptyDescription>
+              </Empty>
             }
           >
-            <div className="divide-y rounded-lg border">
+            <ItemGroup className="gap-2">
               {(keys ?? []).map((key) => {
                 const isActive = key.status === 'active';
                 return (
-                  <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" key={key.id}>
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{key.name}</span>
+                  <Item key={key.id} role="listitem" variant="outline">
+                    <ItemContent className="min-w-0">
+                      <ItemTitle className="flex-wrap wrap-anywhere">
+                        {key.name}
                         <Badge variant={isActive ? 'default' : 'secondary'}>
                           {isActive ? 'Active' : 'Revoked'}
                         </Badge>
-                      </div>
-                      <p className="font-mono text-xs text-muted-foreground">{key.prefix}...</p>
-                      <p className="text-xs text-muted-foreground">
+                      </ItemTitle>
+                      <ItemDescription className="font-mono text-xs">{key.prefix}...</ItemDescription>
+                      <ItemDescription className="text-xs">
                         Created {formatTimestamp(key.createdAt)} · Last used {formatTimestamp(key.lastUsedAt)}
-                      </p>
-                    </div>
+                      </ItemDescription>
+                    </ItemContent>
 
                     {isActive ? (
-                      <AlertDialog
-                        open={confirmKeyId === key.id}
-                        onOpenChange={(open) => setConfirmKeyId(open ? key.id : null)}
-                      >
-                        <AlertDialogTrigger
-                          render={
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              disabled={revokingKeyId === key.id}
-                            />
-                          }
+                      <ItemActions>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={revokingKeyId === key.id}
+                          onClick={() => setConfirmKeyId(key.id)}
                         >
-                          <Trash2 className="mr-2 h-4 w-4" />
+                          <Trash2 data-icon="inline-start" />
                           {revokingKeyId === key.id ? 'Revoking...' : 'Revoke'}
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Revoke {key.name}?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              The agent will immediately lose access. This action cannot be undone, but its run
-                              history will be preserved.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              variant="destructive"
-                              onClick={() => {
-                                setConfirmKeyId(null);
-                                onRevoke(key);
-                              }}
-                            >
-                              Revoke key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                        </Button>
+                        <ConfirmDialog
+                          confirmLabel="Revoke key"
+                          description="The agent will immediately lose access. This action cannot be undone, but its run history will be preserved."
+                          onConfirm={() => {
+                            setConfirmKeyId(null);
+                            onRevoke(key);
+                          }}
+                          onOpenChange={(open) => setConfirmKeyId(open ? key.id : null)}
+                          open={confirmKeyId === key.id}
+                          title={`Revoke ${key.name}?`}
+                        />
+                      </ItemActions>
                     ) : null}
-                  </div>
+                  </Item>
                 );
               })}
-            </div>
+            </ItemGroup>
           </QueryListState>
         </div>
       </CardContent>

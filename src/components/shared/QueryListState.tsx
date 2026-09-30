@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
+import { AlertCircle } from 'lucide-react';
 
+import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { getListQueryStatus, hasListRefreshError } from '@/lib/queryState';
-import { cn } from '@/lib/utils';
 
 type QueryErrorNoticeProps = {
   className?: string;
@@ -10,20 +11,18 @@ type QueryErrorNoticeProps = {
   onRetry: () => void;
 };
 
+// A request that failed, as a destructive shadcn Alert with Retry.
 export function QueryErrorNotice({ className, message, onRetry }: QueryErrorNoticeProps) {
   return (
-    <div
-      role="alert"
-      className={cn(
-        'flex flex-wrap items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-foreground',
-        className,
-      )}
-    >
-      <span>{message}</span>
-      <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-        Retry
-      </Button>
-    </div>
+    <Alert className={className} variant="destructive">
+      <AlertCircle />
+      <AlertTitle>{message}</AlertTitle>
+      <AlertAction>
+        <Button type="button" size="sm" variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      </AlertAction>
+    </Alert>
   );
 }
 
@@ -52,7 +51,7 @@ export function QueryListState({
   const status = getListQueryStatus(query);
 
   if (status === 'idle') return null;
-  if (status === 'loading') return <div className="text-sm text-muted-foreground">{loadingLabel}</div>;
+  if (status === 'loading') return <p className="text-sm text-muted-foreground">{loadingLabel}</p>;
   if (status === 'error') return <QueryErrorNotice message={loadErrorLabel} onRetry={onRetry} />;
 
   return (

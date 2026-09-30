@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, User, X } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
@@ -30,9 +31,9 @@ export const AvatarUpload = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sizeClasses = {
-    sm: "h-12 w-12",
-    md: "h-24 w-24",
-    lg: "h-32 w-32"
+    sm: "size-12",
+    md: "size-16",
+    lg: "size-20"
   };
 
   const handleFileSelect = () => {
@@ -113,48 +114,40 @@ export const AvatarUpload = ({
   };
 
   return (
-    <div className="relative group">
-      <Avatar className={`${sizeClasses[size]}`}>
+    <div className="flex flex-wrap items-center gap-4">
+      <Avatar className={sizeClasses[size]}>
         <AvatarImage src={currentAvatarUrl || undefined} />
         <AvatarFallback>
-          <User className="h-1/2 w-1/2" />
+          <User className="size-1/2" />
         </AvatarFallback>
       </Avatar>
-      
+
       {editable && (
-        <>
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            size="icon"
-            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+            size="sm"
             onClick={handleFileSelect}
             disabled={isUploading || isRemoving}
             aria-label="Upload avatar"
           >
-            {isUploading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <Camera className="h-4 w-4" />
-            )}
+            {isUploading ? <Spinner data-icon="inline-start" /> : <Camera data-icon="inline-start" />}
+            Upload avatar
           </Button>
 
           {currentAvatarUrl ? (
             <Button
               variant="outline"
-              size="icon"
-              className="absolute -bottom-2 -left-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              size="sm"
               onClick={handleRemoveAvatar}
               disabled={isUploading || isRemoving}
               aria-label="Remove avatar"
             >
-              {isRemoving ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
+              {isRemoving ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
+              Remove avatar
             </Button>
           ) : null}
-          
+
           <input
             ref={fileInputRef}
             type="file"
@@ -163,7 +156,7 @@ export const AvatarUpload = ({
             disabled={isUploading || isRemoving}
             className="hidden"
           />
-        </>
+        </div>
       )}
     </div>
   );

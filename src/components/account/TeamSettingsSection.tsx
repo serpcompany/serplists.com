@@ -1,19 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { Crown, Users } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { api, type TeamMember, type TeamMemberStatus, type TeamRole } from '@/lib/api';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
@@ -25,16 +17,11 @@ import { useTeamSettingsForm } from '@/features/teams/useTeamSettingsForm';
 import { useTeamSettingsQueries } from '@/features/teams/useTeamSettingsQueries';
 import { TeamInvitesPanel } from '@/components/account/TeamInvitesPanel';
 import { TeamActivityList } from '@/components/account/TeamActivityList';
-import { QueryErrorNotice, QueryListState } from '@/components/shared/QueryListState';
-import {
-  assignableRoles,
-  describeMemberForControls,
-  formatInviteExpiration,
-  formatRole,
-} from '@/components/account/teamSettingsFormat';
+import { IncomingInviteList, OrganizationList } from '@/components/account/OrganizationChoices';
+import { OrganizationMemberList } from '@/components/account/OrganizationMemberList';
+import { QueryErrorNotice } from '@/components/shared/QueryListState';
+import { formatRole } from '@/components/account/teamSettingsFormat';
 import type { AssignableTeamRole } from '@/features/teams/teamInviteLinks';
-
-const memberStatuses: TeamMemberStatus[] = ['active', 'disabled'];
 
 const roleDescriptions: Record<TeamRole, string> = {
   owner: 'Owns billing, members, settings, templates, and runs.',
@@ -43,9 +30,6 @@ const roleDescriptions: Record<TeamRole, string> = {
   runner: 'Starts and updates runs without editing templates.',
   viewer: 'Views shared templates and runs.',
 };
-
-const formatMemberStatus = (status: TeamMemberStatus): string =>
-  status.charAt(0).toUpperCase() + status.slice(1);
 
 
 const errorMessage = (error: unknown, fallback: string): string =>
@@ -267,53 +251,20 @@ export function TeamSettingsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          Organizations
-        </CardTitle>
+        <CardTitle>Organizations</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="flex flex-col gap-6">
         {incomingInvites.length > 0 ? (
-          <div className="space-y-3">
-            <div className="text-sm font-medium text-foreground">Incoming invites</div>
-            <div className="divide-y rounded-md border border-border">
-              {incomingInvites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_120px_160px_auto]"
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {invite.teamName}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      Invited by {invite.inviterName || invite.inviterEmail || 'an Organization admin'}
-                    </div>
-                  </div>
-                  <div className="text-sm capitalize text-muted-foreground">
-                    {formatRole(invite.role)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {formatInviteExpiration(invite.expiresAt)}
-                  </div>
-                  <Button
-                    aria-label={`Accept invite to ${invite.teamName}`}
-                    type="button"
-                    size="sm"
-                    disabled={acceptingIncomingInviteId === invite.id}
-                    onClick={() => void handleAcceptIncomingInvite(invite.id)}
-                  >
-                    {acceptingIncomingInviteId === invite.id ? 'Accepting...' : 'Accept'}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
+          <IncomingInviteList
+            acceptingInviteId={acceptingIncomingInviteId}
+            invites={incomingInvites}
+            onAccept={(inviteId) => void handleAcceptIncomingInvite(inviteId)}
+          />
         ) : null}
 
-        <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleCreateTeam}>
-          <div className="space-y-2">
-            <Label htmlFor="team-name">Organization name</Label>
+        <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleCreateTeam}>
+          <Field>
+            <FieldLabel htmlFor="team-name">Organization name</FieldLabel>
             <Input
               id="team-name"
               maxLength={ORGANIZATION_NAME_MAX}
@@ -321,21 +272,19 @@ export function TeamSettingsSection() {
               onChange={(event) => setTeamName(event.target.value)}
               placeholder="Agency operations"
             />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="team-slug">Slug</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="team-slug">Slug</FieldLabel>
             <Input
               id="team-slug"
               value={teamSlug}
               onChange={(event) => setTeamSlug(event.target.value)}
               placeholder="agency-ops"
             />
-          </div>
-          <div className="flex items-end">
-            <Button type="submit" disabled={isCreatingTeam} className="w-full">
-              {isCreatingTeam ? 'Creating...' : 'Create Organization'}
-            </Button>
-          </div>
+          </Field>
+          <Button type="submit" disabled={isCreatingTeam}>
+            {isCreatingTeam ? 'Creating...' : 'Create Organization'}
+          </Button>
         </form>
 
         {/* Not "no Organizations": the user could otherwise create a duplicate. */}
@@ -344,57 +293,31 @@ export function TeamSettingsSection() {
         ) : null}
 
         {teams.length > 0 ? (
-          <div className="space-y-3">
-            <div className="text-sm font-medium text-foreground">Your Organizations</div>
-            <div className="divide-y rounded-md border border-border">
-              {teams.map((team) => {
-                const selected = activeWorkspace.type === 'team' && activeWorkspace.teamId === team.id;
-
-                return (
-                  <button
-                    key={team.id}
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left transition hover:bg-muted/50"
-                    onClick={() => selectWorkspace(team.id)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-foreground">
-                        {team.name}
-                      </span>
-                      <span className="block text-xs capitalize text-muted-foreground">
-                        {formatRole(team.role)}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {selected ? 'Selected' : 'Select'}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <OrganizationList
+            activeTeamId={activeWorkspace.type === 'team' ? activeWorkspace.teamId : null}
+            onSelect={selectWorkspace}
+            teams={teams}
+          />
         ) : null}
 
         <Separator />
 
         {isTeamWorkspace ? (
-          <div className="space-y-5">
-            <div>
-              <div className="text-sm font-medium text-foreground">
-                {activeWorkspace.name}
-              </div>
-              <div className="text-sm capitalize text-muted-foreground">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+              <h4 className="text-sm font-medium wrap-anywhere">{activeWorkspace.name}</h4>
+              <p className="text-sm text-muted-foreground">
                 Your role: {formatRole(activeWorkspace.role)}
-              </div>
-              <div className="text-xs text-muted-foreground">
+              </p>
+              <p className="text-xs text-muted-foreground">
                 {roleDescriptions[activeWorkspace.role]}
-              </div>
+              </p>
             </div>
 
             {canManageTeam ? (
-              <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleUpdateTeam}>
-                <div className="space-y-2">
-                  <Label htmlFor="team-settings-name">Organization name</Label>
+              <form className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end" onSubmit={handleUpdateTeam}>
+                <Field>
+                  <FieldLabel htmlFor="team-settings-name">Organization name</FieldLabel>
                   <Input
                     id="team-settings-name"
                     maxLength={ORGANIZATION_NAME_MAX}
@@ -402,157 +325,51 @@ export function TeamSettingsSection() {
                     onChange={(event) => teamSettingsForm.setName(event.target.value)}
                     placeholder="Agency operations"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="team-settings-slug">Slug</Label>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="team-settings-slug">Slug</FieldLabel>
                   <Input
                     id="team-settings-slug"
                     value={editTeamSlug}
                     onChange={(event) => teamSettingsForm.setSlug(event.target.value)}
                     placeholder="agency-ops"
                   />
-                </div>
-                <div className="flex items-end">
-                  <Button type="submit" disabled={isUpdatingTeam || !teamSettingsUpdate} className="w-full">
-                    {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
-                  </Button>
-                </div>
+                </Field>
+                <Button type="submit" disabled={isUpdatingTeam || !teamSettingsUpdate}>
+                  {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
+                </Button>
               </form>
             ) : null}
 
             {canManageTeam && activeTeamId ? <TeamInvitesPanel teamId={activeTeamId} /> : null}
 
             {!canManageTeam ? (
-              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Owners and admins manage Organization settings, invites, and activity.
-              </div>
+              </p>
             ) : null}
 
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-foreground">Members</div>
-              <QueryListState
-                query={membersQuery}
-                loadingLabel="Loading members..."
-                loadErrorLabel="Couldn't load members."
-                refreshErrorLabel="Couldn't refresh members. Showing the last loaded list."
-                onRetry={() => void reload.members()}
-                empty={<div className="text-sm text-muted-foreground">No members found.</div>}
-              >
-                <div className="divide-y rounded-md border border-border">
-                  {members.map((member) => {
-                    const isOwner = member.role === 'owner';
-                    const isCurrentMember = member.id === activeMemberId;
-                    const controlsDisabled =
-                      isOwner || isCurrentMember || updatingMemberId === member.id;
-                    const memberLabel = describeMemberForControls(member);
-
-                    return (
-                      <div
-                        key={member.id}
-                        className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_150px_150px_auto]"
-                      >
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-foreground">
-                            {member.name || member.email || member.user_id}
-                            {isCurrentMember ? (
-                              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                You
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {member.email || member.user_id}
-                          </div>
-                        </div>
-                        {canManageTeam ? (
-                          <Select
-                            value={member.role}
-                            disabled={controlsDisabled}
-                            onValueChange={(value) =>
-                              void handleUpdateMember(member, {
-                                role: value as AssignableTeamRole,
-                              })
-                            }
-                          >
-                            <SelectTrigger aria-label={`Role for ${memberLabel}`}>
-                              <SelectValue>
-                                {(role: TeamMember['role']) => formatRole(role)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {isOwner ? (
-                                <SelectItem value="owner">Owner</SelectItem>
-                              ) : null}
-                              {assignableRoles.map((role) => (
-                                <SelectItem key={role} value={role}>
-                                  {formatRole(role)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">
-                            {formatRole(member.role)}
-                          </div>
-                        )}
-                        {canManageTeam ? (
-                          <Select
-                            value={member.status}
-                            disabled={controlsDisabled}
-                            onValueChange={(value) =>
-                              void handleUpdateMember(member, {
-                                status: value as TeamMemberStatus,
-                              })
-                            }
-                          >
-                            <SelectTrigger aria-label={`Status for ${memberLabel}`}>
-                              <SelectValue>
-                                {(status: TeamMemberStatus) => formatMemberStatus(status)}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {memberStatuses.map((status) => (
-                                <SelectItem key={status} value={status}>
-                                  {formatMemberStatus(status)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="text-sm text-muted-foreground">
-                            {formatMemberStatus(member.status)}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-end">
-                          {canTransferOwnership && !isOwner && !isCurrentMember && member.status === 'active' ? (
-                            <Button
-                              aria-label={`Make owner: ${memberLabel}`}
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              disabled={transferringOwnerMemberId === member.id}
-                              onClick={() => void handleTransferOwnership(member)}
-                            >
-                              <Crown className="mr-2 h-4 w-4" />
-                              Make owner
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </QueryListState>
-            </div>
+            <OrganizationMemberList
+              activeMemberId={activeMemberId}
+              canManageTeam={canManageTeam}
+              canTransferOwnership={canTransferOwnership}
+              members={members}
+              membersQuery={membersQuery}
+              onRetry={() => void reload.members()}
+              onTransferOwnership={(member) => void handleTransferOwnership(member)}
+              onUpdateMember={(member, updates) => void handleUpdateMember(member, updates)}
+              transferringOwnerMemberId={transferringOwnerMemberId}
+              updatingMemberId={updatingMemberId}
+            />
 
             {canManageTeam ? (
               <TeamActivityList query={activityQuery} onRetry={() => void reload.activity()} />
             ) : null}
           </div>
         ) : teamsUnavailable ? null : (
-          <div className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Create or select an Organization to share templates and runs.
-          </div>
+          </p>
         )}
       </CardContent>
     </Card>

@@ -146,7 +146,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   await expect(page.getByText(new RegExp(`${keyName} via MCP · authorized by `)).first()).toBeVisible();
 
   await page.goto('/dashboard/settings/');
-  const keyRow = page.locator('div.divide-y > div').filter({ hasText: keyName });
+  const keyRow = page.getByRole('listitem').filter({ hasText: keyName });
   await expect(keyRow).toHaveCount(1);
   await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
   await page.getByRole('button', { name: 'Revoke key' }).click();
@@ -195,7 +195,7 @@ test('a Run Key created while the key list is still loading shows in the list', 
   releaseFirstList();
 
   await expect(page.getByLabel('New Run Key secret')).toBeVisible();
-  const keyRow = page.locator('div.divide-y > div').filter({ hasText: keyName });
+  const keyRow = page.getByRole('listitem').filter({ hasText: keyName });
   await expect(keyRow).toHaveCount(1);
   await expect(page.getByText('No Run Keys yet.')).toHaveCount(0);
 

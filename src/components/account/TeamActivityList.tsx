@@ -1,3 +1,4 @@
+import { ChangelogRows } from '@/components/shared/ChangelogList';
 import { QueryListState } from '@/components/shared/QueryListState';
 import { formatTeamActivityAction } from '@/components/account/teamActivityLabels';
 import type { TeamActivityEvent } from '@/lib/api';
@@ -23,40 +24,28 @@ const formatActivityTime = (value: string): string => {
 const getActivityActorName = (event: TeamActivityEvent): string =>
   getAuditActorName(event.actor, event.metadata, event.actor.userId || undefined);
 
-// The latest Organization activity (the API sends the 10 the page shows).
+// The latest Organization activity (the API sends the 10 the page shows), in the Changelog's rows.
 export function TeamActivityList({ query, onRetry }: TeamActivityListProps) {
   return (
-    <div className="space-y-3">
-      <div className="text-sm font-medium text-foreground">Activity</div>
+    <section className="flex flex-col gap-3">
+      <h4 className="text-sm font-medium">Activity</h4>
       <QueryListState
         query={query}
         loadingLabel="Loading activity..."
         loadErrorLabel="Couldn't load Organization activity."
         refreshErrorLabel="Couldn't refresh Organization activity. Showing the last loaded list."
         onRetry={onRetry}
-        empty={<div className="text-sm text-muted-foreground">No Organization activity recorded yet.</div>}
+        empty={<p className="text-sm text-muted-foreground">No Organization activity recorded yet.</p>}
       >
-        <div className="divide-y rounded-md border border-border">
-          {(query.data ?? []).map((event) => (
-            <div
-              key={event.id}
-              className="grid gap-1 p-3 md:grid-cols-[minmax(0,1fr)_180px]"
-            >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">
-                  {formatTeamActivityAction(event.action)}
-                </div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {getActivityActorName(event)}
-                </div>
-              </div>
-              <div className="text-sm text-muted-foreground md:text-right">
-                {formatActivityTime(event.createdAt)}
-              </div>
-            </div>
-          ))}
-        </div>
+        <ChangelogRows
+          entries={(query.data ?? []).map((event) => ({
+            actor: getActivityActorName(event),
+            key: event.id,
+            label: formatTeamActivityAction(event.action),
+            time: formatActivityTime(event.createdAt),
+          }))}
+        />
       </QueryListState>
-    </div>
+    </section>
   );
 }
