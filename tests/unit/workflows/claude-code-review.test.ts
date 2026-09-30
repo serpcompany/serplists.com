@@ -8,21 +8,13 @@ import yaml from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-// Tools the code-review plugin needs, copied from the `allowed-tools` frontmatter of
-// https://github.com/anthropics/claude-code/blob/main/plugins/code-review/commands/code-review.md
-// plus Task, the tool it launches its review subagents with. Update this list when the
-// plugin changes; a tool missing from claude_args is denied at runtime.
-const PLUGIN_TOOLS = [
-  'Bash(gh issue view:*)',
-  'Bash(gh search:*)',
-  'Bash(gh issue list:*)',
-  'Bash(gh pr comment:*)',
-  'Bash(gh pr diff:*)',
-  'Bash(gh pr view:*)',
-  'Bash(gh pr list:*)',
-  'mcp__github_inline_comment__create_inline_comment',
-  'Task',
-];
+// The tools the review skill runs with, from its allowed-tools frontmatter. A tool missing
+// from claude_args is denied at runtime.
+const SKILL_PATH = '.claude/skills/pr-review/SKILL.md';
+const skillFrontmatter = z
+  .object({ 'allowed-tools': z.string() })
+  .parse(yaml.load(/^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(SKILL_PATH, 'utf8'))?.[1] ?? ''));
+const SKILL_TOOLS = skillFrontmatter['allowed-tools'].split(',').map((tool) => tool.trim()).filter(Boolean);
 
 const stepSchema = z.object({
   id: z.string().optional(),
@@ -65,7 +57,9 @@ const STARTED_AT = '2026-10-01T10:00:00Z';
 // A timestamp this many minutes after the review started (negative: before it).
 const minutesAfterStart = (minutes: number) => new Date(Date.parse(STARTED_AT) + minutes * 60_000).toISOString();
 
-type Posted = { login: string; at: string };
+// `updatedAt` marks a comment edited after it was posted, as the review's summary is.
+// `details` adds fields such as path, line and body to what the API returns.
+type Posted = { login: string; at: string; updatedAt?: string; details?: Record<string, unknown> };
 type PullRequest = {
   issueComments?: Posted[];
   reviewComments?: Posted[];
@@ -75,7 +69,13 @@ type PullRequest = {
 
 // A stand-in for the GitHub REST API that serves one pull request's comments and reviews.
 const withFakeGitHub = async <T>(pullRequest: PullRequest, run: (apiUrl: string) => Promise<T>) => {
-  const toComments = (items: Posted[] = []) => items.map(({ login, at }) => ({ user: { login }, created_at: at }));
+  const toComments = (items: Posted[] = []) =>
+    items.map(({ login, at, updatedAt, details }) => ({
+      user: { login },
+      created_at: at,
+      updated_at: updatedAt ?? at,
+      ...details,
+    }));
   const routes: Record<string, unknown[]> = {
     [`/repos/${REPO}/issues/${PR}/comments`]: toComments(pullRequest.issueComments),
     [`/repos/${REPO}/pulls/${PR}/comments`]: toComments(pullRequest.reviewComments),
@@ -151,12 +151,16 @@ const deniedGhPrView = {
 };
 
 describe('Claude code review workflow', () => {
-  it('allows every tool the code-review plugin uses', () => {
+  it('runs the repository review skill, from the base branch, with every tool it uses', () => {
     expect(reviewStep?.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
+    // The skill lives in .claude/, which the action restores from the base branch.
+    expect(reviewStep.with?.prompt).toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
+    expect(reviewStep.with?.plugins).toBeUndefined();
     const allowList = claudeArgs.match(/--allowedTools\s+"([^"]+)"/)?.[1] ?? '';
     const allowed = new Set(allowList.split(',').map((tool) => tool.trim()));
 
-    for (const tool of PLUGIN_TOOLS) {
+    expect(SKILL_TOOLS).toContain('mcp__github_inline_comment__create_inline_comment');
+    for (const tool of SKILL_TOOLS) {
       expect(allowed.has(tool), `claude_args does not allow ${tool}`).toBe(true);
     }
   });
@@ -169,11 +173,11 @@ describe('Claude code review workflow', () => {
     // The action deletes a CLAUDE.md the base branch lacks, so writing one is lost work.
     for (const step of steps) expect(step.run ?? '').not.toMatch(/>\s*"?CLAUDE\.md/);
 
-    const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-rules.md"'));
-    expect(rulesStep, 'no step writes $RUNNER_TEMP/review-rules.md').toBeGreaterThan(-1);
+    const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
+    expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
-    expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-rules.md');
-    expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-rules.md');
+    expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-context.md');
+    expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--strict-mcp-config');
   });
 
@@ -263,13 +267,112 @@ describe('Claude code review workflow', () => {
     expect(status).toBe(0);
   });
 
-  it('passes with a notice when Claude reviewed the PR on an earlier push', async () => {
+  it('passes when Claude updated its summary comment during the run', async () => {
     const { status, output } = await runGuard(cleanLog, {
-      reviewComments: [{ login: BOT, at: minutesAfterStart(-90) }],
+      issueComments: [{ login: BOT, at: minutesAfterStart(-90), updatedAt: minutesAfterStart(4) }],
     });
 
-    expect(output).toContain('::notice');
     expect(output).not.toContain('::error');
     expect(status).toBe(0);
+  });
+
+  // Every push is reviewed again, so a run must at least update the summary.
+  it('fails when Claude reviewed an earlier push but posted and updated nothing now', async () => {
+    const { status, output } = await runGuard(cleanLog, {
+      reviewComments: [{ login: BOT, at: minutesAfterStart(-90) }],
+      issueComments: [{ login: BOT, at: minutesAfterStart(-90) }],
+    });
+
+    expect(output).toContain('::error');
+    expect(status).not.toBe(0);
+  });
+});
+
+// The step before the review appends Claude's earlier findings to the review's context.
+const findingsIndex = steps.findIndex((step) => step.env?.CONTEXT_FILE !== undefined);
+const findingsStep = steps[findingsIndex];
+
+const runFindings = (pullRequest: PullRequest) =>
+  withFakeGitHub(pullRequest, (apiUrl) => {
+    const scriptPath = path.join(workDir, 'findings.cjs');
+    const contextFile = path.join(workDir, 'review-context.md');
+    writeFileSync(scriptPath, findingsStep?.run ?? '');
+    writeFileSync(contextFile, '# Repository rules for this review\n');
+    const child = spawn(process.execPath, [scriptPath], {
+      env: {
+        ...process.env,
+        CONTEXT_FILE: contextFile,
+        GITHUB_API_URL: apiUrl,
+        GITHUB_REPOSITORY: REPO,
+        GITHUB_TOKEN: 'test-token',
+        PR_NUMBER: PR,
+        REVIEW_BOT: BOT,
+      },
+    });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    return new Promise<{ status: number | null; output: string; context: string }>((resolve) => {
+      child.on('close', (status) => resolve({ status, output, context: readFileSync(contextFile, 'utf8') }));
+    });
+  });
+
+describe('earlier findings passed to the review', () => {
+  it('reads them before the review, after the rules', () => {
+    expect(findingsIndex, 'no step writes the earlier findings').toBeGreaterThan(-1);
+    expect(findingsIndex).toBeLessThan(reviewIndex);
+    const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
+    expect(findingsIndex).toBeGreaterThan(rulesStep);
+    expect(findingsStep.env).toMatchObject({ GITHUB_TOKEN: '${{ github.token }}', REVIEW_BOT: BOT });
+  });
+
+  it("lists Claude's inline comments and summary, and leaves out everyone else's", async () => {
+    const { status, context } = await runFindings({
+      reviewComments: [
+        {
+          login: BOT,
+          at: minutesAfterStart(-60),
+          details: {
+            path: 'functions/api/keys.ts',
+            line: 18,
+            commit_id: 'abc1234def',
+            html_url: 'https://github.com/c/1',
+            body: '**Access check is broken.** Any key can edit public templates.',
+          },
+        },
+        {
+          login: BOT,
+          at: minutesAfterStart(-60),
+          details: { path: 'functions/api/log.ts', line: null, original_line: 9, commit_id: 'abc1234def', html_url: 'https://github.com/c/2', body: 'Logs an email.' },
+        },
+        { login: 'someone', at: minutesAfterStart(-50), details: { path: 'x.ts', line: 1, body: 'Not Claude.' } },
+      ],
+      issueComments: [
+        { login: BOT, at: minutesAfterStart(-60), details: { html_url: 'https://github.com/c/3', body: '## Claude review\nReviewed abc1234.' } },
+      ],
+    });
+
+    expect(status).toBe(0);
+    expect(context).toContain('# Repository rules for this review');
+    expect(context).toContain('# Earlier findings on this pull request');
+    expect(context).toContain('functions/api/keys.ts:18, on commit abc1234 (https://github.com/c/1): **Access check is broken.**');
+    expect(context).toContain('functions/api/log.ts:9 (outdated: the code there changed)');
+    expect(context).toContain('Summary comment (https://github.com/c/3): ## Claude review Reviewed abc1234.');
+    expect(context).not.toContain('Not Claude.');
+  });
+
+  it('says when this is the first review', async () => {
+    const { status, context } = await runFindings({});
+
+    expect(status).toBe(0);
+    expect(context).toContain('None: this is the first review of this pull request.');
+  });
+
+  it('fails the job when it cannot read the pull request', async () => {
+    const { status, output } = await runFindings({ status: 403 });
+
+    expect(output).toContain('::error');
+    expect(status).not.toBe(0);
   });
 });

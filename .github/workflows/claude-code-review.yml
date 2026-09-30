@@ -1,8 +1,10 @@
 name: Code Review
 
-# Claude reviews each pull request with the code-review plugin and posts an inline
-# comment per issue it finds (or one summary comment when it finds none). Advisory:
-# it never blocks merging, but the check goes red when Claude posted nothing.
+# Claude reviews every push to a pull request with the repository's pr-review skill
+# (.claude/skills/pr-review/SKILL.md): each new finding as an inline comment, plus one
+# summary comment it updates on every review. Its findings from earlier pushes are passed
+# in, so a re-review raises only what is new. Advisory: it never blocks merging, but the
+# check goes red when Claude posted or updated nothing.
 # Setup and limits: docs/design-docs/agent-workflow.md.
 on:
   pull_request:
@@ -21,7 +23,7 @@ jobs:
     timeout-minutes: 30
     # Claude posts with the Claude GitHub App token that the action gets through the
     # OIDC exchange, so the workflow token only reads: the checkout, and the PR's
-    # comments for the check at the end.
+    # comments before and after the review.
     permissions:
       contents: read
       pull-requests: read
@@ -40,18 +42,18 @@ jobs:
         with:
           fetch-depth: 1
 
-      # The plugin reviews against CLAUDE.md. This repo keeps its rules in AGENTS.md and
-      # the core beliefs, and a CLAUDE.md in the checkout does not survive: the action
-      # replaces CLAUDE.md, .claude/ and .mcp.json with the base branch's copies (deleting
-      # them when the base has none) before Claude starts. So the rules go outside the
-      # checkout and into the system prompt of Claude and of every subagent it starts.
+      # Before Claude starts, the action replaces CLAUDE.md, .claude/ and .mcp.json with
+      # the base branch's copies (deleting them when the base has none). So the review
+      # skill always comes from the base branch, and a PR cannot rewrite its own review.
+      # The rules the skill checks against, and the earlier findings below, go outside the
+      # checkout, into the system prompt of Claude and of every subagent it starts.
       - name: Give the reviewer the repository rules
         if: env.HAS_REVIEW_TOKEN == 'true'
         run: |
           {
             echo "# Repository rules for this review"
             echo
-            echo "This repository has no CLAUDE.md. Its rules are AGENTS.md and docs/design-docs/core-beliefs.md, copied below. Wherever the review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
+            echo "This repository's rules are AGENTS.md and docs/design-docs/core-beliefs.md, copied below. Wherever a review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
             echo
             echo "## AGENTS.md"
             echo
@@ -60,46 +62,102 @@ jobs:
             echo "## docs/design-docs/core-beliefs.md"
             echo
             cat docs/design-docs/core-beliefs.md
-          } > "$RUNNER_TEMP/review-rules.md"
+          } > "$RUNNER_TEMP/review-context.md"
 
       - name: Note when the review starts
         if: env.HAS_REVIEW_TOKEN == 'true'
         run: echo "REVIEW_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
-      # claude_args allows every tool in the plugin's allowed-tools frontmatter
-      # (plugins/code-review/commands/code-review.md in anthropics/claude-code), Task for
-      # its subagents, and Read, Glob and Grep, which also brings back the Glob and Grep
-      # tools that Claude Code leaves out on Linux (searches then skip Bash and its ask
-      # rules). --strict-mcp-config keeps .mcp.json servers such as chrome-devtools out
-      # of the review; the action's inline comment server still loads.
+      # What Claude posted on earlier pushes, so the review raises only new findings and
+      # updates its one summary comment. Read with the workflow's read-only token, and
+      # inline for the same reason as the check at the end.
+      - name: Give the reviewer its earlier findings
+        if: env.HAS_REVIEW_TOKEN == 'true'
+        env:
+          CONTEXT_FILE: ${{ runner.temp }}/review-context.md
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_BOT: "claude[bot]"
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+          const headers = {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          };
+          const bot = process.env.REVIEW_BOT || 'claude[bot]';
+          const list = async (path) => {
+            const items = [];
+            let url = `${api}${path}?per_page=100`;
+            for (let page = 0; url && page < 10; page += 1) {
+              const response = await fetch(url, { headers });
+              if (!response.ok) throw new Error(`GET ${path} returned ${response.status}`);
+              items.push(...(await response.json()));
+              url = (/<([^>]+)>;\s*rel="next"/.exec(response.headers.get('link') || '') || [])[1];
+            }
+            return items.filter((item) => item && item.user && item.user.login === bot);
+          };
+          const excerpt = (text, max) => {
+            const flat = String(text || '').replace(/\s+/g, ' ').trim();
+            return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+          };
+          const main = async () => {
+            const pr = process.env.PR_NUMBER;
+            const [inline, comments] = await Promise.all([list(`/pulls/${pr}/comments`), list(`/issues/${pr}/comments`)]);
+            const lines = ['', '# Earlier findings on this pull request', ''];
+            if (inline.length === 0 && comments.length === 0) {
+              lines.push('None: this is the first review of this pull request.');
+            } else {
+              lines.push('Claude posted these on earlier commits. Do not post any of them again, including the same problem reworded or at the lines it moved to. In the summary, say for each whether the current commit fixes it or it still applies.', '');
+              for (const item of inline) {
+                const where = item.line == null ? `${item.path}:${item.original_line} (outdated: the code there changed)` : `${item.path}:${item.line}`;
+                lines.push(`- ${where}, on commit ${String(item.commit_id || '').slice(0, 7)} (${item.html_url}): ${excerpt(item.body, 600)}`);
+              }
+              for (const item of comments) {
+                lines.push(`- Summary comment (${item.html_url}): ${excerpt(item.body, 1500)}`);
+              }
+            }
+            fs.appendFileSync(process.env.CONTEXT_FILE, `${lines.join('\n')}\n`);
+            console.log(`Earlier findings passed to the review: ${inline.length} inline, ${comments.length} summary.`);
+          };
+          main().catch((error) => {
+            console.log(`::error title=Could not read the earlier review::${String(error && error.message).replace(/[\r\n%]+/g, ' ')}`);
+            process.exit(1);
+          });
+
+      # claude_args allows every tool in the pr-review skill's allowed-tools frontmatter,
+      # which also brings back the Glob and Grep tools that Claude Code leaves out on
+      # Linux (searches then skip Bash and its ask rules). --strict-mcp-config keeps
+      # .mcp.json servers such as chrome-devtools out of the review; the action's inline
+      # comment server still loads.
       - name: Review with Claude
         id: review
         if: env.HAS_REVIEW_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
         env:
-          # Claude Code runs subagents in the background by default. The plugin's first
-          # step starts one, Claude ends its turn to wait for it, the action stops at that
-          # first result, and the run exits green with nothing posted
-          # (anthropics/claude-code-action#1646). This keeps subagents in the foreground.
+          # Claude Code runs subagents in the background by default. The review starts
+          # them, Claude ends its turn to wait, the action stops at that first result, and
+          # the run exits green with nothing posted (anthropics/claude-code-action#1646).
+          # This keeps subagents in the foreground.
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
-          plugins: "code-review@claude-code-plugins"
-          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          prompt: "/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
           claude_args: >-
             --model claude-sonnet-5-5
             --strict-mcp-config
-            --append-system-prompt-file ${{ runner.temp }}/review-rules.md
-            --append-subagent-system-prompt-file ${{ runner.temp }}/review-rules.md
-            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Task,Read,Glob,Grep"
+            --append-system-prompt-file ${{ runner.temp }}/review-context.md
+            --append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Task,Read,Glob,Grep"
 
       # The full transcript (Claude's messages, tool calls, denials) is the only record of
       # what the review did: the action's log shows counts only. The repository is
       # private, so members can download it for a week.
       - name: Keep the review transcript
         if: always() && env.HAS_REVIEW_TOKEN == 'true' && steps.review.outputs.execution_file != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: claude-review-transcript
           path: ${{ steps.review.outputs.execution_file }}
@@ -143,7 +201,8 @@ jobs:
             return { messages, result };
           };
 
-          // Every comment and review the bot has on the PR, with when it was posted.
+          // Every comment and review the bot has on the PR, with when it was last written:
+          // the summary comment is edited in place, so an update counts as posting.
           const readBotActivity = async (bot) => {
             const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
             const headers = {
@@ -178,7 +237,7 @@ jobs:
               list(`/pulls/${pr}/reviews`),
             ]);
             return [
-              ...comments.map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
+              ...comments.map((item) => ({ login: item.user && item.user.login, at: item.updated_at || item.created_at })),
               ...inline.map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
               ...reviews.map((item) => ({ login: item.user && item.user.login, at: item.submitted_at })),
             ].filter((item) => item.login === bot);
@@ -225,17 +284,13 @@ jobs:
               if (denied.length > 0) {
                 console.log(`::warning title=Claude review was denied tools::Claude was denied ${clean(denied.join(', '), 600)}. Allow the tool in claude_args if the review needs it.`);
               }
-              console.log(`Claude posted ${posted} comment(s) or review(s) on this PR.`);
+              console.log(`Claude posted or updated ${posted} comment(s) or review(s) on this PR.`);
               return;
             }
             if (denied.length > 0) {
               fail(`Claude was denied ${denied.join(', ')} and posted nothing, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
             }
-            if (activity.length > 0) {
-              console.log('::notice title=Claude review skipped::Claude already commented on this PR, and the code-review plugin reviews a PR once, so this push was not reviewed. Run /code-review in Claude Code for another pass.');
-              return;
-            }
-            fail(`Claude finished without posting a review or a summary comment. The plugin posts nothing when it judges a PR closed, draft, or trivial. Claude's last message: ${clean(result.result || '(none)', 400)}`);
+            fail(`Claude finished without posting a finding or updating its summary comment. Claude's last message: ${clean(result.result || '(none)', 400)}`);
           };
 
           main().catch((error) => fail(`The review check failed: ${error && error.message}`));
