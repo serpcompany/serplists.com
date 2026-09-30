@@ -7,7 +7,7 @@ import {
   saveRunExecutionTitle,
   saveRunItemNotes,
   toggleRunItem,
-} from '@/features/run-execution/useRunExecutionModel';
+} from '@/features/run-execution/runExecutionActions';
 import type { ChecklistRun } from '@/types/checklist';
 
 // Titles had no length limit before the 160-character PUT limit, and runs started from a

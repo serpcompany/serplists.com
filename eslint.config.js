@@ -11,7 +11,6 @@ const MAX_LINES = 500;
 // Legacy files already over MAX_LINES, capped at roughly their current size.
 // Lower a cap when a file shrinks; never raise one. Split the file instead.
 const LEGACY_MAX_LINES = {
-  "src/features/run-execution/useRunExecutionModel.ts": 650,
   "src/lib/api.ts": 650,
   "src/components/template-editor/SectionSidebar.tsx": 560,
 };
