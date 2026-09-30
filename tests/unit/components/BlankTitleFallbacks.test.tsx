@@ -75,7 +75,7 @@ describe('blank section and sub-task titles', () => {
       />,
     );
 
-    expect(html).toMatch(/<span>Section 2<\/span>\s*<span>\/<\/span>/);
+    expect(html).toMatch(/<span[^>]*>Section 2<\/span>\s*<span[^>]*>\/<\/span>/);
   });
 
   it('labels a blank sub-task by its position in a run', () => {
