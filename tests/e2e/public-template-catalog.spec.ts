@@ -90,13 +90,16 @@ test('public creator profile page stays available under /profile/:username', asy
   await page.setViewportSize({ width: 1440, height: 1600 });
   await page.goto('/profile/serp/');
 
-  const firstTemplateCard = page.getByRole('link', {
+  // Each Template is a card (MediaCard): its title links to the Template and the link covers
+  // the card; the categories sit over the title and the icon in the card's muted media.
+  const firstTemplateLink = page.getByRole('link', {
     name: /Complete Wedding Planning Checklist/i,
   });
+  const firstTemplateCard = page.locator('article', { has: firstTemplateLink });
   const firstTemplateChip = firstTemplateCard.getByText('wedding', {
     exact: true,
   }).first();
-  const firstTemplateSurface = firstTemplateCard.locator('..');
+  const firstTemplateMedia = firstTemplateCard.locator('[data-slot="icon-tile"]').locator('..');
 
   await expect(
     page.getByRole('heading', { level: 1, name: 'SERP Lists Library' }),
@@ -113,21 +116,24 @@ test('public creator profile page stays available under /profile/:username', asy
     page.getByRole('heading', { name: 'Public templates' }),
   ).toBeVisible();
   await expect(page.getByText('Checklist Items')).toBeVisible();
-  await expect(firstTemplateCard).toBeVisible();
+  await expect(firstTemplateLink).toBeVisible();
 
+  // The cards sit inside the page's width, several to a row: never full width, never tall.
+  const pageBox = await page.locator('[data-slot="detail-page"]').boundingBox();
   const templateCardBox = await firstTemplateCard.boundingBox();
-  const templateSurfaceRadius = Number.parseFloat(
-    await firstTemplateSurface.evaluate(
+  const templateMediaRadius = Number.parseFloat(
+    await firstTemplateMedia.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
 
+  expect(pageBox).not.toBeNull();
   expect(templateCardBox).not.toBeNull();
-  expect(templateCardBox?.x ?? 0).toBeGreaterThan(250);
-  expect(templateCardBox?.width ?? 0).toBeGreaterThan(360);
-  expect(templateCardBox?.width ?? 999).toBeLessThan(460);
-  expect(templateCardBox?.height ?? 999).toBeLessThan(280);
-  expect(templateSurfaceRadius).toBeLessThan(16);
+  expect(templateCardBox?.x ?? 0).toBeGreaterThan(pageBox?.x ?? 999);
+  expect(templateCardBox?.width ?? 0).toBeGreaterThan(300);
+  expect(templateCardBox?.width ?? 999).toBeLessThan((pageBox?.width ?? 0) / 2);
+  expect(templateCardBox?.height ?? 999).toBeLessThan(420);
+  expect(templateMediaRadius).toBeLessThan(16);
   await expect(firstTemplateChip).toBeVisible();
 });
 
