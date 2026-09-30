@@ -701,3 +701,9 @@ Each of these needs the user's approval, or happens with the domain move:
   room for the task and run around them. Only what an agent sends is checked: notes written in
   the web app can be longer, `get_run` reads them in parts, and an agent can replace them with
   shorter ones. No operation appends to notes.
+- 2026-09-30: **`update_template` keeps whole-checklist `sections`, with a plain warning.** The
+  user chose to keep accepting `sections` for a template of any size rather than refuse it for
+  one too large to read in one result (left open in the TD-27 entry). The tool description and
+  its `sections` argument now say that `sections` replaces the whole checklist, removing
+  whatever it leaves out, and that `operation` is the safe way to edit a template read in pages;
+  `tests/unit/functions/api/agent-mcp-template-tools.test.ts` holds the description to it.

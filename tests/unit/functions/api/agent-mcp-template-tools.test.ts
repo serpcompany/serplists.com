@@ -144,6 +144,22 @@ describe("personal run MCP template tools", () => {
     for (const keyword of ["oneOf", "anyOf", "allOf"]) expect(update).not.toHaveProperty(keyword);
   });
 
+  it("warns that sections replaces the whole checklist, and to edit a template read in pages by part", async () => {
+    const tools = ((await send("tools/list")).body.result as { tools: JsonRecord[] }).tools;
+    const update = tools.find((tool) => tool.name === "update_template") as JsonRecord;
+    const sections = ((update.inputSchema as JsonRecord).properties as JsonRecord).sections as JsonRecord;
+
+    // sections is still accepted for a template of any size, so the description says what it does.
+    expect(update.description).toContain(
+      "sections, which replaces the whole checklist: any section, task, or subtask it leaves out is removed.",
+    );
+    expect(update.description).toContain(
+      "For a template read in pages (get_template returned an outline or nextCursor), operation is the safe way to edit it",
+    );
+    expect(sections.description).toMatch(/^The whole checklist, its sections in order: it replaces every section/);
+    expect(sections.description).toContain("For a template read in pages, change it with operation instead.");
+  });
+
   it("reads a template too large for one result in pages, each response within the bound", async () => {
     const row = templateRow(largeSections());
     storedRow(row);

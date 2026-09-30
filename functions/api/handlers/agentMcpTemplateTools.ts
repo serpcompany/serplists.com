@@ -252,8 +252,10 @@ export const templateToolDefinitions = [
     description: "Update a private personal template (public templates can only be edited in SERP Lists). "
       + "Pass the latest version from get_template or the previous update_template as expectedVersion to "
       + "prevent lost updates. Either replace the fields you pass: title, description, categories, tags, or "
-      + "sections (the whole checklist; a section left out is removed). Or change one part with operation, "
-      + "which never needs more than get_template returned, even for a template read in pages: "
+      + "sections, which replaces the whole checklist: any section, task, or subtask it leaves out is removed. "
+      + "Or change one part with operation, which never needs more than get_template returned. For a template "
+      + "read in pages (get_template returned an outline or nextCursor), operation is the safe way to edit it: "
+      + "no one result holds the whole checklist that sections would have to send back. "
       + "replace_section needs sectionId and section (title, items, or both; items replace its tasks); "
       + "insert_section needs section (title and items), added before beforeSectionId or at the end; "
       + "move_section needs sectionId, moved before beforeSectionId or to the end; remove_section needs sectionId; "
@@ -273,7 +275,13 @@ export const templateToolDefinitions = [
         expectedVersion: { type: "integer", minimum: 1 },
         title: { type: "string", minLength: 1, maxLength: 160 },
         description: { type: "string", maxLength: 5000 },
-        sections: templateSectionsJsonSchema,
+        sections: {
+          ...templateSectionsJsonSchema,
+          description: "The whole checklist, its sections in order: it replaces every section, and any section, "
+            + "task, or subtask left out is removed. For a template read in pages, change it with operation "
+            + "instead. Keep the id of every section, task, and subtask you keep so run progress follows it; omit "
+            + "ids for new ones.",
+        },
         categories: templateLabelsJsonSchema,
         tags: templateLabelsJsonSchema,
         operation: {
