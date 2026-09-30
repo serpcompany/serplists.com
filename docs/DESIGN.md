@@ -110,9 +110,12 @@ page, so a page's sticky parts stick to the window.
   the component is purely presentational (no app state, features, or API calls;
   enforced by `deps:check`). Add shadcn components with the CLI
   (`npx shadcn@latest add <name>`) and keep them as generated.
-- Three generated components carry a change; keep it when you regenerate them.
+- Four generated components carry a change; keep it when you regenerate them.
   `CardTitle` (`card.tsx`) renders an `h3`, as it did before the move to base-nova, so card
-  titles stay in the page's outline. The sonner `Toaster` (`sonner.tsx`) follows the app's
+  titles stay in the page's outline. `buttonVariants` (`button.tsx`) merges its classes
+  with `cn`: unmerged, the base's `border-transparent` beats the outline variant's
+  `border-border`, and a link styled as an outline button showed no border in the light
+  theme. The sonner `Toaster` (`sonner.tsx`) follows the app's
   theme (`useDocumentTheme`), not next-themes. `SelectTrigger`'s icon (`select.tsx`) has
   empty children: Base UI's default "▼" would render inside the lucide icon as text and
   join the trigger's text (`tests/unit/components/ui/select.test.tsx`). `EmptyTitle` and
