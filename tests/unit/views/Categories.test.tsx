@@ -156,9 +156,14 @@ describe('Categories page search', () => {
     const container = createFakeContainer();
     root = createRoot(container as unknown as HTMLElement);
     await act(async () => root?.render(<Categories />));
+    // The field its visible label names.
+    const [label] = findAll(
+      container,
+      (node) => node instanceof FakeElement && node.nodeName === 'LABEL' && node.textContent === 'Search categories',
+    ) as FakeElement[];
     const [search] = findAll(
       container,
-      (node) => node instanceof FakeElement && node.getAttribute('aria-label') === 'Search categories',
+      (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
     ) as FakeElement[];
     // React DOM loaded without a DOM listens for the old IE input events, so call the field's
     // own onChange (the props React keeps on the node) with the typed value.
