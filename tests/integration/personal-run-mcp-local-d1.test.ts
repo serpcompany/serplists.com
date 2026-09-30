@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES } from "../../functions/api/handlers/agentMcpPages";
 import {
@@ -11,7 +11,8 @@ import {
   insertPersonalRunKeyWithinCap,
 } from "../../functions/api/utils/personal-run-key";
 import { execTool } from "../../scripts/lib/run-tool.mjs";
-import { contentSaveBytes, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
+import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
+import { readRunInFull } from "../support/runPages";
 import { readTemplateInFull } from "../support/templatePages";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -53,11 +54,11 @@ async function rows<T extends JsonRecord>(sql: string, ...bindings: unknown[]): 
   return result.results;
 }
 
-function mcpRequest(method: string, params?: unknown, id: number | undefined = 1, path = "/api/mcp"): Request {
+function mcpRequest(method: string, params?: unknown, id: number | undefined = 1, path = "/api/mcp", key = rawKey): Request {
   return new Request(`http://localhost${path}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${rawKey}`,
+      Authorization: `Bearer ${key}`,
       Accept: "application/json, text/event-stream",
       "Content-Type": "application/json; charset=utf-8",
       "MCP-Protocol-Version": protocolVersion,
@@ -94,6 +95,11 @@ const PROSE = "Confirm the owner, the rollback plan, and the customer notice —
 const PROSE_CHARACTERS = Array.from(PROSE);
 const prose = (length: number) =>
   Array.from({ length }, (_, index) => PROSE_CHARACTERS[index % PROSE_CHARACTERS.length]).join("");
+// At most `length` UTF-16 units, what update_run's notes limit counts, never splitting an emoji.
+const notesOf = (length: number) => {
+  let units = 0;
+  return Array.from(prose(length)).filter((character) => (units += character.length) <= length).join("");
+};
 const textTask = (id: string, textLength: number) => ({
   id,
   title: `Task ${id}`,
@@ -796,6 +802,112 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history.map(({ metadata_json }) => (JSON.parse(String(metadata_json)) as JsonRecord).operation))
       .toEqual(["replace_task", "insert_task", "move_section", "remove_task"]);
   }, 60_000);
+
+  it("reads a run near the 896KB limit back in full, a bounded result at a time, and updates it", async () => {
+    // A key of its own: the read takes a few dozen of a Run Key's 120 calls a minute.
+    const runKey = await createPersonalRunKeySecret();
+    await env.DB.prepare(`
+      INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
+      VALUES ('key-user-a-runs', 'user-a', 'Run reader', ?, ?, ?, ?)
+    `).bind(
+      runKey.keyPrefix,
+      runKey.keyHash,
+      "2026-09-19T02:50:00.000Z",
+      '["templates:read","templates:write","runs:read","runs:write"]',
+    ).run();
+    // The key-count checks below expect only the first key.
+    onTestFinished(async () => {
+      await env.DB.prepare("DELETE FROM personal_run_keys WHERE id = 'key-user-a-runs'").run();
+    });
+    let calls = 0;
+    const call = async (name: string, args: JsonRecord): Promise<JsonRecord> => {
+      calls += 1;
+      const body = await bodyOf(await handleAgentMcp(
+        mcpRequest("tools/call", { name, arguments: args }, calls, "/api/mcp", runKey.key),
+        env as never,
+      ));
+      expect(body.error, `${name}: ${JSON.stringify(body.error)}`).toBeUndefined();
+      const payload = toolPayload(body);
+      expect(byteLength(payload), name).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+      return payload;
+    };
+    const tool = async (name: string, args: JsonRecord): Promise<JsonRecord> => {
+      const payload = await call(name, args);
+      expect(payload.error, `${name}: ${String(payload.message)}`).toBeUndefined();
+      return payload;
+    };
+
+    // A template 1KB under the 768KB limit, and a run of it: too large to return whole.
+    const created = await tool("create_template", { title: "Incident Runbook", sections: nearLimitSections() });
+    const templateId = (created.template as JsonRecord).id as string;
+    const started = await tool("start_run", { templateId, title: "Incident drill" });
+    expect(started).toMatchObject({ run: { title: "Incident drill", revision: 1 }, sectionsOmitted: true });
+    const runId = (started.run as JsonRecord).id as string;
+    let revision = 1;
+    const update = async (args: JsonRecord) => {
+      const result = await tool("update_run", { runId, expectedRevision: revision, ...args });
+      revision = (result.run as JsonRecord).revision as number;
+      return result;
+    };
+    const storedRun = async () => (await rows<JsonRecord>(
+      "SELECT items, retired_items, revision FROM checklist_runs WHERE id = ?",
+      runId,
+    ))[0];
+
+    // Notes on a section and a task the template then removes: the run keeps them as retired work.
+    await update({ operation: "set_task_notes", taskId: "area-0-0", notes: notesOf(20_000) });
+    await update({ operation: "set_task_notes", taskId: "check-5", notes: "Pager rotated before the drill." });
+    let version = 1;
+    for (const operation of [{ operation: "remove_section", sectionId: "area-0" }, { operation: "remove_task", taskId: "check-5" }]) {
+      version = ((await tool("update_template", { templateId, expectedVersion: version, ...operation })).template as JsonRecord).version as number;
+    }
+    revision = Number((await storedRun()).revision);
+    expect(revision).toBe(5);
+
+    // 20,000-character notes (the most one update_run writes) until the run is within about 2KB
+    // of the run limit.
+    for (let area = 1; ; area += 1) {
+      const room = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(JSON.parse(String((await storedRun()).items)));
+      if (room < 1_000) break;
+      await update({ operation: "set_task_notes", taskId: `area-${area}-0`, notes: notesOf(Math.min(20_000, Math.floor(room / 1.1))) });
+    }
+    const stored = await storedRun();
+    const storedSections = JSON.parse(String(stored.items)) as JsonRecord[];
+    const storedRetired = JSON.parse(String(stored.retired_items)) as JsonRecord[];
+    expect(contentSaveBytes(storedSections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
+    expect(contentSaveBytes(storedSections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES - 4 * 1024);
+    expect(storedRetired.map(({ kind }) => kind)).toEqual(["section", "item"]);
+
+    // Every section, task, note and retired entry comes back, one bounded result at a time.
+    const before = calls;
+    const { run, results } = await readRunInFull((args) => tool("get_run", args), runId);
+    expect(run).toMatchObject({ id: runId, title: "Incident drill", revision, templateVersion: 3 });
+    expect(run.sections).toEqual(storedSections);
+    expect(run.retiredItems).toEqual(storedRetired);
+    const parts = new Set(results.flatMap((result) => (result.part ? [(result.part as JsonRecord).of] : [])));
+    expect(parts).toEqual(new Set(["task", "retiredItem"]));
+    expect(results.some((result) => typeof (result.section as JsonRecord | undefined)?.firstTask === "number")).toBe(true);
+    expect(calls - before).toBe(results.length);
+    expect(results.length).toBeLessThan(80);
+    const staleCursor = results.find((result) => typeof result.nextCursor === "string")?.nextCursor;
+    expect(typeof staleCursor).toBe("string");
+
+    // Each update sends one task's change and returns that task, or names one too large to return.
+    const ticked = await update({ operation: "set_task_completed", taskId: "check-100", completed: true });
+    expect(ticked).toMatchObject({ sectionId: "checks", taskId: "check-100", task: { id: "check-100", isCompleted: true } });
+    const noted = await update({ operation: "set_task_notes", taskId: "guide-long", notes: "Read the summary first." });
+    expect(noted).toEqual({ run: expect.objectContaining({ id: runId, revision }), sectionId: "guide", taskId: "guide-long", taskOmitted: true });
+    expect(await call("get_run", { runId, cursor: staleCursor })).toMatchObject({
+      error: "edit_conflict",
+      details: { currentRevision: revision },
+    });
+
+    const after = JSON.parse(String((await storedRun()).items)) as JsonRecord[];
+    const task = (sectionIndex: number, taskId: string) => ((after[sectionIndex].items as JsonRecord[]).find(({ id }) => id === taskId));
+    expect(task(1, "check-100")).toMatchObject({ isCompleted: true });
+    expect(task(0, "guide-long")).toMatchObject({ notes: "Read the summary first." });
+    expect(await call("get_run", { runId, taskId: "check-100" })).toMatchObject({ sectionId: "checks", task: { isCompleted: true } });
+  }, 120_000);
 
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
