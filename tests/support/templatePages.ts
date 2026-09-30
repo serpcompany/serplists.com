@@ -2,17 +2,18 @@
 // (functions/api/handlers/agentMcpTemplatePages.ts): whole when it fits, otherwise the outline
 // (following nextCursor), then each section by id (following nextCursor), joining the parts of
 // anything too large for one result. Used by the unit and local D1 tests to show that every
-// template can be read in full.
+// template can be read in full; runPages.ts reads runs the same way.
 
 type JsonRecord = Record<string, unknown>;
 
-export type TemplateRead = (args: JsonRecord) => Promise<JsonRecord> | JsonRecord;
+export type PagedRead = (args: JsonRecord) => Promise<JsonRecord> | JsonRecord;
+export type TemplateRead = PagedRead;
 
-const isRecord = (value: unknown): value is JsonRecord =>
+export const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 // Joins consecutive parts of one unit's JSON text; returns the unit with its last part.
-function partJoiner() {
+export function partJoiner() {
   let text = '';
   let expectedFrom = 0;
   return (part: JsonRecord): unknown => {
@@ -27,7 +28,8 @@ function partJoiner() {
   };
 }
 
-async function readSection(call: TemplateRead, sectionId: unknown): Promise<JsonRecord> {
+/** One section by id, whole or a page of tasks at a time, joining the parts of anything larger. */
+export async function readSection(call: PagedRead, sectionId: unknown): Promise<JsonRecord> {
   let page = await call({ sectionId });
   const first = page.section as JsonRecord | undefined;
   if (first && typeof first.taskCount !== 'number') return first;
@@ -56,6 +58,46 @@ async function readSection(call: TemplateRead, sectionId: unknown): Promise<Json
 }
 
 /**
+ * An outline read from its first page (already called) to its last: the fields of the template or
+ * run (stored under `key`) and every outline entry.
+ */
+export async function readOutline(
+  call: PagedRead,
+  firstPage: JsonRecord,
+  key: 'template' | 'run',
+): Promise<{ fields: JsonRecord; outline: JsonRecord[] }> {
+  const join = partJoiner();
+  let fields: JsonRecord | undefined;
+  const outline: JsonRecord[] = [];
+  let page = firstPage;
+  for (;;) {
+    if (isRecord(page.part)) {
+      const value = join(page.part);
+      if (isRecord(value)) {
+        if (page.part.of === key) fields = value;
+        else outline.push(value);
+      }
+    } else {
+      // The outline's first page carries the fields, unless they came in parts.
+      fields ??= page[key] as JsonRecord;
+      outline.push(...(page.outline as JsonRecord[]));
+    }
+    if (typeof page.nextCursor !== 'string') break;
+    page = await call({ cursor: page.nextCursor });
+  }
+  return { fields: fields ?? {}, outline };
+}
+
+/** Calls `read` with `extra` arguments on each call, recording every result. */
+export function recordingCall(read: PagedRead, extra: JsonRecord, results: JsonRecord[]): PagedRead {
+  return async (args: JsonRecord) => {
+    const result = await read({ ...extra, ...args });
+    results.push(result);
+    return result;
+  };
+}
+
+/**
  * The template as a whole get_template result would hold it, read in as many calls as it
  * takes, and every result on the way.
  */
@@ -64,36 +106,14 @@ export async function readTemplateInFull(
   templateId: string,
 ): Promise<{ template: JsonRecord; results: JsonRecord[] }> {
   const results: JsonRecord[] = [];
-  const call = async (args: JsonRecord) => {
-    const result = await read({ templateId, ...args });
-    results.push(result);
-    return result;
-  };
+  const call = recordingCall(read, { templateId }, results);
 
-  let page = await call({});
+  const page = await call({});
   if (page.sectionsOmitted !== true) return { template: page.template as JsonRecord, results };
 
-  const join = partJoiner();
-  let fields: JsonRecord | undefined;
-  const outline: JsonRecord[] = [];
-  for (;;) {
-    if (isRecord(page.part)) {
-      const value = join(page.part);
-      if (isRecord(value)) {
-        if (page.part.of === 'template') fields = value;
-        else outline.push(value);
-      }
-    } else {
-      // The outline's first page carries the template's fields, unless they came in parts.
-      fields ??= page.template as JsonRecord;
-      outline.push(...(page.outline as JsonRecord[]));
-    }
-    if (typeof page.nextCursor !== 'string') break;
-    page = await call({ cursor: page.nextCursor });
-  }
-
+  const { fields, outline } = await readOutline(call, page, 'template');
   const sections: JsonRecord[] = [];
   for (const entry of outline) sections.push(await readSection(call, entry.id));
-  const { sectionCount: _sectionCount, taskCount: _taskCount, bytes: _bytes, ...header } = fields ?? {};
+  const { sectionCount: _sectionCount, taskCount: _taskCount, bytes: _bytes, ...header } = fields;
   return { template: { ...header, sections }, results };
 }

@@ -23,25 +23,18 @@ import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections"
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 import { withStableTemplateIdentities } from "../utils/template-identities";
-import { boundedText, toJson, utf8ByteLength } from "./agentMcpPages";
+import { describeList, listRuns, listTemplates } from "./agentMcpLists";
+import { boundedText, byteSize, fits, resultTooLarge, toJson } from "./agentMcpPages";
+import { describeRunRead, readRun, runView, startedRunResult, updatedRunResult } from "./agentMcpRunPages";
 import {
   applyRunOperation,
   assertRunCanBeCompleted,
   assertRunContentFits,
-  jsonByteLength,
-  MAX_UNPAGED_RESULT_BYTES,
-  outlineRetiredItems,
-  outlineSections,
-  parseRetiredItems,
   parseStoredSections,
-  selectRunScope,
-  serializeRun,
   summarizeRun,
   summarizeRunForAudit,
   updateRunAuditDiff,
-  updateRunResult,
 } from "./agentMcpRuns";
-import { describeList, listRuns, listTemplates } from "./agentMcpLists";
 import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getOwnedTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
@@ -108,12 +101,19 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
   });
 }
 
-// Only for read-only tools. A mutation must never report failure after its write has
-// committed, so mutating tools size their results before the write or keep them compact.
-function assertBoundedResult(value: JsonRecord): void {
-  if (jsonByteLength(value) > MAX_UNPAGED_RESULT_BYTES) {
-    throw new ToolError("Result is too large; request a smaller resource", "result_too_large");
-  }
+// Every tool builds its result to fit MAX_RESULT_BYTES (agentMcpPages.ts); this catches a
+// mistake. A read that does not fit fails. A mutation has already committed and must never report
+// failure (the agent would retry it, and a retried start_run makes a duplicate run), so it is
+// logged and returned.
+function checkResultBound(request: Request, identity: PersonalRunKeyIdentity, tool: string, data: JsonRecord): void {
+  if (fits(data)) return;
+  if (isReadOnlyTool(tool)) throw resultTooLarge();
+  log("error", "mcp_result_too_large", {
+    requestId: requestIdOf(request),
+    keyId: identity.keyId,
+    tool: toolNameForLog(tool),
+    bytes: byteSize(data),
+  });
 }
 
 function contentTypeIsJson(request: Request): boolean {
@@ -144,6 +144,9 @@ async function startRun(
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
   if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
+  const sections = resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)));
+  // Checked before the write, as a web start checks it, so a run too large to save is never stored.
+  assertRunContentFits(sections);
 
   const now = new Date().toISOString();
   const run = {
@@ -152,7 +155,7 @@ async function startRun(
     team_id: null,
     template_id: template.id,
     title: args.title ?? template.title,
-    items: JSON.stringify(resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)))),
+    items: JSON.stringify(sections),
     status: "in_progress",
     progress: 0,
     started_at: now,
@@ -165,11 +168,10 @@ async function startRun(
     revision: 1,
     retired_items: "[]",
   };
-  // Size the run before writing: once the batch commits, start_run must return the run
-  // rather than an error, or the agent retries and creates duplicate runs. The content
-  // cap leaves room under MAX_UNPAGED_RESULT_BYTES for the run's scalar fields.
-  assertRunContentFits(utf8ByteLength(run.items));
-  const result = { run: serializeRun(run) };
+  // Built before writing: once the batch commits, start_run must return the run rather than an
+  // error, or the agent retries and creates duplicate runs. A run too large for one result comes
+  // back without its sections (startedRunResult never fails).
+  const result = startedRunResult(runView(run));
   const auditEvent = await buildAuditEventValues({
     actorUserId: identity.userId,
     subject: { type: "user", id: identity.userId },
@@ -218,22 +220,9 @@ async function getRun(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const args = parseToolArguments(getRunArgs, rawArguments);
-  const run = await getOwnedRun(env, identity.userId, args.runId);
-  const scoped = selectRunScope(parseStoredSections(run.items), parseRetiredItems(run), args);
-  const result = { run: serializeRun(run, scoped.sections, scoped.retiredItems) };
-  if (jsonByteLength(result) <= MAX_UNPAGED_RESULT_BYTES) return result;
-  throw new ToolError(
-    "Run is too large to return at once; call get_run again with a sectionId or taskId from details.sections "
-      + "or details.retiredItems",
-    "result_too_large",
-    {
-      limit: MAX_UNPAGED_RESULT_BYTES,
-      run: summarizeRun(run),
-      sections: outlineSections(scoped.sections),
-      retiredItems: outlineRetiredItems(scoped.retiredItems),
-    },
-  );
+  const { runId, ...read } = parseToolArguments(getRunArgs, rawArguments);
+  const run = await getOwnedRun(env, identity.userId, runId);
+  return readRun(runView(run), read);
 }
 
 // The router sets X-Request-Id on every API request before dispatch.
@@ -334,14 +323,12 @@ async function updateRun(
       now,
     }));
   } else {
-    // Only notes can grow the content. Completion toggles just flip booleans (unchecking
-    // adds a byte per task or subtask), so they stay allowed on a run over the cap.
-    const currentBytes = args.operation === "set_task_notes" ? jsonByteLength(sections) : null;
     applyRunOperation(sections, args);
-    const items = JSON.stringify(sections);
-    // Checked before the write, so an oversized update never commits.
-    if (currentBytes !== null) assertRunContentFits(utf8ByteLength(items), currentBytes);
-    updates.items = items;
+    // Only notes change the size the content limit counts (it counts every task and Sub-task as
+    // unticked). Checked before the write, so an oversized update never commits; a run already
+    // over the limit can still take shorter notes.
+    if (args.operation === "set_task_notes") assertRunContentFits(sections, parseStoredSections(existing.items));
+    updates.items = JSON.stringify(sections);
     updates.progress = calculateRunProgress(sections);
   }
 
@@ -402,7 +389,7 @@ async function updateRun(
     throw new ToolError("Unable to update the run safely", "internal_invariant");
   }
 
-  return updateRunResult(nextRun, sections, args);
+  return updatedRunResult(summarizeRun(nextRun), sections, args);
 }
 
 async function callTool(
@@ -438,7 +425,8 @@ async function callTool(
     }
     case "start_run": {
       const data = await startRun(request, env, identity, rawArguments);
-      return { data, text: `Started run "${boundedText((data.run as JsonRecord).title)}".` };
+      const omitted = data.sectionsOmitted === true ? " It is too large for one result; read it with get_run." : "";
+      return { data, text: `Started run "${boundedText((data.run as JsonRecord).title)}".${omitted}` };
     }
     case "list_runs": {
       const data = await listRuns(env, identity, rawArguments);
@@ -446,11 +434,12 @@ async function callTool(
     }
     case "get_run": {
       const data = await getRun(env, identity, rawArguments);
-      return { data, text: `Loaded run "${boundedText((data.run as JsonRecord).title)}".` };
+      return { data, text: describeRunRead(data) };
     }
     case "update_run": {
       const data = await updateRun(request, env, identity, rawArguments);
-      return { data, text: `Updated run "${boundedText((data.run as JsonRecord).title)}".` };
+      const omitted = data.taskOmitted === true ? " The task is too large for one result; read it with get_run and taskId." : "";
+      return { data, text: `Updated run "${boundedText((data.run as JsonRecord).title)}".${omitted}` };
     }
     default:
       throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -572,7 +561,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     log("info", "mcp_tool_call", { requestId, keyId: identity.keyId, toolName: toolNameForLog(params.name) });
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
-      if (isReadOnlyTool(params.name)) assertBoundedResult(data);
+      checkResultBound(request, identity, params.name, data);
       try {
         await markPersonalRunKeyUsed(env, identity);
       } catch (error) {

@@ -36,6 +36,8 @@ export const getRunArgs = z.object({
   runId: z.string().trim().min(1),
   sectionId: z.string().trim().min(1).optional(),
   taskId: z.string().trim().min(1).optional(),
+  retired: z.boolean().optional(),
+  cursor: cursorArg.optional(),
 }).strict();
 
 export const updateRunArgs = z.discriminatedUnion("operation", [
@@ -96,9 +98,10 @@ export const toolDefinitions = [
   ...templateToolDefinitions,
   {
     name: "start_run",
-    description: "Start a personal checklist run from one of the authenticated user's templates. "
-      + "Returns the new run with its sections, tasks, and revision. A template too large to run "
-      + "through MCP fails with content_too_large and nothing is created.",
+    description: "Start a personal checklist run from one of the authenticated user's templates. Returns the "
+      + "new run with its sections, tasks, and revision when it fits in one result (32KB); otherwise its fields "
+      + "without sections (sectionsOmitted), to read with get_run. A template whose run would be too large to "
+      + "save fails with content_too_large and nothing is created.",
     inputSchema: {
       type: "object",
       properties: {
@@ -129,16 +132,29 @@ export const toolDefinitions = [
   },
   {
     name: "get_run",
-    description: "Read a personal run, including its sections, tasks, subtasks, progress, status, and revision, "
-      + "and retiredItems (work a template change removed). Pass sectionId or taskId to read part of a large run; "
-      + "retiredItems then holds only that section's or task's retired work, and retired ids work too. A run too "
-      + "large to return at once fails with result_too_large and lists its section, task, and retired ids.",
+    description: "Read a personal run: its sections, tasks, subtasks, completion, notes, progress, status, and "
+      + "revision, and retiredItems (work a template change removed, read-only). No result is larger than 32KB, "
+      + "what MCP clients take from one call, so a larger run comes back as an outline instead (sectionsOmitted, "
+      + "and outline: each section's id, title, taskCount, and bytes; run.retiredCount and run.retiredBytes say "
+      + "how much retired work it holds). Read a section with sectionId, or one task with taskId. A section too "
+      + "large for one result comes back a page of tasks at a time (section.firstTask and section.taskCount say "
+      + "which), and anything too large for a result on its own, such as a task with very long notes, comes back "
+      + "as part: pieces of its JSON text to join in order. Pass retired: true to read retiredItems instead, a "
+      + "page of whole entries at a time (firstRetired and retiredCount say which); with sectionId or taskId it "
+      + "reads only that section's or task's retired work. While a result has nextCursor, call get_run with runId "
+      + "and cursor set to it for the rest. A cursor reads the revision it started from: once the run changes it "
+      + "fails with edit_conflict, so start again without it.",
     inputSchema: {
       type: "object",
       properties: {
         runId: { type: "string" },
-        sectionId: { type: "string", description: "Return only this section, live or retired." },
-        taskId: { type: "string", description: "Return only this task, inside its section, live or retired." },
+        sectionId: {
+          type: "string",
+          description: "Read only this section, in pages if it is too large for one result; with retired, its retired work.",
+        },
+        taskId: { type: "string", description: "Read only this task; with retired, its retired work." },
+        retired: { type: "boolean", description: "Read the run's retired work (retiredItems) instead of its sections." },
+        cursor: cursorJsonSchema,
       },
       required: ["runId"],
       additionalProperties: false,
@@ -152,7 +168,9 @@ export const toolDefinitions = [
       + "set_subtask_completed needs taskId, subtaskId, and completed; set_task_notes needs taskId and notes; "
       + "set_run_status needs status; a run can be completed only once every task and Sub-task is done "
       + "(it fails with run_incomplete, naming open taskIds, otherwise). Leave out fields the operation does not use. "
-      + "Returns the run summary with its new revision and the changed task; call get_run for the full run.",
+      + "Returns the run's fields with its new revision and, after a task operation, the changed task (sectionId "
+      + "and taskId name it) when it fits in one result (32KB); taskOmitted otherwise, so read it with get_run and "
+      + "taskId.",
     // One flat object: model APIs reject a oneOf/anyOf/allOf at the root of a tool schema,
     // and many clients read only top-level properties. updateRunArgs enforces which
     // fields each operation needs.

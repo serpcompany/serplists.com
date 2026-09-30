@@ -466,9 +466,10 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const items = [{
       id: "section-large",
       title: "Large",
-      // About 560 KB: over both the MCP run content cap and the 512 KB result bound. The size
-      // is in task descriptions, which a new run copies; run-only notes on a template are dropped.
-      items: Array.from({ length: 56 }, (_, index) => ({
+      // About 930 KB, stored before the 768KB template limit: over the 896KB a run's content may
+      // hold. The size is in task descriptions, which a new run copies; run-only notes on a
+      // template are dropped.
+      items: Array.from({ length: 93 }, (_, index) => ({
         id: `large-task-${index}`,
         title: `Large task ${index}`,
         isCompleted: false,
