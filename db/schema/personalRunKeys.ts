@@ -13,6 +13,7 @@ export const personal_run_keys = sqliteTable(
     created_at: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     last_used_at: text("last_used_at"),
     revoked_at: text("revoked_at"),
+    permissions: text("permissions").notNull().default('["templates:read","runs:read","runs:write"]'),
   },
   (table) => [
     primaryKey({ columns: [table.id] }),

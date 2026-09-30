@@ -34,7 +34,12 @@ import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 
-const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
+const identity = {
+  keyId: "key-1",
+  userId: "user-1",
+  name: "Codex",
+  permissions: ["templates:read", "templates:write", "runs:read", "runs:write"] as const,
+};
 const env = { DB: {} } as any;
 
 function rpcRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
@@ -315,6 +320,27 @@ describe("personal run MCP handler", () => {
       { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     ]);
     expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
+  });
+
+  it("offers and allows only the tools a key's permissions cover", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, permissions: ["runs:read"] });
+
+    const listResponse = await handleAgentMcp(rpcRequest("tools/list"), env);
+    const list = await listResponse.json() as any;
+    expect(list.result.tools.map((tool: any) => tool.name)).toEqual(["list_runs", "get_run"]);
+
+    const deniedResponse = await handleAgentMcp(callTool("create_template", {
+      title: "Denied",
+      sections: [{ title: "Section", items: [{ title: "Task" }] }],
+    }), env);
+    const denied = await deniedResponse.json() as any;
+    expect(denied.result.isError).toBe(true);
+    expect(denied.result.structuredContent).toMatchObject({
+      error: "permission_denied",
+      details: { permission: "templates:write" },
+    });
+    expect(dbMocks.db.select).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it("does not expose another user's or a team's templates", async () => {

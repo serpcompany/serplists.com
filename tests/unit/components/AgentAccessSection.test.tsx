@@ -15,6 +15,7 @@ const activeKey: AgentKey = {
   createdAt: '2026-09-19T01:00:00.000Z',
   lastUsedAt: null,
   revokedAt: null,
+  permissions: ['templates:read', 'runs:read', 'runs:write'],
   status: 'active',
 };
 
@@ -25,12 +26,14 @@ const defaultProps: AgentAccessSectionViewProps = {
   keys: [],
   keyName: '',
   mcpEndpoint: 'https://demo.serplists.test/api/mcp',
+  permissions: ['templates:read', 'runs:read', 'runs:write'],
   revokingKeyId: null,
   onCopyEndpoint: vi.fn(),
   onCopySecret: vi.fn(),
   onCreate: vi.fn(),
   onDismissSecret: vi.fn(),
   onKeyNameChange: vi.fn(),
+  onPermissionChange: vi.fn(),
   onRevoke: vi.fn(),
 };
 
@@ -38,14 +41,18 @@ const renderView = (overrides: Partial<AgentAccessSectionViewProps> = {}) =>
   renderToStaticMarkup(<AgentAccessSectionView {...defaultProps} {...overrides} />);
 
 describe('AgentAccessSectionView', () => {
-  it('renders the create state with the fixed personal run permissions', () => {
+  it('renders the create state with permission choices that default to no template writes', () => {
     const html = renderView({ keyName: 'Codex SOP Runner' });
 
     expect(html).toContain('Agent Access');
     expect(html).toContain('Create Run Key');
-    expect(html).toContain('read, create, and edit private personal templates');
-    expect(html).toContain('list, start, read, and update personal');
-    expect(html).toContain('cannot delete or publish templates');
+    expect(html).toContain('Permissions are fixed when you create a key');
+    expect(html).toContain('No key can delete or publish');
+    for (const label of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
+      expect(html).toContain(`aria-label="${label}"`);
+    }
+    expect(html).toMatch(/aria-checked="false"[^>]*aria-label="Write templates"|aria-label="Write templates"[^>]*aria-checked="false"/);
+    expect(html).toMatch(/aria-checked="true"[^>]*aria-label="Read templates"|aria-label="Read templates"[^>]*aria-checked="true"/);
     expect(html).toContain('value="Codex SOP Runner"');
     expect(html).toContain('No Run Keys yet.');
     expect(html).toContain('MCP connection');
@@ -74,6 +81,11 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('I have saved this key');
   });
 
+  it('disables creation when no permission is chosen', () => {
+    const html = renderView({ keyName: 'Codex SOP Runner', permissions: [] });
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+  });
+
   it('renders active keys as revocable and revoked keys as historical records', () => {
     const html = renderView({
       keys: [
@@ -95,6 +107,8 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Old Claude Runner');
     expect(html).toContain('Revoked');
     expect(html).toContain('slrk_demo12...');
+    expect(html).toContain('Codex SOP Runner permissions');
+    expect(html).toContain('Write runs');
     expect(html).not.toContain('slrk_secret_visible_once');
   });
 });

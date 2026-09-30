@@ -1,4 +1,5 @@
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { parseStoredRunKeyPermissions, type RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { sha256Hex } from "./crypto";
@@ -10,6 +11,7 @@ export interface PersonalRunKeyIdentity {
   keyId: string;
   userId: string;
   name: string;
+  permissions: readonly RunKeyPermission[];
   lastUsedAt?: string | null;
 }
 
@@ -24,6 +26,7 @@ export interface PersonalRunKeyRecord {
   key_prefix: string;
   key_hash: string;
   created_at: string;
+  permissions: readonly RunKeyPermission[];
 }
 
 function encodeBase64Url(bytes: Uint8Array): string {
@@ -67,8 +70,8 @@ export async function insertPersonalRunKeyWithinCap(
   record: PersonalRunKeyRecord,
 ): Promise<boolean> {
   const result: unknown = await createDb(env).run(sql`
-    insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at)
-    select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}
+    insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
+    select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}, ${JSON.stringify(record.permissions)}
     where (
       select count(*) from personal_run_keys
       where user_id = ${record.user_id} and revoked_at is null
@@ -95,6 +98,7 @@ export async function authenticatePersonalRunKey(
       id: personal_run_keys.id,
       userId: personal_run_keys.user_id,
       name: personal_run_keys.name,
+      permissions: personal_run_keys.permissions,
       lastUsedAt: personal_run_keys.last_used_at,
     })
     .from(personal_run_keys)
@@ -107,6 +111,7 @@ export async function authenticatePersonalRunKey(
     keyId: record.id,
     userId: record.userId,
     name: record.name,
+    permissions: parseStoredRunKeyPermissions(record.permissions),
     lastUsedAt: record.lastUsedAt,
   };
 }

@@ -17,10 +17,18 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@/lib/api';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import {
+  DEFAULT_RUN_KEY_PERMISSIONS,
+  RUN_KEY_PERMISSION_DETAILS,
+  RUN_KEY_PERMISSIONS,
+  toggleRunKeyPermission,
+  type RunKeyPermission,
+} from '@/lib/schemas/runKeyPermissions';
 
 const agentKeysQueryKey = ['agent-keys'] as const;
 
@@ -43,12 +51,14 @@ export type AgentAccessSectionViewProps = {
   keys: AgentKey[];
   keyName: string;
   mcpEndpoint: string;
+  permissions: readonly RunKeyPermission[];
   revokingKeyId: string | null;
   onCopyEndpoint: () => void;
   onCopySecret: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onDismissSecret: () => void;
   onKeyNameChange: (name: string) => void;
+  onPermissionChange: (permission: RunKeyPermission, enabled: boolean) => void;
   onRevoke: (key: AgentKey) => void;
 };
 
@@ -59,12 +69,14 @@ export function AgentAccessSectionView({
   keys,
   keyName,
   mcpEndpoint,
+  permissions,
   revokingKeyId,
   onCopyEndpoint,
   onCopySecret,
   onCreate,
   onDismissSecret,
   onKeyNameChange,
+  onPermissionChange,
   onRevoke,
 }: AgentAccessSectionViewProps) {
   return (
@@ -78,13 +90,13 @@ export function AgentAccessSectionView({
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            Create a personal Run Key for a code agent to operate SOP runs in Personal.
+            Create a personal Run Key for a code agent to work with your Personal templates and runs.
           </p>
           <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-            <p className="font-medium">Fixed personal permissions</p>
+            <p className="font-medium">Permissions are fixed when you create a key</p>
             <p className="mt-1 text-muted-foreground">
-              The key can read, create, and edit private personal templates and list, start, read, and update personal
-              runs. It cannot delete or publish templates, change your profile, access Organizations, or manage billing.
+              To change what an agent can do, create a new key and revoke the old one. No key can delete or publish
+              templates, change your profile, access Organizations, or manage billing.
             </p>
           </div>
         </div>
@@ -101,12 +113,32 @@ export function AgentAccessSectionView({
                 maxLength={80}
                 autoComplete="off"
               />
-              <Button type="submit" disabled={isCreating || !keyName.trim()}>
+              <Button type="submit" disabled={isCreating || !keyName.trim() || permissions.length === 0}>
                 <KeyRound className="mr-2 h-4 w-4" />
                 {isCreating ? 'Creating...' : 'Create Run Key'}
               </Button>
             </div>
           </div>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Permissions</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {RUN_KEY_PERMISSIONS.map((permission) => (
+                <label className="flex items-start gap-3 rounded-md border p-3 text-sm" key={permission}>
+                  <Checkbox
+                    aria-label={RUN_KEY_PERMISSION_DETAILS[permission].label}
+                    checked={permissions.includes(permission)}
+                    onCheckedChange={(checked) => onPermissionChange(permission, checked === true)}
+                  />
+                  <span className="space-y-0.5">
+                    <span className="block font-medium">{RUN_KEY_PERMISSION_DETAILS[permission].label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {RUN_KEY_PERMISSION_DETAILS[permission].description}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </form>
 
         {createdKey ? (
@@ -211,6 +243,13 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                         </Badge>
                       </div>
                       <p className="font-mono text-xs text-muted-foreground">{key.prefix}...</p>
+                      <div className="flex flex-wrap gap-1" aria-label={`${key.name} permissions`}>
+                        {key.permissions.map((permission) => (
+                          <Badge key={permission} variant="outline">
+                            {RUN_KEY_PERMISSION_DETAILS[permission]?.label ?? permission}
+                          </Badge>
+                        ))}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         Created {formatTimestamp(key.createdAt)} · Last used {formatTimestamp(key.lastUsedAt)}
                       </p>
@@ -257,6 +296,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
 
 export function AgentAccessSection() {
   const [keyName, setKeyName] = useState('');
+  const [permissions, setPermissions] = useState<RunKeyPermission[]>([...DEFAULT_RUN_KEY_PERMISSIONS]);
   const [createdKey, setCreatedKey] = useState<CreatedAgentKey | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
@@ -277,9 +317,10 @@ export function AgentAccessSection() {
 
     setIsCreating(true);
     try {
-      const result = await api.createAgentKey(name);
+      const result = await api.createAgentKey(name, permissions);
       setCreatedKey(result);
       setKeyName('');
+      setPermissions([...DEFAULT_RUN_KEY_PERMISSIONS]);
       await keysQuery.refetch();
       toast.success('Run Key created');
     } catch (error) {
@@ -331,12 +372,15 @@ export function AgentAccessSection() {
       keys={keysQuery.data ?? []}
       keyName={keyName}
       mcpEndpoint={mcpEndpoint}
+      permissions={permissions}
       revokingKeyId={revokingKeyId}
       onCopyEndpoint={handleCopyEndpoint}
       onCopySecret={handleCopySecret}
       onCreate={handleCreate}
       onDismissSecret={() => setCreatedKey(null)}
       onKeyNameChange={setKeyName}
+      onPermissionChange={(permission, enabled) =>
+        setPermissions((current) => toggleRunKeyPermission(current, permission, enabled))}
       onRevoke={handleRevoke}
     />
   );

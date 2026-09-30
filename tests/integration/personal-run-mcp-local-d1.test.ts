@@ -14,6 +14,7 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
 const migration25 = "0025_add_personal_run_keys.sql";
+const migration27 = "0027_add_personal_run_key_permissions.sql";
 const protocolVersion = "2025-06-18";
 
 type TestEnv = {
@@ -32,7 +33,7 @@ let runId = "";
 
 function migrationNamesThrough24(): string[] {
   return readdirSync(migrationsDir)
-    .filter((name) => name.endsWith(".sql") && name !== migration25)
+    .filter((name) => name.endsWith(".sql") && name !== migration25 && name !== migration27)
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -248,6 +249,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at)
       VALUES (?, 'user-a', 'Codex local D1', ?, ?, ?)
     `).bind(keyId, secret.keyPrefix, secret.keyHash, "2026-09-19T02:00:00.000Z").run();
+    await applyMigration(migration27);
 
     const stored = await rows<JsonRecord>("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
     expect(JSON.stringify(stored)).not.toContain(rawKey);
@@ -257,7 +259,18 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       key_prefix: secret.keyPrefix,
       key_hash: secret.keyHash,
       revoked_at: null,
+      permissions: '["templates:read","runs:read","runs:write"]',
     });
+
+    const toolsBody = await bodyOf(await handleAgentMcp(mcpRequest("tools/list"), env as never));
+    expect(((toolsBody.result as JsonRecord).tools as JsonRecord[]).map(({ name }) => name)).toEqual([
+      "list_templates",
+      "get_template",
+      "start_run",
+      "list_runs",
+      "get_run",
+      "update_run",
+    ]);
 
     const listBody = await bodyOf(await callTool("list_templates"));
     expect((toolPayload(listBody).templates as JsonRecord[]).map(({ id }) => id)).toEqual(["template-a"]);
@@ -406,6 +419,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
         contents: [{ type: "subItems", subItems: [{ title: "pnpm install" }] }],
       }],
     }];
+
+    const denied = await bodyOf(await callTool("create_template", { title: "Agent Harness Setup", sections }));
+    expect(toolError(denied)).toBe("permission_denied");
+    expect(await rows("SELECT id FROM templates WHERE title = 'Agent Harness Setup'")).toEqual([]);
+
+    await env.DB.prepare("UPDATE personal_run_keys SET permissions = ? WHERE id = ?")
+      .bind('["templates:read","templates:write","runs:read","runs:write"]', keyId)
+      .run();
 
     const limited = await bodyOf(await callTool("create_template", { title: "Agent Harness Setup", sections }));
     expect(toolError(limited)).toBe("limit_reached");
@@ -574,6 +595,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       key_prefix: "slrk_cap",
       key_hash: `cap-hash-${index}`,
       created_at: "2026-09-19T04:00:00.000Z",
+      permissions: ["runs:read"] as const,
     });
 
     // Twelve parallel creates: exactly ten may succeed.
@@ -589,5 +611,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       .run();
     expect(await insertPersonalRunKeyWithinCap(env as never, record(20))).toBe(true);
     expect(await insertPersonalRunKeyWithinCap(env as never, record(21))).toBe(false);
+    expect(await rows("SELECT permissions FROM personal_run_keys WHERE id = 'cap-key-20'"))
+      .toEqual([{ permissions: '["runs:read"]' }]);
   });
 });

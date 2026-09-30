@@ -12,11 +12,16 @@
 - **Email verification is required** before sign-in in production, and
   breached passwords are rejected (`haveIBeenPwned` plugin).
 - **Production blocks known test-email domains** at sign-up and sign-in.
-- **Agents act through Run Keys**, revocable credentials limited to reading,
-  creating, and editing the owner's Personal templates and listing, starting,
-  reading, and updating Personal runs. Templates a key creates are private; a key
-  cannot delete or publish templates or edit a public one, and template edits use the web editor's
-  code path, so they get the same version check, history, and run sync.
+- **Agents act through Run Keys**, revocable credentials limited to the owner's
+  Personal templates and runs and, within that, to the permissions chosen when the
+  key was created (`src/lib/schemas/runKeyPermissions.ts`): `templates:read`,
+  `templates:write`, `runs:read`, `runs:write`. Each write implies its read, new keys
+  default to everything except `templates:write`, and permissions cannot be edited
+  afterwards. The MCP lists only the tools a key's permissions cover and refuses the
+  rest with `permission_denied`. A stored value that fails to parse grants nothing.
+  Templates a key creates are private; a key cannot delete or publish templates or
+  edit a public one, and template edits use the web editor's code path, so they get
+  the same version check, history, and run sync.
   Keys are stored hashed, and each user can hold at most 10 active keys (enforced in
   one insert statement, so parallel requests cannot exceed it). Every authenticated
   MCP request logs `mcp_request` with its request ID and key ID, and tool calls also
