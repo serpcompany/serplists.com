@@ -5,20 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, FileX } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PageSection } from '@/components/layout/page-shell';
+import { PageEmptyState, PageLoadingState } from '@/components/layout/PageState';
 import { NoIndexMeta } from '@/components/seo/NoIndexMeta';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from '@/components/ui/empty';
-import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { useTemplates } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
@@ -204,40 +195,25 @@ const PublicTemplate = () => {
   const ownerPath = ownerSlug ? buildPublicProfilePath(ownerSlug) : null;
 
   if (loading) {
-    return (
-      <PageSection spacing="spacious" width="narrow">
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia>
-              <Spinner className="size-8" />
-            </EmptyMedia>
-            <EmptyDescription>Loading template…</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </PageSection>
-    );
+    return <PageLoadingState label="Loading template…" />;
   }
 
   // A failed request is not a missing template: say so and let the visitor retry.
   // No noindex here: a crawler that hits a brief outage must not drop a live page.
   if (loadError && !displayTemplate) {
     return (
-      <PageSection spacing="spacious" width="narrow">
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyTitle className="text-2xl">
-              <h1>Unable to load template</h1>
-            </EmptyTitle>
-            <EmptyDescription>{loadError}</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent className="flex-row justify-center">
+      <PageEmptyState
+        actions={
+          <>
             <Button onClick={reload}>Try again</Button>
             <Link href={buildPublicTemplatesPath()} className={buttonVariants({ variant: 'outline' })}>
               Browse the Template Library
             </Link>
-          </EmptyContent>
-        </Empty>
-      </PageSection>
+          </>
+        }
+        description={loadError}
+        title="Unable to load template"
+      />
     );
   }
 
@@ -246,26 +222,20 @@ const PublicTemplate = () => {
   // after the server rendered the page.
   if (notFound || !displayTemplate) {
     return (
-      <PageSection spacing="spacious" width="narrow">
+      <>
         <NoIndexMeta follow={false} />
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileX />
-            </EmptyMedia>
-            <EmptyTitle className="text-2xl">
-              <h1>{TEMPLATE_NOT_FOUND_PAGE_TEXT.title}</h1>
-            </EmptyTitle>
-            <EmptyDescription>{TEMPLATE_NOT_FOUND_PAGE_TEXT.description}</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
+        <PageEmptyState
+          actions={
             <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
               <ArrowLeft data-icon="inline-start" />
               Browse the Template Library
             </Link>
-          </EmptyContent>
-        </Empty>
-      </PageSection>
+          }
+          description={TEMPLATE_NOT_FOUND_PAGE_TEXT.description}
+          icon={<FileX />}
+          title={TEMPLATE_NOT_FOUND_PAGE_TEXT.title}
+        />
+      </>
     );
   }
 
