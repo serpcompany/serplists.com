@@ -4,14 +4,14 @@ import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
   isYamlTemplateExtension,
-  normalizePortableTemplate,
   parseTemplateMarkdown,
   parseTemplateYaml,
   renderTemplateMarkdown,
-  renderTemplatePreviewHtml,
-  renderTemplateReadme,
   type SupportedTemplateSourceExtension,
 } from "../../src/lib/templates/templateMarkdown";
+import { normalizePortableTemplate } from "../../src/lib/templates/portableTemplateNormalization";
+import { renderTemplatePreviewHtml } from "./templatePreviewHtml";
+import { renderTemplateReadme } from "./templateReadme";
 import {
   portableChecklistTemplateSchema,
   type PortableChecklistTemplate,

@@ -8,11 +8,8 @@ import { withStableTemplateIdentities } from '@functions/api/utils/template-iden
 import { assignMissingStableTemplateIdentities } from '@functions/api/utils/template-reconciliation';
 import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import { buildTemplateEditorFormValues, normalizeTemplateEditorFormForSave } from '@/lib/forms/templateEditorForm';
-import {
-  normalizePortableTemplate,
-  parseTemplateMarkdown,
-  renderTemplateMarkdown,
-} from '@/lib/templates/templateMarkdown';
+import { normalizePortableTemplate } from '@/lib/templates/portableTemplateNormalization';
+import { parseTemplateMarkdown, renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 import type { ChecklistSection } from '@/types/checklist';
 
 const storedSections = [

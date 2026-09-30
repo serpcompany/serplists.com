@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PortableChecklistTemplate } from '@/lib/schemas/checklistSchema';
-import {
-  normalizePortableTemplate,
-  parseTemplateMarkdown,
-  renderTemplateMarkdown,
-} from '@/lib/templates/templateMarkdown';
+import { normalizePortableTemplate } from '@/lib/templates/portableTemplateNormalization';
+import { parseTemplateMarkdown, renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 
 const FENCE = '```';
 

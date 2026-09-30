@@ -1,6 +1,8 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { parseTemplateYaml, renderTemplateMarkdown, renderTemplatePreviewHtml, renderTemplateReadme } from "../src/lib/templates/templateMarkdown";
+import { parseTemplateYaml, renderTemplateMarkdown } from "../src/lib/templates/templateMarkdown";
+import { renderTemplatePreviewHtml } from "./lib/templatePreviewHtml";
+import { renderTemplateReadme } from "./lib/templateReadme";
 
 const normalizeJson = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
 
