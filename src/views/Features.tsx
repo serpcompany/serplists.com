@@ -1,14 +1,15 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useParams } from 'next/navigation';
 
-import { PageSection, Surface } from '@/components/layout/page-shell';
+import { CardGrid } from '@/components/layout/CardGrid';
+import { DetailPageLayout } from '@/components/layout/DetailPageLayout';
+import { MediaCard } from '@/components/layout/MediaCard';
+import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
-import { IconTile } from '@/components/layout/IconTile';
+import { Link } from '@/components/navigation/Link';
 import { buttonVariants } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FEATURES, findFeature } from '@/data/publicFeatures';
 import {
   buildPricingPath,
@@ -17,59 +18,42 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 
-import { Link } from '@/components/navigation/Link';
-
 // /features and /features/<slug>. The route shows the 404 page for a slug with no feature.
 const Features = () => {
   const { featureSlug } = useParams<{ featureSlug?: string }>();
   const feature = findFeature(featureSlug);
 
+  // A feature page: a detail page with its points in the panel beside the header.
   if (feature) {
     const Icon = feature.icon;
 
     return (
-      <>
-        <PageSection spacing="spacious" width="narrow">
-          <Link
-            href={buildPublicFeaturesPath()}
-            className={cn(buttonVariants({ variant: 'ghost' }), 'mb-6')}
-          >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Features
+      <DetailPageLayout
+        actions={
+          <>
+            <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
+              Browse the Template Library
             </Link>
-
-          <Surface as="article" tone="docs">
-            <CardHeader className="space-y-4">
-              <IconTile size="lg">
-                <Icon className="h-7 w-7" />
-              </IconTile>
-              <div className="space-y-2">
-                <CardTitle className="text-3xl">{feature.title}</CardTitle>
-                <CardDescription className="text-base">
-                  {feature.description}
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                {feature.bullets.map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
-                ))}
-              </ul>
-              <div className="flex flex-wrap gap-3">
-                <Link
-                  href={buildPublicTemplatesPath()}
-                  className={buttonVariants()}
-                >Browse the Template Library</Link>
-                <Link
-                  href={buildPricingPath()}
-                  className={buttonVariants({ variant: 'outline' })}
-                >See Pricing</Link>
-              </div>
-            </CardContent>
-          </Surface>
-        </PageSection>
-      </>
+            <Link href={buildPricingPath()} className={buttonVariants({ variant: 'outline' })}>
+              See Pricing
+            </Link>
+          </>
+        }
+        aside={
+          <ul className="flex flex-col gap-4 text-sm">
+            {feature.bullets.map((bullet) => (
+              <li key={bullet} className="flex items-start gap-3">
+                <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        }
+        breadcrumbs={[{ href: buildPublicFeaturesPath(), label: 'Features' }, { label: feature.title }]}
+        description={feature.description}
+        icon={<Icon />}
+        title={feature.title}
+      />
     );
   }
 
@@ -79,11 +63,15 @@ const Features = () => {
         <PageHero
           actions={
             <>
-              <Link href={buildPricingPath()} className={buttonVariants()}>See Pricing</Link>
+              <Link href={buildPricingPath()} className={buttonVariants()}>
+                See Pricing
+              </Link>
               <Link
                 href={buildPublicTemplatesPath()}
                 className={buttonVariants({ variant: 'outline' })}
-              >Browse the Template Library</Link>
+              >
+                Browse the Template Library
+              </Link>
             </>
           }
           align="center"
@@ -94,39 +82,26 @@ const Features = () => {
       </PageSection>
 
       <PageSection className="pt-0" spacing="spacious">
-        <div className="grid gap-6 md:grid-cols-2">
+        <CardGrid columns={2}>
           {FEATURES.map((featureItem) => {
             const Icon = featureItem.icon;
 
             return (
-              <Link
+              <MediaCard
                 key={featureItem.slug}
+                description={featureItem.description}
                 href={buildPublicFeaturePath(featureItem.slug)}
+                icon={<Icon />}
+                title={featureItem.title}
+                titleAs="h2"
               >
-                <Surface
-                  as="article"
-                  className="h-full transition-transform duration-200 hover:-translate-y-0.5"
-                  tone="docs"
-                >
-                  <CardHeader className="space-y-4">
-                    <IconTile>
-                      <Icon className="h-6 w-6" />
-                    </IconTile>
-                    <div className="space-y-2">
-                      <CardTitle>{featureItem.title}</CardTitle>
-                      <CardDescription>
-                        {featureItem.description}
-                      </CardDescription>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 text-sm text-muted-foreground">
-                    View the feature details and related workflows.
-                  </CardContent>
-                </Surface>
-              </Link>
+                <p className="text-sm text-muted-foreground">
+                  View the feature details and related workflows.
+                </p>
+              </MediaCard>
             );
           })}
-        </div>
+        </CardGrid>
       </PageSection>
     </>
   );
