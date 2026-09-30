@@ -26,6 +26,7 @@ const activeKey: AgentKey = {
   createdAt: '2026-09-19T01:00:00.000Z',
   lastUsedAt: null,
   revokedAt: null,
+  permissions: ['templates:read', 'runs:read', 'runs:write'],
   status: 'active',
 };
 
@@ -38,12 +39,14 @@ const defaultProps: AgentAccessSectionViewProps = {
   keyName: '',
   mcpEndpoint: 'https://demo.serplists.test/api/mcp',
   mcpHostMismatch: false,
+  permissions: ['templates:read', 'runs:read', 'runs:write'],
   revokingKeyId: null,
   onCopyEndpoint: vi.fn(),
   onCopySecret: vi.fn(),
   onCreate: vi.fn(),
   onDismissSecret: vi.fn(),
   onKeyNameChange: vi.fn(),
+  onPermissionChange: vi.fn(),
   onRetry: vi.fn(),
   onRevoke: vi.fn(),
 };
@@ -51,15 +54,46 @@ const defaultProps: AgentAccessSectionViewProps = {
 const renderView = (overrides: Partial<AgentAccessSectionViewProps> = {}) =>
   renderToStaticMarkup(<AgentAccessSectionView {...defaultProps} {...overrides} />);
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// A permission's checkbox: a native button named by its card's title, which the whole card
+// labels, so a click or tap anywhere on the card toggles it.
+function permissionCheckbox(html: string, label: string): string {
+  const title = new RegExp(`<div[^>]*id="([^"]+)"[^>]*>${escapeRegExp(label)}</div>`).exec(html);
+  expect(title, `the title of ${label}`).not.toBeNull();
+  const checkbox = new RegExp(`<button[^>]*aria-labelledby="${title![1]}"[^>]*>`).exec(html);
+  expect(checkbox, `the checkbox of ${label}`).not.toBeNull();
+  expect(checkbox![0]).toContain('role="checkbox"');
+  const id = /\sid="([^"]+)"/.exec(checkbox![0])![1];
+  expect(html).toMatch(new RegExp(`<label[^>]*for="${id}"`));
+  return checkbox![0];
+}
+
+// The permission badges listed under a key.
+function keyPermissions(html: string, keyName: string): string[] {
+  const list = new RegExp(`<ul aria-label="Permissions for ${escapeRegExp(keyName)}"[^>]*>(.*?)</ul>`).exec(html);
+  expect(list, `the permissions of ${keyName}`).not.toBeNull();
+  return [...list![1].matchAll(/<li[^>]*>([^<]*)<\/li>/g)].map((match) => match[1]);
+}
+
 describe('AgentAccessSectionView', () => {
-  it('renders the create state with the fixed personal run permissions', () => {
+  it('renders the create state with permission choices that default to no template writes', () => {
     const html = renderView({ keyName: 'Codex SOP Runner' });
 
     expect(html).toContain('Agent Access');
     expect(html).toContain('Create Run Key');
-    expect(html).toContain('read personal templates');
-    expect(html).toContain('list, start, read, and update personal runs');
-    expect(html).toContain('cannot edit');
+    expect(html).toContain('Permissions are fixed when you create a key');
+    expect(html).toContain('No key can delete or publish');
+    expect(html).toContain('>Permissions</legend>');
+    for (const label of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
+      expect(permissionCheckbox(html, label)).toMatch(/aria-describedby="[^"]+"/);
+    }
+    expect(html).toContain('Never delete or publish.');
+    expect(permissionCheckbox(html, 'Write templates')).toContain('aria-checked="false"');
+    expect(permissionCheckbox(html, 'Read templates')).toContain('aria-checked="true"');
+    expect(permissionCheckbox(html, 'Read runs')).toContain('aria-checked="true"');
+    expect(permissionCheckbox(html, 'Write runs')).toContain('aria-checked="true"');
+    expect(html).not.toContain('Choose at least one permission.');
     expect(html).toContain('value="Codex SOP Runner"');
     expect(html).toContain('No Run Keys yet.');
     expect(html).toContain('MCP connection');
@@ -88,6 +122,15 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('I have saved this key');
   });
 
+  it('disables creation when no permission is chosen', () => {
+    const html = renderView({ keyName: 'Codex SOP Runner', permissions: [] });
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+    expect(html).toContain('Choose at least one permission.');
+    for (const label of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
+      expect(permissionCheckbox(html, label)).toContain('aria-checked="false"');
+    }
+  });
+
   it('renders active keys as revocable and revoked keys as historical records', () => {
     const html = renderView({
       keys: [
@@ -109,6 +152,8 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Old Claude Runner');
     expect(html).toContain('Revoked');
     expect(html).toContain('slrk_demo12...');
+    expect(keyPermissions(html, 'Codex SOP Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
+    expect(keyPermissions(html, 'Old Claude Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
     expect(html).not.toContain('slrk_secret_visible_once');
   });
 

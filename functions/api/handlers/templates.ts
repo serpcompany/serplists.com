@@ -1,7 +1,7 @@
 import { Env } from '../types';
 import { decodeSlugPath, resolveRequestedSlug } from '../utils/slug';
 import { isReservedTemplateSlug } from '../utils/reserved-template-slugs';
-import { and, desc, eq, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import {
   describePayloadError,
@@ -22,7 +22,6 @@ import { getEntitlementsForContext, getEntitlementsForUser } from '../utils/enti
 import {
   buildAuditEventValues,
   buildTemplateVersionValues,
-  insertAuditEventWhen,
   type AuditSubject,
 } from '../utils/audit';
 import {
@@ -36,13 +35,14 @@ import { personalProRequiredResponse } from '../utils/limit-reached';
 import {
   countTemplates,
   isMissingRulesColumnError,
-  omitRulesColumn,
   templateCapacityAvailableSql,
   templateLimitResponse,
-  type AuditEventValues,
+  updateTemplateWithHistoryFallback,
+  type ReconciledRunUpdate,
   type TemplateInsertValues,
-  type TemplateVersionValues,
+  type TemplateUpdateValues,
 } from '../utils/template-writes';
+import { batchUpdateMissed } from '../utils/checklist-runs';
 import { canEditTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from '../utils/team-access';
 import { z } from 'zod';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
@@ -83,7 +83,6 @@ import { isOwnPersonalTemplateRow, toPublicTemplate } from '../utils/template-pu
 const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
 type QueryResult<T> = PromiseLike<T> | T;
-type TemplateUpdateValues = Partial<TemplateInsertValues>;
 
 function getTemplateSelectColumns(includeRules: boolean) {
   const { templates } = schema;
@@ -128,92 +127,8 @@ async function withRulesColumnFallback<T>(
   }
 }
 
-type ReconciledRunUpdate = {
-  items: string;
-  retiredItems: string;
-  progress: number;
-  templateVersion: number;
-  revision: number;
-  whereClause: SQL | undefined;
-  updatedAt: string;
-  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause
-  // and by the template's own audit row, so a save that misses records nothing.
-  auditEvent?: AuditEventValues;
-};
-
-async function updateTemplateWithHistoryFallback(
-  db: ReturnType<typeof createDb>,
-  values: TemplateUpdateValues,
-  whereClause: SQL | undefined,
-  auditEventValues: AuditEventValues,
-  versionValues: TemplateVersionValues,
-  reconciledRunUpdates: ReconciledRunUpdate[] = [],
-): Promise<{ updated: boolean; runResults: unknown[] }> {
-  const { audit_events, checklist_runs, template_versions, templates } = schema;
-  // The audit row goes first, only while the template still matches whereClause, and every
-  // other statement requires that audit row. A plain INSERT would commit even when the
-  // UPDATE lost a race, leaving history (and reconciled runs) for a change that never happened.
-  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
-  const templateUpdateIndex = 2;
-  const runResultIndexes: number[] = [];
-  // Run statements follow the audit insert, version insert, and template update.
-  let nextIndex = 3;
-  for (const runUpdate of reconciledRunUpdates) {
-    if (runUpdate.auditEvent) nextIndex += 1;
-    runResultIndexes.push(nextIndex);
-    nextIndex += 1;
-  }
-
-  const runBatch = (templateValues: TemplateUpdateValues) => {
-    const statements = [
-      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
-      insertRowWhere(db, template_versions, versionValues, auditWritten),
-      db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
-      ...reconciledRunUpdates.flatMap((runUpdate) => [
-        ...(runUpdate.auditEvent
-          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
-          : []),
-        db
-          .update(checklist_runs)
-          .set({
-            items: runUpdate.items,
-            retired_items: runUpdate.retiredItems,
-            progress: runUpdate.progress,
-            template_version: runUpdate.templateVersion,
-            revision: runUpdate.revision + 1,
-            updated_at: runUpdate.updatedAt,
-          })
-          .where(and(runUpdate.whereClause, auditWritten)),
-      ]),
-    ] as const;
-
-    return db.batch(statements);
-  };
-
-  let results: readonly unknown[];
-  try {
-    results = await runBatch(values);
-  } catch (error) {
-    if (!isMissingRulesColumnError(error)) {
-      throw error;
-    }
-
-    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
-  }
-  return {
-    updated: !batchUpdateMissed(results[templateUpdateIndex]),
-    runResults: runResultIndexes.map((index) => results[index]),
-  };
-}
-
 function slugInUseResponse(slug: string): Response {
   return jsonError('Another template uses this URL slug. Choose a different slug.', 409, { code: 'slug_taken', details: { slug } });
-}
-
-function batchUpdateMissed(result: unknown): boolean {
-  if (!isRecord(result)) return false;
-  const meta = result.meta;
-  return isRecord(meta) && typeof meta.changes === 'number' && meta.changes === 0;
 }
 
 function parseTemplateRow<T extends Record<string, unknown>>(template: T) {
@@ -405,13 +320,465 @@ type TemplateImportSummary = {
   successes: TemplateImportSuccess[];
 };
 
+type TemplateWriteOptions = {
+  // Run Key writes (the MCP): only the key owner's Personal templates, never a public one.
+  personalOnly?: boolean;
+  // Added to the audit events the write records; the MCP names the Run Key there.
+  auditMetadata?: Record<string, unknown>;
+};
+
+// POST /api/templates, and the MCP's create_template.
+export async function createTemplateForUser(
+  request: Request,
+  env: Env,
+  userId: string,
+  body: unknown,
+  options: TemplateWriteOptions = {},
+): Promise<Response> {
+  const db = createDb(env);
+
+  const parsed = templatePayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+    return jsonError(message, 400, { details });
+  }
+
+  const requestedTeamId = options.personalOnly ? null : getRequestedTeamId(parsed.data, new URL(request.url));
+  if (requestedTeamId) {
+    const accessError = await assertTeamTemplateCreateAccess(env, requestedTeamId, userId);
+    if (accessError) return accessError;
+  }
+
+  const entitlements = requestedTeamId
+    ? await getEntitlementsForContext(env, { type: 'team', teamId: requestedTeamId, userId })
+    : await getEntitlementsForUser(env, userId);
+  const createCapacity = entitlements.limits.maxTemplates
+    ? { owner: { userId, teamId: requestedTeamId }, limit: entitlements.limits.maxTemplates }
+    : undefined;
+  if (createCapacity) {
+    const currentCount = await countTemplates(env, createCapacity.owner);
+    if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
+  }
+
+  const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
+
+  const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
+  if (normalizedSections.error) {
+    return jsonError(normalizedSections.error, 400);
+  }
+  normalizedSections.sections = assignMissingStableTemplateIdentities(normalizedSections.sections);
+  const identityError = validateStableTemplateIdentities(normalizedSections.sections);
+  if (identityError) {
+    return jsonError(identityError, 400);
+  }
+  const tooLarge = contentTooLargeResponse('template', normalizedSections.sections);
+  if (tooLarge) return tooLarge;
+
+  const templateId = crypto.randomUUID();
+  const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
+
+  const finalCategories = normalizeStringArray(categories ?? category);
+  const finalTags = normalizeStringArray(tags);
+  const finalType = type ?? 'checklist';
+  const isPublic = typeof is_public === 'boolean' ? is_public : false;
+
+  if (title && junkTemplateTitles.has(title)) {
+    log('warn', 'junk_template_title_created', { userId, title });
+  }
+
+  const now = new Date().toISOString();
+  const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
+  const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
+    const insertedTemplate: TemplateInsertValues = {
+      id: templateId,
+      user_id: userId,
+      title: title || '',
+      description: description || '',
+      type: finalType,
+      seo_title: seoTitle || '',
+      seo_description: seoDescription || '',
+      rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
+      items: JSON.stringify(normalizedSections.sections),
+      version: 1,
+      is_public: isPublic,
+      category: JSON.stringify(finalCategories),
+      tags: JSON.stringify(finalTags),
+      slug: candidateSlug,
+      owner_type: requestedTeamId ? 'team' : 'user',
+      team_id: requestedTeamId,
+      created_by_user_id: userId,
+      created_at: now,
+      updated_at: now,
+    };
+    const snapshot = insertedTemplate as Record<string, unknown>;
+    return {
+      template: insertedTemplate,
+      version: await buildTemplateVersionValues({
+        templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.created', createdAt: now,
+      }),
+      audit: await buildAuditEventValues({
+        actorUserId: userId,
+        subject,
+        resource: { type: 'template', id: templateId },
+        action: 'template.created',
+        after: snapshot,
+        metadata: options.auditMetadata,
+        request,
+        createdAt: now,
+      }),
+    };
+  };
+  const inserted = await insertTemplateWithUniqueSlug(db, {
+    title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows, capacity: createCapacity,
+  });
+
+  return newTemplateResponse(env, templateId, inserted, createCapacity, 'create');
+}
+
+// PUT /api/templates/:id, and the MCP's update_template.
+export async function updateTemplateForUser(
+  request: Request,
+  env: Env,
+  userId: string,
+  templateId: string,
+  body: unknown,
+  options: TemplateWriteOptions = {},
+): Promise<Response> {
+  const db = createDb(env);
+  const { templates, checklist_runs } = schema;
+
+  const parsed = templateUpdatePayloadSchema.safeParse(body);
+  if (!parsed.success) {
+    const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
+    return jsonError(message, 400, { details });
+  }
+
+  const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
+  const rawBody = body as Record<string, unknown>;
+
+  // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
+  const now = new Date().toISOString();
+  const updates: Record<string, unknown> = {};
+  let syncedItems: string | null = null;
+  let incomingSections: unknown[] | null = null;
+
+  if (typeof title !== 'undefined') {
+    updates.title = title || '';
+  }
+  if (typeof description !== 'undefined') {
+    updates.description = description || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'type') && typeof type === 'string') {
+    updates.type = type;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')) {
+    updates.seo_title = seoTitle || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')) {
+    updates.seo_description = seoDescription || '';
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'rules')) {
+    updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
+    const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
+    if (normalizedSections.error) {
+      return jsonError(normalizedSections.error, 400);
+    }
+    incomingSections = normalizedSections.sections;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
+    updates.is_public = is_public;
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'categories') || Object.prototype.hasOwnProperty.call(rawBody, 'category')) {
+    const finalCategories = normalizeStringArray(categories ?? category);
+    updates.category = JSON.stringify(finalCategories);
+  }
+  if (Object.prototype.hasOwnProperty.call(rawBody, 'tags')) {
+    const finalTags = normalizeStringArray(tags);
+    updates.tags = JSON.stringify(finalTags);
+  }
+
+  if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlug?.trim()) {
+    return jsonError('No fields to update', 400);
+  }
+
+  const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
+    db
+      .select(getTemplateSelectColumns(includeRules))
+      .from(templates)
+      .where(eq(templates.id, templateId))
+      .limit(1),
+  );
+
+  if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+    return jsonError('Template not found or unauthorized', 404);
+  }
+  if (options.personalOnly && !isOwnPersonalTemplateRow(existingTemplate as unknown as Record<string, unknown>, userId)) {
+    return jsonError('Template not found or unauthorized', 404);
+  }
+  if (options.personalOnly && Boolean(existingTemplate.is_public)) {
+    return jsonError('Public templates can only be edited in SERP Lists', 403, { code: 'template_is_public' });
+  }
+  if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+    return jsonError('Forbidden', 403);
+  }
+  if (incomingSections) {
+    const previousSections = parseJsonArray(existingTemplate.items) ?? [];
+    const stableSections = assignMissingStableTemplateIdentities(incomingSections, previousSections);
+    const identityError = validateStableTemplateIdentities(stableSections);
+    if (identityError) {
+      return jsonError(identityError, 400);
+    }
+    // Clients resend unchanged sections on every save; only a real structure change may
+    // bump content_version and reconcile runs.
+    if (templateStructureChanged(previousSections, stableSections)) {
+      const tooLarge = contentTooLargeResponse('template', stableSections, previousSections);
+      if (tooLarge) return tooLarge;
+      syncedItems = JSON.stringify(stableSections);
+      updates.items = syncedItems;
+    }
+  }
+  const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
+  if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
+  // A content edit must say which version it was based on; without one the check
+  // would be skipped and a stale editor would overwrite newer work.
+  const versionRequired = requestsContentChange(rawBody, slugRequest.kind === 'changed');
+  if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
+    return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
+      code: 'edit_conflict',
+      details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
+    });
+  }
+
+  // A body whose only field is the stored slug asks for nothing.
+  if (slugRequest.kind === 'unchanged' && Object.keys(updates).length === 0 && !incomingSections) {
+    return jsonError('No fields to update', 400);
+  }
+  if (slugRequest.kind === 'changed') {
+    const requestedSlugValue = slugRequest.slug;
+    const [conflict] = await db
+      .select({ id: templates.id })
+      .from(templates)
+      .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
+      .limit(1);
+
+    // A requested slug a bundled starter holds is taken too (the Template keeps a slug it
+    // already has: resolveRequestedSlug never reports that as a change).
+    const slug = conflict || isReservedTemplateSlug(requestedSlugValue)
+      ? await findFreeSuffixedSlug(db, requestedSlugValue, templateId)
+      : requestedSlugValue;
+    if (!slug) return slugInUseResponse(requestedSlugValue);
+    updates.slug = slug;
+  }
+
+  const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
+  const invalidField = validateChangedTemplateFields(changes, parsed.data);
+  if (invalidField) {
+    return jsonError(invalidField.message, 400, { details: invalidField.details });
+  }
+  const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
+  const currentContentVersion = typeof existingTemplate.content_version === 'number'
+    ? existingTemplate.content_version
+    : currentVersion;
+  if (Object.keys(changes).length === 0) {
+    return json({
+      success: true,
+      id: templateId,
+      slug: existingTemplate.slug ?? undefined,
+      version: currentVersion,
+      content_version: currentContentVersion,
+      structureChanged: false,
+      reconciledRuns: 0,
+    });
+  }
+  // Every stored change is a new version, visibility included, so an editor loaded before
+  // a Share gets 409 instead of silently reverting it. content_version (run staleness and
+  // reconciliation) still moves only when the checklist structure changes.
+  const nextVersion = currentVersion + 1;
+  const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
+  const templateValues: Record<string, unknown> = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
+  if (syncedItems !== null) {
+    templateValues.content_version = nextContentVersion;
+  }
+
+  if (typeof title === 'string' && junkTemplateTitles.has(title)) {
+    log('warn', 'junk_template_title_updated', { userId, templateId, title });
+  }
+
+  const ownedTemplateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
+    ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at))
+    : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at));
+  // A Run Key's edit lands only while the template is still private; every statement in the
+  // batch below requires this row to match.
+  const templateUpdateWhere = options.personalOnly
+    ? and(ownedTemplateWhere, or(eq(templates.is_public, false), isNull(templates.is_public)))
+    : ownedTemplateWhere;
+
+  const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
+  const updatedTemplate = {
+    ...(existingTemplate as unknown as Record<string, unknown>),
+    ...templateValues,
+  };
+
+  const versionValues = await buildTemplateVersionValues({
+    templateId,
+    version: nextVersion,
+    changedByUserId: userId,
+    subject,
+    snapshot: updatedTemplate,
+    changeSummary: 'template.updated',
+    createdAt: now,
+  });
+  const visibilityChange = visibilityChangeMetadata(changes);
+  const auditEvent = await buildAuditEventValues({
+    actorUserId: userId,
+    subject,
+    resource: { type: 'template', id: templateId },
+    action: 'template.updated',
+    before: existingTemplate as unknown as Record<string, unknown>,
+    after: updatedTemplate,
+    diff: changes,
+    // History lists return metadata, not diffs: the Changelog labels a Share or switch by it.
+    metadata: visibilityChange || options.auditMetadata ? { ...visibilityChange, ...options.auditMetadata } : undefined,
+    request,
+    createdAt: now,
+  });
+
+  const matchingRuns = syncedItems === null
+    ? []
+    : await db
+        .select()
+        .from(checklist_runs)
+        .where(
+          existingTemplate.owner_type === 'team' && existingTemplate.team_id
+            ? and(
+                eq(checklist_runs.template_id, templateId),
+                eq(checklist_runs.team_id, existingTemplate.team_id),
+                eq(checklist_runs.status, 'in_progress'),
+                or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+                isNull(checklist_runs.deleted_at),
+              )
+            : and(
+                eq(checklist_runs.template_id, templateId),
+                eq(checklist_runs.user_id, userId),
+                isNull(checklist_runs.team_id),
+                eq(checklist_runs.status, 'in_progress'),
+                or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+                isNull(checklist_runs.deleted_at),
+              ),
+        )
+        .orderBy(checklist_runs.created_at);
+  const activeRuns = matchingRuns.filter((run): run is typeof run & { id: string } =>
+    typeof run.id === 'string'
+    && run.status === 'in_progress'
+    && !run.is_public
+    && !run.deleted_at
+  );
+
+  const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
+  const reconciledRunUpdates = (await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate | null> => {
+    const previousSections = parseJsonArray(run.items) ?? [];
+    const previousRetired = parseJsonArray(run.retired_items) ?? [];
+    const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
+    // A run the change would grow past what its page can save keeps its content and shows
+    // as stale; Revalidate then explains why it cannot take the change.
+    if (!contentFits('run', reconciled.sections, previousSections)) {
+      log('warn', 'run_reconcile_skipped_content_too_large', { templateId, runId: run.id });
+      return null;
+    }
+    const revision = typeof run.revision === 'number' ? run.revision : 1;
+    const items = JSON.stringify(reconciled.sections);
+    const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
+
+    return {
+      items,
+      retiredItems: JSON.stringify(reconciled.retired),
+      progress: calculateRunProgress(reconciled.sections),
+      templateVersion: nextContentVersion,
+      revision,
+      updatedAt: now,
+      whereClause: and(
+        eq(checklist_runs.id, run.id),
+        eq(checklist_runs.revision, revision),
+        eq(checklist_runs.status, 'in_progress'),
+        or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
+        isNull(checklist_runs.deleted_at),
+      ),
+      // The run's Changelog records the save. The event names retired work by id and
+      // title; its notes stay in the run's retired_items.
+      auditEvent: runChanged
+        ? await buildAuditEventValues({
+          actorUserId: userId,
+          subject,
+          resource: { type: 'checklist_run', id: run.id },
+          action: 'checklist_run.reconciled',
+          metadata: {
+            templateId,
+            templateVersion: nextContentVersion,
+            fromRevision: revision,
+            toRevision: revision + 1,
+            retired: summarizeRetiredEntries(reconciled.newlyRetired),
+            ...options.auditMetadata,
+          },
+          request,
+          createdAt: now,
+        })
+        : undefined,
+    };
+  }))).filter((update): update is ReconciledRunUpdate => update !== null);
+
+  let reconciledRuns = 0;
+  try {
+    const { updated, runResults } = await updateTemplateWithHistoryFallback(
+      db,
+      templateValues as TemplateUpdateValues,
+      templateUpdateWhere,
+      auditEvent,
+      versionValues,
+      reconciledRunUpdates,
+    );
+    if (!updated) {
+      return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
+        code: 'edit_conflict',
+      });
+    }
+    reconciledRuns = runResults.filter((result) => !batchUpdateMissed(result)).length;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
+      return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
+        code: 'edit_conflict',
+      });
+    }
+    // Another save claimed the slug between the check above and this write.
+    if (isTemplateSlugUniqueViolation(error) && typeof changes.slug === 'string') {
+      return slugInUseResponse(changes.slug);
+    }
+    throw error;
+  }
+
+  // The next save sends this version as expected_version. The slug is the one the template
+  // has after the write, requested (it may carry a -<id8> suffix) or kept, so the editor
+  // never guesses.
+  return json({
+    success: true,
+    id: templateId,
+    slug: typeof changes.slug === 'string' ? changes.slug : existingTemplate.slug ?? undefined,
+    version: nextVersion,
+    content_version: nextContentVersion,
+    structureChanged: syncedItems !== null,
+    reconciledRuns,
+  });
+}
+
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
   const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
   const templatesSubpath = pathParts.slice(2); // after /api/templates
   const db = createDb(env);
-  const { templates, users, checklist_runs, audit_events } = schema;
+  const { templates, users, audit_events } = schema;
 
   // Pro-only: export/import templates as JSON backup
   // GET  /api/templates/backup?teamId=...&format=portable|backup (owned templates only)
@@ -1117,101 +1484,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Invalid JSON payload', 400);
     }
 
-    const parsed = templatePayloadSchema.safeParse(body);
-    if (!parsed.success) {
-      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
-      return jsonError(message, 400, { details });
-    }
-
-    const requestedTeamId = getRequestedTeamId(parsed.data, url);
-    if (requestedTeamId) {
-      const accessError = await assertTeamTemplateCreateAccess(env, requestedTeamId, userId);
-      if (accessError) return accessError;
-    }
-
-    const entitlements = requestedTeamId
-      ? await getEntitlementsForContext(env, { type: 'team', teamId: requestedTeamId, userId })
-      : await getEntitlementsForUser(env, userId);
-    const createCapacity = entitlements.limits.maxTemplates
-      ? { owner: { userId, teamId: requestedTeamId }, limit: entitlements.limits.maxTemplates }
-      : undefined;
-    if (createCapacity) {
-      const currentCount = await countTemplates(env, createCapacity.owner);
-      if (currentCount >= createCapacity.limit) return templateLimitResponse(createCapacity.owner, 'create', createCapacity.limit, currentCount);
-    }
-
-    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems } = parsed.data;
-
-    const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
-    if (normalizedSections.error) {
-      return jsonError(normalizedSections.error, 400);
-    }
-    normalizedSections.sections = assignMissingStableTemplateIdentities(normalizedSections.sections);
-    const identityError = validateStableTemplateIdentities(normalizedSections.sections);
-    if (identityError) {
-      return jsonError(identityError, 400);
-    }
-    const tooLarge = contentTooLargeResponse('template', normalizedSections.sections);
-    if (tooLarge) return tooLarge;
-
-    const templateId = crypto.randomUUID();
-    const slugSource = typeof requestedSlug === 'string' && requestedSlug.trim() ? requestedSlug.trim() : title || '';
-
-    const finalCategories = normalizeStringArray(categories ?? category);
-    const finalTags = normalizeStringArray(tags);
-    const finalType = type ?? 'checklist';
-    const isPublic = typeof is_public === 'boolean' ? is_public : false;
-
-    if (title && junkTemplateTitles.has(title)) {
-      log('warn', 'junk_template_title_created', { userId, title });
-    }
-
-    const now = new Date().toISOString();
-    const subject: AuditSubject = requestedTeamId ? { type: 'team', id: requestedTeamId } : { type: 'user', id: userId };
-    const buildRows = async (candidateSlug: string): Promise<NewTemplateRows> => {
-      const insertedTemplate: TemplateInsertValues = {
-        id: templateId,
-        user_id: userId,
-        title: title || '',
-        description: description || '',
-        type: finalType,
-        seo_title: seoTitle || '',
-        seo_description: seoDescription || '',
-        rules: Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null,
-        items: JSON.stringify(normalizedSections.sections),
-        version: 1,
-        is_public: isPublic,
-        category: JSON.stringify(finalCategories),
-        tags: JSON.stringify(finalTags),
-        slug: candidateSlug,
-        owner_type: requestedTeamId ? 'team' : 'user',
-        team_id: requestedTeamId,
-        created_by_user_id: userId,
-        created_at: now,
-        updated_at: now,
-      };
-      const snapshot = insertedTemplate as Record<string, unknown>;
-      return {
-        template: insertedTemplate,
-        version: await buildTemplateVersionValues({
-          templateId, version: 1, changedByUserId: userId, subject, snapshot, changeSummary: 'template.created', createdAt: now,
-        }),
-        audit: await buildAuditEventValues({
-          actorUserId: userId,
-          subject,
-          resource: { type: 'template', id: templateId },
-          action: 'template.created',
-          after: snapshot,
-          request,
-          createdAt: now,
-        }),
-      };
-    };
-    const inserted = await insertTemplateWithUniqueSlug(db, {
-      title: slugSource, slug: await generateUniqueSlug(env, slugSource, templateId), buildRows, capacity: createCapacity,
-    });
-
-    return newTemplateResponse(env, templateId, inserted, createCapacity, 'create');
+    return createTemplateForUser(request, env, userId, body);
   }
 
   if (request.method === 'PUT') {
@@ -1232,316 +1505,7 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Invalid JSON payload', 400);
     }
 
-    const parsed = templateUpdatePayloadSchema.safeParse(body);
-    if (!parsed.success) {
-      const { message, details } = describePayloadError(parsed.error, 'Invalid template payload');
-      return jsonError(message, 400, { details });
-    }
-
-    const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
-    const rawBody = body as Record<string, unknown>;
-
-    // Only update slug if explicitly provided (avoid breaking shared URLs on title edits).
-    const now = new Date().toISOString();
-    const updates: Record<string, unknown> = {};
-    let syncedItems: string | null = null;
-    let incomingSections: unknown[] | null = null;
-
-    if (typeof title !== 'undefined') {
-      updates.title = title || '';
-    }
-    if (typeof description !== 'undefined') {
-      updates.description = description || '';
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'type') && typeof type === 'string') {
-      updates.type = type;
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')) {
-      updates.seo_title = seoTitle || '';
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')) {
-      updates.seo_description = seoDescription || '';
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'rules')) {
-      updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
-      const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
-      if (normalizedSections.error) {
-        return jsonError(normalizedSections.error, 400);
-      }
-      incomingSections = normalizedSections.sections;
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
-      updates.is_public = is_public;
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'categories') || Object.prototype.hasOwnProperty.call(rawBody, 'category')) {
-      const finalCategories = normalizeStringArray(categories ?? category);
-      updates.category = JSON.stringify(finalCategories);
-    }
-    if (Object.prototype.hasOwnProperty.call(rawBody, 'tags')) {
-      const finalTags = normalizeStringArray(tags);
-      updates.tags = JSON.stringify(finalTags);
-    }
-
-    if (Object.keys(updates).length === 0 && !incomingSections && !requestedSlug?.trim()) {
-      return jsonError('No fields to update', 400);
-    }
-
-    const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
-      db
-        .select(getTemplateSelectColumns(includeRules))
-        .from(templates)
-        .where(eq(templates.id, templateId))
-        .limit(1),
-    );
-
-    if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
-      return jsonError('Template not found or unauthorized', 404);
-    }
-    if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
-      return jsonError('Forbidden', 403);
-    }
-    if (incomingSections) {
-      const previousSections = parseJsonArray(existingTemplate.items) ?? [];
-      const stableSections = assignMissingStableTemplateIdentities(incomingSections, previousSections);
-      const identityError = validateStableTemplateIdentities(stableSections);
-      if (identityError) {
-        return jsonError(identityError, 400);
-      }
-      // Clients resend unchanged sections on every save; only a real structure change may
-      // bump content_version and reconcile runs.
-      if (templateStructureChanged(previousSections, stableSections)) {
-        const tooLarge = contentTooLargeResponse('template', stableSections, previousSections);
-        if (tooLarge) return tooLarge;
-        syncedItems = JSON.stringify(stableSections);
-        updates.items = syncedItems;
-      }
-    }
-    const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
-    if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
-    // A content edit must say which version it was based on; without one the check
-    // would be skipped and a stale editor would overwrite newer work.
-    const versionRequired = requestsContentChange(rawBody, slugRequest.kind === 'changed');
-    if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
-      return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
-        code: 'edit_conflict',
-        details: { expectedVersion: expected_version, currentVersion: existingTemplate.version },
-      });
-    }
-
-    // A body whose only field is the stored slug asks for nothing.
-    if (slugRequest.kind === 'unchanged' && Object.keys(updates).length === 0 && !incomingSections) {
-      return jsonError('No fields to update', 400);
-    }
-    if (slugRequest.kind === 'changed') {
-      const requestedSlugValue = slugRequest.slug;
-      const [conflict] = await db
-        .select({ id: templates.id })
-        .from(templates)
-        .where(and(eq(templates.slug, requestedSlugValue), ne(templates.id, templateId)))
-        .limit(1);
-
-      // A requested slug a bundled starter holds is taken too (the Template keeps a slug it
-      // already has: resolveRequestedSlug never reports that as a change).
-      const slug = conflict || isReservedTemplateSlug(requestedSlugValue)
-        ? await findFreeSuffixedSlug(db, requestedSlugValue, templateId)
-        : requestedSlugValue;
-      if (!slug) return slugInUseResponse(requestedSlugValue);
-      updates.slug = slug;
-    }
-
-    const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
-    const invalidField = validateChangedTemplateFields(changes, parsed.data);
-    if (invalidField) {
-      return jsonError(invalidField.message, 400, { details: invalidField.details });
-    }
-    const currentVersion = typeof existingTemplate.version === 'number' ? existingTemplate.version : 1;
-    const currentContentVersion = typeof existingTemplate.content_version === 'number'
-      ? existingTemplate.content_version
-      : currentVersion;
-    if (Object.keys(changes).length === 0) {
-      return json({
-        success: true,
-        id: templateId,
-        slug: existingTemplate.slug ?? undefined,
-        version: currentVersion,
-        content_version: currentContentVersion,
-        structureChanged: false,
-        reconciledRuns: 0,
-      });
-    }
-    // Every stored change is a new version, visibility included, so an editor loaded before
-    // a Share gets 409 instead of silently reverting it. content_version (run staleness and
-    // reconciliation) still moves only when the checklist structure changes.
-    const nextVersion = currentVersion + 1;
-    const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
-    const templateValues: Record<string, unknown> = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
-    if (syncedItems !== null) {
-      templateValues.content_version = nextContentVersion;
-    }
-
-    if (typeof title === 'string' && junkTemplateTitles.has(title)) {
-      log('warn', 'junk_template_title_updated', { userId, templateId, title });
-    }
-
-    const templateUpdateWhere = existingTemplate.owner_type === 'team' && existingTemplate.team_id
-      ? and(eq(templates.id, templateId), eq(templates.team_id, existingTemplate.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at))
-      : and(eq(templates.id, templateId), eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), eq(templates.version, currentVersion), isNull(templates.deleted_at));
-
-    const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
-    const updatedTemplate = {
-      ...(existingTemplate as unknown as Record<string, unknown>),
-      ...templateValues,
-    };
-
-    const versionValues = await buildTemplateVersionValues({
-      templateId,
-      version: nextVersion,
-      changedByUserId: userId,
-      subject,
-      snapshot: updatedTemplate,
-      changeSummary: 'template.updated',
-      createdAt: now,
-    });
-    const auditEvent = await buildAuditEventValues({
-      actorUserId: userId,
-      subject,
-      resource: { type: 'template', id: templateId },
-      action: 'template.updated',
-      before: existingTemplate as unknown as Record<string, unknown>,
-      after: updatedTemplate,
-      diff: changes,
-      // History lists return metadata, not diffs: the Changelog labels a Share or switch by it.
-      metadata: visibilityChangeMetadata(changes),
-      request,
-      createdAt: now,
-    });
-
-    const matchingRuns = syncedItems === null
-      ? []
-      : await db
-          .select()
-          .from(checklist_runs)
-          .where(
-            existingTemplate.owner_type === 'team' && existingTemplate.team_id
-              ? and(
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.team_id, existingTemplate.team_id),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                )
-              : and(
-                  eq(checklist_runs.template_id, templateId),
-                  eq(checklist_runs.user_id, userId),
-                  isNull(checklist_runs.team_id),
-                  eq(checklist_runs.status, 'in_progress'),
-                  or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-                  isNull(checklist_runs.deleted_at),
-                ),
-          )
-          .orderBy(checklist_runs.created_at);
-    const activeRuns = matchingRuns.filter((run): run is typeof run & { id: string } =>
-      typeof run.id === 'string'
-      && run.status === 'in_progress'
-      && !run.is_public
-      && !run.deleted_at
-    );
-
-    const nextTemplateSections = syncedItems === null ? [] : (parseJsonArray(syncedItems) ?? []);
-    const reconciledRunUpdates = (await Promise.all(activeRuns.map(async (run): Promise<ReconciledRunUpdate | null> => {
-      const previousSections = parseJsonArray(run.items) ?? [];
-      const previousRetired = parseJsonArray(run.retired_items) ?? [];
-      const reconciled = reconcileRunSections(previousSections, nextTemplateSections, previousRetired);
-      // A run the change would grow past what its page can save keeps its content and shows
-      // as stale; Revalidate then explains why it cannot take the change.
-      if (!contentFits('run', reconciled.sections, previousSections)) {
-        log('warn', 'run_reconcile_skipped_content_too_large', { templateId, runId: run.id });
-        return null;
-      }
-      const revision = typeof run.revision === 'number' ? run.revision : 1;
-      const items = JSON.stringify(reconciled.sections);
-      const runChanged = reconciled.newlyRetired.length > 0 || items !== JSON.stringify(previousSections);
-
-      return {
-        items,
-        retiredItems: JSON.stringify(reconciled.retired),
-        progress: calculateRunProgress(reconciled.sections),
-        templateVersion: nextContentVersion,
-        revision,
-        updatedAt: now,
-        whereClause: and(
-          eq(checklist_runs.id, run.id),
-          eq(checklist_runs.revision, revision),
-          eq(checklist_runs.status, 'in_progress'),
-          or(eq(checklist_runs.is_public, false), isNull(checklist_runs.is_public)),
-          isNull(checklist_runs.deleted_at),
-        ),
-        // The run's Changelog records the save. The event names retired work by id and
-        // title; its notes stay in the run's retired_items.
-        auditEvent: runChanged
-          ? await buildAuditEventValues({
-            actorUserId: userId,
-            subject,
-            resource: { type: 'checklist_run', id: run.id },
-            action: 'checklist_run.reconciled',
-            metadata: {
-              templateId,
-              templateVersion: nextContentVersion,
-              fromRevision: revision,
-              toRevision: revision + 1,
-              retired: summarizeRetiredEntries(reconciled.newlyRetired),
-            },
-            request,
-            createdAt: now,
-          })
-          : undefined,
-      };
-    }))).filter((update): update is ReconciledRunUpdate => update !== null);
-
-    let reconciledRuns = 0;
-    try {
-      const { updated, runResults } = await updateTemplateWithHistoryFallback(
-        db,
-        templateValues as TemplateUpdateValues,
-        templateUpdateWhere,
-        auditEvent,
-        versionValues,
-        reconciledRunUpdates,
-      );
-      if (!updated) {
-        return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
-          code: 'edit_conflict',
-        });
-      }
-      reconciledRuns = runResults.filter((result) => !batchUpdateMissed(result)).length;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/unique constraint failed:.*template_versions|template_versions.*unique/i.test(message)) {
-        return jsonError('Template changed while it was being saved. Refresh before saving again.', 409, {
-          code: 'edit_conflict',
-        });
-      }
-      // Another save claimed the slug between the check above and this write.
-      if (isTemplateSlugUniqueViolation(error) && typeof changes.slug === 'string') {
-        return slugInUseResponse(changes.slug);
-      }
-      throw error;
-    }
-
-    // The next save sends this version as expected_version. The slug is the one the template
-    // has after the write, requested (it may carry a -<id8> suffix) or kept, so the editor
-    // never guesses.
-    return json({
-      success: true,
-      id: templateId,
-      slug: typeof changes.slug === 'string' ? changes.slug : existingTemplate.slug ?? undefined,
-      version: nextVersion,
-      content_version: nextContentVersion,
-      structureChanged: syncedItems !== null,
-      reconciledRuns,
-    });
+    return updateTemplateForUser(request, env, userId, templateId, body);
   }
 
   if (request.method === 'DELETE') {

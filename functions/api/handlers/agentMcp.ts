@@ -12,6 +12,7 @@ import {
 import { requestHostIsSafe, requestOriginIsAllowed } from "../utils/agent-mcp-host";
 import { buildAuditEventValues } from "../utils/audit";
 import { describeErrorForLog, log } from "../utils/logger";
+import { failedAuthIsBlocked, limitPersonalRunKey, recordFailedAuth } from "../utils/mcp-limits";
 import {
   authenticatePersonalRunKey,
   markPersonalRunKeyUsed,
@@ -42,15 +43,18 @@ import {
   updateRunResult,
   utf8ByteLength,
 } from "./agentMcpRuns";
+import { createTemplate, getOwnedTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
 import {
   getRunArgs,
   isReadOnlyTool,
   isRecord,
+  keyAllowsTool,
   listRunsArgs,
   parseToolArguments,
   startRunArgs,
   ToolError,
   toolDefinitions,
+  toolPermission,
   updateRunArgs,
   type JsonRecord,
 } from "./agentMcpTools";
@@ -58,11 +62,6 @@ import {
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_LIST_RESULTS = 100;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_REQUESTS = 120;
-const MAX_RATE_LIMIT_KEYS = 1_000;
-
-const rateLimitWindows = new Map<string, { count: number; resetsAt: number }>();
 
 type JsonRpcId = string | number | null;
 
@@ -133,26 +132,6 @@ function acceptsMcpResponse(request: Request): boolean {
   return values.includes("application/json") && values.includes("text/event-stream");
 }
 
-function rateLimit(identity: PersonalRunKeyIdentity): { allowed: true } | { allowed: false; retryAfter: number } {
-  const now = Date.now();
-  let window = rateLimitWindows.get(identity.keyId);
-  if (!window || window.resetsAt <= now) {
-    window = { count: 0, resetsAt: now + RATE_LIMIT_WINDOW_MS };
-  }
-  window.count += 1;
-  rateLimitWindows.set(identity.keyId, window);
-
-  if (rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) {
-    for (const [key, candidate] of rateLimitWindows) {
-      if (candidate.resetsAt <= now || rateLimitWindows.size > MAX_RATE_LIMIT_KEYS) rateLimitWindows.delete(key);
-      if (rateLimitWindows.size <= MAX_RATE_LIMIT_KEYS) break;
-    }
-  }
-
-  if (window.count <= RATE_LIMIT_REQUESTS) return { allowed: true };
-  return { allowed: false, retryAfter: Math.max(1, Math.ceil((window.resetsAt - now) / 1000)) };
-}
-
 function summarizeTemplate(template: JsonRecord): JsonRecord {
   return {
     id: template.id,
@@ -206,26 +185,7 @@ async function startRun(
   const args = parseToolArguments(startRunArgs, rawArguments);
 
   const db = createDb(env);
-  const [template] = await db
-    .select()
-    .from(schema.templates)
-    .where(and(
-      eq(schema.templates.id, args.templateId),
-      eq(schema.templates.user_id, identity.userId),
-      eq(schema.templates.owner_type, "user"),
-      isNull(schema.templates.team_id),
-      isNull(schema.templates.deleted_at),
-    ))
-    .limit(1);
-  if (
-    !template
-    || template.user_id !== identity.userId
-    || template.owner_type !== "user"
-    || template.team_id !== null
-    || template.deleted_at !== null
-  ) {
-    throw new ToolError("Template not found", "template_not_found");
-  }
+  const template = await getOwnedTemplate(env, identity.userId, args.templateId);
 
   const owner = { userId: identity.userId, teamId: null };
   // Fast path for a friendly error; the guarded insert below is what enforces the limit.
@@ -529,10 +489,29 @@ async function callTool(
   name: string,
   rawArguments: unknown,
 ): Promise<{ data: JsonRecord; text: string }> {
+  // A tool the key's permissions do not cover is refused before it reads anything.
+  if (!keyAllowsTool(identity.permissions, name)) {
+    const permission = toolPermission(name);
+    if (!permission) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
+    throw new ToolError(`This Run Key does not have the ${permission} permission`, "permission_denied", { permission });
+  }
+
   switch (name) {
     case "list_templates": {
       const data = await listTemplates(env, identity);
       return { data, text: `Found ${(data.templates as unknown[]).length} personal template(s).` };
+    }
+    case "get_template": {
+      const data = await getTemplate(env, identity, rawArguments);
+      return { data, text: `Loaded template "${boundedText((data.template as JsonRecord).title)}".` };
+    }
+    case "create_template": {
+      const data = await createTemplate(request, env, identity, rawArguments);
+      return { data, text: `Created template "${boundedText((data.template as JsonRecord).title)}".` };
+    }
+    case "update_template": {
+      const data = await updateTemplate(request, env, identity, rawArguments);
+      return { data, text: `Updated template "${boundedText((data.template as JsonRecord).title)}".` };
     }
     case "start_run": {
       const data = await startRun(request, env, identity, rawArguments);
@@ -584,6 +563,10 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     }
   }
 
+  if (failedAuthIsBlocked(request)) {
+    return rpcError(null, -32000, "Too many failed authentication attempts", undefined, 429);
+  }
+
   let identity: PersonalRunKeyIdentity | null;
   try {
     identity = await authenticatePersonalRunKey(request, env);
@@ -593,11 +576,17 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(null, -32603, "Internal error", undefined, 500);
   }
   if (!identity) {
+    recordFailedAuth(request);
     return rpcError(null, -32001, "Unauthorized", undefined, 401);
   }
 
-  const rateLimitResult = rateLimit(identity);
+  // Logging the key ID for every authenticated request, even a malformed one, lets an abused
+  // key be found and revoked.
+  const requestId = requestIdOf(request);
+  log("info", "mcp_request", { requestId, keyId: identity.keyId });
+  const rateLimitResult = limitPersonalRunKey(identity);
   if (!rateLimitResult.allowed) {
+    log("warn", "mcp_rate_limited", { requestId, keyId: identity.keyId });
     const response = rpcError(null, -32000, "Rate limit exceeded", undefined, 429);
     response.headers.set("Retry-After", String(rateLimitResult.retryAfter));
     return response;
@@ -643,19 +632,21 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcResult(id, {
       protocolVersion: MCP_PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
-      serverInfo: { name: "serp-lists-personal-runs", version: "0.1.0" },
+      serverInfo: { name: "serp-lists-personal-runs", version: "0.2.0" },
     });
   }
 
   if (payload.method === "ping") return rpcResult(id, {});
 
   if (payload.method === "tools/list") {
-    return rpcResult(id, { tools: toolDefinitions });
+    const permissions = identity.permissions;
+    return rpcResult(id, { tools: toolDefinitions.filter((tool) => keyAllowsTool(permissions, tool.name)) });
   }
 
   if (payload.method === "tools/call") {
     const params = isRecord(payload.params) ? payload.params : {};
     if (typeof params.name !== "string") return rpcError(id, -32602, "Tool name is required");
+    log("info", "mcp_tool_call", { requestId, keyId: identity.keyId, toolName: toolNameForLog(params.name) });
     try {
       const { data, text } = await callTool(request, env, identity, params.name, params.arguments);
       if (isReadOnlyTool(params.name)) assertBoundedResult(data);
@@ -664,7 +655,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
       } catch (error) {
         // Usage telemetry must not turn a committed tool mutation into a retryable failure.
         log("warn", "mcp_key_usage_error", {
-          requestId: requestIdOf(request),
+          requestId,
           keyId: identity.keyId,
           ...describeErrorForLog(error),
         });
@@ -687,7 +678,7 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
       // Expected ToolErrors above are client outcomes; anything else is a server fault.
       // Never log the tool arguments: they carry run notes and titles.
       log("error", "mcp_tool_error", {
-        requestId: requestIdOf(request),
+        requestId,
         tool: toolNameForLog(params.name),
         keyId: identity.keyId,
         userId: identity.userId,

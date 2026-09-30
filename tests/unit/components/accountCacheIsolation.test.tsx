@@ -52,7 +52,14 @@ const userAData: Record<string, unknown[]> = {
     },
   ],
   'agent-keys': [
-    { id: 'key-a', name: 'Prod SOP bot', keyPrefix: 'sl_run_a1b2', createdAt: '2026-09-01T00:00:00.000Z', lastUsedAt: null },
+    {
+      id: 'key-a',
+      name: 'Prod SOP bot',
+      keyPrefix: 'sl_run_a1b2',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      lastUsedAt: null,
+      permissions: ['runs:read'],
+    },
   ],
   'team-members': [
     { id: 'member-disabled', team_id: 'team-1', user_id: 'user-x', role: 'viewer', status: 'disabled', name: 'Disabled Member' },

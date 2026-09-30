@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL("../../../../db/migrations/0025_add_personal_run_keys.sql", import.meta.url),
   "utf8",
 );
+const permissionsMigration = readFileSync(
+  new URL("../../../../db/migrations/0027_add_personal_run_key_permissions.sql", import.meta.url),
+  "utf8",
+);
 
 describe("personal run key migration", () => {
   it("creates hashed-key storage with user ownership and cascade deletion", () => {
@@ -56,6 +60,29 @@ describe("personal run key migration", () => {
 
     db.prepare("DELETE FROM users WHERE id = ?").run("user-1");
     expect(db.prepare("SELECT count(*) AS count FROM personal_run_keys").get()).toEqual({ count: 0 });
+    db.close();
+  });
+
+  it("backfills existing keys to read templates and read and write runs", () => {
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA foreign_keys = ON; CREATE TABLE users (id TEXT PRIMARY KEY);");
+    db.exec(migration);
+    db.prepare("INSERT INTO users(id) VALUES (?)").run("user-1");
+    const insert = db.prepare(`
+      INSERT INTO personal_run_keys(id, user_id, name, key_prefix, key_hash)
+      VALUES (?, 'user-1', 'Codex', ?, ?)
+    `);
+    insert.run("existing-key", "slrk_existing", "existing-hash");
+
+    db.exec(permissionsMigration);
+    insert.run("new-key", "slrk_new", "new-hash");
+
+    expect(db.prepare("SELECT id, permissions FROM personal_run_keys ORDER BY id").all()).toEqual([
+      { id: "existing-key", permissions: '["templates:read","runs:read","runs:write"]' },
+      { id: "new-key", permissions: '["templates:read","runs:read","runs:write"]' },
+    ]);
+    expect(db.prepare("PRAGMA table_info('personal_run_keys')").all()
+      .find((column) => column.name === "permissions")).toMatchObject({ notnull: 1 });
     db.close();
   });
 });

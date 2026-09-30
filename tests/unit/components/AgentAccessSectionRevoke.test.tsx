@@ -64,6 +64,7 @@ const activeKey: AgentKey = {
   createdAt: '2026-09-19T01:00:00.000Z',
   lastUsedAt: null,
   revokedAt: null,
+  permissions: ['templates:read', 'runs:read', 'runs:write'],
   status: 'active',
 };
 const revokedKey: AgentKey = { ...activeKey, revokedAt: '2026-09-19T02:00:00.000Z', status: 'revoked' };

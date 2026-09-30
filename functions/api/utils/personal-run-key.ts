@@ -1,4 +1,5 @@
-import { and, eq, isNull, lt, or } from "drizzle-orm";
+import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { parseStoredRunKeyPermissions, type RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { sha256Hex } from "./crypto";
@@ -10,10 +11,23 @@ export interface PersonalRunKeyIdentity {
   keyId: string;
   userId: string;
   name: string;
+  permissions: readonly RunKeyPermission[];
   lastUsedAt?: string | null;
 }
 
 const LAST_USED_WRITE_INTERVAL_MS = 15 * 60 * 1000;
+
+export const MAX_ACTIVE_PERSONAL_RUN_KEYS = 10;
+
+export interface PersonalRunKeyRecord {
+  id: string;
+  user_id: string;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  created_at: string;
+  permissions: readonly RunKeyPermission[];
+}
 
 function encodeBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -49,6 +63,24 @@ function readBearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+// One statement, so parallel requests cannot push a user past the cap. Returns false when
+// the user already has the maximum number of active keys.
+export async function insertPersonalRunKeyWithinCap(
+  env: Env,
+  record: PersonalRunKeyRecord,
+): Promise<boolean> {
+  const result: unknown = await createDb(env).run(sql`
+    insert into personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
+    select ${record.id}, ${record.user_id}, ${record.name}, ${record.key_prefix}, ${record.key_hash}, ${record.created_at}, ${JSON.stringify(record.permissions)}
+    where (
+      select count(*) from personal_run_keys
+      where user_id = ${record.user_id} and revoked_at is null
+    ) < ${MAX_ACTIVE_PERSONAL_RUN_KEYS}
+  `);
+  const meta = typeof result === "object" && result !== null ? (result as { meta?: { changes?: unknown } }).meta : undefined;
+  return meta?.changes === 1;
+}
+
 export async function authenticatePersonalRunKey(
   request: Request,
   env: Env,
@@ -66,6 +98,7 @@ export async function authenticatePersonalRunKey(
       id: personal_run_keys.id,
       userId: personal_run_keys.user_id,
       name: personal_run_keys.name,
+      permissions: personal_run_keys.permissions,
       lastUsedAt: personal_run_keys.last_used_at,
     })
     .from(personal_run_keys)
@@ -78,6 +111,7 @@ export async function authenticatePersonalRunKey(
     keyId: record.id,
     userId: record.userId,
     name: record.name,
+    permissions: parseStoredRunKeyPermissions(record.permissions),
     lastUsedAt: record.lastUsedAt,
   };
 }

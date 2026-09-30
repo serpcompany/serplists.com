@@ -8,6 +8,7 @@ import { agentMcpConnectionSchema, type AgentMcpConnection } from "@/lib/schemas
 import { resolveApiBaseUrl } from "@/lib/apiBaseUrl";
 import type { TemplateImportSummary } from "@/types/checklist";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import type { RunKeyPermission } from "@/lib/schemas/runKeyPermissions";
 import {
   createdTeamInviteSchema,
   teamInvitePreviewSchema,
@@ -173,6 +174,7 @@ export type AgentKey = {
   createdAt: string;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  permissions: RunKeyPermission[];
   status: AgentKeyStatus;
 };
 
@@ -470,17 +472,15 @@ class ApiClient {
     return agentMcpConnectionSchema.parse(await this.request('/agent-keys/connection'));
   }
 
-  async createAgentKey(name: string): Promise<CreatedAgentKey> {
+  async createAgentKey(name: string, permissions: RunKeyPermission[]): Promise<CreatedAgentKey> {
     return this.request('/agent-keys', {
       method: 'POST',
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, permissions }),
     });
   }
 
   async revokeAgentKey(id: string): Promise<{ id: string; revokedAt: string }> {
-    return this.request(`/agent-keys/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
+    return this.request(`/agent-keys/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 
   // Teams

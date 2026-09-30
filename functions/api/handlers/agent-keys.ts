@@ -1,18 +1,32 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  DEFAULT_RUN_KEY_PERMISSIONS,
+  parseStoredRunKeyPermissions,
+  runKeyPermissionSchema,
+  withImpliedRunKeyPermissions,
+} from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
 import { resolveAgentMcpConnection } from "../utils/agent-mcp-host";
-import { createPersonalRunKeySecret } from "../utils/personal-run-key";
+import {
+  createPersonalRunKeySecret,
+  insertPersonalRunKeyWithinCap,
+  MAX_ACTIVE_PERSONAL_RUN_KEYS,
+} from "../utils/personal-run-key";
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
 
 // GET /api/agent-keys/connection. Key ids are UUIDs, so this segment never names a key.
 const CONNECTION_PATH = "connection";
 
+// Active keys are capped, so this bounds the list to every active key plus recent revoked ones.
+const MAX_LISTED_KEYS = 50;
+
 const createKeyBodySchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(80, "Name must be 80 characters or fewer"),
-});
+  permissions: z.array(runKeyPermissionSchema).min(1, "Choose at least one permission").max(8).optional(),
+}).strict();
 
 const safeKeySelection = (personal_run_keys: typeof schema.personal_run_keys) => ({
   id: personal_run_keys.id,
@@ -21,6 +35,7 @@ const safeKeySelection = (personal_run_keys: typeof schema.personal_run_keys) =>
   createdAt: personal_run_keys.created_at,
   lastUsedAt: personal_run_keys.last_used_at,
   revokedAt: personal_run_keys.revoked_at,
+  permissions: personal_run_keys.permissions,
 });
 
 async function readJson(request: Request): Promise<unknown> {
@@ -55,9 +70,11 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       .select(safeKeySelection(personal_run_keys))
       .from(personal_run_keys)
       .where(eq(personal_run_keys.user_id, userId))
-      .orderBy(desc(personal_run_keys.created_at));
+      .orderBy(sql`${personal_run_keys.revoked_at} is not null`, desc(personal_run_keys.created_at))
+      .limit(MAX_LISTED_KEYS);
     return json(keys.map((key) => ({
       ...key,
+      permissions: parseStoredRunKeyPermissions(key.permissions),
       status: key.revokedAt ? "revoked" : "active",
     })));
   }
@@ -82,11 +99,14 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       key_prefix: secret.keyPrefix,
       key_hash: secret.keyHash,
       created_at: new Date().toISOString(),
+      permissions: withImpliedRunKeyPermissions(parsed.data.permissions ?? DEFAULT_RUN_KEY_PERMISSIONS),
       last_used_at: null,
       revoked_at: null,
     };
 
-    await db.insert(personal_run_keys).values(record);
+    if (!(await insertPersonalRunKeyWithinCap(env, record))) {
+      return jsonError(`You can have up to ${MAX_ACTIVE_PERSONAL_RUN_KEYS} active Run Keys. Revoke one to create another.`, 409);
+    }
     const response = json({
       key: {
         id: record.id,
@@ -95,6 +115,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
         createdAt: record.created_at,
         lastUsedAt: record.last_used_at,
         revokedAt: record.revoked_at,
+        permissions: record.permissions,
         status: "active",
       },
       secret: secret.key,

@@ -8,8 +8,18 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Empty, EmptyDescription } from '@/components/ui/empty';
-import { Field, FieldLabel } from '@/components/ui/field';
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+  FieldTitle,
+} from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Item,
@@ -25,6 +35,13 @@ import { api, getAgentMcpEndpoint, type AgentKey, type CreatedAgentKey } from '@
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { queryKeys } from '@/lib/queryKeys';
 import { reloadQuery } from '@/lib/queryReload';
+import {
+  DEFAULT_RUN_KEY_PERMISSIONS,
+  RUN_KEY_PERMISSION_DETAILS,
+  RUN_KEY_PERMISSIONS,
+  toggleRunKeyPermission,
+  type RunKeyPermission,
+} from '@/lib/schemas/runKeyPermissions';
 
 const agentMcpConnectionQueryKey = ['agent-mcp-connection'] as const;
 
@@ -59,12 +76,15 @@ export type AgentAccessSectionViewProps = {
   mcpEndpoint: string | null;
   // The page's address is not one the MCP server accepts (for example a per-deployment URL).
   mcpHostMismatch: boolean;
+  // What the next key may do; fixed once it is created.
+  permissions: readonly RunKeyPermission[];
   revokingKeyId: string | null;
   onCopyEndpoint: () => void;
   onCopySecret: () => void;
   onCreate: (event: FormEvent<HTMLFormElement>) => void;
   onDismissSecret: () => void;
   onKeyNameChange: (name: string) => void;
+  onPermissionChange: (permission: RunKeyPermission, enabled: boolean) => void;
   onRetry: () => void;
   onRevoke: (key: AgentKey) => void;
 };
@@ -78,12 +98,14 @@ export function AgentAccessSectionView({
   keyName,
   mcpEndpoint,
   mcpHostMismatch,
+  permissions,
   revokingKeyId,
   onCopyEndpoint,
   onCopySecret,
   onCreate,
   onDismissSecret,
   onKeyNameChange,
+  onPermissionChange,
   onRetry,
   onRevoke,
 }: AgentAccessSectionViewProps) {
@@ -95,23 +117,23 @@ export function AgentAccessSectionView({
       <CardHeader>
         <CardTitle as="h2">Agent Access</CardTitle>
         <CardDescription>
-          Create a personal Run Key for a code agent to operate SOP runs in Personal.
+          Create a personal Run Key for a code agent to work with your Personal templates and runs.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <Alert>
           <Bot />
-          <AlertTitle>Fixed run-only permissions</AlertTitle>
+          <AlertTitle>Permissions are fixed when you create a key</AlertTitle>
           <AlertDescription>
-            The key can read personal templates and list, start, read, and update personal runs. It cannot edit
+            To change what an agent can do, create a new key and revoke the old one. No key can delete or publish
             templates, change your profile, access Organizations, or manage billing.
           </AlertDescription>
         </Alert>
 
         <form onSubmit={onCreate}>
-          <Field>
-            <FieldLabel htmlFor="agent-key-name">Key name</FieldLabel>
-            <div className="flex flex-col gap-2 sm:flex-row">
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="agent-key-name">Key name</FieldLabel>
               <Input
                 id="agent-key-name"
                 value={keyName}
@@ -120,12 +142,47 @@ export function AgentAccessSectionView({
                 maxLength={80}
                 autoComplete="off"
               />
-              <Button className="sm:shrink-0" type="submit" disabled={isCreating || !keyName.trim()}>
+            </Field>
+            <FieldSet>
+              <FieldLegend variant="label">Permissions</FieldLegend>
+              <FieldGroup className="grid gap-3 sm:grid-cols-2">
+                {RUN_KEY_PERMISSIONS.map((permission) => {
+                  const id = `run-key-permission-${permission.replace(':', '-')}`;
+                  const details = RUN_KEY_PERMISSION_DETAILS[permission];
+                  return (
+                    // A choice card: the whole card toggles the checkbox, which the title names.
+                    <FieldLabel htmlFor={id} key={permission}>
+                      <Field orientation="horizontal">
+                        <Checkbox
+                          // A native button, so the card's label reaches it.
+                          nativeButton
+                          render={<button type="button" />}
+                          id={id}
+                          aria-labelledby={`${id}-title`}
+                          aria-describedby={`${id}-description`}
+                          checked={permissions.includes(permission)}
+                          onCheckedChange={(checked) => onPermissionChange(permission, checked === true)}
+                        />
+                        <FieldContent>
+                          <FieldTitle id={`${id}-title`}>{details.label}</FieldTitle>
+                          <FieldDescription id={`${id}-description`}>{details.description}</FieldDescription>
+                        </FieldContent>
+                      </Field>
+                    </FieldLabel>
+                  );
+                })}
+              </FieldGroup>
+              {permissions.length === 0 ? (
+                <FieldDescription>Choose at least one permission.</FieldDescription>
+              ) : null}
+            </FieldSet>
+            <Field orientation="horizontal">
+              <Button type="submit" disabled={isCreating || !keyName.trim() || permissions.length === 0}>
                 <KeyRound data-icon="inline-start" />
                 {isCreating ? 'Creating...' : 'Create Run Key'}
               </Button>
-            </div>
-          </Field>
+            </Field>
+          </FieldGroup>
         </form>
 
         {createdKey ? (
@@ -251,6 +308,13 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                         </Badge>
                       </ItemTitle>
                       <ItemDescription className="font-mono text-xs">{key.prefix}...</ItemDescription>
+                      <ul aria-label={`Permissions for ${key.name}`} className="flex flex-wrap gap-1">
+                        {key.permissions.map((permission) => (
+                          <Badge key={permission} render={<li />} variant="outline">
+                            {RUN_KEY_PERMISSION_DETAILS[permission]?.label ?? permission}
+                          </Badge>
+                        ))}
+                      </ul>
                       <ItemDescription className="text-xs">
                         Created {formatTimestamp(key.createdAt)} · Last used {formatTimestamp(key.lastUsedAt)}
                       </ItemDescription>
@@ -294,6 +358,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
 
 export function AgentAccessSection() {
   const [keyName, setKeyName] = useState('');
+  const [permissions, setPermissions] = useState<RunKeyPermission[]>([...DEFAULT_RUN_KEY_PERMISSIONS]);
   const [createdKey, setCreatedKey] = useState<CreatedAgentKey | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
@@ -324,9 +389,10 @@ export function AgentAccessSection() {
 
     setIsCreating(true);
     try {
-      const result = await api.createAgentKey(name);
+      const result = await api.createAgentKey(name, permissions);
       setCreatedKey(result);
       setKeyName('');
+      setPermissions([...DEFAULT_RUN_KEY_PERMISSIONS]);
       // Show the new key at once; the list may still be loading from before the create.
       await reloadQuery<AgentKey[]>(queryClient, queryKeys.agentKeys(userId), (keys = []) => [
         result.key,
@@ -389,12 +455,15 @@ export function AgentAccessSection() {
       keyName={keyName}
       mcpEndpoint={mcpEndpoint}
       mcpHostMismatch={mcpHostMismatch}
+      permissions={permissions}
       revokingKeyId={revokingKeyId}
       onCopyEndpoint={handleCopyEndpoint}
       onCopySecret={handleCopySecret}
       onCreate={handleCreate}
       onDismissSecret={() => setCreatedKey(null)}
       onKeyNameChange={setKeyName}
+      onPermissionChange={(permission, enabled) =>
+        setPermissions((current) => toggleRunKeyPermission(current, permission, enabled))}
       onRetry={() => void keysQuery.refetch()}
       onRevoke={handleRevoke}
     />

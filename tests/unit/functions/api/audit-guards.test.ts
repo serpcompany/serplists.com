@@ -50,7 +50,7 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { handleTemplates } from '@functions/api/handlers/templates';
+import { handleTemplates, updateTemplateForUser } from '@functions/api/handlers/templates';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
@@ -217,6 +217,34 @@ describe('audit rows are written only when the guarded write lands', () => {
     expect(render((versionInsert as { query: SQL }).query)).toContain('"audit_events"');
     const runUpdate = statements.find((statement) => statement.kind === 'update' && statement.table === schema.checklist_runs);
     expect(render((runUpdate as { where: SQL }).where)).toContain('"audit_events"');
+  });
+
+  it('Run Key template edit: a template published meanwhile is not edited or audited', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([template()]);
+
+    const response = await updateTemplateForUser(
+      new Request('http://localhost/api/mcp', { method: 'POST' }),
+      env,
+      'user-123',
+      'template-1',
+      { expected_version: 3, title: 'Renamed by an agent' },
+      { personalOnly: true, auditMetadata: { source: 'mcp', personalRunKeyId: 'key-1' } },
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json() as Record<string, unknown>).code).toBe('edit_conflict');
+    // Publishing between the read and the write leaves no matching row, so nothing lands.
+    expectGuardedAudit(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
+  });
+
+  it('template PUT: an owner edit of a public template does not require it to be private', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([template({ is_public: true })]);
+
+    await send(handleTemplates, 'templates/template-1', 'PUT', { expected_version: 3, title: 'Renamed' });
+
+    const statements = expectGuardedAudit(schema.templates, ['"version" = ?', '"deleted_at" is null']);
+    const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
+    expect(render((auditInsert as { query: SQL }).query)).not.toContain('"is_public"');
   });
 
   it('template archive: a concurrent archive does not report a second success', async () => {

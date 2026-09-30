@@ -55,9 +55,28 @@
   origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters).
   `null` or an empty string removes the avatar. Updates check only the fields they
   write, so Better Auth's internal updates (email verification, username) pass.
-- **Agents act through Run Keys**, revocable credentials limited to reading
-  Personal templates and listing, starting, reading, and updating Personal runs.
-  Keys are stored hashed. The MCP routes are off on remote hosts unless
+- **Agents act through Run Keys**, revocable credentials limited to the owner's
+  Personal templates and runs and, within that, to the permissions chosen when the
+  key was created (`src/lib/schemas/runKeyPermissions.ts`): `templates:read`,
+  `templates:write`, `runs:read`, `runs:write`. Each write implies its read, and
+  `runs:write` also implies `templates:read` because starting a run copies the
+  template's current content into the run. New keys
+  default to everything except `templates:write`, and permissions cannot be edited
+  afterwards. The MCP lists only the tools a key's permissions cover and refuses the
+  rest with `permission_denied`. A stored value that fails to parse grants nothing.
+  Templates a key creates are private; a key cannot delete or publish templates or
+  edit a public one (checked again inside the write, so a template published at the
+  same moment refuses the edit), and template writes use the web editor's code path
+  (`createTemplateForUser`, `updateTemplateForUser`), so they get the same
+  validation, template limit, version check, history, and run sync (a
+  `templates:write` edit therefore also updates the owner's in-progress private runs
+  of that template).
+  Keys are stored hashed, and each user can hold at most 10 active keys (enforced in
+  one insert statement, so parallel requests cannot exceed it). Every authenticated
+  MCP request logs `mcp_request` with its request ID and key ID, and tool calls also
+  log `mcp_tool_call` with the tool name (`unknown` for a name that is not a tool;
+  never the secret or the arguments), so a key being abused can be found and
+  revoked. The MCP routes are off on remote hosts unless
   `PERSONAL_RUN_MCP_ENABLED=true`. Revoking a key its owner already revoked
   succeeds with the original revoke time (a retry, or another tab); a missing key
   and another user's key get the same 404.
@@ -256,9 +275,9 @@ Clients that share a /64 (some office or campus networks) share one budget.
   grants plans without payment, so every request counts as a guess, reads included.
 - MCP (`POST /api/mcp`): 240 per minute per IP, in its own bucket. MCP is JSON-RPC
   over POST, so every call counts, reads included; the separate bucket keeps a local
-  agent from using up its owner's web saves on the same IP. It is also the only
-  limit on calls with an unknown Run Key, each of which costs a D1 lookup. The
-  `429` is a JSON-RPC error (`code: -32000`, `Rate limit exceeded`) with `Retry-After`.
+  agent from using up its owner's web saves on the same IP. It also counts calls
+  with an unknown Run Key, each of which costs a D1 lookup. The `429` is a JSON-RPC
+  error (`code: -32000`, `Rate limit exceeded`) with `Retry-After`.
 - Billing checkout and portal (`POST /api/billing/*`), which each call Stripe, whose
   rate limit the whole Stripe account shares: 10 per minute per IP on deployed hosts
   (120 locally), in their own bucket, and 10 per minute per account in the billing
@@ -268,7 +287,13 @@ Clients that share a /64 (some office or campus networks) share one budget.
   family the router dispatches is either limited there or listed in
   `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
 - MCP also limits each authenticated Run Key to 120 requests per minute, so one
-  key's full budget always fits under the per-IP MCP limit.
+  key's full budget always fits under the per-IP MCP limit, and refuses an IP after
+  10 failed authentications in a minute, before the D1 key lookup
+  (`functions/api/utils/mcp-limits.ts`).
+- Cloudflare WAF rate-limiting rule `MCP rate limit` (zone `serplists.com`, Free plan,
+  the zone's only rate-limiting slot): `http.host eq "serplists.com" and
+  starts_with(http.request.uri.path, "/api/mcp")`, 20 requests per 10 seconds per IP,
+  then Block for 10 seconds. Unlike the in-memory limits, it applies across all edges.
 - Password-reset and verification emails are also limited per account, whatever
   the IP: at most one of each kind a minute and five an hour
   (`functions/api/utils/auth-email-throttle.ts`, called from the Better Auth send

@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { portableChecklistSectionSchema } from "../../../src/lib/schemas/checklistSchema";
+import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 
-// Tool argument validators and the tool list advertised by the personal run MCP endpoint
-// (functions/api/handlers/agentMcp.ts).
+// Tool argument validators, the tool list advertised by the personal run MCP endpoint
+// (functions/api/handlers/agentMcp.ts), and the Run Key permission each tool needs.
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -68,6 +70,38 @@ export const updateRunArgs = z.discriminatedUnion("operation", [
 
 export type UpdateRunArgs = z.infer<typeof updateRunArgs>;
 
+// Template writes are private Personal templates only: no visibility, Organization, or slug
+// fields (.strict() refuses them).
+export const getTemplateArgs = z.object({
+  templateId: z.string().trim().min(1),
+}).strict();
+
+const templateTitleArg = z.string().trim().min(1).max(160);
+const templateDescriptionArg = z.string().max(5000);
+const templateSectionsArg = z.array(portableChecklistSectionSchema).min(1).max(100);
+const templateLabelsArg = z.array(z.string().trim().min(1).max(80)).max(20);
+
+export const createTemplateArgs = z.object({
+  title: templateTitleArg,
+  description: templateDescriptionArg.optional(),
+  sections: templateSectionsArg,
+  categories: templateLabelsArg.optional(),
+  tags: templateLabelsArg.optional(),
+}).strict();
+
+export const updateTemplateArgs = z.object({
+  templateId: z.string().trim().min(1),
+  expectedVersion: z.number().int().positive(),
+  title: templateTitleArg.optional(),
+  description: templateDescriptionArg.optional(),
+  sections: templateSectionsArg.optional(),
+  categories: templateLabelsArg.optional(),
+  tags: templateLabelsArg.optional(),
+}).strict().refine(
+  ({ templateId: _templateId, expectedVersion: _expectedVersion, ...changes }) => Object.keys(changes).length > 0,
+  "Provide at least one of title, description, sections, categories, or tags",
+);
+
 const MAX_REPORTED_ISSUES = 5;
 
 // Models often send fields a call does not use as null (OpenAI strict mode does so for
@@ -89,13 +123,118 @@ export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, 
   throw new ToolError(message || "Invalid arguments", "invalid_arguments", { issues });
 }
 
+const templateSectionsJsonSchema = {
+  type: "array",
+  minItems: 1,
+  maxItems: 100,
+  description: "Sections in order. Keep the id of every existing section, task, and subtask you change so run "
+    + "progress follows it; omit ids for new ones.",
+  items: {
+    type: "object",
+    properties: {
+      id: { type: "string" },
+      title: { type: "string", minLength: 1 },
+      items: {
+        type: "array",
+        minItems: 1,
+        items: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            title: { type: "string", minLength: 1 },
+            description: { type: "string" },
+            contents: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  type: { type: "string", enum: ["text", "image", "video", "file", "embed", "subItems"] },
+                  value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
+                  subItems: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: { id: { type: "string" }, title: { type: "string", minLength: 1 } },
+                      required: ["title"],
+                    },
+                  },
+                },
+                required: ["type"],
+              },
+            },
+          },
+          required: ["title"],
+        },
+      },
+    },
+    required: ["title", "items"],
+  },
+} as const;
+
+const templateLabelsJsonSchema = {
+  type: "array",
+  maxItems: 20,
+  items: { type: "string", minLength: 1, maxLength: 80 },
+} as const;
+
 export const toolDefinitions = [
   {
     name: "list_templates",
     description: "List the authenticated user's active personal SOP templates, most recently edited or created "
-      + "first, up to 100 (truncated is true when there are more). Templates are read-only.",
+      + "first, up to 100 (truncated is true when there are more).",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "get_template",
+    description: "Read a personal template, including its sections, tasks, subtasks, ids, and version.",
+    inputSchema: {
+      type: "object",
+      properties: { templateId: { type: "string" } },
+      required: ["templateId"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "create_template",
+    description: "Create a private personal template.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", minLength: 1, maxLength: 160 },
+        description: { type: "string", maxLength: 5000 },
+        sections: templateSectionsJsonSchema,
+        categories: templateLabelsJsonSchema,
+        tags: templateLabelsJsonSchema,
+      },
+      required: ["title", "sections"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  },
+  {
+    name: "update_template",
+    description: "Update a private personal template (public templates can only be edited in SERP Lists). "
+      + "Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs "
+      + "of the template pick up the change. Pass the latest version from get_template as expectedVersion to "
+      + "prevent lost updates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        templateId: { type: "string" },
+        expectedVersion: { type: "integer", minimum: 1 },
+        title: { type: "string", minLength: 1, maxLength: 160 },
+        description: { type: "string", maxLength: 5000 },
+        sections: templateSectionsJsonSchema,
+        categories: templateLabelsJsonSchema,
+        tags: templateLabelsJsonSchema,
+      },
+      required: ["templateId", "expectedVersion"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   },
   {
     name: "start_run",
@@ -191,4 +330,28 @@ export const toolDefinitions = [
 
 export function isReadOnlyTool(name: string): boolean {
   return toolDefinitions.some((tool) => tool.name === name && tool.annotations.readOnlyHint);
+}
+
+type ToolName = (typeof toolDefinitions)[number]["name"];
+
+// The Run Key permission each tool needs (src/lib/schemas/runKeyPermissions.ts).
+const toolPermissions: Record<ToolName, RunKeyPermission> = {
+  list_templates: "templates:read",
+  get_template: "templates:read",
+  create_template: "templates:write",
+  update_template: "templates:write",
+  start_run: "runs:write",
+  list_runs: "runs:read",
+  get_run: "runs:read",
+  update_run: "runs:write",
+};
+
+/** The permission a tool needs; undefined for a name that is not a tool. */
+export function toolPermission(name: string): RunKeyPermission | undefined {
+  return Object.prototype.hasOwnProperty.call(toolPermissions, name) ? toolPermissions[name as ToolName] : undefined;
+}
+
+export function keyAllowsTool(permissions: readonly RunKeyPermission[], name: string): boolean {
+  const permission = toolPermission(name);
+  return permission !== undefined && permissions.includes(permission);
 }

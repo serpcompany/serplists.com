@@ -2,8 +2,8 @@
 
 SERP Lists lets people and Organizations own reusable Templates (SOPs, checklists,
 audits, launches) and execute them as Runs with their own progress and history.
-Public Templates are published through Public Profiles; code agents can operate
-Runs through revocable Run Keys. What exists today is specified in
+Public Templates are published through Public Profiles; code agents can write
+private Templates and operate Runs through revocable Run Keys. What exists today is specified in
 [product-specs/](product-specs/index.md).
 
 ## Principles
@@ -100,7 +100,7 @@ A code agent that acts through explicitly delegated access without becoming a Us
 _Avoid_: Agent user, machine profile
 
 **Run Key**:
-A revocable credential that authorizes an Agent to operate runs within its permitted Personal or Organization scope.
+A revocable credential that authorizes an Agent to do what its permissions allow (read or write templates, read or write runs) within its permitted Personal or Organization scope. Permissions are chosen when the key is created and cannot be changed.
 _Avoid_: User session, agent account
 
 ### Visibility

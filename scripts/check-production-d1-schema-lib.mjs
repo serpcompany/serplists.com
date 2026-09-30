@@ -239,6 +239,7 @@ export const REQUIRED_D1_SCHEMA = Object.freeze({
     "created_at",
     "last_used_at",
     "revoked_at",
+    "permissions",
   ],
 });
 

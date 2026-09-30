@@ -52,7 +52,12 @@ import {
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
 
-const identity = { keyId: "key-1", userId: "user-1", name: "Codex" };
+const identity = {
+  keyId: "key-1",
+  userId: "user-1",
+  name: "Codex",
+  permissions: ["templates:read", "templates:write", "runs:read", "runs:write"] as const,
+};
 const env = { DB: {} } as any;
 
 function rpcRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
@@ -350,18 +355,24 @@ describe("personal run MCP handler", () => {
     expect(await response.text()).toBe("");
   });
 
-  it("advertises only the five run-focused tools", async () => {
+  it("advertises personal template and run tools without delete or publish controls", async () => {
     const response = await handleAgentMcp(rpcRequest("tools/list"), env);
     const body = await response.json() as any;
 
     expect(body.result.tools.map((tool: any) => tool.name)).toEqual([
       "list_templates",
+      "get_template",
+      "create_template",
+      "update_template",
       "start_run",
       "list_runs",
       "get_run",
       "update_run",
     ]);
-    expect(JSON.stringify(body)).not.toContain("edit_template");
+    const serialized = JSON.stringify(body);
+    for (const forbidden of ["delete", "is_public", "visibility", "teamId", "slug"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
 
     const updateRun = body.result.tools.find((tool: any) => tool.name === "update_run");
     expect(updateRun.inputSchema.required).toEqual(["runId", "expectedRevision", "operation"]);
@@ -373,6 +384,9 @@ describe("personal run MCP handler", () => {
     ]);
     expect(body.result.tools.map((tool: any) => tool.annotations)).toEqual([
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -402,6 +416,27 @@ describe("personal run MCP handler", () => {
     sqlite.close();
 
     expect(ordered).toEqual(["created-today", "edited-recently", "imported-b", "imported-a", "edited-long-ago"]);
+  });
+
+  it("offers and allows only the tools a key's permissions cover", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, permissions: ["runs:read"] });
+
+    const listResponse = await handleAgentMcp(rpcRequest("tools/list"), env);
+    const list = await listResponse.json() as any;
+    expect(list.result.tools.map((tool: any) => tool.name)).toEqual(["list_runs", "get_run"]);
+
+    const deniedResponse = await handleAgentMcp(callTool("create_template", {
+      title: "Denied",
+      sections: [{ title: "Section", items: [{ title: "Task" }] }],
+    }), env);
+    const denied = await deniedResponse.json() as any;
+    expect(denied.result.isError).toBe(true);
+    expect(denied.result.structuredContent).toMatchObject({
+      error: "permission_denied",
+      details: { permission: "templates:write" },
+    });
+    expect(dbMocks.db.select).not.toHaveBeenCalled();
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it("does not expose another user's or a team's templates", async () => {
@@ -515,6 +550,92 @@ describe("personal run MCP handler", () => {
     expect(body.result.isError).toBeUndefined();
     // Same fixture and expectation as the web create test in checklists-handler.test.ts.
     expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(runSections);
+  });
+
+  describe("template tools", () => {
+    const ids = (sections: any[]) => sections.map((section) => [section.id, section.items.map((item: any) => item.id)]);
+
+    it("reads a template stored without ids with the ids its runs and next save use", async () => {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(LEGACY_ID_TEMPLATE_SECTIONS)]);
+      const read = await toolBody(await handleAgentMcp(callTool("get_template", { templateId: "template-1" }), env));
+
+      expect(read.result.isError).toBeUndefined();
+      // Sending these back in update_template keeps every id, so runs keep their progress.
+      expect(ids(read.result.structuredContent.template.sections)).toEqual(ids(LEGACY_ID_RUN_SECTIONS));
+    });
+
+    it("treats null optional fields as absent, as every other tool does", async () => {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([]) // the slug is free
+        .mockResolvedValueOnce([{ ...ownedTemplate(JSON.parse(personalRun().items as string)), version: 1 }]);
+
+      const body = await toolBody(await handleAgentMcp(callTool("create_template", {
+        title: "Release SOP",
+        description: null,
+        categories: null,
+        tags: null,
+        sections: [{ title: "Release", items: [{ title: "Verify" }] }],
+      }), env));
+
+      expect(body.result.isError).toBeUndefined();
+      expect(body.result.structuredContent.template).toEqual(expect.objectContaining({ id: "template-1", version: 1 }));
+      const created = dbMocks.insertChain.values.mock.calls.map(([values]) => values)
+        .find((values: JsonRecord) => values.owner_type === "user" && typeof values.slug === "string");
+      expect(created).toEqual(expect.objectContaining({ is_public: false, team_id: null, user_id: "user-1" }));
+    });
+
+    it("names the offending field when template arguments are invalid", async () => {
+      const body = await toolBody(await handleAgentMcp(callTool("update_template", {
+        templateId: "template-1",
+        expectedVersion: 1,
+        title: "",
+      }), env));
+
+      expect(body.error.data.code).toBe("invalid_arguments");
+      expect(body.error.message).toMatch(/^title: /);
+      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    });
+
+    it("reports a committed create as success when reading it back fails", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        dbMocks.selectChain.limit
+          .mockResolvedValueOnce([]) // the slug is free
+          .mockRejectedValueOnce(new Error("D1_ERROR: database is locked"));
+
+        const body = await toolBody(await handleAgentMcp(callTool("create_template", {
+          title: "Release SOP",
+          sections: [{ title: "Release", items: [{ title: "Verify" }] }],
+        }), env));
+
+        // A retried create would make a duplicate, so the committed write is never an error.
+        expect(dbMocks.db.batch).toHaveBeenCalledOnce();
+        expect(body.result.isError).toBeUndefined();
+        expect(body.result.structuredContent).toEqual({
+          template: { id: expect.any(String), title: "Release SOP", version: 1 },
+          sectionsOmitted: true,
+        });
+        expect(warn.mock.calls.map(([line]) => JSON.parse(String(line)).message)).toContain("mcp_template_reload_error");
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("records the Run Key on the template's history", async () => {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ ...ownedTemplate([]), version: 1 }]);
+
+      await handleAgentMcp(callTool("create_template", {
+        title: "Release SOP",
+        sections: [{ title: "Release", items: [{ title: "Verify" }] }],
+      }), env);
+
+      expect(dbMocks.insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
+        action: "template.created",
+        metadata_json: expect.stringContaining('"personalRunKeyName":"Codex"'),
+      }));
+    });
   });
 
   describe("Free plan active run limit", () => {
@@ -1166,9 +1287,31 @@ describe("personal run MCP handler", () => {
       const tools = (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
       const mutatingTools = tools.filter((tool: any) => tool.annotations.readOnlyHint === false)
         .map((tool: any) => tool.name);
-      expect(mutatingTools).toEqual(["start_run", "update_run"]);
+      expect(mutatingTools).toEqual(["create_template", "update_template", "start_run", "update_run"]);
 
+      // A template the write stored, read back too large to return whole.
+      const storedTemplate = { ...ownedTemplate(largeSections(600 * 1024)), version: 2, is_public: false, slug: "release-sop" };
       const calls: Record<string, () => Promise<Response>> = {
+        create_template: () => {
+          dbMocks.selectChain.limit
+            .mockResolvedValueOnce([]) // the slug is free
+            .mockResolvedValueOnce([storedTemplate]);
+          return handleAgentMcp(callTool("create_template", {
+            title: "Release SOP",
+            sections: [{ title: "Release", items: [{ title: "Verify" }] }],
+          }), env);
+        },
+        update_template: () => {
+          dbMocks.selectChain.limit
+            .mockResolvedValueOnce([{ ...storedTemplate, version: 1 }])
+            .mockResolvedValueOnce([storedTemplate]);
+          dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+          return handleAgentMcp(callTool("update_template", {
+            templateId: "template-1",
+            expectedVersion: 1,
+            title: "Release SOP v2",
+          }), env);
+        },
         start_run: () => {
           dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(largeSections(370 * 1024))]);
           return handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
@@ -1191,13 +1334,19 @@ describe("personal run MCP handler", () => {
         vi.mocked(markPersonalRunKeyUsed).mockClear();
         dbMocks.db.batch.mockClear();
         const body = await toolBody(await calls[name]());
-        expect(dbMocks.db.batch).toHaveBeenCalledOnce();
-        expect(body.result.isError).toBeUndefined();
-        expect(body.result.structuredContent.run).toEqual(expect.objectContaining({
-          id: expect.any(String),
-          revision: expect.any(Number),
-        }));
-        expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
+        expect(dbMocks.db.batch, name).toHaveBeenCalledOnce();
+        expect(body.result.isError, name).toBeUndefined();
+        const { structuredContent } = body.result;
+        if (name.endsWith("_template")) {
+          expect(structuredContent.template).toEqual(expect.objectContaining({ id: expect.any(String), version: 2 }));
+          expect(structuredContent.sectionsOmitted).toBe(true);
+        } else {
+          expect(structuredContent.run).toEqual(expect.objectContaining({
+            id: expect.any(String),
+            revision: expect.any(Number),
+          }));
+        }
+        expect(byteLength(structuredContent)).toBeLessThanOrEqual(RESULT_LIMIT_BYTES);
         expect(markPersonalRunKeyUsed).toHaveBeenCalledOnce();
       }
     });
@@ -1476,6 +1625,81 @@ describe("personal run MCP handler", () => {
       expect(tooLarge).toBeGreaterThan(0);
       expect(seen.size).toBeGreaterThan(tooLarge);
     });
+  });
+
+  it("logs the key ID for every authenticated request, including malformed ones, never the secret", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
+      const toolRequest = callTool("get_run", { runId: "run-1" });
+      toolRequest.headers.set("Authorization", "Bearer slrk_secret-canary");
+      toolRequest.headers.set("X-Request-Id", "req-123");
+      await handleAgentMcp(toolRequest, env);
+
+      const malformed = new Request("http://localhost/api/mcp", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer slrk_secret-canary",
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          "X-Request-Id": "req-456",
+        },
+        body: "{not json",
+      });
+      await handleAgentMcp(malformed, env);
+
+      const entries = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+      expect(entries).toContainEqual(expect.objectContaining({ message: "mcp_request", requestId: "req-123", keyId: "key-1" }));
+      expect(entries).toContainEqual(expect.objectContaining({
+        message: "mcp_tool_call",
+        requestId: "req-123",
+        keyId: "key-1",
+        toolName: "get_run",
+      }));
+      expect(entries).toContainEqual(expect.objectContaining({ message: "mcp_request", requestId: "req-456", keyId: "key-1" }));
+      expect(JSON.stringify(entries)).not.toContain("secret-canary");
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("refuses an IP that keeps failing authentication before reading D1", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
+    const fromIp = () => {
+      const request = rpcRequest("ping");
+      request.headers.set("CF-Connecting-IP", "203.0.113.7");
+      return request;
+    };
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await handleAgentMcp(fromIp(), env)).status).toBe(401);
+    }
+    vi.mocked(authenticatePersonalRunKey).mockClear();
+
+    const blocked = await handleAgentMcp(fromIp(), env);
+    expect(blocked.status).toBe(429);
+    expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
+
+    const otherIp = rpcRequest("ping");
+    otherIp.headers.set("CF-Connecting-IP", "203.0.113.8");
+    expect((await handleAgentMcp(otherIp, env)).status).toBe(401);
+  });
+
+  it("counts failed authentication from IPv6 addresses per /64, like the router's limits", async () => {
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
+    const fromIp = (ip: string) => {
+      const request = rpcRequest("ping");
+      request.headers.set("CF-Connecting-IP", ip);
+      return request;
+    };
+    // A new address in the same /64 for every attempt.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await handleAgentMcp(fromIp(`2001:db8:5:6::${(attempt + 1).toString(16)}`), env)).status).toBe(401);
+    }
+    vi.mocked(authenticatePersonalRunKey).mockClear();
+
+    expect((await handleAgentMcp(fromIp("2001:db8:5:6:ffff::1"), env)).status).toBe(429);
+    expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
+    expect((await handleAgentMcp(fromIp("2001:db8:5:7::1"), env)).status).toBe(401);
   });
 
   it("hides a personal run owned by another user", async () => {

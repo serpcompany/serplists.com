@@ -72,8 +72,15 @@ export function createRateLimitStore(options: { maxKeys?: number } = {}) {
     return { allowed: true, remaining: Math.max(0, opts.max - existing.count), resetAt: existing.resetAt };
   }
 
+  // Whether a key is already at `max` in its current window, without counting a request.
+  function isLimited(key: string, max: number): boolean {
+    const existing = entries.get(key);
+    return existing !== undefined && existing.resetAt > Date.now() && existing.count >= max;
+  }
+
   return {
     check,
+    isLimited,
     get size() {
       return entries.size;
     },
@@ -84,4 +91,9 @@ const store = createRateLimitStore();
 
 export function checkRateLimit(key: string, opts: RateLimitOptions): RateLimitResult {
   return store.check(key, opts);
+}
+
+// Reports whether a key is already at its limit, without counting a request.
+export function isRateLimited(key: string, max: number): boolean {
+  return store.isLimited(key, max);
 }

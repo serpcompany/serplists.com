@@ -5,12 +5,16 @@ import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
-import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
+import {
+  createPersonalRunKeySecret,
+  insertPersonalRunKeyWithinCap,
+} from "../../functions/api/utils/personal-run-key";
 import { execTool } from "../../scripts/lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
 const migration25 = "0025_add_personal_run_keys.sql";
+const migration27 = "0027_add_personal_run_key_permissions.sql";
 const protocolVersion = "2025-06-18";
 
 type TestEnv = {
@@ -29,7 +33,7 @@ let runId = "";
 
 function migrationNamesThrough24(): string[] {
   return readdirSync(migrationsDir)
-    .filter((name) => name.endsWith(".sql") && name !== migration25)
+    .filter((name) => name.endsWith(".sql") && name !== migration25 && name !== migration27)
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -46,8 +50,8 @@ async function rows<T extends JsonRecord>(sql: string, ...bindings: unknown[]): 
   return result.results;
 }
 
-function mcpRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
-  return new Request("http://localhost/api/mcp", {
+function mcpRequest(method: string, params?: unknown, id: number | undefined = 1, path = "/api/mcp"): Request {
+  return new Request(`http://localhost${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${rawKey}`,
@@ -244,6 +248,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at)
       VALUES (?, 'user-a', 'Codex local D1', ?, ?, ?)
     `).bind(keyId, secret.keyPrefix, secret.keyHash, "2026-09-19T02:00:00.000Z").run();
+    await applyMigration(migration27);
 
     const stored = await rows<JsonRecord>("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
     expect(JSON.stringify(stored)).not.toContain(rawKey);
@@ -253,7 +258,18 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       key_prefix: secret.keyPrefix,
       key_hash: secret.keyHash,
       revoked_at: null,
+      permissions: '["templates:read","runs:read","runs:write"]',
     });
+
+    const toolsBody = await bodyOf(await handleAgentMcp(mcpRequest("tools/list"), env as never));
+    expect(((toolsBody.result as JsonRecord).tools as JsonRecord[]).map(({ name }) => name)).toEqual([
+      "list_templates",
+      "get_template",
+      "start_run",
+      "list_runs",
+      "get_run",
+      "update_run",
+    ]);
 
     const listBody = await bodyOf(await callTool("list_templates"));
     expect((toolPayload(listBody).templates as JsonRecord[]).map(({ id }) => id)).toEqual(["template-a"]);
@@ -488,6 +504,163 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(payload.truncated).toBe(true);
   });
 
+  it("creates and edits a private personal template and syncs its in-progress runs", async () => {
+    const sections = [{
+      title: "Boot",
+      items: [{
+        title: "Install",
+        contents: [{ type: "subItems", subItems: [{ title: "pnpm install" }] }],
+      }],
+    }];
+
+    const denied = await bodyOf(await callTool("create_template", { title: "Agent Harness Setup", sections }));
+    expect(toolError(denied)).toBe("permission_denied");
+    expect(await rows("SELECT id FROM templates WHERE title = 'Agent Harness Setup'")).toEqual([]);
+
+    await env.DB.prepare("UPDATE personal_run_keys SET permissions = ? WHERE id = ?")
+      .bind('["templates:read","templates:write","runs:read","runs:write"]', keyId)
+      .run();
+
+    const limited = await bodyOf(await callTool("create_template", { title: "Agent Harness Setup", sections }));
+    expect(toolError(limited)).toBe("limit_reached");
+
+    await env.DB.prepare(`
+      INSERT INTO entitlement_overrides (user_id, plan, created_at) VALUES ('user-a', 'pro', ?)
+    `).bind("2026-09-19T02:30:00.000Z").run();
+
+    const createBody = await bodyOf(await callTool("create_template", {
+      title: "Agent Harness Setup",
+      description: "Per-project harness checklist",
+      sections,
+      tags: ["harness"],
+    }));
+    const created = toolPayload(createBody).template as JsonRecord;
+    expect(created).toMatchObject({ title: "Agent Harness Setup", version: 1, tags: ["harness"] });
+    const templateId = created.id as string;
+    const [storedTemplate] = await rows<JsonRecord>(
+      "SELECT user_id, owner_type, team_id, is_public FROM templates WHERE id = ?",
+      templateId,
+    );
+    expect(storedTemplate).toEqual({ user_id: "user-a", owner_type: "user", team_id: null, is_public: 0 });
+
+    const createdSection = (created.sections as JsonRecord[])[0];
+    const createdTask = (createdSection.items as JsonRecord[])[0];
+    expect(typeof createdSection.id).toBe("string");
+    expect(typeof createdTask.id).toBe("string");
+
+    const startBody = await bodyOf(await callTool("start_run", { templateId }));
+    const templateRunId = (toolPayload(startBody).run as JsonRecord).id as string;
+    await callTool("update_run", {
+      runId: templateRunId,
+      expectedRevision: 1,
+      operation: "set_task_completed",
+      taskId: createdTask.id as string,
+      completed: true,
+    });
+
+    const updateBody = await bodyOf(await callTool("update_template", {
+      templateId,
+      expectedVersion: 1,
+      sections: [{ ...createdSection, items: [createdTask, { title: "Verify" }] }],
+    }));
+    const updated = toolPayload(updateBody).template as JsonRecord;
+    expect(updated.version).toBe(2);
+    expect(((updated.sections as JsonRecord[])[0].items as JsonRecord[]).map(({ title }) => title))
+      .toEqual(["Install", "Verify"]);
+
+    const runBody = await bodyOf(await callTool("get_run", { runId: templateRunId }));
+    const runTasks = ((toolPayload(runBody).run as JsonRecord).sections as JsonRecord[])[0].items as JsonRecord[];
+    expect(runTasks.map(({ title, isCompleted }) => ({ title, isCompleted: isCompleted === true }))).toEqual([
+      { title: "Install", isCompleted: true },
+      { title: "Verify", isCompleted: false },
+    ]);
+
+    const stale = await bodyOf(await callTool("update_template", { templateId, expectedVersion: 1, title: "Stale" }));
+    expect(toolError(stale)).toBe("edit_conflict");
+
+    const history = await rows<JsonRecord>(
+      "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? ORDER BY created_at",
+      templateId,
+    );
+    expect(history.map(({ action }) => action)).toEqual(["template.created", "template.updated"]);
+    expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
+    expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
+
+    // The run's Changelog names the Run Key that changed its template.
+    const reconciled = await rows<JsonRecord>(
+      "SELECT metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? AND action = 'checklist_run.reconciled'",
+      templateRunId,
+    );
+    expect(reconciled).toHaveLength(1);
+    expect(String(reconciled[0].metadata_json)).toContain(`"personalRunKeyId":"${keyId}"`);
+  });
+
+  it("keeps template writes inside the key owner's private personal templates", async () => {
+    const sections = [{ title: "Section", items: [{ title: "Task" }] }];
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at)
+        VALUES ('member-a', 'team-a', 'user-a', 'owner', 'active', ?, ?)
+      `).bind("2026-09-19T02:40:00.000Z", "2026-09-19T02:40:00.000Z"),
+      env.DB.prepare(`
+        INSERT INTO templates (
+          id, user_id, title, items, is_public, created_at, version, type, owner_type,
+          team_id, created_by_user_id, content_version
+        ) VALUES ('template-public', 'user-a', 'Published SOP', ?, 1, ?, 1, 'checklist', 'user', NULL, 'user-a', 1)
+      `).bind(JSON.stringify(sections), "2026-09-19T02:40:00.000Z"),
+    ]);
+
+    const publicRead = await bodyOf(await callTool("get_template", { templateId: "template-public" }));
+    expect((toolPayload(publicRead).template as JsonRecord).title).toBe("Published SOP");
+    const publicWrite = await bodyOf(await callTool("update_template", {
+      templateId: "template-public",
+      expectedVersion: 1,
+      title: "Defaced public SOP",
+    }));
+    expect(toolError(publicWrite)).toBe("template_is_public");
+
+    const viaQuery = await bodyOf(await handleAgentMcp(mcpRequest("tools/call", {
+      name: "create_template",
+      arguments: { title: "Created with teamId query", sections },
+    }, 1, "/api/mcp?teamId=team-a"), env as never));
+    const viaQueryId = (toolPayload(viaQuery).template as JsonRecord).id;
+    expect(await rows("SELECT owner_type, team_id, is_public FROM templates WHERE id = ?", viaQueryId)).toEqual([
+      { owner_type: "user", team_id: null, is_public: 0 },
+    ]);
+
+    for (const templateId of ["template-b", "template-team"]) {
+      const read = await bodyOf(await callTool("get_template", { templateId }));
+      expect(toolError(read)).toBe("template_not_found");
+      const write = await bodyOf(await callTool("update_template", { templateId, expectedVersion: 1, title: "Taken" }));
+      expect(toolError(write)).toBe("template_not_found");
+    }
+
+    for (const extra of [{ is_public: true }, { teamId: "team-a" }, { visibility: "public" }]) {
+      const body = await bodyOf(await callTool("create_template", { title: "Escalation", sections, ...extra }));
+      expect(((body.error as JsonRecord).data as JsonRecord).code).toBe("invalid_arguments");
+    }
+
+    expect(await rows(
+      "SELECT title FROM templates WHERE id IN ('template-b', 'template-public', 'template-team') ORDER BY id",
+    )).toEqual([
+      { title: "Other user's SOP" },
+      { title: "Published SOP" },
+      { title: "Team SOP" },
+    ]);
+    expect(await rows("SELECT id FROM templates WHERE title = 'Escalation'")).toEqual([]);
+  });
+
+  it("reports a committed oversized create as success without its sections", async () => {
+    const body = await bodyOf(await callTool("create_template", {
+      title: "Oversized SOP",
+      sections: [{ title: "Long", items: [{ title: "Read", contents: [{ type: "text", value: "x".repeat(300_000) }] }] }],
+    }));
+    expect(toolError(body)).toBeUndefined();
+    expect(toolPayload(body).sectionsOmitted).toBe(true);
+    expect(toolPayload(body).template).not.toHaveProperty("sections");
+    expect(await rows("SELECT id FROM templates WHERE title = 'Oversized SOP'")).toHaveLength(1);
+  });
+
   it("revokes immediately and cascades keys only with their owning user", async () => {
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T03:00:00.000Z", keyId)
@@ -509,5 +682,37 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(await rows("SELECT id FROM personal_run_keys WHERE id = 'constraint-key'")).toEqual([{ id: "constraint-key" }]);
     expect(await rows("SELECT id FROM users WHERE id = 'user-b'")).toEqual([{ id: "user-b" }]);
     expect(await rows("PRAGMA foreign_key_check")).toEqual([]);
+  });
+
+  it("caps active keys per user atomically and ignores revoked keys", async () => {
+    await env.DB.prepare(`
+      INSERT INTO users (id, email, name, email_verified, created_at)
+      VALUES ('cap-user', 'cap@example.test', 'Cap User', 1, '2026-09-19T04:00:00.000Z')
+    `).run();
+    const record = (index: number) => ({
+      id: `cap-key-${index}`,
+      user_id: "cap-user",
+      name: `Cap key ${index}`,
+      key_prefix: "slrk_cap",
+      key_hash: `cap-hash-${index}`,
+      created_at: "2026-09-19T04:00:00.000Z",
+      permissions: ["runs:read"] as const,
+    });
+
+    // Twelve parallel creates: exactly ten may succeed.
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
+    );
+    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(await rows("SELECT id FROM personal_run_keys WHERE user_id = 'cap-user' AND revoked_at IS NULL"))
+      .toHaveLength(10);
+
+    await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
+      .bind("2026-09-19T05:00:00.000Z", "cap-key-0")
+      .run();
+    expect(await insertPersonalRunKeyWithinCap(env as never, record(20))).toBe(true);
+    expect(await insertPersonalRunKeyWithinCap(env as never, record(21))).toBe(false);
+    expect(await rows("SELECT permissions FROM personal_run_keys WHERE id = 'cap-key-20'"))
+      .toEqual([{ permissions: '["runs:read"]' }]);
   });
 });

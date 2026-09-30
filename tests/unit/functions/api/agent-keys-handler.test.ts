@@ -24,6 +24,8 @@ const dbMocks = vi.hoisted(() => {
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const keyMocks = vi.hoisted(() => ({
   createPersonalRunKeySecret: vi.fn(),
+  insertPersonalRunKeyWithinCap: vi.fn(),
+  MAX_ACTIVE_PERSONAL_RUN_KEYS: 10,
 }));
 
 vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
@@ -45,7 +47,8 @@ describe("Personal run key management handler", () => {
     });
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
+    dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
+    keyMocks.insertPersonalRunKeyWithinCap.mockResolvedValue(true);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
@@ -65,7 +68,7 @@ describe("Personal run key management handler", () => {
     expect(dbMocks.db.select).not.toHaveBeenCalled();
   });
 
-  it("creates a fixed personal-run credential and returns its secret once", async () => {
+  it("creates a credential with the default permissions and returns its secret once", async () => {
     const response = await handleAgentKeys(
       new Request("http://localhost/api/agent-keys", {
         method: "POST",
@@ -87,17 +90,71 @@ describe("Personal run key management handler", () => {
         createdAt: expect.any(String),
         lastUsedAt: null,
         revokedAt: null,
+        permissions: ["templates:read", "runs:read", "runs:write"],
         status: "active",
       },
       secret: "slrk_raw-secret-only-returned-once",
     });
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
+    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, expect.objectContaining({
       user_id: "user-1",
       name: "Codex release runner",
       key_prefix: "slrk_raw-secr",
       key_hash: "hash-only-stored",
+      permissions: ["templates:read", "runs:read", "runs:write"],
     }));
     expect(JSON.stringify(body)).not.toContain("hash-only-stored");
+  });
+
+  it("refuses a new key and returns no secret once the user has the maximum active keys", async () => {
+    keyMocks.insertPersonalRunKeyWithinCap.mockResolvedValueOnce(false);
+
+    const response = await handleAgentKeys(
+      new Request("http://localhost/api/agent-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "One too many" }),
+      }),
+      mockEnv,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toContain("10 active Run Keys");
+    expect(JSON.stringify(body)).not.toContain("slrk_raw-secret-only-returned-once");
+  });
+
+  it("stores chosen permissions with the read each write permission implies", async () => {
+    const response = await handleAgentKeys(
+      new Request("http://localhost/api/agent-keys", {
+        method: "POST",
+        body: JSON.stringify({ name: "Template writer", permissions: ["templates:write"] }),
+      }),
+      mockEnv,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(body.key.permissions).toEqual(["templates:read", "templates:write"]);
+    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, expect.objectContaining({
+      permissions: ["templates:read", "templates:write"],
+    }));
+  });
+
+  it("rejects empty, unknown, and extra permission fields without minting a secret", async () => {
+    for (const payload of [
+      { name: "None", permissions: [] },
+      { name: "Unknown", permissions: ["templates:delete"] },
+      { name: "Admin", permissions: ["runs:read"], admin: true },
+    ]) {
+      const response = await handleAgentKeys(
+        new Request("http://localhost/api/agent-keys", { method: "POST", body: JSON.stringify(payload) }),
+        mockEnv,
+      );
+      expect(response.status).toBe(400);
+    }
+
+    expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
+    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
   });
 
   it("rejects blank and oversized names without minting a secret", async () => {
@@ -113,11 +170,11 @@ describe("Personal run key management handler", () => {
     }
 
     expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
-    expect(dbMocks.db.insert).not.toHaveBeenCalled();
+    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
   });
 
   it("lists safe records and derives active or revoked status", async () => {
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([
+    dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: "key-active",
         name: "Codex",
@@ -125,6 +182,7 @@ describe("Personal run key management handler", () => {
         createdAt: "2026-09-19T00:00:00.000Z",
         lastUsedAt: null,
         revokedAt: null,
+        permissions: '["templates:read","templates:write","runs:read","runs:write"]',
       },
       {
         id: "key-revoked",
@@ -133,6 +191,7 @@ describe("Personal run key management handler", () => {
         createdAt: "2026-09-18T00:00:00.000Z",
         lastUsedAt: "2026-09-18T01:00:00.000Z",
         revokedAt: "2026-09-18T02:00:00.000Z",
+        permissions: "not json",
       },
     ]);
 
@@ -144,7 +203,12 @@ describe("Personal run key management handler", () => {
 
     expect(response.status).toBe(200);
     expect(body.map((key: { status: string }) => key.status)).toEqual(["active", "revoked"]);
+    expect(body.map((key: { permissions: string[] }) => key.permissions)).toEqual([
+      ["templates:read", "templates:write", "runs:read", "runs:write"],
+      [],
+    ]);
     expect(JSON.stringify(body)).not.toContain("key_hash");
+    expect(dbMocks.selectChain.limit).toHaveBeenCalledWith(50);
   });
 
   describe("MCP connection", () => {

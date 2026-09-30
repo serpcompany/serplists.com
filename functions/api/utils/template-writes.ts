@@ -1,15 +1,18 @@
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
+import { insertAuditEventWhen } from './audit';
+import { batchUpdateMissed } from './checklist-runs';
 import { insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
-// Template inserts and the template-count limit. Create, clone and restore pre-check the
-// count for a clear error, then repeat the check inside the write so concurrent requests
-// cannot all pass the same count.
+// Template inserts, the template-count limit, and the guarded batch a template edit writes.
+// Create, clone and restore pre-check the count for a clear error, then repeat the check
+// inside the write so concurrent requests cannot all pass the same count.
 
 type Db = ReturnType<typeof createDb>;
 export type TemplateInsertValues = typeof schema.templates.$inferInsert;
+export type TemplateUpdateValues = Partial<TemplateInsertValues>;
 export type AuditEventValues = typeof schema.audit_events.$inferInsert;
 export type TemplateVersionValues = typeof schema.template_versions.$inferInsert;
 
@@ -108,4 +111,87 @@ export async function insertTemplateWithHistoryFallback(
 
   const meta = (results[0] as { meta?: { changes?: unknown } } | undefined)?.meta;
   return !(capacity && meta?.changes === 0);
+}
+
+export type ReconciledRunUpdate = {
+  items: string;
+  retiredItems: string;
+  progress: number;
+  templateVersion: number;
+  revision: number;
+  whereClause: SQL | undefined;
+  updatedAt: string;
+  // Written only when the reconcile changed the run, guarded by the run update's WHERE clause
+  // and by the template's own audit row, so a save that misses records nothing.
+  auditEvent?: AuditEventValues;
+};
+
+/**
+ * Writes a template edit, its version and audit rows, and the in-progress runs it reconciles,
+ * in one batch. `updated` is false when the template no longer matched `whereClause`; then
+ * nothing was written. `runResults` holds each run update's result, in order.
+ */
+export async function updateTemplateWithHistoryFallback(
+  db: Db,
+  values: TemplateUpdateValues,
+  whereClause: SQL | undefined,
+  auditEventValues: AuditEventValues,
+  versionValues: TemplateVersionValues,
+  reconciledRunUpdates: ReconciledRunUpdate[] = [],
+): Promise<{ updated: boolean; runResults: unknown[] }> {
+  const { audit_events, checklist_runs, template_versions, templates } = schema;
+  // The audit row goes first, only while the template still matches whereClause, and every
+  // other statement requires that audit row. A plain INSERT would commit even when the
+  // UPDATE lost a race, leaving history (and reconciled runs) for a change that never happened.
+  const auditWritten = rowExistsSql(audit_events.id, String(auditEventValues.id));
+  const templateUpdateIndex = 2;
+  const runResultIndexes: number[] = [];
+  // Run statements follow the audit insert, version insert, and template update.
+  let nextIndex = 3;
+  for (const runUpdate of reconciledRunUpdates) {
+    if (runUpdate.auditEvent) nextIndex += 1;
+    runResultIndexes.push(nextIndex);
+    nextIndex += 1;
+  }
+
+  const runBatch = (templateValues: TemplateUpdateValues) => {
+    const statements = [
+      insertRowWhere(db, audit_events, auditEventValues, sql`exists (select 1 from ${templates} where ${whereClause})`),
+      insertRowWhere(db, template_versions, versionValues, auditWritten),
+      db.update(templates).set(templateValues).where(and(whereClause, auditWritten)),
+      ...reconciledRunUpdates.flatMap((runUpdate) => [
+        ...(runUpdate.auditEvent
+          ? [insertAuditEventWhen(db, runUpdate.auditEvent, sql`exists (select 1 from ${checklist_runs} where ${runUpdate.whereClause}) and ${auditWritten}`)]
+          : []),
+        db
+          .update(checklist_runs)
+          .set({
+            items: runUpdate.items,
+            retired_items: runUpdate.retiredItems,
+            progress: runUpdate.progress,
+            template_version: runUpdate.templateVersion,
+            revision: runUpdate.revision + 1,
+            updated_at: runUpdate.updatedAt,
+          })
+          .where(and(runUpdate.whereClause, auditWritten)),
+      ]),
+    ] as const;
+
+    return db.batch(statements);
+  };
+
+  let results: readonly unknown[];
+  try {
+    results = await runBatch(values);
+  } catch (error) {
+    if (!isMissingRulesColumnError(error)) {
+      throw error;
+    }
+
+    results = await runBatch(omitRulesColumn(values as Record<string, unknown>) as TemplateUpdateValues);
+  }
+  return {
+    updated: !batchUpdateMissed(results[templateUpdateIndex]),
+    runResults: runResultIndexes.map((index) => results[index]),
+  };
 }
