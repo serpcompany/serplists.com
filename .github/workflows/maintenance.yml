@@ -73,6 +73,9 @@ jobs:
           CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # No Co-Authored-By trailer on the bot's commits and no "Generated with Claude
+          # Code" line in its PRs: this repository's commits carry no attribution lines.
+          settings: '{"attribution": {"commit": false, "pr": false}}'
           prompt: |
             You are this repository's weekly doc gardener. Follow AGENTS.md.
             Goal: documentation that no longer matches the code gets fixed in one small PR.
@@ -93,11 +96,14 @@ jobs:
                tests, workflows, baselines, or generated files in docs/generated/.
             5. Run `pnpm run docs:check`; it must pass.
             6. If you changed nothing, stop and say "No doc drift found". Otherwise create
-               branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with the
-               message "docs: weekly doc gardening", push it, and open a PR into staging
-               titled "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each
-               doc you changed, what was wrong, and which code you checked it against, and
-               list the docs you verified without changes.
+               branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with
+               `git commit -m "docs: weekly doc gardening"` and nothing else in the message,
+               push it, and open a PR into staging titled
+               "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each doc you
+               changed, what was wrong, and which code you checked it against, and list the
+               docs you verified without changes.
+            7. This repository's commits and PRs carry no attribution: no Co-Authored-By
+               trailer in the commit, and no "Generated with Claude Code" line in the PR body.
           claude_args: |
             --max-turns 80
             --strict-mcp-config

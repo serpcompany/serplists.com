@@ -113,6 +113,13 @@ describe('weekly doc gardening workflow', () => {
     expect(String(gardenStep?.with?.claude_args)).toContain('--strict-mcp-config');
   });
 
+  it('adds no attribution to the commits and PRs it makes', () => {
+    const settings = z
+      .object({ attribution: z.object({ commit: z.literal(false), pr: z.literal(false) }) })
+      .safeParse(JSON.parse(String(gardenStep?.with?.settings ?? '{}')));
+    expect(settings.success).toBe(true);
+  });
+
   it('runs a guard after Claude that reads its log and the open PRs', () => {
     expect(guard?.run).toBeTruthy();
     expect(guardIndex).toBeGreaterThan(gardenIndex);

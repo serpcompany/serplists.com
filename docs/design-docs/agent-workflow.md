@@ -127,7 +127,9 @@ debt in the baselines, oversized files, and open tech debt.
   gardening". It edits only `AGENTS.md`, `ARCHITECTURE.md`, and `docs/`, skips the
   week if a gardening PR is still open, and opens nothing when there is no drift.
   These PRs are small; skim and merge them. Claude code review skips them because
-  a bot opens them. Like the review, the job keeps Claude's subagents in the foreground
+  a bot opens them. Its commits and PRs carry no attribution (the `attribution` setting
+  plus the prompt, since the model otherwise adds a Co-Authored-By trailer by habit). Like
+  the review, the job keeps Claude's subagents in the foreground
   (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`) and keeps Claude's transcript as a week-long
   artifact. A check after it prints what Claude said and passes only on an outcome: a
   gardening PR opened during the run, "No doc drift found", or an open gardening PR left
