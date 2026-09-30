@@ -243,13 +243,22 @@ Common failures:
   from `tests/e2e/support/request-connections.ts`, which gives each of its requests a
   new connection; `tests/unit/e2e/request-connections.test.ts` fails if a Playwright
   upgrade undoes that.
-- Wrangler's dev proxy keeps its own connections to the worker the same way, and a
-  request it forwards on a connection being closed can be lost
-  (cloudflare/workers-sdk#14641). Wrangler 4.143 answers a real restart correctly and
-  resends a dropped GET or HEAD itself; a dropped POST, PUT or DELETE still fails. If
-  the browser suite shows dropped writes, patch the proxy with `pnpm patch wrangler@<version>`
-  (forward the request once more when no response has started) and add a check that the
-  patch applies; see the Next.js migration plan.
+- Wrangler's dev proxy (its ProxyWorker) keeps its connections to the worker open the same
+  way, and there the risk is not one moment: while the worker is busy (a page render, the API
+  calls a page sends at once), its workerd reads no new request and runs no timer, so a
+  request that reaches an idle connection in that time can lose to the connection's 5-second
+  timer once the worker catches up, even one that arrived a second before it was due. The
+  proxy then answers `500` and logs `Network connection lost`; it resends a GET or HEAD itself,
+  not a POST, PUT or DELETE (cloudflare/workers-sdk#14641). The invite created right after an
+  Organization in `team-invite-flow.spec.ts` was lost this way whenever the machine was busy.
+  `patches/wrangler@4.143.0.patch`, which pnpm applies on install (`pnpm.patchedDependencies`
+  in `package.json`), puts a relay between the proxy and the worker, in wrangler's own process
+  (`wrangler-dist/serplists-user-worker-relay.js`): it sends every request to the worker over a
+  new connection, which that timer never applies to, and never closes an idle connection from
+  the proxy itself, so nothing is lost and nothing is sent twice.
+  `tests/unit/e2e/wrangler-proxy-patch.test.ts` fails if a wrangler upgrade leaves the patch
+  behind: check whether upstream fixed #14641, and if not, re-create the patch for the new
+  version with `pnpm patch wrangler@<version>`.
 - Specs set up and read their data with `apiRequest()` or `apiJson()` from
   `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
   client with the page's cookies. A fetch inside `page.evaluate()`
