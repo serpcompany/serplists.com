@@ -2,8 +2,8 @@ name: Code Review
 
 # Claude reviews each pull request with the code-review plugin and posts an inline
 # comment per issue it finds (or one summary comment when it finds none). Advisory:
-# it never blocks merging, but the check goes red when Claude could not finish the
-# review. Setup and limits: docs/design-docs/agent-workflow.md.
+# it never blocks merging, but the check goes red when Claude posted nothing.
+# Setup and limits: docs/design-docs/agent-workflow.md.
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
@@ -19,6 +19,9 @@ jobs:
     if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Claude posts with the Claude GitHub App token that the action gets through the
+    # OIDC exchange, so the workflow token only reads: the checkout, and the PR's
+    # comments for the check at the end.
     permissions:
       contents: read
       pull-requests: read
@@ -37,68 +40,202 @@ jobs:
         with:
           fetch-depth: 1
 
-      # The plugin reads review guidelines from CLAUDE.md. This repo keeps them in
-      # AGENTS.md and the core beliefs, so build CLAUDE.md on the runner only.
+      # The plugin reviews against CLAUDE.md. This repo keeps its rules in AGENTS.md and
+      # the core beliefs, and a CLAUDE.md in the checkout does not survive: the action
+      # replaces CLAUDE.md, .claude/ and .mcp.json with the base branch's copies (deleting
+      # them when the base has none) before Claude starts. So the rules go outside the
+      # checkout and into the system prompt of Claude and of every subagent it starts.
       - name: Give the reviewer the repository rules
         if: env.HAS_REVIEW_TOKEN == 'true'
         run: |
           {
-            echo "<!-- Generated in CI from AGENTS.md and docs/design-docs/core-beliefs.md. Cite those files, not CLAUDE.md. -->"
+            echo "# Repository rules for this review"
+            echo
+            echo "This repository has no CLAUDE.md. Its rules are AGENTS.md and docs/design-docs/core-beliefs.md, copied below. Wherever the review asks for CLAUDE.md files, use these two files, and cite and link them by these paths."
+            echo
+            echo "## AGENTS.md"
+            echo
             cat AGENTS.md
             echo
+            echo "## docs/design-docs/core-beliefs.md"
+            echo
             cat docs/design-docs/core-beliefs.md
-          } > CLAUDE.md
+          } > "$RUNNER_TEMP/review-rules.md"
 
-      # Allow every tool in the plugin's allowed-tools frontmatter
-      # (plugins/code-review/commands/code-review.md in anthropics/claude-code) plus
-      # Task for its subagents. A tool left out is denied, the review stops early,
-      # and the action still exits 0; the next step turns that into a failure.
+      - name: Note when the review starts
+        if: env.HAS_REVIEW_TOKEN == 'true'
+        run: echo "REVIEW_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+      # claude_args allows every tool in the plugin's allowed-tools frontmatter
+      # (plugins/code-review/commands/code-review.md in anthropics/claude-code), Task for
+      # its subagents, and Read, Glob and Grep, which also brings back the Glob and Grep
+      # tools that Claude Code leaves out on Linux (searches then skip Bash and its ask
+      # rules). --strict-mcp-config keeps .mcp.json servers such as chrome-devtools out
+      # of the review; the action's inline comment server still loads.
       - name: Review with Claude
         id: review
         if: env.HAS_REVIEW_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
+        env:
+          # Claude Code runs subagents in the background by default. The plugin's first
+          # step starts one, Claude ends its turn to wait for it, the action stops at that
+          # first result, and the run exits green with nothing posted
+          # (anthropics/claude-code-action#1646). This keeps subagents in the foreground.
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
           prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Task"'
+          claude_args: >-
+            --model claude-sonnet-5-5
+            --strict-mcp-config
+            --append-system-prompt-file ${{ runner.temp }}/review-rules.md
+            --append-subagent-system-prompt-file ${{ runner.temp }}/review-rules.md
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Task,Read,Glob,Grep"
 
-      # Inline on purpose: this job can mint an OIDC token, so it runs no script from
-      # the PR checkout. tests/unit/workflows/claude-code-review.test.ts runs this code.
-      - name: Fail if Claude could not finish the review
+      # The full transcript (Claude's messages, tool calls, denials) is the only record of
+      # what the review did: the action's log shows counts only. The repository is
+      # private, so members can download it for a week.
+      - name: Keep the review transcript
+        if: always() && env.HAS_REVIEW_TOKEN == 'true' && steps.review.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-transcript
+          path: ${{ steps.review.outputs.execution_file }}
+          retention-days: 7
+          overwrite: true
+
+      # Inline on purpose: this job can mint an OIDC token, so it runs no script from the
+      # PR checkout. tests/unit/workflows/claude-code-review.test.ts runs this code.
+      - name: Fail unless Claude posted a review
         if: env.HAS_REVIEW_TOKEN == 'true'
         env:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REVIEW_BOT: "claude[bot]"
         shell: node {0}
         run: |
           const fs = require('node:fs');
           // Workflow commands end at a newline and treat % as an escape.
           const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
           const fail = (message) => {
-            console.log(`::error title=Claude review did not finish::${clean(message, 600)}`);
+            console.log(`::error title=Claude did not post a review::${clean(message, 900)}`);
             process.exit(1);
           };
-          const file = process.env.EXECUTION_FILE;
-          if (!file || !fs.existsSync(file)) {
-            fail('The review wrote no execution log, so no review happened. The action also skips when this PR changes the review workflow (it must match main).');
-          }
-          let messages;
-          try {
-            messages = JSON.parse(fs.readFileSync(file, 'utf8'));
-          } catch (error) {
-            fail(`The review execution log is not valid JSON: ${error.message}`);
-          }
-          const results = Array.isArray(messages) ? messages.filter((entry) => entry && entry.type === 'result') : [];
-          const result = results[results.length - 1];
-          if (!result) fail('The review execution log has no result entry, so the review did not finish.');
-          const denials = Array.isArray(result.permission_denials) ? result.permission_denials : [];
-          if (denials.length > 0) {
+
+          const readLog = () => {
+            const file = process.env.EXECUTION_FILE;
+            if (!file || !fs.existsSync(file)) {
+              fail('The review wrote no execution log, so no review happened. The action skips (the log says "Skipping action due to workflow validation") when this workflow differs from the copy on main: on a PR that edits it, or on PRs into staging while a change to it waits there.');
+            }
+            let messages;
+            try {
+              messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+            } catch (error) {
+              fail(`The review execution log is not valid JSON: ${error.message}`);
+            }
+            if (!Array.isArray(messages)) fail('The review execution log is not a list of messages.');
+            const results = messages.filter((entry) => entry && entry.type === 'result');
+            const result = results[results.length - 1];
+            if (!result) fail('The review execution log has no result entry, so the review did not finish.');
+            return { messages, result };
+          };
+
+          // Every comment and review the bot has on the PR, with when it was posted.
+          const readBotActivity = async (bot) => {
+            const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+            const headers = {
+              Accept: 'application/vnd.github+json',
+              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              'X-GitHub-Api-Version': '2022-11-28',
+            };
+            const get = async (url) => {
+              for (let attempt = 1; ; attempt += 1) {
+                const response = await fetch(url, { headers });
+                if (response.ok) return response;
+                if (attempt >= 3 || response.status < 500) {
+                  throw new Error(`GET ${url.replace(api, '')} returned ${response.status}`);
+                }
+                await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+              }
+            };
+            const list = async (path) => {
+              const items = [];
+              let url = `${api}${path}?per_page=100`;
+              for (let page = 0; url && page < 10; page += 1) {
+                const response = await get(url);
+                items.push(...(await response.json()));
+                url = (/<([^>]+)>;\s*rel="next"/.exec(response.headers.get('link') || '') || [])[1];
+              }
+              return items;
+            };
+            const pr = process.env.PR_NUMBER;
+            const [comments, inline, reviews] = await Promise.all([
+              list(`/issues/${pr}/comments`),
+              list(`/pulls/${pr}/comments`),
+              list(`/pulls/${pr}/reviews`),
+            ]);
+            return [
+              ...comments.map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
+              ...inline.map((item) => ({ login: item.user && item.user.login, at: item.created_at })),
+              ...reviews.map((item) => ({ login: item.user && item.user.login, at: item.submitted_at })),
+            ].filter((item) => item.login === bot);
+          };
+
+          const main = async () => {
+            const { messages, result } = readLog();
+
+            const models = Object.keys(result.modelUsage || {}).join(', ') || 'unknown';
+            const cost = Number(result.total_cost_usd || 0).toFixed(2);
+            const summary = `Claude review: ${result.num_turns} turns in ${Math.round((result.duration_ms || 0) / 1000)}s, about $${cost} (estimate), models: ${models}.`;
+            console.log(summary);
+            if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+
+            if (result.is_error) fail(`The review ended with ${result.subtype || 'an error'}.`);
+
+            // Subagents still running when the run ended took their findings with them.
+            const taskSets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
+            const lastSet = taskSets.length > 0 ? taskSets[taskSets.length - 1].tasks : [];
+            const running = (Array.isArray(lastSet) ? lastSet : []).filter((task) => task && !task.ambient);
+            if (running.length > 0) {
+              const names = [...new Set(running.map((task) => clean(task.description || task.task_type, 60)))];
+              fail(`The run ended while ${running.length} background task(s) were still running (${names.join(', ')}), so their findings were never posted. Set CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 on the review step.`);
+            }
+
+            const denials = Array.isArray(result.permission_denials) ? result.permission_denials : [];
             const denied = [...new Set(denials.map((denial) => {
               const command = denial && denial.tool_input && denial.tool_input.command;
               return command ? `${denial.tool_name} (${clean(command)})` : String(denial && denial.tool_name);
             }))];
-            fail(`Claude was denied ${denied.join(', ')}, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
-          }
-          if (result.is_error) fail(`The review ended with ${result.subtype || 'an error'}.`);
-          console.log(`Claude review finished in ${result.num_turns} turns with no denied tools.`);
+
+            const startedAt = Date.parse(process.env.REVIEW_STARTED_AT || '');
+            if (Number.isNaN(startedAt)) fail('REVIEW_STARTED_AT is not set, so the check cannot tell which comments this run posted.');
+            let activity;
+            try {
+              activity = await readBotActivity(process.env.REVIEW_BOT || 'claude[bot]');
+            } catch (error) {
+              fail(`Could not read the PR's comments to check the review: ${error.message}`);
+            }
+            // Allow for clock skew between the runner and GitHub.
+            const posted = activity.filter((item) => Date.parse(item.at) >= startedAt - 30 * 1000).length;
+
+            if (posted > 0) {
+              if (denied.length > 0) {
+                console.log(`::warning title=Claude review was denied tools::Claude was denied ${clean(denied.join(', '), 600)}. Allow the tool in claude_args if the review needs it.`);
+              }
+              console.log(`Claude posted ${posted} comment(s) or review(s) on this PR.`);
+              return;
+            }
+            if (denied.length > 0) {
+              fail(`Claude was denied ${denied.join(', ')} and posted nothing, so the review stopped early. Allow the tool in claude_args; see docs/design-docs/agent-workflow.md.`);
+            }
+            if (activity.length > 0) {
+              console.log('::notice title=Claude review skipped::Claude already commented on this PR, and the code-review plugin reviews a PR once, so this push was not reviewed. Run /code-review in Claude Code for another pass.');
+              return;
+            }
+            fail(`Claude finished without posting a review or a summary comment. The plugin posts nothing when it judges a PR closed, draft, or trivial. Claude's last message: ${clean(result.result || '(none)', 400)}`);
+          };
+
+          main().catch((error) => fail(`The review check failed: ${error && error.message}`));

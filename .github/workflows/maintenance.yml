@@ -60,8 +60,13 @@ jobs:
         run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
 
       - name: Garden docs with Claude
+        id: garden
         if: env.HAS_CLAUDE_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
+        env:
+          # The action stops at Claude's first result, so a subagent left running in the
+          # background is dropped with its work (see the Code Review workflow).
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
@@ -91,7 +96,42 @@ jobs:
                list the docs you verified without changes.
           claude_args: |
             --max-turns 80
+            --strict-mcp-config
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run docs:check),Bash(date:*)"
+
+      # Inline on purpose, like the review's guard: this job can mint an OIDC token, so it
+      # runs no script from the checkout. tests/unit/workflows/maintenance.test.ts runs it.
+      - name: Fail if Claude could not finish
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        env:
+          EXECUTION_FILE: ${{ steps.garden.outputs.execution_file }}
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          // Workflow commands end at a newline and treat % as an escape.
+          const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const fail = (message) => {
+            console.log(`::error title=Doc gardening did not finish::${clean(message, 900)}`);
+            process.exit(1);
+          };
+          const file = process.env.EXECUTION_FILE;
+          if (!file || !fs.existsSync(file)) fail('Doc gardening wrote no execution log.');
+          let messages;
+          try {
+            messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+          } catch (error) {
+            fail(`The execution log is not valid JSON: ${error.message}`);
+          }
+          if (!Array.isArray(messages)) fail('The execution log is not a list of messages.');
+          const result = messages.filter((entry) => entry && entry.type === 'result').pop();
+          if (!result) fail('The execution log has no result entry.');
+          console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${clean(result.result || '(nothing)', 400)}`);
+          if (result.is_error) fail(`Doc gardening ended with ${result.subtype || 'an error'}.`);
+          const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
+          const running = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
+          if (running.length) fail(`Doc gardening ended with ${running.length} background task(s) still running.`);
+          const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${clean(d.tool_input.command)})` : String(d.tool_name))))];
+          if (denied.length) fail(`Claude was denied ${denied.join(', ')}. Allow the tool in claude_args.`);
 
   report:
     runs-on: ubuntu-latest
