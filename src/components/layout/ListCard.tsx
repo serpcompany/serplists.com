@@ -13,8 +13,8 @@ import {
 import { cn } from '@/lib/utils';
 
 type ListCardProps = {
-  // Buttons or links on the card's right (under the text on a narrow card). Only on a card
-  // without an href: the card itself is then no link.
+  // Buttons or links on the card's right (under the text on phones). Only on a card without
+  // an href: the card itself is then no link.
   actions?: ReactNode;
   className?: string;
   description?: ReactNode;
@@ -63,7 +63,7 @@ export function ListCard({
         {description ? <ItemDescription className="line-clamp-none">{description}</ItemDescription> : null}
       </ItemContent>
       {meta ? <ItemActions className="text-sm text-muted-foreground">{meta}</ItemActions> : null}
-      {actions ? <ItemActions>{actions}</ItemActions> : null}
+      {actions ? <ItemActions className="basis-full justify-end sm:basis-auto">{actions}</ItemActions> : null}
     </Item>
   );
 }
