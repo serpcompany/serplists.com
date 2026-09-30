@@ -53,9 +53,13 @@ const ruleMatches = (rule: Rule, tool: string, command: string) => {
 
 const SHELLS = ['Bash', 'PowerShell'];
 
+// Deny and ask rules also match past leading variable assignments (`FOO=bar cmd` is `cmd`).
+const withoutAssignments = (command: string) => command.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '');
+
 const decision = (tool: string, command: string) => {
-  if (denyRules.some((rule) => ruleMatches(rule, tool, command))) return 'deny';
-  if (askRules.some((rule) => ruleMatches(rule, tool, command))) return 'ask';
+  const commands = [command, withoutAssignments(command)];
+  if (denyRules.some((rule) => commands.some((text) => ruleMatches(rule, tool, text)))) return 'deny';
+  if (askRules.some((rule) => commands.some((text) => ruleMatches(rule, tool, text)))) return 'ask';
   return 'default';
 };
 
@@ -94,8 +98,35 @@ describe('.claude/settings.json', () => {
     'pnpm exec opennextjs-cloudflare deploy',
     'pnpm exec opennextjs-cloudflare upload',
     'stripe products list --live',
+    'wrangler deploy --env production',
+    'pnpm wrangler versions deploy',
+    'CLOUDFLARE_ACCOUNT_ID=abc123 npx wrangler d1 migrations apply serp-checklists-db --remote',
+    'npx opennextjs-cloudflare deploy',
   ])('asks before %s', (command) => {
     for (const shell of SHELLS) expect(decision(shell, command), shell).toBe('ask');
+  });
+
+  // In CI an ask rule denies, so a rule that matched text inside another command would stop
+  // the review from posting a comment that mentions a deploy, or from searching for one.
+  it.each([
+    'gh pr comment 7 --body "Run npx wrangler deploy --remote after this merges"',
+    'gh pr comment 7 --body "This adds a wrangler secret put step"',
+    'grep -rn "wrangler deploy" scripts docs',
+    'git commit -m "docs: explain npx wrangler d1 migrations apply --remote"',
+  ])('lets %s through, which only mentions such a command', (command) => {
+    for (const shell of SHELLS) expect(decision(shell, command), shell).toBe('default');
+  });
+
+  it('starts no rule with a wildcard, which would match inside other commands', () => {
+    const loose = [...denyRules, ...askRules].filter((rule) => rule.pattern?.startsWith('*'));
+    expect(loose).toEqual([]);
+  });
+
+  it('gives every Bash rule a PowerShell twin', () => {
+    for (const rules of [denyRules, askRules]) {
+      const patterns = (tool: string) => rules.filter((rule) => rule.tool === tool).map((rule) => rule.pattern);
+      expect(patterns('PowerShell')).toEqual(patterns('Bash'));
+    }
   });
 
   it.each([
