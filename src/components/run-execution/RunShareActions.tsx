@@ -40,13 +40,13 @@ export function RunShareActions({ isCreatingShare, isPublic, onShare, onStopShar
   return (
     <>
       {isPublic ? <Badge variant="secondary">Shared</Badge> : null}
-      <Button variant="outline" size="sm" disabled={busy} onClick={onShare}>
-        <Share2 className="mr-2 h-4 w-4" />
+      <Button variant="outline" disabled={busy} onClick={onShare}>
+        <Share2 data-icon="inline-start" />
         {isCreatingShare ? 'Creating link...' : 'Share'}
       </Button>
       {isPublic ? (
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => void stopSharing()}>
-          <Link2Off className="mr-2 h-4 w-4" />
+        <Button variant="outline" disabled={busy} onClick={() => void stopSharing()}>
+          <Link2Off data-icon="inline-start" />
           {isStopping ? 'Stopping...' : 'Stop sharing'}
         </Button>
       ) : null}
