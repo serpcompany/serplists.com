@@ -1,12 +1,14 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
-import { CheckCircle2, Loader2, Users } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { AlertCircle, CheckCircle2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AuthCard } from '@/components/auth/AuthCard';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { createSingleFlight } from '@/features/teams/singleFlight';
 import {
@@ -27,6 +29,31 @@ import {
 } from '@/lib/routes';
 
 import { Link } from '@/components/navigation/Link';
+
+// A line saying what the page is waiting for, or what just happened.
+function StatusLine({ children, icon }: { children: ReactNode; icon: ReactNode }) {
+  return (
+    <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+      {icon}
+      {children}
+    </p>
+  );
+}
+
+// The page's buttons, one under another across the card.
+function InviteActions({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-2">{children}</div>;
+}
+
+// Why the invite could not be shown or answered.
+function InviteError({ message }: { message: string }) {
+  return (
+    <Alert variant="destructive">
+      <AlertCircle />
+      <AlertTitle>{message}</AlertTitle>
+    </Alert>
+  );
+}
 
 // Opening an invite link only shows what the invite is. Joining takes a click
 // on Accept, and switching the active context takes another on "Switch to".
@@ -85,34 +112,35 @@ export default function TeamInviteAccept() {
 
   const renderJoined = (teamId: string, teamName: string, message: string) => (
     <>
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <CheckCircle2 className="h-4 w-4 text-foreground" />
+      <StatusLine icon={<CheckCircle2 aria-hidden="true" className="size-4 text-foreground" />}>
         {message}
-      </div>
-      <div className="flex flex-wrap gap-2">
+      </StatusLine>
+      <InviteActions>
         <Button onClick={() => handleSwitch(teamId)}>Switch to {teamName}</Button>
         <Button variant="outline" onClick={() => router.push(buildConsoleSettingsPath())}>
           Organization settings
         </Button>
-      </div>
+      </InviteActions>
     </>
   );
 
   const renderDeclined = (teamName: string) => (
     <>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         Invite declined. You did not join {teamName}.
       </p>
-      <Link
-        href={buildConsoleTemplatesPath()}
-        className={buttonVariants({ variant: 'outline' })}
-      >Open templates</Link>
+      <InviteActions>
+        <Link
+          href={buildConsoleTemplatesPath()}
+          className={buttonVariants({ variant: 'outline' })}
+        >Open templates</Link>
+      </InviteActions>
     </>
   );
 
   const renderEmailMismatch = () => (
     <>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-center text-sm text-muted-foreground">
         {user?.email ? (
           <>
             You&apos;re signed in as <span className="font-medium text-foreground">{user.email}</span>.{' '}
@@ -121,47 +149,42 @@ export default function TeamInviteAccept() {
         This invite was sent to a different email address. Sign out, then log in or create an
         account with the invited email address to accept it.
       </p>
-      <div className="flex flex-wrap gap-2">
+      <InviteActions>
         <Button disabled={isSigningOut} onClick={() => void handleSignOutAndContinue()}>
           {isSigningOut ? 'Signing out...' : 'Sign out and continue'}
         </Button>
-      </div>
+      </InviteActions>
     </>
   );
 
   const renderBody = () => {
     if (!token) {
-      return <p className="text-sm text-muted-foreground">This invite link is missing a token.</p>;
+      return <p className="text-center text-sm text-muted-foreground">This invite link is missing a token.</p>;
     }
 
     if (isLoading) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking your session...
-        </div>
-      );
+      return <StatusLine icon={<Spinner />}>Checking your session...</StatusLine>;
     }
 
     if (!isAuthenticated) {
       // Both links bring the user back here after signing in or signing up.
       return (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground">
             Log in with the invited email address to see and accept this invite. New here?
             Create an account with that email address.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <InviteActions>
             <Link href={withReturnPath(buildLoginPath(), invitePath)} className={buttonVariants()}>
-                Log in to accept
-              </Link>
+              Log in to accept
+            </Link>
             <Link
               href={withReturnPath(buildRegisterPath(), invitePath)}
               className={buttonVariants({ variant: 'outline' })}
             >
-                Create an account
-              </Link>
-          </div>
+              Create an account
+            </Link>
+          </InviteActions>
         </>
       );
     }
@@ -183,22 +206,19 @@ export default function TeamInviteAccept() {
     if (invite.previewError) {
       return (
         <>
-          <p className="text-sm text-destructive">{describeTeamInviteError(invite.previewError)}</p>
-          <Link
-            href={buildConsoleSettingsPath()}
-            className={buttonVariants({ variant: 'outline' })}
-          >Open settings</Link>
+          <InviteError message={describeTeamInviteError(invite.previewError)} />
+          <InviteActions>
+            <Link
+              href={buildConsoleSettingsPath()}
+              className={buttonVariants({ variant: 'outline' })}
+            >Open settings</Link>
+          </InviteActions>
         </>
       );
     }
 
     if (!preview) {
-      return (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading invite...
-        </div>
-      );
+      return <StatusLine icon={<Spinner />}>Loading invite...</StatusLine>;
     }
 
     if (preview.status === 'already_member') {
@@ -214,8 +234,8 @@ export default function TeamInviteAccept() {
 
     return (
       <>
-        <div className="space-y-1">
-          <p className="text-base font-medium text-foreground">{preview.teamName}</p>
+        <div className="flex flex-col gap-1 text-center">
+          <p className="text-base font-medium wrap-anywhere text-foreground">{preview.teamName}</p>
           <p className="text-sm text-muted-foreground">
             {inviter} invited you to join as {formatTeamRole(preview.role)}.
           </p>
@@ -224,7 +244,7 @@ export default function TeamInviteAccept() {
             you want to work in it.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <InviteActions>
           <Button disabled={invite.isResponding} onClick={() => void handleAccept()}>
             {invite.isResponding ? 'Responding...' : 'Accept invite'}
           </Button>
@@ -235,25 +255,15 @@ export default function TeamInviteAccept() {
           >
             Decline
           </Button>
-        </div>
-        {responseError ? (
-          <p className="text-sm text-destructive">{describeTeamInviteError(responseError)}</p>
-        ) : null}
+        </InviteActions>
+        {responseError ? <InviteError message={describeTeamInviteError(responseError)} /> : null}
       </>
     );
   };
 
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-xl items-center px-4 py-12">
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Organization Invite
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">{renderBody()}</CardContent>
-      </Card>
-    </main>
+    <AuthCard icon={<Users />} title="Organization Invite">
+      <div className="flex flex-col gap-4">{renderBody()}</div>
+    </AuthCard>
   );
 }
