@@ -43,9 +43,9 @@ describe('AgentAccessSectionView', () => {
 
     expect(html).toContain('Agent Access');
     expect(html).toContain('Create Run Key');
-    expect(html).toContain('read personal templates');
-    expect(html).toContain('list, start, read, and update personal runs');
-    expect(html).toContain('cannot edit');
+    expect(html).toContain('read, create, and edit private personal templates');
+    expect(html).toContain('list, start, read, and update personal');
+    expect(html).toContain('cannot delete or publish templates');
     expect(html).toContain('value="Codex SOP Runner"');
     expect(html).toContain('No Run Keys yet.');
     expect(html).toContain('MCP connection');

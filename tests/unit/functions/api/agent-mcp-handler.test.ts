@@ -261,18 +261,24 @@ describe("personal run MCP handler", () => {
     expect(await response.text()).toBe("");
   });
 
-  it("advertises only the five run-focused tools", async () => {
+  it("advertises personal template and run tools without delete or publish controls", async () => {
     const response = await handleAgentMcp(rpcRequest("tools/list"), env);
     const body = await response.json() as any;
 
     expect(body.result.tools.map((tool: any) => tool.name)).toEqual([
       "list_templates",
+      "get_template",
+      "create_template",
+      "update_template",
       "start_run",
       "list_runs",
       "get_run",
       "update_run",
     ]);
-    expect(JSON.stringify(body)).not.toContain("edit_template");
+    const serialized = JSON.stringify(body);
+    for (const forbidden of ["delete", "is_public", "visibility", "teamId", "slug"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
 
     const updateRun = body.result.tools.find((tool: any) => tool.name === "update_run");
     expect(updateRun.inputSchema.oneOf).toHaveLength(4);
@@ -300,6 +306,9 @@ describe("personal run MCP handler", () => {
     expect(updateRun.inputSchema.oneOf.every((branch: any) => branch.additionalProperties === false)).toBe(true);
     expect(body.result.tools.map((tool: any) => tool.annotations)).toEqual([
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+      { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
       { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
