@@ -1,6 +1,6 @@
 import { isSubTasksBlock } from "../../../src/lib/schemas/storedSections";
 import { getId } from "../utils/template-identities";
-import { findSection, findTask, tasksOf } from "./agentMcpTemplatePages";
+import { findSection, findTask, tasksOf } from "./agentMcpPages";
 import type { TemplateOperationArgs } from "./agentMcpTemplateTools";
 import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
 

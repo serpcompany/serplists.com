@@ -32,7 +32,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { templateView } from "@functions/api/handlers/agentMcpTemplatePages";
-import { MAX_TEMPLATE_RESULT_BYTES } from "@functions/api/handlers/agentMcpTemplateTools";
+import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
@@ -164,7 +164,7 @@ describe("personal run MCP template tools", () => {
     expect(responses).toHaveLength(31);
     for (const raw of responses) {
       const result = resultOf(JSON.parse(raw) as JsonRecord);
-      expect(bytes(JSON.stringify(result.structuredContent))).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+      expect(bytes(JSON.stringify(result.structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     }
     expect(markPersonalRunKeyUsed).toHaveBeenCalledTimes(31);
   });
@@ -285,7 +285,7 @@ describe("personal run MCP template tools", () => {
         taskId: "t3-2",
         task: changed[3].items[2],
       });
-      expect(bytes(JSON.stringify(resultOf(JSON.parse(raw) as JsonRecord).structuredContent))).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+      expect(bytes(JSON.stringify(resultOf(JSON.parse(raw) as JsonRecord).structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     });
 
     it("treats a null operation as absent, replacing fields as before", async () => {

@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { boundedText, toWellFormedText } from "@functions/api/handlers/agentMcpPages";
 import {
-  boundedText,
   jsonByteLength,
-  MAX_RESULT_BYTES,
+  MAX_UNPAGED_RESULT_BYTES,
   outlineRetiredItems,
   selectRunScope,
-  toWellFormedText,
 } from "@functions/api/handlers/agentMcpRuns";
 
 // A UTF-16 surrogate half without its partner. JSON.stringify writes one as a "\ud83d"
@@ -134,6 +133,6 @@ describe("outlineRetiredItems", () => {
 
     expect(outline.length).toBeGreaterThan(0);
     expect(outline[0]).toEqual(expect.objectContaining({ id: "section-0", taskCount: 20 }));
-    expect(jsonByteLength(outline)).toBeLessThanOrEqual(MAX_RESULT_BYTES / 4);
+    expect(jsonByteLength(outline)).toBeLessThanOrEqual(MAX_UNPAGED_RESULT_BYTES / 4);
   });
 });

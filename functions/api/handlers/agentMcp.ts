@@ -23,13 +23,13 @@ import { sanitizeStoredSections } from "../../../src/lib/schemas/storedSections"
 import { completionStamps } from "../utils/run-completion";
 import { calculateRunProgress, resetRunCompletionState } from "../utils/template-reconciliation";
 import { withStableTemplateIdentities } from "../utils/template-identities";
+import { boundedText, toJson, utf8ByteLength } from "./agentMcpPages";
 import {
   applyRunOperation,
   assertRunCanBeCompleted,
   assertRunContentFits,
-  boundedText,
   jsonByteLength,
-  MAX_RESULT_BYTES,
+  MAX_UNPAGED_RESULT_BYTES,
   outlineRetiredItems,
   outlineSections,
   parseRetiredItems,
@@ -38,10 +38,8 @@ import {
   serializeRun,
   summarizeRun,
   summarizeRunForAudit,
-  toWellFormedText,
   updateRunAuditDiff,
   updateRunResult,
-  utf8ByteLength,
 } from "./agentMcpRuns";
 import { describeTemplateRead } from "./agentMcpTemplatePages";
 import { createTemplate, getOwnedTemplate, getTemplate, updateTemplate } from "./agentMcpTemplates";
@@ -78,13 +76,10 @@ const initializeArgs = z.object({
   }).passthrough(),
 }).passthrough();
 
-// Replaces lone surrogates in every string, so stored text can never make a response
+// toJson replaces lone surrogates in every string, so stored text can never make a response
 // that strict JSON parsers (Codex's serde_json) reject.
-const wellFormedStrings = (_key: string, value: unknown) =>
-  typeof value === "string" ? toWellFormedText(value) : value;
-
 function jsonResponse(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value, wellFormedStrings), {
+  return new Response(toJson(value), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
@@ -106,7 +101,7 @@ function rpcError(id: JsonRpcId, code: number, message: string, data?: unknown, 
 }
 
 function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, isError = false): Response {
-  const textContent = `${text}\n\n${JSON.stringify(structuredContent, wellFormedStrings)}`;
+  const textContent = `${text}\n\n${toJson(structuredContent)}`;
   return rpcResult(id, {
     content: [{ type: "text", text: textContent }],
     structuredContent,
@@ -117,7 +112,7 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
 // Only for read-only tools. A mutation must never report failure after its write has
 // committed, so mutating tools size their results before the write or keep them compact.
 function assertBoundedResult(value: JsonRecord): void {
-  if (jsonByteLength(value) > MAX_RESULT_BYTES) {
+  if (jsonByteLength(value) > MAX_UNPAGED_RESULT_BYTES) {
     throw new ToolError("Result is too large; request a smaller resource", "result_too_large");
   }
 }
@@ -217,7 +212,7 @@ async function startRun(
   };
   // Size the run before writing: once the batch commits, start_run must return the run
   // rather than an error, or the agent retries and creates duplicate runs. The content
-  // cap leaves room under MAX_RESULT_BYTES for the run's scalar fields.
+  // cap leaves room under MAX_UNPAGED_RESULT_BYTES for the run's scalar fields.
   assertRunContentFits(utf8ByteLength(run.items));
   const result = { run: serializeRun(run) };
   const auditEvent = await buildAuditEventValues({
@@ -300,13 +295,13 @@ async function getRun(
   const run = await getOwnedRun(env, identity.userId, args.runId);
   const scoped = selectRunScope(parseStoredSections(run.items), parseRetiredItems(run), args);
   const result = { run: serializeRun(run, scoped.sections, scoped.retiredItems) };
-  if (jsonByteLength(result) <= MAX_RESULT_BYTES) return result;
+  if (jsonByteLength(result) <= MAX_UNPAGED_RESULT_BYTES) return result;
   throw new ToolError(
     "Run is too large to return at once; call get_run again with a sectionId or taskId from details.sections "
       + "or details.retiredItems",
     "result_too_large",
     {
-      limit: MAX_RESULT_BYTES,
+      limit: MAX_UNPAGED_RESULT_BYTES,
       run: summarizeRun(run),
       sections: outlineSections(scoped.sections),
       retiredItems: outlineRetiredItems(scoped.retiredItems),

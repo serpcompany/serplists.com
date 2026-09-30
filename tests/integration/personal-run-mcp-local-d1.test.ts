@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
-import { MAX_TEMPLATE_RESULT_BYTES } from "../../functions/api/handlers/agentMcpTemplateTools";
+import { MAX_RESULT_BYTES } from "../../functions/api/handlers/agentMcpPages";
 import {
   createPersonalRunKeySecret,
   insertPersonalRunKeyWithinCap,
@@ -725,7 +725,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const { template, results } = await readTemplateInFull(readTool, templateId);
     expect(template).toMatchObject({ id: templateId, title: "Operations Handbook", version: 1 });
     expect(template.sections).toEqual(sections);
-    expect(Math.max(...resultBytes)).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+    expect(Math.max(...resultBytes)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     // A few dozen calls, well within a Run Key's 120 a minute.
     expect(results.length).toBeLessThan(40);
     expect(results.some((result) => (result.part as JsonRecord | undefined)?.of === "task")).toBe(true);

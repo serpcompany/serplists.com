@@ -1,50 +1,27 @@
 import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../../src/lib/schemas/storedSections";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { findRunCompletionRefusal } from "../utils/run-completion";
+import { boundedText, utf8ByteLength } from "./agentMcpPages";
 import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
 
 // Run content helpers for the personal run MCP endpoint: parsing, serialization, the
 // operations update_run applies, and the size bounds that keep every result returnable.
 
-export const MAX_RESULT_BYTES = 512 * 1024;
+// The bound of the results that are not read in pages yet (TD-28): the run tools' and
+// list_templates'. The template tools' results stay within MAX_RESULT_BYTES (agentMcpPages.ts).
+export const MAX_UNPAGED_RESULT_BYTES = 512 * 1024;
 // Largest run content (the sections JSON stored in checklist_runs.items) an MCP write may
-// produce. It stays well under MAX_RESULT_BYTES so get_run can always return a run MCP
+// produce. It stays well under MAX_UNPAGED_RESULT_BYTES so get_run can always return a run MCP
 // wrote, and it keeps the run row far below D1's 2 MB row limit.
 export const MAX_RUN_CONTENT_BYTES = 384 * 1024;
 // The section/task outline that result_too_large returns must itself stay small.
-const MAX_OUTLINE_BYTES = MAX_RESULT_BYTES / 2;
+const MAX_OUTLINE_BYTES = MAX_UNPAGED_RESULT_BYTES / 2;
 const MAX_OUTLINE_SECTIONS = 1_000;
-// The retired-work outline beside it, so both together stay under MAX_RESULT_BYTES.
+// The retired-work outline beside it, so both together stay under MAX_UNPAGED_RESULT_BYTES.
 const MAX_RETIRED_OUTLINE_BYTES = MAX_OUTLINE_BYTES / 2;
-
-export function utf8ByteLength(text: string): number {
-  return new TextEncoder().encode(text).byteLength;
-}
 
 export function jsonByteLength(value: unknown): number {
   return utf8ByteLength(JSON.stringify(value));
-}
-
-// A UTF-16 surrogate half without its partner. JSON.stringify writes one as a "\ud83d"
-// escape, and strict JSON parsers (serde_json in Codex's MCP client) reject the whole
-// response. Stored text can already hold one: JSON request bodies accept them.
-const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
-
-// String.prototype.toWellFormed (ES2024) without the newer lib typings.
-export function toWellFormedText(text: string): string {
-  return text.replace(LONE_SURROGATE, "�");
-}
-
-const isHighSurrogate = (code: number) => code >= 0xd800 && code <= 0xdbff;
-
-// At most `maximum` UTF-16 units, cut on a character boundary.
-export function boundedText(value: unknown, maximum = 160): string {
-  const text = toWellFormedText(typeof value === "string" ? value : "Untitled");
-  if (text.length <= maximum) return text;
-  let end = maximum - 1;
-  // Never keep the first half of a surrogate pair (an emoji, for example).
-  if (end > 0 && isHighSurrogate(text.charCodeAt(end - 1))) end -= 1;
-  return `${text.slice(0, end)}…`;
 }
 
 export function parseStoredSections(value: unknown): JsonRecord[] {
@@ -191,7 +168,7 @@ export function updateRunResult(nextRun: JsonRecord, sections: JsonRecord[], ope
   if (operation.operation === "set_run_status") return { run };
   const task = findTask(sections, operation.taskId);
   const result = { run, task: task ? agentTaskView(task) : task };
-  return jsonByteLength(result) <= MAX_RESULT_BYTES ? result : { run, taskOmitted: true };
+  return jsonByteLength(result) <= MAX_UNPAGED_RESULT_BYTES ? result : { run, taskOmitted: true };
 }
 
 // Scalar run fields recorded in audit payloads. Content (items, retired_items) is left

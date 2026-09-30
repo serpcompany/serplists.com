@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toWellFormedText } from "@functions/api/handlers/agentMcpRuns";
+import { MAX_RESULT_BYTES, toWellFormedText } from "@functions/api/handlers/agentMcpPages";
 import {
   describeTemplateRead,
   readTemplate,
@@ -8,7 +8,6 @@ import {
   writtenTemplateResult,
   type TemplateView,
 } from "@functions/api/handlers/agentMcpTemplatePages";
-import { MAX_TEMPLATE_RESULT_BYTES } from "@functions/api/handlers/agentMcpTemplateTools";
 import { ToolError } from "@functions/api/handlers/agentMcpTools";
 import { readTemplateInFull } from "../../../support/templatePages";
 
@@ -55,7 +54,7 @@ const wholeOf = (view: TemplateView) => ({ ...view.header, sections: view.sectio
 // Reads the whole template as a client receives it, checking every result against the bound.
 async function readBack(view: TemplateView) {
   const read = await readTemplateInFull((args) => onWire(readTemplate(view, args as never)), String(view.header.id));
-  for (const result of read.results) expect(resultBytes(result)).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+  for (const result of read.results) expect(resultBytes(result)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
   return read;
 }
 
@@ -88,11 +87,11 @@ describe("get_template results", () => {
   it("returns a template whole up to the bound, and an outline one byte over", () => {
     const sized = (textBytes: number) => viewOf([section("s1", [task("t1", textBytes)])]);
     const base = resultBytes(readTemplate(sized(0), {}));
-    const atBound = readTemplate(sized(MAX_TEMPLATE_RESULT_BYTES - base), {});
-    const overBound = readTemplate(sized(MAX_TEMPLATE_RESULT_BYTES - base + 1), {});
+    const atBound = readTemplate(sized(MAX_RESULT_BYTES - base), {});
+    const overBound = readTemplate(sized(MAX_RESULT_BYTES - base + 1), {});
 
-    expect(resultBytes(atBound)).toBe(MAX_TEMPLATE_RESULT_BYTES);
-    expect(atBound).toEqual({ template: wholeOf(sized(MAX_TEMPLATE_RESULT_BYTES - base)) });
+    expect(resultBytes(atBound)).toBe(MAX_RESULT_BYTES);
+    expect(atBound).toEqual({ template: wholeOf(sized(MAX_RESULT_BYTES - base)) });
     expect(overBound.sectionsOmitted).toBe(true);
     expect(overBound).not.toHaveProperty("template.sections");
     expect(describeTemplateRead(atBound)).toBe('Loaded template "Release SOP".');
@@ -116,7 +115,7 @@ describe("get_template results", () => {
         taskCount: (entry.items as unknown[]).length,
         bytes: resultBytes(entry),
       })),
-      limit: MAX_TEMPLATE_RESULT_BYTES,
+      limit: MAX_RESULT_BYTES,
     });
     // Outline titles are cut; reading the section returns the whole title.
     const entry = (outline.outline as JsonRecord[])[3];
@@ -161,7 +160,7 @@ describe("get_template results", () => {
     expect(second).not.toHaveProperty("title");
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: (first.items as unknown[]).length });
     expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(view.sections[0].items);
-    for (const page of pages) expect(resultBytes(page)).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+    for (const page of pages) expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     expect(describeTemplateRead(pages[1])).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows/);
   });
 
@@ -173,7 +172,7 @@ describe("get_template results", () => {
 
     expect(pages.length).toBeGreaterThan(3);
     for (const page of pages) {
-      expect(resultBytes(page)).toBeLessThanOrEqual(MAX_TEMPLATE_RESULT_BYTES);
+      expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
       expect(page).toMatchObject({ sectionId: "s1", part: { of: "task", index: 1 } });
       expect(page).not.toHaveProperty("task");
     }
@@ -228,7 +227,7 @@ describe("get_template results", () => {
       const { template, results } = await readBack(view);
 
       expect(template, `seed ${seed}`).toEqual(onWire(wholeOf(view)));
-      expect(results.every((result) => resultBytes(result) <= MAX_TEMPLATE_RESULT_BYTES), `seed ${seed}`).toBe(true);
+      expect(results.every((result) => resultBytes(result) <= MAX_RESULT_BYTES), `seed ${seed}`).toBe(true);
     }
   }, 60_000);
 });
