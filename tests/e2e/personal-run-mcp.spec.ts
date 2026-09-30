@@ -37,6 +37,14 @@ async function mcpRequest(
   return { body, response };
 }
 
+// Every MCP tool result stays within 32KB, what MCP clients take from one call whole
+// (MAX_RESULT_BYTES in functions/api/handlers/agentMcpPages.ts).
+function boundedResult(body: JsonRecord): JsonRecord {
+  const structuredContent = (body.result as JsonRecord).structuredContent as JsonRecord;
+  expect(new TextEncoder().encode(JSON.stringify(structuredContent)).byteLength).toBeLessThanOrEqual(32 * 1024);
+  return structuredContent;
+}
+
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
@@ -93,7 +101,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     arguments: {},
   }, 2);
   expect(templateResult.response.status).toBe(200);
-  const templateContent = (templateResult.body.result as JsonRecord).structuredContent as JsonRecord;
+  const templateContent = boundedResult(templateResult.body);
   const templates = templateContent.templates as JsonRecord[];
   expect(templates.length).toBeGreaterThan(0);
 
@@ -104,7 +112,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     arguments: { templateId: template.id, title: runTitle },
   }, 3);
   expect(started.response.status).toBe(200);
-  const startedContent = (started.body.result as JsonRecord).structuredContent as JsonRecord;
+  const startedContent = boundedResult(started.body);
   const startedRun = startedContent.run as JsonRecord;
   const sections = startedRun.sections as JsonRecord[];
   const firstTask = (sections[0].items as JsonRecord[])[0];
@@ -137,7 +145,26 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     },
   }, 5);
   expect(completed.response.status).toBe(200);
-  const completedRun = ((completed.body.result as JsonRecord).structuredContent as JsonRecord).run as JsonRecord;
+  const completedContent = boundedResult(completed.body);
+  const completedRun = completedContent.run as JsonRecord;
+  expect(completedContent).toMatchObject({ taskId, task: { id: taskId, isCompleted: true, notes: note } });
+
+  // The run reads back whole, or one task at a time, and leads the list of runs.
+  const read = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId } }, 6);
+  const readRun = boundedResult(read.body).run as JsonRecord;
+  expect(readRun).toMatchObject({ id: runId, revision: completedRun.revision, progress: completedRun.progress });
+  const readTask = ((readRun.sections as JsonRecord[])[0].items as JsonRecord[])[0];
+  expect(readTask).toMatchObject({ id: taskId, isCompleted: true, notes: note });
+  const oneTask = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId, taskId } }, 7);
+  expect(boundedResult(oneTask.body)).toEqual({
+    run: { id: runId, revision: completedRun.revision },
+    sectionId: (sections[0] as JsonRecord).id,
+    task: readTask,
+  });
+  const runList = await mcpRequest(secret, 'tools/call', { name: 'list_runs', arguments: { status: 'in_progress' } }, 8);
+  const [newest] = boundedResult(runList.body).runs as JsonRecord[];
+  expect(newest).toMatchObject({ id: runId, title: runTitle, revision: completedRun.revision });
+  expect(newest).not.toHaveProperty('sections');
 
   await page.goto(`/dashboard/runs/${encodeURIComponent(runId)}/`);
   await expect(page.getByRole('heading', { name: runTitle })).toBeVisible();
@@ -153,7 +180,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   await page.getByRole('button', { name: 'Revoke key' }).click();
   await expect(keyRow.getByText('Revoked')).toBeVisible();
 
-  const denied = await mcpRequest(secret, 'tools/list', undefined, 6);
+  const denied = await mcpRequest(secret, 'tools/list', undefined, 9);
   expect(denied.response.status).toBe(401);
 });
 
