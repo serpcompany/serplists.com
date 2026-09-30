@@ -7,15 +7,8 @@ import { normalizeSectionsPayload, normalizeStringArray, parseJsonArray } from "
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import { withStableTemplateIdentities } from "../utils/template-identities";
 import { jsonByteLength } from "./agentMcpRuns";
-import {
-  createTemplateArgs,
-  getTemplateArgs,
-  isRecord,
-  parseToolArguments,
-  ToolError,
-  updateTemplateArgs,
-  type JsonRecord,
-} from "./agentMcpTools";
+import { createTemplateArgs, getTemplateArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
+import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
 import { createTemplateForUser, updateTemplateForUser } from "./templates";
 
 // The personal run MCP's template tools. Writes go through the web editor's code
