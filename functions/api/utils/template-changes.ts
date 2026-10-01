@@ -1,14 +1,8 @@
 import { describePayloadError, normalizeStringArray, parseJsonArray, templatePayloadSchema } from './payloads';
 import { assignMissingStableTemplateIdentities } from './template-reconciliation';
 
-// Clients resend the whole Template on every save (editor saves, visibility toggles), so a
-// PUT must compare values with the stored row rather than trust which keys are present.
-// Otherwise every save bumps content_version, marks every unreconciled run stale, and
-// rewrites every active run (see docs/product-specs/portable-templates.md).
-
 type Row = Record<string, unknown>;
 
-// Run state that clients carry inside section JSON; it is never checklist structure.
 const RUN_STATE_KEYS = new Set(['isCompleted', 'completed', 'notes']);
 
 const isEmptyValue = (value: unknown): boolean =>
@@ -22,11 +16,6 @@ function sortKeysDeep(value: unknown): unknown {
   return Object.fromEntries(Object.entries(value).sort(byKey).map(([key, entry]) => [key, sortKeysDeep(entry)]));
 }
 
-// Drops run state and empty values (an editor's `description: ''` or `contents: []` equals a
-// missing key) and sorts keys. Array order is kept: reordering is a real structure change.
-// A content block's own id is dropped too: blocks are often stored without one (seed and
-// starter Templates, imports, copies of those), the editor gives each a new id on load,
-// and runs never match blocks by id. Section, task, and Sub-task ids are kept.
 function canonicalStructure(value: unknown, isContentBlock = false): unknown {
   if (Array.isArray(value)) return value.map((entry) => canonicalStructure(entry, isContentBlock));
   if (typeof value !== 'object' || value === null) return value;
@@ -38,11 +27,6 @@ function canonicalStructure(value: unknown, isContentBlock = false): unknown {
   );
 }
 
-/**
- * True when `incomingStableSections` (already given stable identities against the stored
- * sections) differ from the stored checklist structure. Only then may a save bump
- * content_version and reconcile runs.
- */
 export function templateStructureChanged(storedSections: unknown[], incomingStableSections: unknown[]): boolean {
   const stored = assignMissingStableTemplateIdentities(storedSections, storedSections);
   return JSON.stringify(canonicalStructure(stored)) !== JSON.stringify(canonicalStructure(incomingStableSections));
@@ -55,8 +39,6 @@ const jsonList = (value: unknown) => {
 };
 const stringList = (value: unknown) => JSON.stringify(normalizeStringArray(value));
 
-// How each comparable templates column is normalized before comparing. `items` is not listed:
-// callers add it only after templateStructureChanged reports a change.
 const COLUMN_NORMALIZERS: Record<string, (value: unknown) => unknown> = {
   title: text,
   description: text,
@@ -70,7 +52,6 @@ const COLUMN_NORMALIZERS: Record<string, (value: unknown) => unknown> = {
   is_public: (value) => value === true || value === 1,
 };
 
-/** Returns the update values that differ from the stored Template row. */
 export function omitUnchangedTemplateColumns(existing: Row, updates: Row): Row {
   return Object.fromEntries(
     Object.entries(updates).filter(([column, value]) => {
@@ -80,8 +61,7 @@ export function omitUnchangedTemplateColumns(existing: Row, updates: Row): Row {
   );
 }
 
-// The request fields behind each templates column.
-const BODY_FIELDS: Record<string, string[]> = {
+const REQUEST_FIELDS_BY_COLUMN: Record<string, string[]> = {
   title: ['title'],
   description: ['description'],
   seo_title: ['seoTitle'],
@@ -91,43 +71,28 @@ const BODY_FIELDS: Record<string, string[]> = {
   tags: ['tags'],
 };
 
-/**
- * Checks the fields behind changed columns against the save bounds. Unchanged fields are
- * skipped, so a stored value that predates the bounds can be resent. Returns an error
- * message naming the field (and the field, for the client), or null.
- */
 export function validateChangedTemplateFields(
   changes: Row,
   body: Row,
 ): { message: string; details: { field?: string } } | null {
   const changedFields = Object.fromEntries(
     Object.keys(changes).flatMap((column) =>
-      (BODY_FIELDS[column] ?? []).filter((field) => body[field] !== undefined).map((field) => [field, body[field]]),
+      (REQUEST_FIELDS_BY_COLUMN[column] ?? []).filter((field) => body[field] !== undefined).map((field) => [field, body[field]]),
     ),
   );
   const result = templatePayloadSchema.safeParse(changedFields);
   return result.success ? null : describePayloadError(result.error, 'Invalid template payload');
 }
 
-// Fields that change a Template's content. Visibility (is_public) is not one of them.
 const CONTENT_FIELDS = [
   'title', 'description', 'type', 'seoTitle', 'seoDescription', 'rules', 'sections', 'items',
   'categories', 'category', 'tags',
 ] as const;
 
-/**
- * True when an update asks to change content (or the slug). Such an update must name the
- * version it was based on (expected_version); without one the version check would be
- * skipped and a stale editor would overwrite newer work.
- */
 export function requestsContentChange(body: Row, slugChanged: boolean): boolean {
   return slugChanged || CONTENT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
 }
 
-/**
- * Audit metadata for an update that changed only visibility (Share or the Public/Private
- * switch), so the Changelog can say "Made template public" without reading the diff.
- */
 export function visibilityChangeMetadata(changes: Row): { visibility: 'public' | 'private' } | undefined {
   const keys = Object.keys(changes);
   if (keys.length !== 1 || keys[0] !== 'is_public') return undefined;

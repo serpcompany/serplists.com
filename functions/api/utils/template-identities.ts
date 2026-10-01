@@ -1,7 +1,3 @@
-// Stable ids for Template and run content: reading sections, tasks and Sub-tasks, checking
-// that a Template's ids are unique, giving records that lack one an id (matched to the
-// previous content where possible, so run state follows it), and giving stored content that
-// lacks ids, when it is read, the ids a save of it stores.
 import { getTaskSubTasks, isSectionedList, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
 import { normalizeSectionsPayload, parseJsonArray } from './payloads';
 
@@ -22,7 +18,6 @@ export const getArray = (value: unknown): unknown[] => Array.isArray(value) ? va
 export function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
   const records = values.filter(isRecord);
   if (records.length === 0) return [];
-  // The same rule as the payload check, so a first section with items: null stays a section.
   if (isSectionedList(values)) return records;
 
   return [{
@@ -32,12 +27,8 @@ export function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
   }];
 }
 
-// A task's Sub-tasks, the rows of its Sub-tasks blocks (getTaskSubTasks). Sub-items stored on
-// another block or on the task itself are not shown by the run page, so they get no id here and
-// are never matched, retired, ticked or counted.
 export const getSubItems = getTaskSubTasks;
 
-// A task's contents with each Sub-tasks block's list passed through `mapSubItems`, in order.
 export const mapSubTasksBlocks = (contents: unknown[], mapSubItems: (subItems: unknown[]) => unknown[]): unknown[] =>
   contents.map((content) => (
     isSubTasksBlock(content) && Array.isArray(content.subItems)
@@ -217,8 +208,6 @@ const hasMissingIdentity = (sections: unknown[]): boolean => sections.filter(isR
   !getId(section) || getArray(section.items).filter(isRecord).some((item) =>
     !getId(item) || getSubItems(item).some((subItem) => !getId(subItem))));
 
-// A stored task with the ids the identity pass gave it and its Sub-tasks (stableItem), in the
-// order getSubItems numbers them: each Sub-tasks block's, in turn.
 function withItemIds(item: JsonRecord, stableItem: JsonRecord): JsonRecord {
   const subItemIds = getSubItems(stableItem).map((subItem) => subItem.id);
   let subItemIndex = 0;
@@ -231,17 +220,7 @@ function withItemIds(item: JsonRecord, stableItem: JsonRecord): JsonRecord {
   };
 }
 
-/**
- * Stored sections as readers get them. A section, task or Sub-task stored without an id the
- * API accepts (a row older than stable ids, or a numeric, blank or whitespace id) gets the id
- * a save of these sections stores (assignMissingStableTemplateIdentities). So an editor that
- * sends them back keeps every id across saves, and a run started from them matches its
- * Template by id. Unlike the identity pass, entries that are not objects stay where they
- * are, for the readers that show them. Sections that already have every id come back as is.
- */
 export function withStableTemplateIdentities(sections: unknown[]): unknown[] {
-  // The identity pass reads a list that is not sections (isSectionedList) as a flat task
-  // list; normalizeSectionsPayload has already wrapped any such stored list in one section.
   if (!isSectionedList(sections) || !hasMissingIdentity(sections)) return sections;
 
   const stableSections = assignMissingStableTemplateIdentities(sections);
@@ -257,7 +236,6 @@ export function withStableTemplateIdentities(sections: unknown[]): unknown[] {
   });
 }
 
-/** A stored items column with withStableTemplateIdentities applied; as stored when no id is missing. */
 export function withStableItemsColumn(items: string): string {
   const { sections, error } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
   if (error) return items;

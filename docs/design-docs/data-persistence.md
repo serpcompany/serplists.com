@@ -92,7 +92,9 @@ retried insert drops the column from the statement itself (`withoutColumns`).
   version the metadata of its event, found among the newest events read with the same
   limit, which hold the event of every version the Changelog shows (an older version, or
   one written before audit events, gets `null`). The template Changelog can then name the
-  Run Key and label a Share (`functions/api/utils/history-queries.ts`).
+  Run Key and label a Share (`functions/api/utils/history-queries.ts`): a save that changes
+  only visibility records `{ visibility }` metadata (`visibilityChangeMetadata`), so the
+  Changelog says "Made template public" without reading the diff.
 
 ## Resource Ownership
 
@@ -148,6 +150,46 @@ user-scoped keys from `src/lib/queryKeys.ts`. When the signed-in user changes (s
 or a sign-in as someone else in the same tab), `AuthProvider` removes every cached query
 that no mounted page reads, except the shared public catalog, so nothing the previous
 user loaded is shown to or refetched for the next one.
+
+## Stable ids and run reconciliation
+
+Sections, tasks and Sub-tasks keep their ids across saves, and a run's state follows
+them. The rules people see are in [features](../product-specs/features.md), and the
+storage contract and what counts as a structure change are in the
+[portable template spec](../product-specs/portable-templates.md#storage-strategy-d1). The
+API applies them like this:
+
+- **Ids on write.** `assignMissingStableTemplateIdentities`
+  (`functions/api/utils/template-identities.ts`) gives a record without a usable id one
+  matched to the content it replaces, so run state follows it: the same id first, then
+  the only previous sibling with the same title (when the title is unique and that sibling
+  had no stored id), then the previous sibling at the same position (when it had none),
+  and otherwise its own id or a positional `legacy-*` id.
+- **Ids on read.** Readers get stored content with the ids a save of it would store
+  (`withStableTemplateIdentities`), so an editor that sends it back keeps every id, and a
+  run started from it matches its Template. Unlike the identity pass, entries that are not
+  objects stay where they are, for the readers that show them. Import refuses such an entry
+  instead (`findNonObjectTemplateEntry`): the identity pass would silently drop it, and a
+  client that spread a string into a record would store its characters as keys on an
+  untitled task.
+- **Matching a run.** `reconcileRunSections`
+  (`functions/api/utils/template-reconciliation.ts`) matches each Template task and
+  Sub-task to the run's previous copy by id. Ids are unique across a Template, so work that
+  moved to another section or task is still the same work. Every copy under its own parent
+  is matched first (legacy runs repeat ids across sections), before any is looked for
+  elsewhere, so the result does not depend on which way work moved; then the only copy
+  anywhere in the run is taken, and an id the run holds more than once is never guessed.
+  Work an earlier reconcile retired comes back with its state when the Template brings its
+  id back (restoring an older version, say), the newest retired copy first, but only for
+  an id the run no longer holds anywhere, so a stale retired copy never replaces live
+  state.
+- **Retiring.** Previous work nothing in the Template matched joins `retired_items` after
+  the earlier entries. A retired task leaves out the Sub-tasks that moved to another task,
+  and a removed section leaves out the work that moved elsewhere and is not retired at all
+  when every task it had moved.
+- **Legacy state.** Runs saved before `isCompleted` existed store `completed`, which
+  reconciliation and the completion rule read the way the client does; a new run drops it
+  (`resetRunCompletionState`).
 
 ## Import/Export
 
