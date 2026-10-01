@@ -175,7 +175,20 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", "functions/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
+    files: [
+      "src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      "functions/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      "tests/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+    ],
+    ignores: [
+      "tests/unit/views/**",
+      "tests/unit/contexts/**",
+      "tests/unit/server/**",
+      "tests/unit/seo/**",
+      "tests/unit/scripts/**",
+      "tests/unit/config/**",
+      "tests/unit/workflows/**",
+    ],
     linterOptions: { noInlineConfig: true },
     plugins: { serplists: { rules: { "no-comments": noComments } } },
     rules: { "serplists/no-comments": "error" },
