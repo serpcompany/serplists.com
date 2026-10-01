@@ -19,6 +19,7 @@ import {
   type ResourcePermissions,
 } from '@/lib/organizationPermissions';
 
+import { SESSION_RECHECK_INTERVAL_MS } from './sessionSync';
 import { markListsStaleForWorkspaceSwitch } from './templateListCache';
 import {
   PERSONAL_WORKSPACE_ID,
@@ -137,7 +138,7 @@ export function WorkspaceProvider({
     queryKey: ['teams', userId],
     queryFn: () => api.getTeams(),
     enabled: Boolean(user),
-    staleTime: 60 * 1000,
+    staleTime: SESSION_RECHECK_INTERVAL_MS,
   });
   const [rememberedTeams, setRememberedTeams] = useRememberedTeams(userId, teamsQuery);
 

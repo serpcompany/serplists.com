@@ -140,9 +140,10 @@ and user-facing failure states when a supporting service is unavailable.
   cached queries are then dropped), a confirmed sign-out sends protected pages to
   `/login/`, and a failed check changes nothing. A tab also re-reads the session when
   it comes back into view, at most once a minute (each read is a D1 query; a minute is
-  also the Organizations list's stale time, so that list's refetch on focus rarely runs
-  without a session check), and after a back/forward cache restore, which may have
-  missed messages. Answers can arrive out of order, so each read takes a ticket when it
+  also the Organizations list's stale time, as both read `SESSION_RECHECK_INTERVAL_MS`,
+  so that list's refetch on focus rarely runs without a session check), and after a
+  back/forward cache restore, which may have missed messages. Answers can arrive out of
+  order, so each read takes a ticket when it
   starts and its answer is dropped when a later read, or a sign-in or sign-out in this
   tab, was applied first; a failed read never outranks an older answer. One re-check
   runs at a time, and a request made during one queues one more, since the running
