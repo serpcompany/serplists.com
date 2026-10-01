@@ -27,8 +27,7 @@ const sectionsWithAsset = (fileSize: unknown, type = "file") => [
 ];
 
 describe("template asset limits", () => {
-  // An export must import again: import accepts every size the uploader accepts.
-  it("never blocks on import an asset the uploader accepted", () => {
+  it("never blocks on import an asset the uploader accepted, so an export always imports again", () => {
     expect(TEMPLATE_IMPORT_MAX_ASSET_BYTES).toBeGreaterThanOrEqual(UPLOAD_MAX_BYTES);
 
     const largestUpload = new File(["x"], "brief.pdf", { type: "application/pdf" });
@@ -40,13 +39,17 @@ describe("template asset limits", () => {
 
   it("counts only asset sizes no upload could produce", () => {
     expect(countOversizedTemplateAssets(sectionsWithAsset(TEMPLATE_IMPORT_MAX_ASSET_BYTES + 1))).toBe(1);
-    // A size is a hint from the imported file: a missing or invalid one is not counted.
+    expect(countOversizedTemplateAssets("not sections")).toBe(0);
+  });
+
+  it("does not count a missing or invalid size, which is only a hint from the imported file", () => {
     expect(countOversizedTemplateAssets(sectionsWithAsset(undefined))).toBe(0);
     expect(countOversizedTemplateAssets(sectionsWithAsset("huge"))).toBe(0);
     expect(countOversizedTemplateAssets(sectionsWithAsset(Number.POSITIVE_INFINITY))).toBe(0);
-    // Text blocks never count.
+  });
+
+  it("never counts a text block", () => {
     expect(countOversizedTemplateAssets(sectionsWithAsset(TEMPLATE_IMPORT_MAX_ASSET_BYTES + 1, "text"))).toBe(0);
-    expect(countOversizedTemplateAssets("not sections")).toBe(0);
   });
 
   it("rejects an upload one byte over the limit", () => {

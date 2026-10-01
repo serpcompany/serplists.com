@@ -9,11 +9,7 @@ import {
   uploadAcceptAttribute,
 } from '@/lib/schemas/uploadTypes';
 
-// Real (bucket, file name, browser-reported type) cases. Browsers take the type from
-// the OS: Windows reports .zip as application/x-zip-compressed and .csv as
-// application/vnd.ms-excel when Excel is installed; an unknown extension arrives as
-// an empty type, which the multipart encoder sends as application/octet-stream.
-describe('upload types', () => {
+describe('upload types, as browsers report them from the operating system', () => {
   it.each<[UploadBucket, string, string, string]>([
     ['template-files', 'report.zip', 'application/x-zip-compressed', 'application/x-zip-compressed'],
     ['template-files', 'report.zip', 'application/zip', 'application/zip'],

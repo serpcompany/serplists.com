@@ -17,11 +17,6 @@ import {
 } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-// docs/generated/portable-template-pack.schema.json is the published contract for AI and
-// external tools. It must accept exactly what the importer (the Zod schema) accepts: the
-// content rules used to live in a superRefine the JSON Schema could not see, and every
-// object was additionalProperties:false although Zod drops unknown keys, so the schema
-// accepted packs the importer rejected and rejected SERP Lists' own exports.
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validateWithJsonSchema = ajv.compile(buildPortableTemplatePackJsonSchema());
 
@@ -76,7 +71,7 @@ const REJECTED: Array<[string, unknown]> = [
   ['another schema version', { ...withItem({ title: 'I' }), schemaVersion: '1.0.0' }],
 ];
 
-describe('portable template JSON Schema matches the importer', () => {
+describe('the published portable template JSON Schema accepts exactly what the importer accepts', () => {
   it.each(ACCEPTED)('both accept %s', (_label, data) => {
     expect(verdicts(data)).toEqual({ jsonSchema: true, importer: true });
   });
@@ -100,9 +95,7 @@ describe('portable template JSON Schema matches the importer', () => {
 });
 
 describe('portable export', () => {
-  // As the app holds a stored template: normalizeSections adds isCompleted (and maps the
-  // legacy completed), and run notes can be present.
-  const storedTemplate = (): ChecklistTemplate => ({
+  const storedTemplateWithRunStateAsTheAppHoldsIt = (): ChecklistTemplate => ({
     id: 't1',
     title: 'Launch',
     description: '',
@@ -131,20 +124,20 @@ describe('portable export', () => {
   });
 
   it('validates against the JSON Schema and imports again', () => {
-    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([storedTemplate()])));
+    const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()])));
 
     expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
   });
 
   it('validates after an import added completion state to every task', () => {
-    const imported = prepareTemplatesForImport([storedTemplate()], 'u1');
+    const imported = prepareTemplatesForImport([storedTemplateWithRunStateAsTheAppHoldsIt()], 'u1');
     const exported = JSON.parse(JSON.stringify(exportPortableTemplatesToJSON(imported)));
 
     expect(verdicts(exported)).toEqual({ jsonSchema: true, importer: true });
   });
 
   it('leaves out run state and other keys that are not part of the portable format', () => {
-    const exported = exportPortableTemplatesToJSON([storedTemplate()]);
+    const exported = exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()]);
     const serialized = JSON.stringify(exported.templates[0].sections);
 
     expect(serialized).not.toMatch(/"(isCompleted|completed|notes)"/);
@@ -167,10 +160,7 @@ describe('portable export', () => {
   });
 });
 
-// A plain JSON import is lenient: content blocks keep a numeric id and null or ill-typed
-// file details, which the app reads as absent. The export used to copy them as they were,
-// and the strict portable schema then left the whole template out of the pack.
-describe('portable export of content blocks a lenient import stored', () => {
+describe('portable export of content blocks a lenient JSON import stored, keeping their template in the pack', () => {
   const importedTemplate = (contents: unknown[]) => {
     const { templates } = parseTemplatesFromData([
       { title: 'Launch', sections: [{ id: 's1', title: 'Prep', items: [{ id: 'i1', title: 'Write copy', contents }] }] },

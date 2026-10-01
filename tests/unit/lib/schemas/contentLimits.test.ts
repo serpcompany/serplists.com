@@ -28,18 +28,13 @@ import { requestBodyLimit } from "@functions/api/utils/body-limit";
 import { normalizeSectionsPayload } from "@functions/api/utils/payloads";
 import { resetRunCompletionState } from "@functions/api/utils/template-reconciliation";
 
-// Every stored Template and run must fit back through its own save route: the editor's PUT
-// /api/templates/:id and a run's PUT /api/checklists/:id (or share-link PUT) resend the whole
-// content under the router's body limit. These tests run the app's own load and save code over
-// content built to make it grow as much as possible, so raising a content limit, lowering a
-// body limit, or making the app add a field on load without counting it here fails.
-
 type Sections = Array<Record<string, unknown>>;
+
+const D1_MAX_ROW_BYTES = 2_000_000;
 
 const utf8Bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-// A text block whose value brings the content's measured size to exactly `target`.
-function padTo(sections: Sections, target: number, char = "a"): Sections {
+function withTextBlockPaddingTo(sections: Sections, target: number, char = "a"): Sections {
   const charBytes = contentSaveBytes([{ value: char }]) - contentSaveBytes([{ value: "" }]);
   const padded = structuredClone(sections);
   const block = { id: "pad", type: "text", value: "" };
@@ -56,9 +51,7 @@ function padTo(sections: Sections, target: number, char = "a"): Sections {
 
 const range = (count: number) => Array.from({ length: count }, (_, index) => index);
 
-// Stored content the app grows the most when it loads and saves it: every default it fills
-// in (titles, descriptions, content lists and ids, completion flags, placeholder tasks) missing.
-const growthCases: Array<[string, Sections]> = [
+const contentMissingEveryDefaultTheAppFillsIn: Array<[string, Sections]> = [
   ["tiny tasks with no title, description, contents or completion", [
     { id: "s", items: range(6000).map((index) => ({ id: `t${index}`, title: "" })) },
   ]],
@@ -105,18 +98,16 @@ const growthCases: Array<[string, Sections]> = [
   ]],
 ];
 
-// The largest envelope the editor sends next to the sections: every field at its limit, in
-// characters JSON writes as six-byte escapes.
-const control = (length: number) => "\u0001".repeat(length);
-const maxEnvelope = {
-  title: control(TEMPLATE_TITLE_MAX),
-  description: control(TEMPLATE_DESCRIPTION_MAX),
+const sixByteJsonEscapes = (length: number) => "\u0001".repeat(length);
+const largestEditorEnvelope = {
+  title: sixByteJsonEscapes(TEMPLATE_TITLE_MAX),
+  description: sixByteJsonEscapes(TEMPLATE_DESCRIPTION_MAX),
   type: "checklist" as const,
-  seoTitle: control(TEMPLATE_SEO_TITLE_MAX),
-  seoDescription: control(TEMPLATE_SEO_DESCRIPTION_MAX),
-  seoUrl: control(TEMPLATE_SLUG_MAX),
-  categories: range(TEMPLATE_LIST_MAX_ITEMS).map(() => control(TEMPLATE_LIST_ITEM_MAX)),
-  tags: range(TEMPLATE_LIST_MAX_ITEMS).map(() => control(TEMPLATE_LIST_ITEM_MAX)),
+  seoTitle: sixByteJsonEscapes(TEMPLATE_SEO_TITLE_MAX),
+  seoDescription: sixByteJsonEscapes(TEMPLATE_SEO_DESCRIPTION_MAX),
+  seoUrl: sixByteJsonEscapes(TEMPLATE_SLUG_MAX),
+  categories: range(TEMPLATE_LIST_MAX_ITEMS).map(() => sixByteJsonEscapes(TEMPLATE_LIST_ITEM_MAX)),
+  tags: range(TEMPLATE_LIST_MAX_ITEMS).map(() => sixByteJsonEscapes(TEMPLATE_LIST_ITEM_MAX)),
   isPublic: false,
   version: Number.MAX_SAFE_INTEGER,
 };
@@ -125,20 +116,17 @@ function loadTemplate(stored: Sections) {
   return mapApiTemplate({ id: "template-1", title: "Template", items: JSON.stringify(stored), version: 1 });
 }
 
-// What the editor sends for a template it loaded and saved without changes.
-function editorSaveBody(stored: Sections) {
+function editorBodyForAnUnchangedSave(stored: Sections) {
   const form = buildTemplateEditorFormValues(loadTemplate(stored));
   const { sections } = applyTemplateSaveDefaults("Template", form.sections as unknown as ChecklistSection[]);
-  return { sections, body: buildTemplateUpdateRequest({ id: "template-1", ...maxEnvelope, sections }) };
+  return { sections, body: buildTemplateUpdateRequest({ id: "template-1", ...largestEditorEnvelope, sections }) };
 }
 
-// A run started from the template, as POST /api/checklists stores it.
-const startRun = (stored: Sections): Sections =>
+const runAsPostChecklistsStoresIt = (stored: Sections): Sections =>
   resetRunCompletionState(sanitizeStoredSections(normalizeSectionsPayload(stored).sections)) as Sections;
 
-// What the run page sends for a save (a rename, so the title is included too).
-function runSaveBody(runSections: Sections) {
-  const run = mapChecklistToRun({ id: "run-1", title: control(RUN_TITLE_MAX), items: JSON.stringify(runSections), revision: 1 }, "run-1");
+function runRenameSaveBody(runSections: Sections) {
+  const run = mapChecklistToRun({ id: "run-1", title: sixByteJsonEscapes(RUN_TITLE_MAX), items: JSON.stringify(runSections), revision: 1 }, "run-1");
   return { sections: run.sections, body: buildRunUpdatePayload(run, { includeTitle: true }) };
 }
 
@@ -159,66 +147,62 @@ function setEveryCompletion(sections: Sections, isCompleted: boolean): Sections 
   }));
 }
 
-describe("content size limits", () => {
+describe("content size limits, so every stored Template and run fits back through its own save route", () => {
   const templateBodyLimit = requestBodyLimit("templates/template-1").maxBytes;
   const runBodyLimits = [
     requestBodyLimit("checklists/run-1").maxBytes,
     requestBodyLimit("checklists/shared/share-token").maxBytes,
   ];
+  const smallestRunBodyLimit = Math.min(...runBodyLimits);
 
   it("leave room under the save routes' body limit", () => {
     expect(TEMPLATE_CONTENT_MAX_BYTES).toBeLessThan(RUN_CONTENT_MAX_BYTES);
-    expect(TEMPLATE_CONTENT_MAX_BYTES + utf8Bytes(buildTemplateUpdateRequest({ id: "t", ...maxEnvelope, sections: [] })))
+    expect(TEMPLATE_CONTENT_MAX_BYTES + utf8Bytes(buildTemplateUpdateRequest({ id: "t", ...largestEditorEnvelope, sections: [] })))
       .toBeLessThan(templateBodyLimit);
     for (const limit of runBodyLimits) expect(RUN_CONTENT_MAX_BYTES).toBeLessThan(limit);
   });
 
-  it.each(growthCases)("bound what the app sends back for %s", (_label, content) => {
-    const stored = padTo(content, TEMPLATE_CONTENT_MAX_BYTES);
+  it.each(contentMissingEveryDefaultTheAppFillsIn)("bound what the app sends back for %s", (_label, content) => {
+    const stored = withTextBlockPaddingTo(content, TEMPLATE_CONTENT_MAX_BYTES);
 
-    // The template loads, and saves again unchanged (Duplicate sends the loaded sections).
-    expect(utf8Bytes(loadTemplate(stored).sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
-    const editor = editorSaveBody(stored);
-    expect(utf8Bytes(editor.sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
-    expect(utf8Bytes(editor.body)).toBeLessThanOrEqual(templateBodyLimit);
+    const sectionsDuplicateSends = loadTemplate(stored).sections;
+    expect(utf8Bytes(sectionsDuplicateSends)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
+    const unchangedEditorSave = editorBodyForAnUnchangedSave(stored);
+    expect(utf8Bytes(unchangedEditorSave.sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
+    expect(utf8Bytes(unchangedEditorSave.body)).toBeLessThanOrEqual(templateBodyLimit);
 
-    // A run started from it fits the run limit, and its page can save it.
-    const run = startRun(stored);
-    expect(contentSaveBytes(run)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
-    expect(utf8Bytes(runSaveBody(run).body)).toBeLessThanOrEqual(Math.min(...runBodyLimits));
+    const startedRun = runAsPostChecklistsStoresIt(stored);
+    expect(contentSaveBytes(startedRun)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
+    expect(utf8Bytes(runRenameSaveBody(startedRun).body)).toBeLessThanOrEqual(smallestRunBodyLimit);
 
-    // Notes grow it up to the run limit; every task ticked, it still saves.
-    const annotated = padTo(run, RUN_CONTENT_MAX_BYTES);
-    const ticked = setEveryCompletion(annotated, true);
-    const saved = runSaveBody(ticked);
-    expect(utf8Bytes(saved.sections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
-    expect(utf8Bytes(saved.body)).toBeLessThanOrEqual(Math.min(...runBodyLimits));
+    const runGrownToTheRunLimit = withTextBlockPaddingTo(startedRun, RUN_CONTENT_MAX_BYTES);
+    const everyTaskTickedSave = runRenameSaveBody(setEveryCompletion(runGrownToTheRunLimit, true));
+    expect(utf8Bytes(everyTaskTickedSave.sections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
+    expect(utf8Bytes(everyTaskTickedSave.body)).toBeLessThanOrEqual(smallestRunBodyLimit);
   });
 
-  // A save sends the whole run, so a tick must never count against the limit: a run whose
-  // notes reached it can still be ticked and unticked.
-  it("measure a run the same whichever tasks are ticked", () => {
-    const run = startRun(padTo(growthCases[2][1], TEMPLATE_CONTENT_MAX_BYTES));
+  it("measure a run the same whichever tasks are ticked, so a run at the limit can still be ticked and unticked", () => {
+    const [, subTasksWithNoTitleOrCompletion] = contentMissingEveryDefaultTheAppFillsIn[2];
+    const run = runAsPostChecklistsStoresIt(withTextBlockPaddingTo(subTasksWithNoTitleOrCompletion, TEMPLATE_CONTENT_MAX_BYTES));
     expect(contentSaveBytes(setEveryCompletion(run, true))).toBe(contentSaveBytes(run));
     expect(contentSaveBytes(setEveryCompletion(run, false))).toBe(contentSaveBytes(run));
   });
 
-  // D1 refuses rows over 2,000,000 bytes. A template_versions snapshot holds the template row
-  // as JSON, so its content is escaped a second time.
-  it("keep a Template's version snapshot under D1's row limit", async () => {
-    const stored = padTo([{ id: "s", title: "Quotes", items: [{ id: "t", title: "Task" }] }], TEMPLATE_CONTENT_MAX_BYTES, "\"");
+  it("keep a Template's version snapshot, which escapes the content a second time, under D1's row limit", async () => {
+    const quoteEscapedTwice = "\"";
+    const stored = withTextBlockPaddingTo([{ id: "s", title: "Quotes", items: [{ id: "t", title: "Task" }] }], TEMPLATE_CONTENT_MAX_BYTES, quoteEscapedTwice);
     const version = await buildTemplateVersionValues({
       templateId: "template-1",
       version: 1,
       changedByUserId: "user-1",
       subject: { type: "user", id: "user-1" },
-      snapshot: { ...maxEnvelope, id: "template-1", items: JSON.stringify(stored) },
+      snapshot: { ...largestEditorEnvelope, id: "template-1", items: JSON.stringify(stored) },
       changeSummary: "template.updated",
     });
     const rowBytes = Object.values(version).reduce<number>(
       (total, value) => total + new TextEncoder().encode(String(value)).byteLength,
       0,
     );
-    expect(rowBytes).toBeLessThan(2_000_000);
+    expect(rowBytes).toBeLessThan(D1_MAX_ROW_BYTES);
   });
 });

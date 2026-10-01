@@ -48,10 +48,7 @@ describe('template slug helpers', () => {
   });
 });
 
-// The editor's URL Slug field used its own rule, which dropped letters the shared rule
-// folds ('Straße' became 'stra-e'). It sends the slug already normalized, and the API
-// keeps a valid slug as it is, so the editor's rule was the one stored.
-describe('the URL Slug field follows the shared slug rule', () => {
+describe('the URL Slug field follows the shared slug rule, since the API stores the slug the editor normalized', () => {
   const samples = [
     'Straße Checkliste',
     'Ørsted',
@@ -69,10 +66,12 @@ describe('the URL Slug field follows the shared slug rule', () => {
   ];
 
   it.each(samples)('normalizes %j as the API does', (sample) => {
+    expect(slugifyTemplateSlug(sample)).toBe(truncateSlug(generateSlug(sample), TEMPLATE_SLUG_MAX));
+  });
+
+  it.each(samples)('stores the same slug for %j whether or not the editor normalized it first', (sample) => {
     const slug = slugifyTemplateSlug(sample);
 
-    expect(slug).toBe(truncateSlug(generateSlug(sample), TEMPLATE_SLUG_MAX));
-    // Normalizing first never changes what the API stores for the typed text.
     expect(resolveRequestedSlug(slug || undefined, undefined)).toEqual(
       slug ? resolveRequestedSlug(sample, undefined) : { kind: 'unchanged' },
     );

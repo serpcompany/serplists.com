@@ -5,9 +5,6 @@ import { describe, expect, it } from 'vitest';
 
 import { AUDIT_ACTIONS, TEMPLATE_VERSION_ACTIONS } from '@/lib/schemas/auditActions';
 
-// Every audit action the API writes must be registered, so the Organization
-// Activity list (and every other history view) has a label for it.
-
 const repoRoot = join(__dirname, '../../../..');
 
 function listTypeScriptFiles(directory: string): string[] {
@@ -23,8 +20,7 @@ const functionSources = listTypeScriptFiles(join(repoRoot, 'functions')).map((fi
   source: readFileSync(file, 'utf8'),
 }));
 
-// Each `<key>: "resource.verb"` literal under functions/, with the file that writes it.
-function collectLiterals(key: string): Map<string, string> {
+function resourceVerbLiteralsUnderFunctionsWithTheirFile(key: string): Map<string, string> {
   const literal = new RegExp(String.raw`\b${key}:\s*(["'])([a-z_]+\.[a-z_]+)\1`, 'g');
   const found = new Map<string, string>();
 
@@ -37,11 +33,9 @@ function collectLiterals(key: string): Map<string, string> {
   return found;
 }
 
-// AuditEventInput.action is typed by AUDIT_ACTIONS, so the history label maps cover every
-// action. This also catches an action that reaches the audit log around the type (a cast).
-describe('AUDIT_ACTIONS', () => {
-  it('lists every audit action literal written under functions/', () => {
-    const written = collectLiterals('action');
+describe('AUDIT_ACTIONS, which every history view has a label for', () => {
+  it('lists every audit action literal written under functions/, even one cast around the AuditEventInput type', () => {
+    const written = resourceVerbLiteralsUnderFunctionsWithTheirFile('action');
     const registered = new Set<string>(AUDIT_ACTIONS);
 
     expect(written.size).toBeGreaterThan(10);
@@ -50,13 +44,13 @@ describe('AUDIT_ACTIONS', () => {
   });
 
   it('lists only actions some handler writes', () => {
-    const written = collectLiterals('action');
+    const written = resourceVerbLiteralsUnderFunctionsWithTheirFile('action');
 
     expect(AUDIT_ACTIONS.filter((action) => !written.has(action))).toEqual([]);
   });
 
   it('lists every template version change summary', () => {
-    const summaries = [...collectLiterals('changeSummary').keys()];
+    const summaries = [...resourceVerbLiteralsUnderFunctionsWithTheirFile('changeSummary').keys()];
 
     expect(summaries.length).toBeGreaterThan(0);
     expect(summaries.filter((action) => !(TEMPLATE_VERSION_ACTIONS as readonly string[]).includes(action))).toEqual([]);

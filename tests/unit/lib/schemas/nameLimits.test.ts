@@ -8,9 +8,7 @@ import {
   RUN_TITLE_MAX,
 } from '@/lib/schemas/nameLimits';
 
-// The app checks names against the limits the API enforces, so a long name gets a clear
-// message instead of the API's raw schema error.
-describe('run title limit', () => {
+describe('run title limit, checked in the app so a long title gets a clear message instead of the API schema error', () => {
   it('matches the limit the API enforces on run titles, after trimming', () => {
     expect(checklistPayloadSchema.safeParse({ title: 'a'.repeat(RUN_TITLE_MAX) }).success).toBe(true);
     expect(checklistPayloadSchema.safeParse({ title: ` ${'a'.repeat(RUN_TITLE_MAX)} ` }).success).toBe(true);

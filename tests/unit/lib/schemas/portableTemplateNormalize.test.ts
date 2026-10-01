@@ -29,8 +29,6 @@ describe('parsePortableTemplate', () => {
   });
 });
 
-// Export and import share this normalizer so every pack SERP Lists wrote can be read back,
-// including packs that hold content ids or file details the strict schema does not accept.
 const templateWithContents = (contents: unknown[]) => ({
   title: 'Launch',
   sections: [{ title: 'Prep', items: [{ title: 'Write copy', contents }] }],
@@ -42,7 +40,7 @@ const contentsOf = (contents: unknown[]) => {
   return result.data.sections[0].items[0].contents;
 };
 
-describe('parsePortableTemplate content blocks', () => {
+describe('parsePortableTemplate content blocks with ids or file details the strict schema rejects, which an older pack can hold', () => {
   it('turns a numeric id into a string and drops null or ill-typed optional keys', () => {
     expect(
       contentsOf([
