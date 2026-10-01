@@ -11,6 +11,7 @@ import { requestHostIsSafe, resolveAgentMcpConnection } from "@functions/api/uti
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import type { Env } from "@functions/api/types";
 import { varFromWranglerToml } from "../../../support/wranglerToml";
+import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
 const baseEnv = { DB: {} } as Env;
 const previewEnv: Env = { ...baseEnv, CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS") };
@@ -86,12 +87,12 @@ describe("advertised MCP endpoint", () => {
 
   it("points a per-deployment staging URL at the canonical staging host", () => {
     expect(resolveAgentMcpConnection(connectionRequest("https://3f2a1b9c.serp-checklists.pages.dev"), previewEnv))
-      .toEqual({ mcpEndpoint: "https://staging.serplists.com/api/mcp", hostMismatch: true });
+      .toEqual({ mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: true });
   });
 
   it("keeps the request's own endpoint on allowed and loopback hosts", () => {
-    expect(resolveAgentMcpConnection(connectionRequest("https://staging.serplists.com"), previewEnv))
-      .toEqual({ mcpEndpoint: "https://staging.serplists.com/api/mcp", hostMismatch: false });
+    expect(resolveAgentMcpConnection(connectionRequest(STAGING_ORIGIN), previewEnv))
+      .toEqual({ mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: false });
     for (const origin of ["http://localhost:8788", "http://127.0.0.1:8788", "http://[::1]:8788"]) {
       expect(resolveAgentMcpConnection(connectionRequest(origin), baseEnv))
         .toEqual({ mcpEndpoint: `${origin}/api/mcp`, hostMismatch: false });
@@ -112,10 +113,10 @@ describe("advertised MCP endpoint", () => {
 
   it("does not trust a Host header that differs from the request URL", () => {
     const spoofed = new Request("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", {
-      headers: { Host: "staging.serplists.com" },
+      headers: { Host: new URL(STAGING_ORIGIN).host },
     });
     expect(resolveAgentMcpConnection(spoofed, previewEnv))
-      .toEqual({ mcpEndpoint: "https://staging.serplists.com/api/mcp", hostMismatch: true });
+      .toEqual({ mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: true });
   });
 
   describe.each(envs)("with %s", (_name, env) => {

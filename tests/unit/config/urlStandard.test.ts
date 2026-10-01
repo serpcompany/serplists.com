@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { canonicalPath } from '@/lib/http/urlStandard';
-import { SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
+import { SMOKE_TEST_HEADER, STAGING_ORIGIN } from '@/lib/seo/siteOrigin';
 
 import {
   loadBuiltRoutes,
@@ -183,11 +183,11 @@ describe.each([
   });
 });
 
-describe.each([
-  ['production', PRODUCTION, 'https://serplists.com'],
-  ['staging', STAGING, 'https://staging.serplists.com'],
-] as const)('other hosts (%s build)', (_name, build, canonicalOrigin) => {
-  it('sends every workers.dev URL to the environment host, in canonical form and one hop', async () => {
+describe('other hosts (production build)', () => {
+  const build = PRODUCTION;
+  const canonicalOrigin = 'https://serplists.com';
+
+  it('sends every workers.dev URL to serplists.com, in canonical form and one hop', async () => {
     for (const host of Object.values(WORKERS_DEV_URLS)) {
       for (const [path, canonical] of [
         ['/', '/'],
@@ -216,7 +216,20 @@ describe.each([
       });
     }
   });
+});
 
+describe('the staging build, which lives on its workers.dev address', () => {
+  it('serves staging there instead of sending it to another host, applying only the URL standard', async () => {
+    expect(await agreedRedirect(STAGING, `${STAGING_ORIGIN}/about/`)).toBeNull();
+    expect(await agreedRedirect(STAGING, `${STAGING_ORIGIN}/api/health`)).toBeNull();
+    expect(await agreedRedirect(STAGING, `${STAGING_ORIGIN}/about`)).toEqual({ status: 308, location: '/about/' });
+  });
+});
+
+describe.each([
+  ['production', PRODUCTION, 'https://serplists.com'],
+  ['staging', STAGING, STAGING_ORIGIN],
+] as const)('other hosts (%s build)', (_name, build, canonicalOrigin) => {
   it('serves a workers.dev request that carries the smoke-test header', async () => {
     const smokeTest = { headers: { [SMOKE_TEST_HEADER]: '1' } };
     for (const path of ['/', '/about/', '/robots.txt', '/api/health']) {

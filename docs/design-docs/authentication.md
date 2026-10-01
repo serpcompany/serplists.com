@@ -33,7 +33,7 @@ and user-facing failure states when a supporting service is unavailable.
   verification email when sign-in is blocked. The same setting, not the request
   hostname, turns on the other production-only checks: breached-password lookups
   and test-email blocking (`functions/api/utils/auth-policy.ts`). Preview sets it to
-  `false`, so `staging.serplists.com` and `*.pages.dev` previews behave the same.
+  `false`, so staging behaves the same on every host it answers on.
   Every deployed environment sets it; where it is unset (tests, ad hoc runs),
   verification is required whenever an email provider is configured.
 - Verification emails return to `/login/?verified=1`. Links expire after Better

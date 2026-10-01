@@ -34,6 +34,7 @@ vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 import { varFromWranglerToml } from "../../../support/wranglerToml";
+import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
 const mockEnv = { DB: {} as D1Database };
 
@@ -227,7 +228,7 @@ describe("Personal run key management handler", () => {
       await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection"))
         .resolves.toEqual({
           status: 200,
-          body: { mcpEndpoint: "https://staging.serplists.com/api/mcp", hostMismatch: true },
+          body: { mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: true },
         });
       expect(dbMocks.db.select).not.toHaveBeenCalled();
     });
@@ -243,10 +244,10 @@ describe("Personal run key management handler", () => {
     });
 
     it("keeps an allowed or loopback host's own endpoint", async () => {
-      await expect(connection("https://staging.serp-checklists.pages.dev/api/agent-keys/connection"))
+      await expect(connection(`${STAGING_ORIGIN}/api/agent-keys/connection`))
         .resolves.toEqual({
           status: 200,
-          body: { mcpEndpoint: "https://staging.serp-checklists.pages.dev/api/mcp", hostMismatch: false },
+          body: { mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: false },
         });
       await expect(connection("http://localhost:8788/api/agent-keys/connection", mockEnv as never))
         .resolves.toEqual({
@@ -264,7 +265,7 @@ describe("Personal run key management handler", () => {
       sessionMocks.getSessionUserId.mockResolvedValue(null);
 
       const response = await handleAgentKeys(
-        new Request("https://staging.serplists.com/api/agent-keys/connection"),
+        new Request(`${STAGING_ORIGIN}/api/agent-keys/connection`),
         previewEnv,
       );
 

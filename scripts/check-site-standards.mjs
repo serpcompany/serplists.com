@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 
 export const SMOKE_TEST_HEADER = "x-serplists-smoke-test";
 
-const CANONICAL_ORIGINS = { production: "https://serplists.com", staging: "https://staging.serplists.com" };
+const CANONICAL_ORIGINS = { production: "https://serplists.com", staging: "https://serp-checklists-preview.serpcompany.workers.dev" };
 
 const ONE_SEEDED_PAGE_OF_EACH_KIND = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];
 const FILES = ["/robots.txt", "/sitemap.xml", "/sitemaps/pages/1.xml"];
@@ -112,11 +112,16 @@ async function checkOnlyProductionIsIndexedOrLoadsAnalytics({ get, check }, site
 async function checkOtherHostsRedirectToTheCanonicalHost({ base, onWorkersDev, get, check, expectRedirect }, { canonicalOrigin, local }) {
   if (onWorkersDev || local) {
     const workersDevHost = local ? { host: LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST } : {};
-    for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]]) {
-      await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...workersDevHost, sendSmokeTestHeader: false });
+    if (new URL(canonicalOrigin).hostname.endsWith(".workers.dev")) {
+      const page = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: false });
+      check(page.status === 200, `${page.status} /about/ on ${workersDevHost.host ?? base.host}, where this environment lives`);
+    } else {
+      for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]]) {
+        await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...workersDevHost, sendSmokeTestHeader: false });
+      }
+      const smokeTest = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: true });
+      check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost.host ?? base.host} with ${SMOKE_TEST_HEADER}`);
     }
-    const smokeTest = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: true });
-    check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost.host ?? base.host} with ${SMOKE_TEST_HEADER}`);
   }
   if (local) {
     await expectRedirect("/pricing", "https://serplists.com/pricing/", { host: "www.serplists.com" });

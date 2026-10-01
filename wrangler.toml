@@ -29,7 +29,7 @@ AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 SITE_ENV = "staging"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 PERSONAL_RUN_MCP_ENABLED = "true"
-CORS_ALLOWED_ORIGINS = "https://staging.serplists.com,https://staging.serp-checklists.pages.dev"
+CORS_ALLOWED_ORIGINS = "https://serp-checklists-preview.serpcompany.workers.dev"
 
 [env.production.vars]
 SITE_ENV = "production"

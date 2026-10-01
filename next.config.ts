@@ -14,6 +14,7 @@ import { canonicalHostRedirects, trailingSlashRedirects } from './src/lib/http/u
 import {
   CANONICAL_ORIGIN,
   deploymentOrigin,
+  isOnWorkersDev,
   isProductionSite,
   SMOKE_TEST_HEADER,
 } from './src/lib/seo/siteOrigin';
@@ -65,8 +66,9 @@ const nextConfig: NextConfig = {
     ];
   },
   async redirects() {
+    const siteOrigin = deploymentOrigin();
     return [
-      ...canonicalHostRedirects(deploymentOrigin(), [workersDevHost], [smokeTestHeader]),
+      ...(isOnWorkersDev(siteOrigin) ? [] : canonicalHostRedirects(siteOrigin, [workersDevHost], [smokeTestHeader])),
       ...canonicalHostRedirects(CANONICAL_ORIGIN, [wwwHost]),
       ...LEGACY_PATH_REDIRECTS,
       DASHBOARD_HOME_REDIRECT,

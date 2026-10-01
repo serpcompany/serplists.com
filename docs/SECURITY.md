@@ -12,8 +12,8 @@
 - **Email verification is required** before sign-in in production, and
   breached passwords are rejected (`haveIBeenPwned` plugin). "Production" here is
   the auth policy `AUTH_EMAIL_VERIFICATION_REQUIRED=true` from `wrangler.toml`
-  (`functions/api/utils/auth-policy.ts`), never the request hostname, so preview
-  domains such as `staging.serplists.com` get the preview policy.
+  (`functions/api/utils/auth-policy.ts`), never the request hostname, so staging gets the
+  preview policy on any host.
 - **A password reset signs out every session** for the account
   (`revokeSessionsOnPasswordReset`), so recovering an account removes anyone
   holding a stolen session. This takes effect immediately only because sessions

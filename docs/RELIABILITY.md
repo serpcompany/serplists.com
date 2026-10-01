@@ -108,7 +108,8 @@ to `staging` that passes the Quality Gate and the schema parity check deploys st
 
 Nothing deploys production yet. Production moves to Workers at launch
 ([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)); until then
-`serplists.com` keeps serving the last Pages deployment, and so does `staging.serplists.com`.
+`serplists.com` keeps serving the last Pages deployment. Staging lives on its Worker's
+`workers.dev` address, `https://serp-checklists-preview.serpcompany.workers.dev`.
 
 The staging deploy:
 
@@ -140,8 +141,9 @@ The staging deploy:
 
 Settings:
 
-- **Address:** staging answers on its `workers.dev` address. Its CORS and MCP host lists in
-  `wrangler.toml` name that address.
+- **Address:** staging answers on its `workers.dev` address, which `STAGING_ORIGIN`
+  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.mjs` and staging's
+  `CORS_ALLOWED_ORIGINS` in `wrangler.toml` all name.
 - **Database:** the `preview` environment binds `serp-checklists-staging-db`.
 - **Secrets:** the Worker has `BETTER_AUTH_SECRET`. Stripe and auth email secrets are not set,
   so billing and password emails show as unavailable on staging (see [SECURITY.md](SECURITY.md)).
@@ -162,7 +164,7 @@ explicitly per environment, never inferred from the host.
 | Environment | `wrangler.toml` env | `SITE_ENV` | Canonical host |
 | --- | --- | --- | --- |
 | Production | `production` | `production` | `serplists.com` |
-| Staging | `preview` | `staging` | `staging.serplists.com` |
+| Staging | `preview` | `staging` | `serp-checklists-preview.serpcompany.workers.dev` |
 | Local (`next dev`, `pnpm preview`) | top level | unset | none |
 
 A Wrangler environment inherits no bindings from the top level of `wrangler.toml`, so each
@@ -182,10 +184,12 @@ one repeats its D1, R2 and self-reference bindings.
   hide the site from search engines.
 - **One host per environment.** `next.config.ts` sends every other host that reaches the
   Worker to the environment's host with a 308, in one hop and in the canonical URL form:
-  `www.serplists.com` to `serplists.com`, and the Worker's `*.workers.dev` URL (and its
-  version preview URLs) to `serplists.com` or `staging.serplists.com`. API paths keep their
-  exact path. A request with the `x-serplists-smoke-test` header skips the workers.dev
-  redirect, so CI can test a deployment on its workers.dev URL; the header is not a secret.
+  `www.serplists.com` to `serplists.com`, and the production Worker's `*.workers.dev` URL (and
+  its version preview URLs) to `serplists.com`. API paths keep their exact path. Staging has no
+  domain of its own yet, so its build skips the workers.dev redirect (`isOnWorkersDev`) and
+  serves on its `workers.dev` address. A request with the `x-serplists-smoke-test` header
+  skips the workers.dev redirect, so CI can test a production deployment on its workers.dev
+  URL; the header is not a secret.
   When adding a host (another custom domain), add its redirect in `next.config.ts` and a
   case in `tests/unit/config/urlStandard.test.ts`.
 - **Checking a running site.** `node scripts/check-site-standards.mjs <base-url>
