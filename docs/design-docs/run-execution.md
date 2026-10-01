@@ -36,9 +36,9 @@ error the page reports, never "not found".
 
 The model loads again only when the run id or share token changes
 ([FRONTEND.md](../FRONTEND.md#data-and-state)), since a load clears the unsaved notes and the
-selection. The page's `updateRun` comes from the Templates context and can change identity with
-the cached lists, so the model reads it, through a ref, when a save calls it. The Run opens on its
-first unfinished task, or on its first task when every task is finished.
+selection. The model reads the page's `updateRun` (the Templates context's) through a ref when a
+save calls it, rather than depending on it, so a new callback never reloads the Run. The Run opens
+on its first unfinished task, or on its first task when every task is finished.
 
 `mapChecklistToRun` reads the API's row into a `ChecklistRun`:
 
@@ -164,9 +164,10 @@ its history.
   dialog. The server never completes a Run on its own, so `canFinishRun` keeps the page's Complete
   run action while every task is finished and the Run is in progress: a dismissed dialog, a reload
   or ticks made over MCP never leave it stuck.
-- Completion sends `completed`, progress 100, the completion time and every draft. A completed Run
-  is frozen (`COMPLETED_RUN_FROZEN_MESSAGE`): unticking would leave a Run labelled Completed with
-  open tasks, and ticking again would never offer completion again. Notes stay editable.
+- Completion sends the status `completed`, progress 100, the completion time and every draft. A
+  completed Run is frozen (`COMPLETED_RUN_FROZEN_MESSAGE`): unticking would leave a Run labelled
+  Completed with open tasks, and ticking again would never offer completion again. Notes stay
+  editable.
 - After completing, a signed-in user goes to My Runs only while still on the page
   (`usePageVisit`). The leave guard lets them go, since completion saved every draft; a note typed
   while completion was saving still asks.
