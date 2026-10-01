@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { signOutAndLeave, signOutAndReturn } from '@/features/auth/signOut';
 
+import { deferred } from '../../../support/deferred';
+
 describe('signOutAndLeave', () => {
   it('leaves the page once the server signed the user out', async () => {
     const onSignedOut = vi.fn();
@@ -41,21 +43,8 @@ describe('signOutAndLeave', () => {
   });
 });
 
-// Switching accounts from a page (such as an invite for another email) signs
-// out and opens the login page with a way back. The login page sends a
-// signed-in visitor straight to the return path, so it must only open once the
-// old session is gone.
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
-describe('signOutAndReturn', () => {
-  it('opens the login page only after sign-out finishes, carrying the return path', async () => {
+describe('signOutAndReturn, which switches accounts from a page such as an invite for another email', () => {
+  it('opens the login page only after sign-out finishes, since it sends a signed-in visitor straight to the return path it carries', async () => {
     const logout = deferred<{ ok: boolean }>();
     const navigate = vi.fn();
 
