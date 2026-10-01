@@ -182,7 +182,10 @@ Authenticated:
   can be one Stripe no longer has, so for a user with a Stripe customer Stripe
   decides: checkout lists the customer's subscriptions in Stripe
   (`GET /v1/subscriptions?customer=...`), stores them, and applies the same rules
-  to what Stripe lists, whatever D1 holds for that customer. A subscription stored
+  to what Stripe lists, whatever D1 holds for that customer. One page of 100 holds
+  them, since Stripe's default filter leaves out canceled subscriptions; a list with
+  more pages fails closed unless what it shows already blocks checkout, and an
+  `incomplete` subscription does not on its own. A subscription stored
   for any other customer is read by id (`GET /v1/subscriptions/{id}`): one Stripe
   has is stored and the same rules apply to it; one Stripe does not have (`404`,
   such as one made with the other mode's keys) no longer blocks, and its row is
@@ -195,7 +198,8 @@ Authenticated:
   customer's open sessions (`GET /v1/checkout/sessions?customer=...&status=open`)
   and leaves at most one subscription session open. It keeps the newest session
   that matches this checkout (same user, same `metadata[checkoutParams]` digest
-  of the price and return URLs, and at least an hour left) and expires every
+  of the price and return URLs, and at least an hour left, so the buyer has time to
+  finish paying; Stripe lists sessions newest first) and expires every
   other one (`POST /v1/checkout/sessions/{id}/expire`). When no open
   subscription blocks checkout, it returns the kept session's URL instead of
   creating a new one, so a tab left on Checkout plus a later Upgrade cannot be
@@ -227,7 +231,8 @@ Authenticated:
   `stripe_customer_missing_with_subscription` (ids and status only).
   A first checkout creates the customer with the idempotency key
   `customer-<userId>-<email digest>`, so concurrent or retried first checkouts
-  share one customer, and stores the mapping with `ON CONFLICT DO NOTHING`: a
+  share one customer (a changed email makes a new key rather than a Stripe
+  parameter-mismatch error), and stores the mapping with `ON CONFLICT DO NOTHING`: a
   mapping another request or the webhook stored first is kept, and that request
   gets `409 checkout_in_progress`. The Checkout idempotency key is the user, the
   customer id, a digest of the price and return URLs, and the five-minute window the
@@ -256,7 +261,8 @@ Authenticated:
   and lands back on the same URL, query included.
 - `GET /api/billing/status` → returns `{ plan, limits, billingEnabled }` (`plan` is `free`, `pro`, or the legacy `team` for a paid Organization).
   In Personal context it also returns `subscriptionStatus` (the most urgent open
-  subscription status, failed payments first, or `null`; once the user has a
+  subscription status, failed payments first and a status Stripe adds later after
+  the known ones, or `null`; once the user has a
   Stripe customer, only that customer's subscriptions count, since the Customer
   Portal shows only those), `canManageBilling`
   (a Stripe customer exists), and `managedBySupport` (a manual override sets the
@@ -275,6 +281,13 @@ Webhook:
 
 ## Implementation note
 This project calls Stripe via `fetch` (form-encoded) and verifies webhook signatures using HMAC-SHA256 against the raw request body (no `stripe-node` dependency).
+
+A failed Stripe call throws `StripeApiError` (`functions/api/utils/stripe.ts`) with the
+HTTP status and Stripe's error `type`, `code` and `param`. Stripe's message text can
+echo request data such as an email address, so it never enters the error message that
+gets logged. A customer Stripe does not have in this mode (deleted, or made with the
+other mode's keys) is `resource_missing` on `customer`, and it lists no open Checkout
+Sessions.
 
 Webhook event rows provide idempotency and retry state
 (`functions/api/utils/stripe-webhook-events.ts`). A row with no error records an
@@ -309,6 +322,9 @@ subscription does not exist, the event is acknowledged without a write. The upse
 also refuses transitions Stripe never makes: a `canceled` or `incomplete_expired`
 row is never overwritten, and no row returns to `incomplete`. Without
 `STRIPE_SECRET_KEY` the webhook stores the event snapshot under that same guard.
+Newer Stripe API versions report `current_period_end` on each subscription item
+rather than on the subscription, so the stored period end is the subscription's, or
+else its first item's.
 
 ## Production verification
 

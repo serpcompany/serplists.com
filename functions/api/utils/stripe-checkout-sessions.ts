@@ -1,10 +1,8 @@
 import { z } from "zod";
 import { log } from "./logger";
-import { StripeApiError, isMissingStripeCustomer, stripeGet, stripePostForm } from "./stripe";
+import { StripeApiError, expandableStripeIdSchema, isMissingStripeCustomer, stripeGet, stripePostForm } from "./stripe";
 
-// A buyer needs time to finish paying, so a session closer than this to expiring is
-// replaced rather than reused.
-const MIN_REUSE_SECONDS = 60 * 60;
+const MIN_SECONDS_LEFT_TO_REUSE_SESSION = 60 * 60;
 
 const checkoutSessionSchema = z
   .object({
@@ -13,12 +11,7 @@ const checkoutSessionSchema = z
     url: z.string().nullish(),
     expires_at: z.number(),
     metadata: z.record(z.unknown()).nullish(),
-    // The subscription Stripe created when the buyer submitted payment: an id, or the
-    // object when expanded.
-    subscription: z
-      .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
-      .nullish()
-      .transform((value) => (typeof value === "object" && value !== null ? value.id : value ?? null)),
+    subscription: expandableStripeIdSchema.nullish().transform((subscriptionId) => subscriptionId ?? null),
   })
   .passthrough();
 
@@ -28,39 +21,24 @@ const checkoutSessionListSchema = z
 
 type CheckoutSession = z.infer<typeof checkoutSessionSchema>;
 
-/** What makes an open session the same checkout this request would start. */
 export type CheckoutSessionMatch = {
   userId: string;
-  /** Digest of the price and return URLs, stored on the session as metadata[checkoutParams]. */
   paramsDigest: string;
   nowSeconds: number;
 };
 
 export type OpenCheckoutSessions =
-  /**
-   * One open session matches this checkout; every other one was expired. subscriptionId
-   * is the incomplete subscription a declined or abandoned payment in it left, if any.
-   */
   | { kind: "reuse"; url: string; subscriptionId: string | null }
-  /** No session is open any more: start a new one. */
   | { kind: "none" }
-  /** A session left the open state while it was being expired (paid, or expired by a concurrent request). */
   | { kind: "changed" };
 
 function isReusable(session: CheckoutSession, match: CheckoutSessionMatch): boolean {
   return Boolean(session.url)
     && session.metadata?.userId === match.userId
     && session.metadata?.checkoutParams === match.paramsDigest
-    && session.expires_at - match.nowSeconds >= MIN_REUSE_SECONDS;
+    && session.expires_at - match.nowSeconds >= MIN_SECONDS_LEFT_TO_REUSE_SESSION;
 }
 
-/**
- * Leaves the customer at most one open subscription Checkout Session. Each open session
- * stays payable for 24 hours and opens its own subscription, so two left open (a tab
- * left on Checkout, then Upgrade again later) could bill the customer twice. The newest
- * session that matches this checkout is kept for reuse; every other one is expired.
- * Throws when Stripe cannot answer or returns an incomplete or unexpected list.
- */
 export async function settleOpenCheckoutSessions(
   secretKey: string,
   stripeCustomerId: string,
@@ -73,7 +51,6 @@ export async function settleOpenCheckoutSessions(
       `/v1/checkout/sessions?customer=${encodeURIComponent(stripeCustomerId)}&status=open&limit=100`,
     );
   } catch (error) {
-    // A customer Stripe does not have has no sessions; Checkout replaces it.
     if (isMissingStripeCustomer(error)) return { kind: "none" };
     throw error;
   }
@@ -81,12 +58,11 @@ export async function settleOpenCheckoutSessions(
   const list = checkoutSessionListSchema.parse(body);
   if (list.has_more) throw new Error("Stripe returned an incomplete Checkout Session list");
 
-  // Stripe lists newest first, so the first match is the newest one.
-  const subscriptionSessions = list.data.filter((session) => session.mode === "subscription");
-  const reusable = subscriptionSessions.find((session) => isReusable(session, match));
+  const subscriptionSessionsNewestFirst = list.data.filter((session) => session.mode === "subscription");
+  const newestReusable = subscriptionSessionsNewestFirst.find((session) => isReusable(session, match));
 
-  for (const session of subscriptionSessions) {
-    if (session === reusable) continue;
+  for (const session of subscriptionSessionsNewestFirst) {
+    if (session === newestReusable) continue;
     try {
       await stripePostForm(secretKey, `/v1/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {});
     } catch (error) {
@@ -99,5 +75,7 @@ export async function settleOpenCheckoutSessions(
     log("info", "stripe_checkout_session_expired", { stripeCheckoutSessionId: session.id });
   }
 
-  return reusable?.url ? { kind: "reuse", url: reusable.url, subscriptionId: reusable.subscription } : { kind: "none" };
+  return newestReusable?.url
+    ? { kind: "reuse", url: newestReusable.url, subscriptionId: newestReusable.subscription }
+    : { kind: "none" };
 }

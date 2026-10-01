@@ -3,42 +3,35 @@ import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { log } from "./logger";
-import { StripeApiError, stripeGet } from "./stripe";
+import { StripeApiError, expandableStripeIdSchema, stripeGet } from "./stripe";
 
 type Db = ReturnType<typeof createDb>;
 
-// Stripe ends a subscription in one of these statuses and never reopens it.
 const TERMINAL_SUBSCRIPTION_STATUSES = ["canceled", "incomplete_expired"];
 
-// Open (non-terminal) statuses, most urgent first: statuses that need the customer to
-// act come before paid-up ones, so a failed payment is what the account surfaces.
-const OPEN_SUBSCRIPTION_STATUS_PRIORITY = ["past_due", "unpaid", "paused", "incomplete", "active", "trialing"];
+const OPEN_SUBSCRIPTION_STATUSES_MOST_URGENT_FIRST = ["past_due", "unpaid", "paused", "incomplete", "active", "trialing"];
+const UNKNOWN_OPEN_STATUS_RANK = OPEN_SUBSCRIPTION_STATUSES_MOST_URGENT_FIRST.length;
 
 export function isTerminalSubscriptionStatus(status: string): boolean {
   return TERMINAL_SUBSCRIPTION_STATUSES.includes(status);
 }
 
-/** Statuses that grant Pro. Other open statuses keep billing the customer without it. */
 export function isPaidSubscriptionStatus(status: string): boolean {
   return status === "active" || status === "trialing";
 }
 
 function statusPriority(status: string): number {
-  const index = OPEN_SUBSCRIPTION_STATUS_PRIORITY.indexOf(status);
-  // A status Stripe adds later is open but unknown: rank it after the known ones.
-  return index === -1 ? OPEN_SUBSCRIPTION_STATUS_PRIORITY.length : index;
+  const index = OPEN_SUBSCRIPTION_STATUSES_MOST_URGENT_FIRST.indexOf(status);
+  return index === -1 ? UNKNOWN_OPEN_STATUS_RANK : index;
 }
 
 export type PersonalSubscriptionSummary = {
-  /** The most urgent open subscription status across every price, or null. */
   openStatus: string | null;
-  /** A Stripe customer exists, so the Customer Portal can open. */
   hasCustomer: boolean;
 };
 
 export type StoredOpenSubscription = { id: string | null; customerId: string; status: string };
 
-/** The user's stored subscriptions that have not ended, on any customer and price. */
 export async function listOpenStoredSubscriptions(db: Db, userId: string): Promise<StoredOpenSubscription[]> {
   const { stripe_subscriptions } = schema;
   return db
@@ -57,13 +50,6 @@ export async function listOpenStoredSubscriptions(db: Db, userId: string): Promi
     .limit(10);
 }
 
-/**
- * Summarizes a user's stored Stripe billing state for Billing. Once the user has a
- * Stripe customer, only that customer's subscriptions count: the Customer Portal
- * shows only those, and one stored for a customer that checkout or the portal
- * replaced (Stripe no longer had it) would otherwise offer a portal that cannot
- * manage it instead of Upgrade. Checkout asks Stripe about every open subscription.
- */
 export async function getPersonalSubscriptionSummary(env: Env, userId: string): Promise<PersonalSubscriptionSummary> {
   const db = createDb(env);
   const { stripe_customers } = schema;
@@ -86,10 +72,6 @@ export async function getPersonalSubscriptionSummary(env: Env, userId: string): 
   };
 }
 
-/**
- * The most urgent status among the user's open stored subscriptions on one of
- * `priceIds`, on any customer, or null.
- */
 export async function openStoredStatusOnPrices(db: Db, userId: string, priceIds: string[]): Promise<string | null> {
   const { stripe_subscriptions } = schema;
   const rows = await db
@@ -106,7 +88,6 @@ export async function openStoredStatusOnPrices(db: Db, userId: string, priceIds:
   return mostUrgentOpenStatus(rows.map((row) => row.status));
 }
 
-/** The most urgent open (non-terminal) status among `statuses`, or null. */
 export function mostUrgentOpenStatus(statuses: string[]): string | null {
   const [openStatus] = statuses
     .filter((status) => !isTerminalSubscriptionStatus(status))
@@ -114,15 +95,9 @@ export function mostUrgentOpenStatus(statuses: string[]): string | null {
   return openStatus ?? null;
 }
 
-// Expandable references arrive as an id string, or as an object when expanded.
-const stripeIdSchema = z
-  .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
-  .transform((value) => (typeof value === "string" ? value : value.id));
-
 const subscriptionItemSchema = z
   .object({
     price: z.object({ id: z.string().min(1) }).passthrough(),
-    // Newer Stripe API versions keep the period on each item instead of the subscription.
     current_period_end: z.number().nullish(),
   })
   .passthrough();
@@ -130,7 +105,7 @@ const subscriptionItemSchema = z
 const stripeSubscriptionSchema = z
   .object({
     id: z.string().min(1),
-    customer: stripeIdSchema,
+    customer: expandableStripeIdSchema,
     status: z.string().min(1),
     cancel_at_period_end: z.boolean().nullish(),
     canceled_at: z.number().nullish(),
@@ -153,7 +128,6 @@ export type SubscriptionSnapshot = {
   metadataUserId: string | null;
 };
 
-/** Parses a Stripe subscription object (webhook payload or API response). */
 export function parseSubscriptionSnapshot(value: unknown): SubscriptionSnapshot | null {
   const parsed = stripeSubscriptionSchema.safeParse(value);
   if (!parsed.success) return null;
@@ -178,10 +152,6 @@ const subscriptionListSchema = z
   .object({ data: z.array(z.unknown()), has_more: z.boolean() })
   .passthrough();
 
-/**
- * Reads a subscription's current state from Stripe. Returns null when Stripe has no
- * such subscription; other failures throw.
- */
 export async function retrieveSubscription(
   secretKey: string,
   subscriptionId: string,
@@ -204,19 +174,26 @@ export async function retrieveSubscription(
   return current;
 }
 
-/**
- * Asks Stripe for a customer's subscriptions, stores them, and returns the open ones.
- * D1 only learns about subscriptions from webhooks, which can lag or fail, so Checkout
- * checks here before selling a second subscription. Throws when Stripe cannot answer,
- * or when the list is incomplete and shows nothing open that blocks Checkout.
- */
+async function storeSubscriptions(env: Env, userId: string, subscriptions: SubscriptionSnapshot[]): Promise<void> {
+  const [first, ...rest] = subscriptions;
+  if (!first) return;
+  const db = createDb(env);
+  const nowIso = new Date().toISOString();
+  await db.batch([
+    upsertStripeSubscription(db, userId, first, nowIso),
+    ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
+  ]);
+}
+
+const stillOpen = (subscriptions: SubscriptionSnapshot[]): SubscriptionSnapshot[] =>
+  subscriptions.filter((subscription) => !isTerminalSubscriptionStatus(subscription.status));
+
 export async function syncCustomerSubscriptions(
   env: Env,
   secretKey: string,
   userId: string,
   stripeCustomerId: string,
 ): Promise<SubscriptionSnapshot[]> {
-  // Stripe's default filter leaves out canceled subscriptions, so the list stays short.
   const body = await stripeGet(
     secretKey,
     `/v1/subscriptions?customer=${encodeURIComponent(stripeCustomerId)}&limit=100`,
@@ -228,34 +205,15 @@ export async function syncCustomerSubscriptions(
   }
   const found = subscriptions.filter((subscription): subscription is SubscriptionSnapshot => subscription !== null);
 
-  // An `incomplete` subscription may not block Checkout on its own (its session can be
-  // reused), so a partial list must show something else open.
-  const blocking = found.filter(
-    (subscription) => !isTerminalSubscriptionStatus(subscription.status) && subscription.status !== "incomplete",
-  );
-  if (blocking.length === 0 && list.has_more) {
+  const blockingCheckoutOnTheirOwn = stillOpen(found).filter((subscription) => subscription.status !== "incomplete");
+  if (blockingCheckoutOnTheirOwn.length === 0 && list.has_more) {
     throw new Error("Stripe returned an incomplete subscription list");
   }
 
-  const [first, ...rest] = found;
-  if (first) {
-    const db = createDb(env);
-    const nowIso = new Date().toISOString();
-    await db.batch([
-      upsertStripeSubscription(db, userId, first, nowIso),
-      ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
-    ]);
-  }
-  return found.filter((subscription) => !isTerminalSubscriptionStatus(subscription.status));
+  await storeSubscriptions(env, userId, found);
+  return stillOpen(found);
 }
 
-/**
- * Reads stored subscriptions from Stripe one by one, stores what Stripe returns, and
- * returns the ones still open. One Stripe does not have (made with the other mode's
- * keys, for example) is left as stored but not returned: a stored row is only ever
- * ended by Stripe saying so, never by a key that cannot see it. Throws when Stripe
- * cannot answer.
- */
 export async function refreshStoredSubscriptions(
   env: Env,
   secretKey: string,
@@ -269,27 +227,10 @@ export async function refreshStoredSubscriptions(
     if (current) found.push(current);
   }
 
-  const [first, ...rest] = found;
-  if (first) {
-    const db = createDb(env);
-    const nowIso = new Date().toISOString();
-    await db.batch([
-      upsertStripeSubscription(db, userId, first, nowIso),
-      ...rest.map((subscription) => upsertStripeSubscription(db, userId, subscription, nowIso)),
-    ]);
-  }
-  return found.filter((subscription) => !isTerminalSubscriptionStatus(subscription.status));
+  await storeSubscriptions(env, userId, found);
+  return stillOpen(found);
 }
 
-/**
- * Returns the subscription state to store for a customer.subscription.* event.
- *
- * Stripe does not deliver events in order and retries failed events after newer ones,
- * so an event snapshot can be stale. The current state is read from Stripe instead.
- * A terminal snapshot is already final. Without a secret key the snapshot is used and
- * the write guard in upsertStripeSubscription still blocks impossible transitions.
- * Returns null when Stripe has no such subscription.
- */
 export async function loadCurrentSubscription(
   env: Env,
   eventSnapshot: SubscriptionSnapshot,
@@ -310,9 +251,6 @@ export async function loadCurrentSubscription(
   return { ...current, metadataUserId: current.metadataUserId ?? eventSnapshot.metadataUserId };
 }
 
-// The upserts below return the statement unexecuted, so the webhook can commit them in
-// one batch with its event record. Await one to run it on its own.
-
 export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
   const { stripe_customers } = schema;
   return db
@@ -324,11 +262,6 @@ export function upsertStripeCustomer(db: Db, userId: string, stripeCustomerId: s
     });
 }
 
-/**
- * Maps the customer to the user only when the user has no customer yet. An ended
- * subscription uses this, so its late event cannot move the user back to a customer
- * that checkout already replaced.
- */
 export function linkStripeCustomerIfUnmapped(db: Db, userId: string, stripeCustomerId: string, nowIso: string) {
   const { stripe_customers } = schema;
   return db
@@ -356,15 +289,15 @@ export function upsertStripeSubscription(
     updated_at: nowIso,
   };
 
+  const transitionStripeCanMake = sql`${stripe_subscriptions.status} NOT IN ('canceled', 'incomplete_expired')
+    AND (excluded.status <> 'incomplete' OR ${stripe_subscriptions.status} = 'incomplete')`;
+
   return db
     .insert(stripe_subscriptions)
     .values({ stripe_subscription_id: subscription.id, ...state, created_at: nowIso })
     .onConflictDoUpdate({
       target: stripe_subscriptions.stripe_subscription_id,
       set: state,
-      // Stripe never reopens a canceled or expired subscription and never returns one to
-      // incomplete, so a late or concurrent older write cannot do either.
-      setWhere: sql`${stripe_subscriptions.status} NOT IN ('canceled', 'incomplete_expired')
-        AND (excluded.status <> 'incomplete' OR ${stripe_subscriptions.status} = 'incomplete')`,
+      setWhere: transitionStripeCanMake,
     });
 }

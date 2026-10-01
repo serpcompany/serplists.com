@@ -9,9 +9,7 @@ export type StripeConfig = {
 
 export type StripeBillingConfig = {
   secretKey: string;
-  /** The price new Checkout sessions use. */
   proPriceId: string;
-  /** Every price whose subscription grants Pro: the checkout price, then legacy prices. */
   proPriceIds: string[];
 };
 
@@ -19,9 +17,6 @@ export type StripeWebhookConfig = {
   webhookSecret: string;
 };
 
-// Stripe prices cannot change amount, so a price change creates a new price while
-// existing subscribers stay on the old one. STRIPE_PRO_LEGACY_PRICE_IDS (comma-separated)
-// keeps those prices granting Pro after STRIPE_PRO_PRICE_ID moves to the new price.
 function parsePriceIds(value: string | undefined): string[] {
   return (value ?? "").split(",").map((id) => id.trim()).filter(Boolean);
 }
@@ -82,6 +77,10 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   return params.toString();
 }
 
+export const expandableStripeIdSchema = z
+  .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
+  .transform((value) => (typeof value === "string" ? value : value.id));
+
 const stripeErrorBodySchema = z.object({
   error: z
     .object({
@@ -101,11 +100,6 @@ function parseStripeErrorBody(text: string): { type?: string; code?: string; par
   }
 }
 
-/**
- * A non-2xx response from the Stripe API: the HTTP status plus Stripe's error type,
- * code, and param when the body has them. Stripe's message text can echo request data
- * such as an email address, so it stays out of the error message that gets logged.
- */
 export class StripeApiError extends Error {
   readonly status: number;
   readonly type?: string;
@@ -124,28 +118,15 @@ export class StripeApiError extends Error {
   }
 }
 
-/**
- * Stripe has no such customer in this mode: it was deleted, or the stored id belongs
- * to the other mode's keys ("a similar object exists in test mode").
- */
 export function isMissingStripeCustomer(error: unknown): error is StripeApiError {
   return error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer";
 }
 
-/**
- * Stripe refused a request because its idempotency key is in use by a request still in
- * flight (409 idempotency_key_in_use), or was first used with other parameters
- * (idempotency_error). Both mean another attempt for the same action is under way.
- */
 export function isStripeIdempotencyConflict(error: unknown): error is StripeApiError {
   return error instanceof StripeApiError
     && (error.code === "idempotency_key_in_use" || error.type === "idempotency_error");
 }
 
-/**
- * A short SHA-256 hex digest for idempotency keys, so a key changes whenever the
- * request it protects changes (Stripe rejects a reused key with other parameters).
- */
 export async function shortDigest(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest).slice(0, 8))
@@ -161,7 +142,6 @@ async function readStripeResponse(resp: Response): Promise<unknown> {
   return JSON.parse(text) as unknown;
 }
 
-/** GET a Stripe API resource. Callers parse the returned JSON with Zod. */
 export async function stripeGet(secretKey: string, path: string): Promise<unknown> {
   const resp = await fetch(`https://api.stripe.com${path}`, {
     method: "GET",

@@ -139,10 +139,11 @@ JSON fields:
 
 - Better Auth session lookup is the only supported login state for normal user flows.
 - API handlers enforce authorization; UI gating is secondary.
-- User entitlements come from user overrides, dev test personas, Stripe subscriptions, or Free fallback.
+- User entitlements come from manual overrides, Stripe subscriptions, or the Free fallback (`functions/api/utils/entitlements.ts`). The local Pro personas get Pro from seeded override rows (`db/seeds/local.ts`), never from their email: anyone can register those addresses on a deployed environment.
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
 - A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
+- Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status`. Reopens check it only before the write (TD-17).
 
 ## Audit And History
 

@@ -3,11 +3,6 @@ import { createDb, schema } from "../db";
 
 type Db = ReturnType<typeof createDb>;
 
-// A stripe_webhook_events row with no error records an event whose writes committed.
-// The row is written in the same D1 batch as those writes, never before them, so a
-// failed write, a lost error record, or a Worker stopped mid-delivery leaves the event
-// retryable instead of looking handled.
-
 export type StripeEventRecord = {
   id: string;
   type: string;
@@ -27,7 +22,6 @@ function eventRow(record: StripeEventRecord, error: string | null) {
   };
 }
 
-/** True when a previous delivery of the event committed its writes (primary-key read). */
 export async function isStripeEventHandled(db: Db, eventId: string): Promise<boolean> {
   const { stripe_webhook_events } = schema;
   const [row] = await db
@@ -38,7 +32,6 @@ export async function isStripeEventHandled(db: Db, eventId: string): Promise<boo
   return row !== undefined && row.error === null;
 }
 
-/** The statement marking the event handled. Batch it with the event's writes. */
 export function markStripeEventHandled(db: Db, record: StripeEventRecord) {
   const { stripe_webhook_events } = schema;
   return db
@@ -50,10 +43,6 @@ export function markStripeEventHandled(db: Db, record: StripeEventRecord) {
     });
 }
 
-/**
- * Records a processing error. It never overwrites a row a concurrent delivery already
- * marked handled. Callers treat it as best effort: without a row the retry still runs.
- */
 export async function recordStripeEventFailure(db: Db, record: StripeEventRecord, message: string) {
   const { stripe_webhook_events } = schema;
   await db

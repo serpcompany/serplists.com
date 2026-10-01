@@ -49,8 +49,6 @@ function paidEntitlements(plan: "pro" | "team", source: EntitlementSource): Enti
   };
 }
 
-// A Free override keeps source "user_override" so billing can tell that support set
-// the plan and refuse a self-serve checkout that the override would hide.
 function userOverrideEntitlements(plan: string): Entitlements {
   return plan === "pro" ? paidEntitlements("pro", "user_override") : { ...freeEntitlements(), source: "user_override" };
 }
@@ -61,16 +59,12 @@ function teamOverrideEntitlements(plan: string): Entitlements {
   return freeEntitlements();
 }
 
-export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
-  const stripe = getStripeBillingConfig(env);
-  const db = createDb(env);
-  const { entitlement_overrides } = schema;
-  const nowSeconds = Math.floor(Date.now() / 1000);
+type Db = ReturnType<typeof createDb>;
 
-  // Manual override takes priority (for comp/revoke / support).
-  let override: typeof entitlement_overrides.$inferSelect | undefined;
+async function findActiveManualOverride(db: Db, userId: string, nowSeconds: number) {
+  const { entitlement_overrides } = schema;
   try {
-    [override] = await db
+    const [override] = await db
       .select()
       .from(entitlement_overrides)
       .where(
@@ -80,16 +74,23 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
         )
       )
       .limit(1);
+    return override;
   } catch (error) {
     if (!isMissingOptionalBillingTableError(error)) {
       throw error;
     }
+    return undefined;
   }
+}
 
-  // Local Pro personas get Pro from seeded override rows (db/seeds/local.ts), never
-  // from their email: anyone can register those addresses on a deployed environment.
-  if (override) {
-    return userOverrideEntitlements(override.plan);
+export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
+  const stripe = getStripeBillingConfig(env);
+  const db = createDb(env);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+
+  const manualOverride = await findActiveManualOverride(db, userId, nowSeconds);
+  if (manualOverride) {
+    return userOverrideEntitlements(manualOverride.plan);
   }
 
   if (!stripe) {
