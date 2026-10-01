@@ -59,8 +59,10 @@ const humanizeAuditAction = (action: string): string => {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : action;
 };
 
-export const formatAuditAction = (labels: Readonly<Record<string, string>>, action: string): string =>
-  Object.prototype.hasOwnProperty.call(labels, action) ? labels[action] : humanizeAuditAction(action);
+export const formatAuditAction = (labels: Readonly<Record<string, string>>, action: string): string => {
+  const label = Object.prototype.hasOwnProperty.call(labels, action) ? labels[action] : undefined;
+  return label ?? humanizeAuditAction(action);
+};
 
 type AuditActor = {
   email?: string | null;

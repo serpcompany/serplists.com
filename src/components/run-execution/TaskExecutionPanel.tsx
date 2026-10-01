@@ -26,7 +26,7 @@ interface TaskExecutionPanelProps {
   onSelectTask: (itemId: string) => void;
   onToggleSubItem: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
   onToggleTask: (isCompleted: boolean) => void;
-  notesDraft?: string;
+  notesDraft?: string | undefined;
   onNotesDraftChange: (notes: string) => void;
   onSaveNotes: (notes: string) => Promise<boolean>;
   hasNext: boolean;

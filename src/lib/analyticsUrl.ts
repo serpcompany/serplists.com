@@ -29,7 +29,8 @@ export function isSensitiveAnalyticsLocation(pathname: string, search: string): 
 }
 
 const splitReturnPath = (returnPath: string): { pathname: string; search: string } => {
-  const [withoutHash] = returnPath.split('#');
+  const hashStart = returnPath.indexOf('#');
+  const withoutHash = hashStart === -1 ? returnPath : returnPath.slice(0, hashStart);
   const queryStart = withoutHash.indexOf('?');
   return queryStart === -1
     ? { pathname: withoutHash, search: '' }

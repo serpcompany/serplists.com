@@ -7,12 +7,12 @@ const EPOCH_MILLISECONDS = /^\d{10,}$/;
 const ECMA_FRACTION_DIGITS = 3;
 
 const buildDateTime = (
-  date: string,
-  time: string,
-  seconds: string | undefined,
-  fraction: string | undefined,
-  zone: string,
-): string => {
+  [, date, time, seconds, fraction]: RegExpExecArray,
+  zone: string | undefined,
+): string | null => {
+  if (!date || !time || !zone) {
+    return null;
+  }
   if (seconds === undefined) {
     return `${date}T${time}${zone}`;
   }
@@ -33,12 +33,12 @@ export const toEcmaDateTimeString = (value: string): string | null => {
 
   const zoned = ZONED_DATE_TIME.exec(trimmed);
   if (zoned) {
-    return buildDateTime(zoned[1], zoned[2], zoned[3], zoned[4], zoned[5]);
+    return buildDateTime(zoned, zoned[5]);
   }
 
   const zoneless = ZONELESS_DATE_TIME.exec(trimmed);
   if (zoneless) {
-    return buildDateTime(zoneless[1], zoneless[2], zoneless[3], zoneless[4], 'Z');
+    return buildDateTime(zoneless, 'Z');
   }
 
   return null;

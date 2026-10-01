@@ -150,9 +150,9 @@ export async function checkSessionWithRetry(
   const retryDelaysMs = options.retryDelaysMs ?? SESSION_RETRY_DELAYS_MS;
   const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let check: SessionCheck = { kind: 'unknown' };
-  for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
-    if (attempt > 0) {
-      await wait(retryDelaysMs[attempt - 1]);
+  for (const delayBeforeAttempt of [undefined, ...retryDelaysMs]) {
+    if (delayBeforeAttempt !== undefined) {
+      await wait(delayBeforeAttempt);
     }
     try {
       check = classifySessionResult(await getSession());

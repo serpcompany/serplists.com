@@ -20,7 +20,7 @@ export type TemplateMarkdownBody = {
 
 const longestLeadingBacktickRun = (value: string): number =>
   value.split("\n").reduce((longest, line) => {
-    const run = /^\s*(`*)/.exec(line)?.[1].length ?? 0;
+    const run = /^\s*(`*)/.exec(line)?.[1]?.length ?? 0;
     return Math.max(longest, run);
   }, 0);
 
@@ -38,55 +38,54 @@ export const escapeTemplateMarkdownDescription = (description: string): string =
 const unescapeDescriptionLine = (line: string): string =>
   ESCAPED_STRUCTURAL_LINE.test(line) ? line.slice(1) : line;
 
+const capturedText = (match: RegExpExecArray, group: number): string => match[group] ?? "";
+
 export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody => {
-  const lines = body.split("\n");
+  const lines = body.split("\n")[Symbol.iterator]();
   const descriptionLines: string[] = [];
   const sections: Array<{ title: string; items: Array<TemplateMarkdownItem & { lines: string[] }> }> = [];
-  let cursor = 0;
 
-  const currentSection = () => sections[sections.length - 1];
-  const currentItem = () => currentSection()?.items[currentSection().items.length - 1];
-  const inTemplateDescription = () => sections.length === 0;
-
-  while (cursor < lines.length) {
-    const line = lines[cursor];
+  for (let next = lines.next(); !next.done; next = lines.next()) {
+    const line = next.value;
+    const section = sections.at(-1);
     const opener = BLOCK_OPENER.exec(line);
 
     if (opener) {
-      const type = opener[2].trim();
-      const closer = new RegExp(`^\`{${opener[1].length}}\\s*$`);
+      const type = capturedText(opener, 2).trim();
+      const closer = new RegExp(`^\`{${capturedText(opener, 1).length}}\\s*$`);
       const blockLines: string[] = [];
-      cursor += 1;
-      while (cursor < lines.length && !closer.test(lines[cursor])) {
-        blockLines.push(lines[cursor]);
-        cursor += 1;
+      let closingFence: string | undefined;
+      for (let blockLine = lines.next(); !blockLine.done; blockLine = lines.next()) {
+        if (closer.test(blockLine.value)) {
+          closingFence = blockLine.value;
+          break;
+        }
+        blockLines.push(blockLine.value);
       }
-      if (cursor >= lines.length) {
+      if (closingFence === undefined) {
         throw new Error(`Content block "${type}" is missing a closing fence`);
       }
 
-      const item = currentItem();
+      const item = section?.items.at(-1);
       if (item) {
         item.blocks.push({ type, body: blockLines.join("\n").trim() });
-      } else if (inTemplateDescription()) {
-        descriptionLines.push(line, ...blockLines, lines[cursor]);
+      } else if (!section) {
+        descriptionLines.push(line, ...blockLines, closingFence);
       }
-      cursor += 1;
       continue;
     }
 
     const sectionHeading = SECTION_HEADING.exec(line);
-    const itemHeading = inTemplateDescription() ? null : ITEM_HEADING.exec(line);
+    const itemHeading = section ? ITEM_HEADING.exec(line) : null;
     if (sectionHeading) {
-      sections.push({ title: sectionHeading[1].trim(), items: [] });
-    } else if (itemHeading) {
-      currentSection().items.push({ title: itemHeading[1].trim(), description: "", blocks: [], lines: [] });
-    } else if (inTemplateDescription()) {
+      sections.push({ title: capturedText(sectionHeading, 1).trim(), items: [] });
+    } else if (section && itemHeading) {
+      section.items.push({ title: capturedText(itemHeading, 1).trim(), description: "", blocks: [], lines: [] });
+    } else if (!section) {
       descriptionLines.push(unescapeDescriptionLine(line));
     } else {
-      currentItem()?.lines.push(unescapeDescriptionLine(line));
+      section.items.at(-1)?.lines.push(unescapeDescriptionLine(line));
     }
-    cursor += 1;
   }
 
   return {

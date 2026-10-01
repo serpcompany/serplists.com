@@ -15,7 +15,7 @@ type UploadKind = {
   mimeTypes: readonly string[];
 };
 
-const typeStoredForUntypedFile = (kind: UploadKind): string => kind.mimeTypes[0];
+const typeStoredForUntypedFile = (kind: UploadKind): string | null => kind.mimeTypes[0] ?? null;
 
 const IMAGE_KINDS: readonly UploadKind[] = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },
@@ -108,7 +108,7 @@ export const resolveUploadContentType = (
   file: { name: string; type: string },
 ): string | null => {
   const { kinds } = UPLOAD_KINDS[bucket];
-  const type = file.type.split(';')[0].trim().toLowerCase();
+  const type = (file.type.split(';')[0] ?? '').trim().toLowerCase();
 
   if (!UNKNOWN_TYPES.has(type)) {
     return kinds.some((kind) => kind.mimeTypes.includes(type)) ? type : null;

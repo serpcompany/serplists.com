@@ -10,47 +10,49 @@ import {
   findCategoryByLegacySlug,
 } from '@/components/checklist-library/discovery-utils';
 
-const templates: ChecklistTemplate[] = [
-  {
-    id: 'alpha',
-    title: 'Alpha Launch',
-    description: 'Launch checklist for teams',
-    isPublic: true,
-    sections: [
-      { id: 'a-1', title: 'One', items: [{ id: 'a-1-1', title: 'Task' }] },
-      { id: 'a-2', title: 'Two', items: [{ id: 'a-2-1', title: 'Task' }] },
-    ],
-    userId: 'user-1',
-    createdAt: '2024-01-01T00:00:00Z',
-    updatedAt: '2024-02-01T00:00:00Z',
-    categories: ['Launch', 'Marketing'],
-    tags: ['launch', 'release'],
-  },
-  {
-    id: 'beta',
-    title: 'Beta Audit',
-    description: 'Audit checklist',
-    isPublic: true,
-    sections: [{ id: 'b-1', title: 'Only', items: [{ id: 'b-1-1', title: 'Task' }, { id: 'b-1-2', title: 'Task' }] }],
-    userId: 'user-2',
-    createdAt: '2024-03-01T00:00:00Z',
-    updatedAt: '2024-03-10T00:00:00Z',
-    categories: ['Security'],
-    tags: ['audit', 'security'],
-  },
-  {
-    id: 'gamma',
-    title: 'Gamma Planning',
-    description: 'Planning checklist',
-    isPublic: true,
-    sections: [{ id: 'g-1', title: 'Only', items: [{ id: 'g-1-1', title: 'Task' }] }],
-    userId: 'user-3',
-    createdAt: '2024-04-01T00:00:00Z',
-    updatedAt: '2024-04-05T00:00:00Z',
-    categories: ['Launch'],
-    tags: ['planning'],
-  },
-];
+const alpha: ChecklistTemplate = {
+  id: 'alpha',
+  title: 'Alpha Launch',
+  description: 'Launch checklist for teams',
+  isPublic: true,
+  sections: [
+    { id: 'a-1', title: 'One', items: [{ id: 'a-1-1', title: 'Task' }] },
+    { id: 'a-2', title: 'Two', items: [{ id: 'a-2-1', title: 'Task' }] },
+  ],
+  userId: 'user-1',
+  createdAt: '2024-01-01T00:00:00Z',
+  updatedAt: '2024-02-01T00:00:00Z',
+  categories: ['Launch', 'Marketing'],
+  tags: ['launch', 'release'],
+};
+
+const beta: ChecklistTemplate = {
+  id: 'beta',
+  title: 'Beta Audit',
+  description: 'Audit checklist',
+  isPublic: true,
+  sections: [{ id: 'b-1', title: 'Only', items: [{ id: 'b-1-1', title: 'Task' }, { id: 'b-1-2', title: 'Task' }] }],
+  userId: 'user-2',
+  createdAt: '2024-03-01T00:00:00Z',
+  updatedAt: '2024-03-10T00:00:00Z',
+  categories: ['Security'],
+  tags: ['audit', 'security'],
+};
+
+const gamma: ChecklistTemplate = {
+  id: 'gamma',
+  title: 'Gamma Planning',
+  description: 'Planning checklist',
+  isPublic: true,
+  sections: [{ id: 'g-1', title: 'Only', items: [{ id: 'g-1-1', title: 'Task' }] }],
+  userId: 'user-3',
+  createdAt: '2024-04-01T00:00:00Z',
+  updatedAt: '2024-04-05T00:00:00Z',
+  categories: ['Launch'],
+  tags: ['planning'],
+};
+
+const templates: ChecklistTemplate[] = [alpha, beta, gamma];
 
 describe('discovery-utils', () => {
   it('filters templates by search text and category slug, then sorts by recency', () => {
@@ -65,13 +67,13 @@ describe('discovery-utils', () => {
 
   it('sorts never-edited templates by creation date under recent', () => {
     const neverEdited: ChecklistTemplate = {
-      ...templates[0],
+      ...alpha,
       id: 'delta',
       title: 'Delta Fresh',
       createdAt: '2024-05-01T00:00:00Z',
       updatedAt: '',
     };
-    const input = [templates[0], neverEdited, templates[1], templates[2]];
+    const input = [alpha, neverEdited, beta, gamma];
 
     for (const ordering of [input, [...input].reverse()]) {
       const filtered = filterAndSortTemplates(ordering, { sortBy: 'recent' });
@@ -82,7 +84,7 @@ describe('discovery-utils', () => {
   it('lists a template published yesterday above the bundled starter templates under recent', () => {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const published: ChecklistTemplate = {
-      ...templates[0],
+      ...alpha,
       id: 'fresh',
       title: 'Zulu Fresh Template',
       createdAt: yesterday,
@@ -91,7 +93,7 @@ describe('discovery-utils', () => {
 
     const filtered = filterAndSortTemplates([...repoTemplates, published], { sortBy: 'recent' });
 
-    expect(filtered[0].id).toBe('fresh');
+    expect(filtered[0]?.id).toBe('fresh');
   });
 
   it('sorts by structural popularity when requested', () => {
@@ -126,9 +128,9 @@ describe('discovery-utils', () => {
 
   it('keeps categories in other scripts apart and drops names that have no slug', () => {
     const international = [
-      { ...templates[0], id: 'ja', categories: ['日本語'] },
-      { ...templates[1], id: 'ru', categories: ['Русский'] },
-      { ...templates[2], id: 'emoji', categories: ['🚀', '!!!'] },
+      { ...alpha, id: 'ja', categories: ['日本語'] },
+      { ...beta, id: 'ru', categories: ['Русский'] },
+      { ...gamma, id: 'emoji', categories: ['🚀', '!!!'] },
     ];
 
     const categories = buildDiscoveryCategories(international, ['!!!', '🚀', 'Русский', '日本語']);
@@ -145,8 +147,8 @@ describe('discovery-utils', () => {
 
   it('filters by a Unicode category slug in any normal form or case', () => {
     const international = [
-      { ...templates[0], id: 'ja', categories: ['日本語'] },
-      { ...templates[1], id: 'cafe', categories: ['Café'] },
+      { ...alpha, id: 'ja', categories: ['日本語'] },
+      { ...beta, id: 'cafe', categories: ['Café'] },
     ];
 
     expect(filterAndSortTemplates(international, { categorySlug: '日本語', sortBy: 'recent' }).map((t) => t.id)).toEqual(['ja']);

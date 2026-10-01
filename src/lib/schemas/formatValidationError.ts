@@ -21,15 +21,19 @@ const yamlExceptionSchema = z.object({
 
 const describePath = (path: (string | number)[]): string => {
   const parts: string[] = [];
-  for (let index = 0; index < path.length; index += 1) {
-    const segment = path[index];
+  let numberedByTheFieldBefore = false;
+  for (const [index, segment] of path.entries()) {
+    if (numberedByTheFieldBefore) {
+      numberedByTheFieldBefore = false;
+      continue;
+    }
     const next = path[index + 1];
     if (typeof segment === "number") {
       const isTemplateInArrayFile = index === 0;
       parts.push(isTemplateInArrayFile ? `Template ${segment + 1}` : `#${segment + 1}`);
     } else if (typeof next === "number") {
       parts.push(`${ARRAY_FIELD_LABELS[segment] ?? segment} ${next + 1}`);
-      index += 1;
+      numberedByTheFieldBefore = true;
     } else {
       parts.push(segment);
     }

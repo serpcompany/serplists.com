@@ -29,7 +29,8 @@ export const storedSectionsSchema = z.array(sectionSchema);
 export function findStoredSectionsIssue(sections: unknown): string | null {
   const result = storedSectionsSchema.safeParse(sections);
   if (result.success) return null;
-  const issue = result.error.issues[0];
+  const [issue] = result.error.issues;
+  if (!issue) return "sections: Invalid input";
   const path = issue.path.map((part) => (typeof part === "number" ? `[${part}]` : `.${part}`)).join("");
   return `sections${path}: ${issue.message}`;
 }
