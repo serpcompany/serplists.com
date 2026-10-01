@@ -64,9 +64,11 @@ of rejecting the whole file.
 
 `GET /api/templates/backup` exports the active context's own templates (Personal or
 the Organization). "Include public community templates" adds, in the browser, the
-public templates from the loaded catalog that the context does not own (never the
+public templates from the catalog that the context does not own (never the
 bundled library), and recomputes the manifest for the whole pack with the same
 `buildPortablePackManifest` the API uses (`src/lib/schemas/portableTemplatePack.ts`).
+The page fetches the catalog only for such an export, never when it opens, and reuses a
+copy the library pages loaded in the last 5 minutes (`usePublicCatalogLoader`).
 Catalog rows carry no Organization id, so a catalog template counts as owned when its
 id is in the page's template list or its slug is in the pack the server returned
 (slugs are unique). The server's pack decides, so a list that failed to load or is

@@ -98,6 +98,18 @@ describe('selectImportFile', () => {
     expect(handlers.parse).toHaveBeenCalledWith(expect.objectContaining({ name: 'a.json' }));
   });
 
+  it("reads the chosen file and clears the input before its first await, since React clears the change event's currentTarget once the handler returns", () => {
+    const handlers = handlersFor(async () => parsed);
+    const input = inputWith(fileOf('a.json'));
+
+    const selecting = selectImportFile(input, handlers);
+
+    expect(input.value).toBe('');
+    expect(handlers.resetPreview).toHaveBeenCalledTimes(1);
+    expect(handlers.parse).toHaveBeenCalledWith(expect.objectContaining({ name: 'a.json' }));
+    return selecting;
+  });
+
   it('keeps the current preview when the file dialog is dismissed', async () => {
     const handlers = handlersFor(async () => parsed);
 

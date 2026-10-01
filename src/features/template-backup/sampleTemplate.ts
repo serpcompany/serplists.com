@@ -1,7 +1,5 @@
 import type { ChecklistTemplate } from "@/types/checklist";
 
-// The Template in the sample portable pack Import Templates offers for download ("Download
-// sample portable pack"), so a user can see the format and try an import.
 export const buildSampleTemplate = (): ChecklistTemplate => ({
   id: "sample-template-001",
   title: "Moving Checklist",
