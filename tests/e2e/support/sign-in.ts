@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page } from '@playwright/test';
 
 import { API_BASE_URL, trackApiRequests } from './api-requests';
 
@@ -32,4 +32,8 @@ export async function loginAs(page: Page, user: TestUser) {
 
 export async function loginAsAdmin(page: Page) {
   await loginAs(page, 'admin');
+}
+
+export async function endSessionSilently(context: BrowserContext) {
+  await context.clearCookies();
 }

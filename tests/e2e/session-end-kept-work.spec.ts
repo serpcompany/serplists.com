@@ -1,26 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { endSessionSilently, fillSignInForm, loginAsAdmin } from './support/sign-in';
 
-// A session that ends in the background (a sign-out in another tab, an expired or revoked
-// session) unmounts every signed-in page and sends the tab to /login without a question. Unsaved
-// work is kept on the tab first and offered back after sign-in (src/lib/navigation/leaveGuard.ts).
-// Tab 1 is never reloaded here.
-
-async function signIn(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible({ timeout: 30_000 });
-  // Let the landing page's requests finish before the test calls the API, which the local
-  // dev proxy can drop in a burst (see support/api-requests.ts).
-  await apiRequests.settled();
-}
-
-// On /login, where RequireAuth sent the tab: signing in returns to the page it was on.
-async function signInAgain(page: Page) {
+async function signInAgainAfterTheSessionEnded(page: Page) {
   await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
   await expect(page.getByText('Your session ended. Sign in again.')).toBeVisible();
   await fillSignInForm(page, 'admin');
@@ -41,9 +24,15 @@ async function callApi<T>(page: Page, path: string, method: string, body?: unkno
   return apiJson<T>(page, path, { method, body });
 }
 
+async function startSigningOutThenCancelAtThePrompt(page: Page) {
+  page.once('dialog', (dialog) => void dialog.dismiss());
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+}
+
 test('edits to an existing template are offered back after another tab signs out', async ({ page }) => {
   test.setTimeout(120_000);
-  await signIn(page);
+  await loginAsAdmin(page);
   const title = `Kept edits QA ${Date.now()}`;
   const created = await callApi<{ id: string }>(page, '/templates', 'POST', {
     title,
@@ -57,7 +46,7 @@ test('edits to an existing template are offered back after another tab signs out
   await titleField.fill(`${title} (edited)`);
 
   await signOutInAnotherTab(page);
-  await signInAgain(page);
+  await signInAgainAfterTheSessionEnded(page);
 
   await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${created.id}/edit`), { timeout: 30_000 });
   await expect(titleField).toHaveValue(title);
@@ -70,7 +59,6 @@ test('edits to an existing template are offered back after another tab signs out
   const stored = await callApi<{ title: string }>(page, `/templates/${created.id}`, 'GET');
   expect(stored.title).toBe(`${title} (edited)`);
 
-  // Saved: the draft is not offered again.
   await page.goto(`/dashboard/templates/${created.id}/edit/`);
   await expect(titleField).toHaveValue(`${title} (edited)`);
   await expect(page.getByText('Unsaved template draft')).toHaveCount(0);
@@ -78,11 +66,9 @@ test('edits to an existing template are offered back after another tab signs out
   await callApi(page, `/templates/${created.id}`, 'DELETE');
 });
 
-// The kept edits were made on the version the editor had loaded. Restored, they save against
-// that version, so a save made elsewhere meanwhile ends in the edit conflict, not an overwrite.
-test('restored edits to a template saved elsewhere meanwhile get the edit conflict', async ({ page }) => {
+test('restored edits to a template saved elsewhere meanwhile get the edit conflict instead of overwriting it', async ({ page }) => {
   test.setTimeout(120_000);
-  await signIn(page);
+  await loginAsAdmin(page);
   const title = `Kept conflict QA ${Date.now()}`;
   const created = await callApi<{ id: string }>(page, '/templates', 'POST', {
     title,
@@ -96,14 +82,13 @@ test('restored edits to a template saved elsewhere meanwhile get the edit confli
   await expect(titleField).toHaveValue(title);
   await titleField.fill(`${title} (draft)`);
 
-  // Another tab saves the template while these edits are unsaved: its version moves on.
   await callApi(page, `/templates/${created.id}`, 'PUT', {
     title: `${title} (saved elsewhere)`,
     expected_version: loaded.version,
   });
 
   await signOutInAnotherTab(page);
-  await signInAgain(page);
+  await signInAgainAfterTheSessionEnded(page);
 
   await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${created.id}/edit`), { timeout: 30_000 });
   await expect(titleField).toHaveValue(`${title} (saved elsewhere)`);
@@ -124,9 +109,9 @@ test('restored edits to a template saved elsewhere meanwhile get the edit confli
   await callApi(page, `/templates/${created.id}`, 'DELETE');
 });
 
-test('unsaved task notes are offered back after another tab signs out', async ({ page }) => {
+test('unsaved task notes survive a cancelled sign-out and are offered back after another tab signs out', async ({ page }) => {
   test.setTimeout(120_000);
-  await signIn(page);
+  await loginAsAdmin(page);
   const created = await callApi<{ id: string }>(page, '/checklists', 'POST', {
     title: `Kept notes QA ${Date.now()}`,
     sections: [{ id: 'kept', title: 'Section', items: [{ id: 'kept-a', title: 'Task A' }] }],
@@ -137,15 +122,12 @@ test('unsaved task notes are offered back after another tab signs out', async ({
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Deployed build 42');
 
-  // Signing out in this tab asks first.
-  page.once('dialog', (dialog) => void dialog.dismiss());
-  await page.getByRole('button', { name: 'Account menu' }).click();
-  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await startSigningOutThenCancelAtThePrompt(page);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await expect(notes).toHaveValue('Deployed build 42');
 
   await signOutInAnotherTab(page);
-  await signInAgain(page);
+  await signInAgainAfterTheSessionEnded(page);
 
   await expect(page).toHaveURL(new RegExp(`/dashboard/runs/${created.id}`), { timeout: 30_000 });
   await expect(notes).toHaveValue('Deployed build 42');
@@ -155,16 +137,14 @@ test('unsaved task notes are offered back after another tab signs out', async ({
   await callApi(page, `/checklists/${created.id}`, 'DELETE');
 });
 
-// A confirmed sign-out returns the tab to Personal, so the new-template draft kept in an
-// Organization is offered from Personal with a switch back to its Organization.
-test("a new template's draft kept in an Organization is offered after signing in again", async ({ page, context }) => {
+test("a new template's draft kept in an Organization is offered from Personal after signing in again, with a switch back to it", async ({ page, context }) => {
   test.setTimeout(120_000);
-  await signIn(page);
+  await loginAsAdmin(page);
   const organization = await callApi<{ id: string; name: string }>(page, '/teams', 'POST', {
     name: `Kept draft Org ${Date.now()}`,
   });
   await page.evaluate((teamId) => window.localStorage.setItem('serplists.activeWorkspaceId', teamId), organization.id);
-  const editorRequests = trackApiRequests(page, API_BASE_URL);
+  const organizationEditorLoads = trackApiRequests(page, API_BASE_URL);
   await page.goto('/dashboard/templates/new/');
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText(organization.name, {
     timeout: 30_000,
@@ -172,14 +152,11 @@ test("a new template's draft kept in an Organization is offered after signing in
   const title = `Org kept draft QA ${Date.now()}`;
   const titleField = page.getByPlaceholder('Enter template name...');
   await titleField.fill(title);
-  // The editor still loads the Organization's plan and Templates after the switcher shows
-  // it. Let it finish, so Save is the request that meets the ended session.
-  await editorRequests.settled();
+  await organizationEditorLoads.settled();
 
-  // The session ends on the server; Save gets a 401 and the tab signs out.
-  await context.clearCookies();
+  await endSessionSilently(context);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await signInAgain(page);
+  await signInAgainAfterTheSessionEnded(page);
 
   await expect(page).toHaveURL(/\/dashboard\/templates\/new/, { timeout: 30_000 });
   await expect(page.getByRole('button', { name: 'Switch context' }).first()).toContainText('Personal');
