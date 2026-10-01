@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { firstOf, present, taskIn } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -7,6 +7,8 @@ import { getSessionUserId } from '@functions/api/utils/session';
 import { personalTemplateRow, startedJustNow } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
+import { objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn, jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
 const progressBody = z.object({ progress: z.number() }).passthrough();
 
@@ -74,7 +76,7 @@ describe('Checklists Handlers', () => {
     );
 
     const response = await revalidate();
-    const data = await response.json();
+    const data: unknown = await response.json();
 
     expect(response.status).toBe(200);
     expect(data).toEqual(expect.objectContaining({
@@ -89,7 +91,7 @@ describe('Checklists Handlers', () => {
       completed_at: null,
       template_version: 3,
     }));
-    expect(JSON.parse(update.items)[0].items).toEqual([
+    expect(firstOf(storedSectionsIn(update.items)).items).toEqual([
       expect.objectContaining({ id: 'item-1', title: 'Renamed', isCompleted: true, notes: 'Preserve' }),
       expect.objectContaining({ id: 'item-2', isCompleted: false }),
     ]);
@@ -113,8 +115,8 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(expect.objectContaining({ progress: 100 }));
     const update = savedUpdate();
-    expect(JSON.parse(update.items)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
-    expect(JSON.parse(update.retired_items)).toEqual([]);
+    expect(taskIn(storedSectionsIn(update.items), 1, 1)).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(jsonRecordsIn(update.retired_items)).toEqual([]);
   });
 
   it('names the work a revalidate retired in its Changelog event', async () => {
@@ -130,16 +132,17 @@ describe('Checklists Handlers', () => {
     const response = await revalidate();
 
     expect(response.status).toBe(200);
-    const auditEvent = dbMocks.insertChain.values.mock.calls
-      .map(([values]) => values)
-      .find((values) => values.action === 'checklist_run.revalidated');
-    expect(JSON.parse(auditEvent.metadata_json)).toEqual({
+    const auditEvent = present(
+      dbMocks.insertChain.values.mock.calls.map(([values]) => values).find((values) => values.action === 'checklist_run.revalidated'),
+      'the checklist_run.revalidated event',
+    );
+    expect(jsonRecordIn(auditEvent.metadata_json)).toEqual({
       templateId: 'template-1',
       templateVersion: 2,
       retired: [{ kind: 'item', id: 'item-dns', title: 'Check DNS' }],
     });
-    expect(JSON.parse(savedUpdate().retired_items)).toEqual([
-      expect.objectContaining({ item: expect.objectContaining({ id: 'item-dns', notes: 'Registrar login is in vault X' }) }),
+    expect(jsonRecordsIn(savedUpdate().retired_items)).toEqual([
+      objectContaining({ item: objectContaining({ id: 'item-dns', notes: 'Registrar login is in vault X' }) }),
     ]);
   });
 
@@ -178,6 +181,6 @@ describe('Checklists Handlers', () => {
     expect(data.progress).toBeLessThan(100);
     const update = savedUpdate();
     expect(update.status).toBe('in_progress');
-    expect(JSON.parse(update.items)[0].items[0]).toEqual(expect.objectContaining({ id: 'item-1', isCompleted: false }));
+    expect(taskIn(storedSectionsIn(update.items), 0, 0)).toEqual(expect.objectContaining({ id: 'item-1', isCompleted: false }));
   });
 });
