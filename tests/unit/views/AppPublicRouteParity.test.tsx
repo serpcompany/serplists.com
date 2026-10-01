@@ -1,10 +1,9 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
+import { appShell } from '../../support/appShellInPlace';
 import React from 'react';
 import { existsSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-
-import { navigation } from '../../support/nextNavigation';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
@@ -16,78 +15,6 @@ vi.mock('@/hooks/useTemplateLibrary', () => ({
   useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
 }));
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-  useAuth: () => ({
-    logout: vi.fn().mockResolvedValue({ ok: true }),
-    user: null,
-  }),
-}));
-
-vi.mock('@/contexts/TemplatesContext', () => ({
-  TemplatesProvider: ({ children }: { children: React.ReactNode }) => children,
-  useTemplates: () => ({
-    templates: [],
-    templatesLoading: false,
-  }),
-}));
-
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
-  useWorkspace: () => ({
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
-
-vi.mock('@/components/ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/components/DevLoginBar', () => ({
-  DevLoginBar: () => null,
-}));
-
-vi.mock('@/components/ui/sonner', () => ({
-  Toaster: () => null,
-}));
-
-vi.mock('@/components/ui/tooltip', () => ({
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/components/RequireAuth', () => ({
-  default: ({ children }: { children: React.ReactNode }) => children,
-}));
-
-vi.mock('@/lib/analytics', () => ({
-  analytics: {
-    getEvents: vi.fn(() => []),
-    setEnabled: vi.fn(),
-    track: vi.fn(),
-    trackError: vi.fn(),
-    trackPageView: vi.fn(),
-    trackTemplateComplete: vi.fn(),
-    trackTemplateRun: vi.fn(),
-    trackTemplateView: vi.fn(),
-    trackUser: vi.fn(),
-  },
-}));
-
 import SiteLayout from '@/app/(site)/layout';
 import CategoryPage from '@/app/(site)/categories/[categorySlug]/page';
 import CategoriesPage from '@/app/(site)/categories/page';
@@ -95,6 +22,12 @@ import HomePage from '@/app/(site)/page';
 import TemplatesPage from '@/app/(site)/templates/page';
 import NotFoundPage from '@/app/not-found';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import { inThePersonalWorkspace } from '../../fixtures/workspaces';
+
+appShell.auth = { logout: vi.fn().mockResolvedValue({ ok: true }), user: null };
+appShell.templates = { templates: [], templatesLoading: false };
+appShell.workspace = inThePersonalWorkspace();
 
 const discoveryTemplate: ChecklistTemplate = {
   id: 'website-launch',

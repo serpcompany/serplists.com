@@ -1,10 +1,9 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
-import { navigation } from '../../support/nextNavigation';
 
 const logout = vi.fn().mockResolvedValue({ ok: true });
 
@@ -17,27 +16,12 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 const workspaceState = vi.hoisted(() => ({ canEditTemplates: true }));
 
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    canEditTemplates: workspaceState.canEditTemplates,
-    activeWorkspace: {
-      id: 'personal',
-      name: 'Personal',
-      role: 'owner',
-      type: 'personal',
-    },
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    workspaces: [
-      {
-        id: 'personal',
-        name: 'Personal',
-        role: 'owner',
-        type: 'personal',
-      },
-    ],
-  }),
-}));
+vi.mock('@/contexts/WorkspaceContext', async () => {
+  const { inThePersonalWorkspace } = await import('../../fixtures/workspaces');
+  return {
+    useWorkspace: () => inThePersonalWorkspace({ canEditTemplates: workspaceState.canEditTemplates }),
+  };
+});
 
 const renderLayout = (location: string, child: string) => {
   navigation.reset(location);

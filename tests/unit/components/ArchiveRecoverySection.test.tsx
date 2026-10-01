@@ -40,14 +40,7 @@ afterEach(() => {
   workspace.scope = 'personal';
 });
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    getArchivedTemplates: vi.fn().mockResolvedValue([]),
-    getArchivedChecklists: vi.fn().mockResolvedValue([]),
-    restoreChecklist: vi.fn(),
-    restoreTemplate: vi.fn(),
-  },
-}));
+vi.mock('@/lib/api', async () => (await import('../../support/emptyArchiveApi')).emptyArchiveApi());
 
 vi.mock('sonner', () => ({
   toast: {

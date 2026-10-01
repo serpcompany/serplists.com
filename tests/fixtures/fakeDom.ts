@@ -156,6 +156,9 @@ export const findAll = (node: FakeNode, match: (node: FakeNode) => boolean): Fak
   ...node.childNodes.flatMap((child) => findAll(child, match)),
 ];
 
+export const findAllByRole = (node: FakeNode, role: string): FakeNode[] =>
+  findAll(node, (entry) => entry instanceof FakeElement && entry.getAttribute('role') === role);
+
 export const findByText = (container: FakeNode, nodeName: string, label: string): FakeNode => {
   const [node] = findAll(container, (entry) => entry.nodeName === nodeName && entry.textContent === label);
   if (!node) throw new Error(`No ${nodeName} labelled ${label}`);

@@ -57,3 +57,15 @@ export const dropdownMenuRenderedOpen = {
   DropdownMenuLabel: ({ children }: ChildrenProps) => <div>{children}</div>,
   DropdownMenuSeparator: () => <hr />,
 };
+
+export const dropdownMenuItemsAsButtons = {
+  DropdownMenu: PassThrough,
+  DropdownMenuContent: PassThrough,
+  DropdownMenuSeparator: () => null,
+  DropdownMenuTrigger: PassThrough,
+  DropdownMenuItem: ({ children, disabled, onClick }: ButtonProps) => (
+    <button type="button" role="menuitem" aria-disabled={disabled ? 'true' : undefined} onClick={onClick}>
+      {children}
+    </button>
+  ),
+};

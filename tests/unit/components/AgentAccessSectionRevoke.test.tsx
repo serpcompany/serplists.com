@@ -1,5 +1,5 @@
+import { openAndConfirm } from '../../support/confirmDialogInPlace';
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
@@ -10,7 +10,7 @@ import { ApiError } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 
-import { click, createFakeContainer, findAll, findByText } from '../../fixtures/fakeDom';
+import { createFakeContainer, findAll, findByText } from '../../fixtures/fakeDom';
 import { createTestQueryClient } from '../../fixtures/queryClient';
 
 const apiMocks = vi.hoisted(() => ({
@@ -26,8 +26,6 @@ vi.mock('@/lib/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api')>()),
   api: apiMocks,
 }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/ui/alert-dialog', async () => (await import('../../support/overlaysInPlace')).alertDialogInPlace);
 
 const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 
@@ -45,7 +43,6 @@ const revokedKey: AgentKey = { ...activeKey, revokedAt: '2026-09-19T02:00:00.000
 
 const fakeDom = aFakeDomForEachTest();
 
-let root: Root | null = null;
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -62,15 +59,11 @@ async function openSectionWithKeysLoadedMomentsAgo(keys: AgentKey[]) {
     mcpEndpoint: 'https://staging.serplists.com/api/mcp',
     hostMismatch: false,
   });
-  const container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as Element));
-  await act(async () => {
-    root?.render(
-      <QueryClientProvider client={queryClient}>
-        <AgentAccessSection />
-      </QueryClientProvider>,
-    );
-  });
+  const { container } = await fakeDom.render(
+    <QueryClientProvider client={queryClient}>
+      <AgentAccessSection />
+    </QueryClientProvider>,
+  );
   await settle();
   return container;
 }
@@ -84,12 +77,7 @@ const buttonsLabelled = (container: ReturnType<typeof createFakeContainer>, labe
   findAll(container, (node) => node.nodeName === 'BUTTON' && node.textContent === label);
 
 async function revokeAndConfirm(container: ReturnType<typeof createFakeContainer>) {
-  await act(async () => {
-    click(container, findByText(container, 'BUTTON', 'Revoke'));
-  });
-  await act(async () => {
-    click(container, findByText(container, 'BUTTON', 'Revoke key'));
-  });
+  await openAndConfirm(container, 'Revoke', 'Revoke key');
   await settle();
 }
 

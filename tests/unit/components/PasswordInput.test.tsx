@@ -1,23 +1,17 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { PasswordInput } from '@/components/auth/PasswordInput';
-import { click, createFakeContainer, FakeElement, findAll } from '../../fixtures/fakeDom';
+import { click, FakeElement, findAll } from '../../fixtures/fakeDom';
 
-let root: Root | null = null;
 const fakeDom = aFakeDomForEachTest();
 const mount = async () => {
-  const container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as HTMLElement));
-  await act(async () =>
-    root?.render(
-      <>
-        <PasswordInput id="password" />
-        <PasswordInput id="confirmPassword" toggleLabel="confirm password" />
-      </>,
-    ),
+  const { container } = await fakeDom.render(
+    <>
+      <PasswordInput id="password" />
+      <PasswordInput id="confirmPassword" toggleLabel="confirm password" />
+    </>,
   );
   const typePropertyOf = (id: string) =>
     (

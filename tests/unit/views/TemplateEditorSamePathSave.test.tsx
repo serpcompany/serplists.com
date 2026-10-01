@@ -1,6 +1,5 @@
-import '../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
@@ -9,9 +8,8 @@ import type { TemplateEditorSaveResult } from '@/features/template-editor/useTem
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import TemplateEditor from '@/views/TemplateEditor';
 
-import { click, createFakeContainer, findByText } from '../../fixtures/fakeDom';
+import { click, findByText } from '../../fixtures/fakeDom';
 import { deferred } from '../../support/deferred';
-import { navigation, RoutedPages } from '../../support/nextNavigation';
 
 const mocks = vi.hoisted(() => ({
   save: vi.fn(),
@@ -100,7 +98,6 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const fakeDom = aFakeDomForEachTest(navigation.window);
 
-let root: Root | null = null;
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -122,17 +119,12 @@ async function renderNewTemplateEditor() {
   navigation.reset('/dashboard/templates/new/', {
     routes: ['/dashboard/templates/new', '/dashboard/templates', '/dashboard/runs'],
   });
-  const container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as Element));
-  await act(async () => {
-    root?.render(
-      <>
-        <SidebarMountedAcrossPages />
-        <RoutedPages pages={{ '/dashboard/templates/new': <TemplateEditor /> }} />
-      </>,
-    );
-  });
-  return { container };
+  return fakeDom.render(
+    <>
+      <SidebarMountedAcrossPages />
+      <RoutedPages pages={{ '/dashboard/templates/new': <TemplateEditor /> }} />
+    </>,
+  );
 }
 
 describe('TemplateEditor create after a same-path navigation', () => {

@@ -1,6 +1,5 @@
-import '../../support/mockedNextNavigation';
-import React, { act, type ReactNode } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import React, { act } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
@@ -9,12 +8,10 @@ import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 import {
   click,
-  createFakeContainer,
   FakeElement,
   findAll,
   type FakeNode,
 } from '../../fixtures/fakeDom';
-import { navigation, RoutedPages } from '../../support/nextNavigation';
 
 const { createTemplate, template } = vi.hoisted(() => ({
   createTemplate: vi.fn(),
@@ -70,28 +67,7 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
     }),
   };
 });
-vi.mock('@/components/ui/dropdown-menu', () => {
-  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
-  return {
-    DropdownMenu: Pass,
-    DropdownMenuContent: Pass,
-    DropdownMenuSeparator: () => null,
-    DropdownMenuTrigger: Pass,
-    DropdownMenuItem: ({
-      children,
-      disabled,
-      onClick,
-    }: {
-      children?: ReactNode;
-      disabled?: boolean;
-      onClick?: () => void;
-    }) => (
-      <button type="button" role="menuitem" aria-disabled={disabled ? 'true' : undefined} onClick={onClick}>
-        {children}
-      </button>
-    ),
-  };
-});
+vi.mock('@/components/ui/dropdown-menu', async () => (await import('../../support/overlaysInPlace')).dropdownMenuItemsAsButtons);
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({ checked }: { checked?: boolean }) => <button type="button" role="switch" aria-checked={Boolean(checked)} />,
 }));
@@ -104,19 +80,14 @@ vi.mock('@/lib/access-flow', () => ({
 
 const fakeDom = aFakeDomForEachTest(navigation.window);
 
-let root: Root | null = null;
 beforeEach(() => {
   vi.clearAllMocks();
   template.current = buildV0DemoPrivateTemplate();
 });
 
 async function renderTemplateDetail() {
-  const container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as Element));
   navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
-  await act(async () => {
-    root?.render(<RoutedPages pages={{ '/dashboard/templates/[id]': <TemplateDetail /> }} />);
-  });
+  const { container } = await fakeDom.render(<RoutedPages pages={{ '/dashboard/templates/[id]': <TemplateDetail /> }} />);
   return container;
 }
 

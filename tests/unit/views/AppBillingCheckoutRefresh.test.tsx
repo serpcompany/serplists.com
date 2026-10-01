@@ -1,4 +1,5 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
+import { appShell } from '../../support/appShellInPlace';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -6,7 +7,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { Providers } from '@/app/providers';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 const registered = vi.hoisted(() => ({ clients: [] as unknown[] }));
 
@@ -21,28 +21,12 @@ vi.mock('@/lib/access-flow', async (importOriginal) => {
   };
 });
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
-  useAuth: () => ({ isAuthenticated: false, isLoading: false, user: null }),
-}));
-vi.mock('@/contexts/TemplatesContext', () => ({
-  TemplatesProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  WorkspaceProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock('@/components/ErrorBoundary', () => ({
-  ErrorBoundary: ({ children }: { children: React.ReactNode }) => children,
-}));
-vi.mock('@/components/DevLoginBar', () => ({ DevLoginBar: () => null }));
-vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
-vi.mock('@/components/ui/tooltip', () => ({
-  TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
 vi.mock('@/lib/theme', () => ({
   applyStoredTheme: vi.fn(),
   subscribeToThemeChanges: () => () => undefined,
 }));
+
+appShell.auth = { isAuthenticated: false, isLoading: false, user: null };
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
