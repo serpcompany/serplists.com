@@ -15,35 +15,9 @@ import {
 } from "@/features/template-editor/templateDraftStore";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-const createStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> & { items: Map<string, string> } => {
-  const items = new Map<string, string>();
-  return {
-    items,
-    get length() {
-      return items.size;
-    },
-    key: (index) => Array.from(items.keys())[index] ?? null,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
+import { memoryStorage as createStorage, storageThatThrows } from "../../../fixtures/memoryStorage";
 
-const throwingStorage: TemplateDraftStorage = {
-  getItem: () => {
-    throw new Error("SecurityError");
-  },
-  setItem: () => {
-    throw new Error("QuotaExceededError");
-  },
-  removeItem: () => {
-    throw new Error("SecurityError");
-  },
-};
+const throwingStorage: TemplateDraftStorage = storageThatThrows;
 
 const draftValues = buildTemplateEditorFormValues({
   title: "Launch checklist",

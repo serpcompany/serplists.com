@@ -1,65 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import "../../../support/templateEditorAccessHook";
+
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
-
-vi.mock("react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react")>()),
-  ...(await import("../../../support/hookStateSlots")).hooksKeptBetweenRenders,
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: { billingEnabled: true, limits: { maxTemplates: 1 } } }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => undefined) }),
-}));
-vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
-vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
-vi.mock("@/contexts/WorkspaceContext", () => ({
-  useWorkspace: () => ({
-    activeTeamId: null,
-    getPermissions: () => ({ canEditTemplates: true }),
-    isTeamWorkspace: false,
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    teams: [],
-  }),
-}));
-vi.mock("@/contexts/TemplatesContext", () => ({
-  useTemplateLists: () => ({ allTemplates: [], templatesLoading: false }),
-}));
-vi.mock("@/lib/api", () => ({ api: { getBillingStatus: vi.fn() } }));
-vi.mock("@/lib/access-flow", () => ({
-  navigateToLoginWithReturnPath: vi.fn(),
-  startBillingCheckout: vi.fn(async () => true),
-}));
 
 import {
   readTemplateDraft,
   saveTemplateDraft,
-  type TemplateDraftStorage,
 } from "@/features/template-editor/templateDraftStore";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { memoryStorage } from "../../../fixtures/memoryStorage";
 import { forgetKeptState, renderKeepingState, unmountEffects } from "../../../support/hookStateSlots";
 import { navigation } from "../../../support/nextNavigation";
 
 const owner = { userId: "user-1", teamId: null };
-
-const createStubSessionStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> => {
-  const items = new Map<string, string>();
-  return {
-    get length() {
-      return items.size;
-    },
-    key: (index) => Array.from(items.keys())[index] ?? null,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
 
 const templateValues = (title: string) =>
   buildTemplateEditorFormValues({
@@ -98,7 +53,7 @@ const editorOnceItReadTheKeptDraft = () => {
   return renderedAccess();
 };
 
-let storage: ReturnType<typeof createStubSessionStorage>;
+let storage: ReturnType<typeof memoryStorage>;
 
 beforeEach(() => {
   navigation.reset("/dashboard/templates/new");
@@ -106,7 +61,7 @@ beforeEach(() => {
   formValues = formB;
   options.allowLeave.mockClear();
   options.guardLeave.mockClear();
-  storage = createStubSessionStorage();
+  storage = memoryStorage();
   vi.stubGlobal("window", Object.assign(new EventTarget(), { sessionStorage: storage }));
 });
 

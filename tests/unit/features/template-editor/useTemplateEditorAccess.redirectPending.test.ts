@@ -2,36 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-const fake = vi.hoisted(() => ({
-  invalidateQueries: null as null | ((filters: unknown) => Promise<void>),
-  startBillingCheckout: null as null | ((billingEnabled: boolean) => Promise<boolean>),
-}));
+import { accessHook as fake } from "../../../support/templateEditorAccessHook";
 
-vi.mock("react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react")>()),
-  ...(await import("../../../support/hookStateSlots")).hooksKeptBetweenRenders,
-}));
-
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: { billingEnabled: true, limits: { maxTemplates: 1 } } }),
-  useQueryClient: () => ({ invalidateQueries: fake.invalidateQueries }),
-}));
-vi.mock("next/navigation", async () => (await import("../../../support/nextNavigation")).nextNavigationMock);
-vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
-vi.mock("@/contexts/WorkspaceContext", () => ({
-  useWorkspace: () => ({
-    activeTeamId: null,
-    getPermissions: () => ({ canEditTemplates: true }),
-    isTeamWorkspace: false,
-    isWorkspaceLoading: false,
-    selectWorkspace: vi.fn(),
-    teams: [],
-  }),
-}));
-vi.mock("@/contexts/TemplatesContext", () => ({
-  useTemplateLists: () => ({ allTemplates: [{ id: "t1", userId: "user-1", teamId: null }], templatesLoading: false }),
-}));
-vi.mock("@/lib/api", () => ({ api: { getBillingStatus: vi.fn() } }));
 vi.mock("@/features/template-editor/templateDraftStore", () => ({
   clearTemplateDraft: vi.fn(),
   getTemplateDraftKey: () => "serplists:template-draft:user-1:personal",
@@ -40,15 +12,12 @@ vi.mock("@/features/template-editor/templateDraftStore", () => ({
   saveTemplateDraft: () => true,
   settleTemplateDraftAfterSave: vi.fn(),
 }));
-vi.mock("@/lib/access-flow", () => ({
-  navigateToLoginWithReturnPath: vi.fn(),
-  startBillingCheckout: (billingEnabled: boolean) => fake.startBillingCheckout!(billingEnabled),
-}));
-
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
 import { forgetKeptState, renderKeepingState, unmountEffects } from "../../../support/hookStateSlots";
 import { navigation } from "../../../support/nextNavigation";
 import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
+
+fake.allTemplates = [{ id: "t1", userId: "user-1", teamId: null }];
 
 const LEAVING_FOR_STRIPE = true;
 const CHECKOUT_NOT_STARTED = false;

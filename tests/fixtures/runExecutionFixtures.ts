@@ -66,3 +66,20 @@ export const withEveryTaskAndSubTaskTicked = (run: ChecklistRun): ChecklistRun =
     })),
   })),
 });
+
+export const runWithNotes = (notes: Record<string, string | undefined>): ChecklistRun => ({
+  id: 'run-1',
+  templateId: 'template-1',
+  title: 'Launch',
+  status: 'in_progress',
+  progress: 0,
+  sections: [
+    {
+      id: 'section-1',
+      title: 'Checklist',
+      items: Object.entries(notes).map(([id, value]) => ({ id, title: id, notes: value })),
+    },
+  ],
+  startedAt: '2026-01-01T00:00:00.000Z',
+  userId: 'user-1',
+});

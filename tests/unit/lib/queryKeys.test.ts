@@ -1,20 +1,13 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { QueryClient, QueryObserver } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryObserver } from '@tanstack/react-query';
+import { describe, expect, it, vi } from 'vitest';
 
 import { isUserSwitch, queryKeys, removeSignedOutUserQueries } from '@/lib/queryKeys';
 
-const clients: QueryClient[] = [];
-const newClient = () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  clients.push(client);
-  return client;
-};
+import { queryClientsClearedAfterEachTest } from '../../support/queryClientsPerTest';
 
-afterEach(() => {
-  clients.splice(0).forEach((client) => client.clear());
-});
+const newClient = queryClientsClearedAfterEachTest();
 
 describe('private query keys', () => {
   it('give each user their own cache entry', () => {

@@ -130,6 +130,12 @@ const fakeDocument = new FakeDocument();
 
 export const createFakeContainer = () => new FakeElement('div', HTML_NAMESPACE);
 
+export const aWindowOnTheSite = () => ({
+  location: { origin: 'https://serplists.com' },
+  addEventListener() {},
+  removeEventListener() {},
+});
+
 export function installFakeDomGlobals(navigationWindow?: object): () => void {
   const globals = globalThis as Record<string, unknown>;
   const saved = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };

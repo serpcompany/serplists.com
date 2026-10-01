@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -10,25 +10,32 @@ import {
 
 import { buildRun, runExecutionApiClient, withEveryTaskAndSubTaskTicked } from '../../../fixtures/runExecutionFixtures';
 
+const markTask1Complete = async (noteDrafts: Record<string, string>, run: ChecklistRun) => {
+  const updateRun = vi.fn<(saved: ChecklistRun) => Promise<ChecklistRun>>(async (saved) => ({ ...saved, revision: 2 }));
+  const result = await toggleRunItem(
+    { isCompleted: true, itemId: 'item-1', noteDrafts, run },
+    { apiClient: runExecutionApiClient(), updateRun },
+  );
+  return { result, updateRun };
+};
+
+const theOneSaveAtRevision1 = (updateRun: Mock<(saved: ChecklistRun) => Promise<ChecklistRun>>) => {
+  expect(updateRun).toHaveBeenCalledOnce();
+  const sent = updateRun.mock.calls[0][0];
+  expect(sent.revision).toBe(1);
+  return sent;
+};
+
 describe('unsaved task notes ride along with the save that would lose them', () => {
 
   it('Mark Complete saves the draft notes of that task in the same PUT', async () => {
-    const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
-
-    const result = await toggleRunItem(
-      {
-        isCompleted: true,
-        itemId: 'item-1',
-        noteDrafts: { 'item-1': 'Deployed build 42, see link', 'item-2': 'not this one' },
-        run: buildRun(),
-      },
-      { apiClient: runExecutionApiClient(), updateRun },
+    const { result, updateRun } = await markTask1Complete(
+      { 'item-1': 'Deployed build 42, see link', 'item-2': 'not this one' },
+      buildRun(),
     );
 
     expect(result.kind).toBe('ok');
-    expect(updateRun).toHaveBeenCalledOnce();
-    const sent = updateRun.mock.calls[0][0];
-    expect(sent.revision).toBe(1);
+    const sent = theOneSaveAtRevision1(updateRun);
     expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'Deployed build 42, see link' });
     expect(sent.sections[0].items[1].notes).toBeUndefined();
   });
@@ -49,16 +56,9 @@ describe('unsaved task notes ride along with the save that would lose them', () 
   };
 
   it('Mark Complete saves the draft notes of a task that a teammate or a queued Sub-task save already completed', async () => {
-    const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
+    const { result, updateRun } = await markTask1Complete({ 'item-1': 'x' }, runWhoseFirstTaskWasCompletedFirst());
 
-    const result = await toggleRunItem(
-      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: runWhoseFirstTaskWasCompletedFirst() },
-      { apiClient: runExecutionApiClient(), updateRun },
-    );
-
-    expect(updateRun).toHaveBeenCalledOnce();
-    const sent = updateRun.mock.calls[0][0];
-    expect(sent.revision).toBe(1);
+    const sent = theOneSaveAtRevision1(updateRun);
     expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'x' });
     expect(sent.sections[0].items[0].contents?.[0]?.subItems?.every((sub) => sub.isCompleted)).toBe(true);
     expect(result).toMatchObject({ kind: 'ok', run: { revision: 2 } });

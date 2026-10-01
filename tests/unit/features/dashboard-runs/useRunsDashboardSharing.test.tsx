@@ -1,10 +1,11 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRoot } from 'react-dom/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRun } from '@/types/checklist';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { aWindowOnTheSite, createFakeContainer } from '../../../fixtures/fakeDom';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 
 const { createChecklistRunShare } = vi.hoisted(() => ({ createChecklistRunShare: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: { createChecklistRunShare } }));
@@ -12,25 +13,12 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 
-let restoreGlobals: () => void;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals({
-    location: { origin: 'https://serplists.com' },
-    addEventListener() {},
-    removeEventListener() {},
-  });
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(aWindowOnTheSite());
 
-let root: Root | null = null;
 beforeEach(() => {
   let minted = 0;
   createChecklistRunShare.mockReset();
   createChecklistRunShare.mockImplementation(async () => ({ shareToken: `token-${++minted}` }));
-});
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
 });
 
 const listedRun = (id: string, isPublic: boolean): ChecklistRun => ({
@@ -51,10 +39,10 @@ async function mountRunsList(initial: ChecklistRun[]) {
     state = useRunsDashboardSharing({ runs, onStopSharingRun: async () => undefined });
     return null;
   }
-  root = createRoot(createFakeContainer() as unknown as Element);
+  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
   const render = async (runs: ChecklistRun[]) => {
     await act(async () => {
-      root?.render(<Probe runs={runs} />);
+      root.render(<Probe runs={runs} />);
     });
   };
   await render(initial);
@@ -76,12 +64,17 @@ async function mountRunsList(initial: ChecklistRun[]) {
   };
 }
 
+const aListWhereRun1WasSharedAndTheDialogClosed = async () => {
+  const list = await mountRunsList([listedRun('run-1', false)]);
+  await list.share('run-1');
+  await list.render([listedRun('run-1', true)]);
+  await list.closeDialog();
+  return list;
+};
+
 describe("sharing from the runs list, where each Share replaces the run's token and stopping sharing kills the link", () => {
   it('reopens the link it made while the list shows the run shared', async () => {
-    const list = await mountRunsList([listedRun('run-1', false)]);
-    await list.share('run-1');
-    await list.render([listedRun('run-1', true)]);
-    await list.closeDialog();
+    const list = await aListWhereRun1WasSharedAndTheDialogClosed();
 
     await list.share('run-1');
 
@@ -101,10 +94,7 @@ describe("sharing from the runs list, where each Share replaces the run's token 
   });
 
   it('makes a new link once the list refetches the run as private, as after a teammate stopped sharing it', async () => {
-    const list = await mountRunsList([listedRun('run-1', false)]);
-    await list.share('run-1');
-    await list.render([listedRun('run-1', true)]);
-    await list.closeDialog();
+    const list = await aListWhereRun1WasSharedAndTheDialogClosed();
 
     await list.render([listedRun('run-1', false)]);
     expect(list.current().sharedLink).toBeNull();
@@ -116,10 +106,7 @@ describe("sharing from the runs list, where each Share replaces the run's token 
   });
 
   it('does not bring its old link back when the run was stopped and shared again elsewhere, which killed that link', async () => {
-    const list = await mountRunsList([listedRun('run-1', false)]);
-    await list.share('run-1');
-    await list.render([listedRun('run-1', true)]);
-    await list.closeDialog();
+    const list = await aListWhereRun1WasSharedAndTheDialogClosed();
 
     await list.render([listedRun('run-1', false)]);
     await list.render([listedRun('run-1', true)]);
@@ -130,10 +117,7 @@ describe("sharing from the runs list, where each Share replaces the run's token 
   });
 
   it('forgets the link once Stop sharing succeeds, since that link no longer works, so the next Share makes a new one', async () => {
-    const list = await mountRunsList([listedRun('run-1', false)]);
-    await list.share('run-1');
-    await list.render([listedRun('run-1', true)]);
-    await list.closeDialog();
+    const list = await aListWhereRun1WasSharedAndTheDialogClosed();
 
     await act(async () => {
       await list.current().stopSharing('run-1');

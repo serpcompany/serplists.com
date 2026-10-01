@@ -55,6 +55,14 @@ async function mountShareLink(initial: ShownRun) {
   };
 }
 
+const aRunSharedOnceWithTheDialogClosed = async () => {
+  const page = await mountShareLink({ runId: 'run-1', isPublic: false });
+  await page.share();
+  await page.render({ runId: 'run-1', isPublic: true });
+  await page.closeDialog();
+  return page;
+};
+
 describe("the run page share link, which each Share replaces and stopping sharing kills", () => {
   it('reopens the link it made while the run is shown shared', async () => {
     const page = await mountShareLink({ runId: 'run-1', isPublic: false });
@@ -71,10 +79,7 @@ describe("the run page share link, which each Share replaces and stopping sharin
   });
 
   it('makes a new link once the page reloads the run as private, as after another tab stopped sharing it', async () => {
-    const page = await mountShareLink({ runId: 'run-1', isPublic: false });
-    await page.share();
-    await page.render({ runId: 'run-1', isPublic: true });
-    await page.closeDialog();
+    const page = await aRunSharedOnceWithTheDialogClosed();
 
     await page.render({ runId: 'run-1', isPublic: false });
     expect(page.current().shareUrl).toBe('');
@@ -98,10 +103,7 @@ describe("the run page share link, which each Share replaces and stopping sharin
   });
 
   it('does not bring its old link back when the run was stopped and shared again elsewhere, which killed that link', async () => {
-    const page = await mountShareLink({ runId: 'run-1', isPublic: false });
-    await page.share();
-    await page.render({ runId: 'run-1', isPublic: true });
-    await page.closeDialog();
+    const page = await aRunSharedOnceWithTheDialogClosed();
 
     await page.render({ runId: 'run-1', isPublic: false });
     await page.render({ runId: 'run-1', isPublic: true });

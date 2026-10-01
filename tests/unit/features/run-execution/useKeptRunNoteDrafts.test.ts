@@ -13,10 +13,10 @@ import {
   keepRunNoteDrafts,
   takeKeptRunNoteDrafts,
   useKeptRunNoteDrafts,
-  type KeptNoteDraftStorage,
 } from '@/features/run-execution/keptNoteDrafts';
 import type { NoteDrafts } from '@/features/run-execution/noteDrafts';
 import type { ChecklistRun } from '@/types/checklist';
+import { memoryStorage as createStorage } from '../../../fixtures/memoryStorage';
 import { forgetKeptState, renderKeepingState, unmountEffects } from '../../../support/hookStateSlots';
 
 const buildRun = (id: string, taskId: string): ChecklistRun => ({
@@ -32,20 +32,6 @@ const buildRun = (id: string, taskId: string): ChecklistRun => ({
 
 const firstRun = buildRun('run-1', 'task-a');
 const secondRun = buildRun('run-2', 'task-b');
-
-const createStorage = (): KeptNoteDraftStorage & { items: Map<string, string> } => {
-  const items = new Map<string, string>();
-  return {
-    items,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
 
 let storage: ReturnType<typeof createStorage>;
 

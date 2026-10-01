@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { canEditTeamTemplates, canManageTeam, teamRoles } from '@functions/api/utils/team-access';
 import {
@@ -14,16 +14,9 @@ import { createApiError } from '@/lib/api-errors';
 import { getOrganizationPermissions, PERSONAL_PERMISSIONS } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
 
-const clients: QueryClient[] = [];
-const newClient = () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  clients.push(client);
-  return client;
-};
+import { queryClientsClearedAfterEachTest } from '../../../support/queryClientsPerTest';
 
-afterEach(() => {
-  clients.splice(0).forEach((client) => client.clear());
-});
+const newClient = queryClientsClearedAfterEachTest();
 
 const setup = (overrides: { restoreTemplate?: () => Promise<unknown>; restoreRun?: () => Promise<unknown> } = {}) => {
   const queryClient = newClient();
@@ -115,6 +108,13 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
   };
   const isInvalidated = (queryClient: QueryClient, key: readonly unknown[]) =>
     queryClient.getQueryState(key)?.isInvalidated ?? false;
+  const restoreRun1FailingWith = async (error: unknown) => {
+    const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
+    seedLists(queryClient);
+
+    await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+    return { queryClient, dependencies };
+  };
 
   it('refreshes the archived templates and the lists, and forgets the cached gone detail page, when a template was already restored', async () => {
     const error = alreadyRestored('Template');
@@ -133,10 +133,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
 
   it('refreshes the archived runs and the run lists when a run was already restored', async () => {
     const error = alreadyRestored('Checklist');
-    const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
-    seedLists(queryClient);
-
-    await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+    const { queryClient, dependencies } = await restoreRun1FailingWith(error);
 
     expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(true);
     expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(true);
@@ -146,10 +143,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
 
   it('refreshes the archive when the item is gone (404)', async () => {
     const error = createApiError(404, { error: 'Checklist not found' });
-    const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
-    seedLists(queryClient);
-
-    await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+    const { queryClient } = await restoreRun1FailingWith(error);
 
     expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(true);
   });
@@ -160,10 +154,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
       createApiError(403, { error: 'Forbidden' }),
       createApiError(400, { error: 'Checklist ID required' }),
     ]) {
-      const { queryClient, dependencies } = setup({ restoreRun: async () => { throw error; } });
-      seedLists(queryClient);
-
-      await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toBe(error);
+      const { queryClient, dependencies } = await restoreRun1FailingWith(error);
 
       expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(false);
       expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(false);

@@ -5,50 +5,11 @@ import {
   takeKeptRunNoteDrafts,
   type KeptNoteDraftStorage,
 } from '@/features/run-execution/keptNoteDrafts';
-import type { ChecklistRun } from '@/types/checklist';
 
-const buildRun = (notes: Record<string, string | undefined>): ChecklistRun => ({
-  id: 'run-1',
-  templateId: 'template-1',
-  title: 'Launch',
-  status: 'in_progress',
-  progress: 0,
-  sections: [
-    {
-      id: 'section-1',
-      title: 'Checklist',
-      items: Object.entries(notes).map(([id, value]) => ({ id, title: id, notes: value })),
-    },
-  ],
-  startedAt: '2026-01-01T00:00:00.000Z',
-  userId: 'user-1',
-});
+import { memoryStorage as createStorage, storageThatThrows } from '../../../fixtures/memoryStorage';
+import { runWithNotes as buildRun } from '../../../fixtures/runExecutionFixtures';
 
-const createStorage = (): KeptNoteDraftStorage & { items: Map<string, string> } => {
-  const items = new Map<string, string>();
-  return {
-    items,
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    },
-  };
-};
-
-const blockedStorage: KeptNoteDraftStorage = {
-  getItem: () => {
-    throw new Error('SecurityError');
-  },
-  setItem: () => {
-    throw new Error('QuotaExceededError');
-  },
-  removeItem: () => {
-    throw new Error('SecurityError');
-  },
-};
+const blockedStorage: KeptNoteDraftStorage = storageThatThrows;
 
 const owner = { userId: 'user-1', runId: 'run-1' };
 

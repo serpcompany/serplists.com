@@ -8,6 +8,22 @@ import {
   shouldNavigateToTemplatesAfterSave,
 } from "@/features/template-editor/useTemplateEditorModel";
 
+type EditorValues = Parameters<typeof saveTemplateEditorData>[0]["values"];
+
+const existingTemplateValues = (overrides: Partial<EditorValues> = {}): EditorValues => ({
+  title: "Existing Template",
+  description: "",
+  templateType: "checklist",
+  categories: [],
+  tags: [],
+  isPublic: true,
+  seoTitle: "",
+  seoDescription: "",
+  seoUrl: "",
+  sections: [],
+  ...overrides,
+});
+
 describe("saveTemplateEditorData versions", () => {
   it("sends the version the editor loaded as the expected version", async () => {
     const saveTemplate = vi.fn().mockResolvedValue({ success: true, errors: [], version: 6 });
@@ -16,18 +32,7 @@ describe("saveTemplateEditorData versions", () => {
       {
         id: "template-1",
         expectedVersion: 5,
-        values: {
-          title: "Existing Template",
-          description: "",
-          templateType: "checklist",
-          categories: [],
-          tags: [],
-          isPublic: true,
-          seoTitle: "",
-          seoDescription: "",
-          seoUrl: "",
-          sections: [],
-        },
+        values: existingTemplateValues(),
       },
       { saveTemplate },
     );
@@ -103,18 +108,7 @@ describe("saveTemplateEditorData", () => {
     const result = await saveTemplateEditorData(
       {
         id: "template-1",
-        values: {
-          title: "Existing Template",
-          description: "",
-          templateType: "checklist",
-          categories: [],
-          tags: [],
-          isPublic: true,
-          seoTitle: "",
-          seoDescription: "",
-          seoUrl: "",
-          sections: [],
-        },
+        values: existingTemplateValues(),
       },
       { saveTemplate },
     );
@@ -134,18 +128,7 @@ describe("saveTemplateEditorData", () => {
     const result = await saveTemplateEditorData(
       {
         id: "template-1",
-        values: {
-          title: "Existing Template",
-          description: "",
-          templateType: "checklist",
-          categories: [],
-          tags: [],
-          isPublic: true,
-          seoTitle: "",
-          seoDescription: "",
-          seoUrl: "changed-slug",
-          sections: [],
-        },
+        values: existingTemplateValues({ seoUrl: "changed-slug" }),
       },
       { saveTemplate },
     );
@@ -158,18 +141,7 @@ describe("saveTemplateEditorData", () => {
 });
 
 describe("saveTemplateEditorData validation", () => {
-  const values = {
-    title: "Existing Template",
-    description: "",
-    templateType: "checklist" as const,
-    categories: [],
-    tags: [],
-    isPublic: true,
-    seoTitle: "",
-    seoDescription: "",
-    seoUrl: "",
-    sections: [],
-  };
+  const values = existingTemplateValues();
 
   it("names the field and skips the API when a value is over its limit", async () => {
     const saveTemplate = vi.fn();
@@ -239,18 +211,7 @@ describe("saveTemplateEditorData validation", () => {
 });
 
 describe("stale editor protection", () => {
-  const values = {
-    title: "Existing Template",
-    description: "",
-    templateType: "checklist" as const,
-    categories: [],
-    tags: [],
-    isPublic: false,
-    seoTitle: "",
-    seoDescription: "",
-    seoUrl: "",
-    sections: [],
-  };
+  const values = existingTemplateValues({ isPublic: false });
 
   it("keeps the version the template was loaded at", async () => {
     const apiClient = { getTemplateById: vi.fn().mockResolvedValue({ id: "template-1", title: "API", version: 7, sections: [] }) };

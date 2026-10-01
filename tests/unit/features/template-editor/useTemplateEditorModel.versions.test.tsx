@@ -1,3 +1,4 @@
+import '../../../support/templateEditorModelWithNoTemplates';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -10,21 +11,6 @@ import { persistTemplateSave, type SaveTemplateInput } from '@/hooks/useTemplate
 import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import type { TemplateSavePayload } from '@/types/checklist';
-
-vi.mock('@/contexts/TemplatesContext', () => {
-  const useTemplates = () => ({
-    getTemplate: vi.fn(() => undefined),
-  });
-  return { useTemplates, useTemplateLists: useTemplates };
-});
-
-vi.mock('@/hooks/useTemplateSave', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/hooks/useTemplateSave')>()),
-  useTemplateSave: () => ({
-    isSaving: false,
-    saveTemplate: vi.fn(),
-  }),
-}));
 
 type EditorModel = ReturnType<typeof useTemplateEditorModel>;
 

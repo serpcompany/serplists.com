@@ -1,9 +1,10 @@
 import { act } from 'react';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreatedTeamInvite, TeamInvite } from '@/lib/api';
 
-import { installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { aWindowOnTheSite } from '../../../fixtures/fakeDom';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 import { deferred } from '../../../support/deferred';
 import { mountQueryHook, settle } from '../../../support/queryHookProbe';
 
@@ -38,15 +39,7 @@ const pendingInvite: TeamInvite = {
   created_at: '2026-09-30T00:00:00.000Z',
 };
 
-let restoreGlobals: () => void;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals({
-    location: { origin: 'https://serplists.com' },
-    addEventListener() {},
-    removeEventListener() {},
-  });
-});
-afterAll(() => restoreGlobals());
+aFakeDomForEachTest(aWindowOnTheSite());
 
 const unmounts: Array<() => void> = [];
 beforeEach(() => {
