@@ -58,3 +58,11 @@ export const mcpTemplateResult = z.object({
 export const mcpTemplatesPage = z.object({ templates: z.array(jsonObject), nextCursor: z.string().optional() }).passthrough();
 
 export const mcpRunsPage = z.object({ runs: z.array(jsonObject), nextCursor: z.string().optional() }).passthrough();
+
+export const recordIn = (value: unknown) => jsonObject.parse(value);
+
+export const recordsIn = (value: unknown) => z.array(jsonObject).parse(value);
+
+export const optionalRecordIn = (value: unknown) => (value === undefined ? undefined : recordIn(value));
+
+export const textIn = (value: unknown) => z.string().parse(value);

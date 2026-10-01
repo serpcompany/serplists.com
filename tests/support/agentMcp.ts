@@ -1,4 +1,5 @@
 import { expect, vi } from "vitest";
+import { objectContaining } from "./asymmetricMatchers";
 import { elementAt, firstOf } from "./elements";
 import { z } from "zod";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
@@ -51,14 +52,16 @@ export function authenticateWithAFreshRunKey(authenticate: typeof authenticatePe
   vi.mocked(authenticate).mockResolvedValue({ ...runKeyWithEveryPermission, keyId: `fresh-run-key-${freshRunKeys}` });
 }
 
-export const asTheClientReceives = <T>(value: T): T => JSON.parse(toJson(value));
+const jsonRecord = z.record(z.string(), z.unknown());
+
+export const asTheClientReceives = (value: unknown): unknown => JSON.parse(toJson(value));
+
+export const pageAsTheClientReceives = (page: JsonRecord): JsonRecord => jsonRecord.parse(asTheClientReceives(page));
 
 export const resultBytes = (value: unknown) => new TextEncoder().encode(toJson(value)).byteLength;
 
-const cursorPositionSchema = z.record(z.string(), z.unknown());
-
 export function cursorMovedPastTheEnd(cursor: string): string {
-  const position = cursorPositionSchema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
+  const position = jsonRecord.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
   return Buffer.from(JSON.stringify({ ...position, u: 5_000 })).toString("base64url");
 }
 
@@ -73,15 +76,15 @@ export function toolErrorOf(action: () => unknown): ToolError {
 }
 
 export const outlineOf = (sections: JsonRecord[]) =>
-  sections.map((entry) => expect.objectContaining({
+  sections.map((entry) => objectContaining({
     id: entry.id,
-    taskCount: (entry.items as unknown[]).length,
+    taskCount: z.array(z.unknown()).parse(entry.items).length,
     bytes: resultBytes(entry),
   }));
 
 export function sectionFieldsOfTheFirstTwoPages(pages: JsonRecord[]) {
   expect(pages.length).toBeGreaterThan(3);
-  const sections = pages.map((page) => page.section as JsonRecord);
+  const sections = pages.map((page) => jsonRecord.parse(page.section));
   const first = firstOf(sections);
   const second = elementAt(sections, 1);
   expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });

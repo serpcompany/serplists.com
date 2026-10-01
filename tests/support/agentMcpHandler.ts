@@ -5,6 +5,7 @@ import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/a
 import { mcpErrorResponse, mcpToolCall, mcpToolResponse, runKeyWithEveryPermission } from "./agentMcp";
 import { apiEnv } from "./apiEnv";
 import { readJson } from "./readJson";
+import { storedSections, storedSectionsIn } from "./storedJson";
 import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
 import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
@@ -78,21 +79,21 @@ export function sectionsOfAtLeast(targetBytes: number, fillerNotesLength = 10_00
   return sections;
 }
 
-function tickEverything(sections: JsonRecord[]): JsonRecord[] {
+function tickEverything(sections: readonly unknown[]): JsonRecord[] {
   const tick = (record: JsonRecord) => ({ ...record, isCompleted: true });
-  return sections.map((section) => ({
+  return storedSections.parse(sections).map((section) => ({
     ...section,
-    items: (section.items as JsonRecord[]).map((item) => ({
+    items: section.items.map((item) => ({
       ...tick(item),
-      ...(Array.isArray(item.contents)
-        ? { contents: item.contents.map((content: JsonRecord) => ({ ...content, subItems: (content.subItems as JsonRecord[]).map(tick) })) }
+      ...(item.contents
+        ? { contents: item.contents.map((content) => ({ ...content, ...(content.subItems ? { subItems: content.subItems.map(tick) } : {}) })) }
         : {}),
     })),
   }));
 }
 
 export const finishedRun = (overrides: JsonRecord = {}) =>
-  personalRun({ items: JSON.stringify(tickEverything(JSON.parse(personalRun().items as string))), ...overrides });
+  personalRun({ items: JSON.stringify(tickEverything(storedSectionsIn(personalRun().items))), ...overrides });
 
 export const finishedIfCompleting = (operation: string, sections: JsonRecord[]) =>
   operation === "set_run_status" ? tickEverything(sections) : sections;
