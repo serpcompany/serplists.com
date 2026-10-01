@@ -3,15 +3,14 @@ import { expect, test } from '@playwright/test';
 import { apiJson } from './support/api-requests';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
-import { createRun, deleteRun, fetchRunWithSections } from './support/run-saves';
+import { createRun, deleteRun, fetchRunWithSections, openTheRunAt } from './support/run-saves';
 
 test('unsaved task notes are saved with Mark Complete and survive moving between tasks', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Notes draft QA ${Date.now()}`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await notes.fill('Deployed build 42, see link');
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();

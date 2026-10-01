@@ -6,6 +6,8 @@ import {
   createRun,
   createRunWithSubTasks,
   deleteRun,
+  expectBackOnTheRunsListWithTheRunCompleted,
+  openTheRunAt,
   postRun,
   readRun,
   recordSaves,
@@ -37,16 +39,10 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
     ] }],
   });
 
-  const saves: number[] = [];
-  page.on('response', (response) => {
-    if (response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'PUT') {
-      saves.push(response.status());
-    }
-  });
+  const saves = recordSaves(page, runId);
   const conflictToast = page.getByText(/changed (while|since)/);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await page.getByRole('button', { name: 'Mark Complete' }).dblclick();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await expect.poll(() => readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
@@ -54,8 +50,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await page.getByRole('button', { name: 'Complete Run' }).dblclick();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+  await expectBackOnTheRunsListWithTheRunCompleted(page, runId);
   expect(saves).toEqual([200, 200, 200]);
   await expect(conflictToast).toHaveCount(0);
 
@@ -66,8 +61,7 @@ test('a dismissed completion dialog can be reopened with Finish Run, and Not yet
   await loginAsAdmin(page);
   const runId = await createRun(page, `Finish run QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -85,8 +79,7 @@ test('a dismissed completion dialog can be reopened with Finish Run, and Not yet
   await page.getByRole('button', { name: 'Complete run' }).click();
   await dialog.getByRole('button', { name: 'Complete Run' }).click();
   await expect(page.getByText('Run completed', { exact: true }).first()).toBeVisible();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+  await expectBackOnTheRunsListWithTheRunCompleted(page, runId);
 
   await deleteRun(page, runId);
 });
@@ -99,8 +92,7 @@ test('a fully ticked run that is still in progress can be completed after a relo
   await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Complete run' }).click();
   await page.getByRole('button', { name: 'Complete Run' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+  await expectBackOnTheRunsListWithTheRunCompleted(page, runId);
 
   await deleteRun(page, runId);
 });
@@ -126,8 +118,7 @@ test('a completed run cannot be unticked, privately or through its share link, a
   });
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await expect(stepCheckbox(page, 'Step one')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Next Task' }).click();
@@ -153,8 +144,7 @@ test('a completed task can be found and unticked by its named checkbox', async (
   await loginAsAdmin(page);
   const runId = await createRun(page, `Task checkbox QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   const taskA = page.getByRole('checkbox', { name: 'Mark "Task A" complete' });
   await expect(taskA).not.toBeChecked();
   await page.getByRole('button', { name: 'Mark Complete' }).click();

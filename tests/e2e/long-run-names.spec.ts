@@ -1,13 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiRecord as callApi } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
 
 const TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES = 160;
-
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
 
 test('Start Run on a public template with a 160-character title creates the run under a shortened default name', async ({ page }) => {
   await loginAsAdmin(page);

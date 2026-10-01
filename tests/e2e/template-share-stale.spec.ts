@@ -1,13 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiRecord as callApi } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
 
 const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try again.';
-
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
 
 async function createPublicTemplate(page: Page, label: string) {
   const stamp = Date.now();

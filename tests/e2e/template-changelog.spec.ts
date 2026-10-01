@@ -1,11 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiRecord as callApi } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
-
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
 
 test('the Changelog shows Share without a reload, and archive and restore next to versions', async ({ page }) => {
   await loginAsAdmin(page);

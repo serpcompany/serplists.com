@@ -1,14 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiRecord as callApi } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
 
 const NEW_TEMPLATE_VERSION = 1;
-
-async function callApi(page: Page, method: string, path: string, body?: unknown) {
-  return apiJson<Record<string, unknown>>(page, path, { method, body });
-}
 
 async function loadPublicCatalogIntoMemory(page: Page) {
   await page.goto('/templates/');

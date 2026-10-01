@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
+import { API_BASE_URL, apiJsonAt as callApi, trackApiRequests } from './support/api-requests';
 import { endSessionSilently, fillSignInForm, loginAsAdmin } from './support/sign-in';
 
 async function signInAgainAfterTheSessionEnded(page: Page) {
@@ -18,10 +18,6 @@ async function signOutInAnotherTab(page: Page) {
   await expect(other.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
   await other.close();
   await page.bringToFront();
-}
-
-async function callApi<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return apiJson<T>(page, path, { method, body });
 }
 
 async function startSigningOutThenCancelAtThePrompt(page: Page) {

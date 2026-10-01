@@ -1,7 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { loginAsAdmin } from './support/sign-in';
-import { createRun, deleteRun, readRun, recordSaves, tickElsewhere } from './support/run-saves';
+import {
+  createRun,
+  deleteRun,
+  expectBackOnTheRunsListWithTheRunCompleted,
+  openTheRunAt,
+  readRun,
+  recordSaves,
+  tickElsewhere,
+} from './support/run-saves';
 
 const STRAY_SAVE_WINDOW_MS = 500;
 const DIALOG_CLOSE_ANIMATION_MS = 400;
@@ -53,8 +61,7 @@ test('a double click on Next Task moves on without completing the next task', as
   await tickElsewhere(page, runId, { a: true, b: false });
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await openTheRunAt(page, runId, 'Task B');
   await page.getByRole('button', { name: 'Previous' }).click();
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Next Task' }).dblclick();
@@ -73,8 +80,7 @@ test('the second click of a double click after a fast save does not complete the
   const runId = await createRun(page, `Fast save double click QA ${Date.now()}`);
   const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await scrollToAndPointAt(page, 'Mark Complete');
   await clickAtPointer(page, 1);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
@@ -95,8 +101,7 @@ test('the rest of the double click that completes the last task keeps the comple
   const runId = await createRun(page, `Dialog double click QA ${Date.now()}`);
   await tickElsewhere(page, runId, { a: true, b: false });
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
+  await openTheRunAt(page, runId, 'Task B');
   const doubleClickPoint = await scrollToAndPointAt(page, 'Mark Complete');
   await clickAtPointer(page, 1);
   await waitForDialogNodeWithinDoubleClickInterval(page);
@@ -110,8 +115,7 @@ test('the rest of the double click that completes the last task keeps the comple
   expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
 
   await dialog.getByRole('button', { name: 'Complete Run' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+  await expectBackOnTheRunsListWithTheRunCompleted(page, runId);
 
   await deleteRun(page, runId);
 });
@@ -123,8 +127,7 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await page.setViewportSize(viewport);
     const saves = recordSaves(page, runId);
 
-    await page.goto(`/dashboard/runs/${runId}/`);
-    await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+    await openTheRunAt(page, runId);
     await page.getByRole('button', { name: 'Rename' }).dblclick();
 
     const titleInput = page.getByRole('textbox', { name: 'Run title' });

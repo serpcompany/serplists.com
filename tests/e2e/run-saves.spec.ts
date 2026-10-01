@@ -6,26 +6,25 @@ import {
   createRunWithSubTasks,
   deleteRun,
   fetchRunWithSections,
+  openTheRunAt,
   postRun,
   readRun,
+  recordSaves,
   stepCheckbox,
   tickElsewhere,
 } from './support/run-saves';
 
 const RUN_TITLE_LIMIT = 160;
 
+const expectTaskAAndBothStepsTicked = (page: Page, runId: string) =>
+  expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+
 test('a tick saved by another session is kept and this page can still save', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Conflict QA ${Date.now()}`);
-  const saves: number[] = [];
-  page.on('response', (response) => {
-    if (response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'PUT') {
-      saves.push(response.status());
-    }
-  });
+  const saves = recordSaves(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await tickElsewhere(page, runId, { a: false, b: true });
   saves.length = 0;
 
@@ -42,8 +41,7 @@ test('ticking a task another session already ticked does not untick it', async (
   await loginAsAdmin(page);
   const runId = await createRun(page, `Same tick QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await tickElsewhere(page, runId, { a: true, b: false });
 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
@@ -80,16 +78,15 @@ test('ticking the last sub-task, then Mark Complete during the save, keeps every
   const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, true);
   const release = await holdFirstSave(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await stepCheckbox(page, 'Step one').click();
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   release();
 
-  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+  await expectTaskAAndBothStepsTicked(page, runId);
   await page.unroute(`**/api/checklists/${runId}`);
   await page.reload();
-  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+  await expectTaskAAndBothStepsTicked(page, runId);
 
   await deleteRun(page, runId);
 });
@@ -99,13 +96,12 @@ test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it
   const runId = await createRunWithSubTasks(page, `Queued set QA ${Date.now()}`, false);
   const release = await holdFirstSave(page, runId);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await stepCheckbox(page, 'Step one').click();
   release();
 
-  await expect.poll(() => readTaskA(page, runId)).toEqual([true, true, true]);
+  await expectTaskAAndBothStepsTicked(page, runId);
   await page.unroute(`**/api/checklists/${runId}`);
 
   await deleteRun(page, runId);
@@ -115,8 +111,7 @@ test('the run Changelog shows a save without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Changelog QA ${Date.now()}`);
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   const changelog = page.locator('section', { has: page.getByRole('heading', { name: 'Changelog' }) });
   await expect(changelog.getByText('Created run')).toBeVisible();
   await expect(changelog.getByText('Updated run')).toHaveCount(0);
@@ -157,8 +152,7 @@ test('a task opened while Mark Complete is saving stays open when the save lands
   const releaseNextSave = await holdEverySave(page, runId);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await page.getByRole('navigation', { name: 'Run tasks' }).getByRole('button', { name: 'Task D' }).click();
   await expect(page.getByRole('heading', { name: 'Task D' })).toBeVisible();
@@ -178,8 +172,7 @@ test('queued Mark Complete saves never move back to an earlier task', async ({ p
   const releaseNextSave = await holdEverySave(page, runId);
   const next = page.getByRole('button', { name: 'Next', exact: true });
 
-  await page.goto(`/dashboard/runs/${runId}/`);
-  await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
+  await openTheRunAt(page, runId);
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await next.click();
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();

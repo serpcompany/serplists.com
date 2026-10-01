@@ -1,11 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJsonAt as api } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
-
-async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return apiJson<T>(page, path, { method, body });
-}
 
 async function sendTheShareRequestFromAnotherTab(context: BrowserContext, templateId: string, version: number) {
   const sharer = await context.newPage();

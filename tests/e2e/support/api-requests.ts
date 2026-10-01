@@ -84,3 +84,11 @@ export async function fetchFromThePageUnderTest(page: Page, url: string, init: P
   );
   return { status, ok, body: parseBody(text) };
 }
+
+export async function apiJsonAt<T = unknown>(owner: PageOrBrowserContext, path: string, method: string, body?: unknown): Promise<T> {
+  return apiJson<T>(owner, path, { method, body });
+}
+
+export async function apiRecord(owner: PageOrBrowserContext, method: string, path: string, body?: unknown) {
+  return apiJson<Record<string, unknown>>(owner, path, { method, body });
+}

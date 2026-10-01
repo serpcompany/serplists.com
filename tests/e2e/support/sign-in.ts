@@ -53,3 +53,19 @@ export async function registerNewAccount(page: Page, account: { name: string; em
     timeout: 30_000,
   });
 }
+
+export async function submitTheSignInForm(page: Page, user: TestUser) {
+  await fillSignInForm(page, user);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+}
+
+export async function openAccountMenu(page: Page) {
+  await page.getByRole('button', { name: 'Account menu' }).click();
+}
+
+export async function signOutFromTheAccountMenu(page: Page) {
+  await openAccountMenu(page);
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page.getByRole('link', { name: 'Log in' }).first()).toBeVisible({ timeout: 15_000 });
+}

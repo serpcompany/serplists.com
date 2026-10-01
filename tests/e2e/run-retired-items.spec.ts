@@ -1,11 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson } from './support/api-requests';
+import { apiJsonAt as api } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
-
-async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
-  return apiJson<T>(page, path, { method, body });
-}
 
 async function replaceTemplateSectionsAtItsVersion(page: Page, templateId: string, sections: unknown[]) {
   const { version } = await api<{ version: number }>(page, `/templates/${templateId}`, 'GET');

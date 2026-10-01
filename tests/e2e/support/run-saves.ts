@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './api-requests';
 
@@ -79,4 +79,19 @@ export async function startARunFromTheFirstStartRun(page: Page) {
   const dialog = page.getByRole('dialog', { name: 'Start a Run' });
   await dialog.getByRole('button', { name: 'Start Run' }).click();
   return dialog;
+}
+
+export async function openTheRunAt(page: Page, runId: string, taskTitle = 'Task A') {
+  await page.goto(`/dashboard/runs/${runId}/`);
+  await expect(page.getByRole('heading', { name: taskTitle })).toBeVisible();
+}
+
+export async function expectBackOnTheRunsListWithTheRunCompleted(page: Page, runId: string) {
+  await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+  await expect.poll(() => readRun(page, runId)).toEqual({ status: 'completed', completed: [true, true] });
+}
+
+export async function openTheRunAtDesktopWidth(page: Page, runId: string) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/dashboard/runs/${runId}/`);
 }
