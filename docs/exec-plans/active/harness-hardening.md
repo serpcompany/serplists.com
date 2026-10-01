@@ -185,6 +185,16 @@ Scheduling:
   - Fixes it found for the existing workflows: the review must allow `claude[bot]` and edit
     its summary by id, and the attribution setting takes strings, so `false` was ignored.
   - The port into this repository waits for the owner's approval of the workflow changes.
+- 2026-10-01: phase 3, pairs 1 and 2 done; `pnpm run verify` passed at 47d31be4.
+  - `functions/api/handlers` and the top-level API files: 554 comments (39ba09e5..93ac5f6f).
+    New doc: [agent access](../../design-docs/agent-access.md).
+  - `tests/unit/components`: 351 comments (ce4ab433..47d31be4). Shared test helpers moved
+    to `tests/support/`.
+  - `functions/api/utils`, `functions/sitemap`, `functions/seo`: 588 comments (4f885527..d2745713).
+    New doc: [SEO and sitemaps](../../design-docs/seo-and-sitemaps.md). Two docs that
+    described the code wrongly were corrected. Its auth commit landed inside 29af3457,
+    under that commit's test message.
+  - `tests/unit/features`, `tests/unit/hooks`: 326 comments (d70122d8..cefac098).
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
@@ -239,6 +249,12 @@ Scheduling:
 - 2026-09-30: the ported "answers the template catalog within a second" test is removed. A
   wall-clock bound fails on a loaded runner, so it is a flaky test, not a performance check.
   Phase 4 replaces it with rows-read budgets, which are deterministic and match what D1 bills.
+- 2026-10-01: agents sharing a checkout commit with `git commit -m <message> -- <paths>`
+  (and `git add -N` for new files), not `git add` and then `git commit`.
+  - The index is shared, so one agent's staged files went into another agent's commit.
+  - Staging by explicit path alone does not prevent that.
+- 2026-10-01: Phase 4's boundary-validation work includes two casts phase 3 found:
+  `stripePostForm<T>` casts Stripe's reply, and `isShareLinkEvent` casts parsed audit metadata.
 - 2026-09-30: the Node clone hazard is TD-29, not TD-27. TD-27 and TD-28 were the MCP result
   bounds, closed earlier. The tracker now keeps a next-ID line, so a closed ID is never
   reused.

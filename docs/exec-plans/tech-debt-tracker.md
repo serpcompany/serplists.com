@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-30.**
+then you raise it. **Next ID: TD-33.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -29,3 +29,6 @@ then you raise it. **Next ID: TD-30.**
 | TD-25 | Security | Run Keys never expire; revocation is the only way to end one. The MCP rate limits are in-memory per isolate, so the only global limit is the per-IP Cloudflare WAF rule `MCP rate limit` (see `docs/SECURITY.md`); nothing limits a single key globally. Revoked keys are never deleted, so listing a user's keys still scans all their revoked keys (the response is capped at 50). | Add an optional key expiry, and move the per-key limit to shared state (KV, a Durable Object, or a Workers rate-limiting binding). Pruning old revoked keys deletes user data, so it needs a human decision. | None |
 | TD-26 | Boundaries | The MCP template tools call `createTemplateForUser`/`updateTemplateForUser`, which return HTTP `Response`s that `agentMcpTemplates.ts` re-parses into tool errors. | Have the template write functions return typed results that the route and the MCP each map to their own errors. | None |
 | TD-29 | Tests | Node's fetch (Vitest, `next dev`) cancels a request's body when a clone of it is garbage collected. The router counts a body that has no Content-Length on a clone (`checkRequestBodyLimit` in `functions/api/utils/body-limit.ts`), so a handler that reads the body after an await can fail with "Body is unusable" (a 400 "Invalid JSON payload"). Workers is unaffected, browsers send Content-Length, and `tests/integration/api-router-local-d1.test.ts` sends it too. | Count the body without a clone that can be collected first: read it once and hand the handler a request built from the bytes. | None |
+| TD-30 | Duplication | Three helpers do the same guarded insert: `insertAuditEventWhere` (`functions/api/utils/guarded-writes.ts`), `insertAuditEventWhen` (`audit.ts`) and `insertRowWhere` (`guarded-insert.ts`). The first lists `audit_events` columns by hand, so it breaks silently when the table gains one. `batchWriteMissed` (`guarded-writes.ts`) and `batchUpdateMissed` (`checklist-runs.ts`) are the same miss check. | Use `insertRowWhere` and one miss check everywhere; update the importers. Small to medium. | None |
+| TD-31 | Duplication | The slug and username unique-violation checks walk an error's cause chain in three copies (`functions/api/utils/username-conflict.ts` and the template slug inserts). | One shared matcher for a D1 unique violation on a named column. Small. | None |
+| TD-32 | Duplication | `isProSubscriptionStatus` (`functions/api/utils/entitlements.ts`) repeats `isPaidSubscriptionStatus` (`stripe-subscriptions.ts`). | Use one function. Small. | None |
