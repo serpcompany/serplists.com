@@ -33,7 +33,10 @@ allow no code comments: code is structured, named and documented so that it need
 | Background refactoring PRs | Weekly report issue | A weekly code-gardening job: one small debt fix per PR |
 | Agents act on review feedback | Manual | An `@claude` workflow that addresses review comments |
 | Logs, metrics and traces an agent can query | `grep` over JSON logs | A query tool over the structured logs: filters, per-route latency, per-request timeline |
-| Type-checked tests | No tsconfig includes `tests/`: 685 errors in 86 files under `strict` | A tests tsconfig in `pnpm run typecheck`; fix the errors |
+| Type-checked tests | No tsconfig includes `tests/`: 685 errors in 86 files under `strict` (TD-1) | A tests tsconfig in `pnpm run typecheck`; fix the errors |
+| File-size limit everywhere | `max-lines` checks only `src/` and `functions/`: 25 files in `tests/`, one in `scripts/` and one in `db/` are over 500 lines | `max-lines` on every authored file; split them |
+| Rule overrides | `@next/next/no-img-element` off for 3 files; `no-explicit-any` and `no-this-alias` off in tests; react-refresh off for `ui`, contexts, `app` and tests; the reachability rule exempts `src/components/ui/`, `use-mobile.tsx` and `securityHeaders.ts` | Remove each one, or record here why it must stay |
+| Performance checks | A ported test timed the catalog against a 1-second wall clock, which flakes on a loaded runner; removed | Rows-read budgets for the hot routes, measured with `withD1Profiling` in the router test |
 | No code comments | 7,996 comments in 1,080 files, plus `.dev.vars.example`, `.gitignore`, `.gitattributes` and `.npmrc` | A lint rule and a repository check; remove them all, moving what they knew into docs, names and tests |
 
 ## Phases
@@ -45,8 +48,9 @@ allow no code comments: code is structured, named and documented so that it need
    with tests; size the new verifications in report mode.
 3. [ ] Remove every comment, area by area, moving what each one knew into the doc that owns
    the area, a name, or a test; then enable the comment checks.
-4. [ ] New verifications: a tests tsconfig, then naming conventions, boundary validation,
-   duplicates, dead code and stricter types; fix what each finds, then enforce it.
+4. [ ] New verifications: a tests tsconfig, then `max-lines` on every authored file, naming
+   conventions, boundary validation, duplicates, dead code, stricter types and rows-read
+   budgets; audit the rule overrides; fix what each finds, then enforce it.
 5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback, each tried in
    the sandbox repository first.
 6. [ ] Observability: the log query tool and its skill.
@@ -161,7 +165,8 @@ Scheduling:
     Porting them found that a sign-up without a password answered 500; it answers 400 now
     (091c6cb1). They also showed that Node's fetch cancels a request's body when a clone of
     it is garbage collected, which made the router's body count flaky in Node; the test sends
-    Content-Length, as clients do, and the hazard is TD-27 (fc4e6bdc).
+    Content-Length, as clients do, and the hazard is TD-29 (fc4e6bdc; its message says TD-27,
+    an ID an earlier, closed item already had).
   - Suppressions: the file and the pre-commit flag that let unpruned suppressions pass are
     gone (9516e451).
   - File size: the 8 capped files and the sidebar primitive are split by responsibility
@@ -213,3 +218,9 @@ Scheduling:
 - 2026-09-30: `max-lines` still checks only `src/` and `functions/`: 25 files in `tests/`, one
   in `scripts/` and one in `db/` are over 500 lines. Extending it is a new verification, left
   for phase 4.
+- 2026-09-30: the ported "answers the template catalog within a second" test is removed. A
+  wall-clock bound fails on a loaded runner, so it is a flaky test, not a performance check.
+  Phase 4 replaces it with rows-read budgets, which are deterministic and match what D1 bills.
+- 2026-09-30: the Node clone hazard is TD-29, not TD-27. TD-27 and TD-28 were the MCP result
+  bounds, closed earlier. The tracker now keeps a next-ID line, so a closed ID is never
+  reused.
