@@ -1231,11 +1231,12 @@ describe("personal run MCP handler", () => {
     it("counts notes by UTF-8 bytes, not characters", async () => {
       const asciiNotes = "n".repeat(20_000);
       const threeByteNotes = "界".repeat(10_000);
+      const threeByteNotesBytes = new TextEncoder().encode(threeByteNotes).byteLength;
       const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES - 32 * 1024);
       const bytesLeftUnderTheRunLimit = RUN_CONTENT_MAX_BYTES - contentSaveBytes(sections);
       expect(bytesLeftUnderTheRunLimit).toBeGreaterThan(asciiNotes.length);
-      expect(bytesLeftUnderTheRunLimit).toBeLessThan(new TextEncoder().encode(threeByteNotes).byteLength);
-      expect(new TextEncoder().encode(threeByteNotes).byteLength).toBeLessThanOrEqual(MAX_TASK_NOTES_BYTES);
+      expect(bytesLeftUnderTheRunLimit).toBeLessThan(threeByteNotesBytes);
+      expect(threeByteNotesBytes).toBeLessThanOrEqual(MAX_TASK_NOTES_BYTES);
       const setNotes = (notes: string) => {
         dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
         return handleAgentMcp(mcpToolCall("update_run", {
