@@ -7,10 +7,6 @@ import type { ChecklistTemplate } from '@/types/checklist';
 export const REPO_TEMPLATE_USER_ID = 'repo-template-catalog';
 export const REPO_TEMPLATE_OWNER_NAME = 'SERP Lists Library';
 export const REPO_TEMPLATE_OWNER_SLUG = 'serp';
-/**
- * Date for repo templates whose pack has no valid `exportedAt`: the day the repo
- * catalog shipped. Never the load time, which would rank starters as newest.
- */
 export const REPO_TEMPLATE_FALLBACK_TIMESTAMP = '2026-03-22T00:00:00.000Z';
 
 type RepoTemplateModule = {
@@ -47,7 +43,6 @@ const getSourceData = (value: unknown): unknown => {
 
 const packDateSchema = z.object({ exportedAt: z.string() });
 
-/** A pack's `exportedAt` as an ISO date, or the fixed fallback when it is missing or invalid. */
 const resolveRepoPackTimestamp = (sourceData: unknown): string => {
   const parsed = packDateSchema.safeParse(sourceData);
   const time = parsed.success ? Date.parse(parsed.data.exportedAt) : Number.NaN;
@@ -75,8 +70,6 @@ export const normalizeRepoTemplateSources = (
 
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
-    // Undated templates take their pack's date, so the Recent sort and published
-    // dates stay stable across page loads. Bump `exportedAt` when a pack changes.
     const { templates } = parseTemplatesFromData(sourceData, {
       fallbackTimestamp: resolveRepoPackTimestamp(sourceData),
     });
@@ -107,7 +100,6 @@ export const normalizeRepoTemplateSources = (
   );
 };
 
-/** When the repo library started: its earliest template date. */
 export const getRepoCatalogCreatedAt = (
   templates: Pick<ChecklistTemplate, 'createdAt'>[],
 ): string => {
@@ -119,8 +111,6 @@ export const getRepoCatalogCreatedAt = (
     : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
 };
 
-// The profile that owns a public template's URL: its owner's username, or the SERP library for
-// bundled starters. Null when the owner is unknown.
 export const resolvePublicTemplateOwnerSlug = (
   template: Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile'>,
 ): string | null => {
@@ -140,9 +130,6 @@ export const resolvePublicTemplateOwnerSlug = (
   return null;
 };
 
-// Public URLs are /profile/<owner>/<slug>, so two templates are the same catalog entry only when
-// both owner and slug match (an official SERP copy of a bundled starter). A template with an
-// unknown owner is never merged with another one.
 const publicCatalogKey = (template: ChecklistTemplate): string => {
   const ownerSlug = resolvePublicTemplateOwnerSlug(template);
   if (!ownerSlug) return `id:${template.id}`;
@@ -165,22 +152,17 @@ export const mergePublicTemplateCollections = (
   return Array.from(merged.values());
 };
 
-// `apiCollection` is the user's own Personal list, or undefined until it has loaded.
 export const mergeAccountTemplateCollections = (
   publicCollection: ChecklistTemplate[],
-  apiCollection: ChecklistTemplate[] | undefined,
+  loadedPersonalList: ChecklistTemplate[] | undefined,
   currentUserId?: string,
 ): ChecklistTemplate[] => {
-  if (!currentUserId || !apiCollection) return publicCollection;
+  if (!currentUserId || !loadedPersonalList) return publicCollection;
 
-  const ownedTemplates = apiCollection.filter(
+  const ownedTemplates = loadedPersonalList.filter(
     (template) => template.userId === currentUserId,
   );
   const ownedIds = new Set(ownedTemplates.map((template) => template.id));
-  // The catalog can be up to 5 minutes old (edge cache), so the loaded Personal list is the
-  // source of truth for the user's own Personal templates: a catalog copy missing from it was
-  // deleted, made private, or moved to an Organization. The user's own copy wins, and Map.set
-  // keeps each template's original position.
   const merged = new Map(
     publicCollection
       .filter(
@@ -197,8 +179,6 @@ export const mergeAccountTemplateCollections = (
   return Array.from(merged.values());
 };
 
-// With ownerUsername (a /profile/<owner>/<slug> page), only that owner's template matches, since
-// different owners can publish templates with the same slug.
 export const findPublicTemplateByIdentifier = (
   templates: ChecklistTemplate[],
   identifier: string,
@@ -222,11 +202,9 @@ export const isRepoTemplate = (
   );
 };
 
-// teamId is required so every caller decides the ownership context: undefined
-// means Personal, an id means that Organization.
 export const buildRepoTemplateCreatePayload = (
   template: ChecklistTemplate,
-  teamId: string | undefined,
+  destinationTeamIdOrPersonal: string | undefined,
 ): RepoTemplateCreatePayload => ({
   title: template.title,
   description: template.description || '',
@@ -234,12 +212,11 @@ export const buildRepoTemplateCreatePayload = (
   seoTitle: template.seoTitle || '',
   seoDescription: template.seoDescription || '',
   rules: template.rules,
-  // No seoUrl: the starter keeps its slug, and the copy gets one from its title.
   sections: template.sections,
   isPublic: false,
   categories: template.categories || [],
   tags: template.tags || [],
-  teamId,
+  teamId: destinationTeamIdOrPersonal,
 });
 
 export const repoTemplates = normalizeRepoTemplateSources(repoTemplateModules);

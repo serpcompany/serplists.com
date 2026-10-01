@@ -32,6 +32,7 @@ import {
   findCategoryNameBySlug,
   hasCanonicalPublicTemplatePath,
   isBlankTemplateEditorRoute,
+  isPathWithin,
   resolveLegacyTemplatesCategoryRedirectPath,
   resolveConsoleSection,
   resolvePublicRouteTier,
@@ -282,6 +283,17 @@ describe('routes', () => {
     expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { full_name: 'No Handle' } })).toBe(false);
     expect(hasCanonicalPublicTemplatePath({ ...baseTemplate, ownerProfile: { username: '  ' } })).toBe(false);
     expect(hasCanonicalPublicTemplatePath(baseTemplate)).toBe(false);
+  });
+});
+
+describe('isPathWithin', () => {
+  it('matches the page a link names and the pages under it in any form or case, and the home page only itself', () => {
+    expect(isPathWithin('/dashboard/templates/abc/', buildConsoleTemplatesPath())).toBe(true);
+    expect(isPathWithin('/dashboard/templates', buildConsoleTemplatesPath())).toBe(true);
+    expect(isPathWithin('/Dashboard/Templates/', buildConsoleTemplatesPath())).toBe(true);
+    expect(isPathWithin('/dashboard/runs/', buildConsoleTemplatesPath())).toBe(false);
+    expect(isPathWithin('/', '/')).toBe(true);
+    expect(isPathWithin('/about/', '/')).toBe(false);
   });
 });
 

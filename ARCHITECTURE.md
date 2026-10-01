@@ -51,6 +51,8 @@ Shared (imported by both sides)
 [.dependency-cruiser.cjs](.dependency-cruiser.cjs)) fails on:
 
 - `functions/` importing anything from `src/` except allowlisted framework-free modules
+  (those import each other by relative path, since the API's TypeScript project,
+  `functions/tsconfig.json`, has no `@/` alias)
 - shared modules importing React, UI, contexts, hooks, or the browser API client
 - `src/` importing from `functions/`, except the route files in `src/app` and `src/server`
 - client code (views, components, hooks, contexts, features) importing `src/server`

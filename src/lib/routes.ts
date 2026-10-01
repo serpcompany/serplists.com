@@ -11,10 +11,6 @@ export type AppShell = 'public' | 'console';
 export type PublicRouteTier = 'marketing' | 'core' | 'secondary' | 'minimal';
 export type ConsoleSection = 'home' | 'templates' | 'runs' | 'archive' | 'account';
 
-// Every builder below returns a page's canonical path, with its trailing slash (the SERP URL
-// standard, src/lib/http/urlStandard.ts). Link to these, never to a form that redirects.
-
-// Paths from earlier versions of the app. next.config.ts redirects each to its page.
 export const LEGACY_PUBLIC_LIBRARY_PATH = '/checklists';
 export const LEGACY_ACCOUNT_PATH = '/account';
 export const LEGACY_CONSOLE_HOME_PATH = '/console';
@@ -22,25 +18,15 @@ export const LEGACY_CONSOLE_PROFILE_PATH = '/dashboard/profile';
 export const LEGACY_CONSOLE_TEMPLATES_PATH = '/console/templates';
 export const LEGACY_CONSOLE_RUNS_PATH = '/console/runs';
 
-// Canonical URLs (rel=canonical, og:url) always name the production site, also on staging
-// and preview hosts. The sitemaps use the same origin (src/lib/seo/siteOrigin.ts).
 export const SITE_ORIGIN = CANONICAL_ORIGIN;
 
 export const buildSiteUrl = (path: string): string => new URL(path, SITE_ORIGIN).toString();
 
-/**
- * A pathname as the router reports it (usePathname, location.pathname), in canonical form and
- * lower case, to compare with the builders below whichever form it came in.
- */
-const routeKey = (pathname: string): string => canonicalPath(pathname.trim().toLowerCase());
+const comparablePath = (pathname: string): string => canonicalPath(pathname.trim().toLowerCase());
 
-/**
- * True when `pathname` is the page `href` names or a page under it, for highlighting the
- * navigation item that holds the current page. The home page only matches itself.
- */
 export const isPathWithin = (pathname: string, href: string): boolean => {
-  const path = routeKey(pathname);
-  const target = routeKey(href);
+  const path = comparablePath(pathname);
+  const target = comparablePath(href);
   return path === target || (target !== '/' && path.startsWith(target));
 };
 
@@ -63,13 +49,11 @@ export const buildContactPath = (): string => '/contact/';
 export const buildPublicTemplatesPath = (): string => '/templates/';
 
 export const isPublicTemplatesDiscoveryPath = (pathname: string): boolean =>
-  routeKey(pathname) === buildPublicTemplatesPath();
+  comparablePath(pathname) === buildPublicTemplatesPath();
 
-// Unicode-aware and shared with the sitemap; see src/lib/categorySlug.ts.
 export const buildCategorySlug = (categoryName: string): string =>
   categorySlug(categoryName);
 
-// The slug may come from a URL, so it is normalized the same way as the names.
 export const findCategoryNameBySlug = (
   categories: string[],
   slug: string,
@@ -83,8 +67,6 @@ export const findCategoryNameBySlug = (
   );
 };
 
-// Category slugs from before accented letters were folded ('Café Guides' gave
-// 'caf-guides'). Only used to send an already indexed URL to the current one.
 const buildLegacyCategorySlug = (categoryName: string): string =>
   categoryName
     .trim()
@@ -112,7 +94,6 @@ export const buildPublicCategoriesPath = (): string => '/categories/';
 export const buildPublicCategoryPathForSlug = (slug: string): string =>
   `/categories/${encodeURIComponent(slug)}/`;
 
-// Null for a name with no letters or digits ('!!!', emoji only): it has no category page.
 export const buildPublicCategoryPath = (categoryName: string): string | null => {
   const slug = buildCategorySlug(categoryName);
   return slug ? buildPublicCategoryPathForSlug(slug) : null;
@@ -136,12 +117,6 @@ export const resolveLegacyTemplatesCategoryRedirectPath = (
 export const buildPublicProfilePath = (username: string): string =>
   `/profile/${encodeURIComponent(username)}/`;
 
-/**
- * The profile URL Account settings previews for the username field, or null while it is
- * empty. The saved username is linked as stored: one saved before usernames were
- * lowercased may be mixed case, and the lookup finds it only in that casing. An unsaved
- * edit previews the lowercase form the save will store.
- */
 export const buildProfilePreviewPath = (
   formUsername: string,
   savedUsername: string | null | undefined,
@@ -153,11 +128,6 @@ export const buildProfilePreviewPath = (
   return buildPublicProfilePath(username === savedUsername ? username : username.toLowerCase());
 };
 
-/**
- * Usernames are stored lowercase and profile lookups ignore case, so
- * /profile/JohnDoe/ loads @johndoe. Returns the path to replace the URL with
- * when its casing differs from the stored username, or null.
- */
 export const getCanonicalProfilePath = (
   routeUsername: string | undefined,
   storedUsername: string | null | undefined,
@@ -193,20 +163,14 @@ export const buildCanonicalPublicTemplatePath = (
   return buildPublicTemplatePath(ownerSlug, templateSlug);
 };
 
-// The only public template route is /profile/:username/:templateSlug/, so a template whose
-// owner has no username has no public URL. Public discovery lists only templates that have one.
 export const hasCanonicalPublicTemplatePath = (
   template: Pick<ChecklistTemplate, 'id' | 'slug' | 'userId' | 'ownerProfile'>,
 ): boolean => buildCanonicalPublicTemplatePath(template) !== null;
 
-// Every dashboard page sits under this path. /dashboard/ itself is not a page: a typed or
-// bookmarked /dashboard/ redirects (307, next.config.ts) to the dashboard's home.
 export const DASHBOARD_PATH = '/dashboard/';
 
 export const buildConsoleTemplatesPath = (): string => '/dashboard/templates/';
 
-// The dashboard's home, My Templates for now. Links go straight to it, since no link may
-// depend on a redirect; if the home moves, change it here and in next.config.ts.
 export const buildConsoleHomePath = (): string => buildConsoleTemplatesPath();
 
 export const buildConsoleTemplateCreatePath = (): string =>
@@ -223,7 +187,6 @@ export const buildConsoleTemplateEditPath = (templateId: string): string =>
 
 export const buildConsoleRunsPath = (): string => '/dashboard/runs/';
 
-// A Run's one page. The old /run/<id> address redirects here (308, next.config.ts).
 export const buildConsoleRunPath = (runId: string): string =>
   `/dashboard/runs/${encodeURIComponent(runId)}/`;
 
@@ -232,7 +195,7 @@ export const buildConsoleSettingsPath = (): string => '/dashboard/settings/';
 export const buildConsoleArchivePath = (): string => '/dashboard/archive/';
 
 export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
-  const path = routeKey(pathname);
+  const path = comparablePath(pathname);
 
   return (
     path === buildConsoleTemplateCreatePath() ||
@@ -242,12 +205,12 @@ export const isBlankTemplateEditorRoute = (pathname: string): boolean => {
 };
 
 export const resolveRouteShell = (pathname: string): AppShell => {
-  const path = routeKey(pathname);
+  const path = comparablePath(pathname);
 
   if (
-    path === routeKey(LEGACY_ACCOUNT_PATH) ||
+    path === comparablePath(LEGACY_ACCOUNT_PATH) ||
     path.startsWith(DASHBOARD_PATH) ||
-    path.startsWith(routeKey(LEGACY_CONSOLE_HOME_PATH))
+    path.startsWith(comparablePath(LEGACY_CONSOLE_HOME_PATH))
   ) {
     return 'console';
   }
@@ -256,7 +219,7 @@ export const resolveRouteShell = (pathname: string): AppShell => {
 };
 
 export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
-  const path = routeKey(pathname);
+  const path = comparablePath(pathname);
 
   if (path === buildHomePath()) {
     return 'marketing';
@@ -268,7 +231,7 @@ export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
 
   if (
     path === buildPublicTemplatesPath() ||
-    path === routeKey(LEGACY_PUBLIC_LIBRARY_PATH) ||
+    path === comparablePath(LEGACY_PUBLIC_LIBRARY_PATH) ||
     path.startsWith('/profile/')
   ) {
     return 'core';
@@ -287,24 +250,24 @@ export const resolvePublicRouteTier = (pathname: string): PublicRouteTier => {
 export const resolveConsoleSection = (
   pathname: string,
 ): ConsoleSection | null => {
-  const path = routeKey(pathname);
+  const path = comparablePath(pathname);
 
   if (
-    path === routeKey(LEGACY_ACCOUNT_PATH) ||
+    path === comparablePath(LEGACY_ACCOUNT_PATH) ||
     path === buildConsoleSettingsPath() ||
-    path === routeKey(LEGACY_CONSOLE_PROFILE_PATH)
+    path === comparablePath(LEGACY_CONSOLE_PROFILE_PATH)
   ) {
     return 'account';
   }
 
-  if (path === DASHBOARD_PATH || path === routeKey(LEGACY_CONSOLE_HOME_PATH)) {
+  if (path === DASHBOARD_PATH || path === comparablePath(LEGACY_CONSOLE_HOME_PATH)) {
     return 'home';
   }
 
   if (
     path === buildConsoleTemplateImportPath() ||
     path.startsWith(buildConsoleTemplatesPath()) ||
-    path.startsWith(routeKey(LEGACY_CONSOLE_TEMPLATES_PATH))
+    path.startsWith(comparablePath(LEGACY_CONSOLE_TEMPLATES_PATH))
   ) {
     return 'templates';
   }
@@ -315,7 +278,7 @@ export const resolveConsoleSection = (
 
   if (
     path.startsWith(buildConsoleRunsPath()) ||
-    path.startsWith(routeKey(LEGACY_CONSOLE_RUNS_PATH))
+    path.startsWith(comparablePath(LEGACY_CONSOLE_RUNS_PATH))
   ) {
     return 'runs';
   }
