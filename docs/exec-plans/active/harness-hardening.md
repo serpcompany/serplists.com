@@ -260,6 +260,16 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the round 1 settings reach the tests, and `!` is refused everywhere
+  (9f50b031..d3c7dcff). TD-58 is closed.
+  - `tests/tsconfig.json` inherits the four settings. It fixed 973 errors, 914 of them from
+    `noUncheckedIndexedAccess`.
+  - `typecheck-coverage.test.ts` fails when any checked tsconfig turns one off.
+  - ESLint's `no-non-null-assertion` covers every TypeScript file. It fixed 96 assertions.
+  - Tests narrow with `assert.exists()` or `tests/support/elements.ts` (`elementAt`,
+    `onlyElement`, `taskAt` and the like). These throw an error that names what is
+    missing.
+  - `pnpm run verify` passed at 198289da (5,811 tests), before this round.
 - 2026-10-01: phase 4, the test-side tracker fixes are done: TD-40, TD-48, TD-49, TD-51 to
   TD-57, and TD-50 apart from one test that waits for TD-2 (5c8111f4..d85d62e5).
   - `tests/tsconfig.json` sets `allowJs: false`, so a test that imports a `.mjs` without a
