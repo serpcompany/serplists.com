@@ -68,7 +68,7 @@ Text blocks are Markdown, rendered by `MarkdownBlock`; item and template descrip
 are plain text. Both are shown exactly as saved, so a backslash followed by `n` (in
 code or a Windows path) stays as typed. Seeds and bundled packs store real line breaks;
 `tests/unit/db/seeds/official-templates.test.ts` checks the official seed and
-`tests/unit/db/officialTemplatesSeed.test.ts` the bundled packs.
+`tests/unit/lib/publicTemplatePacks.test.ts` the bundled packs.
 
 The one exception is legacy data: the official seed once stored text blocks as a single
 line with a literal backslash-n for each line break. `expandLegacyEscapedNewlines`
