@@ -1,28 +1,20 @@
 import React, { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import type { PageVisit } from '@/lib/navigation/pageVisit';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 
 import { usePageVisit } from '@/hooks/usePageVisit';
 
-let restoreGlobals: () => void;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(navigation.window);
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 describe('usePageVisit', () => {
   it('starts current visits on a page StrictMode mounted, unmounted and mounted again, since the page enters its visit in an effect', async () => {
     navigation.reset('/dashboard/templates/');
@@ -31,7 +23,7 @@ describe('usePageVisit', () => {
       beginVisit = usePageVisit();
       return null;
     }
-    root = createRoot(createFakeContainer() as unknown as Element);
+    root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
 
     await act(async () => {
       root?.render(

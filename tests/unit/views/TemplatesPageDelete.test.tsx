@@ -1,7 +1,8 @@
 import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 import { toast } from 'sonner';
 
 import { createApiError } from '@/lib/api-errors';
@@ -13,7 +14,6 @@ import {
   createFakeContainer,
   FakeElement,
   findAll,
-  installFakeDomGlobals,
   type FakeNode,
 } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
@@ -70,17 +70,9 @@ const model = (removeTemplate: (id: string) => Promise<void>) => ({
   preferenceOwnerId: 'user-1',
 });
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest();
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -88,7 +80,7 @@ beforeEach(() => {
 async function renderTemplates(removeTemplate: (id: string) => Promise<void>) {
   mockUseDashboardTemplatesModel.mockReturnValue(model(removeTemplate));
   const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   await act(async () => {
     navigation.reset('/');
     root?.render(

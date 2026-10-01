@@ -1,26 +1,18 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { createFakeContainer } from '../../../fixtures/fakeDom';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-let restoreGlobals: () => void;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest();
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 type ShownRun = { runId: string; isPublic: boolean };
 
 async function mountShareLink(initial: ShownRun) {
@@ -37,7 +29,7 @@ async function mountShareLink(initial: ShownRun) {
     state = useRunShareLink(runId, { createShare, stopSharing }, isPublic);
     return null;
   }
-  root = createRoot(createFakeContainer() as unknown as Element);
+  root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
   const render = async (shown: ShownRun) => {
     await act(async () => {
       root?.render(<Probe {...shown} />);

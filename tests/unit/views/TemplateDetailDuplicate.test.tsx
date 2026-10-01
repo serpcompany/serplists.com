@@ -1,7 +1,8 @@
 import '../../support/mockedNextNavigation';
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import TemplateDetail from '@/views/TemplateDetail';
 
@@ -11,7 +12,6 @@ import {
   createFakeContainer,
   FakeElement,
   findAll,
-  installFakeDomGlobals,
   type FakeNode,
 } from '../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
@@ -102,17 +102,9 @@ vi.mock('@/lib/access-flow', () => ({
   navigateToLoginWithReturnPath: vi.fn(),
 }));
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(navigation.window);
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
 beforeEach(() => {
   vi.clearAllMocks();
   template.current = buildV0DemoPrivateTemplate();
@@ -120,7 +112,7 @@ beforeEach(() => {
 
 async function renderTemplateDetail() {
   const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   navigation.reset('/dashboard/templates/tpl-1', { routes: ['/dashboard/templates/[id]'] });
   await act(async () => {
     root?.render(<RoutedPages pages={{ '/dashboard/templates/[id]': <TemplateDetail /> }} />);

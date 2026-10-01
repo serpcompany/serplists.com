@@ -2,10 +2,11 @@ import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import CategoryDetailRoute from '@/views/CategoryDetailRoute';
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 type PageRender = { param: string | undefined; slugAtMount: string | undefined };
@@ -28,25 +29,16 @@ vi.mock('@/views/CategoryDetail', async () => {
   };
 });
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(navigation.window);
 
 let root: Root | null = null;
 beforeEach(() => {
   probe.mounts = 0;
   probe.renders = [];
 });
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 const mountCategoryRoute = (initialPath: string) => {
   navigation.reset(initialPath, { routes: ['/categories/[categorySlug]'] });
-  root = createRoot(createFakeContainer() as unknown as HTMLElement);
+  root = fakeDom.track(createRoot(createFakeContainer() as unknown as HTMLElement));
   act(() => root!.render(<CategoryDetailRoute />));
 };
 

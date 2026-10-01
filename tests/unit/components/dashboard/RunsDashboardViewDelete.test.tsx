@@ -1,7 +1,8 @@
 import '../../../support/mockedNextNavigation';
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 import { toast } from 'sonner';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
@@ -14,7 +15,6 @@ import {
   createFakeContainer,
   FakeElement,
   findAll,
-  installFakeDomGlobals,
   type FakeNode,
 } from '../../../fixtures/fakeDom';
 import { navigation } from '../../../support/nextNavigation';
@@ -48,24 +48,16 @@ const run: ChecklistRun = {
   userId: 'user-1',
 };
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest();
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 async function renderRuns(onDeleteRun: (runId: string) => Promise<void>) {
   const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   await act(async () => {
     navigation.reset('/');
     root?.render(

@@ -2,10 +2,11 @@ import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -16,24 +17,15 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-let restoreGlobals: () => void = () => {};
 let root: Root | null = null;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
+const fakeDom = aFakeDomForEachTest(navigation.window);
 const unmountThePreviousBar = () => act(() => root?.unmount());
 
 const textAfterMountingAt = async (url: string) => {
   unmountThePreviousBar();
   navigation.reset(url);
   const container = createFakeContainer();
-  root = createRoot(container as unknown as HTMLElement);
+  root = fakeDom.track(createRoot(container as unknown as HTMLElement));
   await act(async () => root?.render(<DevLoginBar />));
   return container.textContent;
 };

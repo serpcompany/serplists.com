@@ -1,7 +1,8 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import type { AgentKey } from '@/lib/api';
@@ -9,7 +10,7 @@ import { ApiError } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 
-import { click, createFakeContainer, findAll, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { click, createFakeContainer, findAll, findByText } from '../../fixtures/fakeDom';
 import { createTestQueryClient } from '../../fixtures/queryClient';
 
 const apiMocks = vi.hoisted(() => ({
@@ -42,18 +43,9 @@ const activeKey: AgentKey = {
 };
 const revokedKey: AgentKey = { ...activeKey, revokedAt: '2026-09-19T02:00:00.000Z', status: 'revoked' };
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest();
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -71,7 +63,7 @@ async function openSectionWithKeysLoadedMomentsAgo(keys: AgentKey[]) {
     hostMismatch: false,
   });
   const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>

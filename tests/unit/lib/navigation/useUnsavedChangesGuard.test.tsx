@@ -1,13 +1,14 @@
 import '../../../support/mockedNextNavigation';
 import React, { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 
 import { Link } from '@/components/navigation/Link';
 import { confirmLeave, keepGuardedWork, leaveAfterConfirmed } from '@/lib/navigation/leaveGuard';
 import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
-import { click, createFakeContainer, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
+import { click, createFakeContainer, findByText, type FakeElement } from '../../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../../support/nextNavigation';
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
@@ -36,19 +37,10 @@ function RunPage({ dirty, keepWork }: { dirty: boolean; keepWork?: () => boolean
   );
 }
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(navigation.window);
 
 let root: Root | null = null;
 let container: FakeElement;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 const announceReloadOrTabClose = () => {
   const event = new Event('beforeunload', { cancelable: true });
   Object.defineProperty(event, 'returnValue', { value: 'unset', writable: true });
@@ -59,7 +51,7 @@ const announceReloadOrTabClose = () => {
 async function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWork?: () => boolean } = {}) {
   navigation.reset('/runs/r1', { before: ['/runs'], routes: ['/', '/runs', '/runs/[id]'] });
   container = createFakeContainer();
-  root = createRoot(container as unknown as HTMLElement);
+  root = fakeDom.track(createRoot(container as unknown as HTMLElement));
   await act(async () => {
     root?.render(
       <RoutedPages

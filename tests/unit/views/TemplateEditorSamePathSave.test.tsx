@@ -1,14 +1,15 @@
 import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { Link } from '@/components/navigation/Link';
 import type { TemplateEditorSaveResult } from '@/features/template-editor/useTemplateEditorModel';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import TemplateEditor from '@/views/TemplateEditor';
 
-import { click, createFakeContainer, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { click, createFakeContainer, findByText } from '../../fixtures/fakeDom';
 import { deferred } from '../../support/deferred';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
 
@@ -97,17 +98,9 @@ vi.mock('@/components/ui/dialog', () => {
 });
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest(navigation.window);
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -130,7 +123,7 @@ async function renderNewTemplateEditor() {
     routes: ['/dashboard/templates/new', '/dashboard/templates', '/dashboard/runs'],
   });
   const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   await act(async () => {
     root?.render(
       <>

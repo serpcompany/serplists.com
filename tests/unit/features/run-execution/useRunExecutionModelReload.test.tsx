@@ -1,13 +1,14 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { aFakeDomForEachTest } from '../../../support/fakeDomRoots';
 
 import type { RunExecutionApiClient } from '@/features/run-execution/runPersistence';
 import type { UseRunExecutionModelOptions } from '@/features/run-execution/useRunExecutionModel';
 import type { ChecklistRun } from '@/types/checklist';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { createFakeContainer } from '../../../fixtures/fakeDom';
 
 vi.mock('@/lib/api', () => ({
   api: { getChecklistHistory: vi.fn(() => new Promise(() => {})) },
@@ -15,18 +16,9 @@ vi.mock('@/lib/api', () => ({
 
 import { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 
-let restoreGlobals: () => void;
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
+const fakeDom = aFakeDomForEachTest();
 
 let root: Root | null = null;
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
-
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const storedRun = (id: string) => ({
@@ -67,7 +59,7 @@ async function mountModel(initial: UseRunExecutionModelOptions) {
     return null;
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  root = createRoot(createFakeContainer() as unknown as Element);
+  root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
   const render = async (options: UseRunExecutionModelOptions) => {
     await act(async () => {
       root?.render(
