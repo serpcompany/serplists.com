@@ -1,4 +1,4 @@
-export const APP_D1_BINDING = "DB";
+const APP_D1_BINDING = "DB";
 
 const isMissingOrPlaceholder = (databaseId) => !databaseId || databaseId.includes("<");
 
