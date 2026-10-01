@@ -60,8 +60,6 @@ import { useTemplateEditPermission } from "@/features/template-editor/useTemplat
 
 type TemplateEditorModel = ReturnType<typeof useTemplateEditorModel>;
 
-// The width (Tailwind's lg) from which the outline sits beside the form; below it, it opens
-// in a sheet from the header's Outline button.
 const OUTLINE_BESIDE_FORM_QUERY = "(min-width: 1024px)";
 
 const TemplateEditorLoading = () => (
@@ -70,8 +68,6 @@ const TemplateEditorLoading = () => (
   </DashboardContentShell>
 );
 
-// The shared template mutations never toast, so the editor reports its own saves: a
-// success always, a failure only for a save the user left (the editor shows it inline).
 const showTemplateSaveToasts = (feedback: TemplateSaveFeedback) => {
   if (feedback.successMessage) {
     toast.success(feedback.successMessage);
@@ -86,23 +82,14 @@ type TemplateEditorFormProps = {
   model: TemplateEditorModel;
 };
 
-// Mounted only once the template has loaded (see TemplateEditor), so the form, the
-// outline, and the header start from the loaded values.
 const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const router = useAppRouter();
   const { user } = useAuth();
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  // Below lg the outline is not beside the form: it opens in a sheet.
-  const isWide = useMediaQuery(OUTLINE_BESIDE_FORM_QUERY);
+  const isOutlineBesideForm = useMediaQuery(OUTLINE_BESIDE_FORM_QUERY);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
-  // The last save was refused because someone saved the template after it loaded.
   const [editConflict, setEditConflict] = useState(false);
-  // A Clipy draft is being generated; it replaces the form when it arrives.
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-  // A save that finishes after the user left must not act on the page (a create's
-  // redirect would pull them off the page they went to). Only leaving the path counts:
-  // the sidebar's New Template link here keeps this editor mounted, and a create in
-  // flight must still leave for My Templates, not stay here as unsaved work.
+  const [isGeneratingClipyDraft, setIsGeneratingClipyDraft] = useState(false);
   const beginVisit = usePageVisit({ endOn: "pathname" });
   
   const {
@@ -121,12 +108,10 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     resolver: zodResolver(templateEditorFormSchema),
     defaultValues: model.initialValues,
   });
-  // The header and the preview show the draft as it is typed.
   const [draftTitle, draftDescription, draftSections] = useWatch({
     control: templateForm.control,
     name: ["title", "description", "sections"],
   });
-  // A picked file reaches the form only when its upload finishes.
   const { uploads, pendingCount } = usePendingTemplateEditorUploads();
   const hasPendingUploads = pendingCount > 0;
   const shouldBlockNavigation = shouldBlockTemplateEditorNavigation({
@@ -136,21 +121,16 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     hasPendingUploads,
   });
 
-  // The form starts from model.initialValues; this follows a later change (the new
-  // template's defaults are set once the model mounts).
   useEffect(() => {
     templateForm.reset(model.initialValues);
   }, [model.initialValues, templateForm]);
 
-  // Keeps the edits when the session ends in the background (set below, once access exists).
-  const keepWorkRef = useRef<() => boolean>(() => false);
-  // Leaving during a save still asks: the save can fail, and the edits are only here.
+  const keepWorkOnSessionEndRef = useRef<() => boolean>(() => false);
   const { allowLeave, guardLeave } = useTemplateEditorLeaveGuard(
     shouldBlockNavigation,
     getTemplateEditorLeaveMessage({ hasPendingUploads, isSaving: model.isSaving }),
-    () => keepWorkRef.current(),
+    () => keepWorkOnSessionEndRef.current(),
   );
-  // Plan limits and an ended session: the upgrade or sign-in action, and the kept draft.
   const access = useTemplateEditorAccess({
     isCreate: !id,
     templateId: id,
@@ -159,25 +139,23 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     allowLeave,
     guardLeave,
   });
-  // A file still uploading is lost with the session; only form edits are kept.
   const isDirty = templateForm.formState.isDirty;
   useEffect(() => {
-    keepWorkRef.current = () => !isDirty || access.keepDraft();
+    keepWorkOnSessionEndRef.current = () => !isDirty || access.keepDraft();
   });
 
+  const fillFormAsUnsavedWork = (values: TemplateEditorFormValues) => {
+    templateForm.reset(values, { keepDefaultValues: true });
+    handleSelectTemplateInfo();
+  };
+
   const handleSave = async () => {
-    // Save is disabled meanwhile; this also covers a call that skips the button.
-    if (uploads.count() > 0 || isGeneratingDraft) {
+    if (uploads.count() > 0 || isGeneratingClipyDraft) {
       return;
     }
 
-    // model.save validates first and returns errors that name the field; the alert
-    // below shows them. The copy is what gets sent; the form stays editable meanwhile.
     const submitted = cloneTemplateEditorFormValues(templateForm.getValues());
     const visit = beginVisit();
-    // The kept draft is settled, and the outcome toasted, even when the user chose to
-    // leave while it saved (a failure must not be silent); the rest (errors, notices,
-    // the redirect) happens only while they are still here.
     const result = await saveTemplateForVisit({
       visit,
       save: () => model.save(submitted),
@@ -191,7 +169,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
       return;
     }
 
-    // A plan gate or an ended session shows as a notice with its action, not as an error.
     setErrors(access.handleSaveResult(result) ? [] : result.errors);
     setEditConflict(Boolean(result.editConflict));
     if (!result.success || !result.savedValues) {
@@ -199,7 +176,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     }
 
     if (shouldNavigateToTemplatesAfterSave({ id, result })) {
-      // The create is saved (and the editor was locked meanwhile): nothing to lose.
       templateForm.reset(result.savedValues);
       allowLeave();
       router.push(buildConsoleTemplatesPath());
@@ -222,21 +198,20 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
     model.reload();
   };
 
-  // A create that saves or a Clipy draft that generates locks the editor (see the fieldsets).
   const isLocked =
-    shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) || isGeneratingDraft;
+    shouldLockTemplateEditorWhileSaving({ id, isSaving: model.isSaving }) || isGeneratingClipyDraft;
   return (
     <div className="flex min-w-0 flex-col" data-template-editor="true">
       <TemplateHeader
         isEditing={!!id}
         isSaving={model.isSaving}
-        isGenerating={isGeneratingDraft}
+        isGenerating={isGeneratingClipyDraft}
         isUploading={hasPendingUploads}
         onCancel={() => router.push(buildConsoleTemplatesPath())}
         onPreview={() => setIsPreviewOpen(true)}
         onSave={handleSave}
         outlineTrigger={
-          isWide ? undefined : (
+          isOutlineBesideForm ? undefined : (
             <Button
               disabled={isLocked}
               onClick={() => setIsOutlineOpen(true)}
@@ -274,25 +249,19 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
 
         <TemplateEditorAccessNotices
           draft={access.draft}
-          // The notices sit outside the locked fieldset: a restore during a create would be
-          // wiped when it finishes, and a Clipy draft arriving later would replace it.
           draftActionsDisabled={isLocked}
           isStartingCheckout={access.isStartingCheckout}
           notice={access.notice}
           onDiscardDraft={access.discardDraft}
           onRestoreDraft={() => {
-            // Work typed since the page opened is replaced only on a yes.
             restoreKeptTemplateDraft({
               hasUnsavedWork: templateForm.formState.isDirty || uploads.count() > 0,
               takeDraft: access.restoreDraft,
               apply: (restored) => {
-                // Against the blank (or loaded) defaults, so the restored draft counts as unsaved.
-                templateForm.reset(restored.values, { keepDefaultValues: true });
-                // Edits to an existing template save against the version they were made on.
+                fillFormAsUnsavedWork(restored.values);
                 if (id && restored.baseVersion !== undefined) {
                   model.setVersion(restored.baseVersion);
                 }
-                handleSelectTemplateInfo();
               },
             });
           }}
@@ -303,20 +272,12 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
           onDiscardOtherContextDraft={access.discardOtherContextDraft}
         />
 
-        {/* A create leaves the page when it finishes, so edits made meanwhile could not
-            be kept: lock the editor until then. An update keeps them (see handleSave).
-            A generated Clipy draft replaces the form, so it is locked while that runs. */}
         <fieldset className="m-0 flex min-w-0 flex-col gap-6 border-0 p-0" disabled={isLocked}>
           {!id ? (
             <GenerateFromClipy
-              // Unsaved work (typed, restored, or an earlier draft) is replaced only on a yes.
               confirmReplace={() => confirmReplaceTemplateDraft(templateForm.formState.isDirty)}
-              onGeneratingChange={setIsGeneratingDraft}
-              onGenerated={(draft) => {
-                // Against the blank defaults, so the draft counts as unsaved.
-                templateForm.reset(draft, { keepDefaultValues: true });
-                handleSelectTemplateInfo();
-              }}
+              onGeneratingChange={setIsGeneratingClipyDraft}
+              onGenerated={fillFormAsUnsavedWork}
             />
           ) : null}
 
@@ -324,7 +285,7 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
             <FormProvider {...templateForm}>
               <div className="grid items-start gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
                 <TemplateEditorOutline
-                  besideForm={isWide}
+                  besideForm={isOutlineBesideForm}
                   locked={isLocked}
                   onSheetOpenChange={setIsOutlineOpen}
                   sheetOpen={isOutlineOpen}
@@ -366,12 +327,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   );
 };
 
-// Shows the spinner or the load error, and creates the editor only once the template
-// has loaded. A form created earlier would start from the blank defaults and be reset
-// after the outline mounted, so the first frame showed "New Template" and one empty
-// section. Reloading (Load latest version) passes through loading again, which
-// remounts the editor with the reloaded values. A viewer who cannot save this template
-// (their Organization role, or someone else's template) gets a notice instead.
 const TemplateEditor = () => {
   const { id } = useParams<{ id?: string }>();
   const router = useAppRouter();

@@ -71,23 +71,19 @@ import { Link } from '@/components/navigation/Link';
 const TemplateDetail = () => {
   const { id } = useParams<{ id: string }>();
   const router = useAppRouter();
-  // Where "Log in to copy template" brings the user back to.
-  const currentPath = useCurrentPath();
-  // Actions below await a request; they move the user only if they are still here.
+  const loginReturnPath = useCurrentPath();
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
   const {
     activeTeamId, canEditTemplates, getPermissions, isRoleUnavailable, isTeamWorkspace, retryWorkspace, teams,
     workspaceStatus,
   } = useWorkspace();
-  // No list: the model loads this template by id (docs/design-docs/d1-cost.md).
   const { createRun, createTemplate, deleteTemplate } = useTemplates();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
   const [isCloningTemplate, setIsCloningTemplate] = useState(false);
-  // Set synchronously, so a second Duplicate or copy before the re-render cannot create a second copy.
   const cloneInFlight = useRef(false);
   const [isCreatingShare, setIsCreatingShare] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -121,25 +117,18 @@ const TemplateDetail = () => {
     workspaceStatus,
   });
   const displayTemplate = template;
-  // Organization Templates follow the viewer's role, never who created them.
   const { canEdit: canEditTemplate, canViewHistory: canViewTemplateHistory } = permissions;
   const copyButton = getCopyTemplateButton({
     billingState,
     canEditTemplates,
     isCloning: isCloningTemplate,
     isTeamWorkspace,
-    // Personal users are never kept waiting: their status is known at once.
     isWorkspaceLoading: workspaceStatus === 'loading' || workspaceStatus === 'error',
     template: displayTemplate,
   });
-  // Runs and copies of another Organization's private template go to that Organization.
   const otherDestination = displayTemplate ? nameOtherTemplateDestination(displayTemplate, activeTeamId, teams) : undefined;
-  // The model's template is the only source: Share and the switch both keep it current.
   const isPublic = displayTemplate?.isPublic ?? false;
-  // Share and a visibility change must not race on the same template version.
   const isChangingVisibility = isCreatingShare || isUpdatingVisibility;
-  // Start Run only where the API accepts it: in the Organization that owns a private
-  // Organization Template (where its runs go), otherwise in the active context.
   const { canStartRun } = getTemplateActionPermissions({
     activeTeamId,
     isRepoTemplate: Boolean(displayTemplate && isRepoTemplate(displayTemplate)),
@@ -147,17 +136,14 @@ const TemplateDetail = () => {
     template: displayTemplate ?? { isPublic: false, userId: '' },
     userId: user?.id,
   });
-  // A private Organization Template runs there; with the teams request failed that role is unknown.
   const startRunRoleUnavailable = Boolean(displayTemplate && !displayTemplate.isPublic) &&
     isRoleUnavailable(displayTemplate?.teamId);
   const totalTasks = displayTemplate?.sections.reduce(
     (count, section) => count + section.items.length,
     0,
   ) ?? 0;
-  // Parsed as database timestamps (UTC when zoneless); unreadable ones show nothing.
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
   const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
-  // Versions and the events no version records (archive, restore, Share), newest first.
   const historyEntries = buildTemplateHistoryTimeline(history?.data);
 
   const handleUpgrade = () =>
@@ -174,7 +160,6 @@ const TemplateDetail = () => {
     try {
       const result = await startRun(runName);
       if (result.kind === 'ok' && result.runId) {
-        // The run exists, whether or not the user is still here to open it.
         setRunDialogOpen(false);
       }
       await followTemplateActionResult(result, visit, {
@@ -218,8 +203,6 @@ const TemplateDetail = () => {
     }
   };
 
-  // Duplicate (a template the user can edit) and copy (someone else's) both create a
-  // template, so both can hit the plan's template limit and must offer the upgrade.
   const handleCloneTemplate = async () => {
     if (!displayTemplate || cloneInFlight.current) {
       return;
@@ -312,7 +295,6 @@ const TemplateDetail = () => {
       if (visit.isCurrent()) {
         router.push(buildConsoleTemplatesPath());
       } else {
-        // The user moved on (another template can keep this page mounted).
         setIsDeleting(false);
       }
     } catch (error) {
@@ -338,7 +320,6 @@ const TemplateDetail = () => {
     </Link>
   );
 
-  // A failed request is not a missing template: say so and let the user retry.
   if (loadError && !displayTemplate) {
     return (
       <DashboardContentShell>
@@ -405,7 +386,6 @@ const TemplateDetail = () => {
             canEdit={canEditTemplate}
             canShare={permissions.canShare}
             copyButton={copyButton}
-            // The loaded id, never the route param: this page also opens by slug, the editor only by id.
             editHref={buildConsoleTemplateEditPath(displayTemplate.id)}
             exportDisabled={billingState.isLoading}
             exportLabel={getTemplateExportLabel(billingState)}
@@ -413,7 +393,7 @@ const TemplateDetail = () => {
             isCloning={isCloningTemplate}
             isCreatingShare={isCreatingShare}
             isSignedIn={Boolean(user)}
-            loginHref={withReturnPath(buildLoginPath(), currentPath)}
+            loginHref={withReturnPath(buildLoginPath(), loginReturnPath)}
             onClone={() => void handleCloneTemplate()}
             onDelete={() => setArchiveDialogOpen(true)}
             onExport={() => void handleExport()}
@@ -459,8 +439,6 @@ const TemplateDetail = () => {
         </div>
       </DetailPageLayout>
 
-      {/* Users see a delete. The API archives the template (making it private), and
-          /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
       <ConfirmDialog
         confirmLabel="Delete"
         description={`Are you sure you want to delete "${displayTemplate.title}"?`}

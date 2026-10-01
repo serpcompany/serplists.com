@@ -44,7 +44,8 @@ missing from the form and the next save would end in a conflict. From that one r
   public URL, also for an Organization's template), and the owner (`ownership`).
 
 The page creates the form only once the load has ended without an error and the permission check
-below has answered.
+below has answered. The form then follows the model's `initialValues` whenever they change: the
+new-template route builds its defaults again once the model has mounted.
 
 ### Who may open the form
 
@@ -261,7 +262,8 @@ the page that started it ([FRONTEND.md](../FRONTEND.md#data-and-state)).
 - **The visibility switch** (`setTemplateVisibility`) sends only `is_public`, with the loaded
   version.
 
-Share and the switch apply what the server accepted (the version and slug in its answer,
+Share and the switch write the same template version, so each is disabled while either runs.
+They apply what the server accepted (the version and slug in its answer,
 `applyTemplateSaveResult`) only while the page still shows that template, and after a stale-copy
 answer they reload the template before the control re-enables
 ([client data](client-data.md#stale-copies-and-conflicts)). An accepted change stands even when
