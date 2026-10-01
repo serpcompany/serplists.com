@@ -6,6 +6,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { count, eq, inArray } from "drizzle-orm";
 import { afterAll, assert, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { onlyElement } from "../support/elements";
 import { readJson } from "../support/readJson";
 import {
   DEV_PASSWORD_HASH,
@@ -109,7 +110,7 @@ async function fixtureCounts(db: LocalDb) {
       .where(inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS)),
     db.select({ value: count() }).from(audit_events).where(inArray(audit_events.subject_id, TEST_TEAM_IDS)),
   ]);
-  return results.map(([row]) => row.value);
+  return results.map((rows) => onlyElement(rows).value);
 }
 
 async function insertOutsider(db: LocalDb) {
@@ -167,7 +168,7 @@ describe("local Drizzle fixture commands", () => {
       await withLocalD1(persistPath, async (db) => {
         expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
 
-        const [admin] = await db.select().from(users).where(eq(users.id, "user-1"));
+        const admin = onlyElement(await db.select().from(users).where(eq(users.id, "user-1")));
         const [teamRun] = await db
           .select()
           .from(checklist_runs)

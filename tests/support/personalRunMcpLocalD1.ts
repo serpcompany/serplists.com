@@ -8,6 +8,7 @@ import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-r
 import { contentSaveBytes, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
 import { platformProxyOnLocalD1, runToolInRepo } from "../integration/local-d1-handler-env";
 import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
+import { firstOf } from "./elements";
 import { jsonObject, readJson } from "./readJson";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -116,7 +117,7 @@ export function sectionsAbout1KbUnderTheTemplateLimit(): JsonRecord[] {
     };
     sections.push(areaReadWhole);
   }
-  const longTaskText = longTaskReadInParts.contents[0];
+  const longTaskText = firstOf(longTaskReadInParts.contents);
   const bytesPerCharacter = new TextEncoder().encode(PROSE).byteLength / PROSE_CHARACTERS.length;
   const roomToGrowUntilAbout1KbUnderTheLimit = TEMPLATE_CONTENT_MAX_BYTES - 1_000 - contentSaveBytes(sections);
   longTaskText.value = proseOfWholeCharacters(

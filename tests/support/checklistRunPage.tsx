@@ -1,5 +1,6 @@
 import { renderPageAt } from './mockedNextNavigation';
 import { vi } from 'vitest';
+import { firstOf } from './elements';
 
 import './mockedWorkspaceRoles';
 
@@ -108,7 +109,7 @@ export const renderRunPage = (
   run: ChecklistRun,
   options: { noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
 ) => {
-  const done = run.sections[0].items.filter((item) => item.isCompleted).length;
+  const done = firstOf(run.sections).items.filter((item) => item.isCompleted).length;
   mockUseRunExecutionModel.mockReturnValue(runPageModel({
     counts: countRunExecutionItems(run),
     isSharedRun: options.shared === true,

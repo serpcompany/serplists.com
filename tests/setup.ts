@@ -23,15 +23,17 @@ class TextOnlyFileReader {
     blob.arrayBuffer().then((buffer) => {
       const text = new TextDecoder().decode(buffer);
       this.result = text;
-      if (this.onload) {
+      const { onload } = this;
+      if (onload) {
         setTimeout(() => {
-          this.onload!({ target: { result: text } });
+          onload.call(this, { target: { result: text } });
         }, 0);
       }
     }).catch(() => {
-      if (this.onerror) {
+      const { onerror } = this;
+      if (onerror) {
         setTimeout(() => {
-          this.onerror!();
+          onerror.call(this);
         }, 0);
       }
     });

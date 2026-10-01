@@ -2,6 +2,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { elementAt } from "../support/elements";
 import { jsonObject, readJson } from "../support/readJson";
 import { activeRunCapacityAvailableSql } from "../../functions/api/utils/active-run-limit";
 import { templateCapacityAvailableSql } from "../../functions/api/utils/template-writes";
@@ -75,7 +76,7 @@ async function burst(userIds: string[], handler: Handler, makeRequest: (index: n
   vi.mocked(getSessionUserId).mockImplementation(async (request: Request) => request.headers.get("x-test-user"));
   const responses = await Promise.all(Array.from({ length: PARALLEL }, (_, index) => {
     const request = makeRequest(index);
-    request.headers.set("x-test-user", userIds[index % userIds.length]);
+    request.headers.set("x-test-user", elementAt(userIds, index % userIds.length));
     return handler(request, d1.env as never);
   }));
   const statuses = responses.map((response) => response.status);

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { firstOf } from "../support/elements";
 import { apiJson } from "./support/api-requests";
 import { loginAsAdmin } from "./support/sign-in";
 import {
@@ -36,7 +37,7 @@ async function addATaskFromAnotherTab(page: Page, templateId: string) {
     `/templates/${templateId}`,
   );
   const { sections } = template;
-  sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
+  firstOf(sections).items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
   await apiJson(page, `/templates/${templateId}`, {
     method: "PUT",
     body: { sections, expected_version: template.version },

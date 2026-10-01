@@ -104,7 +104,7 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
       ...workspaceState,
       getPermissions: (teamId?: string) => getResourcePermissions(teamId, roleSetByATestOrImpliedByTheActiveContext),
       isRoleUnavailable: (teamId?: string) =>
-        Boolean(teamId) && workspaceState.teamsUnavailable && !(teamId! in workspaceState.roles),
+        teamId ? workspaceState.teamsUnavailable && !(teamId in workspaceState.roles) : false,
       retryWorkspace: vi.fn(),
     }),
   };

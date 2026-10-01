@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { onlyElement } from "../support/elements";
 import {
   applyMigration,
   bodyOf,
@@ -25,6 +26,11 @@ import {
 } from "../../functions/api/utils/personal-run-key";
 
 let runId = "";
+
+const auditEventsOfTheRun = async () => onlyElement(await rows<{ count: number }>(
+  "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
+  runId,
+)).count;
 
 describe.sequential("Personal Run Key MCP against real local D1", () => {
   beforeAll(startLocalD1BeforeTheRunKeyMigrations, 60_000);
@@ -146,7 +152,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     }));
     expect(toolPayload(completeBody).run).toMatchObject({ revision: 3, progress: 33 });
 
-    const [storedRun] = await rows<JsonRecord>("SELECT * FROM checklist_runs WHERE id = ?", runId);
+    const storedRun = onlyElement(await rows<JsonRecord>("SELECT * FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun).toMatchObject({
       user_id: "user-a",
       team_id: null,
@@ -181,10 +187,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
   });
 
   it("allows exactly one same-revision update and writes exactly one audit event", async () => {
-    const beforeAudit = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
+    const auditEventsBefore = await auditEventsOfTheRun();
 
     const updates = await Promise.all([
       callTool("update_run", {
@@ -206,13 +209,9 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(bodies.filter((body) => toolError(body) === undefined)).toHaveLength(1);
     expect(bodies.filter((body) => toolError(body) === "edit_conflict")).toHaveLength(1);
 
-    const [storedRun] = await rows<JsonRecord>("SELECT revision FROM checklist_runs WHERE id = ?", runId);
+    const storedRun = onlyElement(await rows<JsonRecord>("SELECT revision FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun.revision).toBe(4);
-    const afterAudit = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
-    expect(afterAudit[0].count).toBe(beforeAudit[0].count + 1);
+    expect(await auditEventsOfTheRun()).toBe(auditEventsBefore + 1);
   });
 
   it("rolls a run mutation back when its audit insert fails", async () => {
@@ -220,10 +219,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       "SELECT items, progress, revision, updated_at FROM checklist_runs WHERE id = ?",
       runId,
     );
-    const [beforeAudit] = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
+    const auditEventsBefore = await auditEventsOfTheRun();
     await env.DB.prepare(`
       CREATE TRIGGER reject_test_mcp_audit
       BEFORE INSERT ON audit_events
@@ -252,22 +248,18 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       "SELECT items, progress, revision, updated_at FROM checklist_runs WHERE id = ?",
       runId,
     )).toEqual([beforeRun]);
-    const [afterAudit] = await rows<{ count: number }>(
-      "SELECT count(*) AS count FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?",
-      runId,
-    );
-    expect(afterAudit.count).toBe(beforeAudit.count);
+    expect(await auditEventsOfTheRun()).toBe(auditEventsBefore);
   });
 
   it("holds a Free owner to the active run limit under concurrent start_run calls", async () => {
     const freeLimit = 3;
-    const activeRuns = async () => (await rows<{ count: number }>(`
+    const activeRuns = async () => onlyElement(await rows<{ count: number }>(`
       SELECT count(*) AS count FROM checklist_runs
       WHERE user_id = 'user-a' AND team_id IS NULL AND status = 'in_progress' AND deleted_at IS NULL
-    `))[0].count;
-    const createdAudits = async () => (await rows<{ count: number }>(
+    `)).count;
+    const createdAudits = async () => onlyElement(await rows<{ count: number }>(
       "SELECT count(*) AS count FROM audit_events WHERE action = 'checklist_run.created' AND actor_user_id = 'user-a'",
-    ))[0].count;
+    )).count;
     const activeBefore = await activeRuns();
     const auditsBefore = await createdAudits();
     expect(activeBefore).toBeLessThan(freeLimit);

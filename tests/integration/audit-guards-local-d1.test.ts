@@ -61,7 +61,7 @@ async function burst(handler: Handler, makeRequest: (index: number) => Request) 
 }
 
 const request = (path: string, method: string, body?: unknown) =>
-  new Request(`http://localhost/api/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  new Request(`http://localhost/api/${path}`, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
 function envWhoseNextBatchFollowsAConcurrentWrite(statement: string): never {
   const db = d1.env.DB;

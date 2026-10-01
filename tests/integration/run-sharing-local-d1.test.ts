@@ -57,7 +57,7 @@ async function call(path: string, method: string, userId: string | null, body?: 
   vi.mocked(getSessionUserId).mockResolvedValue(userId);
   const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
     method,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), d1.env as never);
   return { status: response.status, body: await readJson(response, jsonObject) };
 }

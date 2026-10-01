@@ -21,6 +21,7 @@ import {
   shareToken,
 } from "../../scripts/d1-profile-lib";
 import { apiEnv } from "../support/apiEnv";
+import { firstOf } from "../support/elements";
 import { readJson } from "../support/readJson";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
@@ -361,7 +362,7 @@ async function signIn(email: string): Promise<string> {
   const response = await apiWorker.fetch(signingIn, plainEnv);
   const session = response.headers
     .getSetCookie()
-    .map((cookie) => cookie.split(";")[0])
+    .map((cookie) => firstOf(cookie.split(";")))
     .find((cookie) => cookie.startsWith("better-auth.session_token="));
   if (!session) throw new Error(`Signing in ${email} answered ${response.status} with no session cookie`);
   return session;

@@ -1,6 +1,7 @@
 import { expect, vi } from "vitest";
 import { z } from "zod";
 import { SqliteD1 } from "./sqlite-d1";
+import { onlyElement } from "./elements";
 import { apiEnv } from "./apiEnv";
 import { jsonObjects, readJson } from "./readJson";
 
@@ -86,7 +87,7 @@ export function member(id: string) {
 }
 
 export function billingOwner() {
-  return d1.rows<{ billing_owner_user_id: string }>("SELECT billing_owner_user_id FROM teams WHERE id = 'team-1'")[0]
+  return onlyElement(d1.rows<{ billing_owner_user_id: string }>("SELECT billing_owner_user_id FROM teams WHERE id = 'team-1'"))
     .billing_owner_user_id;
 }
 
@@ -117,7 +118,7 @@ export async function createInvite(inviterUserId: string, email: string, role: s
 }
 
 export function inviteColumns<T extends Record<string, unknown>>(id: string, columns: string): T {
-  return d1.rows<T>(`SELECT ${columns} FROM team_invites WHERE id = ?`, id)[0];
+  return onlyElement(d1.rows<T>(`SELECT ${columns} FROM team_invites WHERE id = ?`, id));
 }
 
 export const revocationAndAcceptance = (id: string) =>

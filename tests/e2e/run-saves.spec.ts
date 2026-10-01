@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { firstOf } from '../support/elements';
 import { loginAsAdmin } from './support/sign-in';
 import {
   createRun,
@@ -55,7 +56,7 @@ test('ticking a task another session already ticked does not untick it', async (
 async function readTaskA(page: Page, runId: string) {
   type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
   const { sections } = await fetchRunWithSections<Task>(page, runId);
-  const task = sections[0].items[0];
+  const task = firstOf(firstOf(sections).items);
   return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
 }
 
@@ -215,7 +216,8 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
   test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
     await loginAsAdmin(page);
     await page.setViewportSize(viewport);
-    const tasks = ['Check DNS', 'Check TLS', 'Check redirects', 'Check sitemap'];
+    const firstTask = 'Check DNS';
+    const tasks = [firstTask, 'Check TLS', 'Check redirects', 'Check sitemap'];
     const runId = await postRun(page, {
       title: `Footer QA ${Date.now()}`,
       sections: [{ id: 'foot', title: 'Section', items: tasks.map((title, index) => ({ id: `foot-${index}`, title })) }],
@@ -226,7 +228,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
       .locator('time');
 
     await page.goto(`/dashboard/runs/${runId}/`);
-    await expect(page.getByRole('heading', { name: tasks[0] })).toBeVisible();
+    await expect(page.getByRole('heading', { name: firstTask })).toBeVisible();
     await expect(changelogEntries).toHaveCount(1);
     const first = await markComplete.boundingBox();
     if (!first) throw new Error('Mark Complete is not shown');

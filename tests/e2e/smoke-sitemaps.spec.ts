@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { capturedGroup } from "../support/elements";
 import { APP_URL } from "./support/stack";
 import { readFileSync } from "node:fs";
 import { validateXML } from "xmllint-wasm";
@@ -29,11 +30,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   const indexXml = await indexResponse.text();
   const childLocations = Array.from(
     indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>/g),
-    (match) => match[1],
+    (match) => capturedGroup(match, 1),
   );
   const shardLastmods = Array.from(
     indexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
-    (match) => [match[1], match[2]],
+    (match) => [capturedGroup(match, 1), capturedGroup(match, 2)],
   );
 
   expect(indexResponse.ok()).toBe(true);
@@ -61,11 +62,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     const childXml = await childResponse.text();
     const pageLocations = Array.from(
       childXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
-      (match) => match[1],
+      (match) => capturedGroup(match, 1),
     );
     const lastmods = Array.from(
       childXml.matchAll(/<lastmod>([^<]+)<\/lastmod>/g),
-      (match) => match[1],
+      (match) => capturedGroup(match, 1),
     );
     pageLocationsByShard.set(childLocation, pageLocations);
 
@@ -113,7 +114,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
   const unchangedIndexXml = await unchangedIndexResponse.text();
   const unchangedShardLastmods = Array.from(
     unchangedIndexXml.matchAll(/<loc>(https:\/\/serplists\.com\/sitemaps\/(?:pages|categories|profiles|templates)\/\d+\.xml)<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/g),
-    (match) => [match[1], match[2]],
+    (match) => [capturedGroup(match, 1), capturedGroup(match, 2)],
   );
   expect(unchangedIndexResponse.ok()).toBe(true);
   expect(unchangedShardLastmods).toEqual(shardLastmods);
@@ -123,7 +124,7 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     const unchangedChildXml = await (await request.get(localLocation)).text();
     const unchangedPageLocations = Array.from(
       unchangedChildXml.matchAll(/<loc>(https:\/\/serplists\.com\/[^<]*)<\/loc>/g),
-      (match) => match[1],
+      (match) => capturedGroup(match, 1),
     );
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }

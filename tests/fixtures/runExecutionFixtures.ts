@@ -77,7 +77,7 @@ export const runWithNotes = (notes: Record<string, string | undefined>): Checkli
     {
       id: 'section-1',
       title: 'Checklist',
-      items: Object.entries(notes).map(([id, value]) => ({ id, title: id, notes: value })),
+      items: Object.entries(notes).map(([id, value]) => ({ id, title: id, ...(value === undefined ? {} : { notes: value }) })),
     },
   ],
   startedAt: '2026-01-01T00:00:00.000Z',

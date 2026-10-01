@@ -34,7 +34,7 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   const dialog = await openStartRunDialog(page);
   const placeholder =
     (await dialog.getByRole('textbox', { name: 'Run name', exact: true }).getAttribute('placeholder')) ?? '';
-  const templateTitle = placeholder.split(' - ')[0];
+  const [templateTitle = ''] = placeholder.split(' - ');
   expect(templateTitle.length).toBeGreaterThan(0);
 
   await dialog.getByRole('button', { name: 'Start Run' }).click();

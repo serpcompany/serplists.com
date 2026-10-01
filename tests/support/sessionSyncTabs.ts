@@ -52,6 +52,7 @@ export function createTab(options: {
   beforeSessionLost?: (state: SessionState) => void;
 }) {
   let state = options.state;
+  const { now, beforeSessionLost } = options;
   const answers = [...(options.answers ?? [])];
   const readSession = vi.fn(options.readSession ?? (async () => answers.shift() ?? { kind: 'unknown' as const }));
   const notify = vi.fn();
@@ -63,8 +64,8 @@ export function createTab(options: {
     initialState: state,
     setState: (update) => showAndObserveAsAuthProviderDoes(update(state)),
     notify,
-    now: options.now,
-    beforeSessionLost: options.beforeSessionLost && (() => options.beforeSessionLost?.(state)),
+    ...(now ? { now } : {}),
+    ...(beforeSessionLost ? { beforeSessionLost: () => beforeSessionLost(state) } : {}),
   });
   function showAndObserveAsAuthProviderDoes(next: SessionState) {
     state = next;

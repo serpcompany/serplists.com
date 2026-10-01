@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { onlyElement } from "../support/elements";
 import { jsonObject, jsonObjects, readJson } from "../support/readJson";
 import apiWorker from "../../functions/api/[[route]]";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
@@ -26,7 +27,7 @@ function send(path: string, options: SendOptions = {}): Promise<Response> {
   const request = new Request(`${ORIGIN}/api/${path}`, {
     method: options.method ?? (body === undefined ? "GET" : "POST"),
     headers,
-    body,
+    ...(body === undefined ? {} : { body }),
   });
   return apiWorker.fetch(request, d1.env as never);
 }
@@ -130,15 +131,15 @@ describe.sequential("the API router against local D1", () => {
     });
 
     it("never sends a password or its stored hash back in a sign-in error", async () => {
-      const [stored] = (
+      const stored = onlyElement((
         await d1.env.DB.prepare(
           "SELECT account.password AS hash FROM account JOIN users ON users.id = account.user_id WHERE users.email = ?",
         ).bind(OWNER_EMAIL).all<{ hash: string }>()
-      ).results;
+      ).results);
       const response = await signIn(OWNER_EMAIL, "wrong-password-2");
       const text = await response.text();
 
-      expect(stored?.hash).toBeTruthy();
+      expect(stored.hash).toBeTruthy();
       expect(text).not.toContain(stored.hash);
       expect(text).not.toContain(OWNER_PASSWORD);
       expect(text).not.toContain("wrong-password-2");

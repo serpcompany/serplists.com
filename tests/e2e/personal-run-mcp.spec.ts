@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { z } from 'zod';
 
+import { firstOf } from '../support/elements';
 import {
   mcpResultResponse,
   mcpRunResult,
@@ -171,7 +172,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   const { templates } = mcpTemplatesPage.parse(templateContent);
   expect(templates.length).toBeGreaterThan(0);
 
-  const template = templates[0];
+  const template = firstOf(templates);
   const runTitle = `Playwright Personal SOP Run ${Date.now()}`;
   const started = await mcpRequest(secret, 'tools/call', {
     name: 'start_run',
@@ -181,7 +182,8 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   const startedContent = structuredContentWithinResultLimit(started.body);
   const startedRun = runWithTasks.parse(startedContent).run;
   const { sections } = startedRun;
-  const firstTask = sections[0].items[0];
+  const firstSection = firstOf(sections);
+  const firstTask = firstOf(firstSection.items);
   const runId = startedRun.id;
   const taskId = firstTask.id;
   const taskTitle = firstTask.title;
@@ -218,12 +220,12 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   const read = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId } }, 6);
   const readRun = runWithTasks.parse(structuredContentWithinResultLimit(read.body)).run;
   expect(readRun).toMatchObject({ id: runId, revision: completedRun.revision, progress: completedRun.progress });
-  const readTask = readRun.sections[0].items[0];
+  const readTask = firstOf(firstOf(readRun.sections).items);
   expect(readTask).toMatchObject({ id: taskId, isCompleted: true, notes: note });
   const oneTask = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId, taskId } }, 7);
   expect(structuredContentWithinResultLimit(oneTask.body)).toEqual({
     run: { id: runId, revision: completedRun.revision },
-    sectionId: sections[0].id,
+    sectionId: firstSection.id,
     task: readTask,
   });
   const runList = await mcpRequest(secret, 'tools/call', { name: 'list_runs', arguments: { status: 'in_progress' } }, 8);

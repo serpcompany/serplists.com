@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
 
+import { firstOf } from "../support/elements";
 import { loginAsAdmin } from "./support/sign-in";
 import {
   createTemplate,
@@ -25,7 +26,7 @@ async function serveAsARowFromBeforeTheBlockTypeCheck(page: Page, templateId: st
     if (route.request().method() !== "GET") return route.fallback();
     const response = await route.fetch();
     const template = storedTemplateSchema.parse(await response.json());
-    template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
+    firstOf(firstOf(template.sections).items).contents.push({ id: "c3", type: "link", value: "https://example.com" });
     await route.fulfill({ response, json: template });
   });
 }

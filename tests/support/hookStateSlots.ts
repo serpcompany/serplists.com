@@ -1,5 +1,5 @@
 type StateUpdate<T> = T | ((previous: T) => T);
-type MountedEffect = { dependencies?: readonly unknown[]; cleanup?: () => void };
+type MountedEffect = { dependencies: readonly unknown[] | undefined; cleanup: (() => void) | undefined };
 
 const slots = { values: [] as unknown[], next: 0, rendering: false, setWhileRendering: false };
 const mountedEffects = new Map<number, MountedEffect>();

@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { readJson } from "../support/readJson";
+import { valueAt } from "../support/elements";
 import { schema } from "../../functions/api/db";
 import { checklistRunSelectFor } from "../../functions/api/utils/checklist-runs";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
@@ -89,15 +90,15 @@ describe.sequential("run source access against local D1, where a run whose templ
 
   it("reports staleness only for sources the caller may use", async () => {
     const bRuns = await listAs("user-b");
-    expect(bRuns["b-from-private"].is_stale).toBe(false);
-    expect(bRuns["b-from-archived"].is_stale).toBe(false);
-    expect(bRuns["b-from-public"].is_stale).toBe(true);
+    expect(valueAt(bRuns, "b-from-private").is_stale).toBe(false);
+    expect(valueAt(bRuns, "b-from-archived").is_stale).toBe(false);
+    expect(valueAt(bRuns, "b-from-public").is_stale).toBe(true);
 
     const aRuns = await listAs("user-a");
-    expect(aRuns["a-from-private"].is_stale).toBe(true);
+    expect(valueAt(aRuns, "a-from-private").is_stale).toBe(true);
 
-    expect((await listAs("user-b", "?teamId=org-1"))["org-from-a-personal"].is_stale).toBe(false);
-    expect((await listAs("user-a", "?teamId=org-1"))["org-from-a-personal"].is_stale).toBe(true);
+    expect(valueAt(await listAs("user-b", "?teamId=org-1"), "org-from-a-personal").is_stale).toBe(false);
+    expect(valueAt(await listAs("user-a", "?teamId=org-1"), "org-from-a-personal").is_stale).toBe(true);
   });
 
   it("refuses to copy a now-private template into another user's run, keeping the run and naming its source unavailable for the page", async () => {

@@ -15,11 +15,11 @@ export class FakeNode {
     readonly ownerDocument: FakeDocument | null,
   ) {}
 
-  get firstChild() {
+  get firstChild(): FakeNode | null {
     return this.childNodes[0] ?? null;
   }
 
-  get lastChild() {
+  get lastChild(): FakeNode | null {
     return this.childNodes[this.childNodes.length - 1] ?? null;
   }
 

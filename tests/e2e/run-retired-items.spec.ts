@@ -11,14 +11,13 @@ async function replaceTemplateSectionsAtItsVersion(page: Page, templateId: strin
 test('notes on a task removed from the Template stay visible on the Run', async ({ page }) => {
   await loginAsAdmin(page);
   const suffix = Date.now();
-  const sections = [{
+  const copyTask = { id: `retired-copy-${suffix}`, title: 'Write copy' };
+  const section = {
     id: `retired-${suffix}`,
     title: 'Launch',
-    items: [
-      { id: `retired-dns-${suffix}`, title: 'Check DNS' },
-      { id: `retired-copy-${suffix}`, title: 'Write copy' },
-    ],
-  }];
+    items: [{ id: `retired-dns-${suffix}`, title: 'Check DNS' }, copyTask],
+  };
+  const sections = [section];
   const template = await api<{ id: string }>(page, '/templates', 'POST', {
     title: `Retired work QA ${suffix}`,
     sections,
@@ -34,7 +33,7 @@ test('notes on a task removed from the Template stay visible on the Run', async 
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect(page.getByRole('heading', { name: 'Write copy' })).toBeVisible();
 
-  await replaceTemplateSectionsAtItsVersion(page, template.id, [{ ...sections[0], items: [sections[0].items[1]] }]);
+  await replaceTemplateSectionsAtItsVersion(page, template.id, [{ ...section, items: [copyTask] }]);
 
   await page.reload();
   const headerTaskCount = page.getByText('0 of 1 task finished').first();
