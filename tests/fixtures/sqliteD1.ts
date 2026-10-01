@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import type { Env } from '../../functions/api/types';
+import { allRowsAsArrays } from '../support/sqliteRowArrays';
 
 const MIGRATIONS_DIR = new URL('../../db/migrations/', import.meta.url);
 
@@ -15,11 +16,7 @@ export function createMigratedD1() {
   const statement = (query: string, params: SQLInputValue[] = []) => ({
     bind: (...next: unknown[]) => statement(query, next as SQLInputValue[]),
     all: async () => ({ results: sqlite.prepare(query).all(...params) as Row[], success: true, meta: {} }),
-    raw: async () => {
-      const prepared = sqlite.prepare(query);
-      prepared.setReturnArrays(true);
-      return prepared.all(...params) as unknown[][];
-    },
+    raw: async () => allRowsAsArrays(sqlite.prepare(query), params),
     first: async () => (sqlite.prepare(query).get(...params) as Row | undefined) ?? null,
     run: async () => {
       const result = sqlite.prepare(query).run(...params);

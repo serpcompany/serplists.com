@@ -1,4 +1,4 @@
-import { isValidElement, type ReactElement } from 'react';
+import { isValidElement, type JSXElementConstructor, type ReactElement } from 'react';
 
 export type AnyElement = ReactElement<Record<string, unknown>>;
 
@@ -11,4 +11,12 @@ export function findAllElements(node: unknown, matches: (element: AnyElement) =>
 
 export function findElement(node: unknown, matches: (element: AnyElement) => boolean): AnyElement | null {
   return findAllElements(node, matches)[0] ?? null;
+}
+
+export function findElementOf<Props>(
+  node: unknown,
+  component: JSXElementConstructor<Props>,
+): (AnyElement & ReactElement<Props>) | null {
+  const isOf = (element: AnyElement): element is AnyElement & ReactElement<Props> => element.type === component;
+  return findAllElements(node, isOf).find(isOf) ?? null;
 }

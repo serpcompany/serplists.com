@@ -1,4 +1,14 @@
+import { vi } from 'vitest';
+
 import type { ChecklistRun } from '@/types/checklist';
+
+export const runExecutionApiClient = () => ({
+  createChecklistRunShare: vi.fn(),
+  getChecklistById: vi.fn(),
+  getSharedChecklist: vi.fn(),
+  revokeChecklistRunShare: vi.fn(),
+  updateSharedChecklist: vi.fn(),
+});
 
 export const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({
   id: 'run-1',

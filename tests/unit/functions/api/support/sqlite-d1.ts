@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
+import { allRowsAsArrays } from "../../../../support/sqliteRowArrays";
+
 type D1Row = Record<string, unknown>;
 
 export type StatementHook = (sql: string, params: unknown[]) => void;
@@ -36,11 +38,9 @@ class SqliteD1Statement {
     return { results, success: true, meta: {} };
   }
 
-  async raw<T = unknown[]>(): Promise<T[]> {
+  async raw(): Promise<unknown[][]> {
     const values = this.values();
-    const statement = this.db.prepare(this.sql);
-    statement.setReturnArrays(true);
-    return statement.all(...values) as T[];
+    return allRowsAsArrays(this.db.prepare(this.sql), values);
   }
 
   async run() {

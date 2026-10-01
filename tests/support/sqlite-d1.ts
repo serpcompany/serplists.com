@@ -3,6 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
+import { allRowsAsArrays } from "./sqliteRowArrays";
+
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
 type Row = Record<string, unknown>;
@@ -110,9 +112,9 @@ export class MigratedSqliteD1 {
   execute(statement: SqliteD1Statement, arrays: boolean): D1Result | { results: unknown[][] } {
     this.queries.push({ sql: statement.sql, params: statement.params });
     const prepared = this.sqlite.prepare(statement.sql);
-    prepared.setReturnArrays(arrays);
-    const rows = prepared.all(...statement.params.map(toSqliteValue));
-    if (arrays) return { results: rows as unknown as unknown[][] };
+    const values = statement.params.map(toSqliteValue);
+    if (arrays) return { results: allRowsAsArrays(prepared, values) };
+    const rows = prepared.all(...values);
 
     const isRead = /^\s*select\b/i.test(statement.sql);
     const changes = isRead
