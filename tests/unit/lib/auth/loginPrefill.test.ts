@@ -63,11 +63,11 @@ describe('the sign-up email handoff', () => {
     expect(takeHandedOffLoginEmail(undefined)).toBeNull();
   });
 
-  it('reads the address the login page keeps in its history entry', () => {
+  it("reads the address the login page keeps in its history entry, beside the router state Next.js adds", () => {
+    const nextJsRouterState = { __NA: true };
     expect(readKeptLoginEmail(buildKeptLoginState('alice@example.com'))).toBe('alice@example.com');
-    // Next.js adds its own router state to the entry.
-    expect(readKeptLoginEmail({ email: 'alice@example.com', __NA: true })).toBe('alice@example.com');
-    expect(readKeptLoginEmail({ __NA: true })).toBeNull();
+    expect(readKeptLoginEmail({ email: 'alice@example.com', ...nextJsRouterState })).toBe('alice@example.com');
+    expect(readKeptLoginEmail(nextJsRouterState)).toBeNull();
     expect(readKeptLoginEmail({ email: '   ' })).toBeNull();
     expect(readKeptLoginEmail(null)).toBeNull();
   });

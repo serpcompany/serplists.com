@@ -17,8 +17,7 @@ describe('sanitizeReturnPath', () => {
     );
   });
 
-  // A link from before the URL standard (or typed by hand) opens its page without a redirect.
-  it('returns the canonical form of a page path', () => {
+  it('returns the canonical form of a page path, so an older or hand-typed link opens its page without a redirect', () => {
     expect(sanitizeReturnPath('/team-invites/abc?x=1#h')).toBe('/team-invites/abc/?x=1#h');
     expect(sanitizeReturnPath('/dashboard/settings?billing=cancel#plan')).toBe(
       '/dashboard/settings/?billing=cancel#plan',
@@ -65,8 +64,6 @@ describe('sanitizeReturnPath', () => {
     },
   );
 
-  // The URL parser removes dot segments, so these came back as the protocol-relative
-  // //evil.com, which a browser resolves to another origin.
   it.each([
     '/.//evil.com',
     '/..//evil.com/share/x',
@@ -75,7 +72,7 @@ describe('sanitizeReturnPath', () => {
     '/./%2e//evil.com',
     '/.///evil.com',
     '/a/..//evil.com',
-  ])('rejects %j, which normalizes to another origin', (value) => {
+  ])('rejects %j, which the URL parser normalizes to the protocol-relative //evil.com of another origin', (value) => {
     expect(sanitizeReturnPath(value)).toBeNull();
   });
 
@@ -179,8 +176,7 @@ describe('getPostSignInDestination', () => {
     expect(getPostSignInDestination('/team-invites/abc/?x=1#h')).toBe('/team-invites/abc/?x=1#h');
   });
 
-  // Not Account Settings: a sign-in with nowhere to go opens the console home, My Templates.
-  it('opens the console home without a return path', () => {
+  it('opens the console home, My Templates, not Account Settings, without a return path', () => {
     expect(getPostSignInDestination(null)).toBe('/dashboard/templates/');
   });
 });

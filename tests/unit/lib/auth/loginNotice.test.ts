@@ -76,9 +76,8 @@ describe('buildEmailVerifiedCallbackURL', () => {
     const callbackURL = buildEmailVerifiedCallbackURL('/team-invites/abc/?x=1#h');
 
     expect(callbackURL).not.toMatch(/[&#]/);
-    // What /verify-email reads back out of the email link, and redirects to.
-    const redirect = decodeURIComponent(callbackURL);
-    expect(redirect).toBe('/login/?verified=1&next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
+    const redirectVerifyEmailReadsBack = decodeURIComponent(callbackURL);
+    expect(redirectVerifyEmailReadsBack).toBe('/login/?verified=1&next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
   });
 
   it("encodes the characters Better Auth's callback check rejects", () => {

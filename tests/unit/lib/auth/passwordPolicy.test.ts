@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { validatePasswordPolicy } from '@/lib/auth/passwordPolicy';
 
 const ascii = (length: number) => 'a'.repeat(length);
-const emoji = (count: number) => '\u{1F600}'.repeat(count); // 4 UTF-8 bytes each
+const fourUtf8ByteEmoji = (count: number) => '\u{1F600}'.repeat(count);
 
 describe('validatePasswordPolicy', () => {
   it.each([
     ['10 ASCII characters', ascii(10)],
     ['72 ASCII characters', ascii(72)],
-    ['18 emoji (72 bytes)', emoji(18)],
+    ['18 emoji (72 bytes)', fourUtf8ByteEmoji(18)],
     ['36 accented letters (72 bytes)', 'é'.repeat(36)],
   ])('accepts %s', (_label, password) => {
     expect(validatePasswordPolicy(password)).toEqual({ ok: true });
@@ -17,7 +17,7 @@ describe('validatePasswordPolicy', () => {
 
   it.each([
     ['73 ASCII characters', ascii(73)],
-    ['19 emoji (38 characters, 76 bytes)', emoji(19)],
+    ['19 emoji (38 characters, 76 bytes)', fourUtf8ByteEmoji(19)],
     ['37 accented letters (74 bytes)', 'é'.repeat(37)],
     ['a lone surrogate at the end (3 bytes)', `${ascii(70)}\ud800`],
     ['72 characters plus trailing spaces, which the server hashes too', `${ascii(72)}  `],
@@ -34,7 +34,7 @@ describe('validatePasswordPolicy', () => {
 
   it('never accepts a password that bcrypt would truncate', () => {
     const samples = [
-      ascii(72), ascii(73), emoji(18), emoji(19), 'é'.repeat(36), 'é'.repeat(37),
+      ascii(72), ascii(73), fourUtf8ByteEmoji(18), fourUtf8ByteEmoji(19), 'é'.repeat(36), 'é'.repeat(37),
       '中'.repeat(24), '中'.repeat(25), `${ascii(70)}\ud800`, `${ascii(69)}\ud800`,
       `${ascii(71)}é`, `${ascii(70)}é`,
     ];
