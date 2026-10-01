@@ -260,6 +260,22 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the test-side tracker fixes are done: TD-40, TD-48, TD-49, TD-51 to
+  TD-57, and TD-50 apart from one test that waits for TD-2 (5c8111f4..d85d62e5).
+  - `tests/tsconfig.json` sets `allowJs: false`, so a test that imports a `.mjs` without a
+    `.d.mts` fails the type check. 14 declaration files were added.
+  - Other changes:
+    - one `.env` parser, `scripts/lib/env-file.mjs`;
+    - one `postcss` version, with no override;
+    - `@types/node` 22.20;
+    - `wrangler.toml` parsed with smol-toml and Zod.
+  - The browser specs' setup-request and seeded-path checks are ESLint conventions over
+    `tests/e2e`.
+  - A test drives every audit-writing route and fails on an action that is registered but
+    never written, or written but not registered.
+  - Bug fixed: the migration-baseline guard read `wrangler.toml` line by line, so it would
+    have missed a database written as an inline table (63345d9d).
+  - New tracker rows: TD-61 (the browser specs' request helpers cast bodies) and TD-62.
 - 2026-10-01: phase 4, app side of round 1 done (4db83dbc..61a9e2b5).
   - The app, API and scripts tsconfigs turn on `noImplicitOverride`,
     `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes` and
