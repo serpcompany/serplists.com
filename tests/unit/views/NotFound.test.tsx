@@ -35,7 +35,7 @@ async function inTheBrowserAtAMissingAddress(check: (page: { container: FakeElem
   try {
     navigation.reset('/definitely-missing');
     const container = createFakeContainer();
-    const root = createRoot(container as unknown as HTMLElement);
+    const root = createRoot(container);
     await act(async () => {
       root.render(<NotFound />);
     });

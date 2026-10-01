@@ -3,10 +3,9 @@ import { firstOf } from "../../../support/elements";
 
 import {
   countOversizedTemplateAssets,
-  formatAssetSizeLimit,
   TEMPLATE_IMPORT_MAX_ASSET_BYTES,
 } from "@/lib/schemas/templateAssetLimits";
-import { TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
+import { formatUploadLimit, TEMPLATE_UPLOAD_MAX_BYTES as UPLOAD_MAX_BYTES } from "@/lib/schemas/uploadLimits";
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from "@/lib/utils/templateBackup";
 import { validateFile } from "@/lib/utils/fileUpload";
 import type { ChecklistTemplate } from "@/types/checklist";
@@ -59,7 +58,7 @@ describe("template asset limits", () => {
 
     expect(validateFile(tooLarge, "file")).toEqual({
       valid: false,
-      error: `File size must be ${formatAssetSizeLimit(UPLOAD_MAX_BYTES)} or less`,
+      error: `File size must be ${formatUploadLimit(UPLOAD_MAX_BYTES)} or less`,
     });
   });
 

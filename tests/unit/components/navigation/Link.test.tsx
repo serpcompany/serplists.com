@@ -61,7 +61,7 @@ const mountEditor = async ({ dirty = true } = {}) => {
     routes: ['/dashboard/templates/[id]/edit', '/dashboard/runs', '/dashboard/settings'],
   });
   container = createFakeContainer();
-  root = createRoot(container as unknown as HTMLElement);
+  root = createRoot(container);
   await act(async () => {
     root?.render(
       <RoutedPages
@@ -83,7 +83,7 @@ describe('Link prefetching on intent, not when the link scrolls into view', () =
   const mountLinks = async () => {
     navigation.reset('/pricing', { routes: ['/pricing', '/about', '/templates'] });
     container = createFakeContainer();
-    root = createRoot(container as unknown as HTMLElement);
+    root = createRoot(container);
     await act(async () => {
       root?.render(
         <RoutedPages

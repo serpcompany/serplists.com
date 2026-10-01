@@ -54,7 +54,7 @@ let root: Root | null = null;
 async function renderAt(entry: string) {
   navigation.reset(entry);
   const container = createFakeContainer();
-  root = createRoot(container as unknown as HTMLElement);
+  root = createRoot(container);
   await act(async () => {
     root?.render(boundaryAroundRoutedPagesAsInLayout);
   });

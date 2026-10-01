@@ -253,7 +253,7 @@ describe('Discovery pages while the catalog loads', () => {
     navigation.reset(location, { state });
     const restoreGlobals = installFakeDomGlobals(navigation.window);
     const container = createFakeContainer();
-    const root = createRoot(container as unknown as HTMLElement);
+    const root = createRoot(container);
     try {
       await act(async () => root.render(<RoutedPages pages={{ '/templates': <ChecklistLibrary /> }} />));
       return container.textContent;

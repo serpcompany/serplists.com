@@ -96,7 +96,7 @@ describe('Login once signed in, which leaves for the return path or the console 
   const firstDestinationFrom = async (url: string) => {
     navigation.reset(url);
     vi.mocked(navigation.router.replace).mockClear();
-    root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    root = createRoot(createFakeContainer());
     await act(async () => root?.render(<Login />));
     return vi.mocked(navigation.router.replace).mock.calls[0]?.[0];
   };
@@ -124,7 +124,7 @@ describe('Login email handoff from sign-up', () => {
 
   const mountLogin = async () => {
     const container = createFakeContainer();
-    root = createRoot(container as unknown as HTMLElement);
+    root = createRoot(container);
     await act(async () => root?.render(<Login />));
     return container;
   };

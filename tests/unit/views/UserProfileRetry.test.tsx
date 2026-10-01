@@ -25,7 +25,7 @@ async function onAlicesProfile(test: (page: FakeElement) => Promise<void>) {
   const restoreGlobals = installFakeDomGlobals(navigation.window);
   navigation.reset('/profile/alice/', { params: { username: 'alice' } });
   const page = createFakeContainer();
-  const root = createRoot(page as unknown as Element);
+  const root = createRoot(page);
   try {
     await act(async () => {
       root.render(<UserProfile />);

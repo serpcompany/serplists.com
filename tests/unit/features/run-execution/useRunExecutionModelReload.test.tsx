@@ -59,7 +59,7 @@ async function mountModel(initial: UseRunExecutionModelOptions) {
     return null;
   }
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  root = fakeDom.track(createRoot(createFakeContainer()));
   const render = async (options: UseRunExecutionModelOptions) => {
     await act(async () => {
       root?.render(

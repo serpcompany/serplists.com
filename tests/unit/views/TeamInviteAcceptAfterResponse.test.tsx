@@ -42,7 +42,7 @@ async function openInvite() {
   const queryClient = createQueryClientWithAppDefaults();
   navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
   const container = createFakeContainer();
-  root = createRoot(container as unknown as HTMLElement);
+  root = createRoot(container);
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>

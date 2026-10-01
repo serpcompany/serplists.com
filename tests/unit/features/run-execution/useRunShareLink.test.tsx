@@ -29,7 +29,7 @@ async function mountShareLink(initial: ShownRun) {
     state = useRunShareLink(runId, { createShare, stopSharing }, isPublic);
     return null;
   }
-  root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  root = fakeDom.track(createRoot(createFakeContainer()));
   const render = async (shown: ShownRun) => {
     await act(async () => {
       root?.render(<Probe {...shown} />);

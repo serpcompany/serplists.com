@@ -110,7 +110,7 @@ describe('ErrorBoundary', () => {
     }
     navigation.reset('/dashboard/templates/');
     const container = createFakeContainer();
-    const root = createRoot(container as unknown as HTMLElement);
+    const root = createRoot(container);
     try {
       await act(async () => {
         root.render(

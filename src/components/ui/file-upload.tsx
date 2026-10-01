@@ -9,9 +9,8 @@ import { Item, ItemActions, ItemContent, ItemMedia, ItemTitle } from './item';
 import { Textarea } from './textarea';
 import { cn } from '@/lib/utils';
 import { uploadAcceptTypesForBlock, type UploadResult } from '@/lib/utils/fileUpload';
-import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
-import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
+import { formatUploadLimit, UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
 import { UPLOAD_BUCKET_BY_TYPE, uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
@@ -179,7 +178,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               )}
             </Button>
             <FieldDescription className="text-xs">
-              Max file size: {formatAssetSizeLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
+              Max file size: {formatUploadLimit(UPLOAD_MAX_BYTES[UPLOAD_BUCKET_BY_TYPE[type]])}
             </FieldDescription>
           </div>
         )}

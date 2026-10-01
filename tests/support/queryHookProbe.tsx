@@ -13,7 +13,7 @@ export async function mountQueryHook<T>(useHook: () => T) {
     rendered = { value: useHook() };
     return null;
   }
-  const root = createRoot(createFakeContainer() as unknown as Element);
+  const root = createRoot(createFakeContainer());
   await act(async () => {
     root.render(
       <QueryClientProvider client={queryClient}>

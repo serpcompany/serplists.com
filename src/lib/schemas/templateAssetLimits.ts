@@ -1,13 +1,10 @@
-import { TEMPLATE_UPLOAD_MAX_BYTES } from "./uploadLimits";
+import { formatUploadLimit, TEMPLATE_UPLOAD_MAX_BYTES } from "./uploadLimits";
 
 export const TEMPLATE_IMPORT_MAX_ASSET_BYTES = TEMPLATE_UPLOAD_MAX_BYTES;
 
-export const formatAssetSizeLimit = (bytes: number): string =>
-  `${Math.floor(bytes / (1024 * 1024))}MB`;
-
 export const oversizedTemplateAssetMessage = (
   maxBytes: number = TEMPLATE_IMPORT_MAX_ASSET_BYTES,
-): string => `Import blocked: one or more assets are over ${formatAssetSizeLimit(maxBytes)}`;
+): string => `Import blocked: one or more assets are over ${formatUploadLimit(maxBytes)}`;
 
 const ASSET_CONTENT_TYPES = new Set(["image", "video", "file"]);
 

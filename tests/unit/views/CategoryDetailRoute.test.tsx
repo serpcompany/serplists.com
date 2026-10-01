@@ -40,7 +40,7 @@ beforeEach(() => {
 });
 const mountCategoryRoute = (initialPath: string) => {
   navigation.reset(initialPath, { routes: ['/categories/[categorySlug]'] });
-  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as HTMLElement));
+  const root = fakeDom.track(createRoot(createFakeContainer()));
   act(() => root.render(<CategoryDetailRoute />));
 };
 

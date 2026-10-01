@@ -23,7 +23,7 @@ export function aFakeDomForEachTest(window?: object) {
     track,
     async render(element: ReactNode, whileRendering: () => Promise<unknown> = async () => undefined) {
       const container = createFakeContainer();
-      const root = track(createRoot(container as unknown as Element));
+      const root = track(createRoot(container));
       await act(async () => {
         root.render(element);
         await whileRendering();

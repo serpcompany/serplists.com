@@ -42,7 +42,7 @@ describe('App billing status refresh after checkout finds a plan the cached stat
       return null;
     };
     navigation.reset('/pricing');
-    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    const root = createRoot(createFakeContainer());
 
     await act(async () => {
       root.render(

@@ -50,7 +50,7 @@ const announceReloadOrTabClose = () => {
 async function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWork?: () => boolean } = {}) {
   navigation.reset('/runs/r1', { before: ['/runs'], routes: ['/', '/runs', '/runs/[id]'] });
   container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as HTMLElement));
+  root = fakeDom.track(createRoot(container));
   await act(async () => {
     root?.render(
       <RoutedPages

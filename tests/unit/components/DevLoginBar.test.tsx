@@ -26,7 +26,7 @@ const textAfterMountingAt = async (url: string) => {
   unmountThePreviousBar();
   navigation.reset(url);
   const container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as HTMLElement));
+  root = fakeDom.track(createRoot(container));
   await act(async () => root?.render(<DevLoginBar />));
   return container.textContent;
 };

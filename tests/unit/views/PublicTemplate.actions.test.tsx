@@ -140,7 +140,7 @@ describe('PublicTemplate Start a Run dialog', () => {
     });
     navigation.reset(`${CLEAN_VISIT.origin}${CLEAN_VISIT.path}`, { routes: ['/profile/[username]/[templateSlug]'] });
     const restoreGlobals = installFakeDomGlobals(navigation.window);
-    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    const root = createRoot(createFakeContainer());
     try {
       await act(async () => root.render(<PublicTemplate />));
       expect(lastDialogProps().open).toBe(false);

@@ -103,7 +103,7 @@ const renderWithCurrentWorkspace = async () => {
 
 const mount = async () => {
   container = createFakeContainer();
-  root = fakeDom.track(createRoot(container as unknown as Element));
+  root = fakeDom.track(createRoot(container));
   await renderWithCurrentWorkspace();
 };
 

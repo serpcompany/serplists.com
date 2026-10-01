@@ -49,7 +49,7 @@ async function withWorkspace(
     return null;
   };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const root = createRoot(createFakeContainer() as unknown as Element);
+  const root = createRoot(createFakeContainer());
   const rerender = () =>
     act(() =>
       root.render(

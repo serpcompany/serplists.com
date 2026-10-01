@@ -62,7 +62,7 @@ function mountProvider(queryClient: QueryClient) {
       </TemplatesProvider>
     </QueryClientProvider>
   );
-  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  const root = fakeDom.track(createRoot(createFakeContainer()));
   act(() => root.render(tree()));
   return {
     context: () => {

@@ -9,9 +9,10 @@ import type { ImportPreview } from "@/features/template-backup/importFileSelecti
 import { countImportPublicTemplates } from "@/lib/utils/templateBackup";
 import type { ImportVisibility } from "@/lib/utils/templateBackup";
 import { formatCount } from "@/lib/utils/pluralize";
-import { formatAssetSizeLimit, TEMPLATE_IMPORT_MAX_ASSET_BYTES } from "@/lib/schemas/templateAssetLimits";
+import { TEMPLATE_IMPORT_MAX_ASSET_BYTES } from "@/lib/schemas/templateAssetLimits";
+import { formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
-const ASSET_LIMIT = formatAssetSizeLimit(TEMPLATE_IMPORT_MAX_ASSET_BYTES);
+const ASSET_LIMIT = formatUploadLimit(TEMPLATE_IMPORT_MAX_ASSET_BYTES);
 
 interface TemplateImportPreviewProps {
   confirmDisabled: boolean;

@@ -96,11 +96,19 @@ export class FakeElement extends FakeNode {
   }
 
   closest(tagNameSelector: string): FakeElement | null {
-    const tagName = tagNameSelector.toUpperCase();
-    for (let node: FakeNode | null = this; node; node = node.parentNode) {
-      if (node instanceof FakeElement && node.nodeName === tagName) return node;
-    }
-    return null;
+    return closestElementNamed(this, tagNameSelector.toUpperCase());
+  }
+}
+
+function closestElementNamed(node: FakeNode | null, tagName: string): FakeElement | null {
+  if (!node) return null;
+  if (node instanceof FakeElement && node.nodeName === tagName) return node;
+  return closestElementNamed(node.parentNode, tagName);
+}
+
+declare module 'react-dom/client' {
+  interface DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS {
+    fakeDomElement: FakeElement;
   }
 }
 

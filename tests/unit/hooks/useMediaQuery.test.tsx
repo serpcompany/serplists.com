@@ -36,7 +36,7 @@ describe('useMediaQuery', () => {
       seen[revision] = useMediaQuery('(min-width: 1024px)', false);
       return null;
     }
-    root = createRoot(createFakeContainer() as unknown as Element);
+    root = createRoot(createFakeContainer());
 
     for (const revision of [0, 1, 2]) {
       await act(async () => {

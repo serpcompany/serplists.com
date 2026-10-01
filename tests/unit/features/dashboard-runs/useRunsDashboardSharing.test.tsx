@@ -39,7 +39,7 @@ async function mountRunsList(initial: ChecklistRun[]) {
     state = useRunsDashboardSharing({ runs, onStopSharingRun: async () => undefined });
     return null;
   }
-  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  const root = fakeDom.track(createRoot(createFakeContainer()));
   const render = async (runs: ChecklistRun[]) => {
     await act(async () => {
       root.render(<Probe runs={runs} />);

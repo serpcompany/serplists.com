@@ -50,7 +50,7 @@ async function mountWorkspace() {
     return null;
   };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  const root = fakeDom.track(createRoot(createFakeContainer()));
   act(() =>
     root.render(
       <QueryClientProvider client={queryClient}>

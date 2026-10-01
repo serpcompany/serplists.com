@@ -135,7 +135,7 @@ describe('Categories page search', () => {
     navigation.reset('/categories/');
     restoreGlobals = installFakeDomGlobals(navigation.window);
     const container = createFakeContainer();
-    root = createRoot(container as unknown as HTMLElement);
+    root = createRoot(container);
     await act(async () => root?.render(<Categories />));
     const search = fieldNamedByItsLabel(container, 'Search categories');
     const type = (value: string) => typeThroughTheFieldsOwnOnChange(search, value);

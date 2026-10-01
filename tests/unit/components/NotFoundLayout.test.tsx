@@ -28,7 +28,7 @@ const shellAfterMountingAt = async (pathname: string, sessionStatus: SessionStat
   navigation.reset(pathname);
   const restoreGlobals = installFakeDomGlobals(navigation.window);
   const container = createFakeContainer();
-  const root = createRoot(container as unknown as HTMLElement);
+  const root = createRoot(container);
   try {
     await act(async () => root.render(<NotFoundLayout>Missing</NotFoundLayout>));
     return (container.firstChild as unknown as { getAttribute: (name: string) => string | null }).getAttribute(

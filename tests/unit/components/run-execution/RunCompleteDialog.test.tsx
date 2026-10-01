@@ -58,7 +58,7 @@ describe('RunCompleteDialog buttons', () => {
     const onComplete = vi.fn();
     const onOpenChange = vi.fn();
     const container = createFakeContainer();
-    root = createRoot(container as unknown as Element);
+    root = createRoot(container);
     await act(async () => {
       root?.render(<RunCompleteDialog onComplete={onComplete} onOpenChange={onOpenChange} open />);
     });

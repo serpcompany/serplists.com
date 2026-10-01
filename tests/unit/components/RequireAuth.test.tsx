@@ -50,7 +50,7 @@ describe('RequireAuth', () => {
     const restoreGlobals = installFakeDomGlobals(navigation.window);
     authState.sessionStatus = 'unauthenticated';
     navigation.reset('/dashboard/runs/?status=active#recent');
-    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    const root = createRoot(createFakeContainer());
     try {
       await act(async () => {
         root.render(
