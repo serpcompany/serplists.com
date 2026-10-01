@@ -171,11 +171,8 @@ const publicCatalogTemplate: ChecklistTemplate = {
   ownerProfile: { username: 'launchcrew' },
 };
 
-// Mirrors the real context: `templates` is the public catalog only
-// (mergePublicTemplateCollections drops private Templates), and private Personal or
-// Organization Templates arrive only through `allTemplates`.
-const templates: ChecklistTemplate[] = [publicCatalogTemplate];
-const allTemplates: ChecklistTemplate[] = [privateTemplate];
+const publicCatalogOnly: ChecklistTemplate[] = [publicCatalogTemplate];
+const privateTemplatesOnlyInAllTemplates: ChecklistTemplate[] = [privateTemplate];
 
 const renderRunsPage = () => {
   navigation.reset('/dashboard/runs/');
@@ -192,14 +189,14 @@ describe('/dashboard/runs presentation', () => {
     mockUseTemplates.mockReset();
   });
 
-  it('renders the v0-style runs list instead of the old console dashboard body', () => {
+  const renderEveryRun = () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
       logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
-      templates,
-      allTemplates,
+      templates: publicCatalogOnly,
+      allTemplates: privateTemplatesOnlyInAllTemplates,
       templatesLoading: false,
       runs,
       runsLoading: false,
@@ -207,8 +204,11 @@ describe('/dashboard/runs presentation', () => {
       revalidateRun: vi.fn(),
       deleteRun: vi.fn(),
     });
+    return renderRunsPage();
+  };
 
-    const html = renderRunsPage();
+  it('renders the v0-style runs list instead of the old console dashboard body', () => {
+    const html = renderEveryRun();
 
     expect(html).toContain('My Runs');
     expect(html).toContain('data-dashboard-content-shell="true"');
@@ -225,10 +225,6 @@ describe('/dashboard/runs presentation', () => {
     expect(html).toContain('Completed');
     expect(html).toContain('Needs revalidation');
     expect(html).toContain('Revalidate');
-    // Each row opens the Run at its one URL.
-    expect(html).toContain('href="/dashboard/runs/run-5/"');
-    expect(html).toContain('href="/dashboard/runs/run-2/"');
-    expect(html).not.toContain('href="/run/');
     expect(html).toContain('data-run-actions="true"');
     expect(html).toContain('focus-within:opacity-100');
     expect(html).not.toContain('Track active checklist runs');
@@ -237,8 +233,16 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('Avg progress');
   });
 
-  it('keeps the mocked catalog honest: `templates` never holds a private Template', () => {
-    expect(templates.every((template) => template.isPublic)).toBe(true);
+  it('opens each row at its Run\'s one URL', () => {
+    const html = renderEveryRun();
+
+    expect(html).toContain('href="/dashboard/runs/run-5/"');
+    expect(html).toContain('href="/dashboard/runs/run-2/"');
+    expect(html).not.toContain('href="/run/');
+  });
+
+  it('keeps the mocked catalog honest: `templates` holds no private Template, which only allTemplates carries', () => {
+    expect(publicCatalogOnly.every((template) => template.isPublic)).toBe(true);
   });
 
   it('links runs to private workspace Templates and to catalog-only public Templates', () => {
@@ -249,10 +253,10 @@ describe('/dashboard/runs presentation', () => {
       title: 'Org Checklist',
       teamId: 'team-1',
     };
+    const allTemplatesInThatOrganization = [organizationTemplate];
     mockUseTemplates.mockReturnValue({
-      templates,
-      // In an Organization, allTemplates holds only that Organization's Templates.
-      allTemplates: [organizationTemplate],
+      templates: publicCatalogOnly,
+      allTemplates: allTemplatesInThatOrganization,
       templatesLoading: false,
       runs: [
         { ...runs[0], id: 'run-org', templateId: 'org-template', title: 'Acme' },
@@ -327,13 +331,13 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('No runs found');
   });
 
-  it('does not offer the guaranteed-to-fail revalidation action for shared snapshots', () => {
+  it('offers Stop sharing to update, which makes the run private and revalidatable, instead of a revalidation that must fail on a shared snapshot', () => {
     mockUseAuth.mockReturnValue({
       user: { id: 'user-1', name: 'Dev User', email: 'dev@example.com' },
       logout: vi.fn().mockResolvedValue({ ok: true }),
     });
     mockUseTemplates.mockReturnValue({
-      templates,
+      templates: publicCatalogOnly,
       templatesLoading: false,
       runs: [{ ...runs[3], isStale: true, isPublic: true }],
       runsLoading: false,
@@ -346,7 +350,6 @@ describe('/dashboard/runs presentation', () => {
 
     expect(html).toContain('Shared snapshot is out of date');
     expect(html).not.toContain('>Revalidate<');
-    // Stopping the share is the way out: the run becomes private and can be revalidated.
     expect(html).toContain('Stop sharing to update');
   });
 
@@ -356,7 +359,7 @@ describe('/dashboard/runs presentation', () => {
       logout: vi.fn(),
     });
     mockUseTemplates.mockReturnValue({
-      templates,
+      templates: publicCatalogOnly,
       templatesLoading: false,
       runs: [{ ...runs[0], isPublic: true }, runs[1]],
       runsLoading: false,
@@ -371,7 +374,7 @@ describe('/dashboard/runs presentation', () => {
     expect(html).not.toContain('Stop sharing to update');
   });
 
-  it('stops sharing through the API and refreshes the runs list and the run Changelog', async () => {
+  it('stops sharing through the API and refreshes the runs list and the run Changelog the API wrote "Stopped sharing" to', async () => {
     const apiClient = {
       createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
       revokeChecklistRunShare: vi.fn().mockResolvedValue({ id: 'run-5', isPublic: false }),
@@ -382,11 +385,16 @@ describe('/dashboard/runs presentation', () => {
     await actions.stopSharingRun('run-5');
     expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-5');
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['runs'] });
-    // The API wrote "Stopped sharing" to the run's Changelog, which stays fresh for 60s.
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.runHistory('run-5') });
+  });
 
-    // Sharing refreshes the list through onShared (markRunShared) once the run is public.
+  it('hands a new share to onShared (markRunShared) once the run is public, and returns its link', async () => {
+    const apiClient = {
+      createChecklistRunShare: vi.fn().mockResolvedValue({ shareToken: 'share-token-1' }),
+      revokeChecklistRunShare: vi.fn(),
+    };
     const onShared = vi.fn();
+
     await expect(
       createRunsDashboardShareUrl('run-5', 'https://serplists.com', apiClient, onShared),
     ).resolves.toBe('https://serplists.com/share/share-token-1/');
@@ -408,8 +416,8 @@ describe('/dashboard/runs presentation', () => {
     mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
     workspaceRoles.roles = { acme: 'viewer' };
     mockUseTemplates.mockReturnValue({
-      templates,
-      allTemplates,
+      templates: publicCatalogOnly,
+      allTemplates: privateTemplatesOnlyInAllTemplates,
       templatesLoading: false,
       runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
       runsLoading: false,
@@ -429,8 +437,8 @@ describe('/dashboard/runs presentation', () => {
     mockUseAuth.mockReturnValue({ user: { id: 'user-1' }, logout: vi.fn() });
     workspaceRoles.roles = { acme: 'editor' };
     mockUseTemplates.mockReturnValue({
-      templates,
-      allTemplates,
+      templates: publicCatalogOnly,
+      allTemplates: privateTemplatesOnlyInAllTemplates,
       templatesLoading: false,
       runs: [{ ...runs[3], teamId: 'acme', isStale: true, isPublic: false }],
       runsLoading: false,

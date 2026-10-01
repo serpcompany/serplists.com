@@ -7,9 +7,6 @@ import type { ChecklistRun } from '@/types/checklist';
 
 import { navigation, renderPageAt } from '../../support/nextNavigation';
 
-// Completing a Run from the Run complete dialog: the owner or a member then goes to My Runs;
-// a guest on a share link stays on the shared run, which shows it completed.
-
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
@@ -18,11 +15,7 @@ vi.mock('@/features/run-execution/useRunExecutionModel', () => ({
   useRunExecutionModel: (...args: unknown[]) => mockUseRunExecutionModel(...args),
 }));
 
-// A static render runs no effects, so the page would never count as shown; these tests act as
-// a user who is still on it.
-vi.mock('@/hooks/usePageVisit', () => ({
-  usePageVisit: () => () => ({ isCurrent: () => true }),
-}));
+vi.mock('@/hooks/usePageVisit', async () => (await import('../../support/pageVisitMock')).pageVisitOfAUserStillOnThePage);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com' } }),
@@ -45,7 +38,6 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-// The dialog itself is tested in tests/unit/components/run-execution/RunCompleteDialog.test.tsx.
 const completeDialog = vi.hoisted(() => ({ props: null as null | { onComplete: () => void } }));
 vi.mock('@/components/run-execution/RunCompleteDialog', () => ({
   RunCompleteDialog: (props: { onComplete: () => void }) => {
@@ -147,8 +139,6 @@ describe('Completing a Run', () => {
   });
 });
 
-// Guests may tick tasks and sub-tasks, write notes and complete the Run through the link
-// (functions/api/handlers/checklists-shared.ts); the page says so, and shows the Run's state.
 describe('The shared run page', () => {
   it('says what anyone with the link can do, never that the Run is read-only', () => {
     const html = renderRun({ completeRun: vi.fn(), shared: true });

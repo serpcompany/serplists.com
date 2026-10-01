@@ -29,7 +29,6 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 
 const workspaceRoles = vi.hoisted(() => ({
   roles: {} as Record<string, 'viewer' | 'runner' | 'admin'>,
-  // The teams request failed with no list, as WorkspaceProvider reports it.
   teamsUnavailable: false,
 }));
 
@@ -87,62 +86,63 @@ const baseRun: ChecklistRun = {
   templateVersion: 1,
 };
 
-describe('ChecklistRunPage layout', () => {
-  it('renders the private run inside the shared dashboard shell with one persistent app sidebar', async () => {
-    mockUseRunExecutionModel.mockReturnValue({
-      counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
-      createShare: vi.fn(),
-      history: {
-        data: {
-          checklistId: 'run-1',
-          events: [
-            {
-              id: 'audit-1',
-              action: 'checklist_run.created',
-              actor: { name: 'Jane Runner' },
-              metadata: {
-                source: 'mcp',
-                personalRunKeyName: 'Codex SOP Runner',
-              },
-              createdAt: '2026-07-03T12:00:00.000Z',
+const renderPrivateRunWithAnAgentInItsChangelog = () => {
+  mockUseRunExecutionModel.mockReturnValue({
+    counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
+    createShare: vi.fn(),
+    history: {
+      data: {
+        checklistId: 'run-1',
+        events: [
+          {
+            id: 'audit-1',
+            action: 'checklist_run.created',
+            actor: { name: 'Jane Runner' },
+            metadata: {
+              source: 'mcp',
+              personalRunKeyName: 'Codex SOP Runner',
             },
-          ],
-          subject: { type: 'user', id: 'user-1' },
-        },
-        isError: false,
-        isLoading: false,
+            createdAt: '2026-07-03T12:00:00.000Z',
+          },
+        ],
+        subject: { type: 'user', id: 'user-1' },
       },
-      isSharedRun: false,
-      loadError: null,
-      loading: false,
-      notFound: false,
-      progress: 35,
-      run: baseRun,
-      saveTitle: vi.fn(),
-      selectedData: {
-        item: baseRun.sections[0].items[0],
-        section: baseRun.sections[0],
-      },
-      selectedItemId: 'item-1',
-      setSelectedItemId: vi.fn(),
-      completeRun: vi.fn(),
-      toggleItem: vi.fn(),
-      saveItemNotes: vi.fn(),
-      noteDrafts: {},
-      setNoteDraft: vi.fn(),
-      hasUnsavedNotes: false,
-      toggleSubItem: vi.fn(),
-    });
+      isError: false,
+      isLoading: false,
+    },
+    isSharedRun: false,
+    loadError: null,
+    loading: false,
+    notFound: false,
+    progress: 35,
+    run: baseRun,
+    saveTitle: vi.fn(),
+    selectedData: {
+      item: baseRun.sections[0].items[0],
+      section: baseRun.sections[0],
+    },
+    selectedItemId: 'item-1',
+    setSelectedItemId: vi.fn(),
+    completeRun: vi.fn(),
+    toggleItem: vi.fn(),
+    saveItemNotes: vi.fn(),
+    noteDrafts: {},
+    setNoteDraft: vi.fn(),
+    hasUnsavedNotes: false,
+    toggleSubItem: vi.fn(),
+  });
 
-    const html = renderPageAt('/dashboard/runs/run-1', { '/dashboard/runs/[id]': <ChecklistRunPage /> });
+  return renderPageAt('/dashboard/runs/run-1', { '/dashboard/runs/[id]': <ChecklistRunPage /> });
+};
+
+describe('ChecklistRunPage layout', () => {
+  it('renders the private run inside the shared dashboard shell with one persistent app sidebar and no outline of its own', async () => {
+    const html = renderPrivateRunWithAnAgentInItsChangelog();
 
     expect(html).toContain('Progress');
     expect(html).toContain('data-dashboard-content-shell="true"');
     expect(html).toContain('data-dashboard-page-header="true"');
     expect(html).toContain('data-run-workspace-shell="true"');
-    expect(html).toContain('data-mobile-run-progress="true"');
-    // Below xl the desktop panel is hidden, so the mobile block must open the task list.
-    expect(html).toMatch(/data-mobile-run-progress="true"(?:(?!<\/section>).)*data-mobile-run-tasks-trigger="true"/s);
     expect(html).toContain('data-run-progress-panel="true"');
     expect(html).toContain('Overall Progress');
     expect(html).toContain('Changelog');
@@ -158,22 +158,31 @@ describe('ChecklistRunPage layout', () => {
     expect(html).toContain(
       'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
     );
-    expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
-    // The task footer sticks to the bottom of the window, which needs every box around it
-    // to clip rather than scroll (a scroll container would hold the sticky footer instead).
-    expect(html).toMatch(/class="[^"]*\bsticky bottom-0\b[^"]*" data-task-footer="true"/);
-    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-content-shell="true"/);
-    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-page-body="true"/);
-    expect(html).not.toMatch(/class="[^"]*\boverflow-(auto|hidden)\b[^"]*" data-dashboard-(content-shell|page-body)="true"/);
     expect(html).not.toContain('data-run-progress-sidebar="true"');
     expect(html).not.toContain('border-r border-border bg-card xl:flex xl:w-64');
-    // The old left-hand "Tasks" outline is gone; the mobile Tasks button is a different control.
     expect(html).not.toMatch(/<h2[^>]*>Tasks<\/h2>/);
     expect(html).not.toContain('Work through the run like a docs outline');
     expect(html).not.toContain('More options');
   });
 
-  it('renders the shared run as the public copyable checklist flow', async () => {
+  it('opens the task list from the mobile progress block, since the desktop panel is hidden below xl', () => {
+    const html = renderPrivateRunWithAnAgentInItsChangelog();
+
+    expect(html).toContain('data-mobile-run-progress="true"');
+    expect(html).toMatch(/data-mobile-run-progress="true"(?:(?!<\/section>).)*data-mobile-run-tasks-trigger="true"/s);
+  });
+
+  it('pins the task footer to the bottom of the window, every box around it clipping, since a scroll container would hold the footer instead', () => {
+    const html = renderPrivateRunWithAnAgentInItsChangelog();
+
+    expect(html).toContain('min-h-[calc(100dvh-3.5rem)]');
+    expect(html).toMatch(/class="[^"]*\bsticky bottom-0\b[^"]*" data-task-footer="true"/);
+    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-content-shell="true"/);
+    expect(html).toMatch(/class="[^"]*\boverflow-clip\b[^"]*" data-dashboard-page-body="true"/);
+    expect(html).not.toMatch(/class="[^"]*\boverflow-(auto|hidden)\b[^"]*" data-dashboard-(content-shell|page-body)="true"/);
+  });
+
+  it('renders the shared run as the public copyable checklist flow in the narrow shared page shell and its cards', async () => {
     mockUseRunExecutionModel.mockReturnValue({
       counts: { progress: 29, subTasksCompleted: 1, subTasksTotal: 4, tasksCompleted: 1, tasksTotal: 3 },
       createShare: vi.fn(),
@@ -218,7 +227,6 @@ describe('ChecklistRunPage layout', () => {
       'Check for typos and broken links.\nThen save to C:\\new_folder\nFinally submit the report.',
     );
     expect(html).not.toContain('Create Your Own Copy');
-    // The shared page shell: its narrow container and its cards.
     expect(html).toContain('data-page-container="narrow"');
     expect(html).toContain('data-slot="card"');
     expect(html).not.toContain('Creating link...');
@@ -299,8 +307,7 @@ describe('ChecklistRunPage completion', () => {
     expect(html).not.toContain('Complete run');
   });
 
-  // Every task ticked, but the first still has an open Sub-task (older runs, API writes).
-  it('points the last task at a ticked task with an open Sub-task, never "Run completed"', async () => {
+  it('points the last task at a ticked task with an open Sub-task, as older runs and API writes can hold, never "Run completed"', async () => {
     const run = twoTaskRun([true, true]);
     run.sections[0].items[0].contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Step one', isCompleted: false }] },
@@ -324,12 +331,9 @@ describe('ChecklistRunPage completion', () => {
   });
 });
 
-// A completed run is frozen: unticking a task would leave it Completed with open tasks.
-describe('ChecklistRunPage on a completed run', () => {
-  // Any element with the checkbox role: the task's own <button> and the sub-tasks' Base UI
-  // checkboxes (<span role="checkbox">, disabled through aria-disabled).
+describe('ChecklistRunPage on a completed run, which is frozen so unticking cannot leave it Completed with open tasks', () => {
   const checkboxes = (html: string) => html.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? [];
-  const isLocked = (tag: string) => tag.includes('disabled=""') || tag.includes('aria-disabled="true"');
+  const isDisabledOrAriaDisabled = (tag: string) => tag.includes('disabled=""') || tag.includes('aria-disabled="true"');
   const completedRun = (): ChecklistRun => {
     const run = twoTaskRun([true, true], 'completed');
     run.sections[0].items[0].contents = [
@@ -343,7 +347,7 @@ describe('ChecklistRunPage on a completed run', () => {
 
     expect(html).not.toContain('Mark Complete');
     expect(checkboxes(html).length).toBeGreaterThan(0);
-    expect(checkboxes(html).every(isLocked)).toBe(true);
+    expect(checkboxes(html).every(isDisabledOrAriaDisabled)).toBe(true);
     expect(html).toContain('Save notes');
   });
 
@@ -351,14 +355,14 @@ describe('ChecklistRunPage on a completed run', () => {
     const html = await renderRunPage(completedRun(), { selectedItemId: 'item-1', shared: true });
 
     expect(checkboxes(html)).toHaveLength(3);
-    expect(checkboxes(html).every(isLocked)).toBe(true);
+    expect(checkboxes(html).every(isDisabledOrAriaDisabled)).toBe(true);
     expect(html).toContain('Save notes');
   });
 
   it('leaves the checkboxes of an in-progress run enabled', async () => {
     const html = await renderRunPage(twoTaskRun([false, false]), { selectedItemId: 'item-1', shared: true });
 
-    expect(checkboxes(html).some(isLocked)).toBe(false);
+    expect(checkboxes(html).some(isDisabledOrAriaDisabled)).toBe(false);
   });
 });
 
@@ -426,18 +430,26 @@ describe('ChecklistRunPage Organization roles', () => {
     expect(html).not.toContain('View only');
   });
 
-  // Opened from Personal while the teams request failed: the role is unknown, not "viewer".
-  it('says the Organizations could not load, with Retry, instead of a silent View only', async () => {
+  const renderOrganizationRunWhileTheTeamsRequestFailed = async () => {
     workspaceRoles.roles = {};
     workspaceRoles.teamsUnavailable = true;
     const html = await renderRunPage(organizationRun(), { selectedItemId: 'item-1' });
     workspaceRoles.teamsUnavailable = false;
+    return html;
+  };
+
+  it('says the Organizations could not load, with Retry, instead of a silent View only, since the role is unknown rather than viewer', async () => {
+    const html = await renderOrganizationRunWhileTheTeamsRequestFailed();
 
     expect(html).toContain('Couldn&#x27;t load your Organizations');
     expect(html).toMatch(/>Retry</);
     expect(html).not.toContain('Continue in Personal');
     expect(html).not.toContain('View only');
-    // Nothing that could fail is offered until the role is known.
+  });
+
+  it('offers no action that could fail until the role is known', async () => {
+    const html = await renderOrganizationRunWhileTheTeamsRequestFailed();
+
     expect(html).not.toContain('Mark Complete');
     expect(html).not.toContain('Rename');
   });
@@ -462,9 +474,7 @@ describe('ChecklistRunPage Organization roles', () => {
 });
 
 
-// Sub-tasks are not tasks: every "tasks" count on the page matches the task list, the
-// "Task N of M" badge and the runs list.
-describe('ChecklistRunPage task counts', () => {
+describe('ChecklistRunPage task counts, which count tasks as the task list, the Task N of M badge and the runs list do, never Sub-tasks', () => {
   const taskWithSubTasks = (id: string, ticked: number) => ({
     id,
     title: `Task ${id}`,
@@ -477,10 +487,9 @@ describe('ChecklistRunPage task counts', () => {
       },
     ],
   });
-  // Three tasks with three sub-tasks each, one sub-task ticked: 1 of 12 units, 8%.
-  const runWithSubTasks = (): ChecklistRun => ({
+  const runWithOneOfTwelveUnitsTicked = (): ChecklistRun => ({
     ...baseRun,
-    progress: 8,
+    progress: Math.round((1 / 12) * 100),
     sections: [
       {
         id: 'section-1',
@@ -491,7 +500,7 @@ describe('ChecklistRunPage task counts', () => {
   });
 
   it('shows the same task total in the header, the progress block and the task list', async () => {
-    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+    const html = await renderRunPage(runWithOneOfTwelveUnitsTicked(), { selectedItemId: 'a' });
 
     expect(html.match(/0 of 3 tasks finished/g)).toHaveLength(2);
     expect(html).toContain('0 / 3 tasks');
@@ -499,17 +508,15 @@ describe('ChecklistRunPage task counts', () => {
     expect(html).not.toMatch(/(of|\/) 12/);
   });
 
-  it('fills the task list bar with the same overall progress as the header', async () => {
-    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a' });
+  it("fills the header bar, the task list bar and the progress block's Progress with the same overall progress", async () => {
+    const html = await renderRunPage(runWithOneOfTwelveUnitsTicked(), { selectedItemId: 'a' });
 
-    // The header bar, the task list bar and the progress block's Progress (which fills to
-    // its value's width).
     expect(html.match(/width:8%/g)).toHaveLength(3);
     expect(html).not.toContain('width:0%');
   });
 
   it('counts tasks, not sub-tasks, in the shared view', async () => {
-    const html = await renderRunPage(runWithSubTasks(), { selectedItemId: 'a', shared: true });
+    const html = await renderRunPage(runWithOneOfTwelveUnitsTicked(), { selectedItemId: 'a', shared: true });
 
     expect(html).toContain('0 of 3 tasks');
     expect(html).not.toMatch(/of 12/);
