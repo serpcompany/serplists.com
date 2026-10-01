@@ -4,10 +4,15 @@ import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateBu
 import { canCopyTemplate } from '@/features/template-detail/templatePermissions';
 import {
   saveTemplateToAccount,
-  type TemplateDetailBillingState,
 } from '@/features/template-detail/useTemplateDetailModel';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import {
+  apiClientThatClones as buildApiClient,
+  FREE_BILLING as freeBilling,
+  PRO_BILLING as proBilling,
+} from '../../../fixtures/templateDetailApiClient';
 
 const buildPrivateOrganizationTemplateOfAnotherMember = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
@@ -21,23 +26,6 @@ const buildPrivateOrganizationTemplateOfAnotherMember = (overrides: Partial<Chec
   slug: 'launch-checklist',
   version: 1,
   ...overrides,
-});
-
-const proBilling: TemplateDetailBillingState = {
-  billingEnabled: true,
-  isError: false,
-  isLoading: false,
-  isPro: true,
-};
-const freeBilling: TemplateDetailBillingState = { ...proBilling, isPro: false };
-
-const buildApiClient = (clonePublicTemplate = vi.fn().mockResolvedValue({ id: 'clone-1' })) => ({
-  clonePublicTemplate,
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate: vi.fn(),
 });
 
 describe('copying a private template', () => {

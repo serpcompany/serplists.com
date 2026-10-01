@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
@@ -13,6 +13,8 @@ import {
   type TemplateDetailBillingState,
 } from '@/features/template-detail/useTemplateDetailModel';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
+
+import { apiClientThatClones, templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
 
 const buildTemplate = (
   overrides: Partial<ChecklistTemplate> = {},
@@ -55,13 +57,7 @@ describe('template detail actions', () => {
   });
 
   it('returns upgrade_required when a free user tries to save a gated template', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-    };
+    const apiClient = templateDetailApiClient();
 
     const result = await saveTemplateToAccount(
       {
@@ -79,34 +75,26 @@ describe('template detail actions', () => {
     expect(apiClient.clonePublicTemplate).not.toHaveBeenCalled();
   });
 
-  it('saves library and API templates into the same Organization', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
-      updateTemplate: vi.fn(),
-    };
+  const saveALibraryAndAnApiTemplateInto = async (teamId: string | undefined) => {
+    const apiClient = apiClientThatClones();
     const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
+    const save = (template: ChecklistTemplate) =>
+      saveTemplateToAccount({
+        apiClient,
+        billingState: buildBillingState(),
+        createTemplate,
+        isAuthenticated: true,
+        teamId,
+        template,
+        userId: 'user-1',
+      });
+    const libraryResult = await save(buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }));
+    const apiResult = await save(buildTemplate());
+    return { apiClient, createTemplate, libraryResult, apiResult };
+  };
 
-    const libraryResult = await saveTemplateToAccount({
-      apiClient,
-      billingState: buildBillingState(),
-      createTemplate,
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
-      userId: 'user-1',
-    });
-    const apiResult = await saveTemplateToAccount({
-      apiClient,
-      billingState: buildBillingState(),
-      createTemplate,
-      isAuthenticated: true,
-      teamId: 'team-1',
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+  it('saves library and API templates into the same Organization', async () => {
+    const { apiClient, createTemplate, libraryResult, apiResult } = await saveALibraryAndAnApiTemplateInto('team-1');
 
     expect(libraryResult).toEqual({ kind: 'ok', templateId: 'created-1' });
     expect(createTemplate).toHaveBeenCalledWith(
@@ -120,33 +108,7 @@ describe('template detail actions', () => {
   });
 
   it('saves library and API templates into Personal when no Organization is active', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn().mockResolvedValue({ id: 'clone-1' }),
-      updateTemplate: vi.fn(),
-    };
-    const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'created-1' }));
-
-    await saveTemplateToAccount({
-      apiClient,
-      billingState: buildBillingState(),
-      createTemplate,
-      isAuthenticated: true,
-      teamId: undefined,
-      template: buildTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID }),
-      userId: 'user-1',
-    });
-    await saveTemplateToAccount({
-      apiClient,
-      billingState: buildBillingState(),
-      createTemplate,
-      isAuthenticated: true,
-      teamId: undefined,
-      template: buildTemplate(),
-      userId: 'user-1',
-    });
+    const { apiClient, createTemplate } = await saveALibraryAndAnApiTemplateInto(undefined);
 
     expect(createTemplate.mock.calls[0]?.[0]?.teamId).toBeUndefined();
     expect(apiClient.clonePublicTemplate).toHaveBeenCalledWith('template-1', {
@@ -156,14 +118,7 @@ describe('template detail actions', () => {
   });
 
   it('does not send a user to checkout when the plan could not be checked', async () => {
-    const apiClient = {
-      getBillingStatus: vi.fn(),
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-    };
+    const apiClient = templateDetailApiClient();
     const createTemplate = vi.fn();
 
     const result = await saveTemplateToAccount({
@@ -289,11 +244,7 @@ describe('template detail actions', () => {
   it('returns an error when an Organization template limit blocks a save', async () => {
     const message =
       'Template limit reached. This Organization needs a paid plan to create more templates.';
-    const apiClient = {
-      getBillingStatus: vi.fn(),
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
+    const apiClient = templateDetailApiClient({
       clonePublicTemplate: vi.fn().mockRejectedValue(
         createApiError(403, {
           code: 'limit_reached',
@@ -301,8 +252,7 @@ describe('template detail actions', () => {
           details: { limit: 3, current: 3, resource: 'templates', context: 'organization' },
         }),
       ),
-      updateTemplate: vi.fn(),
-    };
+    });
 
     const result = await saveTemplateToAccount({
       apiClient,
@@ -360,14 +310,7 @@ describe("resolveShareOwnerTemplate, since cached template lists keep the owner'
 });
 
 describe('setTemplateVisibility', () => {
-  const visibilityClient = (updateTemplate: ReturnType<typeof vi.fn>) => ({
-    clonePublicTemplate: vi.fn(),
-    getBillingStatus: vi.fn(),
-    getProfileById: vi.fn(),
-    getTemplateById: vi.fn(),
-    getTemplateBySlug: vi.fn(),
-    updateTemplate,
-  });
+  const visibilityClient = (updateTemplate: Mock) => templateDetailApiClient({ updateTemplate });
   const applyChange = (onTemplateChange: ReturnType<typeof vi.fn>, current: ChecklistTemplate) =>
     (onTemplateChange.mock.calls[0]?.[0] as (value: ChecklistTemplate | null) => ChecklistTemplate | null)(current);
 

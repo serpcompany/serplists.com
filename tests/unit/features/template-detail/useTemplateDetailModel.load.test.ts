@@ -9,8 +9,30 @@ import {
 } from '@/features/template-detail/templateDetailMappers';
 import { loadTemplateDetailData, type LoadTemplateDetailResult } from '@/features/template-detail/useTemplateDetailModel';
 
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+
 const loadedTemplate = (result: LoadTemplateDetailResult) =>
   result.kind === 'ok' ? result.template : null;
+
+const LEGACY_FLAT_ITEMS = JSON.stringify([
+  { id: 'item-1', title: 'Bring tent' },
+  { id: 'item-2', title: 'Pack stove' },
+]);
+
+const campingChecklistRow = (overrides: Record<string, unknown> = {}) => ({
+  id: 'template-1',
+  title: 'Camping Checklist',
+  sections: [],
+  user_id: 'user-1',
+  created_at: '2026-04-18T00:00:00.000Z',
+  updated_at: '2026-04-18T00:00:00.000Z',
+  is_public: true,
+  slug: 'camping-checklist',
+  ...overrides,
+});
+
+const loadAlicesPublicTemplate = (identifier: string, apiClient: ReturnType<typeof templateDetailApiClient>) =>
+  loadTemplateDetailData({ mode: 'public', identifier, ownerUsername: 'alice' }, { apiClient });
 
 describe('template detail mappers', () => {
   it('normalizes template payloads into ChecklistTemplate', () => {
@@ -75,16 +97,7 @@ describe('template detail mappers', () => {
       {
         id: 'legacy-template',
         title: 'Legacy Checklist',
-        items: JSON.stringify([
-          {
-            id: 'item-1',
-            title: 'Bring tent',
-          },
-          {
-            id: 'item-2',
-            title: 'Pack stove',
-          },
-        ]),
+        items: LEGACY_FLAT_ITEMS,
         user_id: 'user-1',
         created_at: '2026-04-18T00:00:00.000Z',
         is_public: true,
@@ -149,35 +162,12 @@ describe('template detail mappers', () => {
 
 describe('loadTemplateDetailData', () => {
   it('falls back to the API and resolves the owner profile', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn().mockResolvedValue({
-        id: 'template-1',
-        title: 'Camping Checklist',
-        sections: [],
-        user_id: 'user-1',
-        created_at: '2026-04-18T00:00:00.000Z',
-        updated_at: '2026-04-18T00:00:00.000Z',
-        is_public: true,
-        slug: 'camping-checklist',
-      }),
-      getProfileById: vi.fn().mockResolvedValue({
-        username: 'alice',
-        full_name: 'Alice Example',
-      }),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-      getBillingStatus: vi.fn(),
-    };
+    const apiClient = templateDetailApiClient({
+      getTemplateBySlug: vi.fn().mockResolvedValue(campingChecklistRow()),
+      getProfileById: vi.fn().mockResolvedValue({ username: 'alice', full_name: 'Alice Example' }),
+    });
 
-    const result = await loadTemplateDetailData(
-      {
-        mode: 'public',
-        identifier: 'camping-checklist',
-        ownerUsername: 'alice',
-      },
-      { apiClient },
-    );
+    const result = await loadAlicesPublicTemplate('camping-checklist', apiClient);
 
     expect(result.kind).toBe('ok');
     expect(loadedTemplate(result)?.ownerProfile).toEqual({
@@ -191,21 +181,11 @@ describe('loadTemplateDetailData', () => {
   });
 
   it('normalizes legacy flat items during model loading', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
+    const apiClient = templateDetailApiClient({
       getTemplateBySlug: vi.fn().mockResolvedValue({
         id: 'legacy-template',
         title: 'Legacy Checklist',
-        items: JSON.stringify([
-          {
-            id: 'item-1',
-            title: 'Bring tent',
-          },
-          {
-            id: 'item-2',
-            title: 'Pack stove',
-          },
-        ]),
+        items: LEGACY_FLAT_ITEMS,
         user_id: 'user-1',
         created_at: '2026-04-18T00:00:00.000Z',
         updated_at: '2026-04-18T00:00:00.000Z',
@@ -213,20 +193,9 @@ describe('loadTemplateDetailData', () => {
         slug: 'legacy-checklist',
         owner_username: 'alice',
       }),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-      getBillingStatus: vi.fn(),
-    };
+    });
 
-    const result = await loadTemplateDetailData(
-      {
-        mode: 'public',
-        identifier: 'legacy-checklist',
-        ownerUsername: 'alice',
-      },
-      { apiClient },
-    );
+    const result = await loadAlicesPublicTemplate('legacy-checklist', apiClient);
 
     expect(result.kind).toBe('ok');
     expect(loadedTemplate(result)?.sections).toHaveLength(1);
@@ -235,39 +204,17 @@ describe('loadTemplateDetailData', () => {
   });
 
   it('returns not_found when the owner segment does not match', async () => {
-    const apiClient = {
-      getTemplateById: vi.fn(),
-      getTemplateBySlug: vi.fn().mockResolvedValue({
-        id: 'template-1',
-        title: 'Camping Checklist',
-        sections: [],
-        user_id: 'user-1',
-        created_at: '2026-04-18T00:00:00.000Z',
-        updated_at: '2026-04-18T00:00:00.000Z',
-        is_public: true,
-        slug: 'camping-checklist',
-        owner_username: 'bob',
-      }),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-      getBillingStatus: vi.fn(),
-    };
+    const apiClient = templateDetailApiClient({
+      getTemplateBySlug: vi.fn().mockResolvedValue(campingChecklistRow({ owner_username: 'bob' })),
+    });
 
-    const result = await loadTemplateDetailData(
-      {
-        mode: 'public',
-        identifier: 'camping-checklist',
-        ownerUsername: 'alice',
-      },
-      { apiClient },
-    );
+    const result = await loadAlicesPublicTemplate('camping-checklist', apiClient);
 
     expect(result).toEqual({ kind: 'not_found' });
   });
 
   it('keeps the Organization of a private template that is not in the cached list', async () => {
-    const apiClient = {
+    const apiClient = templateDetailApiClient({
       getTemplateById: vi.fn().mockResolvedValue({
         id: 'template-t',
         title: 'Organization Checklist',
@@ -279,12 +226,7 @@ describe('loadTemplateDetailData', () => {
         created_at: '2026-04-18T00:00:00.000Z',
         is_public: false,
       }),
-      getTemplateBySlug: vi.fn(),
-      getProfileById: vi.fn(),
-      clonePublicTemplate: vi.fn(),
-      updateTemplate: vi.fn(),
-      getBillingStatus: vi.fn(),
-    };
+    });
 
     const result = await loadTemplateDetailData(
       {
@@ -299,19 +241,12 @@ describe('loadTemplateDetailData', () => {
     expect(loadedTemplate(result)?.userId).toBe('user-b');
   });
 
-  const failingLookup = (error: unknown) => ({
-    getTemplateById: vi.fn().mockRejectedValue(error),
-    getTemplateBySlug: vi.fn().mockRejectedValue(error),
-    getProfileById: vi.fn(),
-    clonePublicTemplate: vi.fn(),
-    updateTemplate: vi.fn(),
-    getBillingStatus: vi.fn(),
-  });
-  const loadPublic = (identifier: string, error: unknown) =>
-    loadTemplateDetailData(
-      { mode: 'public', identifier, ownerUsername: 'alice' },
-      { apiClient: failingLookup(error) },
-    );
+  const failingLookup = (error: unknown) =>
+    templateDetailApiClient({
+      getTemplateById: vi.fn().mockRejectedValue(error),
+      getTemplateBySlug: vi.fn().mockRejectedValue(error),
+    });
+  const loadPublic = (identifier: string, error: unknown) => loadAlicesPublicTemplate(identifier, failingLookup(error));
 
   it('treats a 404 from the API as a settled not-found, the only answer that renders the noindex Template not found state', async () => {
     const missing = createApiError(404, { error: 'Template not found' });

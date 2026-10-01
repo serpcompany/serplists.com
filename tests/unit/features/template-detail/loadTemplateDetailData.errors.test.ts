@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { loadTemplateDetailData } from '@/features/template-detail/useTemplateDetailModel';
 import { createApiError } from '@/lib/api-errors';
 
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+
 const TEMPLATE_UUID = '4f7c1a52-9b1e-4c1d-8a61-2f8e5b3c9d10';
 
 const serverRow = (overrides: Record<string, unknown> = {}) => ({
@@ -18,15 +20,7 @@ const serverRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const buildApiClient = (overrides: Record<string, unknown> = {}) => ({
-  clonePublicTemplate: vi.fn(),
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate: vi.fn(),
-  ...overrides,
-});
+const buildApiClient = templateDetailApiClient;
 
 const privateOptions = (identifier: string) => ({
   identifier,

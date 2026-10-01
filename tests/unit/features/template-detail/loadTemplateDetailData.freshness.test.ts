@@ -7,6 +7,8 @@ import {
 import { createApiError } from '@/lib/api-errors';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+
 const serverRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'template-1',
   title: 'Camping Checklist B',
@@ -24,14 +26,10 @@ const serverRow = (overrides: Record<string, unknown> = {}) => ({
 const loadedTemplate = (result: LoadTemplateDetailResult) =>
   result.kind === 'ok' ? result.template : null;
 
-const buildApiClient = (getTemplateBySlug = vi.fn()) => ({
-  clonePublicTemplate: vi.fn(),
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug,
-  updateTemplate: vi.fn(),
-});
+const buildApiClient = (getTemplateBySlug = vi.fn()) => templateDetailApiClient({ getTemplateBySlug });
+
+const loadAlicesCampingChecklist = (apiClient: ReturnType<typeof buildApiClient>) =>
+  loadTemplateDetailData({ mode: 'public', identifier: 'camping-checklist', ownerUsername: 'alice' }, { apiClient });
 
 const libraryTemplate = repoTemplates[0];
 
@@ -56,10 +54,7 @@ describe('public template detail freshness', () => {
       vi.fn().mockResolvedValue(serverRow({ is_public: false })),
     );
 
-    const result = await loadTemplateDetailData(
-      { mode: 'public', identifier: 'camping-checklist', ownerUsername: 'alice' },
-      { apiClient },
-    );
+    const result = await loadAlicesCampingChecklist(apiClient);
 
     expect(result).toEqual({ kind: 'not_found' });
   });
@@ -69,10 +64,7 @@ describe('public template detail freshness', () => {
       vi.fn().mockRejectedValue(createApiError(404, { error: 'Template not found' })),
     );
 
-    const result = await loadTemplateDetailData(
-      { mode: 'public', identifier: 'camping-checklist', ownerUsername: 'alice' },
-      { apiClient },
-    );
+    const result = await loadAlicesCampingChecklist(apiClient);
 
     expect(result).toEqual({ kind: 'not_found' });
   });

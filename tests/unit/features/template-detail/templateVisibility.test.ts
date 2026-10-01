@@ -5,6 +5,8 @@ import { setTemplateVisibility } from '@/features/template-detail/templateVisibi
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
+
 const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
   title: 'Camping Checklist',
@@ -18,14 +20,8 @@ const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTem
   ...overrides,
 });
 
-const buildApiClient = (updateTemplate = vi.fn().mockResolvedValue({ success: true })) => ({
-  clonePublicTemplate: vi.fn(),
-  getBillingStatus: vi.fn(),
-  getProfileById: vi.fn(),
-  getTemplateById: vi.fn(),
-  getTemplateBySlug: vi.fn(),
-  updateTemplate,
-});
+const buildApiClient = (updateTemplate = vi.fn().mockResolvedValue({ success: true })) =>
+  templateDetailApiClient({ updateTemplate });
 
 const applyTheUpdaterAsReactWould = (
   onTemplateChange: ReturnType<typeof vi.fn>,
