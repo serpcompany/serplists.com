@@ -9,7 +9,7 @@ describe('describeMemberForControls', () => {
     ['an empty name', { name: '', email: 'bob@example.com', user_id: 'user-2' }, 'bob@example.com'],
     ['name only', { name: 'Carol', email: null, user_id: 'user-3' }, 'Carol (user-3)'],
     ['neither', { name: null, email: null, user_id: 'user-4' }, 'user-4'],
-  ])('names a member with %s', (_label, member, expected) => {
+  ])('names a member with %s, adding the email or user id so two members with one name stay distinct', (_label, member, expected) => {
     expect(describeMemberForControls(member)).toBe(expected);
   });
 });

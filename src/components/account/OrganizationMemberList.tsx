@@ -48,8 +48,6 @@ type OrganizationMemberListProps = {
   updatingMemberId: string | null;
 };
 
-// The active Organization's members. Owners and admins change a member's role and status
-// (never their own or the owner's), and the owner can hand ownership to an active member.
 export function OrganizationMemberList({
   activeMemberId,
   canManageTeam,
@@ -99,8 +97,6 @@ export function OrganizationMemberList({
                 <ItemActions className="basis-full flex-wrap sm:basis-auto">
                   {canManageTeam ? (
                     <>
-                      {/* The visible labels help on a phone, where the fields stack; the
-                          controls' names say whose role and status they are. */}
                       <Field className="w-full sm:w-36">
                         <FieldLabel className="sm:sr-only" htmlFor={roleId}>Role</FieldLabel>
                         <Select

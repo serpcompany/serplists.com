@@ -222,7 +222,10 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   `Switch`, and helper text is linked with `aria-describedby`. Controls repeated on
   each row of a list name the row in their accessible name ("Role for Alice
   (alice@example.com)"), so no two share one; `src/components/account/SecuritySection.tsx`
-  and the member list in `OrganizationMemberList.tsx` are the reference.
+  and the member list in `OrganizationMemberList.tsx` are the reference. The member list
+  shows its Role and Status labels only on phones, where a row's fields stack under the
+  member (`sm:sr-only`); from `sm` the row reads as one line, and the controls' names say
+  whose role and status they are.
 - Show a neutral loading state rather than a guessed value (for example, never
   render a plan label before billing status loads).
 - Check layouts at desktop and mobile widths with `pnpm run ui:snap` (add `--mobile`,

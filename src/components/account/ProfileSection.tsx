@@ -26,17 +26,13 @@ interface ProfileData {
 
 interface ProfileSectionProps {
   profileData: ProfileData;
-  // The username the server holds, which the preview links to as stored.
   savedUsername: string | undefined;
   loading: boolean;
-  // Takes an updater so a keystroke never overwrites a concurrent avatar change.
   onProfileDataChange: React.Dispatch<React.SetStateAction<ProfileData>>;
   onProfileUpdate: () => void;
   onAvatarUpdate: (url: string) => void;
 }
 
-// Account Settings' profile: the picture, the email (read-only), the name and the username
-// with the Public Profile URL it gives.
 export const ProfileSection: React.FC<ProfileSectionProps> = ({
   profileData,
   savedUsername,
@@ -47,8 +43,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
 }) => {
   const origin =
     typeof window !== 'undefined' ? window.location.origin : 'https://serplists.com';
-  // The saved username as stored (a legacy one may be mixed case), or the lowercase URL an
-  // unsaved edit will have.
   const profilePreviewPath = buildProfilePreviewPath(profileData.username, savedUsername);
 
   return (

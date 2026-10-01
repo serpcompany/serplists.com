@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
+import { findElement } from '../../support/elementTree';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -74,5 +75,28 @@ describe('ProfileSection', () => {
 
     expect(html).not.toContain('href="/profile/');
     expect(html).toContain('/profile/username/');
+  });
+
+  it.each([
+    ['fullName', 'Johnny', { fullName: 'Johnny' }],
+    ['username', 'johnny!', { username: 'johnny' }],
+  ])('applies a keystroke in %s to the latest profile, so typing never undoes an avatar change made since the render', (id, typed, change) => {
+    const renderedProfile = { email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' };
+    const onProfileDataChange = vi.fn();
+    const section = ProfileSection({
+      profileData: renderedProfile,
+      savedUsername: 'john',
+      loading: false,
+      onProfileDataChange,
+      onProfileUpdate: vi.fn(),
+      onAvatarUpdate: vi.fn(),
+    });
+    const field = findElement(section, (element) => element.props.id === id);
+
+    (field?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: typed } });
+
+    const update = onProfileDataChange.mock.calls[0][0] as (current: typeof renderedProfile) => typeof renderedProfile;
+    const withNewAvatar = { ...renderedProfile, avatar_url: 'https://cdn.example.com/new-avatar.png' };
+    expect(update(withNewAvatar)).toEqual({ ...withNewAvatar, ...change });
   });
 });

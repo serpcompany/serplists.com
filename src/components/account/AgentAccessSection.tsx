@@ -67,11 +67,8 @@ export type AgentAccessSectionViewProps = {
   isLoading: boolean;
   keys: AgentKey[] | undefined;
   keyName: string;
-  // Null when agents cannot connect from this deployment at all.
   mcpEndpoint: string | null;
-  // The page's address is not one the MCP server accepts (for example a per-deployment URL).
   mcpHostMismatch: boolean;
-  // What the next key may do; fixed once it is created.
   permissions: readonly RunKeyPermission[];
   revokingKeyId: string | null;
   onCopyEndpoint: () => void;
@@ -104,8 +101,7 @@ export function AgentAccessSectionView({
   onRetry,
   onRevoke,
 }: AgentAccessSectionViewProps) {
-  // The key whose revoke confirmation is open. Confirming closes it before the request.
-  const [confirmKeyId, setConfirmKeyId] = useState<string | null>(null);
+  const [revokeDialogKeyId, setRevokeDialogKeyId] = useState<string | null>(null);
 
   return (
     <Card>
@@ -145,11 +141,9 @@ export function AgentAccessSectionView({
                   const id = `run-key-permission-${permission.replace(':', '-')}`;
                   const details = RUN_KEY_PERMISSION_DETAILS[permission];
                   return (
-                    // A choice card: the whole card toggles the checkbox, which the title names.
                     <FieldLabel htmlFor={id} key={permission}>
                       <Field orientation="horizontal">
                         <Checkbox
-                          // A native button, so the card's label reaches it.
                           nativeButton
                           render={<button type="button" />}
                           id={id}
@@ -322,7 +316,7 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                           size="sm"
                           variant="outline"
                           disabled={revokingKeyId === key.id}
-                          onClick={() => setConfirmKeyId(key.id)}
+                          onClick={() => setRevokeDialogKeyId(key.id)}
                         >
                           <Trash2 data-icon="inline-start" />
                           {revokingKeyId === key.id ? 'Revoking...' : 'Revoke'}
@@ -331,11 +325,11 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
                           confirmLabel="Revoke key"
                           description="The agent will immediately lose access. This action cannot be undone, but its run history will be preserved."
                           onConfirm={() => {
-                            setConfirmKeyId(null);
+                            setRevokeDialogKeyId(null);
                             onRevoke(key);
                           }}
-                          onOpenChange={(open) => setConfirmKeyId(open ? key.id : null)}
-                          open={confirmKeyId === key.id}
+                          onOpenChange={(open) => setRevokeDialogKeyId(open ? key.id : null)}
+                          open={revokeDialogKeyId === key.id}
                           title={`Revoke ${key.name}?`}
                         />
                       </ItemActions>
@@ -350,6 +344,11 @@ bearer_token_env_var = "SERPLISTS_RUN_KEY"`}</code></pre>
     </Card>
   );
 }
+
+const listingNewKeyFirst = (newKey: AgentKey) => (keys: AgentKey[] = []) => [
+  newKey,
+  ...keys.filter((key) => key.id !== newKey.id),
+];
 
 export function AgentAccessSection() {
   const [keyName, setKeyName] = useState('');
@@ -370,11 +369,7 @@ export function AgentAccessSection() {
       setCreatedKey(result);
       setKeyName('');
       setPermissions([...DEFAULT_RUN_KEY_PERMISSIONS]);
-      // Show the new key at once; the list may still be loading from before the create.
-      await reloadKeys((keys = []) => [
-        result.key,
-        ...keys.filter((key) => key.id !== result.key.id),
-      ]);
+      await reloadKeys(listingNewKeyFirst(result.key));
       toast.success('Run Key created');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create Run Key');
@@ -414,8 +409,6 @@ export function AgentAccessSection() {
       toast.success('Run Key revoked');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to revoke Run Key');
-      // The key may already be revoked (the response was lost, or another tab revoked it):
-      // show its real state instead of a stale Active row.
       await reloadKeys().catch(() => {});
     } finally {
       setRevokingKeyId(null);

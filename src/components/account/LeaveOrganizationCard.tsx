@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useLeaveOrganization } from '@/features/teams/useLeaveOrganization';
 
-// Lets a non-owner member leave the selected Organization. Owners transfer
-// ownership first (the API refuses an owner with `owner_must_transfer`).
 export function LeaveOrganizationCard() {
   const { activeWorkspace } = useWorkspace();
   const { isLeaving, leaveOrganization } = useLeaveOrganization();

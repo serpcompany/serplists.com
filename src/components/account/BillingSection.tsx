@@ -31,7 +31,6 @@ import { Link } from '@/components/navigation/Link';
 export function BillingSection() {
   const { user } = useAuth();
   const { activeTeamId, isTeamWorkspace } = useWorkspace();
-  // Both stay set until the browser leaves for Stripe, and clear when Back restores the page.
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const [isOpeningPortal, setIsOpeningPortal] = useRedirectPending();
   const billingReturn = useSearchParams().get("billing");
@@ -44,19 +43,15 @@ export function BillingSection() {
   const { refetch: refetchBilling } = billing;
   const queryClient = useQueryClient();
   const userId = user?.id;
-  // The plan may have changed at Stripe before the user pressed Back.
   usePageRestoredFromCache(useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
   }, [queryClient]));
-  // Checkout returns here, not to the editor, so point back to a template draft the
-  // editor kept when the plan limit stopped it.
   const hasTemplateDraft = useMemo(
     () => Boolean(userId && readTemplateDraft({ userId, teamId: activeTeamId })),
     [userId, activeTeamId],
   );
 
   const plan = billing.data?.plan;
-  // "unknown" (status failed to load) is not Free: offer Retry, never an upgrade.
   const planStatus = getBillingPlanStatus(billing);
   const planLabel = getBillingPlanLabel(plan) ?? (planStatus === "unknown" ? "Unavailable" : "Checking...");
   const billingEnabled = billing.data?.billingEnabled ?? true;
@@ -67,7 +62,6 @@ export function BillingSection() {
     : "Personal subscriptions are managed from Personal.";
 
   useEffect(() => {
-    // Only the one-shot ?billing= goes; the page stays, with the rest of its URL.
     const clearBillingReturn = () => {
       const next = new URLSearchParams(window.location.search);
       next.delete("billing");
@@ -85,7 +79,6 @@ export function BillingSection() {
 
     let cancelled = false;
     toast.message("Payment received. Activating Pro…");
-    // Checkout is Personal-only, so poll Personal status even if an Organization is selected.
     void waitForPersonalPro(() => fetchPersonalBillingStatus(queryClient, userId), {
       isCancelled: () => cancelled,
     }).then((result) => {
@@ -116,7 +109,6 @@ export function BillingSection() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start checkout");
       setIsStartingCheckout(false);
-      // Show the subscription checkout found, so Manage subscription replaces Upgrade.
       if (isOpenSubscriptionConflictError(err)) {
         void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(userId, null) });
       }
@@ -139,7 +131,6 @@ export function BillingSection() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to open billing portal");
       setIsOpeningPortal(false);
-      // Stripe no longer had the billing account. When the API replaced it, Upgrade replaces Manage.
       if (isBillingCustomerMissingError(err)) {
         void queryClient.invalidateQueries({ queryKey: getBillingStatusQueryKey(userId, null) });
       }
@@ -156,7 +147,6 @@ export function BillingSection() {
     </Button>
   );
 
-  // The plan's note, then its action in the card's footer.
   let planNote: string | null = null;
   let planAction: ReactNode = null;
   if (isTeamWorkspace) {

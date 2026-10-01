@@ -141,7 +141,6 @@ export const SecuritySection: React.FC = () => {
                 </FieldDescription>
               </FieldContent>
               <Switch
-                // A native button, so the Label's htmlFor names it.
                 nativeButton
                 render={<button type="button" />}
                 id="revoke-other-sessions"

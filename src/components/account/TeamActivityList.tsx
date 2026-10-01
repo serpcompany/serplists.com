@@ -24,7 +24,6 @@ const formatActivityTime = (value: string): string => {
 const getActivityActorName = (event: TeamActivityEvent): string =>
   getAuditActorName(event.actor, event.metadata, event.actor.userId || undefined);
 
-// The latest Organization activity (the API sends the 10 the page shows), in the Changelog's rows.
 export function TeamActivityList({ query, onRetry }: TeamActivityListProps) {
   return (
     <section className="flex flex-col gap-3">

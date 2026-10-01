@@ -59,7 +59,6 @@ export function TeamSettingsSection() {
   } = useWorkspace();
   const [teamName, setTeamName] = useState('');
   const [teamSlug, setTeamSlug] = useState('');
-  // Keeps unsaved edits when the Organizations list changes (see useTeamSettingsForm).
   const teamSettingsForm = useTeamSettingsForm(
     activeWorkspace.type === 'team'
       ? { teamId: activeWorkspace.teamId, name: activeWorkspace.name, slug: activeWorkspace.slug ?? '' }
@@ -80,10 +79,10 @@ export function TeamSettingsSection() {
   const incomingInvites = incomingInvitesQuery.data ?? [];
   const queryClient = useQueryClient();
   const memberChangeRefreshes = [reload.members, refreshTeams, reload.activity];
-  // The change is saved; only the follow-up refresh failed. Mark the
-  // Organization list stale so it refetches on the next focus or visit.
+  const markOrganizationListStale = () =>
+    queryClient.invalidateQueries({ queryKey: ['teams'], refetchType: 'none' });
   const warnRefreshFailed = () => {
-    void queryClient.invalidateQueries({ queryKey: ['teams'], refetchType: 'none' });
+    void markOrganizationListStale();
     toast.warning('Saved, but refreshing failed. Reload to see the latest state.');
   };
   const activeMemberId =
@@ -91,8 +90,7 @@ export function TeamSettingsSection() {
       ? activeWorkspace.memberId
       : null;
   const canTransferOwnership = isTeamWorkspace && activeWorkspace.role === 'owner';
-  // The fields that differ from the saved settings, or null when saving would change nothing.
-  const teamSettingsUpdate = isTeamWorkspace
+  const changedTeamSettings = isTeamWorkspace
     ? getTeamSettingsUpdate({ name: editTeamName, slug: editTeamSlug }, activeWorkspace)
     : null;
 
@@ -130,8 +128,7 @@ export function TeamSettingsSection() {
       return;
     }
 
-    // Save is disabled until a field changes; submitting unchanged values (Enter) sends nothing.
-    const update = teamSettingsUpdate;
+    const update = changedTeamSettings;
     if (!update) {
       return;
     }
@@ -148,7 +145,6 @@ export function TeamSettingsSection() {
       await runTeamWrite({
         write: () => saveTeamSettings(teamId, update),
         onSaved: (result) => {
-          // The response has the saved name and slug (the server may adjust the slug).
           const team = result?.team;
           if (team) {
             teamSettingsForm.applySaved(teamId, submitted, { name: team.name, slug: team.slug ?? '' });
@@ -181,7 +177,6 @@ export function TeamSettingsSection() {
       toast.success('Organization invite accepted');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to accept invite');
-      // A refused invite (already a member, revoked, expired) is no longer listed.
       await reload.incomingInvites().catch(() => undefined);
     } finally {
       setAcceptingIncomingInviteId(null);
@@ -202,12 +197,10 @@ export function TeamSettingsSection() {
       await runTeamWrite({
         write: () => updateTeamMember(teamId, member.id, updates),
         onSaved: () => toast.success('Member updated'),
-        // A status change revokes the member's pending invites.
         refreshes: [...memberChangeRefreshes, reload.invites],
         onRefreshFailed: warnRefreshFailed,
         onWriteFailed: (error) => {
           toast.error(errorMessage(error, 'Failed to update member'));
-          // A 409 means the member changed elsewhere (for example, became the owner).
           void reload.members().catch(() => undefined);
         },
       });
@@ -235,8 +228,6 @@ export function TeamSettingsSection() {
       await runTeamWrite({
         write: () => transferTeamOwnership(teamId, member.id),
         onSaved: () => {
-          // The previous owner is now an admin. Apply it now so the owner-only
-          // controls go away even if the Organization list cannot be refetched.
           patchTeam(teamId, { role: 'admin' });
           toast.success('Organization ownership transferred');
         },
@@ -244,7 +235,6 @@ export function TeamSettingsSection() {
         onRefreshFailed: warnRefreshFailed,
         onWriteFailed: (error) => {
           toast.error(errorMessage(error, 'Failed to transfer ownership'));
-          // Another owner change may have landed first: show the current owner and roles.
           void refreshTeams().catch(() => undefined);
           void reload.members().catch(() => undefined);
         },
@@ -293,7 +283,6 @@ export function TeamSettingsSection() {
           </Button>
         </form>
 
-        {/* Not "no Organizations": the user could otherwise create a duplicate. */}
         {teamsUnavailable ? (
           <QueryErrorNotice message="Couldn't load your Organizations." onRetry={retryWorkspace} />
         ) : null}
@@ -341,7 +330,7 @@ export function TeamSettingsSection() {
                     placeholder="agency-ops"
                   />
                 </Field>
-                <Button type="submit" disabled={isUpdatingTeam || !teamSettingsUpdate}>
+                <Button type="submit" disabled={isUpdatingTeam || !changedTeamSettings}>
                   {isUpdatingTeam ? 'Saving...' : 'Save Organization'}
                 </Button>
               </form>

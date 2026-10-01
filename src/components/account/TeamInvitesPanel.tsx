@@ -30,8 +30,6 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
-// Invite form, the link just created, and the pending invites of the active
-// Organization. Shown to owners and admins only.
 export function TeamInvitesPanel({ teamId }: { teamId: string }) {
   const {
     invites,
@@ -63,7 +61,6 @@ export function TeamInvitesPanel({ teamId }: { teamId: string }) {
     try {
       const result = await createInvite(teamId, email, inviteRole);
       if (result?.kind === 'created') {
-        // The link shows before the lists reload; keep an address typed meanwhile.
         setInviteEmail((current) => inviteEmailAfterLink(current, email));
         toast.success('Invite link created');
       }

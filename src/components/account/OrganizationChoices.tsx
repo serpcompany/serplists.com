@@ -16,7 +16,6 @@ type IncomingInviteListProps = {
   onAccept: (inviteId: string) => void;
 };
 
-// Invites to other Organizations waiting for the user: who invited them, as what, until when.
 export function IncomingInviteList({ acceptingInviteId, invites, onAccept }: IncomingInviteListProps) {
   return (
     <section className="flex flex-col gap-3">
@@ -53,13 +52,11 @@ export function IncomingInviteList({ acceptingInviteId, invites, onAccept }: Inc
 }
 
 type OrganizationListProps = {
-  // The Organization the user acts in, or null in Personal.
   activeTeamId: string | null;
   onSelect: (teamId: string) => void;
   teams: TeamSummary[];
 };
 
-// The user's Organizations, each a button that makes it the active context.
 export function OrganizationList({ activeTeamId, onSelect, teams }: OrganizationListProps) {
   return (
     <section className="flex flex-col gap-3">
