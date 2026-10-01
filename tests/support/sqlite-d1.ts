@@ -14,11 +14,9 @@ export type RecordedQuery = { sql: string; params: unknown[] };
 
 export type StatementHook = (sql: string, params: unknown[]) => void;
 
-export type SqliteD1Result = {
-  success: true;
-  results: Row[];
-  meta: { changes: number; rows_read: number; rows_written: number };
-};
+export type SqliteD1Result = D1Result<Row>;
+
+type RowArrays = { columns: string[]; results: unknown[][] };
 
 export type SqliteD1Options = {
   schemaSql?: string[];
@@ -40,37 +38,66 @@ function toSqliteValue(value: unknown): SQLInputValue {
   throw new TypeError(`D1 cannot bind a value of type ${typeof value}`);
 }
 
-class SqliteD1Statement {
+class SqliteD1Statement implements D1PreparedStatement {
   constructor(
     private readonly database: SqliteD1,
     readonly sql: string,
     readonly params: unknown[] = [],
   ) {}
 
-  bind(...params: unknown[]) {
+  bind(...params: unknown[]): SqliteD1Statement {
     return new SqliteD1Statement(this.database, this.sql, params);
   }
 
-  async all() {
+  all<T = Row>(): Promise<D1Result<T>>;
+  async all(): Promise<SqliteD1Result> {
     return this.database.execute(this, false);
   }
 
-  async run() {
+  run<T = Row>(): Promise<D1Result<T>>;
+  async run(): Promise<SqliteD1Result> {
     return this.database.execute(this, false);
   }
 
-  async raw() {
-    return this.database.execute(this, true).results;
+  raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
+  raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
+  async raw(options?: { columnNames?: boolean }): Promise<unknown[][]> {
+    const { columns, results } = this.database.execute(this, true);
+    return options?.columnNames ? [columns, ...results] : results;
   }
 
-  async first(column?: string) {
+  first<T = unknown>(column: string): Promise<T | null>;
+  first<T = Row>(): Promise<T | null>;
+  async first(column?: string): Promise<unknown> {
     const [row] = this.database.execute(this, false).results;
     if (!row) return null;
     return column ? row[column] : row;
   }
 }
 
-export class SqliteD1 {
+function sqliteD1Statement(statement: D1PreparedStatement): SqliteD1Statement {
+  if (statement instanceof SqliteD1Statement) return statement;
+  throw new TypeError("A SqliteD1 batch runs only statements its own prepare() made");
+}
+
+class SqliteD1Session implements D1DatabaseSession {
+  constructor(private readonly database: SqliteD1) {}
+
+  prepare(sql: string): SqliteD1Statement {
+    return this.database.prepare(sql);
+  }
+
+  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  async batch(statements: D1PreparedStatement[]): Promise<SqliteD1Result[]> {
+    return this.database.batch(statements);
+  }
+
+  getBookmark(): null {
+    return null;
+  }
+}
+
+export class SqliteD1 implements D1Database {
   readonly sqlite = new DatabaseSync(":memory:");
   readonly queries: RecordedQuery[] = [];
   private readonly competingWritesBeforeNextBatch: CompetingWrite[] = [];
@@ -82,20 +109,21 @@ export class SqliteD1 {
   }
 
   get binding(): D1Database {
-    return this as unknown as D1Database;
+    return this;
   }
 
-  prepare(sql: string) {
+  prepare(sql: string): SqliteD1Statement {
     return new SqliteD1Statement(this, sql);
   }
 
-  async batch(statements: SqliteD1Statement[]): Promise<SqliteD1Result[]> {
+  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  async batch(statements: D1PreparedStatement[]): Promise<SqliteD1Result[]> {
     const competingWrite = this.competingWritesBeforeNextBatch.shift();
     if (competingWrite) await competingWrite();
 
     this.sqlite.exec("BEGIN");
     try {
-      const results = statements.map((statement) => this.execute(statement, false));
+      const results = statements.map((statement) => this.execute(sqliteD1Statement(statement), false));
       this.sqlite.exec("COMMIT");
       return results;
     } catch (error) {
@@ -104,9 +132,17 @@ export class SqliteD1 {
     }
   }
 
-  async exec(sql: string) {
+  async exec(sql: string): Promise<D1ExecResult> {
     this.sqlite.exec(sql);
     return { count: 0, duration: 0 };
+  }
+
+  withSession(): SqliteD1Session {
+    return new SqliteD1Session(this);
+  }
+
+  async dump(): Promise<ArrayBuffer> {
+    throw new Error("D1 removed dump() with its alpha databases, so the SqliteD1 stand-in has none");
   }
 
   beforeNextBatch(competingWrite: CompetingWrite) {
@@ -134,22 +170,31 @@ export class SqliteD1 {
     this.sqlite.close();
   }
 
-  execute(statement: SqliteD1Statement, arrays: true): { results: unknown[][] };
+  execute(statement: SqliteD1Statement, arrays: true): RowArrays;
   execute(statement: SqliteD1Statement, arrays: false): SqliteD1Result;
-  execute(statement: SqliteD1Statement, arrays: boolean): SqliteD1Result | { results: unknown[][] } {
+  execute(statement: SqliteD1Statement, arrays: boolean): SqliteD1Result | RowArrays {
     this.beforeStatement?.(statement.sql, statement.params);
     this.queries.push({ sql: statement.sql, params: statement.params });
     const prepared = this.sqlite.prepare(statement.sql);
     const values = statement.params.map(toSqliteValue);
-    if (arrays) return { results: allRowsAsArrays(prepared, values) };
+    if (arrays) return { columns: prepared.columns().map(({ name }) => name), results: allRowsAsArrays(prepared, values) };
     const rows = prepared.all(...values);
 
     const isRead = /^\s*select\b/i.test(statement.sql);
-    const changes = isRead ? 0 : Number(this.sqlite.prepare("select changes() as changes").get()?.["changes"]);
+    const writeMeta = isRead ? undefined : this.sqlite.prepare("select changes() as changes, last_insert_rowid() as id").get();
+    const changes = Number(writeMeta?.["changes"] ?? 0);
     return {
       success: true,
       results: rows.map((row) => ({ ...row })),
-      meta: { changes, rows_read: 0, rows_written: changes },
+      meta: {
+        changes,
+        rows_read: 0,
+        rows_written: changes,
+        duration: 0,
+        size_after: 0,
+        last_row_id: Number(writeMeta?.["id"] ?? 0),
+        changed_db: changes > 0,
+      },
     };
   }
 }
