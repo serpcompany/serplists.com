@@ -3,9 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// Template and run lists load only on pages that show them (docs/FRONTEND.md). These
-// flows must not depend on a list another page happened to load earlier.
-
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
@@ -23,6 +20,11 @@ async function deleteTemplate(page: Page, templateId: string) {
 
 async function createTemplate(page: Page, body: Record<string, unknown>): Promise<string> {
   return (await apiJson<{ id: string }>(page, '/templates', { method: 'POST', body })).id;
+}
+
+async function openRunFromRunsDashboard(page: Page, title: string) {
+  await page.goto('/dashboard/runs/');
+  await page.getByRole('link', { name: title }).click();
 }
 
 test('starts a run from a public template page opened directly', async ({ page }) => {
@@ -50,9 +52,7 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
     },
   });
 
-  // The runs dashboard loads the run list; open the run in the same app session.
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
+  await openRunFromRunsDashboard(page, title);
 
   const completeTask = async () => {
     const saved = page.waitForResponse(
@@ -62,7 +62,6 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
     expect((await saved).status()).toBe(200);
   };
 
-  // Completing a task moves straight on to the next one.
   await expect(page.getByRole('heading', { name: 'First task' })).toBeVisible();
   await completeTask();
   await expect(page.getByRole('heading', { name: 'Second task' })).toBeVisible();
@@ -76,7 +75,7 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
   await deleteRun(page, runId);
 });
 
-test('saves a template twice from the editor without loading a template list', async ({ page }) => {
+test('saves a template twice from the editor without a conflict or loading a template list', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Editor save QA ${Date.now()}`;
   const templateId = await createTemplate(page, {
@@ -84,11 +83,10 @@ test('saves a template twice from the editor without loading a template list', a
     sections: [{ id: 'save-section', title: 'Section', items: [{ id: 'save-task', title: 'Task' }] }],
   });
 
-  // The editor loads its template by id; a list request (?scope= or ?teamId=) is waste.
-  const listRequests: string[] = [];
+  const templateListRequests: string[] = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (request.method() === 'GET' && url.pathname.endsWith('/api/templates') && url.search) listRequests.push(url.search);
+    if (request.method() === 'GET' && url.pathname.endsWith('/api/templates') && url.search) templateListRequests.push(url.search);
   });
   await page.goto(`/dashboard/templates/${templateId}/edit/`);
   const nameInput = page.getByPlaceholder('Enter template name...');
@@ -100,12 +98,11 @@ test('saves a template twice from the editor without loading a template list', a
       (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'PUT',
     );
     await page.getByRole('button', { name: 'Save' }).click();
-    // The second save sends the version the first one returned, so neither is a 409.
     expect((await saved).status()).toBe(200);
     await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
   }
 
-  expect(listRequests).toEqual([]);
+  expect(templateListRequests).toEqual([]);
   await deleteTemplate(page, templateId);
 });
 
@@ -134,7 +131,6 @@ test('opens a template detail page with one request for that template and no lis
     expect(templateRequests.filter(isList)).toEqual([]);
     expect(templateRequests.filter((path) => path === `/api/templates/${templateId}`)).toHaveLength(1);
 
-    // Each change refetches the one template, so the next change is accepted too.
     for (const [nextChecked, message] of [['true', 'Template is now public'], ['false', 'Template is now private']] as const) {
       const saved = page.waitForResponse(
         (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'PUT',

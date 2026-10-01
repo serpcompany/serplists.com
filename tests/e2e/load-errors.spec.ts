@@ -1,9 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// A failed request is not a missing template or user: the page says it could not load
-// and offers a retry (src/features/template-detail/useTemplateDetailModel.ts,
-// src/features/profile/loadUserProfile.ts).
+const JOHNS_PUBLIC_TEMPLATE_ID = 'template-2';
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -21,15 +19,14 @@ const serviceUnavailable = {
 test('template detail offers a retry when loading the template fails', async ({ page }) => {
   await loginAsAdmin(page);
   let failing = true;
-  const slugLookups: string[] = [];
+  const slugFallbackLookups: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.includes('/api/templates/slug/')) {
-      slugLookups.push(request.url());
+      slugFallbackLookups.push(request.url());
     }
   });
-  // John's public template is not in the admin's list, so the page fetches it by id.
   await page.route(
-    (url) => url.pathname.endsWith('/api/templates/template-2'),
+    (url) => url.pathname.endsWith(`/api/templates/${JOHNS_PUBLIC_TEMPLATE_ID}`),
     async (route) => {
       if (failing && route.request().method() === 'GET') {
         await route.fulfill(serviceUnavailable);
@@ -39,10 +36,10 @@ test('template detail offers a retry when loading the template fails', async ({ 
     },
   );
 
-  await page.goto('/dashboard/templates/template-2/');
+  await page.goto(`/dashboard/templates/${JOHNS_PUBLIC_TEMPLATE_ID}/`);
   await expect(page.getByRole('heading', { name: 'Unable to load template' })).toBeVisible();
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
-  expect(slugLookups).toHaveLength(0);
+  expect(slugFallbackLookups).toHaveLength(0);
 
   failing = false;
   await page.getByRole('button', { name: 'Try again' }).click();
