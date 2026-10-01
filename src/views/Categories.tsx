@@ -30,13 +30,10 @@ import { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 import { buildConsoleTemplateCreatePath, buildPublicCategoryPathForSlug } from '@/lib/routes';
 import { formatCount } from '@/lib/utils/pluralize';
 
-// Built-in categories have their own description; any other reads the same line.
 const describeCategory = (slug: string) =>
   PUBLIC_CATEGORY_REGISTRY.find((category) => category.slug === slug)?.description ??
   'Community templates for this workflow area';
 
-// The bundled starter templates are listed before the catalog loads, so their categories
-// and counts are not the catalog's: show placeholders until it has loaded.
 const featuredCategoriesSkeleton = (
   <>
     <span className="sr-only">Loading categories…</span>
@@ -49,8 +46,6 @@ const allCategoriesSkeleton = Array.from({ length: 6 }).map((_, index) => (
   <Skeleton key={index} className="h-20 rounded-lg" />
 ));
 
-// /categories/: a hero with the category search, the popular categories as tiles, every
-// category as a row, and a closing call to action.
 const Categories = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const searchField = useRef<HTMLInputElement>(null);
@@ -76,8 +71,6 @@ const Categories = () => {
     );
   }, [categories, searchQuery]);
   const trimmedQuery = searchQuery.trim();
-  // A search that matches nothing says so, and Clear search brings back every category (and
-  // the search field's focus, where the user was typing).
   const noMatches = !loading && trimmedQuery !== '' && filteredCategories.length === 0;
   const clearSearch = () => {
     setSearchQuery('');
@@ -106,8 +99,6 @@ const Categories = () => {
         />
       </PageSection>
 
-      {/* Without the catalog only the bundled templates are known: never show their
-          categories and counts as the catalog's. */}
       {catalogError ? (
         <PageSection spacing="compact">
           <CatalogLoadError onRetry={retryCatalog} />

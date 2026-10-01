@@ -50,8 +50,10 @@ token, the login notices, `?billing=`) or keeps its filters in the URL (the libr
 the current entry with `replaceCurrentUrl` (`src/lib/navigation/replaceCurrentUrl.ts`), the
 History API that Next.js follows: the page keeps its state and nothing is fetched. The
 `state` it is given stays with that entry across a reload and Back/Forward and never enters
-the URL (the login page keeps a handed-over email address there); it is passed as a copy,
-because Next.js adds its own router state to the object it receives. Return
+the URL (the login page keeps a handed-over email address there, and the library marks the
+entries its own filter edits wrote, so one left with only `?category=` never redirects to
+the category page); it is passed as a copy, because Next.js adds its own router state to
+the object it receives. Return
 paths travel only in the `next` query parameter (`withReturnPath` and `getReturnPath` in
 `src/lib/auth/returnPath.ts`, which sanitizes them), never in history state.
 

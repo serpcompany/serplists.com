@@ -52,8 +52,6 @@ type ChecklistLibraryProps = {
   description?: string;
 };
 
-// The current history entry's state, which only the browser has: the server (and hydration)
-// sees none. Re-read on every render, so it follows the library's own URL writes.
 const subscribeToHistory = (onChange: () => void) => {
   window.addEventListener('popstate', onChange);
   return () => window.removeEventListener('popstate', onChange);
@@ -61,7 +59,6 @@ const subscribeToHistory = (onChange: () => void) => {
 const readHistoryState = (): unknown => window.history.state;
 const readServerHistoryState = (): unknown => null;
 
-// While the catalog loads, and in the server's HTML: the page's layout, with no data yet.
 export const ChecklistLibrarySkeleton = () => (
   <>
     <PageSection spacing="hero">
@@ -86,8 +83,6 @@ export const ChecklistLibrarySkeleton = () => (
   </>
 );
 
-// The library at /templates. Its title and description are the route's metadata
-// (src/app/(site)/templates/page.tsx); a caller with other text passes its own.
 const ChecklistLibrary = ({
   templateType,
   title,
@@ -107,8 +102,6 @@ const ChecklistLibrary = ({
     historyState,
   );
 
-  // Decided on the live URL and entry state, never on the first render's (the server has
-  // no history state, so it would take every entry for an arrival).
   useEffect(() => {
     const path = resolveLibraryLegacyRedirect(
       new URLSearchParams(window.location.search),
@@ -116,8 +109,6 @@ const ChecklistLibrary = ({
     );
     if (path) router.replace(path);
   }, [router, searchParams]);
-  // The URL is the only source of the filters: this page stays mounted when a link or
-  // Back/Forward changes it.
   const {
     categorySlug: selectedCategorySlug,
     query: searchQuery,
@@ -170,8 +161,6 @@ const ChecklistLibrary = ({
       const draft = changes.query;
       setSearchDraft((current) => ({ ...current, draft }));
     }
-    // Rewrites the URL in place (no request per keystroke). The state marks this entry as
-    // written here, so a URL left with only a category does not trigger the legacy redirect.
     const nextSearch = buildLibraryFilterParams({ categorySlug, query, sort }).toString();
     replaceCurrentUrl(
       `${pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`,
@@ -186,7 +175,6 @@ const ChecklistLibrary = ({
       sort: DEFAULT_LIBRARY_SORT,
     });
   };
-  // Leaving for the category page (the effect above); nothing to show meanwhile.
   if (legacyCategoryRedirectPath) {
     return null;
   }
@@ -233,7 +221,6 @@ const ChecklistLibrary = ({
           <SortButtons onSortChange={(sort) => updateFilters({ sort })} sortBy={sortBy} />
         </div>
 
-        {/* A failed catalog load must not read as "no templates matched". */}
         {catalogError ? (
           <CatalogLoadError className="mb-6" onRetry={retryCatalog} />
         ) : null}

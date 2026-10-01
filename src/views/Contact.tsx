@@ -8,7 +8,6 @@ import { PageSection } from '@/components/layout/page-shell';
 import { PageHero } from '@/components/layout/PageHero';
 import { buttonVariants } from '@/components/ui/button';
 
-// The two ways to reach the team, as bordered list cards with their email link.
 const Contact = () => {
   return (
     <>

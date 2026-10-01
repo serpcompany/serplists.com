@@ -18,12 +18,10 @@ import {
   buildPublicTemplatesPath,
 } from '@/lib/routes';
 
-// /features and /features/<slug>. The route shows the 404 page for a slug with no feature.
 const Features = () => {
   const { featureSlug } = useParams<{ featureSlug?: string }>();
   const feature = findFeature(featureSlug);
 
-  // A feature page: a detail page with its points in the panel beside the header.
   if (feature) {
     const Icon = feature.icon;
 

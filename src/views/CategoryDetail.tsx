@@ -48,7 +48,6 @@ import NotFound from '@/views/NotFound';
 
 type CategorySort = DiscoverySort | 'name';
 
-// The sort options in the order the select lists them; the select shows the chosen label.
 const sortLabels: Record<CategorySort, string> = {
   popular: 'Most Popular',
   recent: 'Most Recent',
@@ -59,7 +58,6 @@ const sortLabels: Record<CategorySort, string> = {
 const isCategorySort = (value: string): value is CategorySort =>
   Object.prototype.hasOwnProperty.call(sortLabels, value);
 
-// The trail back to every category, before the category itself is known.
 const categoriesBreadcrumb = { href: buildPublicCategoriesPath(), label: 'All Categories' };
 
 const templateGridSkeleton = (
@@ -71,8 +69,6 @@ const templateGridSkeleton = (
   </CardGrid>
 );
 
-// The page's title, description and canonical URL come from the server
-// (src/server/pageMeta/categoryPage.ts), counted from the same catalog.
 const CategoryDetail = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
   const router = useAppRouter();
@@ -87,7 +83,6 @@ const CategoryDetail = () => {
   const { allCategories, templates, loading, catalogError, retryCatalog } =
     useTemplateLibrary();
 
-  // The param is decoded but may differ in case or Unicode normal form from the slug.
   const slug = buildCategorySlug(categorySlug ?? 'business');
   const categories = useMemo(
     () => buildDiscoveryCategories(templates, allCategories),
@@ -95,8 +90,6 @@ const CategoryDetail = () => {
   );
   const categoryStats = categories.find((item) => item.slug === slug);
   const category = resolveCategoryPresentation(slug, categoryStats);
-  // A slug from before accented letters were folded, for a category that has a new one. Only
-  // known once the catalog has loaded.
   const legacyCategory =
     !category && !loading && !catalogError ? findCategoryByLegacySlug(categories, slug) : null;
   const legacyCategoryPath = legacyCategory
@@ -108,9 +101,6 @@ const CategoryDetail = () => {
   }, [legacyCategoryPath, router]);
   const categoryTemplateCount = categoryStats?.count ?? 0;
   const categoryTemplateCountLabel = formatCount(categoryTemplateCount, 'template');
-  // Registry categories render before any public Template uses them; keep those empty
-  // pages out of search results, but only once the catalog API has answered. Bundled
-  // Templates arrive first, so a count of 0 means nothing until then.
   const isEmptyCategory = !loading && !catalogError && categoryTemplateCount === 0;
   const isSearching = searchQuery.trim() !== '';
   const emptyMessage = isSearching
@@ -136,15 +126,12 @@ const CategoryDetail = () => {
       : base;
   }, [searchQuery, slug, sortBy, templates]);
 
-  // Categories that exist only in database templates are unknown until the catalog loads,
-  // so the 404 page waits for a successful load.
   if (!category) {
     if (loading || catalogError) {
       return (
         <PageContainer width="shell" className="py-8 sm:py-10">
           <PageBreadcrumb items={[categoriesBreadcrumb]} />
           {catalogError ? (
-            // The failure is the whole page: its title is the page's h1.
             <CatalogLoadError onRetry={retryCatalog} titleAs="h1" />
           ) : (
             <>

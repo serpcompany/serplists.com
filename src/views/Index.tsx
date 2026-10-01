@@ -91,7 +91,6 @@ function countTemplateItems(template: ChecklistTemplate): number {
   );
 }
 
-// The home page (/): the hero, how the product works, and the starter templates.
 const Index = () => {
   const { user } = useAuth();
   const { templates, templatesLoading } = useTemplates();
