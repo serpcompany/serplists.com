@@ -5,6 +5,10 @@ import { vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
 import type { ChecklistTemplate } from '@/types/checklist';
+import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+
+type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
+type TemplateDetailModelDouble = (...args: TemplateDetailModelArgs) => Partial<ReturnType<typeof useTemplateDetailModel>>;
 
 const {
   authState,
@@ -25,7 +29,7 @@ const {
   mockDialogProps: vi.fn(),
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
-  mockUseTemplateDetailModel: vi.fn(),
+  mockUseTemplateDetailModel: vi.fn<TemplateDetailModelDouble>(),
   mockViewProps: vi.fn(),
   staleCatalogCopy: {
     id: 'clipy-template-1',
@@ -53,7 +57,7 @@ const {
 vi.mock('@/hooks/usePageVisit', async () => (await import('./pageVisitMock')).pageVisitOfAUserStillOnThePage);
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
-  useTemplateDetailModel: (...args: unknown[]) => mockUseTemplateDetailModel(...args),
+  useTemplateDetailModel: (...args: TemplateDetailModelArgs) => mockUseTemplateDetailModel(...args),
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -201,7 +205,7 @@ export function renderPublishedRoute(
   visit: RouteVisit = CLEAN_VISIT,
 ) {
   mockUseTemplateDetailModel.mockReturnValue({
-    billingState: { billingEnabled: true, isLoading: false, isPro: false },
+    billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
     loading: false,
     notFound: false,
     saveTemplate: vi.fn(),

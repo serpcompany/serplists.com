@@ -125,7 +125,7 @@ describe('TemplateDetail page', () => {
   it('renders the v0 private template detail structure with stats, structure, and metadata cards', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      billingState: { billingEnabled: false, isLoading: false, isPro: true },
+      billingState: { billingEnabled: false, isError: false, isLoading: false, isPro: true },
       history: {
         data: {
           events: [],
@@ -135,7 +135,7 @@ describe('TemplateDetail page', () => {
             {
               id: 'version-1',
               action: 'template.created',
-              actor: { name: 'John Example' },
+              actor: { userId: null, email: null, name: 'John Example', username: null },
               contentHash: 'hash-1',
               createdAt: '2026-07-03T12:00:00.000Z',
               version: 1,
@@ -188,7 +188,7 @@ describe('TemplateDetail page', () => {
     workspaceState.roles = { acme: role };
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      billingState: { billingEnabled: false, isLoading: false, isPro: true },
+      billingState: { billingEnabled: false, isError: false, isLoading: false, isPro: true },
       template: { ...buildV0DemoPrivateTemplate(), ...templateOverrides },
     });
 

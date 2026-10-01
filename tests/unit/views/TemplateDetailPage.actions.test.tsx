@@ -12,6 +12,7 @@ import {
   visibilitySwitchProps,
 } from '../../support/templateDetailPage';
 import { templatePayloadSchema } from '../../../functions/api/utils/payloads';
+import type { TemplateDetailActionResult } from '@/features/template-detail/useTemplateDetailModel';
 import { toast } from 'sonner';
 import { handleUpgradeRequiredForContext, navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
@@ -121,7 +122,7 @@ describe('TemplateDetail visibility', () => {
   const flipTheSwitchThenAnswerThatTheSessionExpired = async (whileSaving: () => void) => {
     let answer: (result: { kind: 'login_required' }) => void = () => {};
     const setVisibility = vi.fn(
-      () => new Promise((resolve) => { answer = resolve; }),
+      (_isPublic: boolean) => new Promise<TemplateDetailActionResult>((resolve) => { answer = resolve; }),
     );
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
 

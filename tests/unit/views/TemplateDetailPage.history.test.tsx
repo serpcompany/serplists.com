@@ -8,21 +8,30 @@ import {
 } from '../../support/templateDetailPage';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
+import type { TemplateDetailHistoryState } from '@/features/template-detail/useTemplateDetailModel';
+import type { HistoryActor, HistoryEvent, TemplateHistoryVersion } from '@/lib/schemas/historyResponses';
 
 beforeEach(resetTemplateDetailPageMocks);
 
-const historyOf = ({ events, versions }: { events: object[]; versions: object[] }) => ({
+const historyOf = ({ events, versions }: { events: HistoryEvent[]; versions: TemplateHistoryVersion[] }): TemplateDetailHistoryState => ({
   data: { events, subject: { id: 'user-1', type: 'user' }, templateId: 'tpl-1', versions },
   isError: false,
   isLoading: false,
 });
 
-const createdByJohn = (id: string, extra: object = {}) => ({
+const actorNamed = (name: string): HistoryActor => ({ userId: null, email: null, name, username: null });
+
+const createdByJohn = (id: string, extra: Partial<HistoryEvent> = {}): HistoryEvent => ({
   action: 'template.created',
-  actor: { name: 'John Example' },
+  actor: actorNamed('John Example'),
   createdAt: '2026-07-03T12:00:00.000Z',
   id,
   ...extra,
+});
+
+const versionCreatedByJohn = (id: string, version: number, extra: Partial<HistoryEvent> = {}): TemplateHistoryVersion => ({
+  ...createdByJohn(id, extra),
+  version,
 });
 
 const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
@@ -43,7 +52,7 @@ describe('TemplateDetail dates', () => {
       ...baseModel(),
       history: historyOf({
         events: [],
-        versions: [createdByJohn('version-1', { createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5, version: 1 })],
+        versions: [versionCreatedByJohn('version-1', 1, { createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5 })],
       }),
       template: {
         ...buildV0DemoPrivateTemplate(),
@@ -69,20 +78,20 @@ describe('TemplateDetail Changelog', () => {
         events: [
           {
             action: 'template.restored',
-            actor: { name: 'Bob Editor' },
+            actor: actorNamed('Bob Editor'),
             createdAt: '2026-07-05T12:00:00.000Z',
             id: 'event-3',
           },
           {
             action: 'template.updated',
-            actor: { name: 'John Example' },
+            actor: actorNamed('John Example'),
             createdAt: '2026-07-04T12:00:00.000Z',
             metadata: { visibility: 'public' },
             id: 'event-2',
           },
           createdByJohn('event-1'),
         ],
-        versions: [createdByJohn('version-1', { version: 1 })],
+        versions: [versionCreatedByJohn('version-1', 1)],
       }),
     });
 
@@ -105,7 +114,7 @@ describe('TemplateDetail Changelog', () => {
         events: [
           {
             action: 'template.updated',
-            actor: { name: 'John Example' },
+            actor: actorNamed('John Example'),
             createdAt: '2026-07-04T12:00:00.000Z',
             id: 'event-2',
             metadata: agent,
@@ -115,13 +124,13 @@ describe('TemplateDetail Changelog', () => {
         versions: [
           {
             action: 'template.updated',
-            actor: { name: 'John Example' },
+            actor: actorNamed('John Example'),
             createdAt: '2026-07-04T12:00:00.000Z',
             id: 'version-2',
             metadata: agent,
             version: 2,
           },
-          createdByJohn('version-1', { metadata: null, version: 1 }),
+          versionCreatedByJohn('version-1', 1, { metadata: null }),
         ],
       }),
     });

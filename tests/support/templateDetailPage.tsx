@@ -6,8 +6,13 @@ import { vi } from 'vitest';
 import { navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
+import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import { present } from './elements';
 
-export const mockUseTemplateDetailModel = vi.fn();
+type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
+type TemplateDetailModel = ReturnType<typeof useTemplateDetailModel>;
+
+export const mockUseTemplateDetailModel = vi.fn<(...args: TemplateDetailModelArgs) => Partial<TemplateDetailModel>>();
 const {
   contextCreateTemplate,
   contextUpdateTemplate,
@@ -43,27 +48,24 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
   );
   const { countTemplateItems } = await import('@/lib/templates/templateItemCount');
   return {
-    useTemplateDetailModel: function useModelWithTheRealPermissionsDuplicateAndTaskCount(options: {
-      canEditTemplates: boolean;
-      createTemplate: Parameters<typeof duplicateOwnedTemplate>[0]['createTemplate'];
-      teamId?: string;
-      userId?: string;
-    }) {
-      const model = mockUseTemplateDetailModel(options);
+    useTemplateDetailModel: function useModelWithTheRealPermissionsDuplicateAndTaskCount(...args: TemplateDetailModelArgs) {
+      const [options] = args;
+      const model = mockUseTemplateDetailModel(...args);
+      const template = model.template ?? null;
       return {
         duplicateTemplate: () =>
           duplicateOwnedTemplate({
             activeTeamId: options.teamId,
             createTemplate: options.createTemplate,
-            template: model.template,
+            template: present(template, 'a template to duplicate'),
           }),
         permissions: getTemplateDetailPermissions({
           activeTeamId: options.teamId,
-          canEditTemplates: options.canEditTemplates,
-          template: model.template,
+          canEditTemplates: options.mode === 'private' && options.canEditTemplates,
+          template,
           userId: options.userId,
         }),
-        totalItems: model.template ? countTemplateItems(model.template) : 0,
+        totalItems: template ? countTemplateItems(template) : 0,
         ...model,
       };
     },
@@ -172,8 +174,8 @@ export const renderTemplateDetail = () => {
   );
 };
 
-export const baseModel = () => ({
-  billingState: { billingEnabled: true, isLoading: false, isPro: true },
+export const baseModel = (): Partial<TemplateDetailModel> => ({
+  billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: true },
   history: { data: null, isError: false, isLoading: false },
   loading: false,
   notFound: false,

@@ -100,7 +100,7 @@ describe('TemplateDetail copy into an Organization', () => {
   it("offers the copy although the Organization's plan is Free", () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
       template: otherUsersPublicTemplate(),
     });
 
@@ -172,7 +172,7 @@ describe('TemplateDetail copy of a private Organization template, which the API 
   it('offers no copy to a Free member, so nobody is sent to checkout for it', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
       template: privateOrganizationTemplate(),
     });
 

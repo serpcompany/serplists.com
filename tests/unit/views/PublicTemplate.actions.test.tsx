@@ -130,7 +130,7 @@ describe('PublicTemplate Start a Run dialog', () => {
   it('opens the dialog on Start Run instead of starting a run', async () => {
     const startRun = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
     mockUseTemplateDetailModel.mockReturnValue({
-      billingState: { billingEnabled: true, isLoading: false, isPro: false },
+      billingState: { billingEnabled: true, isError: false, isLoading: false, isPro: false },
       loading: false,
       notFound: false,
       saveTemplate: vi.fn(),
