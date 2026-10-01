@@ -27,17 +27,15 @@ const renderAt = (url: string) => {
 };
 
 describe('Register page', () => {
-  // Return paths travel only in ?next=, with their own query and hash.
   it('keeps the return path on the Sign in link so switching pages does not lose it', () => {
     const html = renderAt('/register/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
 
     expect(html).toContain('href="/login/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h"');
   });
 
-  it('reads the return path from next', () => {
+  it('reads the return path from next, in its canonical form even from an older link', () => {
     const html = renderAt('/register/?next=%2Fteam-invites%2Fabc');
 
-    // A return path from an older link comes back in its canonical form.
     expect(html).toContain('href="/login/?next=%2Fteam-invites%2Fabc%2F"');
   });
 

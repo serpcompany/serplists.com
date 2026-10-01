@@ -9,9 +9,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Opening an invite while signed in to another account must offer a way to
-// switch accounts that keeps the invite link, instead of a dead end.
-
 const authState = vi.hoisted(() => ({
   isAuthenticated: true,
   isLoading: false,

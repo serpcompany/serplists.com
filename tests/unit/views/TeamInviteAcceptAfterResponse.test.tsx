@@ -1,21 +1,19 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
 
 import { click, createFakeContainer, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
+import { deferred } from '../../support/deferred';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
+import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-// The invite page after the invitee answers. The decline revokes the invite, so reading the
-// preview again answers 404; neither that nor a failed read after Accept may replace the
-// confirmation. Drives the real page, hook and React Query client; only the API, auth and
-// the context list are faked.
 
 type AuthState = {
   isAuthenticated: boolean;
@@ -93,32 +91,16 @@ afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 
-// Lets pending requests answer and React apply what they changed.
-const settle = () =>
-  act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
-// The tab loses focus and gets it back, as when the invitee switches tabs and returns.
-const refocusTab = async () => {
+const switchAwayFromTheTabAndBack = async () => {
   await act(async () => {
     focusManager.setFocused(false);
     focusManager.setFocused(true);
   });
-  await settle();
-};
-
-const deferred = <T,>() => {
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((_resolve, fail) => {
-    reject = fail;
-  });
-  return { promise, reject };
+  await letQueryUpdatesReachObservers();
 };
 
 async function openInvite() {
-  // The app's defaults (src/app/providers.tsx); the page's query sets its own retry and staleTime.
-  const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60 * 1000, retry: 1 } } });
+  const queryClient = createQueryClientWithAppDefaults();
   navigation.reset('/team-invites/invite-token', { routes: ['/team-invites/[token]'] });
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
@@ -129,18 +111,18 @@ async function openInvite() {
       </QueryClientProvider>,
     );
   });
-  await settle();
+  await letQueryUpdatesReachObservers();
 
   const press = async (label: string) => {
     await act(async () => {
       click(container, findByText(container, 'BUTTON', label));
     });
-    await settle();
+    await letQueryUpdatesReachObservers();
   };
   return { text: () => container.textContent, press };
 }
 
-describe('Organization invite page after the invitee answers', () => {
+describe('Organization invite page after the invitee answers, whose confirmation no later read of the preview may replace', () => {
   beforeEach(() => {
     auth.reset();
     Object.values(apiMocks).forEach((mock) => mock.mockReset());
@@ -162,7 +144,7 @@ describe('Organization invite page after the invitee answers', () => {
     await page.press('Decline');
     expect(page.text()).toContain('Invite declined. You did not join Acme Corp.');
 
-    await refocusTab();
+    await switchAwayFromTheTabAndBack();
 
     expect(page.text()).toContain('Invite declined. You did not join Acme Corp.');
     expect(page.text()).not.toContain(NO_LONGER_AVAILABLE);
@@ -177,7 +159,7 @@ describe('Organization invite page after the invitee answers', () => {
     await page.press('Accept invite');
     expect(page.text()).toContain('Invite accepted.');
 
-    await refocusTab();
+    await switchAwayFromTheTabAndBack();
 
     expect(page.text()).toContain('Invite accepted.');
     expect(page.text()).toContain('Switch to Acme Corp');
@@ -188,13 +170,13 @@ describe('Organization invite page after the invitee answers', () => {
     const page = await openInvite();
     const lateRead = deferred<typeof preview>();
     apiMocks.getTeamInvitePreview.mockReturnValueOnce(lateRead.promise);
-    await refocusTab();
+    await switchAwayFromTheTabAndBack();
     expect(apiMocks.getTeamInvitePreview).toHaveBeenCalledTimes(2);
 
     apiMocks.declineTeamInvite.mockResolvedValue({ success: true });
     await page.press('Decline');
     await act(async () => lateRead.reject(inviteRevoked()));
-    await settle();
+    await letQueryUpdatesReachObservers();
 
     expect(page.text()).toContain('Invite declined. You did not join Acme Corp.');
     expect(page.text()).not.toContain(NO_LONGER_AVAILABLE);
@@ -204,7 +186,7 @@ describe('Organization invite page after the invitee answers', () => {
     const page = await openInvite();
 
     apiMocks.getTeamInvitePreview.mockRejectedValue(inviteRevoked());
-    await refocusTab();
+    await switchAwayFromTheTabAndBack();
 
     expect(page.text()).toContain(NO_LONGER_AVAILABLE);
   });
@@ -217,7 +199,7 @@ describe('Organization invite page after the invitee answers', () => {
 
     apiMocks.getTeamInvitePreview.mockResolvedValue({ ...preview, teamName: 'Beta Org' });
     await act(async () => auth.set({ user: { id: 'user-2', email: 'other@example.com' } }));
-    await settle();
+    await letQueryUpdatesReachObservers();
 
     expect(page.text()).toContain('Beta Org');
     expect(page.text()).toContain('Accept invite');

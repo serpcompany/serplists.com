@@ -63,7 +63,6 @@ describe('Login page', () => {
     expect(html).not.toContain('Email verified');
   });
 
-  // Return paths travel only in ?next=, with their own query and hash.
   it('carries the return path to sign-up so a new invitee comes back to the invite', () => {
     const html = renderAt('/login/?next=%2Fteam-invites%2Fabc%2F%3Fx%3D1%23h');
 
@@ -81,9 +80,7 @@ describe('Login page', () => {
   });
 });
 
-// A signed-in visitor leaves the login page: for the return path, or with none for the console
-// home (My Templates), never Account Settings. Verification and password reset end here too.
-describe('Login once signed in', () => {
+describe('Login once signed in, which leaves for the return path or the console home', () => {
   let restoreGlobals: () => void = () => {};
   let root: Root | null = null;
   beforeAll(() => {
@@ -99,9 +96,7 @@ describe('Login once signed in', () => {
     root = null;
   });
 
-  // Where the page first sends the user. (This test keeps the page mounted after it leaves,
-  // which the app never does, so only the first navigation counts.)
-  const destinationFrom = async (url: string) => {
+  const firstDestinationFrom = async (url: string) => {
     navigation.reset(url);
     vi.mocked(navigation.router.replace).mockClear();
     root = createRoot(createFakeContainer() as unknown as HTMLElement);
@@ -110,17 +105,14 @@ describe('Login once signed in', () => {
   };
 
   it.each(['/login/', '/login/?verified=1'])('opens the console home from %s', async (url) => {
-    expect(await destinationFrom(url)).toBe('/dashboard/templates/');
+    expect(await firstDestinationFrom(url)).toBe('/dashboard/templates/');
   });
 
   it('opens the page the user was headed to', async () => {
-    expect(await destinationFrom('/login/?next=%2Fdashboard%2Fruns%2F')).toBe('/dashboard/runs/');
+    expect(await firstDestinationFrom('/login/?next=%2Fdashboard%2Fruns%2F')).toBe('/dashboard/runs/');
   });
 });
 
-// Sign-up sends a new account here to verify its email. The address goes through
-// sessionStorage, never the URL, and this page keeps it in its own history entry, so a
-// reload of that entry still fills the form and a later visit to /login does not.
 describe('Login email handoff from sign-up', () => {
   let restoreGlobals: () => void = () => {};
   let root: Root | null = null;

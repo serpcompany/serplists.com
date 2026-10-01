@@ -2,9 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { profileFormFromUser, syncProfileForm } from "@/views/accountProfileUpdates";
 
-// An avatar upload or removal refreshes the session user. That refresh must
-// not wipe Full Name or Username edits the user has not saved yet.
-
 const savedUser = {
   email: "john@example.com",
   name: "John",
@@ -50,9 +47,7 @@ describe("syncProfileForm", () => {
     expect(next.username).toBe("john");
   });
 
-  it("adopts the server's normalized value after a save moved the baseline", () => {
-    // After saving "Bob", Account moves the baseline to the saved values, so
-    // the refreshed (lowercased) username replaces what was typed.
+  it("adopts the server's lowercased username once a save of what was typed moved the baseline to it", () => {
     const typed = { ...profileFormFromUser(savedUser), username: "Bob" };
     const savedBaseline = { ...typed };
 

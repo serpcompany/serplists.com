@@ -42,14 +42,13 @@ describe("buildAccountUpdatePayload", () => {
 });
 
 describe("buildAccountUpdatePayload never sends a key it would drop", () => {
-  it("does not return username: undefined when a saved username is cleared", () => {
+  it("does not return username: undefined when a saved username is cleared, since the no-changes guard counts keys while the wire body is the JSON", () => {
     const payload = buildAccountUpdatePayload(
       { fullName: "Bob", username: "", avatar_url: "" },
       { name: "Bob", username: "bob", image: "" },
     );
 
     expect(Object.values(payload)).not.toContain(undefined);
-    // The "no changes" guard counts keys; the wire body is the JSON.
     expect(JSON.parse(JSON.stringify(payload))).toStrictEqual(payload);
   });
 
@@ -117,8 +116,7 @@ describe("saveProfileChanges", () => {
     refreshTemplateOwnerData: vi.fn().mockResolvedValue(undefined),
   });
 
-  it("refreshes cached Template lists after a username change", async () => {
-    // Template lists embed the owner's username; a stale one breaks Share links.
+  it("refreshes cached Template lists after a username change, since they embed the owner's username that Share links use", async () => {
     const save = deps();
 
     await expect(saveProfileChanges({ username: "alicejones" }, save)).resolves.toEqual({ ok: true });

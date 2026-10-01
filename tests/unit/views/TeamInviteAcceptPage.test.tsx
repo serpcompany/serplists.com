@@ -10,10 +10,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Opening an invite link must not join the Organization or switch context:
-// the page shows who invited you, to which Organization and role, and waits
-// for a click.
-
 const authState = vi.hoisted(() => ({
   isAuthenticated: true,
   isLoading: false,
@@ -97,8 +93,7 @@ describe('Organization invite page', () => {
     expect(workspaceMocks.selectWorkspace).not.toHaveBeenCalled();
   });
 
-  it('says accepting keeps the current context without claiming which one it is', () => {
-    // The visitor may be working in another Organization, not in Personal.
+  it('says accepting keeps the current context without claiming which one it is, since the visitor may be in another Organization', () => {
     const html = renderInvitePage(preview);
 
     expect(html).toContain('Accepting does not change your current context.');
