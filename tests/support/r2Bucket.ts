@@ -1,4 +1,6 @@
-export type R2File = { key: string; bytes: Uint8Array; contentType: string; etag: string };
+type Bytes = Uint8Array<ArrayBuffer>;
+
+export type R2File = { key: string; bytes: Bytes; contentType: string; etag: string };
 
 type R2Value = ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob;
 
@@ -33,7 +35,7 @@ class StoredR2Object implements R2Object {
 class StoredR2ObjectBody extends StoredR2Object implements R2ObjectBody {
   private readonly response: Response;
 
-  constructor(file: R2File, bytes: Uint8Array, range?: R2Range) {
+  constructor(file: R2File, bytes: Bytes, range?: R2Range) {
     super(file, range);
     this.response = new Response(bytes);
   }
@@ -71,7 +73,7 @@ class StoredR2ObjectBody extends StoredR2Object implements R2ObjectBody {
   }
 }
 
-function byteSlice(bytes: Uint8Array, range: R2Range): Uint8Array {
+function byteSlice(bytes: Bytes, range: R2Range): Bytes {
   const start = 'suffix' in range ? Math.max(0, bytes.length - range.suffix) : (range.offset ?? 0);
   if (start >= bytes.length) throw new Error(R2_UNSATISFIABLE_RANGE_ERROR);
   const end = 'suffix' in range || range.length === undefined ? bytes.length : Math.min(bytes.length, start + range.length);
@@ -82,10 +84,10 @@ function matchesIfNoneMatch(onlyIf: R2Conditional | Headers | undefined, object:
   return onlyIf instanceof Headers && onlyIf.get('If-None-Match') === object.httpEtag;
 }
 
-async function bytesOf(value: R2Value): Promise<Uint8Array> {
+async function bytesOf(value: R2Value): Promise<Bytes> {
   if (value === null) return new Uint8Array();
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
   return new Uint8Array(await new Response(value).arrayBuffer());
 }
 
