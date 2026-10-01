@@ -1,9 +1,25 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { z } from "zod";
 
 import { apiJson, apiRequest } from "./support/api-requests";
-import { fillSignInForm } from "./support/sign-in";
+import { loginAsAdmin } from "./support/sign-in";
+
+type HeaderWatchWindow = Window & { __sawNewTemplate?: boolean };
+
+const updateBodySchema = z.object({ expected_version: z.unknown() });
+const storedTemplateSchema = z
+  .object({
+    sections: z.array(
+      z.object({ items: z.array(z.object({ contents: z.array(z.unknown()) }).passthrough()) }).passthrough(),
+    ),
+  })
+  .passthrough();
 
 const PASSWORD = "Aa!template-editor-password-12345";
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
 
 function uniqueSuffix() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -23,16 +39,6 @@ async function registerAccount(page: Page) {
   });
 }
 
-// Admin is a Pro persona created by `seed-test`, which the isolated e2e database runs.
-async function loginAsSeedUser(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
 async function findTemplateByTitle(page: Page, title: string) {
   const templates = await apiJson<Array<Record<string, unknown>>>(page, "/templates?scope=personal");
   return templates.find((template) => template.title === title) ?? null;
@@ -42,18 +48,16 @@ async function deleteTemplate(page: Page, templateId: string) {
   await apiRequest(page, `/templates/${templateId}`, { method: "DELETE" });
 }
 
-// Creates a template as the signed-in user and returns its id.
-async function postTemplate(page: Page, body: Record<string, unknown>) {
+async function createTemplate(page: Page, body: Record<string, unknown>) {
   return (await apiJson<{ id: string }>(page, "/templates", { method: "POST", body })).id;
 }
 
-// Creates a run as the signed-in user and returns its id.
-async function postRun(page: Page, body: Record<string, unknown>) {
+async function createRun(page: Page, body: Record<string, unknown>) {
   return (await apiJson<{ id: string }>(page, "/checklists", { method: "POST", body })).id;
 }
 
-async function createTemplateViaApi(page: Page, title: string) {
-  return postTemplate(page, {
+async function createTwoTaskTemplate(page: Page, title: string) {
+  return createTemplate(page, {
     title,
     is_public: false,
     sections: [
@@ -69,17 +73,153 @@ async function createTemplateViaApi(page: Page, title: string) {
   });
 }
 
-// A save leaves for the Templates list once the API answers. Wait for that answer, not
-// only the URL: under load a save can take longer than an assertion waits by default.
 async function saveAndReturnToTemplates(page: Page) {
-  const saved = page.waitForResponse((response) => {
+  const saveAnswered = page.waitForResponse((response) => {
     const method = response.request().method();
     const { pathname } = new URL(response.url());
     return (method === "POST" || method === "PUT") && /\/api\/templates(\/[^/]+)?$/.test(pathname);
   });
   await page.getByRole("button", { name: "Save" }).click();
-  expect((await saved).ok()).toBe(true);
+  expect((await saveAnswered).ok()).toBe(true);
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+}
+
+async function saveAndWaitUntilSaved(page: Page) {
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+}
+
+function holdUntilReleased() {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { held, release };
+}
+
+async function dragAndDropBefore(page: Page, dragged: Locator, target: Locator, dropIndicator: string) {
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await dragged.dispatchEvent("dragstart", { dataTransfer });
+  await target.dispatchEvent("dragover", { dataTransfer });
+  await expect(page.locator(`[data-drop-indicator="${dropIndicator}"]`)).toBeVisible();
+  await target.dispatchEvent("drop", { dataTransfer });
+}
+
+async function answerUploadsWithoutStoringThem(
+  page: Page,
+  uploaded: Record<string, unknown>,
+  answerOnceReleased: Promise<void> = Promise.resolve(),
+) {
+  await page.route("**/api/uploads", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    await answerOnceReleased;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(uploaded) });
+  });
+}
+
+async function captureUploadsWithoutStoringThem(page: Page) {
+  const uploads: Array<{ body: Buffer; name: string }> = [];
+  await page.route("**/api/uploads", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const body = route.request().postDataBuffer() ?? Buffer.alloc(0);
+    const name = /filename="([^"]+)"/.exec(body.toString("latin1"))?.[1] ?? "";
+    uploads.push({ body, name });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ url: `/api/uploads/file?key=template-images/e2e/${name}`, fileName: name }),
+    });
+  });
+  return uploads;
+}
+
+async function holdTheFirstUpdate(page: Page, templateId: string, released: Promise<void>) {
+  const expectedVersionsSent: unknown[] = [];
+  let heldOnce = false;
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    expectedVersionsSent.push(updateBodySchema.parse(route.request().postDataJSON()).expected_version);
+    if (!heldOnce) {
+      heldOnce = true;
+      await released;
+    }
+    await route.fallback();
+  });
+  return expectedVersionsSent;
+}
+
+async function holdTheUpdateThenRefuseItAsAConflict(page: Page, templateId: string, released: Promise<void>) {
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    await released;
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Template changed since it was loaded. Refresh before saving again.",
+        code: "edit_conflict",
+      }),
+    });
+  });
+}
+
+async function warnsBeforeUnload(page: Page) {
+  return page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}
+
+async function recordWhetherTheHeaderShowsNewTemplate(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as HeaderWatchWindow;
+    w.__sawNewTemplate = false;
+    new MutationObserver(() => {
+      const headers = Array.from(document.querySelectorAll("header"));
+      if (headers.some((header) => header.textContent?.includes("New Template"))) {
+        w.__sawNewTemplate = true;
+      }
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+  });
+}
+
+async function headerShowedNewTemplate(page: Page) {
+  return page.evaluate(() => (window as HeaderWatchWindow).__sawNewTemplate);
+}
+
+async function addATaskFromAnotherTab(page: Page, templateId: string) {
+  const template = await apiJson<{ sections: Array<{ items: unknown[] }>; version: number }>(
+    page,
+    `/templates/${templateId}`,
+  );
+  const { sections } = template;
+  sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
+  await apiJson(page, `/templates/${templateId}`, {
+    method: "PUT",
+    body: { sections, expected_version: template.version },
+  });
+}
+
+async function serveAsARowFromBeforeTheBlockTypeCheck(page: Page, templateId: string) {
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const template = storedTemplateSchema.parse(await response.json());
+    template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
+    await route.fulfill({ response, json: template });
+  });
 }
 
 function getTemplateSections(template: Record<string, unknown>) {
@@ -115,7 +255,7 @@ function getTemplateSections(template: Record<string, unknown>) {
 
 test.describe("template editor regressions", () => {
   test('remembers the signed-in user layout independently on template screens', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto('/dashboard/templates/');
 
     await page.getByRole('button', { name: 'Show templates in list view' }).click();
@@ -140,7 +280,7 @@ test.describe("template editor regressions", () => {
   });
 
   test('supports full-size console navigation targets', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto('/dashboard/templates/');
 
     const runsLink = page.getByRole('link', { name: 'Runs', exact: true });
@@ -151,7 +291,7 @@ test.describe("template editor regressions", () => {
   });
 
   test('reorders sections and tasks with the visible drag handles', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto('/dashboard/templates/new/');
 
     await page.getByRole('button', { name: /add task to section 1/i }).click();
@@ -161,13 +301,12 @@ test.describe("template editor regressions", () => {
     await page.getByRole('button', { name: 'Add section' }).click();
     await page.getByPlaceholder('Enter section title...').fill('Second section');
 
-    const draggedSection = page.getByRole('button', { name: 'Drag Second section' });
-    const sectionDropTarget = page.getByRole('button', { name: 'Drag Section 1' });
-    const sectionDataTransfer = await page.evaluateHandle(() => new DataTransfer());
-    await draggedSection.dispatchEvent('dragstart', { dataTransfer: sectionDataTransfer });
-    await sectionDropTarget.dispatchEvent('dragover', { dataTransfer: sectionDataTransfer });
-    await expect(page.locator('[data-drop-indicator="section-before"]')).toBeVisible();
-    await sectionDropTarget.dispatchEvent('drop', { dataTransfer: sectionDataTransfer });
+    await dragAndDropBefore(
+      page,
+      page.getByRole('button', { name: 'Drag Second section' }),
+      page.getByRole('button', { name: 'Drag Section 1' }),
+      'section-before',
+    );
     const sectionHandles = page.getByRole('button', { name: /^Drag / });
     await expect(sectionHandles.first()).toHaveAccessibleName('Drag Second section');
 
@@ -178,10 +317,8 @@ test.describe("template editor regressions", () => {
     await expect(taskButtons.first()).toHaveText('Second task');
   });
 
-  // Keyboard users: the section actions after the title were focusable at opacity 0, and
-  // sections and tasks could only be reordered by mouse drag.
-  test('shows outline actions on keyboard focus and reorders with the arrow keys', async ({ page }) => {
-    await loginAsSeedUser(page);
+  test('shows outline actions on keyboard focus, and reorders with the arrow keys keeping focus on the moved handle', async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto('/dashboard/templates/new/');
 
     await page.getByRole('button', { name: /add task to section 1/i }).click();
@@ -208,7 +345,6 @@ test.describe("template editor regressions", () => {
       'Moved Second section to position 1 of 2',
     );
 
-    // Moving down re-inserts the row, so focus has to be put back on its handle.
     const taskHandle = page.getByRole('button', { name: 'Drag First task' });
     await taskHandle.focus();
     await page.keyboard.press('ArrowDown');
@@ -218,7 +354,7 @@ test.describe("template editor regressions", () => {
   });
 
   test('previews the current unsaved template draft', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto('/dashboard/templates/new/');
     await page.getByPlaceholder('Enter template name...').fill('Unsaved preview title');
 
@@ -229,7 +365,7 @@ test.describe("template editor regressions", () => {
   });
 
   test('reviews, edits, previews, and explicitly publishes a generated Clipy draft', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     let createPayload: Record<string, unknown> | null = null;
     await page.route('**/api/templates', async (route) => {
       if (route.request().method() !== 'POST') {
@@ -339,10 +475,8 @@ test.describe("template editor regressions", () => {
     });
   });
 
-  // Generating used to replace a hand-built draft with no question, and anything typed
-  // while the request ran was replaced too.
-  test('asks before a generated Clipy draft replaces unsaved work', async ({ page }) => {
-    await loginAsSeedUser(page);
+  test('asks before a generated Clipy draft replaces unsaved work, and locks the form while it generates', async ({ page }) => {
+    await loginAsAdmin(page);
     let generateCalls = 0;
     let holdGenerate = false;
     let releaseGenerate: () => void = () => {};
@@ -394,7 +528,6 @@ test.describe("template editor regressions", () => {
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Generate draft' }).click();
     await expect.poll(() => generateCalls).toBe(1);
-    // Locked while it runs: nothing typed now could survive the replace.
     await expect(title).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Generating...', exact: true })).toBeDisabled();
 
@@ -405,8 +538,8 @@ test.describe("template editor regressions", () => {
   });
 
   test('shows one task-level notes area and persists it on the run', async ({ page }) => {
-    await loginAsSeedUser(page);
-    const runId = await postRun(page, {
+    await loginAsAdmin(page);
+    const runId = await createRun(page, {
       sections: [
         {
           id: 'notes-section',
@@ -587,22 +720,7 @@ test.describe("template editor regressions", () => {
     const stamp = Date.now();
     const templateTitle = `QA Upload ${stamp}`;
     const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/${stamp}.png`)}`;
-    const onePixelPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-      "base64",
-    );
-
-    // Stub storage so the test checks the editor, not R2.
-    await page.route("**/api/uploads", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.fallback();
-        return;
-      }
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ url: uploadedUrl, fileName: "photo.png", fileSize: onePixelPng.length }),
-      });
-    });
+    await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "photo.png", fileSize: ONE_PIXEL_PNG.length });
 
     await registerAccount(page);
     await page.goto("/dashboard/templates/new/");
@@ -615,7 +733,7 @@ test.describe("template editor regressions", () => {
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
-      buffer: onePixelPng,
+      buffer: ONE_PIXEL_PNG,
     });
 
     await expect(page.getByText("photo.png", { exact: true })).toBeVisible();
@@ -626,7 +744,7 @@ test.describe("template editor regressions", () => {
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
-      buffer: onePixelPng,
+      buffer: ONE_PIXEL_PNG,
     });
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
 
@@ -644,22 +762,16 @@ test.describe("template editor regressions", () => {
     }
   });
 
-  // One failed load used to hide the preview for good: typing a URL fails on its first
-  // characters, so even the finished, valid URL showed an empty box.
-  test("previews a corrected image URL after a broken one", async ({ page }) => {
-    const onePixelPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-      "base64",
-    );
+  test("previews a corrected image URL after a broken one, also when the URL is typed one key at a time", async ({ page }) => {
     await page.route("https://img.test/**", async (route) => {
       if (route.request().url().endsWith("/good.png")) {
-        await route.fulfill({ body: onePixelPng, contentType: "image/png" });
+        await route.fulfill({ body: ONE_PIXEL_PNG, contentType: "image/png" });
         return;
       }
       await route.fulfill({ body: "", status: 404 });
     });
 
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
@@ -695,7 +807,6 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { name: "Add Block" }).last().click();
     await page.getByRole("menuitem", { name: "Sub-tasks", exact: true }).click();
     await page.getByPlaceholder("Sub-task 1").fill("Check title");
-    // Enter adds a blank sub-task below.
     await page.getByPlaceholder("Sub-task 1").press("Enter");
     await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
 
@@ -710,16 +821,15 @@ test.describe("template editor regressions", () => {
     expect(subItems?.map((subItem) => subItem.title)).toEqual(["Check title"]);
 
     const templateId = String(savedTemplate?.id);
-    const runId = await postRun(page, { template_id: templateId, title: "Blank titles run", sections });
+    const runId = await createRun(page, { template_id: templateId, title: "Blank titles run", sections });
 
     await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
-    // The task has its own checkbox; the only other one is its single Sub-task's.
-    await expect(
-      page.getByRole("checkbox", { name: `Mark "Task with sub-tasks ${stamp}" complete` }),
-    ).toBeVisible();
+    const taskCheckbox = page.getByRole("checkbox", { name: `Mark "Task with sub-tasks ${stamp}" complete` });
+    const itsOneSubTaskCheckbox = page.getByRole("checkbox", { name: "Check title", exact: true });
+    await expect(taskCheckbox).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(2);
-    await expect(page.getByRole("checkbox", { name: "Check title", exact: true })).toBeVisible();
+    await expect(itsOneSubTaskCheckbox).toBeVisible();
     await expect(page.getByText("Check title", { exact: true })).toBeVisible();
 
     await apiRequest(page, `/checklists/${runId}`, { method: "DELETE" });
@@ -741,7 +851,6 @@ test.describe("template editor regressions", () => {
 
     const field = page.getByLabel("Embed Code or URL");
     await field.click();
-    // Type one key at a time: fill() sets the whole value in one change and hides the bug.
     await field.pressSequentially(embedUrl);
     await expect(field).toHaveValue(embedUrl);
     await expect(field).toBeFocused();
@@ -772,7 +881,6 @@ test.describe("template editor regressions", () => {
     }
   });
 
-  // Content blocks showed a grab handle that did nothing, so their order was fixed.
   test("reorders content blocks by keyboard and by drag and saves the order", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Block order ${stamp}`;
@@ -799,12 +907,7 @@ test.describe("template editor regressions", () => {
     await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
     await expect(embedHandle).toBeFocused();
 
-    // Drag the text block back above the embed block.
-    const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-    await page.getByRole("button", { name: "Drag Text block" }).dispatchEvent("dragstart", { dataTransfer });
-    await embedHandle.dispatchEvent("dragover", { dataTransfer });
-    await expect(page.locator('[data-drop-indicator="content-before"]')).toBeVisible();
-    await embedHandle.dispatchEvent("drop", { dataTransfer });
+    await dragAndDropBefore(page, page.getByRole("button", { name: "Drag Text block" }), embedHandle, "content-before");
     await expect(handles.first()).toHaveAccessibleName("Drag Text block");
 
     await embedHandle.focus();
@@ -826,50 +929,32 @@ test.describe("template editor regressions", () => {
     }
   });
 
-  test("waits for a file upload before saving or leaving", async ({ page }) => {
+  test("waits for a file upload before saving, and asks before leaving a form whose only change is the upload", async ({ page }) => {
     const stamp = Date.now();
     const templateTitle = `QA Held upload ${stamp}`;
     const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/held-${stamp}.png`)}`;
-    const onePixelPng = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-      "base64",
+    const upload = holdUntilReleased();
+    await answerUploadsWithoutStoringThem(
+      page,
+      { url: uploadedUrl, fileName: "held.png", fileSize: ONE_PIXEL_PNG.length },
+      upload.held,
     );
 
-    // Hold the upload until the test releases it; storage itself is stubbed.
-    let releaseUpload: () => void = () => {};
-    const uploadHeld = new Promise<void>((resolve) => {
-      releaseUpload = resolve;
-    });
-    await page.route("**/api/uploads", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.fallback();
-        return;
-      }
-      await uploadHeld;
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ url: uploadedUrl, fileName: "held.png", fileSize: onePixelPng.length }),
-      });
-    });
-
-    await loginAsSeedUser(page);
-    const templateId = await createTemplateViaApi(page, templateTitle);
+    await loginAsAdmin(page);
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
     await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
     await page.getByRole("button", { name: "Add Block" }).last().click();
     await page.getByRole("menuitem", { name: "Image", exact: true }).click();
-    // Save the empty block first, so the form is clean when the file is picked.
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await saveAndWaitUntilSaved(page);
 
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "held.png",
       mimeType: "image/png",
-      buffer: onePixelPng,
+      buffer: ONE_PIXEL_PNG,
     });
     await expect(page.locator("header").getByRole("button", { name: "Uploading..." })).toBeDisabled();
 
-    // Leaving asks, although nothing else changed: the file is not in the form yet.
     let confirmMessage: string | null = null;
     page.once("dialog", async (dialog) => {
       confirmMessage = dialog.message();
@@ -879,7 +964,7 @@ test.describe("template editor regressions", () => {
     await expect.poll(() => confirmMessage).toContain("still uploading");
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
-    releaseUpload();
+    upload.release();
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
     await page.getByRole("button", { name: "Save" }).click();
     await expect
@@ -893,30 +978,12 @@ test.describe("template editor regressions", () => {
     await deleteTemplate(page, templateId);
   });
 
-  test("keeps edits typed while a save is in flight", async ({ page }) => {
-    await loginAsSeedUser(page);
+  test("keeps edits typed while a save is in flight, and saves them next on the version that save returned", async ({ page }) => {
+    await loginAsAdmin(page);
     const templateTitle = `QA Save race ${Date.now()}`;
-    const templateId = await createTemplateViaApi(page, templateTitle);
-
-    // Hold the first update until the test releases it.
-    let releaseUpdate: () => void = () => {};
-    const updateHeld = new Promise<void>((resolve) => {
-      releaseUpdate = resolve;
-    });
-    let heldOnce = false;
-    const updateVersions: unknown[] = [];
-    await page.route(`**/api/templates/${templateId}`, async (route) => {
-      if (route.request().method() !== "PUT") {
-        await route.fallback();
-        return;
-      }
-      updateVersions.push((route.request().postDataJSON() as { expected_version?: unknown }).expected_version);
-      if (!heldOnce) {
-        heldOnce = true;
-        await updateHeld;
-      }
-      await route.fallback();
-    });
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
+    const firstUpdate = holdUntilReleased();
+    const expectedVersionsSent = await holdTheFirstUpdate(page, templateId, firstUpdate.held);
 
     await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
@@ -928,7 +995,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("button", { exact: true, name: "Second task" }).click();
     await page.getByLabel("Description (Optional)").fill("Typed into another task");
 
-    releaseUpdate();
+    firstUpdate.release();
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
     await expect(page.getByLabel("Description (Optional)")).toHaveValue("Typed into another task");
     await page.getByRole("button", { exact: true, name: "First task" }).click();
@@ -936,7 +1003,6 @@ test.describe("template editor regressions", () => {
       "Sent with the first save, then more",
     );
 
-    // The edits are still unsaved, so leaving asks first.
     let confirmMessage: string | null = null;
     page.once("dialog", async (dialog) => {
       confirmMessage = dialog.message();
@@ -946,11 +1012,9 @@ test.describe("template editor regressions", () => {
     await expect.poll(() => confirmMessage).toContain("unsaved template changes");
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
-    // The second save sends the version the first one returned, so it gets no conflict.
-    expect(updateVersions).toHaveLength(2);
-    expect(Number(updateVersions[1])).toBeGreaterThan(Number(updateVersions[0]));
+    await saveAndWaitUntilSaved(page);
+    expect(expectedVersionsSent).toHaveLength(2);
+    expect(Number(expectedVersionsSent[1])).toBeGreaterThan(Number(expectedVersionsSent[0]));
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
@@ -962,10 +1026,10 @@ test.describe("template editor regressions", () => {
     await deleteTemplate(page, templateId);
   });
 
-  test("asks before unsaved template edits are lost through the app shell or Back", async ({ page }) => {
-    await loginAsSeedUser(page);
+  test("asks once before unsaved template edits are lost through the app shell, Back, Sign out or the editor's own back button", async ({ page }) => {
+    await loginAsAdmin(page);
     const templateTitle = `QA Leave guard ${Date.now()}`;
-    const templateId = await createTemplateViaApi(page, templateTitle);
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
     const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
     const draft = "Edited but not saved";
     const dialogs: string[] = [];
@@ -975,7 +1039,6 @@ test.describe("template editor regressions", () => {
       await (acceptDialogs ? dialog.accept() : dialog.dismiss());
     });
 
-    // Arrive through the app so browser Back stays inside the single-page app.
     await page.goto(`/dashboard/templates/${templateId}/`);
     await page.getByRole("link", { name: "Edit", exact: true }).click();
     await expect(page).toHaveURL(editorUrl);
@@ -999,13 +1062,11 @@ test.describe("template editor regressions", () => {
     await page.getByRole("menuitem", { name: "My Runs" }).click();
     await expectStillEditing(3);
 
-    // Dismissing Sign out keeps the user signed in with the draft.
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
     await expectStillEditing(4);
     await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible();
 
-    // The editor's own back button asks once, not twice.
     await page.getByRole("button", { name: "Back to templates" }).click();
     await expectStillEditing(5);
 
@@ -1018,32 +1079,13 @@ test.describe("template editor regressions", () => {
   });
 
   test("asks before leaving while a save is in flight, and keeps the edits if it fails", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     const templateTitle = `QA Leave during save ${Date.now()}`;
-    const templateId = await createTemplateViaApi(page, templateTitle);
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
     const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
     const draft = "Typed before a save that fails";
-
-    // Hold the update, then refuse it as a conflict.
-    let releaseUpdate: () => void = () => {};
-    const updateHeld = new Promise<void>((resolve) => {
-      releaseUpdate = resolve;
-    });
-    await page.route(`**/api/templates/${templateId}`, async (route) => {
-      if (route.request().method() !== "PUT") {
-        await route.fallback();
-        return;
-      }
-      await updateHeld;
-      await route.fulfill({
-        status: 409,
-        contentType: "application/json",
-        body: JSON.stringify({
-          error: "Template changed since it was loaded. Refresh before saving again.",
-          code: "edit_conflict",
-        }),
-      });
-    });
+    const update = holdUntilReleased();
+    await holdTheUpdateThenRefuseItAsAConflict(page, templateId, update.held);
     const dialogs: string[] = [];
     page.on("dialog", async (dialog) => {
       dialogs.push(dialog.message());
@@ -1060,15 +1102,9 @@ test.describe("template editor regressions", () => {
     await expect.poll(() => dialogs.length).toBe(1);
     expect(dialogs[0]).toContain("still saving");
     await expect(page).toHaveURL(editorUrl);
-    // A reload or tab close is warned about too.
-    const unloadWarned = await page.evaluate(() => {
-      const event = new Event("beforeunload", { cancelable: true });
-      window.dispatchEvent(event);
-      return event.defaultPrevented;
-    });
-    expect(unloadWarned).toBe(true);
+    expect(await warnsBeforeUnload(page)).toBe(true);
 
-    releaseUpdate();
+    update.release();
     await expect(page.getByText("Template changed since it was loaded.").first()).toBeVisible();
     await expect(page).toHaveURL(editorUrl);
     await expect(page.getByLabel("Description (Optional)")).toHaveValue(draft);
@@ -1078,19 +1114,16 @@ test.describe("template editor regressions", () => {
   });
 
   test("stays where the user went when a create finishes after they left", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     const templateTitle = `QA Leave during create ${Date.now()}`;
-    let releaseCreate: () => void = () => {};
-    const createHeld = new Promise<void>((resolve) => {
-      releaseCreate = resolve;
-    });
+    const create = holdUntilReleased();
     let createFinished = false;
     await page.route("**/api/templates", async (route) => {
       if (route.request().method() !== "POST") {
         await route.fallback();
         return;
       }
-      await createHeld;
+      await create.held;
       await route.fallback();
       createFinished = true;
     });
@@ -1105,7 +1138,7 @@ test.describe("template editor regressions", () => {
     await page.getByRole("link", { name: "Runs", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 
-    releaseCreate();
+    create.release();
     await expect.poll(() => createFinished).toBe(true);
     await expect.poll(() => findTemplateByTitle(page, templateTitle)).toBeTruthy();
     await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
@@ -1117,7 +1150,7 @@ test.describe("template editor regressions", () => {
   });
 
   test("leaves a new template without asking once it is saved", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     const templateTitle = `QA Leave after create ${Date.now()}`;
     const dialogs: string[] = [];
     page.on("dialog", async (dialog) => {
@@ -1145,24 +1178,9 @@ test.describe("template editor regressions", () => {
       "R0lGODlhAQABAPAAAP8AAAAA/yH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwAAAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAgAAA/wAAAAICRAEAOw==",
       "base64",
     );
-    const uploads: Array<{ body: Buffer; name: string }> = [];
+    const uploads = await captureUploadsWithoutStoringThem(page);
 
-    // Capture what the browser sends; storage itself is stubbed.
-    await page.route("**/api/uploads", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.fallback();
-        return;
-      }
-      const body = route.request().postDataBuffer() ?? Buffer.alloc(0);
-      const name = /filename="([^"]+)"/.exec(body.toString("latin1"))?.[1] ?? "";
-      uploads.push({ body, name });
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ url: `/api/uploads/file?key=template-images/e2e/${name}`, fileName: name }),
-      });
-    });
-
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
 
@@ -1182,8 +1200,8 @@ test.describe("template editor regressions", () => {
     expect(uploads[1]?.body.includes(animatedGif)).toBe(true);
   });
 
-  test("uploads the file types a File block offers, as Windows reports them", async ({ page }) => {
-    await loginAsSeedUser(page);
+  test("uploads the file types a File block offers, as Windows reports them, and refuses another type before uploading it", async ({ page }) => {
+    await loginAsAdmin(page);
     await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
 
@@ -1201,7 +1219,6 @@ test.describe("template editor regressions", () => {
       await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
     }
 
-    // A type the API refuses is caught before upload, with the accepted types named.
     let uploadRequests = 0;
     page.on("request", (request) => {
       if (request.method() === "POST" && request.url().endsWith("/api/uploads")) uploadRequests += 1;
@@ -1222,18 +1239,7 @@ test.describe("template editor regressions", () => {
     const templateTitle = `QA File URL ${stamp}`;
     const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-files/e2e/${stamp}.pdf`)}`;
     const externalUrl = "https://example.com/pricing.pdf";
-
-    // Stub storage so the test checks the editor, not R2.
-    await page.route("**/api/uploads", async (route) => {
-      if (route.request().method() !== "POST") {
-        await route.fallback();
-        return;
-      }
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ url: uploadedUrl, fileName: "report.pdf", fileSize: 2048 }),
-      });
-    });
+    await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "report.pdf", fileSize: 2048 });
 
     await registerAccount(page);
     await page.goto("/dashboard/templates/new/");
@@ -1270,11 +1276,11 @@ test.describe("template editor regressions", () => {
   });
 
   test("opens every section of a saved template expanded, from the first frame", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     const stamp = Date.now();
     const templateTitle = `QA Outline ${stamp}`;
     const sectionTitles = ["Before the move", "Moving day", "After the move"];
-    const templateId = await postTemplate(page, {
+    const templateId = await createTemplate(page, {
       title: templateTitle,
       is_public: false,
       sections: sectionTitles.map((sectionTitle, index) => ({
@@ -1284,32 +1290,20 @@ test.describe("template editor regressions", () => {
       })),
     });
 
-    // Record whether the header ever showed the blank form's title before the template.
-    await page.addInitScript(() => {
-      const w = window as unknown as { __sawNewTemplate?: boolean };
-      w.__sawNewTemplate = false;
-      new MutationObserver(() => {
-        const headers = Array.from(document.querySelectorAll("header"));
-        if (headers.some((header) => header.textContent?.includes("New Template"))) {
-          w.__sawNewTemplate = true;
-        }
-      }).observe(document, { childList: true, subtree: true, characterData: true });
-    });
+    await recordWhetherTheHeaderShowsNewTemplate(page);
 
     await page.goto(`/dashboard/templates/${templateId}/edit/`);
     for (const title of sectionTitles) {
       await expect(page.getByRole("button", { name: `Collapse ${title}` })).toBeVisible();
       await expect(page.getByRole("button", { name: `${title} task`, exact: true })).toBeVisible();
     }
-    expect(
-      await page.evaluate(() => (window as unknown as { __sawNewTemplate?: boolean }).__sawNewTemplate),
-    ).toBe(false);
+    expect(await headerShowedNewTemplate(page)).toBe(false);
 
     await deleteTemplate(page, templateId);
   });
 
   test("expands every section of a generated Clipy draft", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     await page.route("**/api/templates/generate-from-clipy", async (route) => {
       await route.fulfill({
         contentType: "application/json",
@@ -1422,28 +1416,16 @@ test.describe("template editor regressions", () => {
   });
 
   test("opens the latest saved template, not the cached list copy", async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     const title = `Concurrent edit ${uniqueSuffix()}`;
-    const templateId = await createTemplateViaApi(page, title);
+    const templateId = await createTwoTaskTemplate(page, title);
 
     try {
-      // The template list is now cached in the app.
       await page.goto("/dashboard/templates/");
       await page.getByRole("link", { name: title }).first().click();
       await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/$`));
 
-      // Another tab (or an Organization teammate) saves a new task meanwhile.
-      // Reads return the checklist as parsed `sections` (the raw items column is not sent).
-      const template = await apiJson<{ sections: Array<{ items: unknown[] }>; version: number }>(
-        page,
-        `/templates/${templateId}`,
-      );
-      const { sections } = template;
-      sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
-      await apiJson(page, `/templates/${templateId}`, {
-        method: "PUT",
-        body: { sections, expected_version: template.version },
-      });
+      await addATaskFromAnotherTab(page, templateId);
 
       await page.getByRole("link", { name: "Edit", exact: true }).click();
       await expect(page.getByText("Added elsewhere").first()).toBeVisible();
@@ -1459,12 +1441,10 @@ test.describe("template editor regressions", () => {
     }
   });
 
-  test("saves a template whose stored content came from a legacy import", async ({ page }) => {
-    await loginAsSeedUser(page);
+  test("saves a template whose stored content came from a legacy import, keeping a block of unknown type as text", async ({ page }) => {
+    await loginAsAdmin(page);
     const title = `Legacy content ${uniqueSuffix()}`;
-    // Writes still store ids and nulls as given, as a lenient JSON import did
-    // (src/lib/schemas/storedSections.ts passes them through).
-    const templateId = await postTemplate(page, {
+    const templateId = await createTemplate(page, {
       title,
       is_public: false,
       sections: [
@@ -1484,17 +1464,7 @@ test.describe("template editor regressions", () => {
         },
       ],
     });
-    // Every write now refuses a block of unknown type, but rows stored before that check
-    // still hold them. The editor loads this template with one, as it would load such a row.
-    await page.route(`**/api/templates/${templateId}`, async (route) => {
-      if (route.request().method() !== "GET") return route.fallback();
-      const response = await route.fetch();
-      const template = (await response.json()) as {
-        sections: Array<{ items: Array<{ contents: unknown[] }> }>;
-      };
-      template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
-      await route.fulfill({ response, json: template });
-    });
+    await serveAsARowFromBeforeTheBlockTypeCheck(page, templateId);
 
     try {
       await page.goto(`/dashboard/templates/${templateId}/edit/`);
@@ -1504,7 +1474,6 @@ test.describe("template editor regressions", () => {
       await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
       const saved = await findTemplateByTitle(page, `${title} saved`);
       expect(JSON.stringify(saved?.sections)).toContain("https://example.com/doc.pdf");
-      // The block of unknown type is kept as a text block, not deleted by the save.
       const contents = getTemplateSections(saved as Record<string, unknown>)[0]?.items[0]?.contents;
       expect(contents).toContainEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
     } finally {
@@ -1514,12 +1483,10 @@ test.describe("template editor regressions", () => {
   });
 });
 
-// The edit and new-template routes used to share one editor instance, so a failed save's
-// error, or a save that finished after "New Template" was clicked, landed on the blank form.
 test.describe("template editor route switches", () => {
-  async function openNewTemplateEditor(page: Page) {
+  async function createTemplateAndOpenItsEditor(page: Page) {
     const title = `Route switch QA ${uniqueSuffix()}`;
-    const templateId = await postTemplate(page, {
+    const templateId = await createTemplate(page, {
       title,
       sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
     });
@@ -1529,8 +1496,8 @@ test.describe("template editor route switches", () => {
   }
 
   test("a failed save does not follow the user to the new-template form", async ({ page }) => {
-    await loginAsSeedUser(page);
-    const { templateId } = await openNewTemplateEditor(page);
+    await loginAsAdmin(page);
+    const { templateId } = await createTemplateAndOpenItsEditor(page);
     await page.route(`**/api/templates/${templateId}`, (route) =>
       route.request().method() === "PUT"
         ? route.fulfill({
@@ -1552,15 +1519,12 @@ test.describe("template editor route switches", () => {
   });
 
   test("a save that finishes after New Template does not fill the new form", async ({ page }) => {
-    await loginAsSeedUser(page);
-    const { templateId } = await openNewTemplateEditor(page);
-    let releaseSave: () => void = () => {};
-    const saveHeld = new Promise<void>((resolve) => {
-      releaseSave = resolve;
-    });
+    await loginAsAdmin(page);
+    const { templateId } = await createTemplateAndOpenItsEditor(page);
+    const save = holdUntilReleased();
     await page.route(`**/api/templates/${templateId}`, async (route) => {
       if (route.request().method() !== "PUT") return route.continue();
-      await saveHeld;
+      await save.held;
       return route.continue();
     });
     const creates: string[] = [];
@@ -1574,7 +1538,7 @@ test.describe("template editor route switches", () => {
     await page.getByRole("button", { name: "Save" }).click();
     await page.getByRole("link", { name: "New Template" }).first().click();
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
-    releaseSave();
+    save.release();
     expect((await saved).status()).toBe(200);
 
     await expect(page.getByText("Template saved")).toBeVisible();

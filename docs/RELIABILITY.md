@@ -326,6 +326,11 @@ Common failures:
   in on focus or hover by its computed opacity.
 - A modal dialog takes the page behind it out of the accessibility tree, so `getByRole()`
   finds nothing there until the spec closes the dialog.
+- To test what happens while someone types (focus, a value the page rewrites as it
+  changes), type with `pressSequentially()`: `fill()` sets the whole value in one change.
+- When a step ends in a navigation that waits for the API (a Save that opens the list), wait
+  for that response before checking the URL: on a busy machine the save can take longer than
+  an assertion's default 5 seconds.
 - `setInputFiles()` does not wait for the input to be enabled, and the page ignores a file
   set on a disabled input, so a spec waits for `toBeEnabled()` first (the import page's
   picker stays disabled until the Template list and the plan load). It also dispatches
