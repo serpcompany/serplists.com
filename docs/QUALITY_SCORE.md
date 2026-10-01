@@ -1,6 +1,6 @@
 # Quality Score
 
-- **Last graded:** 2026-09-30
+- **Last graded:** 2026-10-01
 
 Grades show where the next hour of cleanup pays off most. Re-grade a row when its
 code changes materially; the weekly [maintenance report](design-docs/agent-workflow.md#weekly-maintenance)
@@ -26,7 +26,7 @@ changes are risky or slow. D = needs attention before building on it.
 
 | Area | Grade | Notes |
 | --- | --- | --- |
-| Type safety | A | `strict` across app, API, scripts and tests, all in `pnpm run typecheck`, and a test fails on any TypeScript file no checked tsconfig includes; the stricter flags reach the tests in phase 4 round 6 |
+| Type safety | A | `strict` across app, API, scripts and tests, all in `pnpm run typecheck`, and a test fails on any TypeScript file no checked tsconfig includes. App, API and scripts also have `noImplicitOverride`, `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; those reach the tests in phase 4 round 6, and `!` assertions are not refused yet (TD-58) |
 | Client boundary parsing | D | API responses are trusted, not parsed (TD-2) |
 | D1 cost efficiency | B | Run lists (Organization runs 12k at 40k runs, on the runs page only) and catalog cache misses (13k) still read in proportion to table size; the catalog and sitemaps are edge-cached, lists load on demand, and hot paths are indexed. See the [D1 cost plan](exec-plans/active/d1-cost.md) |
 | Architecture enforcement | A | `deps:check` rules with no known violations and no baseline; no dead modules |

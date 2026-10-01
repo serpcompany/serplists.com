@@ -260,6 +260,17 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, app side of round 1 done (4db83dbc..61a9e2b5).
+  - The app, API and scripts tsconfigs turn on `noImplicitOverride`,
+    `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes` and
+    `noUncheckedIndexedAccess`.
+  - It fixed 10, 0, 197 and 146 errors, with no casts or `!` added and two casts removed.
+  - `prop?: T | undefined` appears only where callers really pass `undefined`, such as Zod
+    output, form values or a deliberate clear. Values bound for JSON, logs or R2 metadata
+    leave the key out instead.
+  - The production build passes with them. The tests get them in round 6.
+  - New tracker rows: TD-58 (`!` assertions), TD-59 (two casts left for the boundary
+    round) and TD-60 (two small duplicates).
 - 2026-10-01: phase 4, test side of round 4 done (65759f04..240dd819).
   - Rows-read budgets: `tests/integration/rows-read-budgets-local-d1.test.ts` runs in
     `test:local-d1`, so CI's D1 integration step enforces it.

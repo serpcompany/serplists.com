@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-58.**
+then you raise it. **Next ID: TD-61.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -53,4 +53,7 @@ then you raise it. **Next ID: TD-58.**
 | TD-54 | Tests | No test notices an audit action that is registered in `AUDIT_ACTIONS` but that no handler writes. The check that did ("lists only actions some handler writes") read the handlers' source and went with the other source-reading tests; every registered action is still expected by at least one handler or integration test. | Drive every audit-writing route on `SqliteD1` (`tests/support/sqlite-d1.ts`) and compare the actions written with `AUDIT_ACTIONS` in `tests/unit/lib/schemas/auditActions.test.ts`. Medium. | None |
 | TD-55 | Tests | The `serplists/navigate-while-visit-is-current` lint rule (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) does not follow sign-in or checkout redirects made inside `.then()` callbacks, which the source scan it replaced did. | Follow `.then()` callbacks too, with RuleTester cases. Small. | None |
 | TD-56 | Tests | No TOML parser is a dependency, so `tests/support/wranglerToml.ts` and `tests/unit/scripts/origin-list-parity.test.ts` read `wrangler.toml` with regular expressions. | Add a TOML parser as a devDependency and parse the file. Small. | None |
-| TD-57 | Tests | `tests/unit/e2e/e2e-setup-requests.test.ts` and `tests/unit/e2e/seeded-template-paths.test.ts` read the browser specs' text to check how they set up data and which seeded paths they open. | Make them ESLint rules over `tests/e2e`, with messages saying what to do instead. Small. | None |
+| TD-57 | Tests | `tests/unit/e2e/seeded-template-paths.test.ts` reads the browser specs' text to check which seeded paths they open (the setup-request check is an ESLint convention now). | Make it an ESLint rule over `tests/e2e`, with a message saying what to do instead. Small. | None |
+| TD-58 | Types | Nothing refuses a `!` non-null assertion: 2 in app code (`functions/api/handlers/team-self-service.ts`, `functions/sitemap/shared.ts`) and 103 in `tests/`. | Turn on `@typescript-eslint/no-non-null-assertion` everywhere and narrow each value instead, with the round 1 flags reaching the tests in phase 4 round 6. Medium. | None |
+| TD-59 | Boundaries | Two casts the stricter settings left: `sectionId as string` in `functions/api/handlers/agentMcpTemplateEdits.ts` and `as RetiredRunEntry[]` in `functions/api/utils/template-reconciliation.ts`. | Parse or narrow them in the boundary validation round. Small. | None |
+| TD-60 | Duplication | `getRequestedTeamId` is written in both `functions/api/handlers/checklists-create.ts` and `template-create.ts`, and `TemplatePageSource` is declared in both `src/lib/publicPageMeta.ts` and `src/server/pageMeta/templatePage.ts`. | Share one of each. Small. | None |
