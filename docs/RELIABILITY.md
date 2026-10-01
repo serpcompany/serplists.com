@@ -276,7 +276,7 @@ Common failures:
   connection that has been idle for 5 seconds; a request sent on it at that moment is
   lost. Playwright's request client (`page.request`, the `request` fixture,
   `route.fetch`) keeps idle connections with no limit of its own, so its request
-  failed with `socket hang up`. Playwright has no option for it, so `playwright.config.ts`,
+  failed with `socket hang up`. Playwright has no option to stop that, so `playwright.config.ts`,
   which the runner and every worker load, calls `disableRequestKeepAlive()` from
   `tests/e2e/support/request-connections.ts`: it turns keep-alive off on the HTTP agent
   Playwright's request client sends every `http://` request through, so each request gets a
