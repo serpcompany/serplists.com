@@ -1,6 +1,6 @@
 # Harness hardening
 
-Last updated: 2026-09-30
+Last updated: 2026-10-01
 
 ## Goal
 
@@ -245,6 +245,21 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   passes CI, replacing the disconnected Pages deploy. Staging lives on
   `https://serp-checklists-preview.serpcompany.workers.dev` until its domain moves.
 - 2026-10-01: phase 4 and the other leftovers are tracked in issue #259 for the next PR.
+- 2026-10-01: phase 4, test side of rounds 1 to 3 done.
+  - Round 1: `tests/tsconfig.json` runs in `pnpm run typecheck`, and the 684 errors are fixed,
+    mostly by parsing responses with `readJson(response, schema)` (0693ffd6..2d03656a). TD-1
+    is closed. The four round 1 flags stay off for tests until round 6.
+  - Round 2: `max-lines` (500) covers every authored JavaScript and TypeScript file. The 25
+    files over it in `tests/`, `scripts/` and `db/` are split by responsibility
+    (c381e4e2..488ac205).
+  - Round 3: `pnpm run duplicates:check` runs jscpd at its defaults with a threshold of 0 in
+    `check:repo`, over `tests/` for now (75daa219..c133b31d).
+    - The 519 clones (5,273 lines) are gone. 49 shared modules in `tests/support`,
+      `tests/fixtures` and `tests/e2e/support` replace them. TD-46 and TD-47 are closed.
+    - Every test name is unchanged, except two seed checks that checked nothing the kept
+      check doesn't and the bundled-pack test, which moved.
+    - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
+      schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
@@ -305,6 +320,10 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   - Staging by explicit path alone does not prevent that.
 - 2026-10-01: Phase 4's boundary-validation work includes two casts phase 3 found:
   `stripePostForm<T>` casts Stripe's reply, and `isShareLinkEvent` casts parsed audit metadata.
+- 2026-10-01: `duplicates:check` names the folders it checks on the command line
+  (`jscpd tests`), not as a `path` in `.jscpd.json`. jscpd resolves a configured path to an
+  absolute one and globs it, and on Windows that glob matches no file, so the check passed
+  while reading nothing. The guard test refuses a `path` setting.
 - 2026-09-30: the Node clone hazard is TD-29, not TD-27. TD-27 and TD-28 were the MCP result
   bounds, closed earlier. The tracker now keeps a next-ID line, so a closed ID is never
   reused.
