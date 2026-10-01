@@ -53,9 +53,6 @@ export type TemplateEditorContentType = TemplateEditorContent["type"];
 export type TemplateEditorContentPath =
   `sections.${number}.items.${number}.contents.${number}`;
 
-// Finds a content block by its stable id in the current form values. Work that
-// finishes later (an upload) must use this, not indexes captured when it started:
-// blocks, tasks, and sections can move or be removed in the meantime.
 export function findTemplateEditorContentPath(
   sections: TemplateEditorSection[],
   contentId: string,
@@ -125,12 +122,6 @@ export function createTemplateEditorSection(): TemplateEditorSection {
   };
 }
 
-// Content stored before the API checked every write (legacy backups, hand-written or
-// generated JSON) can hold nulls, numbers, unknown types, or bare values. Loading
-// coerces all of it into values the editor schema accepts, keeping what it can (an
-// unknown block becomes a text block with its value), so a template is never stuck
-// unsaveable. Values are read as unknown for that reason, straight from the stored
-// sections: the display mappers drop what no page renders, and a save would delete it.
 const TEMPLATE_EDITOR_CONTENT_TYPES = templateEditorContentSchema.shape.type.options;
 
 type StoredRecord = Record<string, unknown>;
@@ -172,13 +163,10 @@ function normalizeTemplateEditorSubItem(raw: unknown): TemplateEditorSubItem {
   };
 }
 
-// usedContentIds spans the whole template: uploads find their block by content id, so
-// a repeated id (or 1 and "1") gets a new one.
 function normalizeTemplateEditorContent(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorContent {
-  // A bare value becomes a text block, so its text is not lost.
   const content = isStoredRecord(raw) ? raw : { value: raw };
   const type = toEditorContentType(content.type);
   let id = toEditorId(content.id, "content");
@@ -191,8 +179,6 @@ function normalizeTemplateEditorContent(
   const value = toEditorText(content.value);
   const storedUploadType =
     content.uploadType === "upload" || content.uploadType === "url" ? content.uploadType : undefined;
-  // A name and size saved next to a URL typed over an upload describe that upload,
-  // not the URL: they are dropped here, so the next save stores the fix.
   const staleFileInfo =
     MEDIA_CONTENT_TYPES.has(type) && !hasCurrentFileInfo({ value, uploadType: storedUploadType });
   return {
@@ -254,7 +240,6 @@ function buildTemplateEditorSections(sections?: unknown): TemplateEditorSection[
   return [createTemplateEditorSection()];
 }
 
-// A template whose sections may be stored JSON of any shape (see above).
 export type TemplateEditorFormSource = Omit<Partial<ChecklistTemplate>, "sections"> & {
   sections?: unknown;
 };
@@ -282,7 +267,6 @@ export function normalizeTemplateEditorFormForSave(
   };
 }
 
-// "Section 2, task 1, content block 3" for an issue inside the outline; null otherwise.
 const describeTemplateEditorIssueLocation = (path: Array<string | number>): string | null => {
   const [sections, sectionIndex, items, itemIndex, contents, contentIndex] = path;
   if (sections !== "sections" || typeof sectionIndex !== "number") {
@@ -299,8 +283,6 @@ const describeTemplateEditorIssueLocation = (path: Array<string | number>): stri
   return parts.join(", ");
 };
 
-// Checks save-ready values against the editor schema, which carries the API's limits.
-// Each message names the field as the editor labels it, or where in the outline it is.
 export function validateTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
 ): Array<{ type: "validation"; message: string }> {

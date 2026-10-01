@@ -348,9 +348,10 @@ write: [client data](design-docs/client-data.md).
   `reset()`.
 - Content stored before the API checked every write can hold shapes the editor does
   not use, so `buildTemplateEditorFormValues` coerces it into values the editor schema
-  accepts: numeric ids and values become strings, an unknown block type becomes a text
-  block that keeps its value, invalid file details are dropped, and every content block
-  gets its own id (uploads find their block by id). The editor builds the form from the
+  accepts: numeric ids and values become strings, an unknown block type (or a bare value
+  stored where a block belongs) becomes a text block that keeps its value, invalid file
+  details are dropped, and every content block in the template gets its own id (uploads
+  find their block by id, so a repeated id, even `1` beside `"1"`, gets a new one). The editor builds the form from the
   stored sections the API returns, not the display mapper's copy, which drops what no
   page renders. A loaded template can always be saved without losing content. Save
   validation errors inside the outline name the section, task, and content block.
