@@ -5,20 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
 
-// Render the dialog inline: the Radix portal does not render on the server.
-vi.mock('@/components/ui/dialog', async () => {
-  const { createElement, Fragment } = await import('react');
-  const passThrough = ({ children }: { children?: React.ReactNode }) =>
-    createElement(Fragment, null, children);
-  return {
-    Dialog: passThrough,
-    DialogContent: passThrough,
-    DialogDescription: passThrough,
-    DialogFooter: passThrough,
-    DialogHeader: passThrough,
-    DialogTitle: passThrough,
-  };
-});
+vi.mock('@/components/ui/dialog', async () => (await import('../../../support/overlaysInPlace')).dialogInPlace);
 
 const decodeAttribute = (value: string) =>
   value.replaceAll('&quot;', '"').replaceAll('&#x27;', "'").replaceAll('&amp;', '&');
@@ -56,9 +43,7 @@ describe('RunNameDialog', () => {
   });
 });
 
-// One dialog and one wording wherever a Run starts: My Templates, template detail and the
-// public template page.
-describe('RunNameDialog wording', () => {
+describe('RunNameDialog wording, the same wherever a Run starts: My Templates, template detail and the public template page', () => {
   const render = (loading = false) =>
     renderToStaticMarkup(
       <RunNameDialog

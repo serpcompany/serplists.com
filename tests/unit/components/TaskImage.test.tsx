@@ -64,8 +64,7 @@ describe('resolveTaskImageSource', () => {
     expect(resolveTaskImageSource('https://cdn.example.com/a.png', 'https://cdn.example.com/a.png')).toBeNull();
   });
 
-  it('tries a new url again after an earlier one failed', () => {
-    // The run page reuses the same block when the selected task changes.
+  it('tries a new url again after an earlier one failed, since the run page reuses the same block when the selected task changes', () => {
     expect(resolveTaskImageSource('https://cdn.example.com/b.png', 'https://cdn.example.com/a.png')).toBe(
       'https://cdn.example.com/b.png',
     );

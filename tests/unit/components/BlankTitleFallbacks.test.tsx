@@ -13,10 +13,7 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Templates and runs saved before the editor defaulted blank titles still hold them.
-// Every page falls back to the label the editor showed, instead of an empty heading
-// or an unlabeled checkbox.
-const sections: ChecklistSection[] = [
+const sectionsWithLegacyBlankTitles: ChecklistSection[] = [
   { id: 'section-a', title: 'Prep', items: [{ id: 'item-1', title: 'Pack' }] },
   {
     id: 'section-b',
@@ -39,11 +36,11 @@ const sections: ChecklistSection[] = [
 
 const noop = () => undefined;
 
-describe('blank section and sub-task titles', () => {
+describe('blank section and sub-task titles saved before the editor defaulted them, shown as the labels the editor shows instead of an empty heading or an unlabeled checkbox', () => {
   it('shows "Section N" in the run progress panel', () => {
     const html = renderToStaticMarkup(
       <RunProgressPanel
-        sections={sections}
+        sections={sectionsWithLegacyBlankTitles}
         currentSectionId={null}
         currentTaskId={null}
         onSelectTask={noop}
@@ -56,9 +53,9 @@ describe('blank section and sub-task titles', () => {
   it('shows "Section N" in the task breadcrumb', () => {
     const html = renderToStaticMarkup(
       <TaskExecutionPanel
-        section={sections[1]}
+        section={sectionsWithLegacyBlankTitles[1]}
         sectionIndex={1}
-        task={sections[1].items[0]}
+        task={sectionsWithLegacyBlankTitles[1].items[0]}
         taskIndex={0}
         totalTasks={1}
         onFinishRun={noop}
@@ -80,7 +77,7 @@ describe('blank section and sub-task titles', () => {
 
   it('labels a blank sub-task by its position in a run', () => {
     const html = renderToStaticMarkup(
-      <ContentRenderer contents={sections[1].items[0].contents ?? []} />,
+      <ContentRenderer contents={sectionsWithLegacyBlankTitles[1].items[0].contents ?? []} />,
     );
 
     expect(html).toContain('Check title');
@@ -89,7 +86,7 @@ describe('blank section and sub-task titles', () => {
 
   it('shows "Section N" and labels a blank sub-task on the public template content', () => {
     const html = renderToStaticMarkup(
-      <PublicTemplateContent initialExpandedItems={{ '1-0': true }} sections={sections} />,
+      <PublicTemplateContent initialExpandedItems={{ '1-0': true }} sections={sectionsWithLegacyBlankTitles} />,
     );
 
     expect(html).toMatch(/<h3[^>]*>Section 2<\/h3>/);
@@ -101,7 +98,7 @@ describe('blank section and sub-task titles', () => {
       id: 'template-1',
       slug: 'moving',
       title: 'Moving',
-      sections,
+      sections: sectionsWithLegacyBlankTitles,
       userId: 'user-1',
       isPublic: true,
       createdAt: '2026-03-24T00:00:00.000Z',

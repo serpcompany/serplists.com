@@ -6,14 +6,7 @@ import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress'
 import { RunProgressPanel, RunTaskList } from '@/components/run-execution/RunProgressSidebar';
 import type { ChecklistSection } from '@/types/checklist';
 
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-const findElements = (node: unknown, match: (element: AnyElement) => boolean): AnyElement[] => {
-  if (Array.isArray(node)) return node.flatMap((child) => findElements(child, match));
-  if (!React.isValidElement(node)) return [];
-  const element = node as AnyElement;
-  return [...(match(element) ? [element] : []), ...findElements(element.props.children, match)];
-};
+import { findAllElements } from '../../../support/elementTree';
 
 const sections: ChecklistSection[] = [
   {
@@ -52,16 +45,14 @@ describe('RunTaskList', () => {
 
   it('selects the clicked task', () => {
     const onSelectTask = vi.fn();
-    const rows = findElements(list(null, onSelectTask), (element) => element.type === 'button');
+    const rows = findAllElements(list(null, onSelectTask), (element) => element.type === 'button');
 
     expect(rows).toHaveLength(3);
     (rows[2]?.props.onClick as () => void)();
     expect(onSelectTask).toHaveBeenCalledWith('launch', 't3');
   });
 
-  // The bar is the run's overall progress (sub-tasks weigh in), the same as the header's;
-  // the label counts tasks only.
-  it('fills the bar with the overall progress it is given and counts tasks, not sub-tasks', () => {
+  it("fills the bar with the run's overall progress it is given, in which sub-tasks weigh as in the header, and counts tasks, not sub-tasks", () => {
     const withSubTasks: ChecklistSection[] = [
       {
         id: 'setup',

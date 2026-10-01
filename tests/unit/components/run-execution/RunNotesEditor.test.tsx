@@ -15,8 +15,7 @@ const render = (props: { draft?: string; savedValue?: string }) =>
   );
 
 describe('RunNotesEditor', () => {
-  it('shows the unsaved draft over the saved notes and keeps Save enabled', () => {
-    // The user saved "abc", kept typing, and the save returned "abc".
+  it('shows the unsaved draft over the saved notes and keeps Save enabled when the user kept typing after a save returned', () => {
     const html = render({ draft: 'abcdef', savedValue: 'abc' });
 
     expect(html).toContain('>abcdef</textarea>');

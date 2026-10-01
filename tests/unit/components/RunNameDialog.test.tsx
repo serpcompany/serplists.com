@@ -1,64 +1,26 @@
-import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
-// vitest runs without a DOM, so this file keeps RunNameDialog's useState slots between calls
-// of the component, the way React keeps them between renders, and drives its handlers.
-const hooks = vi.hoisted(() => {
-  const state = { cursor: 0, rendering: false, setDuringRender: false, slots: [] as unknown[] };
-  const useState = <T,>(initial: T | (() => T)) => {
-    const slot = state.cursor++;
-    if (!(slot in state.slots)) {
-      state.slots[slot] = typeof initial === 'function' ? (initial as () => T)() : initial;
-    }
-    const set = (next: T | ((previous: T) => T)) => {
-      state.slots[slot] = typeof next === 'function' ? (next as (previous: T) => T)(state.slots[slot] as T) : next;
-      if (state.rendering) state.setDuringRender = true;
-    };
-    return [state.slots[slot] as T, set] as const;
-  };
-  return { state, useState };
-});
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
-  return { ...actual, useState: hooks.useState };
+  const { useStateKeptBetweenRenders } = await import('../../support/hookStateSlots');
+  return { ...actual, useState: useStateKeptBetweenRenders };
 });
 
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 
-type AnyElement = React.ReactElement<Record<string, unknown>>;
+import { findElement } from '../../support/elementTree';
+import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
+
 type DialogProps = Parameters<typeof RunNameDialog>[0];
 
-const findElement = (node: unknown, match: (element: AnyElement) => boolean): AnyElement | undefined => {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findElement(child, match);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (!React.isValidElement(node)) return undefined;
-  const element = node as AnyElement;
-  return match(element) ? element : findElement(element.props.children, match);
-};
-
-// Mounts the dialog; each call of the result renders it again with the state it kept.
 const mountDialog = (initial: Partial<DialogProps> = {}) => {
-  hooks.state.slots = [];
+  forgetKeptState();
   const onConfirm = vi.fn(async (_name: string) => undefined);
   let props: DialogProps = { loading: false, onConfirm, onOpenChange: vi.fn(), open: true, templateTitle: 'Vendor onboarding', ...initial };
   const render = (next: Partial<DialogProps> = {}) => {
     props = { ...props, ...next };
-    let tree: unknown;
-    // A state update during render renders again, as React does.
-    do {
-      hooks.state.cursor = 0;
-      hooks.state.setDuringRender = false;
-      hooks.state.rendering = true;
-      tree = (RunNameDialog as (props: DialogProps) => unknown)(props);
-      hooks.state.rendering = false;
-    } while (hooks.state.setDuringRender);
+    const tree = renderUntilNoStateIsSetDuringRender(() => (RunNameDialog as (props: DialogProps) => unknown)(props));
     const input = findElement(tree, (element) => element.props.id === 'run-name');
     const form = findElement(tree, (element) => element.type === 'form');
     return {
@@ -71,23 +33,29 @@ const mountDialog = (initial: Partial<DialogProps> = {}) => {
 };
 
 afterEach(() => {
-  hooks.state.slots = [];
+  forgetKeptState();
 });
 
 describe('RunNameDialog', () => {
   const typedName = 'Q3 vendor onboarding – ACME (priority)';
 
-  it('keeps the typed name when the start fails and the dialog stays open', () => {
+  const typeNameAndSubmitWithoutTheRunStarting = () => {
     const dialog = mountDialog();
     dialog.render().type(typedName);
     dialog.render().submit();
+    return { dialog, afterFailure: dialog.render() };
+  };
 
-    // The page closes the dialog only when the run starts; here it stayed open.
-    const afterFailure = dialog.render();
+  it('keeps the typed name when the start fails, since the page closes the dialog only once the run starts', () => {
+    const { dialog, afterFailure } = typeNameAndSubmitWithoutTheRunStarting();
+
     expect(dialog.onConfirm).toHaveBeenCalledWith(typedName);
     expect(afterFailure.input?.props.value).toBe(typedName);
+  });
 
-    // Trying again sends the same name, not the generated default.
+  it('sends the typed name again when the user retries, not the generated default', () => {
+    const { dialog, afterFailure } = typeNameAndSubmitWithoutTheRunStarting();
+
     afterFailure.submit();
     expect(dialog.onConfirm).toHaveBeenLastCalledWith(typedName);
   });
@@ -109,8 +77,7 @@ describe('RunNameDialog', () => {
     expect(dialog.render().input?.props.value).toBe('   ');
   });
 
-  // The API refuses a longer run title with a raw schema error.
-  it('stops typing at the run title limit', () => {
+  it('stops typing at the run title limit, rather than letting the API refuse a longer title with a raw schema error', () => {
     expect(mountDialog().render().input?.props.maxLength).toBe(RUN_TITLE_MAX);
   });
 

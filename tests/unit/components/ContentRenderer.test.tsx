@@ -95,19 +95,15 @@ describe('ContentRenderer accessibility', () => {
         onSubItemToggle={() => undefined}
       />,
     );
-    // Base UI renders a checkbox as a <span role="checkbox"> beside a hidden input.
-    const checkboxes = markup.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? [];
+    const checkboxRoleTags = markup.match(/<[a-z]+[^>]*role="checkbox"[^>]*>/g) ?? [];
 
-    expect(checkboxes).toHaveLength(2);
-    expect(checkboxes[0]).toContain('aria-label="Send the approval email"');
-    expect(checkboxes[0]).toContain('aria-checked="true"');
-    expect(checkboxes[1]).toContain('aria-label="Sub-task 2"');
+    expect(checkboxRoleTags).toHaveLength(2);
+    expect(checkboxRoleTags[0]).toContain('aria-label="Send the approval email"');
+    expect(checkboxRoleTags[0]).toContain('aria-checked="true"');
+    expect(checkboxRoleTags[1]).toContain('aria-label="Sub-task 2"');
   });
 });
 
-// A broken task image used to fall back to a placehold.co URL from onError, which
-// reloaded forever when that host was unreachable too. Images now fall back to a
-// local "Image unavailable" box and never make a second request.
 describe('ContentRenderer images', () => {
   const renderImage = (value: string) =>
     renderToStaticMarkup(<ContentRenderer contents={[{ id: 'image-1', type: 'image', value }]} />);
@@ -127,7 +123,7 @@ describe('ContentRenderer images', () => {
   });
 
   it.each(['javascript:alert(1)', 'mailto:someone@example.com', 'tel:+15551234567', '#section', 'photo.png'])(
-    'shows a local fallback for %s without loading anything',
+    'shows a local fallback for %s without loading anything, never a remote placeholder',
     (value) => {
       const markup = renderImage(value);
 
@@ -139,9 +135,7 @@ describe('ContentRenderer images', () => {
   );
 });
 
-// An Embed block is shown as a link, never as HTML. Its value can be a URL, pasted
-// iframe code, or plain text; none of them may become a relative link to the markup.
-describe('ContentRenderer embed blocks', () => {
+describe('ContentRenderer embed blocks, shown as a link and never as HTML', () => {
   const renderEmbed = (value: string) =>
     renderToStaticMarkup(<ContentRenderer contents={[{ id: 'embed-1', type: 'embed', value }]} />);
   const hrefs = (markup: string) => Array.from(markup.matchAll(/href="([^"]*)"/g), (match) => match[1]);
@@ -159,7 +153,7 @@ describe('ContentRenderer embed blocks', () => {
     'See the staging dashboard',
     '<iframe src="/relative"></iframe>',
     '//evil.com/x',
-  ])('shows %j as text with no link', (value) => {
+  ])('shows %j as text with no link, never a relative link to the markup', (value) => {
     const markup = renderEmbed(value);
 
     expect(hrefs(markup)).toEqual([]);
@@ -179,11 +173,10 @@ describe('ContentRenderer file blocks', () => {
       <ContentRenderer contents={[{ id: 'file-1', type: 'file', value: '', ...content }]} />,
     );
 
-  // Saved before typing a URL over an upload dropped the old name and size.
   it.each([
     ['with an upload source', { uploadType: 'upload' }],
     ['with no source recorded', {}],
-  ])('does not label a linked file with a name left over from an upload (%s)', (_label, extra) => {
+  ])('does not label a linked file with a name left over from an upload, saved before typing a URL dropped it (%s)', (_label, extra) => {
     const markup = renderFile({ value: 'https://example.com/pricing.pdf', fileName: 'report.pdf', ...extra });
 
     expect(markup).not.toContain('report.pdf');
@@ -201,19 +194,16 @@ describe('ContentRenderer file blocks', () => {
   });
 });
 
-
-// The "Sub-tasks" heading sits one level below the task (or section list) around it: an h4
-// under a shared run's h3 tasks, an h3 under the run page's h2 task title.
-describe('ContentRenderer Sub-tasks heading', () => {
+describe('ContentRenderer Sub-tasks heading, one level below the task around it', () => {
   const contents: ChecklistItemContent[] = [
     { id: 'sub-1', type: 'subItems', value: '', subItems: [{ id: 'a', title: 'Check the title' }] },
   ];
 
-  it('is an h4 by default', () => {
+  it("is an h4 by default, under a shared run's h3 tasks", () => {
     expect(renderToStaticMarkup(<ContentRenderer contents={contents} />)).toMatch(/<h4[^>]*>Sub-tasks<\/h4>/);
   });
 
-  it('takes the level it is given', () => {
+  it("takes the level it is given, such as h3 under the run page's h2 task title", () => {
     const markup = renderToStaticMarkup(<ContentRenderer contents={contents} subtaskHeadingAs="h3" />);
 
     expect(markup).toMatch(/<h3[^>]*>Sub-tasks<\/h3>/);

@@ -1,4 +1,4 @@
-import React, { act, type ReactNode } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -6,23 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { RunCompleteDialog } from '@/components/run-execution/RunCompleteDialog';
 import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../../fixtures/fakeDom';
 
-// Completing a Run freezes its tasks, so the dialog asks first and says so: "Complete Run"
-// completes it, "Not yet" keeps it in progress. Its buttons say what they do (they used to read
-// "Return to Dashboard" or "Return to Public Runs" and complete the Run).
-
-// Render the dialog inline when open: Base UI's portal does not render here.
-vi.mock('@/components/ui/dialog', () => {
-  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
-  return {
-    Dialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
-      open ? <div role="dialog">{children}</div> : null,
-    DialogContent: Pass,
-    DialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
-    DialogFooter: Pass,
-    DialogHeader: Pass,
-    DialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
-  };
-});
+vi.mock('@/components/ui/dialog', async () => (await import('../../../support/overlaysInPlace')).dialogInPlace);
 
 type Props = React.ComponentProps<typeof RunCompleteDialog>;
 
@@ -32,7 +16,7 @@ describe('RunCompleteDialog', () => {
       <RunCompleteDialog onComplete={vi.fn()} onOpenChange={vi.fn()} open {...props} />,
     );
 
-  it('says every task is done and that completing freezes the tasks', () => {
+  it('asks first, says every task is done and that completing freezes the tasks, with buttons that say what they do', () => {
     const html = render();
 
     expect(html).toContain('<h2>Complete this Run?</h2>');
@@ -44,8 +28,10 @@ describe('RunCompleteDialog', () => {
       'Complete Run',
     ]);
     expect(html).not.toMatch(/Return to|Public Runs|Congratulations/);
-    // Theme components and colors only.
-    expect(html).not.toMatch(/green-\d/);
+  });
+
+  it('uses theme components and colors only', () => {
+    expect(render()).not.toMatch(/green-\d/);
   });
 
   it('holds both buttons while the completion saves', () => {
@@ -98,8 +84,7 @@ describe('RunCompleteDialog buttons', () => {
     expect(dialog.onComplete).toHaveBeenCalledTimes(1);
   });
 
-  // The dialog opens as the last task is ticked, often mid double click.
-  it('ignores the rest of a double click on either button', async () => {
+  it('ignores the rest of a double click on either button, since the dialog opens as the last task is ticked, often mid double click', async () => {
     const dialog = await mount();
 
     act(() => click(dialog.container, dialog.button('Not yet'), { detail: 2 }));

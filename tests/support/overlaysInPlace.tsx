@@ -25,6 +25,16 @@ export const alertDialogInPlace = {
   AlertDialogTitle: ({ children }: ChildrenProps) => <h2>{children}</h2>,
 };
 
+export const dialogInPlace = {
+  Dialog: ({ open, children }: ChildrenProps & { open?: boolean }) =>
+    open ? <div role="dialog">{children}</div> : null,
+  DialogContent: PassThrough,
+  DialogDescription: ({ children }: ChildrenProps) => <p>{children}</p>,
+  DialogFooter: PassThrough,
+  DialogHeader: PassThrough,
+  DialogTitle: ({ children }: ChildrenProps) => <h2>{children}</h2>,
+};
+
 export const selectWithoutPopup = {
   Select: PassThrough,
   SelectContent: () => null,

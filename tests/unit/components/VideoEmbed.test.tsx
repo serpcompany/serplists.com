@@ -34,9 +34,7 @@ describe('VideoEmbed', () => {
     );
   });
 
-  // Changing the src of a <source> already in a player loads nothing, and React reuses the
-  // player when only the URL changes: it kept playing the first file it loaded.
-  it('loads a direct video URL on the player itself, with a new player for each URL', () => {
+  it('loads a direct video URL on the player itself, with a new player for each URL, since a player reads a <source> only once', () => {
     const markup = renderToStaticMarkup(<VideoEmbed url="https://cdn.example.com/a.mp4" />);
 
     expect(markup).toMatch(/<video[^>]* src="https:\/\/cdn\.example\.com\/a\.mp4"/);
@@ -50,9 +48,7 @@ describe('VideoEmbed', () => {
   });
 });
 
-// Any http(s) URL that is not YouTube or Clipy goes to the native player, including pages
-// such as a Vimeo or Loom link. The player could not play them and offered no way to them.
-describe('NativeVideoView', () => {
+describe('NativeVideoView, which also gets video pages such as Vimeo or Loom links it cannot play', () => {
   const pageUrl = 'https://vimeo.com/76979871';
 
   it('links to the video once the player could not load it', () => {
@@ -73,12 +69,13 @@ describe('NativeVideoView', () => {
     }>;
     expect(video.type).toBe('video');
     expect(video.props.src).toBe(pageUrl);
+    const errorWhilePlayingAfterTheConnectionDropped = { currentTarget: { readyState: 3 } };
+    const errorBeforeAnythingLoaded = { currentTarget: { readyState: 0 } };
 
-    // A playing video whose connection drops keeps its player.
-    video.props.onError({ currentTarget: { readyState: 3 } });
+    video.props.onError(errorWhilePlayingAfterTheConnectionDropped);
     expect(onFail).not.toHaveBeenCalled();
 
-    video.props.onError({ currentTarget: { readyState: 0 } });
+    video.props.onError(errorBeforeAnythingLoaded);
     expect(onFail).toHaveBeenCalledTimes(1);
   });
 });

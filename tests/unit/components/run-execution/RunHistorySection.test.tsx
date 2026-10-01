@@ -24,8 +24,7 @@ const render = (events: TemplateHistoryEvent[]) =>
     />,
   );
 
-// The API writes more run actions than created, updated and deleted; each needs a label.
-describe('RunHistorySection', () => {
+describe('RunHistorySection labels every run action the API writes, beyond created, updated and deleted', () => {
   it('labels Template reconciles and stopped shares', () => {
     const html = render([
       event('checklist_run.reconciled', owner),
