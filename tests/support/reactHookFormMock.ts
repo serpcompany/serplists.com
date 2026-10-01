@@ -8,7 +8,7 @@ export async function reactHookFormWatching(
   hooks: (form: { actual: ReactHookForm; valueAt: (name: string) => unknown }) => Record<string, unknown>,
 ) {
   const actual = await importOriginal();
-  const valueAt = (name: string) => actual.get(harness.form.getValues(), name);
+  const valueAt = (name: string): unknown => actual.get(harness.form.getValues(), name);
   return {
     ...actual,
     useWatch: ({ name }: { name: string }) => structuredClone(valueAt(name)),

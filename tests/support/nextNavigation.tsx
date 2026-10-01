@@ -20,6 +20,12 @@ import {
 
 const browser = createBrowser();
 
+function objectInheriting(prototype: object): object {
+  const created: unknown = Object.create(prototype);
+  if (typeof created !== 'object' || created === null) throw new Error('Object.create made no object');
+  return created;
+}
+
 export const navigation = {
   reset: (to = '/', options: ResetOptions = {}) => browser.reset(to, options),
   url: () => browser.url(),
@@ -40,7 +46,7 @@ export const navigation = {
   installWindow(extraWindowProperties: object = {}): () => void {
     const globals = globalThis as Record<string, unknown>;
     const saved = globals.window;
-    const installed = Object.create(browser.window);
+    const installed = objectInheriting(browser.window);
     Object.defineProperties(installed, Object.getOwnPropertyDescriptors(extraWindowProperties));
     globals.window = installed;
     return () => {
