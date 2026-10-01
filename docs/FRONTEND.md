@@ -259,8 +259,10 @@ write: [client data](design-docs/client-data.md).
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
   blocks site data, even reading `window.localStorage` throws, and one unguarded read in
-  a component mounted on every route replaces the whole app with the error screen. The
-  helper never throws and keeps values it cannot persist in memory for the session.
+  a component mounted on every route replaces the whole app with the error screen.
+  `safeLocalStorage` never throws and keeps values it cannot persist in memory for the
+  session. `getLocalStorage()` and `getSessionStorage()` only guard reading the property:
+  their methods can still throw (a full quota), so wrap a call in `succeedsWithoutThrowing`.
   ESLint rejects direct access anywhere else in `src/`.
 - After a write, reload the affected query with `reloadQuery`
   (`src/lib/queryReload.ts`), not `refetch()` or `fetchQuery`. Those join a fetch

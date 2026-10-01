@@ -1,8 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
-import { getLocalStorage, safeLocalStorage } from '@/lib/browserStorage';
+import { getLocalStorage, safeLocalStorage, succeedsWithoutThrowing } from '@/lib/browserStorage';
 
-// index.html's boot script reads the same key.
 export const THEME_STORAGE_KEY = 'serplists-theme';
 export const THEME_CHANGE_EVENT = 'serplists-theme-change';
 
@@ -11,8 +10,6 @@ export type SerpListsTheme = 'light' | 'dark';
 const isTheme = (value: string | null): value is SerpListsTheme =>
   value === 'light' || value === 'dark';
 
-// Storage defaults to safeLocalStorage, which never throws. Injected storage is guarded
-// too: a theme read or write must never take the page down.
 export const getStoredTheme = (
   storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
@@ -54,11 +51,7 @@ export const setStoredTheme = (
   storage: Pick<Storage, 'setItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   setDocumentTheme(documentRef, theme);
-  try {
-    storage?.setItem(THEME_STORAGE_KEY, theme);
-  } catch {
-    // Not persisted; the document and every listener below still switch.
-  }
+  succeedsWithoutThrowing(() => storage?.setItem(THEME_STORAGE_KEY, theme));
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent<SerpListsTheme>(THEME_CHANGE_EVENT, { detail: theme }),
@@ -83,22 +76,18 @@ const readStorageEvent = (event: Event): ThemeStorageEvent | null => {
   return key === null || typeof key === 'string' ? { key, storageArea } : null;
 };
 
-/**
- * Another tab wrote the theme (or cleared storage, which sends a null key). Apply the
- * stored theme to this document and return it, or return null for an unrelated event.
- * Never writes storage, so tabs cannot bounce events back and forth.
- */
+const isThemeOrClearedKey = (key: string | null): boolean => key === null || key === THEME_STORAGE_KEY;
+
+const isFromAnotherStorageArea = (event: ThemeStorageEvent, localStorageArea: unknown): boolean =>
+  Boolean(event.storageArea && localStorageArea && event.storageArea !== localStorageArea);
+
 export const syncThemeFromStorageEvent = (
   event: ThemeStorageEvent,
   documentRef: Document = document,
   storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
   localStorageArea: unknown = getLocalStorage(),
 ): SerpListsTheme | null => {
-  if (event.key !== null && event.key !== THEME_STORAGE_KEY) return null;
-  // sessionStorage writes fire the same event.
-  if (event.storageArea && localStorageArea && event.storageArea !== localStorageArea) {
-    return null;
-  }
+  if (!isThemeOrClearedKey(event.key) || isFromAnotherStorageArea(event, localStorageArea)) return null;
   return applyStoredTheme(documentRef, storage);
 };
 
@@ -109,11 +98,6 @@ interface ThemeSubscriptionOptions {
   target?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
 }
 
-/**
- * Calls onChange with the theme whenever this tab or another one changes it. A change
- * from another tab is applied to this document first, so whatever the subscriber shows
- * (a toggle label, the toast theme) always matches the page. Returns the unsubscribe.
- */
 export const subscribeToThemeChanges = (
   onChange: (theme: SerpListsTheme) => void,
   options: ThemeSubscriptionOptions = {},
@@ -152,10 +136,5 @@ const subscribeToDocumentTheme = (onStoreChange: () => void) => subscribeToTheme
 const getClientTheme = (): SerpListsTheme => getDocumentTheme();
 const getServerTheme = (): SerpListsTheme => 'light';
 
-/**
- * The theme the page shows, for a label or a component's theme prop. The server cannot read
- * the stored theme, so its HTML (and hydration) says light; the document already shows the
- * stored theme (the root layout's boot script), and the component follows it right after.
- */
 export const useDocumentTheme = (): SerpListsTheme =>
   useSyncExternalStore(subscribeToDocumentTheme, getClientTheme, getServerTheme);

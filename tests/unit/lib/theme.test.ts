@@ -189,6 +189,20 @@ describe('theme changes from another tab', () => {
     expect(getDocumentTheme(harness.document)).toBe('dark');
   });
 
+  it("applies another tab's theme without writing it back, so tabs never echo a change to each other", () => {
+    const harness = createThemeHarness();
+    harness.storedValues.set(THEME_STORAGE_KEY, 'dark');
+
+    syncThemeFromStorageEvent(
+      { key: THEME_STORAGE_KEY, storageArea: harness.storage },
+      harness.document,
+      harness.storage,
+      harness.storage,
+    );
+
+    expect(harness.storage.setItem).not.toHaveBeenCalled();
+  });
+
   it('ignores other keys and sessionStorage', () => {
     const harness = createThemeHarness();
     harness.storedValues.set(THEME_STORAGE_KEY, 'dark');

@@ -1,5 +1,3 @@
-// Runs in <head> before the first paint (the root layout renders it): the same key and values
-// as src/lib/theme.ts, light unless 'dark' is stored, so a dark page never flashes light.
 export const THEME_BOOT_SCRIPT = `(function () {
   try {
     var storedTheme = window.localStorage.getItem('serplists-theme');

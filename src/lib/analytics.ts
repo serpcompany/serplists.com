@@ -1,4 +1,3 @@
-// Simple analytics tracking for MVP
 interface AnalyticsEvent {
   event: string;
   properties?: Record<string, unknown>;
@@ -7,33 +6,34 @@ interface AnalyticsEvent {
   userAgent: string;
 }
 
+const MAX_EVENTS_KEPT = 100;
+
 class Analytics {
   private events: AnalyticsEvent[] = [];
   private isEnabled: boolean = true;
 
-  // The server renders client components too, where there is no window or history: there
-  // the instance records nothing, so no visitor's events are kept in a server module.
   constructor(inBrowser: boolean) {
     this.isEnabled = inBrowser;
     if (!inBrowser) return;
 
-    // Track page views automatically
     this.trackPageView();
-    
-    // Track page navigation for SPAs
+    this.trackClientSideNavigations();
+  }
+
+  private trackClientSideNavigations() {
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
-    
+
     history.pushState = (...args: Parameters<typeof history.pushState>) => {
       originalPushState.apply(history, args);
       setTimeout(() => this.trackPageView(), 0);
     };
-    
+
     history.replaceState = (...args: Parameters<typeof history.replaceState>) => {
       originalReplaceState.apply(history, args);
       setTimeout(() => this.trackPageView(), 0);
     };
-    
+
     window.addEventListener('popstate', () => {
       this.trackPageView();
     });
@@ -51,13 +51,9 @@ class Analytics {
     };
 
     this.events.push(analyticsEvent);
-    
-    // Log for debugging
     console.info('Analytics:', event, properties);
-    
-    // Keep only last 100 events in memory
-    if (this.events.length > 100) {
-      this.events = this.events.slice(-100);
+    if (this.events.length > MAX_EVENTS_KEPT) {
+      this.events = this.events.slice(-MAX_EVENTS_KEPT);
     }
   }
 
@@ -109,12 +105,10 @@ class Analytics {
     });
   }
 
-  // Get events for debugging/export
   getEvents() {
     return [...this.events];
   }
 
-  // Enable/disable tracking
   setEnabled(enabled: boolean) {
     this.isEnabled = enabled;
   }
@@ -122,11 +116,9 @@ class Analytics {
 
 const isBrowser = typeof window !== 'undefined';
 
-// Global analytics instance (it records only in the browser; see the constructor)
 export const analytics = new Analytics(isBrowser);
 
-// Error tracking setup
-if (isBrowser) {
+const trackUncaughtErrors = () => {
   window.addEventListener('error', (event) => {
     analytics.trackError(new Error(event.message), 'window_error');
   });
@@ -134,4 +126,6 @@ if (isBrowser) {
   window.addEventListener('unhandledrejection', (event) => {
     analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
   });
-}
+};
+
+if (isBrowser) trackUncaughtErrors();
