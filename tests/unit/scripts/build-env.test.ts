@@ -4,10 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { assertProductionApiUrl } from '../../../scripts/lib/buildEnv';
 
-// Next.js inlines NEXT_PUBLIC_* values into the browser bundle at build time. A deployed
-// bundle that names a localhost API breaks sign-in and every API call for every visitor, so
-// a production build refuses one.
-
 describe('production build environment', () => {
   it('does not load .dev.vars into the production build', () => {
     const { scripts } = JSON.parse(readFileSync('package.json', 'utf8')) as {
@@ -36,7 +32,7 @@ describe('production build environment', () => {
     'http://0.0.0.0:3000/api',
     'http://app.localhost/api',
     'not a url',
-  ])('refuses NEXT_PUBLIC_API_URL=%s in a production build', (value) => {
+  ])("refuses NEXT_PUBLIC_API_URL=%s in a production build, which inlines it into every visitor's bundle", (value) => {
     expect(() => assertProductionApiUrl({ NEXT_PUBLIC_API_URL: value })).toThrow(/NEXT_PUBLIC_API_URL/);
   });
 

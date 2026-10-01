@@ -6,19 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const SCRIPT = fileURLToPath(new URL('../../../scripts/check-env.mjs', import.meta.url));
-// Run from an empty directory so a developer's .dev.vars cannot change the result.
-const cwd = mkdtempSync(path.join(tmpdir(), 'check-env-'));
+const cwdWithoutDevVars = mkdtempSync(path.join(tmpdir(), 'check-env-'));
 
 function checkEnv(overrides: Record<string, string>) {
   const env: NodeJS.ProcessEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };
   Object.assign(env, { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!', ...overrides });
-  return spawnSync(process.execPath, [SCRIPT], { cwd, env, encoding: 'utf8', timeout: 60_000 });
+  return spawnSync(process.execPath, [SCRIPT], { cwd: cwdWithoutDevVars, env, encoding: 'utf8', timeout: 60_000 });
 }
 
-// The pre-deploy check (pnpm run typecheck:env) must reject the same origin
-// values the API rejects at runtime (functions/api/env.ts).
-describe('scripts/check-env.mjs origin variables', { timeout: 60_000 }, () => {
-  afterAll(() => rmSync(cwd, { recursive: true, force: true }));
+afterAll(() => rmSync(cwdWithoutDevVars, { recursive: true, force: true }));
+
+describe('typecheck:env refuses before a deploy the origins the API refuses at runtime', { timeout: 60_000 }, () => {
 
   it.each([
     { CORS_ALLOWED_ORIGINS: 'serplists.com' },
@@ -41,4 +39,17 @@ describe('scripts/check-env.mjs origin variables', { timeout: 60_000 }, () => {
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
   });
+});
+
+describe('typecheck:env SITE_ENV', { timeout: 60_000 }, () => {
+  it.each(['production', 'staging'])('passes for %s', (siteEnv) => {
+    expect(checkEnv({ SITE_ENV: siteEnv }).status).toBe(0);
+  });
+
+  it.each(['prod', 'Production', 'preview'])(
+    'fails for %s, since a misspelled production would quietly hide the site from search engines',
+    (siteEnv) => {
+      expect(checkEnv({ SITE_ENV: siteEnv }).status).not.toBe(0);
+    },
+  );
 });

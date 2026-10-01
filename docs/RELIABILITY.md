@@ -149,7 +149,8 @@ explicitly per environment, never inferred from the host.
   `vars`). Each environment's vars in `wrangler.toml` set it, and each environment's build
   command must set the same value (`SITE_ENV=production pnpm run build:worker`). A build
   without it is non-production, which is the safe default; `scripts/check-env.mjs` rejects a
-  value other than `production` or `staging`.
+  value other than `production` or `staging`, so a misspelled `production` cannot quietly
+  hide the site from search engines.
 - **One host per environment.** `next.config.ts` sends every other host that reaches the
   Worker to the environment's host with a 308, in one hop and in the canonical URL form:
   `www.serplists.com` to `serplists.com`, and the Worker's `*.workers.dev` URL (and its

@@ -1,8 +1,3 @@
-// Plain-JS copy of functions/api/utils/origin-list.ts for scripts/check-env.mjs,
-// which runs under node without a TypeScript loader. Keep the two identical:
-// tests/unit/scripts/origin-list-parity.test.ts compares them.
-
-/** @param {string} value @returns {string | null} */
 export function parseAllowedOrigin(value) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -17,7 +12,6 @@ export function parseAllowedOrigin(value) {
   return url.origin === "null" ? null : url.origin;
 }
 
-/** @param {string} raw @returns {{ origins: string[], invalid: string[] }} */
 export function parseOriginList(raw) {
   const origins = [];
   const invalid = [];
@@ -31,7 +25,6 @@ export function parseOriginList(raw) {
   return { origins, invalid };
 }
 
-/** @param {string} raw @returns {string | null} */
 export function describeOriginListProblem(raw) {
   const { origins, invalid } = parseOriginList(raw);
   if (invalid.length > 0) {
@@ -41,7 +34,6 @@ export function describeOriginListProblem(raw) {
   return null;
 }
 
-/** @param {string} raw @returns {string | null} */
 export function describeFrontendUrlProblem(raw) {
   return parseAllowedOrigin(raw) ? null : "FRONTEND_URL must be an http(s) URL such as https://serplists.com";
 }

@@ -182,9 +182,9 @@ Rules:
   one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole. URL values
   are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
-  host (`functions/api/utils/origin-list.ts`, mirrored for the script in
-  `scripts/lib/origin-list.mjs`, which `tests/unit/scripts/origin-list-parity.test.ts`
-  keeps equal). A bare host (`serplists.com`), `host:port` with no scheme (which
+  host (`functions/api/utils/origin-list.ts`, mirrored in plain JavaScript for the script,
+  which Node runs without a TypeScript loader, in `scripts/lib/origin-list.mjs`;
+  `tests/unit/scripts/origin-list-parity.test.ts` keeps the two equal). A bare host (`serplists.com`), `host:port` with no scheme (which
   parses with the opaque origin `null`), a wildcard, a URL with credentials, or a list
   with no entries fails every request with the configuration `500`. A path or
   trailing slash is dropped, and empty entries (a trailing comma) are ignored.

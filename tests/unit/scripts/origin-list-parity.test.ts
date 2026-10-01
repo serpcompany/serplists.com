@@ -31,8 +31,8 @@ const VALUES = [
   'http://localhost:8080, https://serplists.com/,',
 ];
 
-describe('origin-list parity', () => {
-  it.each(VALUES)('parses %j the same in the API and in check-env', (value) => {
+describe('the plain-JS origin list check-env.mjs runs without a TypeScript loader', () => {
+  it.each(VALUES)('parses %j as the API does', (value) => {
     expect(script.parseAllowedOrigin(value)).toBe(runtime.parseAllowedOrigin(value));
     expect(script.parseOriginList(value)).toEqual(runtime.parseOriginList(value));
     expect(script.describeOriginListProblem(value)).toBe(runtime.describeOriginListProblem(value));

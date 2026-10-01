@@ -35,10 +35,12 @@ vars: `next dev` through `initOpenNextCloudflareForDev()` in `next.config.ts`, t
 through `wrangler dev`. The pages read `NEXT_PUBLIC_*` variables through `src/env.ts`,
 which Next.js inlines when it builds or serves them: `pnpm run dev:all` hands `.dev.vars`
 to `next dev`, and a build takes them from its shell. Pages call the API on their own
-origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another API. A build refuses a
-loopback `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`) unless
-`ALLOW_LOCAL_API_URL=1`, and at runtime `src/lib/apiBaseUrl.ts` ignores one unless the
-page itself is served from a loopback host. After changing `wrangler.toml` or the variable
+origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another API. `next build`
+refuses a loopback or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`, which
+`next.config.ts` runs), since every visitor's pages would send their sign-in and API
+requests there, unless `ALLOW_LOCAL_API_URL=1` (a build you only serve locally). At
+runtime `src/lib/apiBaseUrl.ts` ignores one unless the page itself is served from a
+loopback host. After changing `wrangler.toml` or the variable
 names in `.dev.vars`, `pnpm run cf-typegen` regenerates `cloudflare-env.d.ts`.
 
 ## Run
