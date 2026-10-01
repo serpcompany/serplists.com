@@ -35,8 +35,6 @@ export const ROUTE_RATE_LIMIT_MESSAGES: Record<RouteRateLimitBucket, string> = {
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const WRITE_PREFIXES = ['templates', 'checklists', 'uploads', 'teams'];
-
 export const RATE_LIMIT_EXEMPT_ROUTES: Record<string, string> = {
   auth: 'auth-rate-limit.ts limits every /api/auth route',
   health: 'read-only',
@@ -46,14 +44,15 @@ export const RATE_LIMIT_EXEMPT_ROUTES: Record<string, string> = {
     'signed Stripe webhooks arrive in bursts from a few shared IPs, and a 429 would delay subscription changes',
 };
 
+const isExemptRoute = (path: string): boolean =>
+  Object.keys(RATE_LIMIT_EXEMPT_ROUTES).some((exempt) => path === exempt || path.startsWith(`${exempt}/`));
+
 export function routeRateLimitBucket(method: string, path: string): RouteRateLimitBucket | null {
   if (path.startsWith('admin')) return 'admin';
   if (!MUTATING_METHODS.has(method.toUpperCase())) return null;
   if (path.startsWith('billing')) return 'billing';
   if (path === 'mcp') return 'mcp';
-  if (WRITE_PREFIXES.some((prefix) => path.startsWith(prefix))) return 'write';
-  if (path === 'agent-keys' || path.startsWith('agent-keys/')) return 'write';
-  return null;
+  return isExemptRoute(path) ? null : 'write';
 }
 
 export function routeRateLimitResponse(bucket: RouteRateLimitBucket, retryAfterSeconds: number): Response {

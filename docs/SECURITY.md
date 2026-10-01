@@ -315,8 +315,8 @@ neither throw nor merge unrelated clients into one bucket, and the port that
   the session-check allowlist on method and exact path, the path as `URL` parses it
   (no query string, dot segments resolved).
 - Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
-  uploads, the legacy Organization routes `teams`, and Run Key management under
-  `agent-keys`): 120 per minute.
+  uploads, the legacy Organization routes `teams`, Run Key management under
+  `agent-keys`, and any other path not exempt below): 120 per minute.
 - Admin (every request under `/api/admin`, whatever its method): 10 per minute per IP
   on deployed hosts (120 locally, where local and browser-test runs share 127.0.0.1),
   in its own bucket. The endpoint checks a secret that
@@ -331,11 +331,12 @@ neither throw nor merge unrelated clients into one bucket, and the port that
   (120 locally, as for admin), in their own bucket, and 10 per minute per account in
   the billing handler whatever the IP. `GET /api/billing/status` and Stripe webhooks
   are never limited.
-- `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. Every route
-  family the router dispatches is either limited there or listed in
-  `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
-  Its prefixes match the router's own dispatch (`path.startsWith`), so every request a
-  handler receives is counted.
+- `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. It is
+  deny-by-default too: a state-changing request counts as a write unless its route is
+  admin, billing or MCP, or is listed (with everything under it) in
+  `RATE_LIMIT_EXEMPT_ROUTES` with a reason. So a route family added to the router is
+  limited from its first request, and a write to a path no handler serves (a 404)
+  counts as well. The unit tests check both defaults and every exemption.
 - MCP also limits each authenticated Run Key to 120 requests per minute
   (`RUN_KEY_REQUESTS_PER_MINUTE`, which the per-IP MCP limit doubles), so one key's
   full budget always fits under the per-IP MCP limit, and refuses an IP after 10

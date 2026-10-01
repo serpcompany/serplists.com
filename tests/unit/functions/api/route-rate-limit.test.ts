@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   RATE_LIMIT_EXEMPT_ROUTES,
@@ -42,26 +40,18 @@ describe('routeRateLimitBucket', () => {
   });
 });
 
-describe('router rate limit coverage, so no new state-changing route family ships without a limit', () => {
-  const routerSource = readFileSync(resolve(__dirname, '../../../../functions/api/[[route]].ts'), 'utf8');
-  const dispatched = Array.from(
-    routerSource.matchAll(/path(?:\s*===\s*|\.startsWith\()'([^']+)'/g),
-    (match) => match[1],
-  );
-  const families = Array.from(new Set(dispatched));
-
-  it('finds the route families the router dispatches', () => {
-    expect(families).toEqual(expect.arrayContaining(['billing', 'stripe', 'templates', 'admin', 'mcp', 'auth']));
+describe('rate limits by default, so no new state-changing route family ships without a limit', () => {
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])('counts %s to a route family the limiter does not name as a write', (method) => {
+    expect(routeRateLimitBucket(method, 'a-route-family-added-later')).toBe('write');
+    expect(routeRateLimitBucket(method, 'a-route-family-added-later/item-1')).toBe('write');
   });
 
-  it.each(families)('POST %s is limited or explicitly exempt', (family) => {
-    const exemptFamily = Object.keys(RATE_LIMIT_EXEMPT_ROUTES).find(
-      (exempt) => family === exempt || family.startsWith(`${exempt}/`),
-    );
-    if (exemptFamily) {
-      expect(RATE_LIMIT_EXEMPT_ROUTES[exemptFamily].length).toBeGreaterThan(0);
-      return;
+  it('lets through only the exempt routes and what is under them, each with its reason', () => {
+    for (const [route, reason] of Object.entries(RATE_LIMIT_EXEMPT_ROUTES)) {
+      expect(reason.length, route).toBeGreaterThan(0);
+      expect(routeRateLimitBucket('POST', route), route).toBeNull();
+      expect(routeRateLimitBucket('POST', `${route}/nested`), route).toBeNull();
     }
-    expect(routeRateLimitBucket('POST', family)).not.toBeNull();
+    expect(routeRateLimitBucket('POST', 'profiles/by-username-and-more')).toBe('write');
   });
 });
