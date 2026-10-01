@@ -84,10 +84,9 @@ export const useTemplateEditorAccess = ({
     retry: false,
   });
   const queryClient = useQueryClient();
-  const refetchPlanAfterBack = useCallback(() => {
+  usePageRestoredFromCache(useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
-  }, [queryClient]);
-  usePageRestoredFromCache(refetchPlanAfterBack);
+  }, [queryClient]));
   const { allTemplates, templatesLoading } = useTemplateLists({
     workspace: shouldLoadTemplateCountForLimit({
       isCreate,
