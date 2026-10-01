@@ -79,7 +79,6 @@ const formatWebsiteLabel = (website: string) =>
 
 type UserProfileContentProps = {
   onRetry: () => void;
-  // Null while the profile loads.
   result: LoadUserProfileResult | null;
 };
 
@@ -90,14 +89,12 @@ export const UserProfileContent = ({
   const profile = result?.kind === 'ok' ? result.profile : null;
   const templates = result?.kind === 'ok' ? result.templates : NO_TEMPLATES;
   const stats = useMemo(() => calculateStats(templates), [templates]);
-  // Null for a missing or unreadable date, so the page never shows "Invalid Date".
   const joinedDate = formatMonthYear(profile?.created_at);
 
   if (!result) {
     return <PageLoadingState label="Loading profile..." />;
   }
 
-  // No noindex here: a crawler that hits a brief outage must not drop a live profile.
   if (result.kind === 'error') {
     return (
       <PageEmptyState
@@ -109,9 +106,6 @@ export const UserProfileContent = ({
     );
   }
 
-  // The page is served with HTTP 200, so noindex is what keeps a gone profile out of search.
-  // The server's metadata says so too (src/server/pageMeta/profilePage.ts); this tag covers a
-  // profile that went away after the server rendered the page.
   if (!profile) {
     return (
       <>
@@ -270,11 +264,8 @@ export const UserProfileContent = ({
 const UserProfile = () => {
   const { username } = useParams<{ username: string }>();
   const router = useAppRouter();
-  // Bumped by Try again; a retry starts from the loading state.
-  const [reloadKey, setReloadKey] = useState(0);
-  // Each answer is kept with the request it answers, so another profile or a retry shows
-  // the loading state until its own answer arrives.
-  const request = `${reloadKey}:${username}`;
+  const [retryCount, setRetryCount] = useState(0);
+  const request = `${retryCount}:${username}`;
   const [loaded, setLoaded] = useState<{ request: string; result: LoadUserProfileResult } | null>(null);
   const result = loaded?.request === request ? loaded.result : null;
 
@@ -283,8 +274,6 @@ const UserProfile = () => {
 
     void loadUserProfile(username).then((nextResult) => {
       if (isCancelled) return;
-      // /profile/JohnDoe found @johndoe: move to the one canonical URL, which loads again
-      // from there.
       const canonicalPath =
         nextResult.kind === 'ok' ? getCanonicalProfilePath(username, nextResult.profile.username) : null;
       if (canonicalPath) {
@@ -302,7 +291,7 @@ const UserProfile = () => {
   return (
     <UserProfileContent
       result={result}
-      onRetry={() => setReloadKey((key) => key + 1)}
+      onRetry={() => setRetryCount((count) => count + 1)}
     />
   );
 };

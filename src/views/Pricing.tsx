@@ -51,14 +51,12 @@ const PRO_FEATURES = [
 ];
 
 type PlanCardProps = {
-  // The plan's button, or what stands in for it (a plan check, a notice).
   action: ReactNode;
   description: ReactNode;
   features: string[];
   title: string;
 };
 
-// A plan: its name and price line, what it includes, and its action in the card's footer.
 function PlanCard({ action, description, features, title }: PlanCardProps) {
   return (
     <Card>
@@ -83,7 +81,6 @@ function PlanCard({ action, description, features, title }: PlanCardProps) {
 
 const Pricing = () => {
   const { user } = useAuth();
-  // Stays set until the browser leaves for Stripe, and clears when Back restores the page.
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const billing = useQuery({
     queryKey: getBillingStatusQueryKey(user?.id),
@@ -92,11 +89,9 @@ const Pricing = () => {
     retry: shouldRetryBillingStatus,
   });
   const queryClient = useQueryClient();
-  // The plan may have changed at Stripe before the user pressed Back.
   usePageRestoredFromCache(useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: BILLING_STATUS_QUERY_PREFIX });
   }, [queryClient]));
-  // A failed status is unknown, not Free: offer a retry, never the upgrade.
   const planStatus = getBillingPlanStatus(billing);
   const isCheckingPlan = planStatus === 'loading';
   const personalAction = getPersonalBillingAction(billing.data);
@@ -108,8 +103,6 @@ const Pricing = () => {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to start checkout');
       setIsStartingCheckout(false);
-      // Checkout found an open subscription or a support override: reload the plan so
-      // Manage or the support message replaces Upgrade.
       if (
         isOpenSubscriptionConflictError(error)
         || (isApiError(error) && error.code === 'plan_managed_by_support')

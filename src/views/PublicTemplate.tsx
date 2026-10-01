@@ -34,20 +34,14 @@ import {
 
 import { Link } from '@/components/navigation/Link';
 
-// The page's title, description, canonical URL and robots come from the server
-// (src/server/pageMeta/templatePage.ts), which finds the template the same way.
 const PublicTemplate = () => {
   const { username, templateSlug } = useParams<{
     username: string;
     templateSlug: string;
   }>();
   const router = useAppRouter();
-  // Start Run and Save await a request; they move the user only if they are still here.
   const beginVisit = usePageVisit();
   const { user, isAuthenticated } = useAuth();
-  // Billing, Save and Start Run all use the active ownership context. In an
-  // Organization, Save needs a role that adds Templates and Start Run one that starts
-  // runs (the API refuses the rest); both are always true in Personal.
   const {
     activeTeamId,
     canEditTemplates,
@@ -61,7 +55,6 @@ const PublicTemplate = () => {
   const { createRun, createTemplate } = useTemplates();
   const [runDialogOpen, setRunDialogOpen] = useState(false);
   const [isCreatingRun, setIsCreatingRun] = useState(false);
-  // Set synchronously, so a second click before the re-render cannot create a second run.
   const startRunInFlight = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const saveInFlight = useRef(false);
@@ -103,8 +96,6 @@ const PublicTemplate = () => {
     analytics.trackTemplateView(displayTemplate.id, displayTemplate.title);
   }, [displayTemplate]);
 
-  // Save and Start Run both act in the active context, so an Organization at its limit
-  // needs an Organization plan; a Personal checkout cannot lift it.
   const handleUpgrade = () =>
     handleUpgradeRequiredForContext({
       billingEnabled: billingState.billingEnabled,
@@ -116,10 +107,7 @@ const PublicTemplate = () => {
     upgradeRequired: handleUpgrade,
   };
 
-  // Start Run asks for the Run's name in the dialog the other Start Run entry points use. A
-  // visitor who is not signed in goes to sign in first, and comes back to this page.
   const handleStartRunClick = () => {
-    // Until the stored Organization is restored, a click would land in Personal.
     if (!template || isWorkspaceLoading || !canRunTemplates) return;
     if (!isAuthenticated) {
       navigateToLoginWithReturnPath(router.push);
@@ -128,7 +116,6 @@ const PublicTemplate = () => {
     setRunDialogOpen(true);
   };
 
-  // The dialog's name, or the default it showed when left blank.
   const handleStartRun = async (runName: string) => {
     if (!template || isWorkspaceLoading || !canRunTemplates || startRunInFlight.current) return;
 
@@ -138,7 +125,6 @@ const PublicTemplate = () => {
     try {
       const result = await startRun(runName);
       if (result.kind === 'ok' && result.runId) {
-        // The run exists, whether or not the user is still here to open it.
         setRunDialogOpen(false);
       }
       await followTemplateActionResult(result, visit, {
@@ -156,7 +142,6 @@ const PublicTemplate = () => {
     }
   };
 
-  // Resolves true only when the template was saved; every other outcome is false.
   const handleSaveTemplate = async (): Promise<boolean> => {
     if (!template || isWorkspaceLoading || !canEditTemplates || saveInFlight.current) {
       return false;
@@ -175,13 +160,11 @@ const PublicTemplate = () => {
               ? 'Template copied to this Organization'
               : 'Template saved to your account',
           );
-          // Open the copy itself: it lives in the context it was saved to.
           router.push(
             templateId ? buildConsoleTemplatePath(templateId) : buildConsoleTemplatesPath(),
           );
         },
       });
-      // The copy exists even when the user has already left this page.
       return result.kind === 'ok';
     } finally {
       saveInFlight.current = false;
@@ -198,8 +181,6 @@ const PublicTemplate = () => {
     return <PageLoadingState label="Loading template…" />;
   }
 
-  // A failed request is not a missing template: say so and let the visitor retry.
-  // No noindex here: a crawler that hits a brief outage must not drop a live page.
   if (loadError && !displayTemplate) {
     return (
       <PageEmptyState
@@ -217,9 +198,6 @@ const PublicTemplate = () => {
     );
   }
 
-  // The page is served with HTTP 200, so noindex is what keeps a gone template out of search.
-  // The server's metadata says so too; this tag covers a template that went away (or private)
-  // after the server rendered the page.
   if (notFound || !displayTemplate) {
     return (
       <>
@@ -242,7 +220,6 @@ const PublicTemplate = () => {
   return (
     <div className="pb-12">
       <PublicTemplateView
-        // A new template gets fresh view state (expanded sections, Saved).
         key={displayTemplate.id}
         template={displayTemplate}
         totalItems={displayTotalItems}
@@ -258,7 +235,6 @@ const PublicTemplate = () => {
         isSaving={isSaving}
         isTeamWorkspace={isTeamWorkspace}
         isWorkspaceLoading={isWorkspaceLoading}
-        // The public shell has no WorkspaceGate, so a failed teams request is shown here.
         workspaceError={
           isAuthenticated && workspaceStatus === 'error'
             ? {

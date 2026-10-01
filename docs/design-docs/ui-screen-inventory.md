@@ -721,6 +721,8 @@ existing content, invent nothing):
     switcher.
   - The server renders the title, description, canonical URL and robots tag. The page loads
     the Template again on every visit (bundled Templates excepted).
+  - The view is keyed by the Template's id, so another Template starts with fresh view state:
+    its sections as they first open, and Save not yet "Saved".
 
 ### Categories
 
