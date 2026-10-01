@@ -9,6 +9,37 @@ import tseslint from "typescript-eslint";
 
 const MAX_LINES = 500;
 
+const TEST_FILES = ["**/*.test.{ts,tsx,js,mjs}", "**/*.spec.{ts,tsx,js,mjs}", "tests/**/*.{ts,tsx,js,mjs}"];
+const SKIPPED_TEST_MESSAGE =
+  "Tests are never skipped, left as todo or fixme, or run only under a condition: a test that does not run hides " +
+  "behavior that stopped working. Make it pass and run it in a suite (pnpm run test:run, test:local-d1, or the " +
+  "browser tests), or delete it if another test covers the same behavior.";
+const FOCUSED_TEST_MESSAGE =
+  "`.only` skips every other test in the file. Remove it, and run one test with `pnpm exec vitest run <file> -t " +
+  "'<name>'` or Playwright's `-g` instead.";
+const TEST_API = "/^(describe|it|test|suite|bench)$/";
+const TEST_API_MODIFIER = "/^(describe|serial|parallel|concurrent|sequential|shuffle)$/";
+const SKIPPING_MODIFIER = "/^(skip|skipIf|runIf|todo|fixme)$/";
+const SKIPPED_TEST_RESTRICTIONS = [
+  { selector: `MemberExpression[object.name=${TEST_API}][property.name=${SKIPPING_MODIFIER}]`, message: SKIPPED_TEST_MESSAGE },
+  {
+    selector: `MemberExpression[object.property.name=${TEST_API_MODIFIER}][property.name=${SKIPPING_MODIFIER}]`,
+    message: SKIPPED_TEST_MESSAGE,
+  },
+  {
+    selector:
+      `CallExpression[callee.property.name=/^(skip|fixme)$/]:not([callee.object.name=${TEST_API}])` +
+      `:not([callee.object.property.name=${TEST_API_MODIFIER}])`,
+    message: SKIPPED_TEST_MESSAGE,
+  },
+  { selector: "CallExpression[callee.name=/^x(describe|it|test)$/]", message: SKIPPED_TEST_MESSAGE },
+  { selector: `CallExpression[callee.object.name=${TEST_API}][callee.property.name='only']`, message: FOCUSED_TEST_MESSAGE },
+  {
+    selector: `CallExpression[callee.object.property.name=${TEST_API_MODIFIER}][callee.property.name='only']`,
+    message: FOCUSED_TEST_MESSAGE,
+  },
+];
+
 const TOAST_MESSAGE =
   "The app's providers (src/app/providers.tsx) mount only the sonner Toaster, so toasts from any other toast store are never shown. " +
   "Import { toast } from 'sonner' instead.";
@@ -226,6 +257,12 @@ export default tseslint.config(
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-this-alias": "off",
+    },
+  },
+  {
+    files: TEST_FILES,
+    rules: {
+      "no-restricted-syntax": ["error", ...SKIPPED_TEST_RESTRICTIONS],
     },
   }
 );

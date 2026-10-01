@@ -194,6 +194,10 @@ Common failures:
 ## Testing conventions
 
 - Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
+- Every test runs. ESLint refuses `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `xit` and a
+  `.only` call in Vitest and Playwright files, and a test file excluded from `test:run` must
+  be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass
+  yet is fixed or deleted, never skipped.
 - Smoke and e2e suites run against the production build on a local worker, or dedicated
   staging, never production. `tests/e2e/run-smoke.mjs` builds the app with OpenNext
   (skip with `-- --skip-build`), and Playwright's web server
