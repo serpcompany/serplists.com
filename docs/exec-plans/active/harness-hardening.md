@@ -139,6 +139,22 @@ Scheduling:
 | 9 | `scripts`, `tests/unit/{scripts,config,workflows}` | none |
 | 10 | root config, `db`, `.github`, Lefthook, Wrangler, tsconfig JSON, CSS, patches, and dotfiles; the check covers every tracked format | none |
 
+## Phase 4 schedule
+
+This runs on branch `fl/harness-checks`, stacked on PR #260, and works through issue #259.
+
+Each round pairs a test-side item with an app-side item, so the two agents mostly touch
+different files. Each item ends with its check enforced in `pnpm run verify`.
+
+| Round | Test side | App side |
+| --- | --- | --- |
+| 1 | Type-check the tests (TD-1) | `noImplicitOverride`, `noFallthroughCasesInSwitch`, `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess` on app code |
+| 2 | `max-lines` on `tests/`, `scripts/`, `db/` | Boundary validation lint, and the API client parses with Zod (TD-2) |
+| 3 | Duplicate code in tests (TD-46, TD-47) | `noPropertyAccessFromIndexSignature`, typed D1 rows |
+| 4 | Tests that read source text; rows-read budgets | Naming conventions, including the Drizzle table exports |
+| 5 | Small tracker fixes (TD-33 to TD-44, TD-48, TD-49) | Duplicate code in app code (TD-30 to TD-32, TD-35, TD-38, TD-41); rule override audit |
+| 6 | Dead code (`knip`; TD-37, TD-39); the round 1 flags extended to tests; the full browser suite | |
+
 ## Exceptions allowed
 
 - **Generated files:** `cloudflare-env.d.ts`, `next-env.d.ts`, `pnpm-lock.yaml`,
