@@ -179,10 +179,11 @@ export default tseslint.config(
       "src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       "functions/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       "tests/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
     ],
     ignores: [
-      "tests/unit/scripts/**",
-      "tests/unit/config/**",
+      "scripts/maintenance-report.mjs",
+      "tests/unit/config/agent-tooling.test.ts",
       "tests/unit/workflows/**",
     ],
     linterOptions: { noInlineConfig: true },
