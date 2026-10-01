@@ -105,8 +105,10 @@ its release checks. Until then, the Pages deploy workflow did this:
 4. runs `wrangler pages deploy ./dist --branch <branch>`
 5. probes the new deployment's `/api/health` (the Worker boots) and
    `/api/templates` (D1 is bound) with `scripts/verify-deployment.mjs`, up to six
-   tries 10 seconds apart. A 5xx or no response (DNS, connect, TLS, or a 30-second
-   timeout) fails the run; other statuses, such as an access policy, only warn
+   tries 10 seconds apart, since a new `*.pages.dev` hostname can take a few seconds to
+   resolve. A 5xx or no response (DNS, connect, TLS, or a 30-second timeout) fails the
+   run; other statuses, such as an access policy, only warn. The probe follows no
+   redirect, so an access login counts as its redirect status
 
 Cloudflare Pages settings:
 

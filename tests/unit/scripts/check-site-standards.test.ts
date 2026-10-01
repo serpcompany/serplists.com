@@ -12,10 +12,7 @@ vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
 
 type Options = { host?: string; headers?: Record<string, string> };
 
-// A stand-in for a deployed Worker: redirects come from the real routes a build of this
-// environment has (next.config.ts, through OpenNext's routing); the rest answers what the app
-// renders there.
-async function fakeSite(siteEnv: 'production' | 'staging', { brokenApi = false } = {}) {
+async function deployedWorkerWithTheBuiltRedirects(siteEnv: 'production' | 'staging', { brokenApi = false } = {}) {
   const { redirects } = await loadBuiltRoutes(siteEnv);
   const production = siteEnv === 'production';
   return async (url: string, { host, headers = {} }: Options = {}) => {
@@ -55,7 +52,7 @@ describe('check-site-standards', () => {
       ['http://localhost:8787', true],
       ['https://serp-checklists-production.serp.workers.dev', false],
     ] as const) {
-      const result = await checkSiteStandards({ baseUrl, siteEnv, local, request: await fakeSite(siteEnv) });
+      const result = await checkSiteStandards({ baseUrl, siteEnv, local, request: await deployedWorkerWithTheBuiltRedirects(siteEnv) });
       expect(result.lines.filter((line) => line.startsWith('FAIL'))).toEqual([]);
       expect(result.passed).toBeGreaterThan(30);
     }
@@ -66,7 +63,7 @@ describe('check-site-standards', () => {
       baseUrl: 'http://localhost:8787',
       siteEnv: 'production',
       local: true,
-      request: await fakeSite('production', { brokenApi: true }),
+      request: await deployedWorkerWithTheBuiltRedirects('production', { brokenApi: true }),
     });
     expect(brokenApi.lines.filter((line) => line.startsWith('FAIL'))).toEqual(['FAIL 308 /api/health/ (the API is never redirected)']);
 
@@ -74,7 +71,7 @@ describe('check-site-standards', () => {
       baseUrl: 'http://localhost:8787',
       siteEnv: 'production',
       local: true,
-      request: await fakeSite('staging'),
+      request: await deployedWorkerWithTheBuiltRedirects('staging'),
     });
     expect(stagingAsProduction.failed).toBeGreaterThan(0);
     expect(stagingAsProduction.lines).toContain('FAIL robots.txt allows crawling');

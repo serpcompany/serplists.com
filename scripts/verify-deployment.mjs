@@ -1,20 +1,10 @@
-// Probes a new Cloudflare Pages deployment after `wrangler pages deploy`.
-//
-//   DEPLOY_URL=https://<hash>.<project>.pages.dev node scripts/verify-deployment.mjs
-//
-// Run by .github/workflows/cloudflare-pages-deploy.yml. /api/health proves the Worker
-// boots; /api/templates proves the D1 binding works. A 5xx or no response (DNS,
-// connect, TLS or timeout) fails the run; other statuses, such as an access policy,
-// only warn (docs/RELIABILITY.md).
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 
 export const DEPLOYMENT_PROBE_PATHS = ["/api/health", "/api/templates"];
 
-/** Returns { status } for any HTTP response, or { status: null, reason } when none arrived. */
 async function probe(url, { fetchImpl, timeoutMs }) {
   try {
-    // Like curl without -L: report a redirect (such as an access login) as its status.
     const response = await fetchImpl(url, { redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
     await response.body?.cancel().catch(() => {});
     return { status: response.status };
@@ -44,7 +34,6 @@ export async function verifyDeployment({
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       result = await probe(url, { fetchImpl, timeoutMs });
       if (result.status === 200 || attempt === attempts) break;
-      // New *.pages.dev hostnames can take a few seconds to resolve.
       await sleep(retryDelayMs);
     }
 

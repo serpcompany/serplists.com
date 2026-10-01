@@ -257,7 +257,9 @@ page and API response (`src/lib/http/securityHeaders.ts`), with the policy chose
 (below). Static files (the build's `/_next/static` files, fonts and images) are served by
 Workers Static Assets without running the Worker, so each build writes `public/_headers` from
 the same values
-(`scripts/generate-static-headers.ts`, run by `pnpm run build`; the file is not committed).
+(`scripts/generate-static-headers.ts`, run by `pnpm run build` before `next build`; the file is
+not committed), and OpenNext copies `public/` into the Worker's assets, so each environment's
+build carries its own.
 `next dev` applies only `next.config.ts`, so check asset headers on `pnpm run preview` or a
 deployed host. A build that is not production also marks every response and file
 `X-Robots-Tag: noindex, nofollow` ([FRONTEND.md](FRONTEND.md#production-and-other-environments)).

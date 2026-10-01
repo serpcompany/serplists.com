@@ -1,8 +1,3 @@
-// Writes public/_headers for this build: the headers Workers Static Assets gives the static
-// files it serves without running the Worker, from src/lib/http/securityHeaders.ts, noindex
-// unless SITE_ENV=production. `pnpm run build` runs it before `next build`, and OpenNext copies
-// public/ into the Worker's assets, so each environment's build carries its own. Generated at
-// every build and never committed (.gitignore).
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 

@@ -1,15 +1,3 @@
-// Checks a running site against the SERP URL and environment standards, the way a crawler and
-// the deploy workflow see it:
-//   node scripts/check-site-standards.mjs <base-url> <staging|production> [--local]
-// - Canonical pages and files answer 200. A page without its slash, and a file with one, answer
-//   308 to the canonical form in one hop. The API is never redirected, with or without a slash.
-// - The sitemaps list only canonical URLs; robots.txt, X-Robots-Tag and Tag Manager match the
-//   environment (production may be indexed; staging is noindex, disallowed, without analytics).
-// - Other hosts answer 308 to the environment's host in one hop, and the smoke-test header
-//   exempts a workers.dev host. On a deployed workers.dev URL every other request carries the
-//   header; with --local (a local `opennextjs-cloudflare preview`) the other hosts are sent as
-//   a Host header to the local server instead.
-// Exits 1 if any check fails.
 import http from "node:http";
 import https from "node:https";
 import { pathToFileURL } from "node:url";
@@ -18,13 +6,12 @@ export const SMOKE_TEST_HEADER = "x-serplists-smoke-test";
 
 const CANONICAL_ORIGINS = { production: "https://serplists.com", staging: "https://staging.serplists.com" };
 
-// A seeded page of each kind the app has, in canonical form.
-const PAGES = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];
+const ONE_SEEDED_PAGE_OF_EACH_KIND = ["/", "/about/", "/pricing/", "/templates/", "/categories/", "/features/template-builder/", "/login/", "/profile/serp/ultimate-camping-checklist/"];
 const FILES = ["/robots.txt", "/sitemap.xml", "/sitemaps/pages/1.xml"];
 const API = ["/api/health", "/api/auth/get-session", "/api/mcp", "/api/stripe/webhook"];
+const LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST = "serp-checklists-check.serp.workers.dev";
 
-/** One GET without following redirects: { status, location (absolute), headers, body }. */
-export function requestOnce(url, { host, headers = {}, timeoutMs = 30_000 } = {}) {
+export function getWithoutFollowingRedirects(url, { host, headers = {}, timeoutMs = 30_000 } = {}) {
   const target = new URL(url);
   const client = target.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
@@ -38,10 +25,10 @@ export function requestOnce(url, { host, headers = {}, timeoutMs = 30_000 } = {}
           body += chunk;
         });
         response.on("end", () => {
-          const location = response.headers.location
+          const absoluteLocation = response.headers.location
             ? new URL(response.headers.location, `${target.protocol}//${host ?? target.host}`).href
             : null;
-          resolve({ status: response.statusCode ?? 0, location, headers: response.headers, body });
+          resolve({ status: response.statusCode ?? 0, location: absoluteLocation, headers: response.headers, body });
         });
       },
     );
@@ -51,19 +38,11 @@ export function requestOnce(url, { host, headers = {}, timeoutMs = 30_000 } = {}
   });
 }
 
-/**
- * Runs every check against `baseUrl` for `siteEnv` and returns { passed, failed, lines }.
- * `request(url, { host, headers })` is requestOnce, or a stand-in in tests.
- */
-export async function checkSiteStandards({ baseUrl, siteEnv, local = false, request = requestOnce }) {
-  const base = new URL(baseUrl);
+function siteUnderCheck(base, request) {
   const origin = base.origin;
-  const canonicalOrigin = CANONICAL_ORIGINS[siteEnv];
-  if (!canonicalOrigin) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
   const onWorkersDev = base.hostname.endsWith(".workers.dev");
-  // On a workers.dev URL every request but the host checks carries the smoke-test header.
-  const get = (path, { host, smokeTest = onWorkersDev } = {}) =>
-    request(`${origin}${path}`, { host, headers: smokeTest ? { [SMOKE_TEST_HEADER]: "1" } : {} });
+  const get = (path, { host, sendSmokeTestHeader = onWorkersDev } = {}) =>
+    request(`${origin}${path}`, { host, headers: sendSmokeTestHeader ? { [SMOKE_TEST_HEADER]: "1" } : {} });
 
   const lines = [];
   let failed = 0;
@@ -80,21 +59,24 @@ export async function checkSiteStandards({ baseUrl, siteEnv, local = false, requ
     const ok = status === 308 && location === want;
     check(ok, `${path}${options?.host ? ` on ${options.host}` : ""} -> ${status} ${location ?? ""}${ok ? "" : ` (want 308 ${want})`}`);
   };
+  const result = () => ({ passed: lines.length - failed, failed, lines });
+  return { base, origin, onWorkersDev, get, check, expectStatus, expectRedirect, result };
+}
 
-  for (const path of [...PAGES, ...FILES]) await expectStatus(path, 200);
-
-  // SERP URL standard: the other form of a page or a file redirects, in one hop.
-  for (const page of PAGES.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
+async function checkTheOtherFormRedirectsInOneHop({ origin, expectRedirect }) {
+  for (const page of ONE_SEEDED_PAGE_OF_EACH_KIND.filter((path) => path !== "/")) await expectRedirect(page.slice(0, -1), `${origin}${page}`);
   await expectRedirect("/login?next=%2Fdashboard%2F", `${origin}/login/?next=%2Fdashboard%2F`);
   for (const file of FILES) await expectRedirect(`${file}/`, `${origin}${file}`);
+}
 
-  // The API answers at the path it is called with: never a redirect, with or without a slash.
+async function checkTheApiIsNeverRedirected({ get, check }) {
   for (const path of [...API, ...API.map((apiPath) => `${apiPath}/`)]) {
     const { status } = await get(path);
     check(status < 300 || status >= 400, `${status} ${path} (the API is never redirected)`);
   }
+}
 
-  // Sitemaps list only canonical URLs: sitemap files without a slash, pages with one.
+async function checkSitemapsListOnlyCanonicalUrls({ get, check }) {
   const index = (await get("/sitemap.xml")).body;
   const children = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
   check(children.length > 0 && children.every((loc) => /^https:\/\/serplists\.com\/sitemaps\/[a-z]+\/\d+\.xml$/.test(loc)), `the sitemap index lists ${children.length} unslashed .xml files on serplists.com`);
@@ -104,8 +86,9 @@ export async function checkSiteStandards({ baseUrl, siteEnv, local = false, requ
     const bad = locs.filter((loc) => !/^https:\/\/serplists\.com\/(?:[^?#]*\/)?$/.test(loc));
     check(locs.length > 0 && bad.length === 0, `${new URL(child).pathname} lists ${locs.length} slashed page URLs${bad.length ? `; not canonical: ${bad.slice(0, 3).join(", ")}` : ""}`);
   }
+}
 
-  // Environment: only production may be indexed or load analytics.
+async function checkOnlyProductionIsIndexedOrLoadsAnalytics({ get, check }, siteEnv) {
   const robots = (await get("/robots.txt")).body;
   const home = await get("/");
   const staticFile = await get("/og-default.png");
@@ -124,23 +107,37 @@ export async function checkSiteStandards({ baseUrl, siteEnv, local = false, requ
     check(noindex(staticFile), "static files send X-Robots-Tag noindex");
     check(!tagManager, "pages load no Tag Manager");
   }
+}
 
-  // Canonical hosts: one hop to the environment's host, in canonical form. A deployed
-  // workers.dev URL is asked directly; a local preview is sent the host as a Host header.
+async function checkOtherHostsRedirectToTheCanonicalHost({ base, onWorkersDev, get, check, expectRedirect }, { canonicalOrigin, local }) {
   if (onWorkersDev || local) {
-    const workersDev = local ? { host: "serp-checklists-check.serp.workers.dev" } : {};
+    const workersDevHost = local ? { host: LOCAL_STAND_IN_FOR_A_WORKERS_DEV_HOST } : {};
     for (const [path, canonical] of [["/about", "/about/"], ["/robots.txt/", "/robots.txt"], ["/api/mcp", "/api/mcp"]]) {
-      await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...workersDev, smokeTest: false });
+      await expectRedirect(path, `${canonicalOrigin}${canonical}`, { ...workersDevHost, sendSmokeTestHeader: false });
     }
-    const smokeTest = await get("/about/", { ...workersDev, smokeTest: true });
-    check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDev.host ?? base.host} with ${SMOKE_TEST_HEADER}`);
+    const smokeTest = await get("/about/", { ...workersDevHost, sendSmokeTestHeader: true });
+    check(smokeTest.status === 200, `${smokeTest.status} /about/ on ${workersDevHost.host ?? base.host} with ${SMOKE_TEST_HEADER}`);
   }
   if (local) {
     await expectRedirect("/pricing", "https://serplists.com/pricing/", { host: "www.serplists.com" });
     await expectRedirect("/", "https://serplists.com/", { host: "www.serplists.com" });
   }
+}
 
-  return { passed: lines.length - failed, failed, lines };
+export async function checkSiteStandards({ baseUrl, siteEnv, local = false, request = getWithoutFollowingRedirects }) {
+  const base = new URL(baseUrl);
+  const canonicalOrigin = CANONICAL_ORIGINS[siteEnv];
+  if (!canonicalOrigin) throw new Error(`Unknown environment ${siteEnv}: use staging or production`);
+  const site = siteUnderCheck(base, request);
+
+  for (const path of [...ONE_SEEDED_PAGE_OF_EACH_KIND, ...FILES]) await site.expectStatus(path, 200);
+  await checkTheOtherFormRedirectsInOneHop(site);
+  await checkTheApiIsNeverRedirected(site);
+  await checkSitemapsListOnlyCanonicalUrls(site);
+  await checkOnlyProductionIsIndexedOrLoadsAnalytics(site, siteEnv);
+  await checkOtherHostsRedirectToTheCanonicalHost(site, { canonicalOrigin, local });
+
+  return site.result();
 }
 
 async function main() {

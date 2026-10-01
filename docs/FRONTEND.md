@@ -111,7 +111,11 @@ and agents (MCP) call them directly and do not follow redirects.
   trailing-slash redirect would move the API too, and OpenNext skips its redirect for files.
   `redirects()` does that work instead (`trailingSlashRedirects()`), after sending the legacy
   paths (`/account`, `/console/*`, `/checklists`, `/dashboard/profile`, and `/run/<id>`, a
-  Run's old second address) straight to their page's canonical URL.
+  Run's old second address) straight to their page's canonical URL. Bookmarks still open
+  them, and Stripe returns a buyer whose Checkout session was created before Billing moved to
+  `/account?billing=success`, so a legacy redirect adds no query of its own and passes the
+  request's on (the browser keeps the hash): Billing still sees `?billing=` and confirms Pro
+  (`tests/unit/config/legacyRedirects.test.ts`).
   `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's server and
   OpenNext's routing, and `tests/e2e/site-standards.spec.ts` checks them in workerd.
 - The rules in `src/lib/http/urlStandard.ts` have to suit both. Next.js matches a source with
