@@ -43,3 +43,4 @@ export const exportedTemplatePackSchema = z.object({ templates: z.array(z.unknow
 
 export type ApiTemplate = z.infer<typeof apiTemplateSchema>;
 export type SavedTemplate = z.infer<typeof savedTemplateSchema>;
+export type ExportedTemplatePack = z.infer<typeof exportedTemplatePackSchema>;

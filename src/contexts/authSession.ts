@@ -77,6 +77,11 @@ export type SessionCheck =
   | { kind: 'unauthenticated' }
   | { kind: 'unknown'; status?: number | undefined };
 
+const sessionUserOf = (data: unknown): unknown =>
+  typeof data === 'object' && data !== null && 'user' in data ? data.user : undefined;
+
+const signUpTokenSchema = z.object({ token: z.string().min(1) });
+
 export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result) {
     return { kind: 'unknown' };
@@ -88,9 +93,10 @@ export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result.data) {
     return { kind: 'unauthenticated' };
   }
-  const user = sessionUserSchema.safeParse((result.data as { user?: unknown }).user);
+  const sessionUser = sessionUserOf(result.data);
+  const user = sessionUserSchema.safeParse(sessionUser);
   if (!user.success) {
-    return (result.data as { user?: unknown }).user == null ? { kind: 'unauthenticated' } : { kind: 'unknown' };
+    return sessionUser == null ? { kind: 'unauthenticated' } : { kind: 'unknown' };
   }
   return { kind: 'authenticated', user: user.data, session: result.data };
 }
@@ -182,6 +188,5 @@ export function resolveProtectedRouteAction(status: SessionStatus): ProtectedRou
 }
 
 export function signUpRequiresEmailVerification(signUpData: unknown): boolean {
-  const token = (signUpData as { token?: unknown } | null | undefined)?.token;
-  return typeof token !== 'string' || token.length === 0;
+  return !signUpTokenSchema.safeParse(signUpData).success;
 }

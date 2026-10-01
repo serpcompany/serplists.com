@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { z } from "zod";
 import {
   portableChecklistTemplateSchema,
   portableTemplatePackSchema,
@@ -15,6 +16,9 @@ import {
   parseTemplateMarkdownBody,
   renderTemplateMarkdownBlock,
 } from "@/lib/templates/templateMarkdownBody";
+
+const yamlObjectSchema = z.record(z.unknown());
+const titledEntrySchema = z.object({ title: z.string() });
 
 const FRONTMATTER_DELIMITER = "---";
 const TEMPLATE_TITLE_PREFIX = "# ";
@@ -125,23 +129,23 @@ const extractFrontmatter = (markdown: string) => {
   const rawFrontmatter = source.slice(FRONTMATTER_DELIMITER.length + 1, closingIndex);
   const body = source.slice(closingIndex + `\n${FRONTMATTER_DELIMITER}\n`.length);
 
-  const frontmatter = yaml.load(rawFrontmatter);
-  if (!frontmatter || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
+  const frontmatter = yamlObjectSchema.safeParse(yaml.load(rawFrontmatter));
+  if (!frontmatter.success) {
     throw new Error("Markdown template frontmatter must be a YAML object");
   }
 
   return {
-    frontmatter: frontmatter as Record<string, unknown>,
+    frontmatter: frontmatter.data,
     body,
   };
 };
 
 const parseYamlBlock = (rawBlock: string) => {
-  const parsed = yaml.load(rawBlock.trim());
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  const parsed = yamlObjectSchema.safeParse(yaml.load(rawBlock.trim()));
+  if (!parsed.success) {
     throw new Error("Expected a YAML object block");
   }
-  return parsed as Record<string, unknown>;
+  return parsed.data;
 };
 
 const parseSubItemsBlock = (rawBlock: string) => {
@@ -150,11 +154,10 @@ const parseSubItemsBlock = (rawBlock: string) => {
     throw new Error("Sub-items block must be a YAML array");
   }
 
-  return parsed.map((entry) => {
+  return parsed.map((entry: unknown) => {
     if (typeof entry === "string") return { title: entry.trim() };
-    if (entry && typeof entry === "object" && typeof (entry as { title?: unknown }).title === "string") {
-      return { title: (entry as { title: string }).title.trim() };
-    }
+    const titled = titledEntrySchema.safeParse(entry);
+    if (titled.success) return { title: titled.data.title.trim() };
     throw new Error("Sub-items block entries must be strings or objects with a title");
   });
 };
@@ -261,7 +264,7 @@ export const parseTemplateYaml = (source: string): PortableChecklistTemplate | P
     throw new Error("YAML template source must be an object");
   }
 
-  if ((parsed as { kind?: unknown }).kind === "serplists-template-pack") {
+  if ("kind" in parsed && parsed.kind === "serplists-template-pack") {
     return normalizePortableTemplatePack(portableTemplatePackSchema.parse(parsed));
   }
 

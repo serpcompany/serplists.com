@@ -43,7 +43,7 @@ function isSensitiveReturnPath(value: string): boolean {
 }
 
 const isTagManagerStartEvent = (entry: unknown): boolean =>
-  typeof entry === 'object' && entry !== null && (entry as { event?: unknown }).event === 'gtm.js';
+  typeof entry === 'object' && entry !== null && 'event' in entry && entry.event === 'gtm.js';
 
 export function isTagManagerLoaded(win: object): boolean {
   const dataLayer: unknown = Reflect.get(win, 'dataLayer');

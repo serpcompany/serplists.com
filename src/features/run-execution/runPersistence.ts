@@ -53,13 +53,7 @@ export const persistRun = async (
       sections: nextRun.sections,
       status: nextRun.status,
     });
-    return {
-      ...nextRun,
-      revision:
-        typeof (result as { revision?: unknown })?.revision === 'number'
-          ? (result as { revision: number }).revision
-          : nextRun.revision,
-    };
+    return { ...nextRun, revision: result.revision };
   }
 
   const persisted = params.includeTitle

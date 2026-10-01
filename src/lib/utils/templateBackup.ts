@@ -25,6 +25,7 @@ import {
   parseTemplateMarkdown,
   parseTemplateYaml,
 } from "@/lib/templates/templateMarkdown";
+import type { ExportedTemplatePack } from "@/lib/schemas/apiTemplates";
 import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 
 export type TemplateImportWarning = {
@@ -266,7 +267,7 @@ export const exportPortableTemplatesToJSON = (
 };
 
 export const downloadBackupFile = (
-  backup: TemplateBackupExport | PortableTemplatePack,
+  backup: TemplateBackupExport | ExportedTemplatePack,
   filename?: string
 ): void => {
   const jsonString = JSON.stringify(backup, null, 2);
@@ -346,7 +347,7 @@ export const parseTemplatesFromData = (
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
-    } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
+    } else if (data && typeof data === "object" && "kind" in data && data.kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
@@ -359,7 +360,7 @@ export const parseTemplatesFromData = (
         const backup = validateBackup(data);
         rawTemplates = backup.templates;
       } catch {
-        rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
+        rawTemplates = validateTemplateImportArray(data.templates);
       }
       normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else {
