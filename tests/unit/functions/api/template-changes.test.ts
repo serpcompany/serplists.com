@@ -30,9 +30,7 @@ const storedSections = [
   },
 ];
 
-// What the editor sends back for the stored sections above: other key order, injected
-// run state, and empty defaults for fields the stored JSON never had.
-const editorSections = [
+const storedSectionsAsTheEditorResendsThem = [
   {
     title: 'Launch',
     id: 'section-1',
@@ -63,7 +61,7 @@ const changed = (stored: unknown[], incoming: unknown[]) =>
 
 describe('templateStructureChanged', () => {
   it('treats resent sections with run state, key order, and empty defaults as unchanged', () => {
-    expect(changed(storedSections, editorSections)).toBe(false);
+    expect(changed(storedSections, storedSectionsAsTheEditorResendsThem)).toBe(false);
   });
 
   it('treats an empty template and a missing items value as unchanged', () => {
@@ -82,27 +80,23 @@ describe('templateStructureChanged', () => {
   });
 
   it.each([
-    ['an item title is renamed', (sections: typeof editorSections) => { sections[0].items[1].title = 'Ship'; }],
-    ['items are reordered', (sections: typeof editorSections) => { sections[0].items.reverse(); }],
-    ['an item is added', (sections: typeof editorSections) => {
-      sections[0].items.push({ id: 'item-3', title: 'Announce' } as (typeof editorSections)[0]['items'][1]);
+    ['an item title is renamed', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items[1].title = 'Ship'; }],
+    ['items are reordered', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items.reverse(); }],
+    ['an item is added', (sections: typeof storedSectionsAsTheEditorResendsThem) => {
+      sections[0].items.push({ id: 'item-3', title: 'Announce' } as (typeof storedSectionsAsTheEditorResendsThem)[0]['items'][1]);
     }],
-    ['a sub-item is added under contents', (sections: typeof editorSections) => {
+    ['a sub-item is added under contents', (sections: typeof storedSectionsAsTheEditorResendsThem) => {
       sections[0].items[0].contents[0].subItems.push({ title: 'Long', id: 'sub-2', isCompleted: false });
     }],
-    ['a description changes', (sections: typeof editorSections) => { sections[0].items[0].description = 'Draft and edit'; }],
+    ['a description changes', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items[0].description = 'Draft and edit'; }],
   ])('reports a change when %s', (_label, mutate) => {
-    const incoming = clone(editorSections);
+    const incoming = clone(storedSectionsAsTheEditorResendsThem);
     mutate(incoming);
     expect(changed(storedSections, incoming)).toBe(true);
   });
 });
 
-// Content blocks are stored without ids by the official seed, starter packs, Markdown and
-// YAML imports, and copies of those. The editor gives each block a new id on load, and a
-// save that only changed the title must still not count as a structure change: it would
-// bump content_version, rewrite active runs and mark completed and shared runs stale.
-describe('templateStructureChanged after an editor round trip', () => {
+describe('templateStructureChanged after an editor round trip of content blocks stored without ids, which the editor ids anew on load', () => {
   const seedSections = [
     {
       id: 'sec-1',
@@ -123,9 +117,7 @@ describe('templateStructureChanged after an editor round trip', () => {
     },
   ];
 
-  // What the editor sends back after loading the stored sections (as GET returns them)
-  // and saving without touching the outline.
-  const editorSave = (stored: unknown[]): unknown[] => {
+  const editorSaveWithoutTouchingTheOutline = (stored: unknown[]): unknown[] => {
     const loaded = withStableTemplateIdentities(clone(stored));
     const form = normalizeTemplateEditorFormForSave(
       buildTemplateEditorFormValues({ title: 'Technical SEO Audit', sections: loaded }),
@@ -135,7 +127,7 @@ describe('templateStructureChanged after an editor round trip', () => {
   };
 
   it('treats a save of stored id-less content blocks as unchanged', () => {
-    const incoming = editorSave(seedSections);
+    const incoming = editorSaveWithoutTouchingTheOutline(seedSections);
     expect(JSON.stringify(incoming)).toContain('"id":"content_');
     expect(changed(seedSections, incoming)).toBe(false);
   });
@@ -145,7 +137,7 @@ describe('templateStructureChanged after an editor round trip', () => {
     const imported = normalizePortableTemplate(parseTemplateMarkdown(markdown));
     expect(JSON.stringify(imported.sections)).not.toContain('"id"');
     const stored = assignMissingStableTemplateIdentities(imported.sections as unknown[]);
-    expect(changed(stored, editorSave(stored))).toBe(false);
+    expect(changed(stored, editorSaveWithoutTouchingTheOutline(stored))).toBe(false);
   });
 
   type EditorSections = Array<{
@@ -166,7 +158,7 @@ describe('templateStructureChanged after an editor round trip', () => {
       sections[0].items[0].contents[1].subItems![1].title = 'Sitemap directive';
     }],
   ])('still reports a change when %s', (_label, mutate) => {
-    const incoming = editorSave(seedSections) as EditorSections;
+    const incoming = editorSaveWithoutTouchingTheOutline(seedSections) as EditorSections;
     mutate(incoming);
     expect(changed(seedSections, incoming)).toBe(true);
   });

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canUseTemplateAsRunSource } from '@functions/api/utils/template-access';
 
-// Which template content may be copied into a run: at creation, sharing, and revalidation.
-
 const personal = (overrides: Record<string, unknown> = {}) => ({
   owner_type: 'user',
   team_id: null,
@@ -17,7 +15,7 @@ const organization = (overrides: Record<string, unknown> = {}) => personal({
   ...overrides,
 });
 
-describe('canUseTemplateAsRunSource', () => {
+describe('canUseTemplateAsRunSource, which decides what content a run may copy when it starts, is shared or revalidates', () => {
   it.each([
     ['public Personal template, another user', personal({ is_public: true }), 'caller', null, true],
     ['public template stored as 1', personal({ is_public: 1 }), 'caller', 'org-9', true],

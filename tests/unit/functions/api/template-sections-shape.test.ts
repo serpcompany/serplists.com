@@ -13,11 +13,6 @@ vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn(async (
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 
-// The payload check, the stored-content schema and the client read a list whose first
-// section has `items: null` as sections ("null counts as absent"). Template writes and
-// run reconciliation must read it the same way, not wrap every section as a task of one
-// "Checklist" section.
-
 type Json = Record<string, unknown>;
 
 const onboarding = () => [
@@ -31,7 +26,7 @@ const sectionOutline = (sections: unknown[]) => (sections as Json[]).map((sectio
   items: ((section.items ?? []) as Json[]).map((item) => item.id),
 }));
 
-describe('a first section with items: null', () => {
+describe('a first section with items: null, which every reader takes as sections rather than tasks of one Checklist section', () => {
   it('keeps its sections when stable ids are assigned', () => {
     expect(sectionOutline(assignMissingStableTemplateIdentities(onboarding()))).toEqual([
       { id: 's1', title: 'Intro', items: [] },
@@ -57,13 +52,12 @@ describe('a first section with items: null', () => {
     expect(result.sections[1].items).toEqual([expect.objectContaining({ id: 'i1', isCompleted: true, notes: 'Done' })]);
   });
 
-  // Each reader classifies a list as sections or as a legacy flat task list.
   it.each([
     ['sections', [{ id: 's1', title: 'A', items: [{ id: 'i1', title: 'Task' }] }], true],
     ['sections, the first with items: null', [{ id: 's1', title: 'A', items: null }, { id: 's2', title: 'B', items: [] }], true],
     ['sections, the first with items: []', [{ id: 's1', title: 'A', items: [] }], true],
     ['a flat task list', [{ id: 'i1', title: 'Task' }, { id: 'i2', title: 'Task 2' }], false],
-  ])('reads %s the same way everywhere', (_label, list, sectioned) => {
+  ])('reads %s as sections or a legacy flat task list the same way in every reader', (_label, list, sectioned) => {
     const wrapped = (sections: unknown[]) => sections.length === 1 && (sections[0] as Json).title === 'Checklist'
       && (sections[0] as Json).id === '1';
 

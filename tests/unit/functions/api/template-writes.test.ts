@@ -3,10 +3,6 @@ import { drizzle } from 'drizzle-orm/d1';
 import { schema } from '@functions/api/db';
 import { insertTemplateWithHistoryFallback, isMissingRulesColumnError } from '@functions/api/utils/template-writes';
 
-// A database that has not applied the template rules migration rejects any statement that
-// names the `rules` column. The retry must therefore leave the column out of the SQL itself:
-// Drizzle names every table column in an INSERT, whether or not the value was given.
-
 const values = {
   id: 'template-1',
   user_id: 'user-1',
@@ -54,7 +50,7 @@ function databaseWithoutRulesColumn() {
 }
 
 describe('insertTemplateWithHistoryFallback without the rules column', () => {
-  it('retries a limit-guarded insert without naming rules', async () => {
+  it('retries a limit-guarded insert without naming rules, still guarded by the template limit and writing the given values', async () => {
     const { db, batches } = databaseWithoutRulesColumn();
 
     const inserted = await insertTemplateWithHistoryFallback(db, values, versionValues, auditValues, {
@@ -67,7 +63,6 @@ describe('insertTemplateWithHistoryFallback without the rules column', () => {
     const [templateInsert] = batches[1];
     expect(templateInsert.sql).toMatch(/^insert into "templates" \(/);
     expect(templateInsert.sql).not.toContain('"rules"');
-    // Still guarded by the template limit, and still writes the given values.
     expect(templateInsert.sql).toMatch(/where \(select count\(\*\) from "templates" where .*\) < \?$/);
     expect(templateInsert.params).toEqual(expect.arrayContaining(['template-1', 'user-1', 'Template']));
   });

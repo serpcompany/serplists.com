@@ -130,8 +130,7 @@ describe('template run reconciliation', () => {
     expect(calculateRunProgress(result.sections)).toBe(100);
   });
 
-  it('never reports 100% while a task or sub-task is left, however large the run', () => {
-    // 40 tasks with 4 sub-tasks each is 200 units; 199 of 200 is 99.5%, which used to round to 100.
+  it('never reports 100% while a task or sub-task is left, however large the run: 199 of 200 units is 99, not a rounded 100', () => {
     const sections = [
       {
         id: 'section-1',
@@ -185,7 +184,7 @@ describe('template run reconciliation', () => {
     ])).toMatch(/sub-item/i);
   });
 
-  it('preserves legacy id-less progress on the first template evolution', () => {
+  it('preserves legacy id-less progress on the first template evolution, reopening a task that gains an incomplete Sub-task', () => {
     const legacyRun = [
       {
         title: 'Content',
@@ -226,7 +225,6 @@ describe('template run reconciliation', () => {
     expect(result.sections[0].items[0]).toMatchObject({
       id: 'legacy-item-1-1',
       title: 'Renamed copy task',
-      // 'New long copy' arrives incomplete, so the task is no longer complete.
       isCompleted: false,
       notes: 'Legacy note',
     });
@@ -295,8 +293,7 @@ describe('template run reconciliation', () => {
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
       reconcileRunSections(previous, next, []).sections[0].items[0] as Json;
-    // Only a Sub-tasks block's rows are Sub-tasks: the run page shows no other sub-items.
-    const allSubTasks = (item: Json): Json[] => (item.contents ?? [])
+    const subTasksBlockRows = (item: Json): Json[] => (item.contents ?? [])
       .filter((content: Json) => content.type === 'subItems')
       .flatMap((content: Json) => content.subItems ?? []);
 
@@ -306,7 +303,7 @@ describe('template run reconciliation', () => {
       const task = result.sections[0].items[0] as Json;
 
       expect(task.isCompleted).toBe(false);
-      expect(allSubTasks(task).map((subItem) => [subItem.id, subItem.isCompleted]))
+      expect(subTasksBlockRows(task).map((subItem) => [subItem.id, subItem.isCompleted]))
         .toEqual([['short', true], ['long', true], ['tagline', false]]);
       expect(calculateRunProgress(result.sections)).toBe(40);
     });
@@ -331,7 +328,7 @@ describe('template run reconciliation', () => {
       const task = reconciledTask(previous, template(subTasks(['short'])));
 
       expect(task.isCompleted).toBe(true);
-      expect(allSubTasks(task)[0].isCompleted).toBe(true);
+      expect(subTasksBlockRows(task)[0].isCompleted).toBe(true);
     });
 
     it('never leaves a task complete with an unfinished Sub-task', () => {
@@ -353,7 +350,7 @@ describe('template run reconciliation', () => {
       for (const previous of previousRuns) {
         for (const next of evolutions) {
           const task = reconciledTask(previous, next);
-          const subItems = allSubTasks(task);
+          const subItems = subTasksBlockRows(task);
           if (subItems.length > 0) {
             expect(task.isCompleted).toBe(subItems.every((subItem) => subItem.isCompleted === true));
           }
@@ -469,9 +466,7 @@ describe('retired run work', () => {
   });
 });
 
-// Template ids are unique across the whole Template, so a task or Sub-task that keeps its id
-// but moves to another section or task is the same work and keeps its run state.
-describe('work that moves to another section or task', () => {
+describe('work that moves to another section or task, which keeps its run state since ids are unique across the Template', () => {
   const x = { id: 'x', title: 'Call vendor', isCompleted: true, notes: 'called vendor' };
   const y = { id: 'y', title: 'Draft brief', isCompleted: false };
   const z = { id: 'z', title: 'Publish', isCompleted: true, notes: 'live' };
@@ -523,12 +518,11 @@ describe('work that moves to another section or task', () => {
       { id: 'A', title: 'Plan', items: [fresh(y)] },
       { id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] },
     ], []);
-    // Unticked and noted again in its new section.
-    const updated = structuredClone(moved.sections);
-    updated[1].items[1] = { ...updated[1].items[1], isCompleted: false, notes: 'vendor called back' };
+    const untickedAndNotedAgainInItsNewSection = structuredClone(moved.sections);
+    untickedAndNotedAgainInItsNewSection[1].items[1] = { ...untickedAndNotedAgainInItsNewSection[1].items[1], isCompleted: false, notes: 'vendor called back' };
     const stale = { kind: 'item', sectionId: 'A', item: x };
 
-    const back = reconcileRunSections(updated, [
+    const back = reconcileRunSections(untickedAndNotedAgainInItsNewSection, [
       { id: 'A', title: 'Plan', items: [fresh(x), fresh(y)] },
       { id: 'B', title: 'Ship', items: [fresh(z)] },
     ], [stale]);
@@ -585,8 +579,7 @@ describe('work that moves to another section or task', () => {
     });
   });
 
-  // Runs from before ids were unique across the Template can repeat one in every section.
-  describe('ids a legacy run repeats in several sections', () => {
+  describe('ids a legacy run from before ids were unique across the Template repeats in several sections', () => {
     const legacy = [
       { id: 'A', title: 'Plan', items: [{ id: '1', title: 'First', isCompleted: true, notes: 'a' }] },
       { id: 'B', title: 'Ship', items: [{ id: '1', title: 'First', isCompleted: false, notes: 'b' }] },
@@ -617,7 +610,7 @@ describe('work that moves to another section or task', () => {
     });
   });
 
-  it('keeps every task and Sub-task state when ids are only rearranged between parents', () => {
+  it('keeps every task and Sub-task state when ids are only rearranged between parents, a task with Sub-tasks being complete exactly when they are', () => {
     const subTaskBlock = (...list: Array<[string, boolean]>) =>
       [{ type: 'subItems', value: '', subItems: list.map(([id, isCompleted]) => ({ id, title: id, isCompleted })) }];
     const run = [
@@ -631,10 +624,8 @@ describe('work that moves to another section or task', () => {
       ] },
       { id: 'C', title: 'C', items: [{ id: 'c1', title: 'c1', isCompleted: true }] },
     ];
-    // Every id with its notes and completion. A task with Sub-tasks is complete exactly when
-    // they all are, so only its notes are compared.
     type Entry = { id: string; isCompleted?: unknown; notes?: unknown; contents?: Array<{ subItems?: Entry[] }> };
-    const state = (sections: Array<{ items: Entry[] }>) => new Map(sections.flatMap((section) => section.items.flatMap((item) => {
+    const notesAndOwnCompletionById = (sections: Array<{ items: Entry[] }>) => new Map(sections.flatMap((section) => section.items.flatMap((item) => {
       const subItems = (item.contents ?? []).flatMap((content) => content.subItems ?? []);
       return [
         [item.id, { notes: item.notes, ...(subItems.length > 0 ? {} : { isCompleted: item.isCompleted }) }],
@@ -650,7 +641,7 @@ describe('work that moves to another section or task', () => {
         ...(subIds.length > 0 ? { contents: [{ type: 'subItems', value: '', subItems: subIds.map((id) => ({ id, title: id })) }] } : {}),
       })),
     }));
-    const before = state(run);
+    const before = notesAndOwnCompletionById(run);
 
     for (const rearranged of [
       { C: { b2: [], a1: ['u3'] }, A: { c1: ['u2', 'u1'], a2: [] }, B: { b1: [] } },
@@ -658,7 +649,7 @@ describe('work that moves to another section or task', () => {
       { A: { b1: ['u2'], a1: ['u1'] }, B: {}, C: { c1: ['u3'], a2: [], b2: [] } },
     ]) {
       const result = reconcileRunSections(run, layout(rearranged), []);
-      for (const [id, after] of state(result.sections as Array<{ items: Entry[] }>)) {
+      for (const [id, after] of notesAndOwnCompletionById(result.sections as Array<{ items: Entry[] }>)) {
         const had = before.get(id)!;
         expect(after.notes, id).toBe(had.notes);
         if ('isCompleted' in after && 'isCompleted' in had) expect(after.isCompleted, id).toBe(had.isCompleted);
