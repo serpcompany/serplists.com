@@ -86,10 +86,29 @@ const baseRun: ChecklistRun = {
   templateVersion: 1,
 };
 
+const runPageModel = (overrides: Record<string, unknown>) => ({
+  createShare: vi.fn(),
+  history: { data: null, isError: false, isLoading: false },
+  isSharedRun: false,
+  loadError: null,
+  loading: false,
+  notFound: false,
+  saveTitle: vi.fn(),
+  selectedData: null,
+  setSelectedItemId: vi.fn(),
+  completeRun: vi.fn(),
+  toggleItem: vi.fn(),
+  saveItemNotes: vi.fn(),
+  noteDrafts: {},
+  setNoteDraft: vi.fn(),
+  hasUnsavedNotes: false,
+  toggleSubItem: vi.fn(),
+  ...overrides,
+});
+
 const renderPrivateRunWithAnAgentInItsChangelog = () => {
-  mockUseRunExecutionModel.mockReturnValue({
+  mockUseRunExecutionModel.mockReturnValue(runPageModel({
     counts: { progress: 35, subTasksCompleted: 1, subTasksTotal: 6, tasksCompleted: 1, tasksTotal: 3 },
-    createShare: vi.fn(),
     history: {
       data: {
         checklistId: 'run-1',
@@ -110,27 +129,14 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
       isError: false,
       isLoading: false,
     },
-    isSharedRun: false,
-    loadError: null,
-    loading: false,
-    notFound: false,
     progress: 35,
     run: baseRun,
-    saveTitle: vi.fn(),
     selectedData: {
       item: baseRun.sections[0].items[0],
       section: baseRun.sections[0],
     },
     selectedItemId: 'item-1',
-    setSelectedItemId: vi.fn(),
-    completeRun: vi.fn(),
-    toggleItem: vi.fn(),
-    saveItemNotes: vi.fn(),
-    noteDrafts: {},
-    setNoteDraft: vi.fn(),
-    hasUnsavedNotes: false,
-    toggleSubItem: vi.fn(),
-  });
+  }));
 
   return renderPageAt('/dashboard/runs/run-1', { '/dashboard/runs/[id]': <ChecklistRunPage /> });
 };
@@ -183,38 +189,17 @@ describe('ChecklistRunPage layout', () => {
   });
 
   it('renders the shared run as the public copyable checklist flow in the narrow shared page shell and its cards', async () => {
-    mockUseRunExecutionModel.mockReturnValue({
+    mockUseRunExecutionModel.mockReturnValue(runPageModel({
       counts: { progress: 29, subTasksCompleted: 1, subTasksTotal: 4, tasksCompleted: 1, tasksTotal: 3 },
-      createShare: vi.fn(),
-      history: {
-        data: null,
-        isError: false,
-        isLoading: false,
-      },
       isSharedRun: true,
-      loadError: null,
-      loading: false,
-      notFound: false,
       progress: 29,
-      run: {
-        ...baseRun,
-        title: 'Project Setup Checklist',
-      },
-      saveTitle: vi.fn(),
+      run: { ...baseRun, title: 'Project Setup Checklist' },
       selectedData: {
         item: baseRun.sections[0].items[0],
         section: baseRun.sections[0],
       },
       selectedItemId: 'item-1',
-      setSelectedItemId: vi.fn(),
-      completeRun: vi.fn(),
-      toggleItem: vi.fn(),
-      saveItemNotes: vi.fn(),
-      noteDrafts: {},
-      setNoteDraft: vi.fn(),
-      hasUnsavedNotes: false,
-      toggleSubItem: vi.fn(),
-    });
+    }));
 
     const html = renderPageAt('/share/abc123', { '/share/[shareToken]': <ChecklistRunPage /> });
 
@@ -255,28 +240,15 @@ const renderRunPage = (
   options: { noteDrafts?: Record<string, string>; selectedItemId: string; shared?: boolean },
 ) => {
   const done = run.sections[0].items.filter((item) => item.isCompleted).length;
-  mockUseRunExecutionModel.mockReturnValue({
+  mockUseRunExecutionModel.mockReturnValue(runPageModel({
     counts: countRunExecutionItems(run),
-    createShare: vi.fn(),
-    history: { data: null, isError: false, isLoading: false },
     isSharedRun: options.shared === true,
-    loadError: null,
-    loading: false,
-    notFound: false,
     progress: done * 50,
     run,
-    saveTitle: vi.fn(),
-    selectedData: null,
     selectedItemId: options.selectedItemId,
-    setSelectedItemId: vi.fn(),
-    completeRun: vi.fn(),
-    toggleItem: vi.fn(),
-    saveItemNotes: vi.fn(),
     noteDrafts: options.noteDrafts ?? {},
-    setNoteDraft: vi.fn(),
     hasUnsavedNotes: Object.keys(options.noteDrafts ?? {}).length > 0,
-    toggleSubItem: vi.fn(),
-  });
+  }));
 
   return renderPageAt(options.shared ? '/share/abc123' : '/dashboard/runs/run-1', {
     '/dashboard/runs/[id]': <ChecklistRunPage />,
