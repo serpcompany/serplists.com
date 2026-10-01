@@ -31,7 +31,6 @@ export const uploadFile = async (
   try {
     let fileToUpload = file;
 
-    // Only Image blocks are optimized. A file attached to a File block keeps its bytes.
     if (bucket === 'template-images' && isImageFile(file)) {
       try {
         fileToUpload = await optimizeImage(file, {
@@ -41,11 +40,9 @@ export const uploadFile = async (
         });
       } catch (optimizationError) {
         console.warn('Image optimization failed, uploading original:', optimizationError);
-        // Continue with original file if optimization fails
       }
     }
 
-    // An image the browser could not convert (HEIC in most browsers) would be refused.
     if (!isAllowedUpload(bucket, fileToUpload)) {
       return { success: false, error: unsupportedUploadMessage(bucket) };
     }
@@ -71,11 +68,6 @@ export { getUploadedAssetKey, isUploadedAssetUrl };
 
 export const uploadAvatar = (file: File) => api.uploadToR2({ bucket: 'avatars', file });
 
-/**
- * Deletes a replaced or removed avatar. Only avatars can be deleted: Templates,
- * versions, Runs and clones may still reference template media, so clearing or
- * replacing it only unlinks it, and the API refuses the delete.
- */
 export const deleteUploadedAsset = async (url: string): Promise<boolean> => {
   const key = getUploadedAssetKey(url);
 
@@ -98,13 +90,10 @@ const BUCKET_BY_BLOCK_TYPE = {
   file: 'template-files',
 } as const satisfies Record<'image' | 'video' | 'file', TemplateUploadBucket>;
 
-// Checks a picked file against what the API stores (src/lib/schemas/uploadTypes.ts).
-// Image blocks take any image: other decodable types are converted to PNG on upload.
 export const validateFile = (
   file: File,
   type: 'image' | 'video' | 'file'
 ): { valid: boolean; error?: string } => {
-  // The API enforces the same limit for the block's bucket.
   const maxSize = UPLOAD_MAX_BYTES[BUCKET_BY_BLOCK_TYPE[type]];
   if (file.size > maxSize) {
     return { valid: false, error: `File size must be ${formatAssetSizeLimit(maxSize)} or less` };

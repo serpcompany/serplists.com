@@ -85,7 +85,7 @@ describe('hasCurrentFileInfo', () => {
 // is a relative address that loads a page of this site and always fails.
 describe('imagePreviewSrc', () => {
   it.each(['h', 'ht', 'https:', 'https://', '   ', '', 'example.com/photo.png', 'javascript:alert(1)', 'data:image/png;base64,AAAA', 'mailto:a@b.c'])(
-    'has nothing to load for %j',
+    'has nothing to load for %j, which as an img src would load a page of this site and fail',
     (value) => {
       expect(imagePreviewSrc(value)).toBeNull();
     },
