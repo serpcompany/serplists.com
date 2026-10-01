@@ -22,8 +22,7 @@ describe('formatTeamActivityAction', () => {
     }
   });
 
-  it('turns an action it does not know into readable text', () => {
-    // Rows written by older or newer deploys must never show a dotted id.
+  it('turns an action it does not know into readable text, so rows written by older or newer deploys never show a dotted id', () => {
     expect(formatTeamActivityAction('foo_bar.baz_qux')).toBe('Foo bar baz qux');
     expect(formatTeamActivityAction('checklist_run.archived_forever')).toBe('Run archived forever');
     expect(formatTeamActivityAction('team.renamed')).toBe('Organization renamed');

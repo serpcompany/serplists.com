@@ -8,6 +8,7 @@ import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
 import { api } from '@/lib/api';
 import { getResourcePermissions, type OrganizationRole } from '@/lib/organizationPermissions';
 import { queryKeys } from '@/lib/queryKeys';
+import { createTestQueryClient } from '../../fixtures/queryClient';
 
 const workspace = vi.hoisted(() => ({
   activeTeamId: undefined as string | undefined,
@@ -93,8 +94,6 @@ describe('ArchiveRecoverySection', () => {
   });
 });
 
-// The API restores a Template for editors and above, and a Run for admins and above
-// (canEditTemplate, canRestoreRun). Offering Restore to other roles only led to "Forbidden".
 describe('ArchiveRecoverySection restore by role', () => {
   const renderArchive = () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -131,14 +130,13 @@ describe('ArchiveRecoverySection restore by role', () => {
     ['runner', 0, 0],
     ['viewer', 0, 0],
     [undefined, 0, 0],
-  ])('offers an Organization %s Restore only where the API allows it', (role, templates, runs) => {
+  ])('lists the archived items to an Organization %s, and offers Restore only where the API allows it, so no click ends in Forbidden', (role, templates, runs) => {
     workspace.activeTeamId = 'team-1';
     workspace.role = role;
     workspace.scope = 'team-1';
 
     const shown = renderArchive();
 
-    // The archived items stay listed: every member may see them.
     expect(shown.html).toContain('Archived Launch Template');
     expect(shown.html).toContain('Archived Launch Run');
     expect(shown.templates).toBe(templates);
@@ -170,9 +168,7 @@ describe('useArchiveRecovery restore', () => {
   });
 });
 
-// An archive list must never read as empty before it has loaded: a user who just deleted a
-// Template or Run would think it was gone for good.
-describe('ArchiveRecoverySection before its lists load', () => {
+describe('ArchiveRecoverySection never reads as empty before its lists load, since a user who just deleted something would think it gone for good', () => {
   const render = (queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
     renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>
@@ -215,11 +211,9 @@ describe('ArchiveRecoverySection before its lists load', () => {
   });
 
   it('shows the failed list with Retry and claims no total', async () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = createTestQueryClient();
     queryClient.setQueryData(queryKeys.archivedTemplates('user-1', 'personal'), []);
     const runsKey = queryKeys.archivedRuns('user-1', 'personal');
-    // Keep the failure on screen: by default a mount would retry it (and show loading).
-    queryClient.setQueryDefaults(runsKey, { retryOnMount: false });
     await queryClient.prefetchQuery({ queryKey: runsKey, queryFn: () => Promise.reject(new Error('Server down')) });
 
     const html = render(queryClient);

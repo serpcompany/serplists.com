@@ -20,7 +20,7 @@ type BillingQueryResult = {
 
 const mocks = vi.hoisted(() => ({
   billingQuery: null as unknown as BillingQueryResult,
-  exportRunning: false,
+  exportInFlight: false,
   templateListOptions: [] as unknown[],
   templateLists: {
     allTemplates: [] as Array<Record<string, unknown>>,
@@ -62,15 +62,13 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   },
 }));
 
-// The catalog loads only for an export that includes public templates.
 vi.mock('@/features/template-backup/publicCatalogLoader', () => ({
   usePublicCatalogLoader: () => vi.fn().mockResolvedValue([]),
 }));
 
-// The page's export guard: tests set whether an export is in flight.
 vi.mock('@/hooks/useSingleFlight', () => ({
   useSingleFlight: () => ({
-    isRunning: mocks.exportRunning,
+    isRunning: mocks.exportInFlight,
     run: <T,>(task: () => Promise<T> | T) => Promise.resolve(task()),
   }),
 }));
@@ -228,35 +226,39 @@ describe('TemplateBackup while the template list loads', () => {
   });
 });
 
-// A failed list showed 0 templates, public and private, as if the context had none.
 describe('TemplateBackup when the template list failed to load', () => {
   afterEach(() => {
     mocks.templateLists.templatesError = null;
   });
 
-  it('says the list failed and offers Retry instead of zero counts', () => {
+  const renderWithFailedTemplateList = () => {
     mocks.billingQuery = knownBillingQuery('pro');
     mocks.templateLists.templatesError = new Error('HTTP 503');
-
     navigation.reset('/');
-    const html = renderToStaticMarkup(<TemplateBackup />);
+    return renderToStaticMarkup(<TemplateBackup />);
+  };
+
+  it('says the list failed and offers Retry instead of zero counts that read as a context with no templates', () => {
+    const html = renderWithFailedTemplateList();
 
     expect(html).toContain('Couldn&#x27;t load your templates');
     expect(html).toContain('Retry');
     expect(statValues(html)).toEqual([]);
-    // The server's pack decides what the context owns, so export still works.
-    expect(isDisabled(exportButton(html))).toBe(false);
+  });
+
+  it("keeps Export enabled, since the server's pack decides what the context owns", () => {
+    expect(isDisabled(exportButton(renderWithFailedTemplateList()))).toBe(false);
   });
 });
 
 describe('TemplateBackup while an export runs', () => {
   afterEach(() => {
-    mocks.exportRunning = false;
+    mocks.exportInFlight = false;
   });
 
   it('disables Export and the include-public switch and says it is exporting', () => {
     mocks.billingQuery = knownBillingQuery('pro');
-    mocks.exportRunning = true;
+    mocks.exportInFlight = true;
 
     navigation.reset('/');
     const html = renderToStaticMarkup(<TemplateBackup />);

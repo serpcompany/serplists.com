@@ -55,9 +55,7 @@ describe('ProfileSection', () => {
     }
   });
 
-  // Usernames saved before they were normalized may be mixed case, and the profile lookup
-  // finds them only as stored (a lowercase link may even open another user's profile).
-  it('links a saved legacy mixed-case username as stored', () => {
+  it("links a saved legacy mixed-case username as stored, the only casing the profile lookup finds, since its lowercase form may be another user's", () => {
     const html = renderSection('JaneDoe', 'JaneDoe');
 
     expect(html).toContain('href="/profile/JaneDoe/"');

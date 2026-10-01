@@ -209,8 +209,7 @@ describe('BillingSection', () => {
     expect(html).not.toContain('Manage subscription');
   });
 
-  // Checkout returns here, not to the editor: the draft kept for it must be reachable.
-  it('links back to a template draft kept while the user upgraded', () => {
+  it('links back to a template draft kept while the user upgraded, since checkout returns to Billing, not to the editor', () => {
     draftMock.readTemplateDraft.mockReturnValueOnce({
       savedAt: '2026-09-28T10:00:00.000Z',
       values: { title: 'Launch checklist' },

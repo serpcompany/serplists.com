@@ -16,8 +16,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
-// The keys are cached per signed-in user.
-const agentKeysKey = queryKeys.agentKeys('user-1');
+const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 
 const activeKey: AgentKey = {
   id: 'key-1',
@@ -56,8 +55,8 @@ const renderView = (overrides: Partial<AgentAccessSectionViewProps> = {}) =>
 
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// A permission's checkbox: a native button named by its card's title, which the whole card
-// labels, so a click or tap anywhere on the card toggles it.
+const PERMISSION_LABELS = ['Read templates', 'Write templates', 'Read runs', 'Write runs'];
+
 function permissionCheckbox(html: string, label: string): string {
   const title = new RegExp(`<div[^>]*id="([^"]+)"[^>]*>${escapeRegExp(label)}</div>`).exec(html);
   expect(title, `the title of ${label}`).not.toBeNull();
@@ -69,8 +68,7 @@ function permissionCheckbox(html: string, label: string): string {
   return checkbox![0];
 }
 
-// The permission badges listed under a key.
-function keyPermissions(html: string, keyName: string): string[] {
+function permissionBadgesUnderKey(html: string, keyName: string): string[] {
   const list = new RegExp(`<ul aria-label="Permissions for ${escapeRegExp(keyName)}"[^>]*>(.*?)</ul>`).exec(html);
   expect(list, `the permissions of ${keyName}`).not.toBeNull();
   return [...list![1].matchAll(/<li[^>]*>([^<]*)<\/li>/g)].map((match) => match[1]);
@@ -85,7 +83,7 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Permissions are fixed when you create a key');
     expect(html).toContain('No key can delete or publish');
     expect(html).toContain('>Permissions</legend>');
-    for (const label of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
+    for (const label of PERMISSION_LABELS) {
       expect(permissionCheckbox(html, label)).toMatch(/aria-describedby="[^"]+"/);
     }
     expect(html).toContain('Never delete or publish.');
@@ -103,6 +101,14 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('bearer_token_env_var = &quot;SERPLISTS_RUN_KEY&quot;');
     expect(html).toContain('Claude or another MCP client:');
     expect(html).toContain('Bearer &lt;your Run Key&gt;');
+  });
+
+  it('makes each permission checkbox a native button named by its card title, with the whole card as its label, so a tap anywhere on the card toggles it', () => {
+    const html = renderView();
+
+    for (const label of PERMISSION_LABELS) {
+      expect(permissionCheckbox(html, label)).toMatch(/^<button[^>]*role="checkbox"/);
+    }
   });
 
   it('shows a newly-created secret once with a copy action and recovery warning', () => {
@@ -126,7 +132,7 @@ describe('AgentAccessSectionView', () => {
     const html = renderView({ keyName: 'Codex SOP Runner', permissions: [] });
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
     expect(html).toContain('Choose at least one permission.');
-    for (const label of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
+    for (const label of PERMISSION_LABELS) {
       expect(permissionCheckbox(html, label)).toContain('aria-checked="false"');
     }
   });
@@ -152,8 +158,8 @@ describe('AgentAccessSectionView', () => {
     expect(html).toContain('Old Claude Runner');
     expect(html).toContain('Revoked');
     expect(html).toContain('slrk_demo12...');
-    expect(keyPermissions(html, 'Codex SOP Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
-    expect(keyPermissions(html, 'Old Claude Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
+    expect(permissionBadgesUnderKey(html, 'Codex SOP Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
+    expect(permissionBadgesUnderKey(html, 'Old Claude Runner')).toEqual(['Read templates', 'Read runs', 'Write runs']);
     expect(html).not.toContain('slrk_secret_visible_once');
   });
 
@@ -186,11 +192,9 @@ describe('AgentAccessSection', () => {
       </QueryClientProvider>,
     );
 
-  it('shows the endpoint the server accepts, not the address the page was opened on', () => {
-    // A per-deployment URL such as https://3f2a1b9c.serp-checklists.pages.dev is not on the
-    // MCP host allowlist, so the server points agents at the canonical staging address.
+  it('shows the endpoint the server accepts, not an address outside the MCP host allowlist that the page was opened on', () => {
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(agentKeysKey, []);
+    queryClient.setQueryData(signedInUserAgentKeysKey, []);
     queryClient.setQueryData(['agent-mcp-connection'], {
       mcpEndpoint: 'https://staging.serplists.com/api/mcp',
       hostMismatch: true,
@@ -206,7 +210,7 @@ describe('AgentAccessSection', () => {
 
   it('shows the endpoint for the current address without a notice when the server accepts it', () => {
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(agentKeysKey, []);
+    queryClient.setQueryData(signedInUserAgentKeysKey, []);
     queryClient.setQueryData(['agent-mcp-connection'], {
       mcpEndpoint: 'https://staging.serplists.com/api/mcp',
       hostMismatch: false,
@@ -220,7 +224,7 @@ describe('AgentAccessSection', () => {
 
   it('says MCP is unavailable instead of showing an endpoint the server rejects', () => {
     const queryClient = createTestQueryClient();
-    queryClient.setQueryData(agentKeysKey, []);
+    queryClient.setQueryData(signedInUserAgentKeysKey, []);
     queryClient.setQueryData(['agent-mcp-connection'], { mcpEndpoint: null, hostMismatch: true });
 
     const html = renderSection(queryClient);
@@ -233,7 +237,7 @@ describe('AgentAccessSection', () => {
 
   it('does not report "No Run Keys yet." when loading the keys failed', () => {
     const queryClient = createTestQueryClient();
-    seedQueryError(queryClient, agentKeysKey);
+    seedQueryError(queryClient, signedInUserAgentKeysKey);
 
     const html = renderToStaticMarkup(
       <QueryClientProvider client={queryClient}>

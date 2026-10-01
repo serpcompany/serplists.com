@@ -1,4 +1,4 @@
-import React, { act, type ReactNode } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,13 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { queryKeys } from '@/lib/queryKeys';
 
-import { createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
-
-// The Organization name and slug fields in Settings. WorkspaceContext rebuilds the active
-// workspace object whenever the Organizations list changes (Make owner patches the role, a
-// focus refetch picks up a change to any of the user's Organizations), so a form that reset
-// on every new object dropped what the user was typing. Drives the real section; only the
-// workspace context, the API, toasts and the Radix select are faked.
+import { createFakeContainer, dispatch, FakeElement, findAll, installFakeDomGlobals } from '../../fixtures/fakeDom';
 
 type TeamWorkspace = {
   id: string;
@@ -57,10 +51,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
-vi.mock('@/components/ui/select', () => {
-  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
-  return { Select: Pass, SelectContent: () => null, SelectItem: Pass, SelectTrigger: Pass, SelectValue: () => null };
-});
+vi.mock('@/components/ui/select', async () => (await import('../../support/overlaysInPlace')).selectWithoutPopup);
 vi.mock('@/components/account/TeamInvitesPanel', () => ({ TeamInvitesPanel: () => null }));
 vi.mock('@/components/account/TeamActivityList', () => ({ TeamActivityList: () => null }));
 
@@ -74,6 +65,10 @@ const acme = (overrides: Partial<TeamWorkspace> = {}): TeamWorkspace => ({
   slug: 'acme',
   ...overrides,
 });
+
+const rebuildActiveWorkspaceWithPatch = (_teamId: string, patch: Partial<TeamWorkspace>) => {
+  workspace.active = { ...workspace.active, ...patch };
+};
 
 let restoreGlobals: () => void = () => {};
 beforeAll(() => {
@@ -89,10 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   workspace.active = acme();
   workspace.refreshTeams.mockResolvedValue(undefined);
-  // The real patchTeam rebuilds the active workspace from the patched list.
-  workspace.patchTeam.mockImplementation((_teamId: string, patch: Partial<TeamWorkspace>) => {
-    workspace.active = { ...workspace.active, ...patch };
-  });
+  workspace.patchTeam.mockImplementation(rebuildActiveWorkspaceWithPatch);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient.setQueryData(queryKeys.teamMembers('user-1', 'team-1'), []);
   queryClient.setQueryData(queryKeys.teamInvites('user-1', 'team-1'), []);
@@ -104,8 +96,7 @@ afterEach(() => {
   queryClient.clear();
 });
 
-// Renders again, as the context does when its value changes.
-const render = async () => {
+const renderWithCurrentWorkspace = async () => {
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>
@@ -118,7 +109,7 @@ const render = async () => {
 const mount = async () => {
   container = createFakeContainer();
   root = createRoot(container as unknown as Element);
-  await render();
+  await renderWithCurrentWorkspace();
 };
 
 const byId = (id: string) => {
@@ -130,24 +121,6 @@ const byId = (id: string) => {
 const nameField = () => byId('team-settings-name');
 const slugField = () => byId('team-settings-slug');
 
-const dispatch = (type: string, target: FakeNode) => {
-  const event = {
-    type,
-    target,
-    defaultPrevented: false,
-    timeStamp: Date.now(),
-    preventDefault() {
-      this.defaultPrevented = true;
-    },
-    stopPropagation() {},
-  };
-  for (const entry of container.listeners.filter((listener) => listener.type === type)) {
-    entry.listener(event);
-  }
-};
-
-// Typing: React DOM loaded without a DOM listens for the old IE input events, so call the
-// field's own onChange (the props React keeps on the node) with the typed value.
 const typeInto = async (field: FakeElement, value: string) => {
   const propsKey = Object.keys(field).find((key) => key.startsWith('__reactProps$'));
   const props = propsKey ? (field as unknown as Record<string, { onChange?: (event: unknown) => void }>)[propsKey] : null;
@@ -166,27 +139,25 @@ const saveButton = () => {
   return button as FakeElement;
 };
 
-describe('TeamSettingsSection Organization name and slug', () => {
+describe('TeamSettingsSection keeps what the user typed in the Organization name and slug when the context rebuilds the active Organization object', () => {
   it('keeps a typed name when Make owner patches the role', async () => {
     await mount();
     await typeInto(nameField(), 'Acme Marketing');
     expect(nameField().value).toBe('Acme Marketing');
 
-    // Make owner: patchTeam(teamId, { role: 'admin' }) gives a new active workspace object.
     workspace.patchTeam('team-1', { role: 'admin' });
-    await render();
+    await renderWithCurrentWorkspace();
 
     expect(nameField().value).toBe('Acme Marketing');
     expect(slugField().value).toBe('acme');
   });
 
-  it('keeps a typed slug when a refetch rebuilds the workspace, and a clean name follows a rename', async () => {
+  it("keeps a typed slug when a focus refetch brings a teammate's rename, and the untouched name follows the rename", async () => {
     await mount();
     await typeInto(slugField(), 'acme-mkt');
 
-    // A focus refetch: a teammate renamed this Organization.
     workspace.active = acme({ name: 'Acme Group' });
-    await render();
+    await renderWithCurrentWorkspace();
 
     expect(slugField().value).toBe('acme-mkt');
     expect(nameField().value).toBe('Acme Group');
@@ -197,7 +168,7 @@ describe('TeamSettingsSection Organization name and slug', () => {
     await typeInto(slugField(), '');
 
     workspace.active = acme();
-    await render();
+    await renderWithCurrentWorkspace();
 
     expect(slugField().value).toBe('');
   });
@@ -210,13 +181,13 @@ describe('TeamSettingsSection Organization name and slug', () => {
     queryClient.setQueryData(queryKeys.teamMembers('user-1', 'team-2'), []);
     queryClient.setQueryData(queryKeys.teamInvites('user-1', 'team-2'), []);
     queryClient.setQueryData(queryKeys.teamActivity('user-1', 'team-2'), []);
-    await render();
+    await renderWithCurrentWorkspace();
 
     expect(nameField().value).toBe('Globex');
     expect(slugField().value).toBe('globex');
   });
 
-  it('shows what the server saved after Save, even when it adjusted the slug', async () => {
+  it('shows what the server saved after Save, even when it adjusted the slug, leaving nothing to save', async () => {
     workspace.updateTeam.mockResolvedValue({ team: { id: 'team-1', name: 'Acme Marketing', slug: 'acme-mkt-2' } });
     await mount();
     await typeInto(nameField(), ' Acme Marketing ');
@@ -227,14 +198,13 @@ describe('TeamSettingsSection Organization name and slug', () => {
     );
     if (!form) throw new Error('No Organization settings form');
     await act(async () => {
-      dispatch('submit', form);
+      dispatch(container, form, 'submit');
     });
-    await render();
+    await renderWithCurrentWorkspace();
 
     expect(workspace.updateTeam).toHaveBeenCalledWith('team-1', { name: 'Acme Marketing', slug: 'acme-mkt' });
     expect(nameField().value).toBe('Acme Marketing');
     expect(slugField().value).toBe('acme-mkt-2');
-    // Nothing left to save.
     expect(saveButton().getAttribute('disabled')).not.toBeNull();
   });
 });

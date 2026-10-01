@@ -3,13 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Billing buttons stay disabled from the click until the browser leaves for Stripe.
-// Back from Stripe can restore the page from the back/forward cache with that state
-// intact, so each flag must come from useRedirectPending, which clears it on restore.
-// (Vitest has no DOM to click through; tests/unit/hooks/useRedirectPending.test.ts
-// covers the reset itself.) The files are found by scanning src/, so a new checkout
-// entry point cannot be missed.
-
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const read = (file: string) => readFileSync(path.join(repoRoot, file), "utf8");
 
@@ -20,23 +13,20 @@ const listSourceFiles = (dir: string): string[] =>
     return /\.tsx?$/.test(entry.name) ? [relative] : [];
   });
 
-// A call that can send the browser to Stripe Checkout or the Customer Portal (Pricing's
-// goes through src/features/billing/pricingBilling.ts).
-const REDIRECT_CALL =
+const STRIPE_REDIRECT_CALL =
   /\b(?:startBillingCheckout|handleUpgradeRequiredForContext|createBillingCheckout|createBillingPortal|createBillingPortalUrl|createPersonalCheckoutUrl)\s*\(/;
-// A pending flag that stays set while the browser leaves.
-const REDIRECT_FLAG = /^is\w*(?:Checkout|Portal|Redirect)\w*$/;
+const REDIRECT_PENDING_FLAG_NAME = /^is\w*(?:Checkout|Portal|Redirect)\w*$/;
 const STATE_PAIR = /\[\s*(\w+)\s*,\s*\w+\s*\]\s*=\s*(\w+)\s*(?:<[^>]*>)?\s*\(/g;
 
 const redirectFlags = listSourceFiles("src").flatMap((file) => {
   const source = read(file);
-  if (!REDIRECT_CALL.test(source)) return [];
+  if (!STRIPE_REDIRECT_CALL.test(source)) return [];
   return Array.from(source.matchAll(STATE_PAIR))
-    .filter(([, flag]) => REDIRECT_FLAG.test(flag))
+    .filter(([, flag]) => REDIRECT_PENDING_FLAG_NAME.test(flag))
     .map(([, flag, hook]) => ({ file, flag, hook }));
 });
 
-describe("pending flags that carry a billing redirect", () => {
+describe("pending flags that carry a billing redirect, found by scanning src/ so a new checkout entry point cannot be missed", () => {
   it("finds every known checkout and portal entry point", () => {
     const found = redirectFlags.map(({ file, flag }) => `${file}:${flag}`);
     expect(found).toEqual(
@@ -51,20 +41,19 @@ describe("pending flags that carry a billing redirect", () => {
   });
 
   it.each(redirectFlags.map(({ file, flag, hook }) => [`${file} ${flag}`, hook]))(
-    "%s comes from useRedirectPending",
+    "%s comes from useRedirectPending, which clears it when Back restores the page from the back/forward cache",
     (_label, hook) => {
       expect(hook).toBe("useRedirectPending");
     },
   );
 });
 
-// The plan may have changed at Stripe (or in another tab) before the user pressed Back.
 describe.each([
   "src/components/account/BillingSection.tsx",
   "src/views/Pricing.tsx",
   "src/features/template-editor/useTemplateEditorAccess.ts",
 ])("%s", (file) => {
-  it("refetches billing status when the page is restored", () => {
+  it("refetches billing status when the page is restored, since the plan may have changed at Stripe or in another tab", () => {
     expect(read(file)).toMatch(
       /usePageRestoredFromCache\([\s\S]*?invalidateQueries\(\{\s*queryKey:\s*BILLING_STATUS_QUERY_PREFIX/,
     );

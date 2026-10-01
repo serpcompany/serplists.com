@@ -326,6 +326,10 @@ Common failures:
     DOM listens for the old IE input events, so a test types into a field by calling the
     `onChange` in the props React keeps on the node (`__reactProps$...`). React DOM sets an
     input's `type` and `value` as properties, so read them from the node, not its attributes.
+
+  Base UI's overlays render nothing until they open, and their portals render nothing without
+  a DOM, so component tests replace dialogs, alert dialogs, menus and select popups with the
+  in-place versions in `tests/support/overlaysInPlace.tsx`.
 - Coverage settings live under `test.coverage` in `vitest.config.ts`
   (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
   If you override `test.exclude`, keep `node_modules`, `dist`,

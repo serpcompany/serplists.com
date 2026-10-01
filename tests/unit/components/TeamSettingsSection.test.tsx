@@ -20,8 +20,7 @@ const workspaceMocks = vi.hoisted(() => ({
   },
   canManageTeam: true,
   createTeam: vi.fn(),
-  // Personal, with the teams request failed and no list to show.
-  inPersonalWithoutTeams: false,
+  inPersonalWithTeamsRequestFailed: false,
   patchTeam: vi.fn(),
   rememberTeam: vi.fn(),
   refreshTeams: vi.fn(),
@@ -54,7 +53,7 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
     retryWorkspace: vi.fn(),
     selectWorkspace: workspaceMocks.selectWorkspace,
     teams: workspaceMocks.teams,
-    ...(workspaceMocks.inPersonalWithoutTeams
+    ...(workspaceMocks.inPersonalWithTeamsRequestFailed
       ? {
           activeTeamId: undefined,
           activeWorkspace: { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' },
@@ -112,12 +111,11 @@ describe('TeamSettingsSection', () => {
   beforeEach(() => {
     workspaceMocks.activeWorkspace.role = 'admin';
     workspaceMocks.canManageTeam = true;
-    workspaceMocks.inPersonalWithoutTeams = false;
+    workspaceMocks.inPersonalWithTeamsRequestFailed = false;
   });
 
-  // Otherwise a member of two Organizations reads that they have none, and may create a duplicate.
-  it('says the Organizations could not load, with Retry, instead of inviting the user to create one', () => {
-    workspaceMocks.inPersonalWithoutTeams = true;
+  it('says the Organizations could not load, with Retry, instead of inviting a member of other Organizations to create a duplicate', () => {
+    workspaceMocks.inPersonalWithTeamsRequestFailed = true;
     const html = renderSectionWithMembers([]);
 
     expect(html).toContain('Couldn&#x27;t load your Organizations.');
@@ -151,8 +149,7 @@ describe('TeamSettingsSection', () => {
     await expect(copyTextToClipboard('https://serplists.com/team-invites/token')).resolves.toBe(false);
   });
 
-  // The API refuses a longer Organization name with a raw schema error.
-  it('stops typing an Organization name at the limit the API accepts', () => {
+  it('stops typing an Organization name at the limit the API accepts, rather than letting the API refuse it with a raw schema error', () => {
     const html = renderSectionWithMembers([]);
 
     expect(html).toMatch(/<input[^>]*id="team-name"[^>]*maxLength="120"|<input[^>]*maxLength="120"[^>]*id="team-name"/);
@@ -215,7 +212,7 @@ describe('TeamSettingsSection', () => {
     expect(html).toContain('Make owner');
   });
 
-  it("names each member's role and status controls after that member", () => {
+  it("names each member's role and status controls after that member, disabled rows (the owner, you) included, since they are still announced", () => {
     workspaceMocks.activeWorkspace.role = 'owner';
 
     const html = renderSectionWithMembers([
@@ -259,7 +256,6 @@ describe('TeamSettingsSection', () => {
 
     expect(html).not.toContain('aria-label="Member role"');
     expect(html).not.toContain('aria-label="Member status"');
-    // Disabled rows (the owner, you) are still announced, so they are named too.
     expect(html).toContain('aria-label="Role for Owner User (owner@example.com)"');
     expect(html).toContain('aria-label="Role for Alice (alice@example.com)"');
     expect(html).toContain('aria-label="Status for Alice (alice.two@example.com)"');

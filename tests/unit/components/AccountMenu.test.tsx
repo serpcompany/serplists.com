@@ -2,9 +2,6 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-// The account menu lists each console page once. "Dashboard" opened My Templates, the
-// console home, which the menu already lists, so it is gone.
-
 const authState = vi.hoisted(() => ({ username: 'alice' as string | null }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -14,26 +11,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-// Renders the menu open, with each item as the element it renders (a link, or a div), so the
-// items and their hrefs can be read from static markup.
-vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/ui/dropdown-menu')>();
-  const { cloneElement, createElement, isValidElement } = await import('react');
-  type Props = { children?: React.ReactNode; render?: React.ReactElement };
-  return {
-    ...actual,
-    DropdownMenu: ({ children }: Props) => createElement('div', null, children),
-    DropdownMenuTrigger: ({ children }: Props) => createElement('button', { type: 'button' }, children),
-    DropdownMenuContent: ({ children }: Props) => createElement('div', { role: 'menu' }, children),
-    DropdownMenuGroup: ({ children }: Props) => createElement('div', { role: 'group' }, children),
-    DropdownMenuItem: ({ children, render }: Props) =>
-      isValidElement(render)
-        ? cloneElement(render as React.ReactElement<Record<string, unknown>>, { role: 'menuitem' }, children)
-        : createElement('div', { role: 'menuitem' }, children),
-    DropdownMenuLabel: ({ children }: Props) => createElement('div', null, children),
-    DropdownMenuSeparator: () => createElement('hr'),
-  };
-});
+vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/dropdown-menu')>()),
+  ...(await import('../../support/overlaysInPlace')).dropdownMenuRenderedOpen,
+}));
 
 import { AccountMenu } from '@/components/layout/AccountMenu';
 import { navigation } from '../../support/nextNavigation';
@@ -46,8 +27,7 @@ const renderMenu = () => {
   return renderToStaticMarkup(<AccountMenu />);
 };
 
-// The menu's items as "label -> href" (no href for a button).
-const menuItems = (html: string) =>
+const menuItemLabelsWithHrefs = (html: string) =>
   [...html.matchAll(/<(a|div)([^>]*)role="menuitem"([^>]*)>(.*?)<\/\1>/g)].map(([, , before, after, label]) => {
     const href = `${before}${after}`.match(/href="([^"]*)"/)?.[1];
     const text = label.replace(/<[^>]*>/g, '').trim();
@@ -55,8 +35,8 @@ const menuItems = (html: string) =>
   });
 
 describe('AccountMenu', () => {
-  it('lists My Templates, My Runs, Settings, the Public Profile and Sign out, with no Dashboard', () => {
-    expect(menuItems(renderMenu())).toEqual([
+  it('lists each console page once, the Public Profile and Sign out, with no Dashboard item, which only opened My Templates again', () => {
+    expect(menuItemLabelsWithHrefs(renderMenu())).toEqual([
       'My Templates -> /dashboard/templates/',
       'My Runs -> /dashboard/runs/',
       'Settings -> /dashboard/settings/',
@@ -68,8 +48,8 @@ describe('AccountMenu', () => {
   it('leaves Profile out for a user without a username', () => {
     authState.username = null;
     try {
-      expect(menuItems(renderMenu())).not.toContain('Profile -> /profile/alice/');
-      expect(menuItems(renderMenu())).toHaveLength(4);
+      expect(menuItemLabelsWithHrefs(renderMenu())).not.toContain('Profile -> /profile/alice/');
+      expect(menuItemLabelsWithHrefs(renderMenu())).toHaveLength(4);
     } finally {
       authState.username = 'alice';
     }

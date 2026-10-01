@@ -7,8 +7,6 @@ import { AgentAccessSection } from '@/components/account/AgentAccessSection';
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
 
-// One tab, two people: user A signs out and user B signs in without a reload, so the
-// QueryClient (and whatever A loaded into it) survives.
 const session = vi.hoisted(() => ({ userId: 'user-a' }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -38,8 +36,7 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-// What user A had loaded, by the first element of the query key.
-const userAData: Record<string, unknown[]> = {
+const userADataByQueryKeyRoot: Record<string, unknown[]> = {
   'incoming-team-invites': [
     {
       id: 'invite-a',
@@ -90,28 +87,30 @@ function renderAs(client: QueryClient, userId: string, element: React.ReactEleme
   return renderToStaticMarkup(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
 }
 
-// Renders as A, fills every query A's render created with A's data (as if A's fetches had
-// finished), then renders the same section as B on the same QueryClient.
-function renderAfterUserSwitch(element: React.ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  renderAs(client, 'user-a', element);
+function finishUserAFetchesWithTheirData(client: QueryClient) {
   for (const query of client.getQueryCache().getAll()) {
-    const data = userAData[String(query.queryKey[0])];
+    const data = userADataByQueryKeyRoot[String(query.queryKey[0])];
     if (data) client.setQueryData(query.queryKey, data);
   }
+}
+
+function renderAsUserAThenUserBOnOneQueryClient(element: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  renderAs(client, 'user-a', element);
+  finishUserAFetchesWithTheirData(client);
   const userAHtml = renderAs(client, 'user-a', element);
   const userBHtml = renderAs(client, 'user-b', element);
   client.clear();
   return { userAHtml, userBHtml };
 }
 
-describe('private account data after a user switch in the same tab', () => {
+describe('private account data after user A signs out and user B signs in on the same tab, whose QueryClient outlives the session', () => {
   it.each([
     ['Organization settings', <TeamSettingsSection key="team" />, ['Acme Corp', 'Disabled Member', 'pending-invitee@example.com']],
     ['Run Keys', <AgentAccessSection key="run-keys" />, ['Prod SOP bot']],
     ['Archive', <ArchiveRecoverySection key="archive" />, ['User A Archived Template', 'User A Archived Run']],
   ])('does not show user A\'s cached %s to user B', (_name, element, userAVisible) => {
-    const { userAHtml, userBHtml } = renderAfterUserSwitch(element);
+    const { userAHtml, userBHtml } = renderAsUserAThenUserBOnOneQueryClient(element);
 
     for (const text of userAVisible) expect(userAHtml).toContain(text);
     for (const text of privateText) expect(userBHtml).not.toContain(text);

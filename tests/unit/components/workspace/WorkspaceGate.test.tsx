@@ -2,10 +2,6 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// When the teams request fails before the stored Organization is confirmed, console pages
-// show an error with Retry instead of silently acting in Personal, and the switcher never
-// claims the tab is in Personal.
-
 const personal = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
 const workspaceState = vi.hoisted(() => ({ status: 'error' as 'ready' | 'loading' | 'error' }));
 
@@ -35,9 +31,8 @@ const renderGate = () =>
     </WorkspaceGate>,
   );
 
-const renderSwitcher = () => {
+const renderSwitcherInConsoleSidebar = () => {
   navigation.reset('/dashboard/templates');
-  // The switcher lives in the console sidebar.
   return renderToStaticMarkup(
     <SidebarProvider>
       <WorkspaceSwitcher />
@@ -45,12 +40,12 @@ const renderSwitcher = () => {
   );
 };
 
-describe('WorkspaceGate', () => {
+describe('WorkspaceGate when the teams request failed before the stored Organization was confirmed', () => {
   beforeEach(() => {
     workspaceState.status = 'error';
   });
 
-  it('shows the error with Retry and a way to Personal instead of the page', () => {
+  it('shows the error with Retry and a way to Personal instead of the page, rather than silently acting in Personal', () => {
     const html = renderGate();
 
     expect(html).toContain('Couldn&#x27;t load your Organizations');
@@ -69,7 +64,7 @@ describe('WorkspaceGate', () => {
 describe('WorkspaceSwitcher while the Organization is unconfirmed', () => {
   it('does not label the tab Personal after the teams request failed', () => {
     workspaceState.status = 'error';
-    const html = renderSwitcher();
+    const html = renderSwitcherInConsoleSidebar();
 
     expect(html).toContain('Organizations unavailable');
     expect(html).not.toContain('>Personal<');
@@ -78,12 +73,12 @@ describe('WorkspaceSwitcher while the Organization is unconfirmed', () => {
   it('does not label the tab Personal while the teams request loads', () => {
     workspaceState.status = 'loading';
 
-    expect(renderSwitcher()).toContain('Loading...');
+    expect(renderSwitcherInConsoleSidebar()).toContain('Loading...');
   });
 
   it('shows the active context once it is known', () => {
     workspaceState.status = 'ready';
 
-    expect(renderSwitcher()).toContain('>Personal<');
+    expect(renderSwitcherInConsoleSidebar()).toContain('>Personal<');
   });
 });
