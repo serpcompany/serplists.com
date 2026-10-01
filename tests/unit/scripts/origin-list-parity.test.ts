@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as runtime from '@functions/api/utils/origin-list';
+import { parseEnvFile } from '../../../scripts/lib/env-file.mjs';
 import * as script from '../../../scripts/lib/origin-list.mjs';
+import { readWranglerToml } from '../../support/wranglerToml';
 
 const VALUES = [
   '',
@@ -40,18 +41,20 @@ describe('the plain-JS origin list check-env.mjs runs without a TypeScript loade
   });
 });
 
-describe('committed origin values', () => {
-  function configuredValues(file: string, pattern: RegExp): Array<[string, string]> {
-    const contents = readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
-    return Array.from(contents.matchAll(pattern), (match) => [match[1], match[2]] as [string, string]);
-  }
+const ORIGIN_SETTINGS = ['FRONTEND_URL', 'CORS_ALLOWED_ORIGINS'];
 
+function originSettings(vars: Record<string, string>): Array<[string, string]> {
+  return Object.entries(vars).filter(([name]) => ORIGIN_SETTINGS.includes(name));
+}
+
+describe('committed origin values', () => {
   it('are all valid in wrangler.toml and .dev.vars.example', () => {
+    const wrangler = readWranglerToml();
     const values = [
-      ...configuredValues('wrangler.toml', /^\s*(FRONTEND_URL|CORS_ALLOWED_ORIGINS)\s*=\s*"([^"]*)"/gm),
-      ...configuredValues('.dev.vars.example', /^\s*(FRONTEND_URL|CORS_ALLOWED_ORIGINS)=(.*)$/gm),
+      ...[wrangler.vars, wrangler.env.preview.vars, wrangler.env.production.vars].flatMap(originSettings),
+      ...originSettings(parseEnvFile('.dev.vars.example')),
     ];
-    expect(values.length).toBeGreaterThan(0);
+    expect(values.map(([name]) => name)).toEqual(expect.arrayContaining(ORIGIN_SETTINGS));
 
     for (const [name, value] of values) {
       const problem =

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import apiWorker from '../../functions/api/[[route]].ts';
 import { apiErrorBody, readJson } from '../support/readJson';
-import { varFromWranglerToml } from '../support/wranglerToml';
+import { wranglerEnvVars } from '../support/wranglerToml';
 
 const healthBody = z.object({ status: z.string() }).passthrough();
 const authStatusBody = z
@@ -22,7 +22,7 @@ function buildEnv(overrides?: Record<string, unknown>) {
 
 function productionEnv(overrides?: Record<string, unknown>) {
   return buildEnv({
-    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+    AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
     ...overrides,
   });
 }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
 import { silenceLogs } from '../../../support/apiRouter';
 import { SqliteD1 } from '../../../support/sqlite-d1';
-import { varFromWranglerToml } from '../../../support/wranglerToml';
+import { wranglerEnvVars } from '../../../support/wranglerToml';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
@@ -16,16 +16,16 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
     ({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.preview.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
-      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.preview.vars', 'CORS_ALLOWED_ORIGINS'),
+      AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('preview').AUTH_EMAIL_VERIFICATION_REQUIRED,
+      CORS_ALLOWED_ORIGINS: wranglerEnvVars('preview').CORS_ALLOWED_ORIGINS,
     }) as any;
 
   const productionEnv = (overrides: Record<string, unknown> = {}) =>
     ({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
-      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.production.vars', 'CORS_ALLOWED_ORIGINS'),
+      AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
+      CORS_ALLOWED_ORIGINS: wranglerEnvVars('production').CORS_ALLOWED_ORIGINS,
       ...overrides,
     }) as any;
 

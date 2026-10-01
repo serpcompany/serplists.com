@@ -16,7 +16,7 @@ import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 import type { Env } from "@functions/api/types";
 import { apiEnv } from "../../../support/apiEnv";
 import { apiErrorBody, readJson } from "../../../support/readJson";
-import { varFromWranglerToml } from "../../../support/wranglerToml";
+import { wranglerEnvVars } from "../../../support/wranglerToml";
 import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
 const mockEnv = apiEnv();
@@ -189,7 +189,7 @@ describe("Personal run key management handler", () => {
   });
 
   describe("MCP connection", () => {
-    const previewEnv = apiEnv({ CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS") });
+    const previewEnv = apiEnv({ CORS_ALLOWED_ORIGINS: wranglerEnvVars("preview").CORS_ALLOWED_ORIGINS });
 
     const connection = async (url: string, env: Env = previewEnv) => {
       const response = await handleAgentKeys(new Request(url), env);

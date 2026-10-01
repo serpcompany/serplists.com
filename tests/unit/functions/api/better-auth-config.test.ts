@@ -3,7 +3,7 @@ import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBetterAuth } from "@functions/api/better-auth";
 import { getAuthEmailPolicy } from "@functions/api/utils/auth-policy";
 import { betterAuthLogger } from "@functions/api/utils/better-auth-logger";
-import { varFromWranglerToml } from "../../../support/wranglerToml";
+import { wranglerEnvVars } from "../../../support/wranglerToml";
 
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn((_options: BetterAuthOptions) => ({ handler: vi.fn() })),
@@ -36,7 +36,7 @@ vi.mock("@functions/api/utils/auth-email-throttle", () => ({
 
 function productionEnvWith(overrides?: Record<string, unknown>) {
   return {
-    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml("env.production.vars", "AUTH_EMAIL_VERIFICATION_REQUIRED"),
+    AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars("production").AUTH_EMAIL_VERIFICATION_REQUIRED,
     BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters!!",
     FRONTEND_URL: "https://app.serplists.com",
     RESEND_API_KEY: "re_test_123",

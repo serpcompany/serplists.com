@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { readWranglerToml } from '../../support/wranglerToml';
 
 const stepSchema = z.object({
   id: z.string().optional(),
@@ -60,7 +61,9 @@ describe('the staging deploy', () => {
     const deployStep = steps.find((step) => step.id === 'deploy');
 
     expect(deployStep?.run).toContain('opennextjs-cloudflare deploy --env preview');
-    expect(readFileSync('wrangler.toml', 'utf8')).toMatch(/\[\[env\.preview\.d1_databases\]\][^[]*database_name = "serp-checklists-staging-db"/);
+    expect(readWranglerToml().env.preview.d1_databases).toContainEqual(
+      expect.objectContaining({ binding: 'DB', database_name: 'serp-checklists-staging-db' }),
+    );
   });
 
   it('fails when the deploy prints no workers.dev URL, so an unchecked deployment never passes', () => {
