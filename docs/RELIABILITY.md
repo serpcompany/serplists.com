@@ -387,6 +387,11 @@ Common failures:
   just before the handler's next `db.batch()`, and `queryPlan()` returns
   `EXPLAIN QUERY PLAN` for a recorded statement. See
   `tests/unit/functions/api/teams-sqlite.test.ts`.
+- Billing tests on SQLite send checkout and portal requests with `postToBilling()` and seed
+  users, customers and subscriptions with the helpers in `tests/support/billingCheckout.ts`.
+  A file that checks out more than 10 times a minute for one user mocks `checkRateLimit`
+  to allow every request: the per-account limit on checkout and portal (tested in
+  `billing-handler.test.ts`) would refuse its later tests.
 - MCP tests send their requests with `mcpRequest()` and `mcpToolCall()` from
   `tests/support/agentMcp.ts`. A test that makes more calls than one Run Key may make in a
   minute (`RUN_KEY_REQUESTS_PER_MINUTE`, counted per key in the process) gives each call a

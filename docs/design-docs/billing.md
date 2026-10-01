@@ -234,7 +234,8 @@ Authenticated:
   share one customer (a changed email makes a new key rather than a Stripe
   parameter-mismatch error), and stores the mapping with `ON CONFLICT DO NOTHING`: a
   mapping another request or the webhook stored first is kept, and that request
-  gets `409 checkout_in_progress`. The Checkout idempotency key is the user, the
+  gets `409 checkout_in_progress`, because the kept customer's subscriptions were not
+  checked; the retry checks out as that customer. The Checkout idempotency key is the user, the
   customer id, a digest of the price and return URLs, and the five-minute window the
   request falls in, so a retry or double submit in that window joins one Checkout
   Session, which later checkouts reuse or expire. The customer and the digest are in

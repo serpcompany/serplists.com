@@ -1,21 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  postToBilling,
+  seedBillingUser,
+  storeSubscriptionRow,
+  stripeBillingEnv,
+  stripeSubscription,
+} from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
 
-// A Checkout Session stays payable for 24 hours and each one opens its own subscription.
-// The idempotency key only joins requests in the same five-minute window, so a tab left
-// on Checkout plus a later Upgrade used to leave two payable sessions: paying both
-// billed the customer twice.
-
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-// Each test here is its own checkout for the same user, so the per-account limit on
-// checkout and portal (tested in billing-handler.test.ts) would block the later ones.
 vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
   checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
 }));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
-
-import { handleBilling } from "@functions/api/handlers/billing";
 
 const USER_ID = "user-1";
 const CUSTOMER_ID = "cus_1";
@@ -31,7 +29,6 @@ type StripeSession = {
   created: number;
   expires_at: number;
   metadata: Record<string, string>;
-  /** The subscription Stripe created when the buyer submitted payment, if any. */
   subscription: string | null;
 };
 
@@ -40,12 +37,9 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let sessions: StripeSession[];
 let idempotentResponses: Map<string, string>;
 let nextSessionId: number;
-/** What GET /v1/subscriptions returns. */
-let stripeSubscriptions: unknown[];
-/** Overrides the Checkout Session list response. */
-let sessionListResponse: (() => Response) | null;
-/** Runs when Stripe is asked to expire a session, before it answers. */
-let beforeExpire: ((session: StripeSession) => void) | null;
+let subscriptionsStripeLists: unknown[];
+let sessionListOverride: (() => Response) | null;
+let whileStripeExpiresTheSession: ((session: StripeSession) => void) | null;
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
@@ -81,6 +75,12 @@ function addSession(overrides: Partial<StripeSession> = {}): StripeSession {
   return session;
 }
 
+function cancelTheIncompleteSubscriptionItOpened(session: StripeSession) {
+  subscriptionsStripeLists = subscriptionsStripeLists.filter(
+    (subscription) => (subscription as { id: string }).id !== session.subscription,
+  );
+}
+
 function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   const url = new URL(String(input));
   const method = init?.method ?? "GET";
@@ -88,10 +88,10 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   const idempotencyKey = (init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"];
 
   if (method === "GET" && url.pathname === "/v1/subscriptions") {
-    return jsonResponse({ object: "list", data: stripeSubscriptions, has_more: false });
+    return jsonResponse({ object: "list", data: subscriptionsStripeLists, has_more: false });
   }
   if (method === "GET" && url.pathname === "/v1/checkout/sessions") {
-    if (sessionListResponse) return sessionListResponse();
+    if (sessionListOverride) return sessionListOverride();
     const customer = url.searchParams.get("customer");
     const status = url.searchParams.get("status");
     const data = sessions
@@ -102,16 +102,13 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   const expire = /^\/v1\/checkout\/sessions\/([^/]+)\/expire$/.exec(url.pathname);
   if (method === "POST" && expire) {
     const session = sessions.find((candidate) => candidate.id === expire[1]);
-    if (session) beforeExpire?.(session);
+    if (session) whileStripeExpiresTheSession?.(session);
     if (!session || session.status !== "open") {
       return jsonResponse({ error: { type: "invalid_request_error", message: "Session is not open." } }, 400);
     }
     session.status = "expired";
     session.url = null;
-    // Expiring a session cancels the incomplete subscription it opened.
-    stripeSubscriptions = stripeSubscriptions.filter(
-      (subscription) => (subscription as { id: string }).id !== session.subscription,
-    );
+    cancelTheIncompleteSubscriptionItOpened(session);
     return jsonResponse(session);
   }
   if (method === "POST" && url.pathname === "/v1/checkout/sessions") {
@@ -125,22 +122,7 @@ function stripeMock(input: RequestInfo | URL, init?: RequestInit): Response {
   throw new Error(`Unexpected Stripe call: ${method} ${url}`);
 }
 
-function env() {
-  return {
-    DB: d1.binding,
-    BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-    STRIPE_SECRET_KEY: "sk_test_open_sessions",
-    STRIPE_PRO_PRICE_ID: "price_pro",
-  } as never;
-}
-
-async function checkout(): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await handleBilling(
-    new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
-    env(),
-  );
-  return { status: response.status, body: await response.json() };
-}
+const checkout = () => postToBilling(stripeBillingEnv(d1), "checkout");
 
 function stripeCalls(): string[] {
   return fetchMock.mock.calls.map(([input, init]) => {
@@ -149,35 +131,22 @@ function stripeCalls(): string[] {
   });
 }
 
-function stripeSubscription(id: string, status: string) {
-  return {
-    id,
-    object: "subscription",
-    customer: CUSTOMER_ID,
-    status,
-    metadata: { userId: USER_ID },
-    items: { data: [{ current_period_end: 1_900_000_000, price: { id: "price_pro" } }] },
-  };
-}
+const subscriptionOnTheCustomer = (id: string, status: string) =>
+  stripeSubscription({ id, userId: USER_ID, customerId: CUSTOMER_ID, status });
 
-/** A row the customer.subscription.created webhook stored. */
-function storeSubscription(id: string, status: string) {
-  d1.sqlite.prepare(`
-    INSERT INTO stripe_subscriptions (
-      stripe_subscription_id, user_id, stripe_customer_id, price_id, status, created_at, updated_at
-    ) VALUES (?, ?, ?, 'price_pro', ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-  `).run(id, USER_ID, CUSTOMER_ID, status);
-}
+const storeAsTheSubscriptionWebhookWould = (id: string, status: string) =>
+  storeSubscriptionRow(d1, { id, userId: USER_ID, customerId: CUSTOMER_ID, status });
 
-/** The buyer's card is declined in `session`: Stripe leaves its subscription incomplete. */
-function declinePayment(session: StripeSession, subscriptionId: string, { stored = true } = {}) {
+function declinePaymentLeavingItsSubscriptionIncomplete(session: StripeSession, subscriptionId: string, { stored = true } = {}) {
   session.subscription = subscriptionId;
-  stripeSubscriptions.push(stripeSubscription(subscriptionId, "incomplete"));
-  if (stored) storeSubscription(subscriptionId, "incomplete");
+  subscriptionsStripeLists.push(subscriptionOnTheCustomer(subscriptionId, "incomplete"));
+  if (stored) storeAsTheSubscriptionWebhookWould(subscriptionId, "incomplete");
 }
 
 const openSessions = () => sessions.filter((session) => session.status === "open");
 const sessionCreates = () => stripeCalls().filter((call) => call === "POST /v1/checkout/sessions");
+
+const addSessionWithoutThisCheckoutsParams = () => addSession({ metadata: { userId: USER_ID } });
 
 function advanceMinutes(minutes: number) {
   vi.setSystemTime(Date.now() + minutes * 60_000);
@@ -187,17 +156,14 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-09-28T10:00:00.000Z"));
   d1 = createSqliteD1(billingSchemaSql());
-  d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(USER_ID, "user-1@example.test");
-  d1.sqlite.prepare(`
-    INSERT INTO stripe_customers (user_id, stripe_customer_id, created_at) VALUES (?, ?, '2026-01-01T00:00:00.000Z')
-  `).run(USER_ID, CUSTOMER_ID);
+  seedBillingUser(d1, USER_ID, CUSTOMER_ID);
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   sessions = [];
   idempotentResponses = new Map();
   nextSessionId = 0;
-  stripeSubscriptions = [];
-  sessionListResponse = null;
-  beforeExpire = null;
+  subscriptionsStripeLists = [];
+  sessionListOverride = null;
+  whileStripeExpiresTheSession = null;
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => stripeMock(input, init));
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -209,9 +175,8 @@ afterEach(() => {
 });
 
 describe("POST /api/billing/checkout with an open Checkout Session", () => {
-  it("sends a later Upgrade to the session already open instead of opening a second one", async () => {
+  it("sends an Upgrade in a later idempotency window to the session still open in another tab instead of opening a second one", async () => {
     const first = await checkout();
-    // The buyer leaves that tab on Checkout and clicks Upgrade again in a later window.
     advanceMinutes(7);
     fetchMock.mockClear();
 
@@ -235,8 +200,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   });
 
   it("expires an open session that does not match this checkout, then opens a new one", async () => {
-    // Opened before this check existed, or for another price or return URL.
-    const stale = addSession({ metadata: { userId: USER_ID } });
+    const stale = addSessionWithoutThisCheckoutsParams();
 
     const result = await checkout();
 
@@ -266,16 +230,15 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   it("keeps the newest matching session and expires every other one", async () => {
     await checkout();
     advanceMinutes(10);
-    // A second session left from before this check, in a later window.
     const [firstSession] = sessions;
-    const newer = addSession({ metadata: { ...firstSession.metadata } });
+    const newerSessionLeftFromBeforeThisCheck = addSession({ metadata: { ...firstSession.metadata } });
     advanceMinutes(10);
 
     const result = await checkout();
 
-    expect(result.body.url).toBe(`https://checkout.stripe.test/${newer.id}`);
+    expect(result.body.url).toBe(`https://checkout.stripe.test/${newerSessionLeftFromBeforeThisCheck.id}`);
     expect(firstSession.status).toBe("expired");
-    expect(openSessions().map((session) => session.id)).toEqual([newer.id]);
+    expect(openSessions().map((session) => session.id)).toEqual([newerSessionLeftFromBeforeThisCheck.id]);
   });
 
   it("leaves open sessions that cannot start a subscription alone", async () => {
@@ -289,16 +252,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 
   it("expires open sessions before checking Stripe for a subscription, and sells nothing when one exists", async () => {
     const stale = addSession();
-    stripeSubscriptions = [
-      {
-        id: "sub_paid",
-        object: "subscription",
-        customer: CUSTOMER_ID,
-        status: "active",
-        metadata: { userId: USER_ID },
-        items: { data: [{ current_period_end: 1_900_000_000, price: { id: "price_pro" } }] },
-      },
-    ];
+    subscriptionsStripeLists = [subscriptionOnTheCustomer("sub_paid", "active")];
 
     const result = await checkout();
 
@@ -310,16 +264,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 
   it("does not reuse a matching session when Stripe shows a subscription", async () => {
     await checkout();
-    stripeSubscriptions = [
-      {
-        id: "sub_paid",
-        object: "subscription",
-        customer: CUSTOMER_ID,
-        status: "active",
-        metadata: { userId: USER_ID },
-        items: { data: [{ current_period_end: 1_900_000_000, price: { id: "price_pro" } }] },
-      },
-    ];
+    subscriptionsStripeLists = [subscriptionOnTheCustomer("sub_paid", "active")];
 
     const result = await checkout();
 
@@ -329,7 +274,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 
   it("returns 409 checkout_in_progress when a session completes while it is being expired", async () => {
     addSession();
-    beforeExpire = (session) => {
+    whileStripeExpiresTheSession = (session) => {
       session.status = "complete";
     };
 
@@ -341,7 +286,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   });
 
   it("fails closed with 503 when Stripe cannot list open sessions", async () => {
-    sessionListResponse = () => jsonResponse({ error: { type: "api_error" } }, 500);
+    sessionListOverride = () => jsonResponse({ error: { type: "api_error" } }, 500);
 
     const result = await checkout();
 
@@ -351,24 +296,20 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   });
 
   it("fails closed when the open-session list is incomplete or malformed", async () => {
-    sessionListResponse = () => jsonResponse({ object: "list", data: [], has_more: true });
+    sessionListOverride = () => jsonResponse({ object: "list", data: [], has_more: true });
     expect((await checkout()).status).toBe(503);
 
-    sessionListResponse = () => jsonResponse({ object: "list", data: [{ id: "cs_x" }], has_more: false });
+    sessionListOverride = () => jsonResponse({ object: "list", data: [{ id: "cs_x" }], has_more: false });
     expect((await checkout()).status).toBe(503);
 
     expect(sessionCreates()).toEqual([]);
   });
 });
 
-describe("POST /api/billing/checkout after a first payment did not go through", () => {
-  // Checkout creates the subscription when the buyer submits payment. A declined card or
-  // an abandoned 3DS step leaves it incomplete while its session stays open, and only a
-  // retry in that session can pay it: the Customer Portal cannot.
-
+describe("POST /api/billing/checkout after a first payment did not go through, which only a retry in its session can pay", () => {
   it("sends the buyer back to the session that holds the incomplete subscription", async () => {
     const first = await checkout();
-    declinePayment(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
     advanceMinutes(10);
     fetchMock.mockClear();
 
@@ -383,7 +324,7 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
 
   it("does the same before the webhook has stored the subscription", async () => {
     const first = await checkout();
-    declinePayment(sessions[0], "sub_1", { stored: false });
+    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1", { stored: false });
     advanceMinutes(10);
 
     const retry = await checkout();
@@ -395,7 +336,7 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
   it("replaces a session about to expire once expiring it has canceled its subscription", async () => {
     await checkout();
     const [declined] = sessions;
-    declinePayment(declined, "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(declined, "sub_1");
     advanceMinutes(24 * 60 - 30);
 
     const retry = await checkout();
@@ -406,10 +347,9 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
     expect(openSessions()).toHaveLength(1);
   });
 
-  it("refuses without the Customer Portal while an incomplete subscription has no open session", async () => {
-    // A first payment still processing, for example.
-    stripeSubscriptions = [stripeSubscription("sub_1", "incomplete")];
-    storeSubscription("sub_1", "incomplete");
+  it("refuses without the Customer Portal while an incomplete subscription has no open session, as when a first payment is processing", async () => {
+    subscriptionsStripeLists = [subscriptionOnTheCustomer("sub_1", "incomplete")];
+    storeAsTheSubscriptionWebhookWould("sub_1", "incomplete");
 
     const result = await checkout();
 
@@ -420,8 +360,8 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
 
   it("does not reuse the session when another subscription is paid", async () => {
     await checkout();
-    declinePayment(sessions[0], "sub_1");
-    stripeSubscriptions.push(stripeSubscription("sub_paid", "active"));
+    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_paid", "active"));
 
     const result = await checkout();
 
@@ -431,8 +371,8 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
 
   it("keeps sending a failed renewal to the Customer Portal even with a session open", async () => {
     await checkout();
-    declinePayment(sessions[0], "sub_1");
-    stripeSubscriptions.push(stripeSubscription("sub_old", "past_due"));
+    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_old", "past_due"));
 
     const result = await checkout();
 
@@ -442,7 +382,7 @@ describe("POST /api/billing/checkout after a first payment did not go through", 
 
   it("refuses without a Stripe customer to check", async () => {
     d1.sqlite.exec("DELETE FROM stripe_customers");
-    storeSubscription("sub_1", "incomplete");
+    storeAsTheSubscriptionWebhookWould("sub_1", "incomplete");
 
     const result = await checkout();
 

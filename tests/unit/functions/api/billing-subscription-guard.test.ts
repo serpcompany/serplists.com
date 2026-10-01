@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  PRO_PRICE_ID,
+  postToBilling,
+  seedBillingUser,
+  storeSubscriptionRow,
+  stripeBillingEnv,
+  stripeSubscription as stripeSubscriptionFor,
+} from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
-
-// Runs the billing handler and the real entitlement resolution against SQLite, so the
-// checkout guard is checked against stored Stripe subscription rows.
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const teamAccessMocks = vi.hoisted(() => ({
@@ -11,8 +16,6 @@ const teamAccessMocks = vi.hoisted(() => ({
   normalizeTeamRole: vi.fn((role: string) => role),
 }));
 
-// Each test here is its own checkout for the same user, so the per-account limit on
-// checkout and portal (tested in billing-handler.test.ts) would block the later ones.
 vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
   checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
@@ -23,43 +26,22 @@ vi.mock("@functions/api/utils/team-access", () => teamAccessMocks);
 import { handleBilling } from "@functions/api/handlers/billing";
 
 const USER_ID = "user-1";
-const PRO_PRICE_ID = "price_pro";
 
 let d1: SqliteD1;
 let fetchMock: ReturnType<typeof vi.fn>;
-/** What Stripe's GET /v1/subscriptions?customer=... returns; null makes it fail. */
-let stripeSubscriptions: { data: unknown[]; has_more: boolean } | null;
+let subscriptionListStripeReturns: { data: unknown[]; has_more: boolean } | null;
 
-function stripeSubscription(id: string, status: string, priceId = PRO_PRICE_ID) {
-  return {
-    id,
-    object: "subscription",
-    customer: "cus_1",
-    status,
-    cancel_at_period_end: false,
-    canceled_at: null,
-    trial_end: null,
-    metadata: { userId: USER_ID },
-    items: { data: [{ current_period_end: 1_900_000_000, price: { id: priceId } }] },
-  };
-}
+const stripeSubscription = (id: string, status: string, priceId = PRO_PRICE_ID) => ({
+  ...stripeSubscriptionFor({ id, userId: USER_ID, customerId: "cus_1", status, priceId }),
+  cancel_at_period_end: false,
+  canceled_at: null,
+  trial_end: null,
+});
 
-function env() {
-  return {
-    DB: d1.binding,
-    BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-    STRIPE_SECRET_KEY: "sk_test_guard",
-    STRIPE_PRO_PRICE_ID: PRO_PRICE_ID,
-  } as never;
-}
+const env = () => stripeBillingEnv(d1);
 
-function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) {
-  d1.sqlite.prepare(`
-    INSERT INTO stripe_subscriptions (
-      stripe_subscription_id, user_id, stripe_customer_id, price_id, status, created_at, updated_at
-    ) VALUES (?, ?, 'cus_1', ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-  `).run(id, USER_ID, priceId, status);
-}
+const insertSubscription = (id: string, status: string, priceId = PRO_PRICE_ID) =>
+  storeSubscriptionRow(d1, { id, userId: USER_ID, customerId: "cus_1", status, priceId });
 
 function insertOverride(plan: string, expiresAt: number | null = null) {
   d1.sqlite.prepare(`
@@ -67,13 +49,7 @@ function insertOverride(plan: string, expiresAt: number | null = null) {
   `).run(USER_ID, plan, expiresAt);
 }
 
-async function checkout(): Promise<{ status: number; body: Record<string, unknown> }> {
-  const response = await handleBilling(
-    new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
-    env(),
-  );
-  return { status: response.status, body: await response.json() };
-}
+const checkout = () => postToBilling(env(), "checkout");
 
 async function billingStatus(query = ""): Promise<Record<string, unknown>> {
   const response = await handleBilling(new Request(`http://localhost/api/billing/status${query}`), env());
@@ -97,19 +73,16 @@ function storedSubscriptionStatuses(): string[] {
 
 beforeEach(() => {
   d1 = createSqliteD1(billingSchemaSql());
-  d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(USER_ID, "user-1@example.test");
-  d1.sqlite.prepare(`
-    INSERT INTO stripe_customers (user_id, stripe_customer_id, created_at) VALUES (?, 'cus_1', '2026-01-01T00:00:00.000Z')
-  `).run(USER_ID);
+  seedBillingUser(d1, USER_ID, "cus_1");
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
-  stripeSubscriptions = { data: [], has_more: false };
+  subscriptionListStripeReturns = { data: [], has_more: false };
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if ((init?.method ?? "GET") === "GET" && url.startsWith("https://api.stripe.com/v1/subscriptions?")) {
-      if (!stripeSubscriptions) {
+      if (!subscriptionListStripeReturns) {
         return new Response(JSON.stringify({ error: { type: "api_error" } }), { status: 500 });
       }
-      return new Response(JSON.stringify({ object: "list", ...stripeSubscriptions }));
+      return new Response(JSON.stringify({ object: "list", ...subscriptionListStripeReturns }));
     }
     if ((init?.method ?? "GET") === "GET" && url.startsWith("https://api.stripe.com/v1/checkout/sessions?")) {
       return new Response(JSON.stringify({ object: "list", data: [], has_more: false }));
@@ -125,14 +98,12 @@ afterEach(() => {
   d1.close();
 });
 
-describe("POST /api/billing/checkout with an existing Stripe subscription", () => {
-  // For the stored customer, Stripe's list decides: it also finds a customer Stripe no
-  // longer has, whose stored rows no webhook will ever update.
+describe("POST /api/billing/checkout with an existing Stripe subscription, where Stripe's list for the stored customer decides", () => {
   it.each(["past_due", "unpaid", "paused"])(
     "returns 409 subscription_needs_attention for a %s subscription Stripe still lists",
     async (status) => {
       insertSubscription("sub_1", status);
-      stripeSubscriptions = { data: [stripeSubscription("sub_1", status)], has_more: false };
+      subscriptionListStripeReturns = { data: [stripeSubscription("sub_1", status)], has_more: false };
 
       const result = await checkout();
 
@@ -142,8 +113,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     },
   );
 
-  it("no longer refuses for a stored subscription Stripe does not list for the customer", async () => {
-    // Its cancellation webhook was lost.
+  it("no longer refuses for a stored subscription Stripe does not list for the customer, whose cancellation webhook was lost", async () => {
     insertSubscription("sub_1", "past_due");
 
     const result = await checkout();
@@ -166,8 +136,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     },
   );
 
-  it("asks Stripe about a stored incomplete subscription, whose first payment only Checkout can finish", async () => {
-    // Expiring its Checkout Session canceled it; the webhook has not arrived yet.
+  it("asks Stripe about a stored incomplete subscription, whose expired session may have canceled it before the webhook arrived", async () => {
     insertSubscription("sub_1", "incomplete");
 
     const result = await checkout();
@@ -193,7 +162,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
     "returns 409 already_subscribed for a %s subscription on another price",
     async (status) => {
       insertSubscription("sub_1", status, "price_other");
-      stripeSubscriptions = { data: [stripeSubscription("sub_1", status, "price_other")], has_more: false };
+      subscriptionListStripeReturns = { data: [stripeSubscription("sub_1", status, "price_other")], has_more: false };
 
       const result = await checkout();
 
@@ -231,11 +200,9 @@ describe("POST /api/billing/checkout with an existing Stripe subscription", () =
   });
 });
 
-describe("POST /api/billing/checkout when Stripe knows a subscription D1 does not", () => {
-  // Webhooks can lag or fail, so D1 alone cannot prove the customer has no subscription.
-
+describe("POST /api/billing/checkout when Stripe knows a subscription D1 does not, since webhooks can lag or fail", () => {
   it("returns 409 already_subscribed for an active subscription and stores it so Pro shows", async () => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_paid", "active")], has_more: false };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_paid", "active")], has_more: false };
 
     const result = await checkout();
 
@@ -247,7 +214,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   });
 
   it.each(["trialing", "active"])("blocks a %s subscription on another price", async (status) => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_other", status, "price_other")], has_more: false };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_other", status, "price_other")], has_more: false };
 
     const result = await checkout();
 
@@ -257,7 +224,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   });
 
   it("returns 409 checkout_incomplete, not the Customer Portal, for an incomplete subscription no session holds", async () => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_open", "incomplete")], has_more: false };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_open", "incomplete")], has_more: false };
 
     const result = await checkout();
 
@@ -270,7 +237,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   it.each(["past_due", "unpaid", "paused"])(
     "returns 409 subscription_needs_attention for a %s subscription",
     async (status) => {
-      stripeSubscriptions = { data: [stripeSubscription("sub_open", status)], has_more: false };
+      subscriptionListStripeReturns = { data: [stripeSubscription("sub_open", status)], has_more: false };
 
       const result = await checkout();
 
@@ -282,7 +249,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   );
 
   it("allows checkout when Stripe's subscriptions have all ended", async () => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_expired", "incomplete_expired")], has_more: false };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_expired", "incomplete_expired")], has_more: false };
 
     const result = await checkout();
 
@@ -291,7 +258,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   });
 
   it("fails closed with 503 when Stripe cannot list the subscriptions", async () => {
-    stripeSubscriptions = null;
+    subscriptionListStripeReturns = null;
 
     const result = await checkout();
 
@@ -301,7 +268,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   });
 
   it("fails closed when the list is incomplete and shows nothing open", async () => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_expired", "incomplete_expired")], has_more: true };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_expired", "incomplete_expired")], has_more: true };
 
     const result = await checkout();
 
@@ -310,7 +277,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   });
 
   it("fails closed when the list is incomplete and shows only an unfinished first payment", async () => {
-    stripeSubscriptions = { data: [stripeSubscription("sub_open", "incomplete")], has_more: true };
+    subscriptionListStripeReturns = { data: [stripeSubscription("sub_open", "incomplete")], has_more: true };
 
     const result = await checkout();
 

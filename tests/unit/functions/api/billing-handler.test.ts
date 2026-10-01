@@ -22,22 +22,20 @@ const teamAccessMocks = vi.hoisted(() => ({
 
 type CustomerRow = { user_id: string; stripe_customer_id: string; created_at?: string; updated_at?: string };
 
-// A stand-in for the stripe_customers table, enough for the checkout flow.
-const dbState = vi.hoisted(() => ({
+const fakeStripeCustomersTable = vi.hoisted(() => ({
   mapping: null as null | CustomerRow,
-  // A row another request inserts right after this request's first read.
-  concurrentMapping: null as null | CustomerRow,
+  rowAnotherRequestInsertsAfterTheFirstRead: null as null | CustomerRow,
 }));
 
 vi.mock("@functions/api/db", async (importOriginal) => {
   const original = await importOriginal<typeof import("@functions/api/db")>();
   const { stripe_customers, users } = original.schema;
   const insertRow = (row: CustomerRow, onConflict: "fail" | "ignore") => {
-    if (dbState.mapping) {
+    if (fakeStripeCustomersTable.mapping) {
       if (onConflict === "ignore") return Promise.resolve();
       return Promise.reject(new Error("D1_ERROR: UNIQUE constraint failed: stripe_customers.user_id"));
     }
-    dbState.mapping = row;
+    fakeStripeCustomersTable.mapping = row;
     return Promise.resolve();
   };
   const fakeDb = {
@@ -47,15 +45,14 @@ vi.mock("@functions/api/db", async (importOriginal) => {
           limit: async () => {
             if (table === users) return [{ email: "user@example.com" }];
             if (table !== stripe_customers) throw new Error("unexpected table");
-            // Whole rows, plus the { stripeCustomerId } projection the customer helpers select.
-            const rows = dbState.mapping
-              ? [{ ...dbState.mapping, stripeCustomerId: dbState.mapping.stripe_customer_id }]
+            const wholeRowsWithTheCustomerIdProjection = fakeStripeCustomersTable.mapping
+              ? [{ ...fakeStripeCustomersTable.mapping, stripeCustomerId: fakeStripeCustomersTable.mapping.stripe_customer_id }]
               : [];
-            if (dbState.concurrentMapping) {
-              dbState.mapping = dbState.concurrentMapping;
-              dbState.concurrentMapping = null;
+            if (fakeStripeCustomersTable.rowAnotherRequestInsertsAfterTheFirstRead) {
+              fakeStripeCustomersTable.mapping = fakeStripeCustomersTable.rowAnotherRequestInsertsAfterTheFirstRead;
+              fakeStripeCustomersTable.rowAnotherRequestInsertsAfterTheFirstRead = null;
             }
-            return rows;
+            return wholeRowsWithTheCustomerIdProjection;
           },
         }),
       }),
@@ -70,7 +67,7 @@ vi.mock("@functions/api/db", async (importOriginal) => {
     update: () => ({
       set: (values: Partial<CustomerRow>) => ({
         where: async () => {
-          if (dbState.mapping) dbState.mapping = { ...dbState.mapping, ...values };
+          if (fakeStripeCustomersTable.mapping) fakeStripeCustomersTable.mapping = { ...fakeStripeCustomersTable.mapping, ...values };
         },
       }),
     }),
@@ -100,6 +97,7 @@ vi.mock("@functions/api/utils/team-access", () => ({
 }));
 
 import { handleBilling } from "@functions/api/handlers/billing";
+import { emptyStripeList } from "../../../support/billingCheckout";
 
 const mockEnv = {
   DB: {} as D1Database,
@@ -122,8 +120,7 @@ function postBilling(path: "checkout" | "portal") {
 
 type StripeCall = { path: string; idempotencyKey: string | null; body: URLSearchParams };
 
-/** Stubs Stripe: each POST /v1/customers without a known key creates a new customer. */
-function stubStripe() {
+function stubStripeCreatingACustomerPerNewIdempotencyKey() {
   const calls: StripeCall[] = [];
   const customersByKey = new Map<string, string>();
   let createdCustomers = 0;
@@ -134,11 +131,8 @@ function stubStripe() {
       const idempotencyKey = new Headers(init?.headers).get("Idempotency-Key");
       const body = new URLSearchParams(String(init?.body ?? ""));
       calls.push({ path, idempotencyKey, body });
-      // A stored customer has its open Checkout Sessions and subscriptions checked first.
       if ((init?.method ?? "GET") === "GET") {
-        if (path === "/v1/checkout/sessions" || path === "/v1/subscriptions") {
-          return Response.json({ object: "list", data: [], has_more: false });
-        }
+        if (path === "/v1/checkout/sessions" || path === "/v1/subscriptions") return emptyStripeList();
         return new Response("not found", { status: 404 });
       }
       if (path === "/v1/customers") {
@@ -174,8 +168,8 @@ describe("Billing handler", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    dbState.mapping = null;
-    dbState.concurrentMapping = null;
+    fakeStripeCustomersTable.mapping = null;
+    fakeStripeCustomersTable.rowAnotherRequestInsertsAfterTheFirstRead = null;
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
     entitlementsMocks.getEntitlementsForUser.mockResolvedValue({
       plan: "free",
@@ -251,12 +245,7 @@ describe("Billing handler", () => {
   });
 
   it("POST /api/billing/checkout returns 503 when Stripe is not configured", async () => {
-    const request = new Request("http://localhost/api/billing/checkout", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const response = await handleBilling(request, mockEnv);
+    const response = await handleBilling(postBilling("checkout"), mockEnv);
     const data = await response.json();
 
     expect(response.status).toBe(503);
@@ -269,12 +258,7 @@ describe("Billing handler", () => {
       source: "user_subscription",
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
-    const request = new Request("http://localhost/api/billing/checkout", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const response = await handleBilling(request, {
+    const response = await handleBilling(postBilling("checkout"), {
       ...mockEnv,
       STRIPE_SECRET_KEY: "sk_live_example",
       STRIPE_PRO_PRICE_ID: "price_live_example",
@@ -286,22 +270,17 @@ describe("Billing handler", () => {
   });
 
   it("POST /api/billing/portal returns 503 when Stripe is not configured", async () => {
-    const request = new Request("http://localhost/api/billing/portal", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const response = await handleBilling(request, mockEnv);
+    const response = await handleBilling(postBilling("portal"), mockEnv);
     const data = await response.json();
 
     expect(response.status).toBe(503);
     expect(data.code).toBe("billing_unavailable");
   });
 
-  it("limits checkout and portal per account, whatever IP the requests come from", async () => {
+  it("limits checkout and portal per account, whatever IP the requests come from, but never the status the settings pages load", async () => {
     sessionMocks.getSessionUserId.mockResolvedValue("rate-limited-user");
-    const stripe = stubStripe();
-    dbState.mapping = { user_id: "rate-limited-user", stripe_customer_id: "cus_existing" };
+    const stripe = stubStripeCreatingACustomerPerNewIdempotencyKey();
+    fakeStripeCustomersTable.mapping = { user_id: "rate-limited-user", stripe_customer_id: "cus_existing" };
 
     for (let index = 0; index < 10; index += 1) {
       const request = postBilling(index % 2 === 0 ? "portal" : "checkout");
@@ -316,8 +295,6 @@ describe("Billing handler", () => {
     expect(Number(blocked.headers.get("Retry-After"))).toBeGreaterThan(0);
     expect((await blocked.json()).error).toMatch(/try again/i);
     expect(stripe.calls.length).toBe(stripeCallsBefore);
-
-    // The status read the settings pages load is never limited.
     expect((await handleBilling(new Request("http://localhost/api/billing/status"), stripeEnv)).status).toBe(200);
   });
 
@@ -329,24 +306,23 @@ describe("Billing handler", () => {
     }
   });
 
-  it("creates the Stripe customer with a per-account idempotency key", async () => {
+  it("creates the Stripe customer with a per-account idempotency key ending in a digest of the email, so a changed email gets a new customer", async () => {
     sessionMocks.getSessionUserId.mockResolvedValue("first-checkout-user");
-    const stripe = stubStripe();
+    const stripe = stubStripeCreatingACustomerPerNewIdempotencyKey();
 
     const response = await handleBilling(postBilling("checkout"), stripeEnv);
 
     expect(response.status).toBe(200);
     const keys = stripe.customerCalls().map((call) => call.idempotencyKey);
-    // The key ends in a digest of the email, so a changed email gets a new customer.
     expect(keys).toHaveLength(1);
     expect(keys[0]).toMatch(/^customer-first-checkout-user-[0-9a-f]+$/);
-    expect(dbState.mapping?.stripe_customer_id).toBe("cus_1");
+    expect(fakeStripeCustomersTable.mapping?.stripe_customer_id).toBe("cus_1");
     expect(stripe.checkoutCustomers()).toEqual(["cus_1"]);
   });
 
   it("gives concurrent first checkouts the same Stripe customer", async () => {
     sessionMocks.getSessionUserId.mockResolvedValue("double-click-user");
-    const stripe = stubStripe();
+    const stripe = stubStripeCreatingACustomerPerNewIdempotencyKey();
 
     const responses = await Promise.all([
       handleBilling(postBilling("checkout"), stripeEnv),
@@ -357,22 +333,20 @@ describe("Billing handler", () => {
     const keys = new Set(stripe.customerCalls().map((call) => call.idempotencyKey));
     expect(keys.size).toBe(1);
     expect([...keys][0]).toMatch(/^customer-double-click-user-/);
-    expect(dbState.mapping?.stripe_customer_id).toBe("cus_1");
+    expect(fakeStripeCustomersTable.mapping?.stripe_customer_id).toBe("cus_1");
     expect(stripe.checkoutCustomers()).toEqual(["cus_1", "cus_1"]);
   });
 
-  it("keeps the stored customer when another request saved one first", async () => {
+  it("keeps the stored customer when another request saved one first, and asks the user to start again since its subscriptions were not checked", async () => {
     sessionMocks.getSessionUserId.mockResolvedValue("raced-user");
-    const stripe = stubStripe();
-    dbState.concurrentMapping = { user_id: "raced-user", stripe_customer_id: "cus_saved_first" };
+    const stripe = stubStripeCreatingACustomerPerNewIdempotencyKey();
+    fakeStripeCustomersTable.rowAnotherRequestInsertsAfterTheFirstRead = { user_id: "raced-user", stripe_customer_id: "cus_saved_first" };
 
     const response = await handleBilling(postBilling("checkout"), stripeEnv);
 
-    // The stored customer's subscriptions were not checked here, so the user starts again
-    // (and then checks out as that customer) instead of opening a session now.
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe("checkout_in_progress");
-    expect(dbState.mapping?.stripe_customer_id).toBe("cus_saved_first");
+    expect(fakeStripeCustomersTable.mapping?.stripe_customer_id).toBe("cus_saved_first");
     expect(stripe.checkoutCustomers()).toEqual([]);
   });
 });
