@@ -38,6 +38,18 @@ The error handler only records the failure: it never sets `src`, and there is no
 remote placeholder, so a broken image makes one request and stops.
 `tests/unit/components/TaskImage.test.tsx` checks this.
 
+## Embed blocks
+
+An embed block holds a URL, pasted `<iframe>` code or plain text, and viewers never get it
+as HTML. `getEmbedLinkUrl` (`src/lib/utils/embedLink.ts`) finds the address to link: the
+value itself, or the `src` of its iframe code, when that is an absolute http(s) URL.
+`ContentRenderer` links that address ("Open embedded content") and shows any other value as
+text, so markup, scripts and relative addresses never become a link or run. The editor's
+`EmbedField` (`src/components/ui/embed-field.tsx`) previews the same address ("Embed URL:
+...") or says viewers will see the value as text, and never offers script embeds. It renders
+one `<textarea>` whatever the value: React remounts a control whose element type changes,
+which would drop focus and the caret as someone types past `https://`.
+
 ## Text blocks and descriptions
 
 Text blocks are Markdown, rendered by `MarkdownBlock`; item and template descriptions

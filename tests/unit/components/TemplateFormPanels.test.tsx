@@ -75,8 +75,6 @@ describe('Template form panels', () => {
   });
 });
 
-// The preview showed example.com/templates/<slug>, a route the app does not have, and
-// "untitled" for a blank slug. Public templates live at /profile/<username>/<slug>.
 describe('Search & SEO preview URL', () => {
   function SeoHarness(props: {
     children: React.ReactNode;
@@ -89,7 +87,7 @@ describe('Search & SEO preview URL', () => {
     return <FormProvider {...form}>{props.children}</FormProvider>;
   }
 
-  it('previews the public template URL for the slug', () => {
+  it('previews the slug at the public template URL, /profile/<username>/<slug>, never a /templates/ route the app does not have', () => {
     const html = renderToStaticMarkup(
       <SeoHarness values={{ seoUrl: 'launch-checklist' }}>
         <SEOMetaEditor ownerSlug="jane" />
@@ -101,7 +99,7 @@ describe('Search & SEO preview URL', () => {
     expect(html).not.toContain('/templates/');
   });
 
-  it('previews the slug a new template gets from its name when the slug is blank', () => {
+  it('previews the slug a new template gets from its name when the slug is blank, never "untitled"', () => {
     const html = renderToStaticMarkup(
       <SeoHarness values={{ seoUrl: '', title: 'Launch Checklist!' }}>
         <SEOMetaEditor ownerSlug="jane" />
@@ -135,11 +133,8 @@ describe('Search & SEO preview URL', () => {
   });
 });
 
-// Screen readers announce a control by its accessible name. Without a linked label these
-// fields fell back to their placeholders, the Public Template switch (which publishes the
-// template) was announced as just 'switch, on', and the tag remove button as 'button'.
-describe('Template form panels name every control', () => {
-  it('links each Template Settings label to its control', () => {
+describe('Template form panels name every control for screen readers', () => {
+  it('links each Template Settings label to its control, so no field falls back to its placeholder and the tag remove button is not a bare "button"', () => {
     const html = renderToStaticMarkup(
       <TemplateFormHarness tags={['onboarding']}>
         <TemplateBasicInfo />
@@ -156,7 +151,7 @@ describe('Template form panels name every control', () => {
     expect(getByAccessibleName(html, 'Remove tag onboarding')?.tag).toBe('button');
   });
 
-  it('names the Public Template switch and describes what it does', () => {
+  it('names the Public Template switch, which publishes the template, and describes what it does, not just "switch, on"', () => {
     const html = renderToStaticMarkup(
       <TemplateFormHarness>
         <TemplateBasicInfo />

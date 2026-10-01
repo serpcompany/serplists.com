@@ -4,25 +4,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GenerateFromClipy } from '@/components/template-editor/GenerateFromClipy';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
-// Unit tests run in node with no DOM, so the component is called as a function with
-// React's hooks stubbed: state setters are recorded, refs persist for one render, and
-// effects are collected so a test can run their cleanup (the unmount).
-const hooks = vi.hoisted(() => ({
-  effects: [] as Array<() => void | (() => void)>,
-  sets: [] as unknown[],
-  url: 'https://clipy.online/video/abc',
+import { findElement } from '../../../support/elementTree';
+
+const stubbedHooks = vi.hoisted(() => ({
+  collectedEffects: [] as Array<() => void | (() => void)>,
+  stateSetterCalls: [] as unknown[],
+  typedClipyUrl: 'https://clipy.online/video/abc',
 }));
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   const stubs = {
     useEffect: (effect: () => void | (() => void)) => {
-      hooks.effects.push(effect);
+      stubbedHooks.collectedEffects.push(effect);
     },
     useRef: <T,>(initial: T) => ({ current: initial }),
     useState: <T,>(initial: T) => [
-      initial === '' ? hooks.url : initial,
+      initial === '' ? stubbedHooks.typedClipyUrl : initial,
       (next: unknown) => {
-        hooks.sets.push(next);
+        stubbedHooks.stateSetterCalls.push(next);
       },
     ],
   };
@@ -31,42 +30,31 @@ vi.mock('react', async (importOriginal) => {
 
 vi.mock('@/lib/api', () => ({ api: { generateTemplateFromClipy: vi.fn() } }));
 
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-function findButton(node: React.ReactNode): AnyElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findButton(child);
-      if (match) return match;
-    }
-    return null;
-  }
-  if (!React.isValidElement(node)) return null;
-  const element = node as AnyElement;
-  if (typeof element.props.onClick === 'function') return element;
-  return findButton(element.props.children as React.ReactNode);
-}
-
 const draft = buildTemplateEditorFormValues({ title: 'Clipy draft' });
 
 const render = (props: Partial<React.ComponentProps<typeof GenerateFromClipy>>) => {
   const tree = GenerateFromClipy({ onGenerated: vi.fn(), ...props });
-  const button = findButton(tree);
+  const button = findElement(tree, (element) => typeof element.props.onClick === 'function');
   if (!button) throw new Error('Generate button not found');
   return () => (button.props.onClick as () => void)();
 };
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const runEffectsThenUnmount = () => {
+  for (const effect of stubbedHooks.collectedEffects) {
+    const cleanup = effect();
+    if (typeof cleanup === 'function') cleanup();
+  }
+};
+
 beforeEach(() => {
-  hooks.effects.length = 0;
-  hooks.sets.length = 0;
+  stubbedHooks.collectedEffects.length = 0;
+  stubbedHooks.stateSetterCalls.length = 0;
 });
 
-// Generating replaced the whole editor (title, sections, everything typed) with the
-// Clipy draft, with no question asked, and edits typed during the request were lost.
-describe('GenerateFromClipy', () => {
-  it('asks before generating and leaves everything as it is when the user declines', async () => {
+describe('GenerateFromClipy, whose draft replaces the whole editor', () => {
+  it('asks before generating and leaves everything as it is, with no error and the URL as typed, when the user declines', async () => {
     const generate = vi.fn().mockResolvedValue({ draft });
     const onGenerated = vi.fn();
     const onGeneratingChange = vi.fn();
@@ -77,11 +65,10 @@ describe('GenerateFromClipy', () => {
     expect(generate).not.toHaveBeenCalled();
     expect(onGenerated).not.toHaveBeenCalled();
     expect(onGeneratingChange).not.toHaveBeenCalled();
-    // No error shown, and the URL stays as typed.
-    expect(hooks.sets).toEqual([]);
+    expect(stubbedHooks.stateSetterCalls).toEqual([]);
   });
 
-  it('generates and hands over the draft once the user agrees', async () => {
+  it('generates and hands over the draft once the user agrees, locking the editor while the request runs so nothing typed meanwhile is lost', async () => {
     const generate = vi.fn().mockResolvedValue({ draft });
     const onGenerated = vi.fn();
     const onGeneratingChange = vi.fn();
@@ -91,7 +78,6 @@ describe('GenerateFromClipy', () => {
 
     expect(generate).toHaveBeenCalledWith('https://clipy.online/video/abc');
     expect(onGenerated).toHaveBeenCalledWith(draft);
-    // The editor is locked while the request runs, so nothing typed meanwhile is lost.
     expect(onGeneratingChange.mock.calls).toEqual([[true], [false]]);
   });
 
@@ -125,11 +111,7 @@ describe('GenerateFromClipy', () => {
     const onGenerated = vi.fn();
 
     render({ confirmReplace: () => true, generate, onGenerated })();
-    // Unmount: run each effect and its cleanup.
-    for (const effect of hooks.effects) {
-      const cleanup = effect();
-      if (typeof cleanup === 'function') cleanup();
-    }
+    runEffectsThenUnmount();
     resolve({ draft });
     await flush();
 

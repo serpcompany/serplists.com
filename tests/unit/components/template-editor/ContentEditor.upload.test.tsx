@@ -1,5 +1,5 @@
 import React from 'react';
-import { createFormControl, get } from 'react-hook-form';
+import { get } from 'react-hook-form';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
@@ -10,23 +10,15 @@ import {
   createPendingUploads,
   type PendingUploads,
 } from '@/features/template-editor/pendingUploads';
-import {
-  buildTemplateEditorFormValues,
-  type TemplateEditorContent,
-  type TemplateEditorFormValues,
-} from '@/lib/forms/templateEditorForm';
+import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
-// Unit tests run in node with no DOM, so the editor is rendered shallowly: each
-// component is called as a function and its element tree is searched for the next
-// component's props. The form is a real react-hook-form control; useWatch returns
-// a deep clone of the watched value, as react-hook-form 7.62 emits after setValue
-// and field-array updates, so render-time snapshots go stale like in the browser.
+import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { findElement } from '../../../support/elementTree';
+
 const harness = vi.hoisted(() => ({
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
-  // The editor's writes, recorded so tests can check they mark the form dirty.
-  editorSetValue: null as unknown as (...args: unknown[]) => void,
-  // The editor page's pending-upload store, which ContentEditor reads from context.
-  uploads: null as unknown,
+  editorSetValueSpy: null as unknown as (...args: unknown[]) => void,
+  pendingUploadsFromContext: null as unknown,
 }));
 
 vi.mock('react', async (importOriginal) => {
@@ -35,18 +27,19 @@ vi.mock('react', async (importOriginal) => {
     useId: () => 'content-editor-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [initial, () => undefined],
-    useContext: () => harness.uploads,
+    useContext: () => harness.pendingUploadsFromContext,
   };
   return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-hook-form')>();
+  const watchedValueSnapshot = ({ name }: { name: string }) =>
+    structuredClone(actual.get(harness.form.getValues(), name));
   return {
     ...actual,
-    useFormContext: () => ({ ...harness.form, setValue: harness.editorSetValue }),
-    useWatch: ({ name }: { name: string }) =>
-      structuredClone(actual.get(harness.form.getValues(), name)),
+    useFormContext: () => ({ ...harness.form, setValue: harness.editorSetValueSpy }),
+    useWatch: watchedValueSnapshot,
     useFieldArray: ({ name }: { name: string }) => ({
       fields: ((actual.get(harness.form.getValues(), name) ?? []) as TemplateEditorContent[]).map(
         (content) => ({ ...content, fieldId: content.id }),
@@ -77,48 +70,24 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-function findElement(
-  node: React.ReactNode,
-  predicate: (element: AnyElement) => boolean,
-): AnyElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findElement(child, predicate);
-      if (match) return match;
-    }
-    return null;
-  }
-  if (!React.isValidElement(node)) return null;
-  const element = node as AnyElement;
-  if (predicate(element)) return element;
-  return findElement(element.props.children as React.ReactNode, predicate);
-}
-
 const CONTENT_PATH = 'sections.0.items.0.contents';
 const UPLOADED_URL = '/api/uploads/file?key=template-images%2Fu1%2Fphoto.png';
 
 function createForm(contents: Array<Partial<TemplateEditorContent>>): void {
-  harness.form = createFormControl<TemplateEditorFormValues>({
-    defaultValues: buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: 's1',
-          title: 'Section',
-          items: [{ id: 'i1', title: 'Task', contents: contents as TemplateEditorContent[] }],
-        },
-      ],
-    }),
-  }) as typeof harness.form;
-  // useForm marks its control mounted; until then getValues() reads the defaults.
-  harness.form.control._state.mount = true;
+  harness.form = createFormControlMountedLikeUseForm({
+    sections: [
+      {
+        id: 's1',
+        title: 'Section',
+        items: [{ id: 'i1', title: 'Task', contents: contents as TemplateEditorContent[] }],
+      },
+    ],
+  }) as unknown as typeof harness.form;
   const setValue = harness.form.setValue as (...args: unknown[]) => void;
-  harness.editorSetValue = vi.fn((...args: unknown[]) => setValue(...args));
+  harness.editorSetValueSpy = vi.fn((...args: unknown[]) => setValue(...args));
 }
 
-// Renders the editor as it was when the user acted and returns FileUpload's tree.
-function renderFileUpload(): React.ReactNode {
+function renderEditorFileUploadFromCurrentForm(): React.ReactNode {
   const editorTree = ContentEditor({ itemIndex: 0, sectionIndex: 0 });
   const media = findElement(editorTree, (element) => element.type === MediaContentEditor);
   expect(media).not.toBeNull();
@@ -144,7 +113,7 @@ function contentAt(index: number): TemplateEditorContent | undefined {
 describe('ContentEditor media uploads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    harness.uploads = createPendingUploads();
+    harness.pendingUploadsFromContext = createPendingUploads();
     vi.mocked(api.uploadToR2).mockResolvedValue({
       url: UPLOADED_URL,
       fileName: 'photo.png',
@@ -152,10 +121,10 @@ describe('ContentEditor media uploads', () => {
     });
   });
 
-  it('keeps the uploaded URL together with the file name and size', async () => {
+  it('keeps the uploaded URL together with the file name and size, and marks the form dirty', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
 
-    await selectFile(renderFileUpload());
+    await selectFile(renderEditorFileUploadFromCurrentForm());
 
     expect(contentAt(0)).toEqual(
       expect.objectContaining({
@@ -167,7 +136,7 @@ describe('ContentEditor media uploads', () => {
         uploadType: 'upload',
       }),
     );
-    const writes = vi.mocked(harness.editorSetValue).mock.calls;
+    const writes = vi.mocked(harness.editorSetValueSpy).mock.calls;
     expect(writes.length).toBeGreaterThan(0);
     for (const [, , options] of writes) {
       expect(options).toEqual(expect.objectContaining({ shouldDirty: true }));
@@ -179,7 +148,7 @@ describe('ContentEditor media uploads', () => {
       { id: 'c1', type: 'image', value: UPLOADED_URL, fileName: 'photo.png', fileSize: 123, uploadType: 'upload' },
     ]);
 
-    const tree = renderFileUpload();
+    const tree = renderEditorFileUploadFromCurrentForm();
     const removeButton = findElement(
       tree,
       (element) => element.props['aria-label'] === 'Remove uploaded image',
@@ -194,7 +163,7 @@ describe('ContentEditor media uploads', () => {
     expect(cleared?.fileSize).toBeUndefined();
   });
 
-  it('writes a finished upload to its own block after blocks move', async () => {
+  it('writes a finished upload to its own block after a block was inserted above it during the upload', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
     let finishUpload: (value: unknown) => void = () => undefined;
     vi.mocked(api.uploadToR2).mockReturnValue(
@@ -202,11 +171,11 @@ describe('ContentEditor media uploads', () => {
         finishUpload = resolve;
       }) as ReturnType<typeof api.uploadToR2>,
     );
+    const textBlockInsertedAbove = { id: 'c0', type: 'text', value: 'Intro' };
 
-    const pending = selectFile(renderFileUpload());
-    // While the upload runs, a text block is inserted above the image block.
+    const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, [
-      { id: 'c0', type: 'text', value: 'Intro' },
+      textBlockInsertedAbove,
       contentAt(0)!,
     ]);
     finishUpload({ url: UPLOADED_URL, fileName: 'photo.png', fileSize: 123 });
@@ -227,7 +196,7 @@ describe('ContentEditor media uploads', () => {
       }) as ReturnType<typeof api.uploadToR2>,
     );
 
-    const pending = selectFile(renderFileUpload());
+    const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, []);
     finishUpload({ url: UPLOADED_URL, fileName: 'photo.png', fileSize: 123 });
     await pending;
@@ -235,10 +204,9 @@ describe('ContentEditor media uploads', () => {
     expect(get(harness.form.getValues(), CONTENT_PATH)).toEqual([]);
   });
 
-  // The editor disables Save and guards leaving while this count is above zero.
-  it('reports the upload to the editor until it finishes', async () => {
+  it('counts the upload as pending for the editor until it finishes, which keeps Save disabled and guards leaving', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    const uploads = harness.uploads as PendingUploads;
+    const uploads = harness.pendingUploadsFromContext as PendingUploads;
     let finishUpload: (value: unknown) => void = () => undefined;
     vi.mocked(api.uploadToR2).mockReturnValue(
       new Promise((resolve) => {
@@ -246,7 +214,7 @@ describe('ContentEditor media uploads', () => {
       }) as ReturnType<typeof api.uploadToR2>,
     );
 
-    const pending = selectFile(renderFileUpload());
+    const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     await Promise.resolve();
     expect(uploads.count()).toBe(1);
 
@@ -259,10 +227,10 @@ describe('ContentEditor media uploads', () => {
 
   it('stops reporting an upload that fails', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    const uploads = harness.uploads as PendingUploads;
+    const uploads = harness.pendingUploadsFromContext as PendingUploads;
     vi.mocked(api.uploadToR2).mockRejectedValue(new Error('Network down'));
 
-    const pending = selectFile(renderFileUpload());
+    const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     expect(uploads.count()).toBe(1);
     await pending;
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -272,15 +240,12 @@ describe('ContentEditor media uploads', () => {
   });
 });
 
-// After an upload the block holds its URL plus the file's name and size. Typing a URL
-// over it must drop the name and size, or runs label the new link with the old file
-// and the editor keeps a Remove button that would clear the typed URL.
 describe('ContentEditor media URL typed over an upload', () => {
   const EXTERNAL_URL = 'https://example.com/pricing.pdf';
 
   beforeEach(() => {
     vi.clearAllMocks();
-    harness.uploads = createPendingUploads();
+    harness.pendingUploadsFromContext = createPendingUploads();
   });
 
   function typeUrl(tree: React.ReactNode, value: string): void {
@@ -292,12 +257,12 @@ describe('ContentEditor media URL typed over an upload', () => {
     (input!.props.onChange as (event: unknown) => void)({ target: { value } });
   }
 
-  it('drops the uploaded file name and size and records a URL source', () => {
+  it('drops the uploaded file name and size and records a URL source, so runs never label the new link with the old file', () => {
     createForm([
       { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
     ]);
 
-    typeUrl(renderFileUpload(), EXTERNAL_URL);
+    typeUrl(renderEditorFileUploadFromCurrentForm(), EXTERNAL_URL);
 
     const content = contentAt(0);
     expect(content?.value).toBe(EXTERNAL_URL);
@@ -305,7 +270,7 @@ describe('ContentEditor media URL typed over an upload', () => {
     expect(content?.fileSize).toBeUndefined();
     expect(content?.uploadType).toBe('url');
     expect(api.deleteFromR2).not.toHaveBeenCalled();
-    const [, , options] = vi.mocked(harness.editorSetValue).mock.calls.at(-1) ?? [];
+    const [, , options] = vi.mocked(harness.editorSetValueSpy).mock.calls.at(-1) ?? [];
     expect(options).toEqual(expect.objectContaining({ shouldDirty: true }));
   });
 
@@ -314,8 +279,8 @@ describe('ContentEditor media URL typed over an upload', () => {
       { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
     ]);
 
-    typeUrl(renderFileUpload(), EXTERNAL_URL);
-    const tree = renderFileUpload();
+    typeUrl(renderEditorFileUploadFromCurrentForm(), EXTERNAL_URL);
+    const tree = renderEditorFileUploadFromCurrentForm();
 
     expect(
       findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
@@ -328,7 +293,7 @@ describe('ContentEditor media URL typed over an upload', () => {
       { id: 'c1', type: 'file', value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' },
     ]);
 
-    typeUrl(renderFileUpload(), UPLOADED_URL);
+    typeUrl(renderEditorFileUploadFromCurrentForm(), UPLOADED_URL);
 
     expect(contentAt(0)).toEqual(
       expect.objectContaining({ value: UPLOADED_URL, fileName: 'report.pdf', fileSize: 2048, uploadType: 'upload' }),

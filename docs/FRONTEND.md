@@ -345,6 +345,11 @@ let it ask, so the user is asked once.
   its Remove button only while the value is an uploaded file, so Remove never clears a
   typed URL. A name saved next to a URL typed over an upload is dropped on load and
   not shown by `ContentRenderer`.
+- An upload writes its file to the block with its id, which it looks up with `getValues()`
+  when it finishes (`findTemplateEditorContentPath`), never by the index or value it
+  rendered with: blocks can move or be removed while it runs, and react-hook-form hands
+  `useWatch` a copy of the value after `setValue` and field-array updates, so a value read
+  during render is stale by then. A file uploaded into a removed block is dropped.
 - Omit an empty slug from create and update payloads rather than sending `""`, and
   omit an update's slug when it is the one already stored, so a stored slug that
   predates today's rules never blocks a save or moves the URL. After a save the URL

@@ -319,7 +319,11 @@ Common failures:
     `tests/unit/components/focusVisibility.ts` finds a focusable element that is invisible,
     or hidden from assistive tech, while it has focus.
   - Call the component as a function, with React's hooks replaced in `vi.mock('react')`, and
-    search the element tree it returns for handlers and the next component's props.
+    search the element tree it returns (`tests/support/elementTree.ts`) for handlers and the
+    next component's props. `useStateKeptBetweenRenders` (`tests/support/hookStateSlots.ts`)
+    keeps state between calls as React keeps it between renders, and
+    `createFormControlMountedLikeUseForm` (`tests/support/editorFormControl.ts`) gives the
+    template editor a real react-hook-form control.
   - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
     (`installFakeDomGlobals`, `createFakeContainer`) and drive it with `act()`, `click()` and
     `dispatch()`, when the test needs effects, focus or clicks. React DOM loaded without a

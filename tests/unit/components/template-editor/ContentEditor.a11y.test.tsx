@@ -49,8 +49,6 @@ function ContentHarness(): JSX.Element {
   );
 }
 
-// Delete buttons announced only as 'button' could be pressed without knowing they
-// delete content, and sub-task fields were named only by their placeholder.
 describe('ContentEditor accessible names', () => {
   it('names every control in the content blocks', () => {
     const html = renderToStaticMarkup(<ContentHarness />);
@@ -58,14 +56,14 @@ describe('ContentEditor accessible names', () => {
     expect(findUnnamedControls(html)).toEqual([]);
   });
 
-  it('names each block delete button after its block', () => {
+  it('names each block delete button after its block, so no one presses a bare "button" without knowing it deletes content', () => {
     const html = renderToStaticMarkup(<ContentHarness />);
 
     expect(getByAccessibleName(html, 'Remove Text block')?.tag).toBe('button');
     expect(getByAccessibleName(html, 'Remove Sub-tasks block')?.tag).toBe('button');
   });
 
-  it('names the text field and each sub-task field and delete button', () => {
+  it('names the text field and each sub-task field and delete button, never only by a placeholder', () => {
     const html = renderToStaticMarkup(<ContentHarness />);
 
     expect(getByAccessibleName(html, 'Text Content')?.tag).toBe('textarea');
@@ -77,8 +75,7 @@ describe('ContentEditor accessible names', () => {
 });
 
 describe('ContentEditor block delete button', () => {
-  // It sat at opacity 0 until hovered, so a keyboard user focused an invisible button.
-  it('shows on keyboard focus and on touch screens', () => {
+  it('shows on keyboard focus and on touch screens, not only on hover, so keyboard focus never lands on an invisible button', () => {
     const html = renderToStaticMarkup(<ContentHarness />);
     const remove = getByAccessibleName(html, 'Remove Text block');
 

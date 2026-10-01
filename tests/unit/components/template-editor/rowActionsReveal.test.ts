@@ -3,14 +3,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-// Row actions (remove a section, task or content block) that only appear on hover were
-// focusable while invisible: a keyboard user could press Enter on a Remove button they
-// could not see (its focus ring was transparent too), and touch screens never showed
-// them. Any hover-revealed class string in the editor must also reveal on keyboard focus
-// and when the device cannot hover.
 const EDITOR_DIR = path.resolve(__dirname, '../../../../src/components/template-editor');
-// The editor's reveal class (ROW_ACTIONS_REVEAL_CLASS) lives here, shared with the dashboard.
-const SHARED_REVEAL_FILE = path.resolve(__dirname, '../../../../src/components/ui/hover-reveal.ts');
+const ROW_ACTIONS_REVEAL_CLASS_SOURCE = path.resolve(__dirname, '../../../../src/components/ui/hover-reveal.ts');
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -21,7 +15,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 function hoverRevealedClassStrings(): Array<{ file: string; value: string }> {
-  return [...sourceFiles(EDITOR_DIR), SHARED_REVEAL_FILE].flatMap((file) => {
+  return [...sourceFiles(EDITOR_DIR), ROW_ACTIONS_REVEAL_CLASS_SOURCE].flatMap((file) => {
     const source = readFileSync(file, 'utf8');
     return [...source.matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)]
       .map((match) => match[2])
@@ -30,12 +24,12 @@ function hoverRevealedClassStrings(): Array<{ file: string; value: string }> {
   });
 }
 
-describe('template editor row actions', () => {
+describe('template editor row actions (remove a section, task or content block)', () => {
   it('has hover-revealed controls to check', () => {
     expect(hoverRevealedClassStrings().length).toBeGreaterThan(0);
   });
 
-  it('reveals every hover-revealed control on keyboard focus and on touch screens', () => {
+  it('reveals every hover-revealed control on keyboard focus and on touch screens, so Enter never acts on an invisible Remove button', () => {
     const missing = hoverRevealedClassStrings().filter(
       ({ value }) =>
         !value.includes('group-focus-within:opacity-100') ||

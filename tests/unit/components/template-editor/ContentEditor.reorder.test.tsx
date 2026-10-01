@@ -1,54 +1,35 @@
 import React from 'react';
-import { createFormControl, get } from 'react-hook-form';
+import { get } from 'react-hook-form';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
 import { SubItemsEditor } from '@/components/template-editor/content-types/SubItemsEditor';
-import {
-  buildTemplateEditorFormValues,
-  type TemplateEditorContent,
-  type TemplateEditorFormValues,
-} from '@/lib/forms/templateEditorForm';
+import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
-// Unit tests run in node with no DOM, so ContentEditor is called as a function and its
-// element tree is searched (as in ContentEditor.upload.test.tsx). React state lives in
-// slots that persist across calls, and the field array's move reorders the real form
-// values the way useFieldArray.move does.
+import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
+
 const harness = vi.hoisted(() => ({
-  slots: [] as unknown[],
-  slot: 0,
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
   move: null as unknown as (from: number, to: number) => void,
 }));
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
-  const useState = <T,>(initial: T | (() => T)) => {
-    const index = harness.slot;
-    harness.slot += 1;
-    if (!(index in harness.slots)) {
-      harness.slots[index] =
-        typeof initial === 'function' ? (initial as () => T)() : initial;
-    }
-    const setState = (next: T | ((current: T) => T)) => {
-      harness.slots[index] =
-        typeof next === 'function'
-          ? (next as (current: T) => T)(harness.slots[index] as T)
-          : next;
-    };
-    return [harness.slots[index] as T, setState] as const;
-  };
-  const stubs = { useState, useId: () => 'blocks', useContext: () => null };
+  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
+  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'blocks', useContext: () => null };
   return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-hook-form')>();
+  const watchedValueSnapshot = ({ name }: { name: string }) =>
+    structuredClone(actual.get(harness.form.getValues(), name));
   return {
     ...actual,
     useFormContext: () => harness.form,
-    useWatch: ({ name }: { name: string }) =>
-      structuredClone(actual.get(harness.form.getValues(), name)),
+    useWatch: watchedValueSnapshot,
     useFieldArray: ({ name }: { name: string }) => ({
       fields: ((actual.get(harness.form.getValues(), name) ?? []) as TemplateEditorContent[]).map(
         (content) => ({ ...content, fieldId: `field-${content.id}` }),
@@ -70,67 +51,52 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-function findAll(node: React.ReactNode, predicate: (element: AnyElement) => boolean): AnyElement[] {
-  if (Array.isArray(node)) return node.flatMap((child) => findAll(child, predicate));
-  if (!React.isValidElement(node)) return [];
-  const element = node as AnyElement;
-  const matches = predicate(element) ? [element] : [];
-  return [...matches, ...findAll(element.props.children as React.ReactNode, predicate)];
-}
-
-// Buttons can be rendered by small components (the drag handle), so render those one
-// level too. Editors with their own hooks are left alone.
-const RENDERED_COMPONENTS = new Set(['ReorderHandle', 'ReorderHint']);
-function withComponentOutput(tree: React.ReactNode): React.ReactNode[] {
-  const outputs = findAll(
+const HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS = new Set(['ReorderHandle', 'ReorderHint']);
+function withHooklessComponentsRendered(tree: React.ReactNode): React.ReactNode[] {
+  const outputs = findAllElements(
     tree,
     (element) =>
-      typeof element.type === 'function' && RENDERED_COMPONENTS.has((element.type as { name: string }).name),
+      typeof element.type === 'function' &&
+      HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS.has((element.type as { name: string }).name),
   ).map((element) => (element.type as (props: unknown) => React.ReactNode)(element.props));
   return [tree, ...outputs];
 }
 
 function findDomElement(tree: React.ReactNode, predicate: (element: AnyElement) => boolean): AnyElement | undefined {
-  return findAll(withComponentOutput(tree), (element) => typeof element.type === 'string' && predicate(element))[0];
+  return findAllElements(withHooklessComponentsRendered(tree), (element) => typeof element.type === 'string' && predicate(element))[0];
 }
 
 const CONTENT_PATH = 'sections.0.items.0.contents';
 
 function createForm(): void {
-  harness.form = createFormControl<TemplateEditorFormValues>({
-    defaultValues: buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: 's1',
-          title: 'Section',
-          items: [
-            {
-              id: 'i1',
-              title: 'Task',
-              contents: [
-                { id: 'c-text', type: 'text', value: 'Intro' },
-                { id: 'c-image', type: 'image', value: 'https://example.com/a.png' },
-                {
-                  id: 'c-subs',
-                  type: 'subItems',
-                  value: '',
-                  subItems: [{ id: 'sub-1', title: 'Laptop' }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    }),
-  }) as typeof harness.form;
-  harness.form.control._state.mount = true;
+  harness.form = createFormControlMountedLikeUseForm({
+    sections: [
+      {
+        id: 's1',
+        title: 'Section',
+        items: [
+          {
+            id: 'i1',
+            title: 'Task',
+            contents: [
+              { id: 'c-text', type: 'text', value: 'Intro' },
+              { id: 'c-image', type: 'image', value: 'https://example.com/a.png' },
+              {
+                id: 'c-subs',
+                type: 'subItems',
+                value: '',
+                subItems: [{ id: 'sub-1', title: 'Laptop' }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }) as unknown as typeof harness.form;
 }
 
 function render(): React.ReactNode {
-  harness.slot = 0;
-  return ContentEditor({ itemIndex: 0, sectionIndex: 0 });
+  return renderKeepingState(() => ContentEditor({ itemIndex: 0, sectionIndex: 0 }));
 }
 
 const contentIds = () =>
@@ -159,16 +125,15 @@ function handle(tree: React.ReactNode, name: string): AnyElement {
   return button!;
 }
 
-// Each block's container takes the drop.
-function blockContainer(tree: React.ReactNode, index: number): AnyElement {
-  const containers = findAll(tree, (element) => typeof element.props.onDrop === 'function');
+function blockDropTarget(tree: React.ReactNode, index: number): AnyElement {
+  const containers = findAllElements(tree, (element) => typeof element.props.onDrop === 'function');
   expect(containers.length).toBeGreaterThan(index);
   return containers[index];
 }
 
 describe('ContentEditor block reordering', () => {
   beforeEach(() => {
-    harness.slots = [];
+    forgetKeptState();
     harness.move = vi.fn();
     createForm();
   });
@@ -182,7 +147,7 @@ describe('ContentEditor block reordering', () => {
       expect(button.props.draggable).toBe(true);
     }
     expect(
-      findAll(tree, (element) => typeof element.type === 'string' && String(element.props.className ?? '').includes('cursor-grab')),
+      findAllElements(tree, (element) => typeof element.type === 'string' && String(element.props.className ?? '').includes('cursor-grab')),
     ).toEqual([]);
   });
 
@@ -209,35 +174,33 @@ describe('ContentEditor block reordering', () => {
     (handle(render(), 'Drag Sub-tasks block').props.onDragStart as (event: unknown) => void)(dragEvent());
 
     const over = dragEvent();
-    (blockContainer(render(), 0).props.onDragOver as (event: unknown) => void)(over);
+    (blockDropTarget(render(), 0).props.onDragOver as (event: unknown) => void)(over);
     expect(over.preventDefault).toHaveBeenCalled();
-    expect(findAll(render(), (element) => element.props['data-drop-indicator'] === 'content-before')).toHaveLength(1);
+    expect(findAllElements(render(), (element) => element.props['data-drop-indicator'] === 'content-before')).toHaveLength(1);
 
-    (blockContainer(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
+    (blockDropTarget(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
 
     expect(harness.move).toHaveBeenCalledWith(2, 0);
     expect(contentIds()).toEqual(['c-subs', 'c-text', 'c-image']);
     expect(get(harness.form.getValues(), `${CONTENT_PATH}.0.subItems`)).toEqual([
       expect.objectContaining({ id: 'sub-1', title: 'Laptop' }),
     ]);
-    expect(findAll(render(), (element) => element.props['data-drop-indicator'] !== undefined)).toEqual([]);
+    expect(findAllElements(render(), (element) => element.props['data-drop-indicator'] !== undefined)).toEqual([]);
   });
 
   it('ignores a drag that did not start on one of its block handles', () => {
     const over = dragEvent();
-    (blockContainer(render(), 0).props.onDragOver as (event: unknown) => void)(over);
-    (blockContainer(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
+    (blockDropTarget(render(), 0).props.onDragOver as (event: unknown) => void)(over);
+    (blockDropTarget(render(), 0).props.onDrop as (event: unknown) => void)(dragEvent());
 
     expect(over.preventDefault).not.toHaveBeenCalled();
     expect(harness.move).not.toHaveBeenCalled();
   });
 
-  // The sub-task list's field array is named by the block's index, so it is remounted
-  // when the block moves rather than kept with a stale name.
-  it('renders the moved sub-task list at its new index', () => {
-    const before = findAll(render(), (element) => element.type === SubItemsEditor)[0];
+  it('renders the moved sub-task list at its new index under a new key, so its field array, named by that index, remounts instead of keeping a stale name', () => {
+    const before = findAllElements(render(), (element) => element.type === SubItemsEditor)[0];
     (handle(render(), 'Drag Sub-tasks block').props.onKeyDown as (event: unknown) => void)(keyEvent('ArrowUp'));
-    const after = findAll(render(), (element) => element.type === SubItemsEditor)[0];
+    const after = findAllElements(render(), (element) => element.type === SubItemsEditor)[0];
 
     expect(before.props.contentIndex).toBe(2);
     expect(after.props.contentIndex).toBe(1);

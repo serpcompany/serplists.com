@@ -78,7 +78,7 @@ describe('uploadSelectedFile', () => {
     });
   });
 
-  it('confirms a successful upload and keeps the asset it replaced', async () => {
+  it('confirms a successful upload and keeps the asset it replaced, which the saved template, its runs, versions and copies may still use', async () => {
     const upload = Promise.resolve({
       success: true,
       url: '/api/uploads/file?key=new',
@@ -104,7 +104,6 @@ describe('uploadSelectedFile', () => {
       fileName: 'guide.pdf',
       fileSize: 1024,
     });
-    // The saved template, its runs, versions, and copies may still use the old file.
     expect(uploadMocks.deleteUploadedAsset).not.toHaveBeenCalled();
     expect(toastMock.success).toHaveBeenCalledWith('Upload successful', {
       description: 'guide.pdf has been uploaded.',

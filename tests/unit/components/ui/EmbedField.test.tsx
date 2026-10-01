@@ -5,10 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EmbedContentEditor } from '@/components/template-editor/content-types/EmbedContentEditor';
 import { EmbedField } from '@/components/ui/embed-field';
 
-// React remounts a control whose element type changes, which drops focus and the
-// caret mid-typing. The embed field must therefore render the same element for every
-// value: typing past "https://" or deleting below it only changes its props.
-const VALUES = [
+const VALUES_ACROSS_THE_URL_PREFIX = [
   '',
   'h',
   'https:/',
@@ -29,14 +26,14 @@ function renderField(value: string): string {
 }
 
 describe('EmbedField', () => {
-  it.each(VALUES)('renders one textarea and no input for %j', (value) => {
+  it.each(VALUES_ACROSS_THE_URL_PREFIX)('renders one textarea and no input for %j', (value) => {
     const markup = renderField(value);
 
     expect(countMatches(markup, /<textarea\b/g)).toBe(1);
     expect(countMatches(markup, /<input\b/g)).toBe(0);
   });
 
-  it('renders the same control element across the URL prefix, both ways', () => {
+  it('renders the same control element across the URL prefix, both ways, since React remounts a control whose element type changes and drops the caret mid-typing', () => {
     const controlTag = (value: string) => renderField(value).match(/<(textarea|input)\b/)?.[1];
 
     expect(controlTag('https:/')).toBe('textarea');
@@ -67,18 +64,17 @@ describe('EmbedField', () => {
   });
 
   it('does not correct or capitalize what is typed', () => {
-    // HTML attribute names are case-insensitive, and React writes some in lower case.
-    const markup = renderField('https://example.com').toLowerCase();
+    const markupWithCaseInsensitiveAttributeNames = renderField('https://example.com').toLowerCase();
 
-    expect(markup).toContain('autocapitalize="off"');
-    expect(markup).toContain('autocorrect="off"');
-    expect(markup).toContain('spellcheck="false"');
-    expect(markup).toContain('inputmode="url"');
+    expect(markupWithCaseInsensitiveAttributeNames).toContain('autocapitalize="off"');
+    expect(markupWithCaseInsensitiveAttributeNames).toContain('autocorrect="off"');
+    expect(markupWithCaseInsensitiveAttributeNames).toContain('spellcheck="false"');
+    expect(markupWithCaseInsensitiveAttributeNames).toContain('inputmode="url"');
   });
 });
 
 describe('EmbedContentEditor', () => {
-  it.each(VALUES)('renders one textarea and no input for %j', (value) => {
+  it.each(VALUES_ACROSS_THE_URL_PREFIX)('renders one textarea and no input for %j', (value) => {
     const markup = renderToStaticMarkup(
       <EmbedContentEditor value={value} onValueChange={() => undefined} />,
     );
@@ -88,15 +84,12 @@ describe('EmbedContentEditor', () => {
   });
 });
 
-// Viewers get a link to a URL or to the src of iframe code, and see anything else as
-// text, so the field must not promise script embeds and shows what viewers will get.
-describe('EmbedField help and preview', () => {
+describe('EmbedField help and preview, which show what viewers get', () => {
   it('does not offer script embeds', () => {
-    // The text people read: markup attributes (data-slot="field-description") are not copy.
-    const text = renderField('')
+    const copyPeopleRead = renderField('')
       .replace(/<[^>]*\bplaceholder="([^"]*)"[^>]*>/g, ' $1 ')
       .replace(/<[^>]+>/g, ' ');
-    expect(text).not.toMatch(/script/i);
+    expect(copyPeopleRead).not.toMatch(/script/i);
   });
 
   it('previews the link viewers get for iframe code', () => {

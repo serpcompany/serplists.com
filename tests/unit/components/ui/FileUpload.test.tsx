@@ -1,25 +1,22 @@
 import { readFileSync } from 'node:fs';
-import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
-// Unit tests run in node with no DOM, so FileUpload is rendered shallowly: React's
-// state hooks are stubbed and the returned element tree is searched for handlers.
-// `stateOverride.value` replaces every useState initial value while set; setters record
-// their calls in `stateOverride.sets`.
-const stateOverride = vi.hoisted(() => ({ value: undefined as unknown, sets: [] as unknown[] }));
+import { findElement, type AnyElement } from '../../../support/elementTree';
+
+const useStateStub = vi.hoisted(() => ({ valueForEveryState: undefined as unknown, setterCalls: [] as unknown[] }));
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
   const stubs = {
     useId: () => 'file-upload-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [
-      stateOverride.value === undefined ? initial : stateOverride.value,
+      useStateStub.valueForEveryState === undefined ? initial : useStateStub.valueForEveryState,
       (next: unknown) => {
-        stateOverride.sets.push(next);
+        useStateStub.setterCalls.push(next);
       },
     ],
   };
@@ -38,41 +35,19 @@ vi.mock('@/lib/imageOptimization', () => ({
   optimizeImage: vi.fn(async (file: File) => file),
 }));
 
-// Upload feedback goes through sonner, the toaster the app mounts.
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
-
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-function findElement(
-  node: React.ReactNode,
-  predicate: (element: AnyElement) => boolean,
-): AnyElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findElement(child, predicate);
-      if (match) return match;
-    }
-    return null;
-  }
-  if (!React.isValidElement(node)) return null;
-  const element = node as AnyElement;
-  if (predicate(element)) return element;
-  return findElement(element.props.children as React.ReactNode, predicate);
-}
 
 const EXISTING_URL = '/api/uploads/file?key=template-images%2Fu1%2Fa.png';
 
 describe('FileUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    stateOverride.value = undefined;
-    stateOverride.sets.length = 0;
+    useStateStub.valueForEveryState = undefined;
+    useStateStub.setterCalls.length = 0;
   });
 
-  // The field is presentational: the page passes the signed-in user, and without one
-  // picking a file uploads nothing.
-  it('uploads nothing without a signed-in user', async () => {
+  it('uploads nothing when the page passes no signed-in user, since the presentational field cannot read the session', async () => {
     const tree = FileUpload({ type: 'file', value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
     const fileInput = findElement(tree, (element) => element.props.type === 'file');
 
@@ -180,9 +155,7 @@ describe('FileUpload', () => {
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: zip });
   });
 
-  // A name next to a URL that is not an upload is left over from an earlier upload (or
-  // names a linked file). Its Remove button would clear a URL the author typed.
-  it('shows the uploaded-file row only while the value is an uploaded file', () => {
+  it('shows the uploaded-file row only while the value is an uploaded file, so its Remove never clears a URL the author typed', () => {
     const tree = FileUpload({
       type: 'file',
       value: 'https://example.com/pricing.pdf',
@@ -197,10 +170,7 @@ describe('FileUpload', () => {
     expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
   });
 
-  // The preview hid its <img> with style.display = 'none' on the first load error. React
-  // kept the same element for the next URL, so a corrected URL loaded but stayed hidden
-  // (typing a URL fails on its first characters), leaving an empty box.
-  describe('image preview', () => {
+  describe('image preview of a URL being typed, which fails to load on its first characters', () => {
     const previewFor = (value: string) =>
       findElement(
         FileUpload({ type: 'image', value, onValueChange: vi.fn(), onFileChange: vi.fn() }),
@@ -239,7 +209,7 @@ describe('FileUpload', () => {
       (img.props.onError as (event: unknown) => void)({ currentTarget: target, target });
 
       expect(target.style.display).toBeUndefined();
-      expect(stateOverride.sets).toEqual([true]);
+      expect(useStateStub.setterCalls).toEqual([true]);
     });
 
     it('never hides the preview by setting a style React does not own', () => {
@@ -251,9 +221,9 @@ describe('FileUpload', () => {
     });
 
     it('says the preview is unavailable instead of showing an empty box', () => {
-      stateOverride.value = true;
+      useStateStub.valueForEveryState = true;
       const failed = ImagePreview({ src: 'https://example.com/photo.png' }) as AnyElement;
-      stateOverride.value = undefined;
+      useStateStub.valueForEveryState = undefined;
       const partial = ImagePreview({ src: null }) as AnyElement;
 
       for (const element of [failed, partial]) {

@@ -1,47 +1,29 @@
 import React from 'react';
-import { createFormControl, get } from 'react-hook-form';
+import { get } from 'react-hook-form';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
-import {
-  buildTemplateEditorFormValues,
-  type TemplateEditorFormValues,
-} from '@/lib/forms/templateEditorForm';
 
-// Unit tests run in node with no DOM, so SectionSidebar is called as a function and its
-// element tree is searched (as in SectionSidebar.expansion.test.tsx). React state lives in
-// slots that persist across calls, and the form is a real react-hook-form control whose
-// field array moves entries the way useFieldArray.move does.
+import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
+import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
+
 const harness = vi.hoisted(() => ({
-  slots: [] as unknown[],
-  slot: 0,
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
   setValue: null as unknown as (...args: unknown[]) => void,
 }));
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
-  const useState = <T,>(initial: T | (() => T)) => {
-    const index = harness.slot;
-    harness.slot += 1;
-    if (!(index in harness.slots)) {
-      harness.slots[index] =
-        typeof initial === 'function' ? (initial as () => T)() : initial;
-    }
-    const setState = (next: T | ((current: T) => T)) => {
-      harness.slots[index] =
-        typeof next === 'function'
-          ? (next as (current: T) => T)(harness.slots[index] as T)
-          : next;
-    };
-    return [harness.slots[index] as T, setState] as const;
-  };
-  const stubs = { useState, useId: () => "outline" };
+  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
+  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'outline' };
   return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-hook-form')>();
+  const watchedValueSnapshot = ({ name }: { name: string }) =>
+    structuredClone(actual.get(harness.form.getValues(), name));
   return {
     ...actual,
     useFormContext: () => ({
@@ -64,23 +46,11 @@ vi.mock('react-hook-form', async (importOriginal) => {
         },
       };
     },
-    useWatch: ({ name }: { name: string }) => structuredClone(actual.get(harness.form.getValues(), name)),
+    useWatch: watchedValueSnapshot,
   };
 });
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
-
-type AnyElement = React.ReactElement<Record<string, unknown>>;
-
-function findAll(node: React.ReactNode, predicate: (element: AnyElement) => boolean): AnyElement[] {
-  if (Array.isArray(node)) {
-    return node.flatMap((child) => findAll(child, predicate));
-  }
-  if (!React.isValidElement(node)) return [];
-  const element = node as AnyElement;
-  const matches = predicate(element) ? [element] : [];
-  return [...matches, ...findAll(element.props.children as React.ReactNode, predicate)];
-}
 
 const selection = {
   onSelectSection: vi.fn(),
@@ -88,40 +58,36 @@ const selection = {
 };
 
 function createForm(): void {
-  harness.form = createFormControl<TemplateEditorFormValues>({
-    defaultValues: buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: 's1',
-          title: 'First section',
-          items: [
-            { id: 'a', title: 'Task A', contents: [] },
-            { id: 'b', title: 'Task B', contents: [] },
-          ],
-        },
-        { id: 's2', title: 'Second section', items: [{ id: 'c', title: 'Task C', contents: [] }] },
-      ],
-    }),
-  }) as typeof harness.form;
-  harness.form.control._state.mount = true;
+  harness.form = createFormControlMountedLikeUseForm({
+    sections: [
+      {
+        id: 's1',
+        title: 'First section',
+        items: [
+          { id: 'a', title: 'Task A', contents: [] },
+          { id: 'b', title: 'Task B', contents: [] },
+        ],
+      },
+      { id: 's2', title: 'Second section', items: [{ id: 'c', title: 'Task C', contents: [] }] },
+    ],
+  }) as unknown as typeof harness.form;
   const setValue = harness.form.setValue as (...args: unknown[]) => void;
   harness.setValue = vi.fn((...args: unknown[]) => setValue(...args));
 }
 
 function render(props: { selectedSectionIndex?: number; selectedItemIndex?: number | null } = {}): React.ReactNode {
-  harness.slot = 0;
-  return SectionSidebar({
-    outlineSelectionActive: true,
-    selectedSectionIndex: props.selectedSectionIndex ?? 0,
-    selectedItemIndex: props.selectedItemIndex ?? null,
-    ...selection,
-  });
+  return renderKeepingState(() =>
+    SectionSidebar({
+      outlineSelectionActive: true,
+      selectedSectionIndex: props.selectedSectionIndex ?? 0,
+      selectedItemIndex: props.selectedItemIndex ?? null,
+      ...selection,
+    }),
+  );
 }
 
-// The tree plus what each function component in it renders (one level, by calling it as
-// SectionSidebar is called), so buttons rendered by the outline's components are found.
-function withComponentOutput(tree: React.ReactNode): React.ReactNode[] {
-  const outputs = findAll(tree, (element) => typeof element.type === 'function').flatMap((element) => {
+function withChildComponentsRenderedOneLevel(tree: React.ReactNode): React.ReactNode[] {
+  const outputs = findAllElements(tree, (element) => typeof element.type === 'function').flatMap((element) => {
     try {
       return [(element.type as (props: unknown) => React.ReactNode)(element.props)];
     } catch {
@@ -131,16 +97,15 @@ function withComponentOutput(tree: React.ReactNode): React.ReactNode[] {
   return [tree, ...outputs];
 }
 
-// The DOM element (not a component) named `name`.
-function findButton(tree: React.ReactNode, name: string): AnyElement | undefined {
-  return findAll(
-    withComponentOutput(tree),
+function findDomElementNamed(tree: React.ReactNode, name: string): AnyElement | undefined {
+  return findAllElements(
+    withChildComponentsRenderedOneLevel(tree),
     (element) => typeof element.type === 'string' && element.props['aria-label'] === name,
   )[0];
 }
 
 function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
-  const handle = findButton(tree, name);
+  const handle = findDomElementNamed(tree, name);
   expect(handle).toBeDefined();
   const event = {
     key,
@@ -162,8 +127,8 @@ const taskIds = (sectionIndex: number) =>
   (get(harness.form.getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
 
 function liveRegionText(tree: React.ReactNode): string {
-  const [region] = findAll(
-    withComponentOutput(tree),
+  const [region] = findAllElements(
+    withChildComponentsRenderedOneLevel(tree),
     (element) => typeof element.type === 'string' && element.props['aria-live'] === 'polite',
   );
   return region ? String(region.props.children ?? '') : '';
@@ -171,7 +136,7 @@ function liveRegionText(tree: React.ReactNode): string {
 
 describe('SectionSidebar keyboard reordering', () => {
   beforeEach(() => {
-    harness.slots = [];
+    forgetKeptState();
     vi.clearAllMocks();
     createForm();
   });
@@ -219,8 +184,8 @@ describe('SectionSidebar keyboard reordering', () => {
   });
 
   it('points every handle at the keyboard hint', () => {
-    const rendered = withComponentOutput(render());
-    const handles = findAll(
+    const rendered = withChildComponentsRenderedOneLevel(render());
+    const handles = findAllElements(
       rendered,
       (element) => typeof element.type === 'string' && /^Drag /.test(String(element.props['aria-label'] ?? '')),
     );
@@ -229,7 +194,7 @@ describe('SectionSidebar keyboard reordering', () => {
     for (const handle of handles) {
       const hintId = String(handle.props['aria-describedby'] ?? '');
       expect(hintId).not.toBe('');
-      const [hint] = findAll(rendered, (element) => typeof element.type === 'string' && element.props.id === hintId);
+      const [hint] = findAllElements(rendered, (element) => typeof element.type === 'string' && element.props.id === hintId);
       expect(String(hint?.props.children ?? '')).toMatch(/arrow key/i);
     }
   });

@@ -13,7 +13,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 describe('TemplateHeader', () => {
-  it('renders the compact reference-style editor top bar', () => {
+  it('renders the compact reference-style editor top bar, sticky under the console top bar', () => {
     const html = renderToStaticMarkup(
       <TemplateHeader
         isEditing
@@ -30,7 +30,6 @@ describe('TemplateHeader', () => {
     expect(html).toContain('Editing');
     expect(html).toContain('Save');
     expect(html).toContain('Preview');
-    // It sticks under the console's top bar.
     expect(html).toContain('sticky top-14 z-30');
     expect(html).not.toContain('Template editor');
     expect(html).not.toContain('Draft');
@@ -39,9 +38,7 @@ describe('TemplateHeader', () => {
 });
 
 describe('TemplateHeader while a file uploads', () => {
-  // Saving now would store the block without the file (and a new template would leave
-  // the page, dropping the upload).
-  it('disables Save and says a file is uploading', () => {
+  it('disables Save and says a file is uploading, since a save now would store the block without its file', () => {
     const html = renderToStaticMarkup(
       <TemplateHeader
         isEditing
@@ -74,10 +71,8 @@ describe('TemplateHeader while a file uploads', () => {
   });
 });
 
-// A generated Clipy draft replaces the form when it arrives, so a save meanwhile would
-// store work that is about to be replaced.
 describe('TemplateHeader while a Clipy draft generates', () => {
-  it('disables Save and says a draft is generating', () => {
+  it('disables Save and says a draft is generating, since the draft replaces the form when it arrives', () => {
     const html = renderToStaticMarkup(
       <TemplateHeader
         isEditing={false}

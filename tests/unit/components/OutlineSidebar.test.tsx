@@ -55,10 +55,8 @@ describe('OutlineSidebar', () => {
   });
 });
 
-// Keyboard users tab onto the section and task actions; they must be visible when focused
-// (and on touch screens), not only while the pointer hovers the row.
 describe('OutlineSidebar row actions', () => {
-  it('reveals the section and task actions on focus and without hover', () => {
+  it('reveals the section and task actions on keyboard focus and without hover, not only while the pointer hovers the row', () => {
     const html = renderToStaticMarkup(<SidebarHarness />);
     const reveal = ['group-focus-within:opacity-100', '[@media(hover:none)]:opacity-100'];
 
