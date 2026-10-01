@@ -23,24 +23,12 @@ export function loadLocalEnv() {
     ...parseEnvFile(".env.local"),
     ...parseEnvFile(".dev.vars"),
   };
-  // Explicit process injection must win over local defaults. This is required
-  // for one-off administrative commands that receive credentials from a
-  // secret manager rather than from a repository-adjacent file.
   return { ...fileEnv, ...process.env };
 }
 
-/** Where local Stripe scripts look for the test secret key, for error messages. */
 export const TEST_SECRET_KEY_HINT =
   "Set STRIPE_SECRET_KEY=sk_test_... (or STRIPE_TEST_SECRET_KEY) in .dev.vars.";
 
-/**
- * The Stripe test secret key for local scripts: STRIPE_TEST_SECRET_KEY, then its
- * alias STRIPE_SECRET_KEY_TEST, then STRIPE_SECRET_KEY, the name .dev.vars.example
- * uses. An empty dedicated key counts as unset. Only an sk_test_ value is returned:
- * a live key never resolves, even one exported in the shell (process.env wins over
- * .dev.vars), and a dedicated key that is not a test key is not hidden by falling
- * back to STRIPE_SECRET_KEY.
- */
 export function resolveTestSecretKey(env) {
   const dedicated = [env.STRIPE_TEST_SECRET_KEY, env.STRIPE_SECRET_KEY_TEST]
     .map((value) => value?.trim())

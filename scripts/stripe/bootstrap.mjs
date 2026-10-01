@@ -50,7 +50,6 @@ function getKeys(env, liveEnv, mode) {
     }
     return { testKey: null, liveKey: injectedLiveKey };
   }
-  // both
   if (!testKey || !injectedLiveKey) {
     throw new Error(
       "For --mode both, set a local test key and inject STRIPE_LIVE_SECRET_KEY through the process environment.",
@@ -80,8 +79,7 @@ async function stripeRequest({ secretKey, method, path, form, dryRun }) {
   return JSON.parse(text);
 }
 
-async function ensureProProduct({ secretKey, dryRun }) {
-  // Prefer Search API (fast). Fallback to listing.
+async function searchProProduct({ secretKey, dryRun }) {
   const query = `metadata['app']:'serp-checklists' AND metadata['tier']:'pro'`;
   try {
     const search = await stripeRequest({
@@ -91,10 +89,15 @@ async function ensureProProduct({ secretKey, dryRun }) {
       dryRun,
     });
     const existing = search?.data?.[0];
-    if (existing?.id) return existing;
+    return existing?.id ? existing : null;
   } catch {
-    // ignore and fallback
+    return null;
   }
+}
+
+async function ensureProProduct({ secretKey, dryRun }) {
+  const searched = await searchProProduct({ secretKey, dryRun });
+  if (searched) return searched;
 
   const list = await stripeRequest({
     secretKey,

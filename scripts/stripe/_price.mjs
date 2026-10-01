@@ -1,4 +1,3 @@
-/** The Pro launch price in cents and its currency (PRO_MONTHLY_PRICE_LABEL in src/lib/billing.ts). */
 export const PRO_MONTHLY_CENTS = 900;
 export const PRO_CURRENCY = "usd";
 
@@ -6,12 +5,6 @@ function productIdOf(product) {
   return product && typeof product === "object" ? product.id : product;
 }
 
-/**
- * Stripe prices cannot change their amount, currency, or interval. Returns why a price
- * found by lookup key differs from the one requested, or null when it matches, so a
- * bootstrap run never hands back an old, archived, or unrelated price id. `productId`
- * is checked when given.
- */
 export function describePriceMismatch(existing, { unitAmount, currency, interval, productId }) {
   const differences = [];
   if (existing.active !== true) {

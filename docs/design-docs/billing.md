@@ -96,7 +96,9 @@ Every local Stripe script reads the test key from `STRIPE_SECRET_KEY=sk_test_...
 in `.dev.vars`, as `.dev.vars.example` lays it out; `STRIPE_TEST_SECRET_KEY` (or
 `STRIPE_SECRET_KEY_TEST`) overrides it. They resolve it with
 `resolveTestSecretKey()` in `scripts/stripe/_env.mjs` and never accept a key that
-does not start with `sk_test_`.
+does not start with `sk_test_`. In every Stripe script the process environment wins
+over `.dev.vars`, so a key a secret manager injects for a one-off administrative command
+is the one used.
 
 ```bash
 # Idempotently create/confirm test resources.
@@ -124,11 +126,14 @@ pnpm dev:auto
 ```
 
 The listener forwards to this checkout's own API, because every clone or worktree
-runs its own stack on a free port pair. It uses the API port in
-`tmp/dev-session.json` when that stack is running. Started first, it forwards to
-the pair `dev:auto` would pick at that moment (skipping ports another worktree or
-the smoke stack holds), and it restarts on the right port if `dev:auto` then
-chooses another pair. It prints each URL it forwards to. Set
+runs its own server on a free port, and a fixed port could belong to another worktree,
+whose API has a different signing secret and local D1. It uses the port in
+`tmp/dev-session.json` while that server's launcher runs. Started first, it forwards to
+the port `dev:all` would pick at that moment (skipping ports another worktree or
+the smoke stack holds). `stripe listen` keeps its `--forward-to` for life, so the
+listener restarts it on the right port if `dev:all` then chooses another; the saved
+signing secret stays valid, since the CLI's secret is stable per account and device.
+It prints each URL it forwards to. Set
 `STRIPE_LOCAL_WEBHOOK_URL` (in the environment or `.dev.vars`) to forward
 somewhere else; the listener then never changes it.
 

@@ -29,8 +29,7 @@ function price(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** A fake Stripe request: the lookup returns `found`, a create echoes a new price. */
-function stripe(found: unknown[]) {
+function fakeStripeWhoseLookupFinds(found: unknown[]) {
   return vi.fn(async ({ method }: { method: string }) =>
     method === "GET" ? { data: found } : { id: "price_created" },
   );
@@ -38,7 +37,7 @@ function stripe(found: unknown[]) {
 
 describe("ensurePrice", () => {
   it("reuses a matching price without creating one", async () => {
-    const request = stripe([price()]);
+    const request = fakeStripeWhoseLookupFinds([price()]);
 
     await expect(ensurePrice({ request, ...MONTHLY })).resolves.toMatchObject({ id: "price_existing" });
     expect(request).toHaveBeenCalledTimes(1);
@@ -51,20 +50,20 @@ describe("ensurePrice", () => {
     ["a price billed every 3 months", price({ recurring: { interval: "month", interval_count: 3 } }), "every 3"],
     ["a different amount", price({ unit_amount: 1900 }), "unit_amount 1900"],
   ])("refuses %s instead of reporting it as the price to use", async (_label, existing, detail) => {
-    const request = stripe([existing]);
+    const request = fakeStripeWhoseLookupFinds([existing]);
 
     await expect(ensurePrice({ request, ...MONTHLY })).rejects.toThrow(detail);
     expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("accepts a price whose product is expanded", async () => {
-    const request = stripe([price({ product: { id: "prod_pro" } })]);
+    const request = fakeStripeWhoseLookupFinds([price({ product: { id: "prod_pro" } })]);
 
     await expect(ensurePrice({ request, ...MONTHLY })).resolves.toMatchObject({ id: "price_existing" });
   });
 
   it("creates the requested price when the lookup key is free", async () => {
-    const request = stripe([]);
+    const request = fakeStripeWhoseLookupFinds([]);
 
     await ensurePrice({ request, ...MONTHLY });
 

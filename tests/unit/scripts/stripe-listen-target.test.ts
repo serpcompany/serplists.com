@@ -5,9 +5,6 @@ import {
   retargetForDevSession,
 } from "../../../scripts/stripe/_listen-target.mjs";
 
-// Every clone or worktree runs its own dev server on a free port, so the Stripe listener
-// must forward to this checkout's API, never to a fixed 3000 that another worktree may own.
-
 const ALIVE = 101;
 const DEAD = 202;
 const isAlive = (pid: number | null) => pid === ALIVE;
@@ -22,15 +19,14 @@ const session = (overrides: Partial<Session> = {}): Session => ({
 });
 
 const allFree = async () => true;
-/** Another worktree holds the default port 3000. */
-const defaultPortBusy = async (port: number) => port !== 3000;
+const anotherWorktreeHoldsPort3000 = async (port: number) => port !== 3000;
 
 describe("resolveWebhookForwardTarget", () => {
-  it("forwards to the API of this checkout's running dev server", async () => {
+  it("forwards to the API of this checkout's running dev server, never a fixed port another worktree may own", async () => {
     const target = await resolveWebhookForwardTarget({
       session: session({ pid: ALIVE }),
       isAlive,
-      portAvailable: defaultPortBusy,
+      portAvailable: anotherWorktreeHoldsPort3000,
     });
 
     expect(target).toMatchObject({ url: "http://localhost:3001/api/stripe/webhook", source: "session" });
@@ -40,7 +36,7 @@ describe("resolveWebhookForwardTarget", () => {
     const target = await resolveWebhookForwardTarget({
       session: session({ pid: DEAD, port: 3005 }),
       isAlive,
-      portAvailable: defaultPortBusy,
+      portAvailable: anotherWorktreeHoldsPort3000,
     });
 
     expect(target).toMatchObject({ url: "http://localhost:3001/api/stripe/webhook", source: "predicted" });

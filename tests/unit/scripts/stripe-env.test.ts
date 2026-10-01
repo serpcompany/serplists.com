@@ -6,9 +6,6 @@ import { describe, expect, it } from "vitest";
 import { parseEnvFile, resolveTestSecretKey } from "../../../scripts/stripe/_env.mjs";
 import { renderDevVars } from "../../../scripts/setup-local-lib.mjs";
 
-// .dev.vars.example (and so `pnpm run setup`) offers only STRIPE_SECRET_KEY for the
-// test key, so every local Stripe script must accept it there, and never a live key.
-
 describe("resolveTestSecretKey", () => {
   it("reads the test key from STRIPE_SECRET_KEY, as .dev.vars.example provides it", () => {
     expect(resolveTestSecretKey({ STRIPE_SECRET_KEY: "sk_test_single" })).toBe("sk_test_single");

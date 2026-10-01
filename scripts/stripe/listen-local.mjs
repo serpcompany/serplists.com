@@ -19,8 +19,6 @@ if (!testKey) {
   throw new Error(`Stripe local listener requires a test secret key. ${TEST_SECRET_KEY_HINT}`);
 }
 
-// Each checkout runs its own dev server on a free port, so forward to this checkout's API
-// (tmp/dev-session.json), not to a fixed port another worktree may own.
 const target = await resolveWebhookForwardTarget({
   envUrl: env.STRIPE_LOCAL_WEBHOOK_URL,
   session: readDevSession(),
@@ -58,19 +56,17 @@ function startListener(url) {
   listener.stderr.on("data", (chunk) => forward(process.stderr, chunk));
   listener.on("exit", (code, signal) => {
     if (restarting && !stopping) {
-      // The CLI signing secret is stable per account and device, so .dev.vars stays valid.
       restarting = false;
       startListener(target.url);
       return;
     }
-    clearInterval(poll);
+    clearInterval(followDevAllToItsPort);
     process.exitCode = code ?? (signal ? 1 : 0);
   });
   child = listener;
 }
 
-// `--forward-to` is fixed per process, so follow dev:all to the port it actually chose.
-const poll = setInterval(() => {
+const followDevAllToItsPort = setInterval(() => {
   if (stopping || restarting) return;
   const url = retargetForDevSession(target, readDevSession());
   if (!url) return;
@@ -86,7 +82,7 @@ startListener(target.url);
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     stopping = true;
-    clearInterval(poll);
+    clearInterval(followDevAllToItsPort);
     child?.kill(signal);
   });
 }

@@ -23,17 +23,11 @@ Reads the live key only from the process environment, never from a file:
 `;
 }
 
-/** A price id with its amount, for bootstrap output. */
 export function describePrice(price) {
   if (!price?.id) return "(dry-run)";
   return `${price.id} (${price.unit_amount} ${price.currency} / ${price.recurring?.interval})`;
 }
 
-/**
- * Returns the price under `lookupKey`, creating it when the key is free. `request`
- * sends one Stripe API call ({ method, path, form }); a dry run returns no data, so
- * nothing is checked.
- */
 export async function ensurePrice({ request, productId, lookupKey, currency, unitAmount, interval }) {
   const lookupResp = await request({
     method: "GET",
