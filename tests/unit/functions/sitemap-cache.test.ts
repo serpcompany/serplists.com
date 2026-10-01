@@ -1,3 +1,4 @@
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
@@ -7,14 +8,6 @@ import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
 import { GET as profilesShardGet } from '@/app/sitemaps/profiles/[page]/route';
 import { GET as templatesShardGet } from '@/app/sitemaps/templates/[page]/route';
-import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
-  ...(await import('../../support/nextServerContext')).requestScopeMock,
-}));
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);

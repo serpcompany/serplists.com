@@ -1,15 +1,11 @@
+import { createEdgeCache, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildPageJsonLd } from '@/lib/seo/pageMetadata';
 import { loadTemplatePageSeo } from '@/server/pageMeta/templatePage';
-import { createEdgeCache, unreachableD1, serverContext } from '../../../support/nextServerContext';
 import { SqliteD1 } from '../../../support/sqlite-d1';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
 
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
 

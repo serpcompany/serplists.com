@@ -12,6 +12,12 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
+const aRouterWithTheMcpHandlerMocked = async () => {
+  const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
+  vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
+  return { apiWorker: await freshApiWorker(), handleAgentMcp };
+};
+
 describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/handlers/templates');
@@ -93,10 +99,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
   });
 
   it('keeps personal run MCP routes off on remote hosts unless explicitly enabled', async () => {
-    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
-    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
-
-    const apiWorker = await freshApiWorker();
+    const { apiWorker, handleAgentMcp } = await aRouterWithTheMcpHandlerMocked();
     const response = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
       {} as any,
@@ -107,10 +110,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
   });
 
   it('allows explicit remote enablement and explicit local disablement', async () => {
-    const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
-    vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
-
-    const apiWorker = await freshApiWorker();
+    const { apiWorker, handleAgentMcp } = await aRouterWithTheMcpHandlerMocked();
     const enabledResponse = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
       buildEnv({ PERSONAL_RUN_MCP_ENABLED: 'true' }),

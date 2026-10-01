@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, silenceLogs } from '../../../support/apiRouter';
+import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, sendToAFreshApiWorker, silenceLogs } from '../../../support/apiRouter';
 import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
@@ -30,10 +30,7 @@ function authPost(path: string, init: { body?: string; headers?: Record<string, 
 describe('auth errors the router sends before Better Auth runs, each with the message the Better Auth client hands the UI', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   const betterAuthHandler = vi.fn(async () => Response.json({ ok: true }));
 
-  async function send(request: Request, env = buildEnv()) {
-    const apiWorker = await freshApiWorker();
-    return apiWorker.fetch(request, env);
-  }
+  const send = (request: Request, env = buildEnv()) => sendToAFreshApiWorker(request, env);
 
   async function expectAuthErrorBody(response: Response, status: number, code?: string) {
     expect(response.status).toBe(status);

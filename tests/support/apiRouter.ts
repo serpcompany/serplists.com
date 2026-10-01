@@ -41,3 +41,8 @@ export function aFreshIp(prefix = '203.0.113') {
   freshIps += 1;
   return { ip: `${prefix}.${freshIps}`, count: freshIps };
 }
+
+export async function sendToAFreshApiWorker(request: Request, env: Parameters<Awaited<ReturnType<typeof freshApiWorker>>['fetch']>[1]) {
+  const apiWorker = await freshApiWorker();
+  return apiWorker.fetch(request, env);
+}

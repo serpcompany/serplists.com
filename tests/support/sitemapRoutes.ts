@@ -1,4 +1,13 @@
+import { vi } from 'vitest';
+
 import { serverContext } from './nextServerContext';
+
+vi.mock('server-only', () => ({}));
+vi.mock('@opennextjs/cloudflare', async () => (await import('./nextServerContext')).cloudflareMock);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  ...(await import('./nextServerContext')).requestScopeMock,
+}));
 
 type SitemapRouteGet = (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response>;
 

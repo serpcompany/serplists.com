@@ -1,22 +1,15 @@
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
-import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { SqliteD1 } from '../../support/sqlite-d1';
-
-vi.mock('server-only', () => ({}));
-vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
-vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
-  ...(await import('../../support/nextServerContext')).requestScopeMock,
-}));
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
