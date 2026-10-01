@@ -129,7 +129,7 @@ page, so a page's sticky parts stick to the window.
 | `TemplateSectionList` | `src/components/template/TemplateSectionList.tsx` | A Template's sections as cards (number, title, task count) over their numbered tasks; collapsible on the public template page, always open on template detail |
 | `ChangelogList` | `src/components/shared/ChangelogList.tsx` | A record's history as `Item` rows (what changed, who, when), with its loading, error and empty lines: template detail, the run page and Organization activity |
 | `RunPageHeader`, `SharedRunView` | `src/components/run-execution/` | The run page's header (the title, or a labelled "Run title" field while renaming; badges; progress from `xl`; the Run's actions), and the shared run page (its own header with Copy Link, a summary Card, a Card per section, the `CtaBanner`) |
-| `TemplateEditorOutline` | `src/components/template-editor/TemplateEditorOutline.tsx` | Where the editor's outline sits: a sticky Card beside the form from `lg`, a bottom `Sheet` below it (opened by the editor header's Outline button; picking or adding an entry closes it and moves focus to that entry's form) |
+| `TemplateEditorOutline` | `src/components/template-editor/TemplateEditorOutline.tsx` | Where the editor's outline sits: a sticky Card beside the form from `lg`, a bottom `Sheet` below it (opened by the editor header's Outline button; picking or adding an entry closes it and moves focus to that entry's form, while moving or removing one keeps it open). The sheet renders outside the page's locked `fieldset`, so it disables its own while a create saves or a Clipy draft generates, and it scrolls the form to the entry a frame after it closes, once its scroll lock has given the page back its scroll |
 
 ## Primitives
 
@@ -211,7 +211,13 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   touch screen) the handle hides (`pointer-coarse:hidden`) and each entry shows Move up and
   Move down buttons (`ReorderMoveButtons`), which move it one place, keep focus on the moved
   entry's button and announce the new position; a fine pointer hides them
-  (`pointer-fine:hidden`). A grab cursor goes only on a handle that works.
+  (`pointer-fine:hidden`). A grab cursor goes only on a handle that works. A move can
+  re-insert the moved row, which drops focus, so focus returns to its handle or button once
+  the move has rendered, and to its other Move button when the move reached the end of the
+  list (`src/components/template-editor/reorder.ts`). A list takes a drop only from a drag
+  that started on one of its own handles: blocks within their task, sections among
+  sections, and tasks within their section. A drag puts its entry in the drag data as it
+  starts, since Firefox starts no drag without data.
 - A `Label` names its control through `htmlFor` and a matching `id`, including a
   `Switch`, and helper text is linked with `aria-describedby`. Controls repeated on
   each row of a list name the row in their accessible name ("Role for Alice

@@ -188,6 +188,13 @@ describe('ContentEditor block reordering', () => {
     expect(findAllElements(render(), (element) => element.props['data-drop-indicator'] !== undefined)).toEqual([]);
   });
 
+  it('puts the dragged block in the drag data as the drag starts, since Firefox starts no drag without data', () => {
+    const start = dragEvent();
+    (handle(render(), 'Drag Sub-tasks block').props.onDragStart as (event: unknown) => void)(start);
+
+    expect(start.dataTransfer.setData).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores a drag that did not start on one of its block handles', () => {
     const over = dragEvent();
     (blockDropTarget(render(), 0).props.onDragOver as (event: unknown) => void)(over);

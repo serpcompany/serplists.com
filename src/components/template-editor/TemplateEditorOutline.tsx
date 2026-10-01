@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { useRef } from "react";
 
+import { EDITOR_PANEL_HEADING_ID, EDITOR_PANEL_ID } from "@/components/template-editor/EditorPanels";
 import {
   OutlineSidebar,
   type OutlineSidebarProps,
@@ -8,23 +9,13 @@ import {
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-// EditorPanels' section and its heading, which a pick in the sheet brings into view.
-const EDITOR_PANEL_ID = "template-editor-panel";
-const EDITOR_PANEL_HEADING_ID = "template-editor-panel-title";
-
 interface TemplateEditorOutlineProps extends Omit<OutlineSidebarProps, "onEntryPicked"> {
-  // From lg up the outline is a card beside the form; below, a bottom sheet that the editor
-  // header's Outline button opens.
   besideForm: boolean;
-  // A create saving or a Clipy draft generating. The sheet renders outside the page's locked
-  // fieldset, so it locks its own.
   locked: boolean;
   onSheetOpenChange: (open: boolean) => void;
   sheetOpen: boolean;
 }
 
-// Where the template editor's outline sits. In the sheet, picking or adding an entry closes it
-// and moves focus to that entry's form, scrolled into view under the top bars.
 export function TemplateEditorOutline({
   besideForm,
   locked,
@@ -32,13 +23,10 @@ export function TemplateEditorOutline({
   sheetOpen,
   ...outlineProps
 }: TemplateEditorOutlineProps): JSX.Element {
-  // Set by a pick, and cleared when the sheet opens again: the close that follows a pick hands
-  // focus to the picked entry's form and scrolls it into view, whichever runs first.
-  const revealPanelRef = useRef(false);
+  const revealPanelOnCloseRef = useRef(false);
 
   if (besideForm) {
     return (
-      // In view while the form scrolls, under the console's and the editor's top bars.
       <Card className="sticky top-32 max-h-[calc(100dvh-9rem)] gap-0 overflow-y-auto py-0">
         <OutlineSidebar {...outlineProps} />
       </Card>
@@ -51,9 +39,8 @@ export function TemplateEditorOutline({
       onOpenChange={onSheetOpenChange}
       onOpenChangeComplete={(open) => {
         if (open) {
-          revealPanelRef.current = false;
-        } else if (revealPanelRef.current) {
-          // A frame later, so the page's scroll is already back from the sheet's scroll lock.
+          revealPanelOnCloseRef.current = false;
+        } else if (revealPanelOnCloseRef.current) {
           window.requestAnimationFrame(() => {
             document.getElementById(EDITOR_PANEL_ID)?.scrollIntoView({ block: "start" });
           });
@@ -63,7 +50,7 @@ export function TemplateEditorOutline({
       <SheetContent
         className="flex max-h-[85dvh] flex-col gap-0 p-0"
         finalFocus={() =>
-          revealPanelRef.current ? document.getElementById(EDITOR_PANEL_HEADING_ID) : true
+          revealPanelOnCloseRef.current ? document.getElementById(EDITOR_PANEL_HEADING_ID) : true
         }
         side="bottom"
       >
@@ -75,7 +62,7 @@ export function TemplateEditorOutline({
             <OutlineSidebar
               {...outlineProps}
               onEntryPicked={() => {
-                revealPanelRef.current = true;
+                revealPanelOnCloseRef.current = true;
                 onSheetOpenChange(false);
               }}
             />

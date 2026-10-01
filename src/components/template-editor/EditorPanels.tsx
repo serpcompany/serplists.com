@@ -8,8 +8,10 @@ import { TemplateBasicInfo } from "@/components/template-editor/TemplateBasicInf
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty";
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
+export const EDITOR_PANEL_ID = "template-editor-panel";
+export const EDITOR_PANEL_HEADING_ID = "template-editor-panel-title";
+
 interface EditorPanelsProps {
-  // The template owner's public profile slug, for the Search & SEO preview URL.
   publicOwnerSlug: string | null;
   selectedSectionIndex: number;
   selectedItemIndex: number | null;
@@ -88,16 +90,14 @@ export function EditorPanels({
 
   return (
     <section
-      aria-labelledby="template-editor-panel-title"
+      aria-labelledby={EDITOR_PANEL_HEADING_ID}
       className="flex min-w-0 flex-col gap-6 scroll-mt-32"
-      id="template-editor-panel"
+      id={EDITOR_PANEL_ID}
     >
       <div className="flex flex-col gap-1">
-        {/* On a phone, picking an entry in the outline sheet moves focus here (tabIndex -1:
-            focusable by script only, never a Tab stop). */}
         <h2
           className="text-lg font-semibold tracking-tight"
-          id="template-editor-panel-title"
+          id={EDITOR_PANEL_HEADING_ID}
           tabIndex={-1}
         >
           {panelTitle}

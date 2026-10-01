@@ -16,22 +16,16 @@ import { Spinner } from '@/components/ui/spinner';
 interface TemplateHeaderProps {
   isEditing: boolean;
   isSaving: boolean;
-  // A file is still uploading: saving now would store the block without it.
   isUploading?: boolean;
-  // A Clipy draft is generating: it replaces the form when it arrives.
   isGenerating?: boolean;
   title: string;
   templateSlug?: string;
   onCancel: () => void;
   onSave: () => void;
   onPreview?: () => void;
-  // The button that opens the outline below lg, where it is not beside the form.
   outlineTrigger?: ReactNode;
 }
 
-// The editor's top bar, which sticks under the console's top bar: back, the draft's title, and
-// Preview, Save, the theme and More actions. On a phone Preview moves into More actions and the
-// theme toggle stays in the sidebar, so the title and Save keep their room.
 export const TemplateHeader = ({
   isEditing,
   isSaving,

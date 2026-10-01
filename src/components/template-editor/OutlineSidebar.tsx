@@ -13,12 +13,9 @@ export interface OutlineSidebarProps {
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
   onSelectSEO: () => void;
   onSelectTemplateInfo: () => void;
-  // Called after the user picks an entry, so the phone's outline sheet can close.
   onEntryPicked?: () => void;
 }
 
-// The template editor's outline: Template Settings and Search & SEO, then the sections and
-// their tasks. A column beside the form from lg up; below lg it opens in a sheet.
 export function OutlineSidebar({
   selectedSectionIndex,
   selectedItemIndex,

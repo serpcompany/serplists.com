@@ -1432,7 +1432,8 @@ existing content, invent nothing):
   - Editor header (sticky under the console's top bar): back arrow ("Back to templates"),
     the draft's title ("New Template" or "Untitled Template"), an "Editing" badge when editing
     (from `sm`), "Outline" (below `lg`), "Preview" (from `sm`; in "More actions" on phones),
-    "Save", a theme toggle (from `sm`; the sidebar has it on phones), "More actions".
+    "Save", a theme toggle (from `sm`; the sidebar has it on phones), "More actions". Preview
+    and the theme toggle leave the bar on phones, so the title and Save keep their room.
   - Notices when needed: "Error" with the problems (and "Load latest version" after a
     conflict); "Unsaved template draft" ("Restore draft", "Discard"); "Unsaved template draft
     in <context>" ("Switch to <context>", "Discard"); plan or session notices ("Upgrade to Pro
@@ -1446,8 +1447,9 @@ existing content, invent nothing):
     or added entry, moving focus to its form. "Template Settings", "Search & SEO";
     "Sections" with "Add section"; per section: a drag handle ("Drag <section>"), collapse or
     expand, the title, "Add task to <section>", "Remove <section>"; per task: a drag handle,
-    the title, "Remove <task>". On a touch screen the drag handles give way to "Move <entry>
-    up" and "Move <entry> down" buttons.
+    the title, "Remove <task>". A double click on a section's or task's title renames it in
+    place (Enter or leaving the field keeps the new title, Escape drops it). On a touch screen
+    the drag handles give way to "Move <entry> up" and "Move <entry> down" buttons.
   - Panel (beside the outline from `lg`, the page's one column below it), titled by the
     selection:
     - "Template Settings": "Template Name", "Goal / Summary", "Template Type" ("Checklist",

@@ -18,8 +18,13 @@ interface TemplatePreviewDialogProps {
   title: string;
 }
 
-// The unsaved draft as its public page shows it, every task expanded. The dialog keeps its
-// header in view and scrolls the template inside it.
+const everyTaskExpanded = (sections: TemplateEditorFormValues["sections"]) =>
+  Object.fromEntries(
+    sections.flatMap((section, sectionIndex) =>
+      section.items.map((_, itemIndex) => [`${sectionIndex}-${itemIndex}`, true]),
+    ),
+  );
+
 export function TemplatePreviewDialog({
   description,
   onOpenChange,
@@ -45,14 +50,7 @@ export function TemplatePreviewDialog({
               <p className="text-sm whitespace-pre-line text-muted-foreground">{description}</p>
             ) : null}
           </div>
-          <PublicTemplateContent
-            initialExpandedItems={Object.fromEntries(
-              sections.flatMap((section, sectionIndex) =>
-                section.items.map((_, itemIndex) => [`${sectionIndex}-${itemIndex}`, true]),
-              ),
-            )}
-            sections={sections}
-          />
+          <PublicTemplateContent initialExpandedItems={everyTaskExpanded(sections)} sections={sections} />
         </div>
       </DialogContent>
     </Dialog>

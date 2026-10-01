@@ -34,7 +34,6 @@ export function ContentEditor({
   sectionIndex,
 }: ContentEditorProps): JSX.Element {
   const { control, getValues, setValue } = useFormContext<TemplateEditorFormValues>();
-  // The page holds Save and guards leaving until every upload has finished.
   const trackUpload = useTrackTemplateEditorUpload();
   const contentsFieldArray = useFieldArray({
     control,
@@ -46,8 +45,6 @@ export function ContentEditor({
       control,
       name: `sections.${sectionIndex}.items.${itemIndex}.contents` as const,
     }) ?? [];
-  // Blocks reorder by dragging their handle or with the arrow keys on it. A move keeps
-  // each block's id, and useFieldArray.move marks the form dirty.
   const blockDrag = useBlockDrag(contentsFieldArray.move);
   const [moveAnnouncement, setMoveAnnouncement] = useState("");
   const reorderHintId = useId();
@@ -64,8 +61,6 @@ export function ContentEditor({
     );
   }
 
-  // Typing in an image, video, or file block's URL field. A new value no longer points
-  // at the uploaded file, so its name and size go in the same write (withMediaValue).
   function handleMediaValueChange(contentId: string, value: string): void {
     const path = findTemplateEditorContentPath(getValues("sections"), contentId);
     if (!path) {
@@ -79,13 +74,9 @@ export function ContentEditor({
     }
   }
 
-  // An upload finishes after the render that started it, so never spread the
-  // render-time `contents` snapshot here: it still holds the old URL. Find the block
-  // by id in the current form values and write the whole change at once.
   function handleFileChange(contentId: string, change: FileUploadChange): void {
     const path = findTemplateEditorContentPath(getValues("sections"), contentId);
     if (!path) {
-      // The block was removed while the upload was running.
       return;
     }
 
@@ -135,7 +126,6 @@ export function ContentEditor({
           />
         );
       case "subItems":
-        // Its field array is named by this index, so a moved block gets a fresh one.
         return (
           <SubItemsEditor
             key={contentIndex}
@@ -213,7 +203,7 @@ export function ContentEditor({
                     {typeLabel}
                   </span>
                   <ReorderMoveButtons
-                    buttonClassName={cn("pointer-fine:hidden", ROW_ACTIONS_REVEAL_CLASS)}
+                    buttonClassName={ROW_ACTIONS_REVEAL_CLASS}
                     count={contentsFieldArray.fields.length}
                     handleId={`content:${contentField.id}`}
                     index={contentIndex}

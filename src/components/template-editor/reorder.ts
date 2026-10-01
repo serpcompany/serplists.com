@@ -1,13 +1,7 @@
 import type { KeyboardEvent } from "react";
 
-// Reordering in the template editor. Sections, tasks and content blocks each have a drag
-// handle; the same handle also moves its entry with the arrow keys, because HTML5 drag
-// and drop needs a mouse. Move up and Move down buttons do the same by touch.
-
 export const REORDER_KEYS_HINT = "Press the Up or Down arrow key to move it.";
 
-// Row actions (add, remove) that appear on hover must also appear when the keyboard
-// reaches the row or the action itself, and on touch screens, which cannot hover.
 export { HOVER_REVEAL_CLASS as ROW_ACTIONS_REVEAL_CLASS } from "@/components/ui/hover-reveal";
 
 export type ReorderKeyEvent = Pick<
@@ -15,8 +9,6 @@ export type ReorderKeyEvent = Pick<
   "altKey" | "ctrlKey" | "key" | "metaKey" | "shiftKey"
 >;
 
-// The index an arrow key moves the entry to, clamped to the list (no wrapping). null
-// means the key is not a reorder key and keeps its default behavior.
 export function getKeyboardMoveIndex(
   event: ReorderKeyEvent,
   index: number,
@@ -54,8 +46,6 @@ export type KeyboardReorderEntry = {
   label: string;
 };
 
-// Moves the entry for an arrow key and returns what to announce, or null when nothing
-// moved. A reorder key is always consumed, even at either end, so it never scrolls.
 export function handleKeyboardReorder(
   event: ReorderKeyEvent & { preventDefault: () => void },
   entry: KeyboardReorderEntry,
@@ -72,9 +62,6 @@ export function handleKeyboardReorder(
 
 export type ReorderDirection = "up" | "down";
 
-// Moves the entry one place with its Move up or Move down button and returns what to
-// announce, or null at either end. Focus stays on the moved entry's button for the same
-// direction, or its other one when the move reached the end of the list.
 export function moveWithButton(
   direction: ReorderDirection,
   entry: KeyboardReorderEntry,
@@ -87,7 +74,6 @@ export function moveWithButton(
   return describeMove(entry.label, toIndex, entry.count);
 }
 
-// The line a drop will land on: above or below the entry under the pointer.
 export function dropIndicatorClass(edge: "after" | "before" | null): string | undefined {
   if (edge === "before") {
     return "before:absolute before:inset-x-1 before:-top-0.5 before:z-20 before:h-0.5 before:rounded-full before:bg-primary before:content-['']";
@@ -98,8 +84,6 @@ export function dropIndicatorClass(edge: "after" | "before" | null): string | un
   return undefined;
 }
 
-// React may re-insert the moved row's DOM node, which drops focus; put it back on the
-// row's handle once the move has rendered. Handles carry data-reorder-handle.
 export function focusReorderHandle(handleId: string): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   window.requestAnimationFrame(() => {
@@ -113,9 +97,6 @@ export function focusReorderHandle(handleId: string): void {
   });
 }
 
-// A move re-inserts the row, which can drop focus. Move buttons carry
-// data-reorder-move="<handleId>:<direction>"; a disabled one (the entry reached an end) hands
-// focus to the other direction.
 export function focusReorderMoveButton(handleId: string, direction: ReorderDirection): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   window.requestAnimationFrame(() => {

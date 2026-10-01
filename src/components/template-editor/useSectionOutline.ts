@@ -20,8 +20,6 @@ export type SectionOutlineSelection = {
   selectedItemIndex: number | null;
   onSelectSection: (sectionIndex: number) => void;
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
-  // Called after the user picks or adds a section or task (not after a move or a removal),
-  // so the phone's outline sheet can close on the chosen entry.
   onEntryPicked?: () => void;
 };
 
@@ -49,15 +47,9 @@ export function useSectionOutline({
   const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const outlineDrag = useOutlineDrag({ moveSection, moveTask });
-  // Sections the user collapsed, by section id; every other section is expanded. The
-  // outline can mount before the template loads (a reset then replaces every section),
-  // and a Clipy draft or a save resets the form too, so expansion must not be seeded
-  // from the sections present at mount. Keyed by id, a collapsed section stays
-  // collapsed when it moves or the form is reset to the saved values.
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(
     () => new Set(),
   );
-  // Where the last keyboard or button move put an entry, for screen readers.
   const [moveAnnouncement, setMoveAnnouncement] = useState("");
   const reorderHintId = useId();
 
@@ -97,7 +89,6 @@ export function useSectionOutline({
 
   function handleAddSection(): void {
     const nextIndex = sectionsFieldArray.fields.length;
-    // A new section has a new id, so it starts expanded.
     sectionsFieldArray.append(createTemplateEditorSection());
     onSelectSection(nextIndex);
     onEntryPicked?.();
@@ -198,8 +189,6 @@ export function useSectionOutline({
     }
   }
 
-  // Drops, arrow keys and the Move buttons all move through these, so the selection follows
-  // the move.
   function moveSection(fromIndex: number, toIndex: number): void {
     sectionsFieldArray.move(fromIndex, toIndex);
 

@@ -15,8 +15,6 @@ import { buildTemplateSeoPreview } from "@/lib/templates/templateSeoPreview";
 
 interface SEOMetaEditorProps {
   showIntro?: boolean;
-  // The template owner's public profile slug (resolvePublicTemplateOwnerSlug); null when
-  // the owner has no username, so the template has no public URL.
   ownerSlug?: string | null;
 }
 
@@ -43,10 +41,8 @@ export const SEOMetaEditor = ({
     seoDescription: `${fieldId}-seo-description`,
   };
 
-  // The slug the template has now (the form's loaded value); left unedited, it is kept.
   const storedSlug = formState.defaultValues?.seoUrl;
   const resolvedTitle = seoTitle || title || DEFAULT_TEMPLATE_TITLE;
-  // The public page the template will have after a save, with the slug the save stores.
   const preview = buildTemplateSeoPreview({
     seoUrl: seoUrl || "",
     storedSlug,
@@ -55,7 +51,6 @@ export const SEOMetaEditor = ({
     origin: browserOrigin(),
   });
 
-  // Show the slug that will be saved once the user leaves the field.
   const handleSlugBlur = (): void => {
     const normalized = normalizeTemplateEditorSlugForSave(seoUrl || "", storedSlug);
     if (normalized !== seoUrl) {

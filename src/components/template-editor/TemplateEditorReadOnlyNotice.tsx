@@ -8,13 +8,10 @@ import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/route
 import { Link } from '@/components/navigation/Link';
 
 type TemplateEditorReadOnlyNoticeProps = {
-  // The template the edit link was for; absent on the new-template route.
   templateId?: string;
   reason: "organization_role" | "not_owner";
 };
 
-// Shown instead of the editor when the viewer could open the link but not save from it
-// (the API refuses the save), so no one edits work that can only end in "Forbidden".
 export function TemplateEditorReadOnlyNotice({ templateId, reason }: TemplateEditorReadOnlyNoticeProps) {
   const title = templateId ? "You can't edit this template" : "You can't create templates here";
   let message = "Only its owner can edit it.";

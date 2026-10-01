@@ -12,12 +12,9 @@ import { generateTemplateDraftFromClipy } from "@/features/template-editor/clipy
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
 type GenerateFromClipyProps = {
-  // Receives the draft, which replaces the form in the editor.
   onGenerated: (draft: TemplateEditorFormValues) => void;
   generate?: (url: string) => Promise<{ draft: TemplateEditorFormValues }>;
-  // Asked before the request: false keeps the editor (and this field) as it is.
   confirmReplace?: () => boolean;
-  // While true the editor is locked, so nothing typed during the request is replaced.
   onGeneratingChange?: (isGenerating: boolean) => void;
 };
 
@@ -30,13 +27,11 @@ export function GenerateFromClipy({
   const [url, setUrl] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The latest request; bumped on unmount, so a draft that arrives after the editor
-  // closed (Cancel, or leaving the page) is dropped.
-  const requestRef = useRef(0);
+  const latestRequestRef = useRef(0);
 
   useEffect(
     () => () => {
-      requestRef.current += 1;
+      latestRequestRef.current += 1;
     },
     [],
   );
@@ -51,17 +46,17 @@ export function GenerateFromClipy({
       return;
     }
 
-    requestRef.current += 1;
-    const request = requestRef.current;
+    latestRequestRef.current += 1;
+    const request = latestRequestRef.current;
     setError(null);
     setGenerating(true);
     try {
       const result = await generate(url);
-      if (request === requestRef.current) {
+      if (request === latestRequestRef.current) {
         onGenerated(result.draft);
       }
     } catch (caught) {
-      if (request === requestRef.current) {
+      if (request === latestRequestRef.current) {
         setError(
           caught instanceof Error
             ? caught.message
@@ -69,7 +64,7 @@ export function GenerateFromClipy({
         );
       }
     } finally {
-      if (request === requestRef.current) {
+      if (request === latestRequestRef.current) {
         setGenerating(false);
       }
     }

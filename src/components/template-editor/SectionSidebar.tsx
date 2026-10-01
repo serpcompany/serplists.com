@@ -24,13 +24,6 @@ function buildItemFallbackLabel(itemIndex: number): string {
   return `Task ${itemIndex + 1}`;
 }
 
-// Move up and Move down show on touch screens, where dragging does not work; a mouse drags the
-// handle, and the keyboard moves it with the arrow keys.
-const MOVE_BUTTON_CLASS = "pointer-fine:hidden";
-
-// The template editor's outline: its sections, each collapsible with its tasks. A row selects
-// its entry; its handle drags it or moves it with the arrow keys, and its actions add a task,
-// remove it, or move it by touch. Double-clicking a title renames it in place.
 export function SectionSidebar({
   outlineSelectionActive,
   selectedSectionIndex,
@@ -95,7 +88,6 @@ export function SectionSidebar({
       <div className="flex flex-col gap-1 p-2">
         {sectionsFieldArray.fields.map((sectionField, sectionIndex) => {
           const section = sections?.[sectionIndex];
-          // A save stores this label for an untitled section, so the outline shows it.
           const sectionLabel = getSectionDisplayTitle(section ?? { title: "" }, sectionIndex);
           const sectionSelected =
             outlineSelectionActive &&
@@ -218,7 +210,6 @@ export function SectionSidebar({
                     <Trash2 />
                   </Button>
                   <ReorderMoveButtons
-                    buttonClassName={MOVE_BUTTON_CLASS}
                     count={sectionsFieldArray.fields.length}
                     handleId={`section:${sectionField.id}`}
                     index={sectionIndex}
@@ -327,10 +318,7 @@ export function SectionSidebar({
                           <Trash2 />
                         </Button>
                         <ReorderMoveButtons
-                          buttonClassName={cn(
-                            MOVE_BUTTON_CLASS,
-                            itemSelected ? "opacity-100" : ROW_ACTIONS_REVEAL_CLASS,
-                          )}
+                          buttonClassName={itemSelected ? "opacity-100" : ROW_ACTIONS_REVEAL_CLASS}
                           count={section.items.length}
                           handleId={`task:${item.id}`}
                           index={itemIndex}

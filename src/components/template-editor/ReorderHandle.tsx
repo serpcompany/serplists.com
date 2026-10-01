@@ -12,24 +12,17 @@ import {
 import { cn } from "@/lib/utils";
 
 interface ReorderHandleProps {
-  // What the handle moves, e.g. "Section 1"; the handle is named "Drag Section 1".
   label: string;
   index: number;
   count: number;
-  // Finds the handle again after a move (see focusReorderHandle).
   handleId: string;
-  // The id of the ReorderHint that says how to move it with the keyboard.
   hintId: string;
   onDragStart: (event: DragEvent<HTMLButtonElement>) => void;
   onDragEnd: () => void;
   onMove: (fromIndex: number, toIndex: number) => void;
-  // Receives the screen-reader announcement after a keyboard move.
   onMoved: (announcement: string) => void;
 }
 
-// A drag handle that also moves its entry one place with the Up and Down arrow keys. HTML5
-// drag and drop needs a mouse, so a touch screen (a coarse pointer) shows the entry's Move up
-// and Move down buttons (ReorderMoveButtons) instead of the handle.
 export function ReorderHandle({
   label,
   index,
@@ -64,21 +57,15 @@ export function ReorderHandle({
 }
 
 interface ReorderMoveButtonsProps {
-  // Classes for each button, such as the row actions' reveal.
   buttonClassName?: string;
   count: number;
-  // The entry's handle id (see ReorderHandle), which finds the moved entry's buttons again.
   handleId: string;
   index: number;
-  // What the buttons move: "Move Section 1 up".
   label: string;
   onMove: (fromIndex: number, toIndex: number) => void;
   onMoved: (announcement: string) => void;
 }
 
-// Move up and Move down: reorder an entry by touch, or by any pointer without dragging. Each
-// moves the entry one place, keeps focus on it and announces the new position, as the handle's
-// arrow keys do.
 export function ReorderMoveButtons({
   buttonClassName,
   count,
@@ -97,7 +84,7 @@ export function ReorderMoveButtons({
     <>
       <Button
         aria-label={`Move ${label} up`}
-        className={cn("text-muted-foreground", buttonClassName)}
+        className={cn("text-muted-foreground pointer-fine:hidden", buttonClassName)}
         data-reorder-move={`${handleId}:up`}
         disabled={index === 0}
         onClick={() => move("up")}
@@ -109,7 +96,7 @@ export function ReorderMoveButtons({
       </Button>
       <Button
         aria-label={`Move ${label} down`}
-        className={cn("text-muted-foreground", buttonClassName)}
+        className={cn("text-muted-foreground pointer-fine:hidden", buttonClassName)}
         data-reorder-move={`${handleId}:down`}
         disabled={index >= count - 1}
         onClick={() => move("down")}
@@ -123,8 +110,6 @@ export function ReorderMoveButtons({
   );
 }
 
-// The keyboard hint the handles point at, and a live region that says where a keyboard
-// move put the entry. Both are read by screen readers only.
 export function ReorderHint({ id, announcement }: { id: string; announcement: string }): JSX.Element {
   return (
     <>

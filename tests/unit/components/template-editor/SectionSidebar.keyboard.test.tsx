@@ -3,6 +3,7 @@ import { get } from 'react-hook-form';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
+import { Input } from '@/components/ui/input';
 
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
 import { findAllElements, type AnyElement } from '../../../support/elementTree';
@@ -197,5 +198,56 @@ describe('SectionSidebar keyboard reordering', () => {
       const [hint] = findAllElements(rendered, (element) => typeof element.type === 'string' && element.props.id === hintId);
       expect(String(hint?.props.children ?? '')).toMatch(/arrow key/i);
     }
+  });
+});
+
+describe('SectionSidebar title rename in place', () => {
+  beforeEach(() => {
+    forgetKeptState();
+    vi.clearAllMocks();
+    createForm();
+  });
+
+  const doubleClickTitle = (title: string) => {
+    const [button] = findAllElements(
+      render(),
+      (element) => element.type === 'button' && element.props.children === title,
+    );
+    expect(button, title).toBeDefined();
+    (button.props.onDoubleClick as () => void)();
+  };
+
+  const titleField = () => {
+    const [field] = findAllElements(render(), (element) => element.type === Input);
+    expect(field).toBeDefined();
+    return field;
+  };
+
+  const typeAndPress = (text: string, key: string) => {
+    (titleField().props.onChange as (event: { target: { value: string } }) => void)({ target: { value: text } });
+    (titleField().props.onKeyDown as (event: { key: string }) => void)({ key });
+  };
+
+  it("opens a field with the section's title on a double click and keeps the typed title on Enter", () => {
+    doubleClickTitle('First section');
+    expect(titleField().props.value).toBe('First section');
+
+    typeAndPress('Kickoff', 'Enter');
+
+    expect(sectionTitles()).toEqual(['Kickoff', 'Second section']);
+    expect(findAllElements(render(), (element) => element.type === Input)).toEqual([]);
+  });
+
+  it('renames a task the same way, and drops the typed title on Escape', () => {
+    doubleClickTitle('Task B');
+    typeAndPress('Never saved', 'Escape');
+
+    expect(harness.setValue).not.toHaveBeenCalled();
+    expect(findAllElements(render(), (element) => element.type === Input)).toEqual([]);
+
+    doubleClickTitle('Task B');
+    typeAndPress('Ship it', 'Enter');
+
+    expect(get(harness.form.getValues(), 'sections.0.items.1.title')).toBe('Ship it');
   });
 });

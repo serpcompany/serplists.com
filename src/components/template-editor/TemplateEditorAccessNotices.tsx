@@ -9,7 +9,6 @@ import type { OtherContextTemplateDraft } from "@/features/template-editor/useOt
 
 type TemplateEditorAccessNoticesProps = {
   draft: StoredTemplateDraft | null;
-  // Restore draft and Discard wait while a create saves or a Clipy draft generates.
   draftActionsDisabled?: boolean;
   isStartingCheckout: boolean;
   notice: TemplateEditorAccessNotice | null;
@@ -17,7 +16,6 @@ type TemplateEditorAccessNoticesProps = {
   onRestoreDraft: () => void;
   onSignIn: () => void;
   onUpgrade: () => void;
-  // A new template's draft kept in another context: switching there offers it.
   otherContextDraft?: OtherContextTemplateDraft | null;
   onSwitchToDraftContext?: () => void;
   onDiscardOtherContextDraft?: () => void;

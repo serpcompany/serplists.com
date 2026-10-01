@@ -36,7 +36,6 @@ interface ContentAddPanelProps {
   onAddContent: (contentType: TemplateEditorContentType) => void;
 }
 
-// Add Block: a shadcn DropdownMenu of the content block types a task can hold.
 export const ContentAddPanel = ({ onAddContent }: ContentAddPanelProps): JSX.Element => (
   <DropdownMenu>
     <DropdownMenuTrigger render={<Button size="sm" type="button" variant="outline" />}>

@@ -1,9 +1,5 @@
 import { useState, type DragEvent } from "react";
 
-// Drag and drop in the template editor's outline: sections move among sections, and tasks
-// within their section. Only a drag that started on one of the outline's handles can drop
-// here. Drops go through the same moves as the arrow keys and the Move buttons.
-
 export type OutlineDragState =
   | { kind: "section"; sectionIndex: number }
   | { kind: "task"; itemIndex: number; sectionIndex: number };

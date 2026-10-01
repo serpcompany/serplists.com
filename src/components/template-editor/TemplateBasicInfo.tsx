@@ -15,7 +15,6 @@ import { PREDEFINED_CATEGORIES } from "@/utils/categories";
 import type { TemplateEditorDetailsFormValues } from "@/lib/forms/templateEditorDetailsForm";
 import { TEMPLATE_FIELD_LIMITS } from "@/lib/schemas/templateFields";
 
-// The template types; the Select shows the chosen one's label.
 const TEMPLATE_TYPE_LABELS = {
   checklist: "Checklist",
   recipe: "Recipe",
@@ -30,7 +29,6 @@ export const TemplateBasicInfo = ({
 }: TemplateBasicInfoProps): JSX.Element => {
   const { setValue, watch } = useFormContext<TemplateEditorDetailsFormValues>();
   const [tagInput, setTagInput] = useState("");
-  // One id per control, unique for each mounted panel, so every label names its control.
   const fieldId = useId();
   const ids = {
     title: `${fieldId}-title`,
@@ -196,7 +194,6 @@ export const TemplateBasicInfo = ({
             </FieldDescription>
           </FieldContent>
           <Switch
-            // A native button, so the Label's htmlFor names it.
             nativeButton
             render={<button type="button" />}
             id={ids.isPublic}
