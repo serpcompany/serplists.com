@@ -5,7 +5,6 @@ import { useTemplateLists } from '@/contexts/TemplatesContext';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 import { useRunSharing } from '@/features/dashboard-runs/useRunSharing';
 
-// The runs page (/dashboard/runs). Archived Templates and Runs live on /dashboard/archive.
 const Dashboard = () => {
   const {
     templates,
@@ -18,7 +17,6 @@ const Dashboard = () => {
     markRunShared,
     deleteRun,
   } = useTemplateLists({ catalog: true, runs: true });
-  // Each run follows the viewer's role in the Organization that owns it.
   const { getPermissions } = useWorkspace();
   const { refreshAfterShareFailure, stopSharingRun } = useRunSharing();
 

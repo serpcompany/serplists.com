@@ -161,7 +161,9 @@ Authenticated:
   Billing and Pricing themselves, and every other page through the shared
   checkout path (`refreshBillingStatusOnCheckoutConflict` in
   `src/lib/access-flow.ts`), so a page that gates Pro features on a cached Free
-  plan stops asking for checkout.
+  plan stops asking for checkout. My Templates' Start a Run dialog starts checkout
+  without reading billing status first: with billing turned off, checkout answers
+  `503 billing_unavailable`, which `startBillingCheckout` reports.
   An `incomplete` subscription is different: Checkout creates the subscription
   when the buyer submits payment, and a declined card or an abandoned 3DS step
   leaves it `incomplete` while its session stays open. Only a retry in that

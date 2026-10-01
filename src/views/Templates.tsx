@@ -48,7 +48,6 @@ import { useAppRouter } from '@/lib/navigation/useAppRouter';
 type SortOption = 'recent' | 'alphabetical' | 'tasks';
 type VisibilityFilter = 'all' | 'public' | 'private';
 
-// The filter and sort options; each Select shows the chosen one's label.
 const VISIBILITY_FILTER_LABELS: Record<VisibilityFilter, string> = {
   all: 'All',
   public: 'Public',
@@ -64,8 +63,6 @@ const Templates = () => {
   const model = useDashboardTemplatesModel();
   const router = useAppRouter();
   const beginVisit = usePageVisit();
-  // Set until the browser leaves for checkout; Back from Stripe clears it, so the
-  // restored dialog can be closed or submitted again.
   const [isStartingCheckout, setIsStartingCheckout] = useRedirectPending();
   const isLaunchingRun = model.isCreatingRun || isStartingCheckout;
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,11 +126,7 @@ const Templates = () => {
   };
 
   const startUpgrade = async (): Promise<boolean> => {
-    // Keep the dialog busy until the checkout redirect starts, so a second
-    // click cannot open a second checkout session.
     setIsStartingCheckout(true);
-    // No billing-status fetch here: a disabled billing config answers checkout
-    // with 503 billing_unavailable, which startBillingCheckout reports.
     const redirecting = await handleUpgradeRequiredForContext({
       billingEnabled: true,
       isTeamWorkspace: Boolean(model.isTeamWorkspace),
@@ -144,14 +137,11 @@ const Templates = () => {
     return redirecting;
   };
 
-  // The dialog's name, or the default it showed when left blank.
   const handleRunConfirm = async (runName: string) => {
     if (isLaunchingRun) {
       return;
     }
 
-    // Started before the request: a failure that arrives after the user has left
-    // (Escape and a sidebar link, or Back) must not send them to sign-in or checkout.
     const visit = beginVisit();
     const result = await model.createRunFromTemplate(runName);
 
@@ -181,14 +171,12 @@ const Templates = () => {
       toast.error(
         error instanceof Error ? error.message : 'Failed to delete template.',
       );
-      // Deleted elsewhere: the list reloaded without it, so a retry could only fail again.
       if (isStaleRecordError(error)) setTemplateToDelete(null);
     } finally {
       setIsDeletingTemplate(false);
     }
   };
 
-  // No count until the list has loaded: a loading or failed list is not an empty one.
   const templateCount = model.templates.length;
   const countDescription =
     model.loading || model.loadError
@@ -327,8 +315,6 @@ const Templates = () => {
         loading={isLaunchingRun}
       />
 
-      {/* Users see a delete. The API archives the template (making it private), and
-          /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
       <ConfirmDialog
         confirmLabel="Delete"
         description="Are you sure you want to delete this template?"
