@@ -341,7 +341,14 @@ Common failures:
   shows there as `Reloading local server`.
 - Reuse stable test identities instead of registering a new account on every run.
   Production auth blocks known test-email domains; keep that coverage when auth
-  routes change.
+  routes change. A spec that needs a fresh account (an Organization invite, a Free plan
+  at its limit) registers one: the stack runs with `wrangler.toml`'s top-level vars, which
+  turn email verification off (`AUTH_EMAIL_VERIFICATION_REQUIRED`), so the new account is
+  signed in at once and returns to its `next` path.
+- Billing is on only where Stripe keys are set, which CI's stack lacks, and without it the
+  app offers no upgrade. A spec about the upgrade path reports billing as enabled with
+  `reportBillingEnabled()` from `tests/e2e/support/billing.ts` and answers checkout itself,
+  so it never reaches Stripe.
 - Handler tests assert the public contract, not incidental query order. Request
   the legacy template backup explicitly with `?format=backup`; the default export
   is portable.

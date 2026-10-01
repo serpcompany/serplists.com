@@ -1,10 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// A failed teams request says nothing about membership. An Organization user whose teams
-// request fails sees an error with Retry, never a silent switch to Personal
-// (src/contexts/workspaceSelection.ts).
-
-// A run owned by the Organization, opened from Personal by a link.
 const organizationRun = {
   id: 'run-org',
   title: 'Org Run',
@@ -75,7 +70,7 @@ async function mockApi(page: Page, state: { teamsFail: boolean }) {
   return scopedListRequests;
 }
 
-test('a failed teams request shows an error instead of switching to Personal', async ({ page }) => {
+test("a failed teams request shows an error instead of switching to Personal or loading Personal's Templates", async ({ page }) => {
   const state = { teamsFail: true };
   const templateListRequests = await mockApi(page, state);
   await page.addInitScript(() => window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1'));
@@ -86,8 +81,8 @@ test('a failed teams request shows an error instead of switching to Personal', a
   const switcher = page.getByRole('button', { name: 'Switch context' }).first();
   await expect(switcher).toContainText('Organizations unavailable');
   await expect(switcher).not.toContainText('Personal');
-  // Nothing loads for Personal while the Organization is unconfirmed.
-  expect(templateListRequests.filter((search) => search.includes('scope=personal'))).toEqual([]);
+  const personalTemplateListRequests = templateListRequests.filter((search) => search.includes('scope=personal'));
+  expect(personalTemplateListRequests).toEqual([]);
 
   state.teamsFail = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
@@ -108,8 +103,6 @@ test('Continue in Personal leaves the error for Personal', async ({ page }) => {
   await expect(page.getByText("Couldn't load your Organizations")).toHaveCount(0);
 });
 
-// Personal never waits on the teams request, but a failed one must not read as "no
-// Organizations" or turn an Organization's run silently read-only.
 test('in Personal, a failed teams request is shown on an Organization run and in the switcher', async ({ page }) => {
   const state = { teamsFail: true };
   await mockApi(page, state);
@@ -138,8 +131,6 @@ test('in Personal, a failed teams request is shown on an Organization run and in
   await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
 });
 
-// The public shell has no WorkspaceGate or switcher, so the public template page, which
-// starts runs and saves copies in the active context, shows the error next to its actions.
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
 
 async function openPublicTemplateWithFailedTeams(page: Page, state: { teamsFail: boolean }) {

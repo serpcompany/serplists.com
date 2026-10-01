@@ -216,8 +216,8 @@ test('@smoke team workspace settings create link invites and expose owner contro
     /\/team-invites\/e2e-token\/$/,
   );
   await expect(page.getByText('Invite link for new@example.com')).toBeVisible();
-  // The Pending invites row shows the email on its own.
-  await expect(page.getByText('new@example.com', { exact: true })).toBeVisible();
+  const pendingInviteRow = page.getByText('new@example.com', { exact: true });
+  await expect(pendingInviteRow).toBeVisible();
   expect(apiMock.inviteRequests).toEqual([
     {
       email: 'New@Example.com',
@@ -243,7 +243,6 @@ test('an ownership transfer that saved is not reported as failed when the Organi
   await expect(page.getByText('Saved, but refreshing failed. Reload to see the latest state.')).toBeVisible();
   await expect(page.getByText('Failed to transfer ownership')).toHaveCount(0);
   await expect(page.getByText('Service unavailable')).toHaveCount(0);
-  // The previous owner is an admin now, so the owner-only action is gone.
   await expect(page.getByText('Your role: Admin')).toBeVisible();
   await expect(page.getByRole('button', { name: /make owner/i })).toHaveCount(0);
 });

@@ -1,8 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// Organization settings after a write loses a race: the API answers 409 and the page
-// must reload what changed instead of keeping stale rows.
-
 type Member = {
   id: string;
   email: string;
@@ -118,14 +115,13 @@ function countRequests(state: MockState, method: string, path: string) {
   return state.requests.filter((request) => request.method === method && request.path === path).length;
 }
 
-test('a rejected owner transfer reloads the member list', async ({ page }) => {
+test('an owner transfer refused because another admin disabled the member meanwhile reloads the member list', async ({ page }) => {
   const state: MockState = {
     members: [ownerMember, editorMember],
     invites: [],
     requests: [],
     respond: (method, path) => {
       if (method !== 'PUT' || path !== '/api/teams/team-1/owner') return null;
-      // Another admin disabled the member while the owner was confirming.
       state.members = [ownerMember, { ...editorMember, status: 'disabled' }];
       return { status: 409, body: { error: 'Ownership could not be transferred', code: 'owner_transfer_conflict' } };
     },
@@ -163,7 +159,6 @@ test('changing a member status reloads pending invites so revoked ones disappear
     requests: [],
     respond: (method, path) => {
       if (method !== 'PUT' || path !== '/api/teams/team-1/members/member-editor') return null;
-      // The API revokes the member's pending invites when their status changes.
       state.members = [ownerMember, editorMember];
       state.invites = [];
       return { status: 200, body: { success: true } };
@@ -208,7 +203,6 @@ test('revoking an invite that was just accepted reports the conflict and shows t
     requests: [],
     respond: (method, path) => {
       if (method !== 'DELETE' || path !== '/api/teams/team-1/invites/invite-new') return null;
-      // The invitee accepted while the admin was clicking Revoke.
       state.members = [ownerMember, newMember];
       state.invites = [];
       return { status: 409, body: { error: 'Invite was already accepted', code: 'invite_already_accepted' } };
@@ -312,7 +306,6 @@ test('accepting an invite to an Organization the user already belongs to shows t
     respond: (method, path) => {
       if (method === 'GET' && path === '/api/teams/invites/pending') return { status: 200, body: incoming };
       if (method !== 'POST' || path !== '/api/teams/invites/pending/invite-stale/accept') return null;
-      // The API refuses the invite and revokes it, since the user is already a member.
       incoming = [];
       return {
         status: 409,

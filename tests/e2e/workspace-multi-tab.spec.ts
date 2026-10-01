@@ -1,8 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// localStorage 'serplists.activeWorkspaceId' is shared by every tab. It seeds a new tab, but a
-// tab that is already open keeps its own context when its teams list refetches
-// (src/contexts/workspaceSelection.ts).
+import { PAST_THE_TEAMS_LIST_STALE_TIME, returnToTabAfter } from './support/navigation';
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
@@ -63,11 +61,8 @@ test('a Personal tab stays Personal after another tab selects an Organization', 
   await tabA.getByRole('menuitem', { name: /Acme Org/ }).click();
   await expect(tabA.getByRole('button', { name: 'Switch context' }).first()).toContainText('Acme Org');
 
-  // Tab B comes back after the teams list went stale and refetches it. A browser's
-  // visibilitychange bubbles from document to window, where React Query listens.
   const requestsBefore = tabBTeamsRequests.length;
-  await tabB.clock.fastForward('02:00');
-  await tabB.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })));
+  await returnToTabAfter(tabB, PAST_THE_TEAMS_LIST_STALE_TIME);
   await expect.poll(() => tabBTeamsRequests.length).toBeGreaterThan(requestsBefore);
 
   await expect(switcherB).toContainText('Personal');

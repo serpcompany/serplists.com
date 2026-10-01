@@ -2,6 +2,8 @@ import type { Page } from '@playwright/test';
 
 type NextWindow = Window & { next?: { router?: { push: (href: string) => void } } };
 
+export const PAST_THE_TEAMS_LIST_STALE_TIME = '02:00';
+
 async function waitForNextRouter(page: Page) {
   await page.waitForFunction(() => Boolean((window as NextWindow).next?.router));
 }

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 
 const PASSWORD = 'Aa!team-flow-password-12345';
 
@@ -18,12 +18,21 @@ async function registerAccount(page: Page, account: { email: string; name: strin
   });
 }
 
+async function registerAccountInItsOwnBrowser(browser: Browser, account: { email: string; name: string }) {
+  const context = await browser.newContext();
+  await registerAccount(await context.newPage(), account);
+  await context.close();
+}
+
+const inviteLinkLabelForThisEmail = (page: Page, email: string) => page.getByText(`Invite link for ${email}`);
+
+const pendingInviteRowWithTheBareEmail = (page: Page, email: string) => page.getByText(email, { exact: true });
+
 async function createLinkInvite(page: Page, email: string): Promise<string> {
   await page.getByLabel('Invite email').fill(email);
   await page.getByRole('button', { name: /create link/i }).click();
 
-  // Wait for this email's link: the link created before it may still be on screen.
-  await expect(page.getByText(`Invite link for ${email}`)).toBeVisible({ timeout: 15_000 });
+  await expect(inviteLinkLabelForThisEmail(page, email)).toBeVisible({ timeout: 15_000 });
   const inviteLink = page.getByRole('textbox', { name: 'Invite link' });
   await expect(inviteLink).toHaveValue(/\/team-invites\/.+/);
 
@@ -128,13 +137,12 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(page.getByText(teamName).first()).toBeVisible();
 
   const linkInviteUrl = await createLinkInvite(page, linkInviteeEmail);
-  await expect(page.getByText(`Invite link for ${linkInviteeEmail}`)).toBeVisible();
-  // exact: the Pending invites row shows the bare email, the link label does not.
-  await expect(page.getByText(linkInviteeEmail, { exact: true })).toBeVisible();
+  await expect(inviteLinkLabelForThisEmail(page, linkInviteeEmail)).toBeVisible();
+  await expect(pendingInviteRowWithTheBareEmail(page, linkInviteeEmail)).toBeVisible();
 
   await createLinkInvite(page, settingsInviteeEmail);
-  await expect(page.getByText(`Invite link for ${settingsInviteeEmail}`)).toBeVisible();
-  await expect(page.getByText(settingsInviteeEmail, { exact: true })).toBeVisible();
+  await expect(inviteLinkLabelForThisEmail(page, settingsInviteeEmail)).toBeVisible();
+  await expect(pendingInviteRowWithTheBareEmail(page, settingsInviteeEmail)).toBeVisible();
 
   const linkInviteeContext = await browser.newContext();
   const linkInviteePage = await linkInviteeContext.newPage();
@@ -151,7 +159,6 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   });
   await gotoInvite(linkInviteePage, linkInviteUrl);
 
-  // Opening the link only previews the invite: no accept request, no context switch.
   await expect(linkInviteePage.getByText(teamName, { exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(linkInviteePage.getByText('Owner User invited you to join as Viewer.')).toBeVisible();
   const acceptButton = linkInviteePage.getByRole('button', { name: 'Accept invite' });
@@ -171,7 +178,6 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expectWorkspaceSelected(linkInviteePage, teamName, linkInviteResponses);
   await expect(linkInviteePage.getByText('Your role: Viewer')).toBeVisible();
 
-  // Members can leave on their own; the context returns to Personal.
   linkInviteePage.once('dialog', (dialog) => void dialog.accept());
   await linkInviteePage.getByRole('button', { name: 'Leave Organization' }).click();
   await expect(linkInviteePage.getByRole('button', { name: 'Switch context' })).toContainText(
@@ -212,12 +218,11 @@ test('@smoke team invite flow asks before joining through a link, lets members l
   await expect(page.getByText(settingsInviteeEmail)).toBeVisible({
     timeout: 15_000,
   });
-  // The link invitee left, so only the activity history remembers them.
   await expect(page.getByText(linkInviteeEmail)).toHaveCount(0);
   await expect(page.getByText('Member left')).toBeVisible();
 });
 
-test('a new invitee who signs up from the invite link comes back to the invite', async ({ browser, page }) => {
+test('a new invitee who goes through Log in and Sign up from the invite link comes back to the invite', async ({ browser, page }) => {
   test.setTimeout(120_000);
 
   const suffix = uniqueSuffix();
@@ -238,7 +243,6 @@ test('a new invitee who signs up from the invite link comes back to the invite',
   const inviteePage = await inviteeContext.newPage();
   await gotoInvite(inviteePage, inviteUrl);
 
-  // Through Log in, then Sign up: the invite path must survive both hops.
   await inviteePage.getByRole('link', { name: 'Log in to accept' }).click();
   await inviteePage.getByRole('link', { name: 'Sign up' }).click();
   await expect(inviteePage).toHaveURL(/\/register\/\?next=/);
@@ -249,7 +253,6 @@ test('a new invitee who signs up from the invite link comes back to the invite',
   await inviteePage.locator('#confirmPassword').fill(PASSWORD);
   await inviteePage.getByRole('button', { name: 'Create account' }).click();
 
-  // Local development skips email verification, so sign-up lands on the invite.
   await expect(inviteePage).toHaveURL(new RegExp(`${invitePath}$`), { timeout: 30_000 });
   await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
   await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
@@ -272,7 +275,6 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   });
   const lostInviteUrl = await createLinkInvite(page, inviteeEmail);
 
-  // The link is gone after a reload; inviting the same email again offers a new link.
   await page.reload();
   await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveCount(0);
   await page.getByLabel('Invite email').fill(inviteeEmail);
@@ -286,7 +288,6 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   const replacedUrl = await inviteLink.inputValue();
   expect(replacedUrl).not.toBe(lostInviteUrl);
 
-  // The pending row offers the same action after another reload.
   await page.reload();
   await page.getByRole('button', { name: `New link for ${inviteeEmail}` }).click();
   await expect(inviteLink).toHaveValue(/\/team-invites\/.+/, { timeout: 15_000 });
@@ -332,20 +333,19 @@ test('revoking an invite removes its link, and only its link, from the page', as
   const copyButton = page.getByRole('button', { name: 'Copy invite link' });
 
   await createLinkInvite(page, typoEmail);
-  await expect(page.getByText(`Invite link for ${typoEmail}`)).toBeVisible();
+  await expect(inviteLinkLabelForThisEmail(page, typoEmail)).toBeVisible();
   const revokeTypo = page.getByRole('button', { name: `Revoke invite for ${typoEmail}` });
   await revokeTypo.click();
   await expect(revokeTypo).toHaveCount(0, { timeout: 15_000 });
   await expect(inviteLink).toHaveCount(0);
   await expect(copyButton).toHaveCount(0);
 
-  // Revoking a different invite keeps the link that is on screen.
   await createLinkInvite(page, typoEmail);
   const keptUrl = await createLinkInvite(page, keptEmail);
   await revokeTypo.click();
   await expect(revokeTypo).toHaveCount(0, { timeout: 15_000 });
   await expect(inviteLink).toHaveValue(keptUrl);
-  await expect(page.getByText(`Invite link for ${keptEmail}`)).toBeVisible();
+  await expect(inviteLinkLabelForThisEmail(page, keptEmail)).toBeVisible();
 });
 
 test('an invite opened in another account offers to sign out and come back to it', async ({ browser, page }) => {
@@ -366,10 +366,7 @@ test('an invite opened in another account offers to sign out and come back to it
   const inviteUrl = await createLinkInvite(page, inviteeEmail);
   const invitePath = new URL(inviteUrl).pathname;
 
-  // The invited account exists, but this device is signed in to another one.
-  const inviteeContext = await browser.newContext();
-  await registerAccount(await inviteeContext.newPage(), { email: inviteeEmail, name: 'Invitee' });
-  await inviteeContext.close();
+  await registerAccountInItsOwnBrowser(browser, { email: inviteeEmail, name: 'Invitee' });
 
   const deviceContext = await browser.newContext();
   const devicePage = await deviceContext.newPage();
@@ -382,8 +379,6 @@ test('an invite opened in another account offers to sign out and come back to it
   await expect(mismatch).toContainText(otherEmail, { timeout: 30_000 });
   await expect(devicePage.getByRole('button', { name: 'Accept invite' })).toHaveCount(0);
 
-  // Sign-out finishes before the login page opens, so it does not bounce back
-  // to the invite as the old account.
   await devicePage.getByRole('button', { name: 'Sign out and continue' }).click();
   await expect(devicePage).toHaveURL(/\/login\/\?next=/, { timeout: 15_000 });
   await expect(devicePage.getByRole('button', { name: 'Sign in' })).toBeVisible();
