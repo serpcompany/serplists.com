@@ -1,19 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// The Start a Run dialog used to clear the run name as soon as it was submitted, so a start
-// that failed (network, 429, 5xx, an Organization plan limit) left the dialog open with the
-// name gone, and a retry silently used the generated default (src/components/ui/run-name-dialog.tsx).
-// It is the one Start Run dialog: My Templates, template detail and the public template page.
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { loginAsAdmin } from './support/sign-in';
 
 async function createTemplate(page: Page, title: string) {
   const template = await apiJson<{ id: string }>(page, '/templates', {

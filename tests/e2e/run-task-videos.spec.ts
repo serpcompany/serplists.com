@@ -1,26 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// The run page keeps one task panel mounted while the task changes. A video block at the
-// same position in the next task used to keep the previous task's player, which reads its
-// file only once, so it kept playing the previous task's video
-// (src/components/shared/VideoEmbed.tsx).
+import { apiJson, apiRequest } from './support/api-requests';
+import { loginAsAdmin } from './support/sign-in';
 
 const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
-
-async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  // Signing in lands on My Templates: let its requests finish before the test calls
-  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
-  await apiRequests.settled();
-}
 
 async function createRun(page: Page, videos: string[]) {
   const run = await apiJson<{ id: string }>(page, '/checklists', {
@@ -41,10 +24,12 @@ async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
-test('each task plays its own video', async ({ page }) => {
-  // The files never finish loading (a failed one would show a link instead of the player):
-  // only which file each player picked matters.
+async function keepVideoFilesLoadingForever(page: Page) {
   await page.route('https://videos.example.test/**', () => undefined);
+}
+
+test('each task plays its own video', async ({ page }) => {
+  await keepVideoFilesLoadingForever(page);
   await loginAsAdmin(page);
   const runId = await createRun(page, [videoUrl('a'), videoUrl('b')]);
 
@@ -68,8 +53,6 @@ test('each task plays its own video', async ({ page }) => {
   }
 });
 
-// Any http(s) URL that is not YouTube or Clipy goes to the native player, a video page
-// (Vimeo, Loom) included. When the player cannot load it, the block links to it instead.
 test('a video URL the player cannot load becomes a link to it', async ({ page }) => {
   const pageUrl = 'https://videos.example.test/watch/76979871';
   await page.route(pageUrl, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Video page</title>' }));

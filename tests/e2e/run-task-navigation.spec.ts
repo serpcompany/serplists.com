@@ -1,21 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
-// The run page shows one task at a time and the window scrolls. Moving to another task
-// (Mark Complete, Next, Previous) scrolls its header back into view below the sticky
-// headers and focuses its title (src/components/run-execution/TaskHeaderReveal.tsx).
+const CONSOLE_TOP_BAR_HEIGHT = 56;
+const TASK_HEADER_TUCKED_UNDER_TOP_BAR_PX = 30;
 
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-// Several viewports of text, so the task buttons are only reached by scrolling.
-const longText = Array.from({ length: 60 }, (_, index) => `Paragraph ${index + 1} of the task instructions.`).join('\n\n');
+const textSeveralScreensLong = Array.from({ length: 60 }, (_, index) => `Paragraph ${index + 1} of the task instructions.`).join('\n\n');
 
 async function createRun(page: Page) {
   const run = await apiJson<{ id: string }>(page, '/checklists', {
@@ -23,12 +14,12 @@ async function createRun(page: Page) {
     body: {
       title: `Task navigation QA ${Date.now()}`,
       sections: [{ id: 'nav', title: 'Section', items: [
-        { id: 'nav-a', title: 'Task A', contents: [{ type: 'text', value: longText }] },
+        { id: 'nav-a', title: 'Task A', contents: [{ type: 'text', value: textSeveralScreensLong }] },
         { id: 'nav-b', title: 'Task B', contents: [
-          { type: 'text', value: longText },
+          { type: 'text', value: textSeveralScreensLong },
           { type: 'subItems', value: '', subItems: [{ id: 'nav-b-1', title: 'Check B one' }] },
         ] },
-        { id: 'nav-c', title: 'Task C', contents: [{ type: 'text', value: longText }] },
+        { id: 'nav-c', title: 'Task C', contents: [{ type: 'text', value: textSeveralScreensLong }] },
       ] }],
     },
   });
@@ -39,12 +30,7 @@ async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
-// The console's top bar (AppShell.tsx) is the only sticky header, at every width.
-const STICKY_HEIGHT = 56;
-
-// The task footer stays in view at the bottom of the window, so scrolling it into view
-// moves nothing. Scroll to the end of the task, as someone reading it does.
-async function scrollToTaskEnd(page: Page, title: string) {
+async function readToTheEndOfTheTask(page: Page, title: string) {
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await expect(page.getByRole('heading', { level: 2, name: title })).not.toBeInViewport();
 }
@@ -54,7 +40,15 @@ async function expectRevealed(page: Page, title: string) {
   await expect(heading).toBeInViewport();
   await expect(heading).toBeFocused();
   const box = await heading.boundingBox();
-  expect(box?.y ?? 0).toBeGreaterThanOrEqual(STICKY_HEIGHT);
+  expect(box?.y ?? 0).toBeGreaterThanOrEqual(CONSOLE_TOP_BAR_HEIGHT);
+}
+
+async function tuckTheTaskHeaderUnderTheTopBar(page: Page) {
+  const shell = await page.locator('[data-run-workspace-shell]').boundingBox();
+  await page.evaluate(
+    (by) => window.scrollBy(0, by),
+    (shell?.y ?? 0) - CONSOLE_TOP_BAR_HEIGHT + TASK_HEADER_TUCKED_UNDER_TOP_BAR_PX,
+  );
 }
 
 for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
@@ -66,15 +60,13 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     await page.goto(`/dashboard/runs/${runId}/`);
     const taskA = page.getByRole('heading', { level: 2, name: 'Task A' });
     await expect(taskA).toBeVisible();
-    // Opening a run neither scrolls nor takes focus.
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect(taskA).not.toBeFocused();
 
-    await scrollToTaskEnd(page, 'Task A');
+    await readToTheEndOfTheTask(page, 'Task A');
     await page.getByRole('button', { name: 'Mark Complete' }).click();
     await expectRevealed(page, 'Task B');
 
-    // Ticking a sub-task keeps the task, so the page stays where it is.
     const subTask = page.getByRole('checkbox', { name: 'Check B one' });
     await subTask.scrollIntoViewIfNeeded();
     const scrollBeforeTick = await page.evaluate(() => window.scrollY);
@@ -85,11 +77,11 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 
     await expect(subTask).toBeChecked();
     expect(await page.evaluate(() => window.scrollY)).toBe(scrollBeforeTick);
 
-    await scrollToTaskEnd(page, 'Task B');
+    await readToTheEndOfTheTask(page, 'Task B');
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expectRevealed(page, 'Task C');
 
-    await scrollToTaskEnd(page, 'Task C');
+    await readToTheEndOfTheTask(page, 'Task C');
     await page.getByRole('button', { name: 'Previous' }).click();
     await expectRevealed(page, 'Task B');
 
@@ -104,9 +96,7 @@ test('the desktop task list opens a task at its title', async ({ page }) => {
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { level: 2, name: 'Task A' })).toBeVisible();
-  // Scroll the task header 30px under the sticky top bar, leaving the task list in view.
-  const shell = await page.locator('[data-run-workspace-shell]').boundingBox();
-  await page.evaluate((by) => window.scrollBy(0, by), (shell?.y ?? 0) - STICKY_HEIGHT + 30);
+  await tuckTheTaskHeaderUnderTheTopBar(page);
 
   await page.locator('[data-run-progress-panel]').getByRole('button', { name: /Task C/ }).click();
   await expectRevealed(page, 'Task C');

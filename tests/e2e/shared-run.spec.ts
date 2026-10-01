@@ -1,23 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// A share link is a completion-only credential: a guest can tick tasks and write notes,
-// but a crafted PUT can never rewrite, inject into, or wipe the owner's run
-// (functions/api/utils/shared-run-merge.ts).
-
-async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  // Signing in lands on My Templates: let its requests finish before the test calls
-  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
-  await apiRequests.settled();
-}
+import { API_BASE_URL, apiJson, apiRequest } from './support/api-requests';
+import { loginAsAdmin } from './support/sign-in';
 
 type StoredRun = {
   progress: number;
@@ -35,7 +19,6 @@ async function readOwnerRun(page: Page, runId: string) {
   };
 }
 
-// Creates a run as the signed-in owner and shares it.
 async function createSharedRun(page: Page, run: { title: string; sections: unknown[] }) {
   const { id: runId } = await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body: run });
   const { shareToken } = await apiJson<{ shareToken: string }>(page, `/checklists/run/${runId}/share`, {
@@ -69,7 +52,6 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
 
   await guest.goto(`/share/${shareToken}/`);
   await expect(guest.getByRole('heading', { name: 'Task A' })).toBeVisible();
-  // The shared view lists every task with its own checkbox (no step-by-step Mark Complete).
   await guest.getByRole('checkbox', { name: 'Mark "Task A" complete' }).click();
   await expect.poll(() => readOwnerRun(page, runId)).toEqual({ progress: 50, tasks: ['Task A:true', 'Task B:false'] });
 
@@ -99,8 +81,7 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
   await deleteRun(page, runId);
 });
 
-// The shared page says what a guest may do, and a guest who completes the Run stays on it.
-test('a share-link guest completes the Run and stays on it, which then reads Completed', async ({ browser, page }) => {
+test('a share-link guest is told what they may do, completes the Run and stays on it, which then reads Completed', async ({ browser, page }) => {
   await loginAsAdmin(page);
   const { runId, shareToken } = await createSharedRun(page, {
     title: `Shared completion ${Date.now()}`,
@@ -163,7 +144,7 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
   await deleteRun(page, runId);
 });
 
-test('stopping a share from the run page turns the guest link off', async ({ browser, page }) => {
+test('stopping a share from the run page turns the guest link off, and the page keeps saving', async ({ browser, page }) => {
   test.setTimeout(120_000);
   await loginAsAdmin(page);
 
@@ -184,7 +165,6 @@ test('stopping a share from the run page turns the guest link off', async ({ bro
   await expect(page.getByRole('button', { name: 'Stop sharing' })).toHaveCount(0);
   expect((await guest.request.get(sharedUrl)).status()).toBe(404);
 
-  // The run page keeps saving after stopping sharing (no revision change).
   await page.getByRole('button', { name: 'Mark Complete' }).click();
   await expect.poll(async () => (await readOwnerRun(page, runId)).tasks).toEqual(['Task A:true']);
 
