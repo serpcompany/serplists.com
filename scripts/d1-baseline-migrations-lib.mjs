@@ -1,3 +1,4 @@
+import { parse } from "smol-toml";
 import { z } from "zod";
 
 const d1DatabaseSchema = z.object({
@@ -7,30 +8,15 @@ const d1DatabaseSchema = z.object({
   preview_database_id: z.string().optional(),
 });
 
-const ARRAY_TABLE_HEADER = /^\[\[\s*([^\]\s]+)\s*\]\]\s*(?:#.*)?$/;
-const STRING_KEY = /^([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"\s*(?:#.*)?$/;
+const d1DatabasesSchema = z.array(d1DatabaseSchema).default([]);
+const wranglerD1Schema = z.object({
+  d1_databases: d1DatabasesSchema,
+  env: z.object({ production: z.object({ d1_databases: d1DatabasesSchema }).default({}) }).default({}),
+});
 
 export function readD1Databases(toml) {
-  const tables = new Map();
-  let current = null;
-  for (const rawLine of toml.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const header = ARRAY_TABLE_HEADER.exec(line);
-    if (header) {
-      current = {};
-      tables.set(header[1], [...(tables.get(header[1]) ?? []), current]);
-      continue;
-    }
-    if (line.startsWith("[")) {
-      current = null;
-      continue;
-    }
-    const pair = STRING_KEY.exec(line);
-    if (pair && current) current[pair[1]] = pair[2];
-  }
-  const entries = (name) => z.array(d1DatabaseSchema).parse(tables.get(name) ?? []);
-  return { topLevel: entries("d1_databases"), production: entries("env.production.d1_databases") };
+  const config = wranglerD1Schema.parse(parse(toml));
+  return { topLevel: config.d1_databases, production: config.env.production.d1_databases };
 }
 
 function readArg(argv, name) {

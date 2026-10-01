@@ -96,6 +96,25 @@ describe('resolveBaselineTarget against wrangler.toml', () => {
   });
 });
 
+describe('readD1Databases', () => {
+  it('reads the D1 entries as TOML, however wrangler.toml quotes its strings or writes its tables', () => {
+    const toml = [
+      "d1_databases = [{ binding = 'DB', database_name = 'prod', database_id = 'p-1', preview_database_id = 's-1' }]",
+      '[env.production]',
+      'd1_databases = [{ binding = "DB", database_name = """prod""", database_id = "p-1" }]',
+    ].join('\n');
+
+    expect(readD1Databases(toml)).toEqual({
+      topLevel: [{ binding: 'DB', database_name: 'prod', database_id: 'p-1', preview_database_id: 's-1' }],
+      production: [{ binding: 'DB', database_name: 'prod', database_id: 'p-1' }],
+    });
+  });
+
+  it('reads no entries from a file with no D1 databases', () => {
+    expect(readD1Databases('name = "serp-checklists"')).toEqual({ topLevel: [], production: [] });
+  });
+});
+
 describe('package.json baseline scripts', () => {
   const scripts = (JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
