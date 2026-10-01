@@ -350,10 +350,13 @@ write: [client data](design-docs/client-data.md).
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
   after the user has left. ESLint's `serplists/navigate-while-visit-is-current`
-  (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses an async handler in
-  `src/` that navigates, signs in or starts checkout after an await outside a visit gate (an
+  (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses code in `src/` that
+  navigates, signs in or starts checkout after an await in an async handler, or in a
+  promise's `.then()`, `.catch()` or `.finally()` callback, outside a visit gate (an
   `if (visit.isCurrent())` branch, an early return once the visit has ended, a callback given
-  to one of the visit helpers, or a call that is passed the visit). A handler that must move the
+  to one of the visit helpers, or a call that is passed the visit). In an effect, a flag the
+  effect's cleanup sets to `true` gates its callbacks the same way (`if (isCancelled)
+  return;`). A handler that must move the
   user on wherever they went, because the account changed (a sign-in, a sign-up, a password
   reset), says so by moving inside `moveOnAfterAnAccountChange()`
   (`src/lib/navigation/moveOnAfterAnAccountChange.ts`).

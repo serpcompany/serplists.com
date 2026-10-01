@@ -173,8 +173,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     one, setup requests through the API helpers rather than a fetch inside `page.evaluate()`,
     and Template paths the e2e stack has ([testing conventions](#testing-conventions)).
   - `serplists/navigate-while-visit-is-current`
-    (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses an async handler in
-    `src/` that moves the user after an await outside a page-visit check ([frontend
+    (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses code in `src/` that
+    moves the user outside a page-visit check after an await in an async handler, or in a
+    promise's `.then()`, `.catch()` or `.finally()` callback ([frontend
     conventions](FRONTEND.md)).
   - Each rule has RuleTester tests in `tests/unit/scripts/`, and
     `tests/unit/config/code-conventions.test.ts` lints a sample of every convention with the
