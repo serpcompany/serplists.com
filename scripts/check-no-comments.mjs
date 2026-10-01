@@ -1,27 +1,27 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 
-import { checkedLanguage, findComments, NO_COMMENTS_MESSAGE } from "./check-no-comments-lib.mjs";
+import {
+  awaitsAPerson,
+  checkedLanguage,
+  filesGitTracksOrWouldTrack,
+  findComments,
+  NO_COMMENTS_MESSAGE,
+} from "./check-no-comments-lib.mjs";
 
-function listRepositoryFiles() {
-  const result = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-  if (result.error) {
-    console.error(result.error.message);
+function requestedFiles() {
+  if (process.argv.length > 2) return process.argv.slice(2);
+  try {
+    return filesGitTracksOrWouldTrack();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(2);
   }
-  if (result.status !== 0) {
-    process.stderr.write(result.stderr ?? "");
-    process.exit(result.status ?? 2);
-  }
-  return result.stdout.split("\0").filter(Boolean);
 }
 
 const isFile = (file) => existsSync(file) && statSync(file).isFile();
-const requested = process.argv.length > 2 ? process.argv.slice(2) : listRepositoryFiles();
-const files = requested.filter((file) => checkedLanguage(file) && isFile(file));
+const checkable = requestedFiles().filter((file) => checkedLanguage(file) && isFile(file));
+const leftForAPerson = checkable.filter(awaitsAPerson);
+const files = checkable.filter((file) => !awaitsAPerson(file));
 const countsByLanguage = new Map();
 const filesWithComments = new Set();
 let unreadableFiles = 0;
@@ -42,6 +42,9 @@ for (const file of files) {
   }
 }
 
+if (leftForAPerson.length > 0) {
+  console.log(`check-no-comments: skipped ${leftForAPerson.join(", ")}, which a person must clean (WORKFLOWS_AWAITING_A_PERSON).`);
+}
 const total = [...countsByLanguage.values()].reduce((sum, count) => sum + count, 0);
 if (total === 0 && unreadableFiles === 0) {
   console.log(`check-no-comments: no comments in ${files.length} file(s).`);

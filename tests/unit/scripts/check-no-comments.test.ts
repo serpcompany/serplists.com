@@ -16,14 +16,37 @@ const commentLines = (file: string, source: string[]) =>
   findComments(file, source.join('\n')).map(({ line, language }: { line: number; language: string }) => `${line} ${language}`);
 
 describe('checkedLanguage', () => {
-  it('checks YAML, TOML, SQL, CSS, JSON and patches', () => {
+  it('checks YAML, TOML, SQL, CSS, JSON, XML and patches', () => {
     expect(
-      ['lefthook.yml', 'a.yaml', 'wrangler.toml', 'db/seed.sql', 'src/app/globals.css', 'tsconfig.json', 'patches/x.patch'].map(checkedLanguage),
-    ).toEqual(['yaml', 'yaml', 'toml', 'sql', 'css', 'json', 'patch']);
+      [
+        'lefthook.yml',
+        'a.yaml',
+        'wrangler.toml',
+        'db/seed.sql',
+        'src/app/globals.css',
+        'tsconfig.json',
+        'tests/fixtures/sitemap.xsd',
+        'public/icon.svg',
+        'patches/x.patch',
+      ].map(checkedLanguage),
+    ).toEqual(['yaml', 'yaml', 'toml', 'sql', 'css', 'json', 'xml', 'xml', 'patch']);
   });
 
-  it('leaves TypeScript and JavaScript to the ESLint rule, and Markdown alone', () => {
-    expect(['src/a.ts', 'src/b.tsx', 'scripts/c.mjs', 'd.cjs', 'README.md'].map(checkedLanguage)).toEqual([null, null, null, null, null]);
+  it('checks dotenv files, the Git config files in any folder and .npmrc by their names', () => {
+    expect(
+      ['.dev.vars.example', '.env.example', '.env.local', '.gitignore', 'docs/.gitignore', '.gitattributes', '.npmrc'].map(checkedLanguage),
+    ).toEqual(['dotenv', 'dotenv', 'dotenv', 'gitignore', 'gitignore', 'gitattributes', 'npmrc']);
+  });
+
+  it('leaves TypeScript and JavaScript to the ESLint rule, even named like a dotenv file, and Markdown alone', () => {
+    expect(['src/a.ts', 'src/b.tsx', 'scripts/c.mjs', 'd.cjs', 'src/.env.ts', 'README.md'].map(checkedLanguage)).toEqual([
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ]);
   });
 
   it('skips the files a generator writes, and each of them exists', () => {
@@ -180,6 +203,80 @@ describe('JSON with comments', () => {
         '}',
       ]),
     ).toEqual(['2 JSON', '4 JSON']);
+  });
+});
+
+describe('XML', () => {
+  it('reports comments, not comment markers inside CDATA or a processing instruction', () => {
+    expect(
+      commentLines('tests/fixtures/sitemap.xsd', [
+        '<?xml version="1.0"?>',
+        '<!-- heading -->',
+        '<schema><![CDATA[ <!-- not a comment --> ]]>',
+        '<?note <!-- not one either -->?>',
+        '  <element/> <!-- trailing',
+        '  over two lines -->',
+        '</schema>',
+      ]),
+    ).toEqual(['2 XML', '5 XML']);
+  });
+});
+
+describe('dotenv files', () => {
+  it('reports comment lines and a # after a value, which dotenv drops from an unquoted value', () => {
+    expect(
+      commentLines('.dev.vars.example', [
+        '# heading',
+        '  # indented',
+        'FRONTEND_URL=http://localhost:3000 # trailing',
+        'CALLBACK_URL=https://example.com/#cut',
+        'export STRIPE_SECRET_KEY=sk_test_xxx',
+      ]),
+    ).toEqual(['1 dotenv', '2 dotenv', '3 dotenv', '4 dotenv']);
+  });
+
+  it('ignores # inside a quoted value, even one that spans lines, but not after its closing quote', () => {
+    expect(
+      commentLines('.env.example', [
+        'EMAIL_FROM="SERP # Lists <support@example.com>"',
+        "TOKEN='a#b'",
+        'PRIVATE_KEY="-----BEGIN KEY-----',
+        '# a line of the key',
+        '-----END KEY-----"',
+        'NAME="serp" # trailing',
+      ]),
+    ).toEqual(['6 dotenv']);
+  });
+});
+
+describe('Git config files', () => {
+  it('reports a .gitignore line that starts with #, and no # an escape or a space puts in a pattern', () => {
+    expect(commentLines('.gitignore', ['# heading', '\\#notes.md', ' # a pattern with a space', 'logs # also a pattern', 'tmp/'])).toEqual([
+      '1 .gitignore',
+    ]);
+  });
+
+  it('reports a .gitattributes line whose first character after any spaces is #', () => {
+    expect(commentLines('.gitattributes', ['# heading', '  # indented', '* text=auto eol=lf', '*.png binary'])).toEqual([
+      '1 .gitattributes',
+      '2 .gitattributes',
+    ]);
+  });
+});
+
+describe('.npmrc', () => {
+  it('reports # and ; comment lines, and a # or ; that ends an unquoted value as npm reads it', () => {
+    expect(
+      commentLines('.npmrc', [
+        '# heading',
+        '; heading',
+        '  ; indented',
+        'node-linker=hoisted ; trailing',
+        'save-exact=true # trailing',
+        'message="released # %s"',
+        'path=C:\\tools\\;build',
+      ]),
+    ).toEqual(['1 .npmrc', '2 .npmrc', '3 .npmrc', '4 .npmrc', '5 .npmrc']);
   });
 });
 
