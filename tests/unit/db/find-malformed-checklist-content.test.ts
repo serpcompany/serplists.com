@@ -1,20 +1,15 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import type { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { hostileSections } from '../../fixtures/malformedSections';
+import { createMigratedD1 } from '../../fixtures/sqliteD1';
 
-// The read-only maintenance query must find every shape saves now reject, and nothing else.
-
-const migrationsDir = new URL('../../../db/migrations/', import.meta.url);
 const query = readFileSync(new URL('../../../db/maintenance/find-malformed-checklist-content.sql', import.meta.url), 'utf8');
 
 function migratedDatabase(): DatabaseSync {
-  const db = new DatabaseSync(':memory:');
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort()) {
-    db.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-  }
+  const db = createMigratedD1().sqlite;
   db.exec(`INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');`);
   return db;
@@ -47,7 +42,7 @@ const validSections = [
   },
 ];
 
-describe('find-malformed-checklist-content.sql', () => {
+describe('find-malformed-checklist-content.sql, the read-only maintenance query that finds every shape saves now reject and nothing else', () => {
   it('finds nothing in content the API accepts, including legacy flat rows', () => {
     const db = migratedDatabase();
     expect(findStoredSectionsIssue(validSections)).toBeNull();

@@ -1,25 +1,16 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
+import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
-const migrationsDir = path.join("db", "migrations");
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
 
-// A backslash followed by "n": what a line break becomes when the SQL seed
-// escapes it twice. SQLite does not process backslash escapes in string
-// literals, so the stored JSON would decode to these two characters.
 const LITERAL_BACKSLASH_N = `${String.fromCharCode(92)}n`;
 
 type OfficialRow = { id: string; items: string };
 
-// Run the seed against real SQLite with every migration applied, so the test
-// sees exactly what SQLite stores for the seed's string literals.
-function seededOfficialRows(): OfficialRow[] {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) {
-    sqlite.exec(readFileSync(path.join(migrationsDir, file), "utf8"));
-  }
+function officialRowsAsSqliteStoresTheSeed(): OfficialRow[] {
+  const sqlite = createMigratedD1().sqlite;
   sqlite.exec(officialSeedSql);
   return sqlite
     .prepare("SELECT id, items FROM templates WHERE user_id = 'serp-user' ORDER BY id")
@@ -39,7 +30,7 @@ function collectStrings(value: unknown, found: string[] = []): string[] {
 
 type Section = { items: Array<{ id: string; contents?: Array<{ type: string; value: string }> }> };
 
-const rows = seededOfficialRows();
+const rows = officialRowsAsSqliteStoresTheSeed();
 
 describe("official Template seed", () => {
   it("stores items that parse to non-empty sections", () => {
@@ -51,7 +42,7 @@ describe("official Template seed", () => {
     }
   });
 
-  it("stores line breaks, not a literal backslash followed by n", () => {
+  it("stores line breaks, not the literal backslash followed by n that a doubled escape stores, since SQLite reads no escapes in string literals", () => {
     const offenders = rows.flatMap((row) =>
       collectStrings(JSON.parse(row.items))
         .filter((text) => text.includes(LITERAL_BACKSLASH_N))

@@ -1,6 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { describe, expect, it } from "vitest";
 import {
@@ -16,21 +15,15 @@ import {
 import * as schema from "../../../../db/schema/index";
 import type { LocalDb } from "../../../../scripts/data/local-d1";
 import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed.mjs";
+import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
-const migrationsDir = path.join("db", "migrations");
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
 
 type TemplateRow = { id: string; user_id: string; slug: string | null };
 type Method = "run" | "all" | "values" | "get";
 
-// A local database with every migration applied (foreign keys on, as in D1),
-// driven through Drizzle the way the seed scripts drive local D1. A batch runs
-// in one transaction, like a D1 batch.
-function createMigratedDatabase() {
-  const sqlite = new DatabaseSync(":memory:");
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) {
-    sqlite.exec(readFileSync(path.join(migrationsDir, file), "utf8"));
-  }
+function migratedLocalD1DrivenAsTheSeedScriptsDriveIt() {
+  const sqlite = createMigratedD1().sqlite;
 
   const execute = (sql: string, params: unknown[], method: Method) => {
     const statement = sqlite.prepare(sql);
@@ -77,17 +70,16 @@ function officialTemplateIds(rows: TemplateRow[]) {
   return officialTemplates(rows).map((row) => row.id);
 }
 
-// What the official seed inserts into a database without test data.
-const expectedOfficialTemplates = (() => {
-  const fresh = createMigratedDatabase();
+const officialTemplatesOfAFreshSeed = (() => {
+  const fresh = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
   fresh.runOfficialSeed();
   return officialTemplates(fresh.templates());
 })();
-const expectedOfficialIds = expectedOfficialTemplates.map((row) => row.id);
+const expectedOfficialIds = officialTemplatesOfAFreshSeed.map((row) => row.id);
 
 describe("local seed with the official Templates", () => {
   it("inserts every official Template after the local test seed", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
 
     await seedLocalTestData(local.db);
     local.runOfficialSeed();
@@ -97,13 +89,13 @@ describe("local seed with the official Templates", () => {
   });
 
   it("gives test Templates slugs that no official Template uses", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
 
     await seedLocalTestData(local.db);
     local.runOfficialSeed();
 
     const testIds = new Set<string>(TEST_TEMPLATE_IDS);
-    const officialSlugs = new Set(expectedOfficialTemplates.map((row) => row.slug));
+    const officialSlugs = new Set(officialTemplatesOfAFreshSeed.map((row) => row.slug));
     const testSlugs = local.templates().filter((row) => testIds.has(row.id)).map((row) => row.slug);
 
     expect(testSlugs).toHaveLength(TEST_TEMPLATE_IDS.length);
@@ -111,7 +103,7 @@ describe("local seed with the official Templates", () => {
   });
 
   it("seeds test data after the official Templates without a slug conflict", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
 
     local.runOfficialSeed();
     await seedLocalTestData(local.db);
@@ -120,7 +112,7 @@ describe("local seed with the official Templates", () => {
   });
 
   it("reruns the official seed without changes", () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
 
     local.runOfficialSeed();
     local.runOfficialSeed();
@@ -129,7 +121,7 @@ describe("local seed with the official Templates", () => {
   });
 
   it("fails instead of skipping an official Template whose slug is taken", () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     local.exec(
       "INSERT INTO users (id, email, name) VALUES ('someone', 'someone@example.com', 'Someone');" +
         "INSERT INTO templates (id, user_id, title, items, slug, created_at) " +
@@ -142,11 +134,7 @@ describe("local seed with the official Templates", () => {
 
 const testUserList = TEST_USER_IDS.map((id) => `'${id}'`).join(", ");
 
-// Rows a developer creates by using the app as the seeded users: an Organization
-// john@test.com created (with an outsider member, an invite, a Template, a Run
-// and history), plus an outsider's Organization where test users are members,
-// send invites and edit Templates.
-const USER_CREATED_DATA_SQL = `
+const ROWS_A_DEVELOPER_CREATES_USING_THE_APP_AS_THE_SEEDED_USERS_SQL = `
 INSERT INTO users (id, email, name) VALUES ('outsider', 'outsider@example.com', 'Outsider');
 INSERT INTO account (id, account_id, provider_id, user_id)
   VALUES ('outsider-account', 'outsider', 'credential', 'outsider');
@@ -180,8 +168,6 @@ INSERT INTO template_versions (id, template_id, version, changed_by_user_id, sub
   VALUES ('outsider-template-v1', 'outsider-template', 1, 'user-2', 'team', 'team-outsider', '{}', datetime('now'));
 `;
 
-// The user foreign keys that block deleting a user. USER_CREATED_DATA_SQL must
-// point each one at a test user so the cleanup test covers it.
 const BLOCKING_USER_FOREIGN_KEYS = [
   "team_invites.invited_by_user_id",
   "teams.created_by_user_id",
@@ -190,9 +176,9 @@ const BLOCKING_USER_FOREIGN_KEYS = [
 
 describe("cleanupLocalTestData", () => {
   it("removes Organizations, invites and history the test users created", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     await seedLocalTestData(local.db);
-    local.exec(USER_CREATED_DATA_SQL);
+    local.exec(ROWS_A_DEVELOPER_CREATES_USING_THE_APP_AS_THE_SEEDED_USERS_SQL);
 
     await cleanupLocalTestData(local.db);
 
@@ -211,8 +197,8 @@ describe("cleanupLocalTestData", () => {
     expect(local.ids(`SELECT id FROM users WHERE id IN (${testUserList}) ORDER BY id`)).toEqual([...TEST_USER_IDS]);
   });
 
-  it("covers every foreign key that blocks deleting a user", () => {
-    const local = createMigratedDatabase();
+  it("covers every foreign key that blocks deleting a user, so a new one needs a delete in cleanupLocalTestData and a developer row pointing it at a test user", () => {
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     const tables = local.ids("SELECT name AS id FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
     const blocking = tables.flatMap((table) =>
       local
@@ -223,13 +209,11 @@ describe("cleanupLocalTestData", () => {
         .map((column) => `${table}.${column}`),
     );
 
-    // A new entry here needs a matching delete in cleanupLocalTestData and a row
-    // in USER_CREATED_DATA_SQL.
     expect(blocking.sort()).toEqual(BLOCKING_USER_FOREIGN_KEYS);
   });
 
   it("deletes nothing when any step fails", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     await seedLocalTestData(local.db);
     local.exec(
       "CREATE TRIGGER block_admin_delete BEFORE DELETE ON users WHEN OLD.id = 'user-1' " +
@@ -246,9 +230,6 @@ describe("cleanupLocalTestData", () => {
   });
 });
 
-// Before the sample- prefix, these test Templates held official Templates' slugs, and the
-// official seed (then INSERT OR IGNORE) silently skipped those four official Templates.
-// Every local database seeded then still looks like this.
 const PRE_SAMPLE_TEST_SLUGS: Record<string, string> = {
   "template-1": "technical-seo-audit-checklist",
   "template-2": "keyword-research-mapping-checklist",
@@ -257,7 +238,7 @@ const PRE_SAMPLE_TEST_SLUGS: Record<string, string> = {
 };
 
 async function databaseSeededBeforeSampleSlugs() {
-  const local = createMigratedDatabase();
+  const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
   await seedLocalTestData(local.db);
   local.runOfficialSeed();
   await seedOfficialLocalLogin(local.db);
@@ -270,10 +251,9 @@ async function databaseSeededBeforeSampleSlugs() {
   return local;
 }
 
-type LocalDatabase = ReturnType<typeof createMigratedDatabase>;
+type LocalDatabase = ReturnType<typeof migratedLocalD1DrivenAsTheSeedScriptsDriveIt>;
 
-// What each stage setup plans runs (scripts/lib/local-d1-seed.mjs LOCAL_SEED_STEPS).
-async function runSeedStage(local: LocalDatabase, step: string) {
+async function runTheStageSetupPlanned(local: LocalDatabase, step: string) {
   if (step === "seed-test") return seedLocalTestData(local.db);
   if (step === "repair-test-slugs") return repairLegacyTestTemplateSlugs(local.db);
   if (step === "official-templates") return local.runOfficialSeed();
@@ -300,7 +280,7 @@ describe("setup on a database seeded before the sample- test slugs", () => {
     expect(status).toEqual({ testData: true, officialTemplates: false, officialLogin: true, legacyTestSlugs: true });
     const plan = planSeedSteps(status);
     expect(plan).not.toContain("seed-test");
-    for (const step of plan) await runSeedStage(local, step);
+    for (const step of plan) await runTheStageSetupPlanned(local, step);
 
     expect(officialTemplateIds(local.templates())).toEqual(expectedOfficialIds);
     expect(testSlugs(local)).toEqual(
@@ -313,7 +293,7 @@ describe("setup on a database seeded before the sample- test slugs", () => {
     expect(planSeedSteps(repaired)).toEqual([]);
   });
 
-  it("leaves renamed test Templates and every other Template alone", async () => {
+  it("leaves renamed test Templates and every other Template alone, and keeps an old slug whose sample- slug is taken rather than failing", async () => {
     const local = await databaseSeededBeforeSampleSlugs();
     local.exec(
       "UPDATE templates SET slug = 'my-keyword-list' WHERE id = 'template-2';" +
@@ -327,7 +307,6 @@ describe("setup on a database seeded before the sample- test slugs", () => {
     await repairLegacyTestTemplateSlugs(local.db);
 
     expect(testSlugs(local)).toEqual({
-      // Its sample- slug is taken, so it keeps the old one rather than failing.
       "template-1": "technical-seo-audit-checklist",
       "template-2": "my-keyword-list",
       "template-3": "sample-content-refresh-checklist",
@@ -341,7 +320,7 @@ describe("setup on a database seeded before the sample- test slugs", () => {
   });
 
   it("changes nothing on a database seeded today", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     await seedLocalTestData(local.db);
     local.runOfficialSeed();
     const before = local.templates();
@@ -353,9 +332,9 @@ describe("setup on a database seeded before the sample- test slugs", () => {
   });
 
   it("knows the old slugs: each is an official slug the seed now prefixes with sample-", async () => {
-    const local = createMigratedDatabase();
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
     await seedLocalTestData(local.db);
-    const officialSlugs = new Set(expectedOfficialTemplates.map((row) => row.slug));
+    const officialSlugs = new Set(officialTemplatesOfAFreshSeed.map((row) => row.slug));
 
     expect(LEGACY_TEST_TEMPLATE_SLUGS).toEqual(PRE_SAMPLE_TEST_SLUGS);
     for (const slug of Object.values(LEGACY_TEST_TEMPLATE_SLUGS)) expect(officialSlugs).toContain(slug);

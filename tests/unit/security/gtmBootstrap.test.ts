@@ -14,11 +14,6 @@ import {
   SENSITIVE_ANALYTICS_LOCATIONS,
 } from '../../fixtures/analyticsLocations';
 
-// Tags in the Google Tag Manager container read location.href at load (GA4 sends it as
-// page_location), so a document whose URL carries a share or invite token, a password
-// reset token or an email address must never load the container. The root layout renders
-// the bootstrap into every page's <head>, where it runs while the page is parsed.
-
 const layout = readFileSync('src/app/layout.tsx', 'utf8');
 
 interface BootstrapResult {
@@ -56,9 +51,7 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// What the root layout puts on a page for Tag Manager: the bootstrap script and the noscript
-// frame, read from its element tree (the page itself is not rendered).
-const tagManagerOnPage = (siteEnv: string | undefined) =>
+const tagManagerInTheRootLayoutTree = (siteEnv: string | undefined) =>
   withSiteEnv(siteEnv, () => {
     const found = { bootstrap: false, noscript: false };
     const visit = (node: ReactNode): void => {
@@ -73,24 +66,22 @@ const tagManagerOnPage = (siteEnv: string | undefined) =>
   });
 
 describe('Google Tag Manager on each environment', () => {
-  // SERP environment configuration standard: analytics run only where SITE_ENV=production,
-  // never on staging or a local build, whatever host serves it.
-  it('loads the container only on the production site', async () => {
-    expect(await tagManagerOnPage('production')).toEqual({ bootstrap: true, noscript: true });
+  it('loads the container only where SITE_ENV=production, never on staging or a local build, whatever host serves it', async () => {
+    expect(await tagManagerInTheRootLayoutTree('production')).toEqual({ bootstrap: true, noscript: true });
     for (const siteEnv of ['staging', undefined, 'prod']) {
-      expect(await tagManagerOnPage(siteEnv), String(siteEnv)).toEqual({ bootstrap: false, noscript: false });
+      expect(await tagManagerInTheRootLayoutTree(siteEnv), String(siteEnv)).toEqual({ bootstrap: false, noscript: false });
     }
   });
 });
 
-describe('Google Tag Manager bootstrap', () => {
-  // A plain script in <head> runs while the page is parsed, as Tag Manager's own snippet
-  // does; next/script's beforeInteractive would wait for Next.js's runtime to load.
-  it('runs from the root layout head on every page, while the page is parsed', () => {
+describe('Google Tag Manager bootstrap, which no URL carrying a token or an email may load, since its tags read the full URL', () => {
+  it('runs from the root layout head on every page as a plain script, while the page is parsed, as Tag Manager\'s own snippet does', () => {
     const head = /<head>([\s\S]*?)<\/head>/.exec(layout)?.[1] ?? '';
 
     expect(head).toMatch(/<script dangerouslySetInnerHTML=\{\{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT \}\} \/>/);
-    // The script and the noscript fallback name the same container.
+  });
+
+  it('names the same container in the script and the noscript fallback', () => {
     expect(layout).toContain('https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}');
     expect(TAG_MANAGER_BOOTSTRAP_SCRIPT).toContain(`'${TAG_MANAGER_ID}'`);
   });

@@ -227,9 +227,10 @@ Locally, `pnpm run dev:all` passes its server's origin as `FRONTEND_URL` and add
 
 ## Secrets in URLs and third-party tags
 
-The root layout loads the Google Tag Manager container from a plain script in `<head>`, so it
-runs as early as GTM's own snippet would, and its tags read the full page URL (GA4 sends it as
-`page_location`). So:
+The root layout loads the Google Tag Manager container from a plain script in `<head>`
+(`next/script`'s `beforeInteractive` would wait for Next.js's runtime to load), so it runs
+while the page is parsed, as early as GTM's own snippet would, and its tags read the full page
+URL (GA4 sends it as `page_location`). So:
 
 - The bootstrap skips the container for any document that opens on
   `/share/*`, `/team-invites/*` or `/reset-password`, or whose query has a `token`,

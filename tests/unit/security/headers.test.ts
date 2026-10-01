@@ -8,9 +8,7 @@ import { getVideoEmbedSource } from '@/utils/urlHelpers';
 
 import { CLIPY_VIDEO_LINKS, YOUTUBE_VIDEO_LINKS } from '../../fixtures/videoLinks';
 
-// public/_headers as a production build writes it (scripts/generate-static-headers.ts), the
-// same policy next.config.ts sends with pages.
-const readContentSecurityPolicy = (): Map<string, string[]> => {
+const productionContentSecurityPolicy = (): Map<string, string[]> => {
   const headers = renderStaticHeaders({ production: true });
   const line = headers.split('\n').find((entry) => entry.includes('Content-Security-Policy:'));
   if (!line) throw new Error('public/_headers has no Content-Security-Policy line');
@@ -44,17 +42,14 @@ const collectPackVideoValues = (): string[] => {
   return values;
 };
 
-// Every third-party script origin the production site loads: Google Tag Manager
-// (the root layout), the Cloudflare Web Analytics beacon (injected by Cloudflare), and
-// Ahrefs Web Analytics (loaded by a GTM tag).
-const ANALYTICS_SCRIPT_ORIGINS = [
+const EVERY_THIRD_PARTY_SCRIPT_ORIGIN_IN_PRODUCTION = [
   'https://www.googletagmanager.com',
   'https://static.cloudflareinsights.com',
   'https://analytics.ahrefs.com',
 ];
 
 describe('deployment security headers', () => {
-  const policy = readContentSecurityPolicy();
+  const policy = productionContentSecurityPolicy();
   const frameSources = new Set(policy.get('frame-src') ?? []);
   const scriptSources = new Set(policy.get('script-src') ?? []);
   const connectSources = new Set(policy.get('connect-src') ?? []);
@@ -66,13 +61,12 @@ describe('deployment security headers', () => {
     expect(frameSources.has('*')).toBe(false);
   });
 
-  it('allows every analytics script origin in script-src, and no wildcard', () => {
-    for (const origin of ANALYTICS_SCRIPT_ORIGINS) {
+  it('allows every analytics script origin in script-src, and no wildcard, while connect-src lets the beacons report to their own hosts', () => {
+    for (const origin of EVERY_THIRD_PARTY_SCRIPT_ORIGIN_IN_PRODUCTION) {
       expect(scriptSources.has(origin), `script-src is missing ${origin}`).toBe(true);
     }
     expect(scriptSources.has('https:')).toBe(false);
     expect(scriptSources.has('*')).toBe(false);
-    // The beacons report to their own hosts (cloudflareinsights.com, analytics.ahrefs.com).
     expect(connectSources.has('https:')).toBe(true);
   });
 
