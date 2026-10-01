@@ -71,7 +71,6 @@ export function PublicTemplateContent({
         ) : null;
 
       case 'embed': {
-        // Shown as a link (a URL, or the src of pasted iframe code) or as text, never as HTML.
         const embedLink = getEmbedLinkUrl(content.value);
         return content.value ? (
           <div className="mt-3 border-l-2 pl-4 text-sm text-muted-foreground">
@@ -143,7 +142,6 @@ export function PublicTemplateContent({
         ) : null;
 
       default: {
-        // A new content type fails type-checking here until the preview renders it.
         const unhandledType: never = content.type;
         void unhandledType;
         return null;
@@ -170,7 +168,6 @@ export function PublicTemplateContent({
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-2">
               {isExpandable ? (
-                // The title toggles the task too, and is the control a screen reader meets.
                 <button
                   aria-hidden="true"
                   tabIndex={-1}

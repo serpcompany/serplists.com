@@ -8,18 +8,14 @@ import { Switch } from '@/components/ui/switch';
 import type { TemplateHistoryTimelineEntry } from '@/features/template-detail/templateHistoryTimeline';
 import { formatLocalDateTime } from '@/lib/utils/dbTimestamp';
 
-// Template detail's cards under its structure: Details, Categories & Tags and Changelog.
-
 type TemplateDetailsCardProps = {
   createdDate: string;
   isPublic: boolean;
   onVisibilityChange: (isPublic: boolean) => void;
   updatedDate: string;
-  // The switch waits for an edit role, and while Share or a change is in flight.
   visibilityDisabled: boolean;
 };
 
-// Created, Last updated and the visibility switch, as rows of a label and a value.
 export function TemplateDetailsCard({
   createdDate,
   isPublic,
@@ -55,7 +51,6 @@ export function TemplateDetailsCard({
             </dt>
             <dd className="flex items-center gap-2">
               <Switch
-                // A native button, so the Label's htmlFor names it.
                 nativeButton
                 render={<button type="button" />}
                 id="template-visibility"
@@ -72,7 +67,6 @@ export function TemplateDetailsCard({
   );
 }
 
-// The categories as badges and the tags as outline badges, or a line saying there are none.
 export function TemplateCategoriesCard({ categories, tags }: { categories: string[]; tags: string[] }) {
   return (
     <Card>
@@ -121,7 +115,6 @@ type TemplateHistoryCardProps = {
   isLoading: boolean;
 };
 
-// The Template's versions and the events no version records, newest first.
 export function TemplateHistoryCard({ className, entries, isError, isLoading }: TemplateHistoryCardProps) {
   return (
     <Card className={className}>

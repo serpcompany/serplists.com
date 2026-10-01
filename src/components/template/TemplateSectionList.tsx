@@ -8,17 +8,11 @@ import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistItem, ChecklistSection } from '@/types/checklist';
 
 type TemplateSectionListProps = {
-  // Each section opens and closes from its header, starting open. Without it every section
-  // stays open.
   collapsible?: boolean;
   sections: ChecklistSection[];
 };
 
-// A Template's sections as cards: the section's number, title and task count, over its
-// numbered tasks with their descriptions and content blocks, read-only. The public template
-// page's "What's included" and template detail's "Template Structure".
 export function TemplateSectionList({ collapsible = true, sections }: TemplateSectionListProps) {
-  // Closed sections by id, so a section that is added or moved keeps its state.
   const [closedSectionIds, setClosedSectionIds] = useState<Set<string>>(() => new Set());
 
   const setSectionOpen = (sectionId: string, open: boolean) => {
@@ -72,7 +66,6 @@ function SectionHeading({ index, section }: { index: number; section: ChecklistS
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
         {index + 1}
       </span>
-      {/* The title wraps rather than cut off on a phone; the count follows it. */}
       <span className="min-w-0 pt-0.5 wrap-break-word">
         <span className="font-medium">{getSectionDisplayTitle(section, index)}</span>
         <span className="ml-2 text-xs whitespace-nowrap text-muted-foreground">

@@ -38,7 +38,10 @@ same HTML on the server and in the browser's first render, or hydration fails: n
 `useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
 visitor's data in module-level state, which the server would share with the next visitor
 (so `Providers` creates the QueryClient in its state, one per tab, with the defaults
-`createQueryClient` in `src/app/providers.tsx` sets).
+`createQueryClient` in `src/app/providers.tsx` sets). A date in the viewer's time zone
+(`formatLocalDate`) differs between the two as well, so only data the browser loads after
+mounting shows one: the public template page's "Updated" date can, since the page loads its
+template in an effect and the server never renders it.
 A view that reads the query with `useSearchParams` on a statically rendered page is
 wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/`,
 `/reset-password/`): the server sends the fallback and the browser renders the rest.

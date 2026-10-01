@@ -37,26 +37,17 @@ interface PublicTemplateViewProps {
   ownerSlug: string | null;
   ownerPath: string | null;
   isAuthenticated: boolean;
-  // Save adds a Template and Start Run adds a Run to the active context, so in an
-  // Organization they follow the viewer's Organization Role (always true in Personal).
   canSaveTemplate: boolean;
   canStartRun: boolean;
-  // The plan check failed: no plan is known, so nothing reads as an upgrade.
   isBillingError: boolean;
   isBillingLoading: boolean;
   isProUser: boolean;
-  // Start Run stays disabled while a run is starting (the Start a Run dialog says so).
   isCreatingRun: boolean;
   isSaving: boolean;
-  // Save copies into the active context; only Personal copying needs a Pro plan.
   isTeamWorkspace: boolean;
-  // Save and Start Run wait until the active ownership context is known.
   isWorkspaceLoading: boolean;
-  // Set when the teams request failed for a signed-in user: this page has no WorkspaceGate,
-  // so it says why Save and Start Run wait and offers the gate's Retry and Personal.
   workspaceError: WorkspaceErrorActions | null;
   onStartRun: () => void;
-  // Resolves true only when the template was saved.
   onSaveTemplate: () => Promise<boolean>;
 }
 
@@ -64,7 +55,6 @@ const WORKSPACE_ERROR_ID = 'public-template-workspace-error';
 
 const getInitials = (value: string) => value.match(/[A-Za-z0-9]/)?.[0]?.toUpperCase() ?? 'U';
 
-// The call to action says why an action is missing instead of leaving a silent gap.
 const getCallToActionText = (canSaveTemplate: boolean, canStartRun: boolean): string => {
   if (canSaveTemplate && canStartRun) {
     return 'Start a run to work through this checklist, or save it to your library for later.';
@@ -81,8 +71,6 @@ const getCallToActionText = (canSaveTemplate: boolean, canStartRun: boolean): st
   return 'Your role in this Organization can view Templates only, so it cannot copy this one or start a run.';
 };
 
-// The public template page's content: a detail page with the template's facts and actions,
-// its sections, and the call to action.
 export function PublicTemplateView({
   template,
   totalItems,
@@ -105,9 +93,6 @@ export function PublicTemplateView({
   const ownerName =
     template.ownerProfile?.full_name || template.ownerProfile?.username || 'Template Library';
   const TypeIcon = template.type === 'recipe' ? List : FileText;
-  // When the Template last changed, as the template detail page's "Last updated" shows it (in
-  // the viewer's zone: the page loads its template in the browser, so the server never renders
-  // it). Nothing when the date is unreadable.
   const lastUpdated = template.updatedAt || template.createdAt;
   const updatedDate = formatLocalDate(lastUpdated);
 
@@ -129,7 +114,6 @@ export function PublicTemplateView({
       setIsSaved(true);
     }
   };
-  // Signed-out visitors are never loading a plan, so they can still click Save to sign in.
   const isSaveDisabled = isSaving || isBillingLoading || isWorkspaceLoading;
   const saveLabels = getPublicTemplateSaveLabels({
     isAuthenticated,
@@ -198,7 +182,6 @@ export function PublicTemplateView({
             <div className="flex flex-wrap gap-1.5">
               {template.categories.map((category) => {
                 const categoryPath = buildPublicCategoryPath(category);
-                // A category with no letters or digits has no page to link to.
                 return categoryPath ? (
                   <Badge key={category} variant="secondary" render={<Link href={categoryPath} />}>
                     {category}

@@ -13,7 +13,6 @@ import type { CopyTemplateButton } from '@/features/template-detail/copyTemplate
 import { Link } from '@/components/navigation/Link';
 
 type TemplateDetailActionsProps = {
-  // Roles that can edit get Share, Edit and the actions menu; others the copy button.
   canEdit: boolean;
   canShare: boolean;
   canDuplicate: boolean;
@@ -23,10 +22,8 @@ type TemplateDetailActionsProps = {
   exportLabel: string;
   isCloning: boolean;
   isCreatingShare: boolean;
-  // Share and a visibility change must not race on the same template version.
   isChangingVisibility: boolean;
   isSignedIn: boolean;
-  // Where "Log in to copy template" goes: the login page with this page as the return path.
   loginHref: string;
   onClone: () => void;
   onDelete: () => void;
@@ -36,8 +33,6 @@ type TemplateDetailActionsProps = {
   showStartRun: boolean;
 };
 
-// Template detail's header actions: Share and Edit (or a copy button), Start Run, and the
-// Template actions menu (Duplicate, Export JSON, Delete).
 export function TemplateDetailActions({
   canDuplicate,
   canEdit,

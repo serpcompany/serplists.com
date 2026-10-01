@@ -154,6 +154,7 @@ Example: a "link" type.
 - `src/components/template-editor/ContentAddPanel.tsx`
 - `src/components/template-editor/ContentEditor.tsx`
 - `src/components/shared/ContentRenderer.tsx`
+- `src/components/template/PublicTemplateContent.tsx`
 
 ### Steps
 
@@ -222,7 +223,9 @@ Add a button in `ContentAddPanel` and allow the new type in `onAddContent`.
 Update `ContentEditor` to render the new editor in the `switch` block.
 
 #### 6. Render in view mode
-Update `ContentRenderer` to display the new content type in the checklist view.
+Update `ContentRenderer` to display the new content type in the checklist view, and
+`PublicTemplateContent`, the editor's preview: its `switch` ends in a `never` check, so the
+build fails until the preview renders the new type.
 
 #### 7. Consider uploads
 If the type needs file uploads, reuse the existing buckets in `functions/api/handlers/uploads.ts` and the helpers in `src/lib/utils/fileUpload.ts`.

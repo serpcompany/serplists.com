@@ -194,3 +194,25 @@ describe('PublicTemplateContent embed blocks', () => {
     expect(html).toContain(value.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'));
   });
 });
+
+describe('PublicTemplateContent task toggles', () => {
+  it('gives a screen reader one toggle per task, the title with its expanded state, and keeps the chevron a pointer copy out of the tab order', () => {
+    const html = renderToStaticMarkup(
+      <PublicTemplateContent
+        sections={[{
+          id: 'steps',
+          title: 'Steps',
+          items: [{ id: 'step-1', title: 'Open the issues tab', description: 'Then filter by label.' }],
+        }]}
+      />,
+    );
+    const toggles = [...html.matchAll(/<button[^>]*>/g)]
+      .map((match) => match[0])
+      .filter((tag) => !tag.includes('role="checkbox"'));
+    const chevron = toggles.find((tag) => tag.includes('aria-hidden="true"'));
+
+    expect(toggles).toHaveLength(2);
+    expect(toggles.filter((tag) => tag !== chevron)).toEqual([expect.stringContaining('aria-expanded="false"')]);
+    expect(chevron).toContain('tabindex="-1"');
+  });
+});
