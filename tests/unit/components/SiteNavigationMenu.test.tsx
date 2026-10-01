@@ -8,27 +8,21 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// The site header's navigation (and the console top bar's): "Templates" and "Features" open
-// menus of their pages, "Pricing" is a link.
-
 const renderAt = (pathname: string) => {
   navigation.reset(pathname);
   return renderToStaticMarkup(<SiteNavigationMenu />);
 };
 
-// The trigger button for a menu, and the (closed, hidden) content that follows it.
-const menu = (html: string, label: string) => {
+const menuTriggerAndClosedContent = (html: string, label: string) => {
   const trigger = html.match(new RegExp(`<button[^>]*>${label} <svg`))?.[0] ?? '';
   const start = html.indexOf('</button>', html.indexOf(trigger)) + '</button>'.length;
   const content = html.slice(start, html.indexOf('</ul>', start));
   return { trigger, content };
 };
 
-// A link's accessible name and description: the texts its aria-labelledby and
-// aria-describedby point at.
 const textById = (html: string, id: string | undefined) =>
   id ? html.match(new RegExp(`id="${id}"[^>]*>([^<]*)<`))?.[1] : undefined;
-const describeLink = (html: string, href: string) => {
+const linkNameDescriptionAndCurrent = (html: string, href: string) => {
   const tag = html.match(new RegExp(`<a href="${href}"[^>]*>`))?.[0] ?? '';
   return {
     current: /aria-current="page"/.test(tag),
@@ -37,24 +31,23 @@ const describeLink = (html: string, href: string) => {
   };
 };
 
-describe('SiteNavigationMenu', () => {
+describe('SiteNavigationMenu, in the site header and the console top bar', () => {
   it('opens Templates and Features as menus from buttons and keeps Pricing a link', () => {
     const html = renderAt('/');
 
     expect(html).toMatch(/<nav[^>]*aria-label="Site"/);
     for (const label of ['Templates', 'Features']) {
-      expect(menu(html, label).trigger, label).toMatch(/type="button"[^>]*aria-expanded="false"/);
+      expect(menuTriggerAndClosedContent(html, label).trigger, label).toMatch(/type="button"[^>]*aria-expanded="false"/);
     }
     expect(html).toMatch(/<a href="\/pricing\/"[^>]*>Pricing<\/a>/);
     expect(html).not.toMatch(/<a href="\/templates\/"[^>]*>Templates<\/a>/);
     expect(html).not.toContain('href="/features/"');
   });
 
-  // Closed menus stay in the HTML, hidden, so crawlers still find the pages they link.
-  it('lists the Template Library and Categories under Templates, and the four feature pages under Features', () => {
+  it('lists the Template Library and Categories under Templates, and the four feature pages under Features, in closed menus kept in the HTML for crawlers', () => {
     const html = renderAt('/');
-    const templates = menu(html, 'Templates').content;
-    const features = menu(html, 'Features').content;
+    const templates = menuTriggerAndClosedContent(html, 'Templates').content;
+    const features = menuTriggerAndClosedContent(html, 'Features').content;
 
     expect(templates).toMatch(/^<div[^>]*hidden=""/);
     expect([...templates.matchAll(/<a href="([^"]+)"/g)].map((match) => match[1])).toEqual([
@@ -67,13 +60,13 @@ describe('SiteNavigationMenu', () => {
       '/features/public-sharing/',
       '/features/import-export/',
     ]);
-    expect(describeLink(html, '/templates/')).toEqual({
+    expect(linkNameDescriptionAndCurrent(html, '/templates/')).toEqual({
       current: false,
       description: 'Browse hundreds of ready-to-use checklist templates created by the community.',
       name: 'Template Library',
     });
-    expect(describeLink(html, '/categories/').name).toBe('Categories');
-    expect(describeLink(html, '/features/import-export/').name).toBe('Import + Export');
+    expect(linkNameDescriptionAndCurrent(html, '/categories/').name).toBe('Categories');
+    expect(linkNameDescriptionAndCurrent(html, '/features/import-export/').name).toBe('Import + Export');
   });
 
   it.each([
@@ -84,17 +77,17 @@ describe('SiteNavigationMenu', () => {
     const html = renderAt(pathname);
 
     for (const label of ['Templates', 'Features']) {
-      expect(menu(html, label).trigger.includes('data-active=""'), label).toBe(label === active);
+      expect(menuTriggerAndClosedContent(html, label).trigger.includes('data-active=""'), label).toBe(label === active);
     }
-    expect(describeLink(html, href).current).toBe(true);
+    expect(linkNameDescriptionAndCurrent(html, href).current).toBe(true);
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });
 
   it('marks the Features menu on the features overview, which it does not list', () => {
     const html = renderAt('/features/');
 
-    expect(menu(html, 'Features').trigger).toContain('data-active=""');
-    expect(menu(html, 'Templates').trigger).not.toContain('data-active=""');
+    expect(menuTriggerAndClosedContent(html, 'Features').trigger).toContain('data-active=""');
+    expect(menuTriggerAndClosedContent(html, 'Templates').trigger).not.toContain('data-active=""');
     expect(html).not.toContain('aria-current="page"');
   });
 

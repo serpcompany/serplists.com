@@ -20,9 +20,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 type Props = React.ComponentProps<typeof ErrorBoundary>;
 
-// Drives the class the way React does: a render error sets state through
-// getDerivedStateFromError, and new props arrive before componentDidUpdate.
-function mountBoundary(props: Props) {
+function mountBoundaryDrivenLikeReact(props: Props) {
   const boundary = new ErrorBoundary(props);
   boundary.setState = ((update: Partial<typeof boundary.state>) => {
     const previous = boundary.state;
@@ -52,7 +50,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('clears the error when its reset key changes, so navigating away recovers', () => {
-    const page = mountBoundary({ children: <p>Page</p>, resetKey: '/categories/broken' });
+    const page = mountBoundaryDrivenLikeReact({ children: <p>Page</p>, resetKey: '/categories/broken' });
     page.crash();
     expect(page.boundary.state.hasError).toBe(true);
 
@@ -65,7 +63,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('leaves a healthy page alone when the key changes', () => {
-    const page = mountBoundary({ children: <p>Page</p>, resetKey: '/a' });
+    const page = mountBoundaryDrivenLikeReact({ children: <p>Page</p>, resetKey: '/a' });
     const setState = vi.spyOn(page.boundary, 'setState');
 
     page.update({ children: <p>Page</p>, resetKey: '/b' });
@@ -76,7 +74,7 @@ describe('ErrorBoundary', () => {
   it('recovers the whole app on browser Back when asked to, and stops listening afterwards', () => {
     const history = new EventTarget();
     vi.stubGlobal('window', history);
-    const app = mountBoundary({ children: <p>App</p>, resetOnHistoryChange: true });
+    const app = mountBoundaryDrivenLikeReact({ children: <p>App</p>, resetOnHistoryChange: true });
 
     app.crash();
     history.dispatchEvent(new Event('popstate'));
@@ -88,9 +86,7 @@ describe('ErrorBoundary', () => {
     expect(app.boundary.state.hasError).toBe(true);
   });
 
-  // Something outside the pages crashed (a provider or a layout). Next.js's router sits above
-  // this boundary, so the way home is a link that mounts the app again there.
-  it('offers a link home in the last-resort fallback that mounts the app again at home', async () => {
+  it('offers a link home in the last-resort fallback for a crashed provider or layout, which the Next.js router above it follows to mount the app again', async () => {
     const restoreGlobals = installFakeDomGlobals(navigation.window);
     const silence = vi.spyOn(console, 'error').mockImplementation(() => {});
     let shellBroken = true;
@@ -133,7 +129,7 @@ describe('ErrorBoundary', () => {
 
   it('passes reset to a fallback render function', () => {
     const fallback = vi.fn(({ reset }: { reset: () => void }) => <button onClick={reset}>Retry</button>);
-    const page = mountBoundary({ children: <p>Page</p>, fallback });
+    const page = mountBoundaryDrivenLikeReact({ children: <p>Page</p>, fallback });
     page.crash();
 
     expect(page.html()).toContain('Retry');

@@ -18,8 +18,6 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   }),
 }));
 
-// The bar shows the page's port, which only the browser knows, so it renders after mount:
-// these mount it as the browser does and read what it shows then.
 let restoreGlobals: () => void = () => {};
 let root: Root | null = null;
 beforeAll(() => {
@@ -31,9 +29,10 @@ afterEach(() => {
   root = null;
 });
 
-const mountAt = async (url: string) => {
-  // One bar at a time: a test may check several URLs.
-  act(() => root?.unmount());
+const unmountThePreviousBar = () => act(() => root?.unmount());
+
+const textAfterMountingAt = async (url: string) => {
+  unmountThePreviousBar();
   navigation.reset(url);
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
@@ -41,21 +40,21 @@ const mountAt = async (url: string) => {
   return container.textContent;
 };
 
-describe('DevLoginBar', () => {
+describe("DevLoginBar, which shows the page's port and so renders only after mount", () => {
   it('stays hidden on blank template editor routes', async () => {
-    expect(await mountAt('/dashboard/templates/new')).toBe('');
-    expect(await mountAt('/dashboard/templates/new/')).toBe('');
+    expect(await textAfterMountingAt('/dashboard/templates/new')).toBe('');
+    expect(await textAfterMountingAt('/dashboard/templates/new/')).toBe('');
   });
 
   it('stays hidden on authenticated dashboard routes used for design QA', async () => {
-    expect(await mountAt('/dashboard')).toBe('');
-    expect(await mountAt('/dashboard/templates/')).toBe('');
-    expect(await mountAt('/dashboard/runs/run-1/')).toBe('');
+    expect(await textAfterMountingAt('/dashboard')).toBe('');
+    expect(await textAfterMountingAt('/dashboard/templates/')).toBe('');
+    expect(await textAfterMountingAt('/dashboard/runs/run-1/')).toBe('');
   });
 
   it('still renders on the login route in development', async () => {
-    expect(await mountAt('/login')).toContain('DEV MODE');
-    expect(await mountAt('/login/')).toContain('DEV MODE');
+    expect(await textAfterMountingAt('/login')).toContain('DEV MODE');
+    expect(await textAfterMountingAt('/login/')).toContain('DEV MODE');
   });
 
   it('renders nothing on the server, so hydration matches', () => {

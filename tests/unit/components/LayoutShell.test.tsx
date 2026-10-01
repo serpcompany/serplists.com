@@ -51,12 +51,18 @@ const renderLayout = (location: string, child: string) => {
 };
 
 describe('Layout shell selection', () => {
-  it('frames dashboard routes with the console sidebar and its navigation', () => {
-    const html = renderLayout('/dashboard/templates', 'Console child');
+  const renderMyTemplates = () => renderLayout('/dashboard/templates', 'Console child');
+
+  it('frames dashboard routes with the console shell', () => {
+    const html = renderMyTemplates();
 
     expect(html).toContain('data-app-shell="console"');
     expect(html).toContain('Console child');
-    // The shadcn Sidebar block, with the console navigation in a Dashboard landmark.
+  });
+
+  it('puts the console navigation in the shadcn Sidebar block, in a Dashboard landmark', () => {
+    const html = renderMyTemplates();
+
     expect(html).toContain('data-slot="sidebar"');
     expect(html).toContain('<nav aria-label="Dashboard"');
     for (const [label, href] of [
@@ -71,13 +77,19 @@ describe('Layout shell selection', () => {
     ]) {
       expect(html, label).toMatch(new RegExp(`<a[^>]*href="${href}"[^>]*>(?:(?!</a>).)*<span>${label}</span>`));
     }
-    // The current page is marked.
-    expect(html).toMatch(/<a[^>]*href="\/dashboard\/templates\/"[^>]*aria-current="page"/);
     expect(html).toContain('Switch context');
     expect(html).not.toContain('>Profile<');
     expect(html).toContain('Switch to dark mode');
     expect(html).toContain('Light mode');
-    // The top bar: the sidebar trigger and the site navigation (its menus and Pricing).
+  });
+
+  it('marks the current page in the console navigation', () => {
+    expect(renderMyTemplates()).toMatch(/<a[^>]*href="\/dashboard\/templates\/"[^>]*aria-current="page"/);
+  });
+
+  it('shows the sidebar trigger and the site navigation, its menus and Pricing, in the top bar', () => {
+    const html = renderMyTemplates();
+
     expect(html).toContain('Toggle Sidebar');
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Templates/);
     expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>Features/);
@@ -105,8 +117,7 @@ describe('Layout shell selection', () => {
     expect(html).toMatch(/<a[^>]*href="\/dashboard\/runs\/"[^>]*aria-current="page"/);
   });
 
-  // The 404 page picks its own shell (src/components/NotFoundLayout.tsx).
-  it('uses the shell it is given over the one its path would pick', () => {
+  it('uses the shell it is given, as the 404 page gives one, over the one its path would pick', () => {
     navigation.reset('/dashboard/definitely-missing/');
     const html = renderToStaticMarkup(
       <Layout shell="public">
@@ -161,11 +172,10 @@ describe('public shell on phones', () => {
     },
   );
 
-  it('keeps the console shell to its own single menu button', () => {
+  it('keeps the console shell to its own single menu button, the trigger that opens the sidebar as a sheet on phones', () => {
     const html = renderAt('/dashboard/templates');
 
     expect(html).not.toContain('data-public-mobile-nav');
-    // Phones open the sidebar itself as a sheet from this trigger.
     expect(html).toContain('Toggle Sidebar');
   });
 });

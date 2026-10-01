@@ -83,6 +83,11 @@ and a page adds no one-off styling around them. Each is built from shadcn compon
 | `IconTile`, `BrandLink` | `IconTile.tsx`, `BrandLink.tsx` | The muted icon tile (sizes `sm`, `md`, `lg`; `tone="card"` on a muted area) and the brand mark and name |
 | `Stat` | `Stat.tsx` | A figure over its muted label, with an optional icon tile: a detail page's stats panel |
 
+Outbound links in the header and footer (`publicSiteLinks.ts`) go over https to a domain
+someone has confirmed is ours, listed in `tests/unit/components/publicSiteLinks.test.ts`
+(`serp.co`, `serplists.com`). Add a domain there only once it is confirmed: a test that pinned
+an exact href once kept `https://serp.dr`, under a top-level domain that does not exist.
+
 The library's `TemplateCard` (`src/components/checklist-library/TemplateCard.tsx`) is a
 `MediaCard` for a public Template, and `CatalogLoadError` next to it the shadcn `Empty` for a
 failed catalog (an `h2` in place of a page's first section, `titleAs="h1"` when it is the

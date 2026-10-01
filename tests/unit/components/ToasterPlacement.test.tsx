@@ -8,12 +8,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// sonner's Toaster starts listening for toasts in an effect, and drops any toast sent
-// before that. React runs sibling effects in tree order, so a page that toasts from its
-// first effect (Login's "Email verified" on the verification link's full page load) is
-// only heard if the Toaster comes before the pages. The root layout renders every page
-// inside these providers.
-
 vi.mock('@/components/ui/sonner', () => ({ Toaster: () => <i data-toaster="" /> }));
 vi.mock('@/components/DevLoginBar', () => ({ DevLoginBar: () => null }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -27,7 +21,7 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 }));
 
 describe('Toaster placement', () => {
-  it('mounts the Toaster once, before the page', () => {
+  it("mounts the Toaster once, before the page, so a toast from the page's first effect is not dropped", () => {
     navigation.reset('/login?verified=1');
     const html = renderToStaticMarkup(
       <Providers>

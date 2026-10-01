@@ -18,10 +18,6 @@ import { navigation, RoutedPages } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Drives the page boundary with the app's Link and Next.js navigation (the in-memory browser
-// of tests/support/nextNavigation.tsx): a page crashes, the user clicks the fallback's home
-// link, and the page at the new location renders. Only auth is faked.
-
 let authUser: { id: string } | null = null;
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -34,26 +30,25 @@ beforeAll(() => {
 });
 afterAll(() => restoreGlobals());
 
-// The page under test. It throws while `pageBroken` is set, as a page does on a bad row, and
-// reads its query as the library does.
-let pageBroken = false;
+let pageThrowsOnABadRow = false;
 const pageRendered = vi.fn();
 let pageMounts = 0;
 
-function Page() {
+function PageReadingItsQueryLikeTheLibrary() {
   pageRendered();
   useSearchParams();
   useEffect(() => {
     pageMounts += 1;
   }, []);
-  if (pageBroken) throw new Error('bad template row');
+  if (pageThrowsOnABadRow) throw new Error('bad template row');
   return <main>Page ok</main>;
 }
 
-// As Layout does: the boundary wraps the page, so it stays mounted across the pages.
-const app = (
+const boundaryAroundRoutedPagesAsInLayout = (
   <RouteErrorBoundary>
-    <RoutedPages pages={{ '/': <Page />, '/dashboard/templates': <Page /> }} />
+    <RoutedPages
+      pages={{ '/': <PageReadingItsQueryLikeTheLibrary />, '/dashboard/templates': <PageReadingItsQueryLikeTheLibrary /> }}
+    />
   </RouteErrorBoundary>
 );
 
@@ -64,7 +59,7 @@ async function renderAt(entry: string) {
   const container = createFakeContainer();
   root = createRoot(container as unknown as HTMLElement);
   await act(async () => {
-    root?.render(app);
+    root?.render(boundaryAroundRoutedPagesAsInLayout);
   });
   return {
     container,
@@ -74,8 +69,7 @@ async function renderAt(entry: string) {
   };
 }
 
-// Lets the navigation finish and React commit it.
-const settle = () =>
+const finishNavigation = () =>
   act(async () => {
     await navigation.settle();
   });
@@ -85,7 +79,7 @@ describe('RouteErrorBoundary', () => {
     act(() => root?.unmount());
     root = null;
     authUser = null;
-    pageBroken = false;
+    pageThrowsOnABadRow = false;
     pageRendered.mockClear();
     pageMounts = 0;
     vi.restoreAllMocks();
@@ -96,16 +90,16 @@ describe('RouteErrorBoundary', () => {
   it('recovers when a signed-in user clicks Go to My Templates on My Templates itself', async () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
-    pageBroken = true;
+    pageThrowsOnABadRow = true;
     const page = await renderAt('/dashboard/templates/');
     expect(page.hasAlert()).toBe(true);
 
-    pageBroken = false;
+    pageThrowsOnABadRow = false;
     await act(async () => {
       const event = click(page.container, page.link('Go to My Templates'));
       expect(event.defaultPrevented).toBe(true);
     });
-    await settle();
+    await finishNavigation();
 
     expect(navigation.pathname()).toBe('/dashboard/templates/');
     expect(page.hasAlert()).toBe(false);
@@ -114,15 +108,15 @@ describe('RouteErrorBoundary', () => {
 
   it('recovers when a visitor clicks Go to home on the home page itself', async () => {
     silenceCaughtErrors();
-    pageBroken = true;
+    pageThrowsOnABadRow = true;
     const page = await renderAt('/');
     expect(page.hasAlert()).toBe(true);
 
-    pageBroken = false;
+    pageThrowsOnABadRow = false;
     await act(async () => {
       click(page.container, page.link('Go to home'));
     });
-    await settle();
+    await finishNavigation();
 
     expect(page.hasAlert()).toBe(false);
     expect(page.text()).toContain('Page ok');
@@ -131,15 +125,15 @@ describe('RouteErrorBoundary', () => {
   it('recovers when the home link differs from the crashed page only by its query', async () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
-    pageBroken = true;
+    pageThrowsOnABadRow = true;
     const page = await renderAt('/dashboard/templates/?scope=team');
     expect(page.hasAlert()).toBe(true);
 
-    pageBroken = false;
+    pageThrowsOnABadRow = false;
     await act(async () => {
       click(page.container, page.link('Go to My Templates'));
     });
-    await settle();
+    await finishNavigation();
 
     expect(navigation.search()).toBe('');
     expect(page.hasAlert()).toBe(false);
@@ -149,15 +143,15 @@ describe('RouteErrorBoundary', () => {
   it('shows the card again, once, when the page still crashes after the click', async () => {
     silenceCaughtErrors();
     authUser = { id: 'user-1' };
-    pageBroken = true;
+    pageThrowsOnABadRow = true;
     const page = await renderAt('/dashboard/templates/');
 
     await act(async () => {
       click(page.container, page.link('Go to My Templates'));
     });
-    await settle();
+    await finishNavigation();
     const rendersAfterRetry = pageRendered.mock.calls.length;
-    await settle();
+    await finishNavigation();
 
     expect(page.hasAlert()).toBe(true);
     expect(pageRendered).toHaveBeenCalledTimes(rendersAfterRetry);
@@ -174,7 +168,7 @@ describe('RouteErrorBoundary', () => {
     await act(async () => {
       navigation.router.replace('/dashboard/templates/?scope=team');
     });
-    await settle();
+    await finishNavigation();
 
     expect(navigation.search()).toBe('?scope=team');
     expect(pageMounts).toBe(1);

@@ -44,10 +44,8 @@ const renderLayoutAt = (pathname: string, child: string) => {
   return renderToStaticMarkup(React.createElement(Layout, null, React.createElement('div', null, child)));
 };
 
-// The App Router route groups: src/app/(site) renders the public pages in the site Layout,
-// src/app/(app) the signed-in pages behind RequireAuth.
-const routeFile = (route: string) => new URL(`../../../src/app/${route}/page.tsx`, import.meta.url);
-const layoutSource = (group: string) =>
+const appRouteFile = (route: string) => new URL(`../../../src/app/${route}/page.tsx`, import.meta.url);
+const routeGroupLayoutSource = (group: string) =>
   readFileSync(new URL(`../../../src/app/${group}/layout.tsx`, import.meta.url), 'utf8');
 
 describe('Layout route contracts', () => {
@@ -62,7 +60,7 @@ describe('Layout route contracts', () => {
   });
 
   it('keeps public content routes in the shared public Layout group', () => {
-    expect(layoutSource('(site)')).toContain('<Layout>{children}</Layout>');
+    expect(routeGroupLayoutSource('(site)')).toContain('<Layout>{children}</Layout>');
     for (const route of [
       'templates',
       'categories',
@@ -70,7 +68,7 @@ describe('Layout route contracts', () => {
       'profile/[username]/[templateSlug]',
       'profile/[username]',
     ]) {
-      expect(existsSync(routeFile(`(site)/${route}`)), route).toBe(true);
+      expect(existsSync(appRouteFile(`(site)/${route}`)), route).toBe(true);
     }
   });
 

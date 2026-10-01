@@ -14,9 +14,6 @@ const sourceFiles = (dir: string): string[] =>
 const importsOf = (file: string): string[] =>
   [...readFileSync(file, 'utf8').matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)].map((match) => match[1]);
 
-// The app's providers (src/app/providers.tsx, around every page) mount only the sonner
-// Toaster. A toast sent through any other store is never rendered, so a failed upload would
-// give the user no feedback at all.
 describe('toast rendering', () => {
   it('mounts the sonner Toaster in the app providers', () => {
     const app = readFileSync(path.join(SRC, 'app/providers.tsx'), 'utf8');
@@ -24,7 +21,7 @@ describe('toast rendering', () => {
     expect(app).toContain('<Toaster />');
   });
 
-  it('sends every toast through sonner, never through a store with no mounted renderer', () => {
+  it('sends every toast through sonner, never through a store with no mounted renderer, where a failed upload would give no feedback', () => {
     const offenders = sourceFiles(SRC).flatMap((file) =>
       importsOf(file)
         .filter((specifier) => /(^|\/)use-toast$|(^|\/)ui\/toaster$|^\.\/toaster$|@radix-ui\/react-toast/.test(specifier))

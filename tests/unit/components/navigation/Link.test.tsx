@@ -12,12 +12,6 @@ import { navigation, RoutedPages } from '../../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
-// Every in-app link (the app's Link) and every navigation code starts (useAppRouter) asks a
-// page holding unsaved work before it opens another page: the sidebar, header and account
-// menu links, in-page links and buttons, and redirects after an action. A change of the
-// query or hash keeps the page mounted, so it never asks. Each navigation is reported, so a
-// page visit ends even on a link to the page already open.
-
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 
 const probe: { router?: AppRouter; setDirty?: (dirty: boolean) => void } = {};
@@ -93,10 +87,7 @@ const clickLink = async (label: string, modifiers?: Parameters<typeof click>[2])
   return event!;
 };
 
-// Next.js prefetches every link that scrolls into view, and each prefetch is a request to the
-// Worker: a page of template cards made a dozen before the user clicked anything. The app's
-// Link prefetches on intent instead (Next.js's hover-triggered prefetch pattern).
-describe('Link prefetching', () => {
+describe('Link prefetching on intent, not when the link scrolls into view', () => {
   const mountLinks = async () => {
     navigation.reset('/pricing', { routes: ['/pricing', '/about', '/templates'] });
     container = createFakeContainer();
@@ -234,9 +225,7 @@ describe('Link with unsaved work on the page', () => {
 });
 
 describe('useAppRouter with unsaved work on the page', () => {
-  // The page decides once it has rendered its latest state, so push and replace say they
-  // did not navigate yet; the page opens the page itself when the user confirms.
-  it('asks before push or replace opens another page', async () => {
+  it('asks before push or replace opens another page, and reports no navigation yet, since the page opens it once the user confirms', async () => {
     await mountEditor();
     navigation.window.confirm.mockReturnValue(false);
 

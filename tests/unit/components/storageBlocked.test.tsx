@@ -6,9 +6,7 @@ import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { Toaster } from '@/components/ui/sonner';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 
-// With site data blocked, reading window.localStorage throws a SecurityError. The Toaster
-// is mounted on every route, so one unguarded read replaced every page with the error screen.
-const blockSiteData = () => {
+const blockSiteDataSoReadingLocalStorageThrows = () => {
   const windowStub = {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
@@ -30,13 +28,13 @@ const ViewModeProbe = () => {
 };
 
 describe('rendering with site data blocked', () => {
-  beforeEach(blockSiteData);
+  beforeEach(blockSiteDataSoReadingLocalStorageThrows);
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the global Toaster', () => {
+  it('renders the Toaster that every route mounts', () => {
     expect(() => renderToStaticMarkup(<Toaster />)).not.toThrow();
   });
 

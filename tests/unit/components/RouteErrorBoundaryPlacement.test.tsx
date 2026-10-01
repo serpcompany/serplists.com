@@ -12,11 +12,6 @@ vi.mock('next/navigation', async () => (await import('../../support/nextNavigati
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('server-only', () => ({}));
 
-// Every page renders inside a route-level error boundary, below the site header, so a page
-// that crashes leaves the navigation usable and clears on navigation: the site and signed-in
-// layouts wrap their page in it (Layout), and so do the 404 page and the shared run page,
-// which renders outside Layout.
-
 vi.mock('@/components/RouteErrorBoundary', () => ({
   RouteErrorBoundary: ({ children }: { children: React.ReactNode }) => (
     <div data-route-boundary="true">{children}</div>
@@ -25,7 +20,6 @@ vi.mock('@/components/RouteErrorBoundary', () => ({
 
 vi.mock('@/views/ChecklistRun', () => ({ default: () => <p>Shared run page</p> }));
 vi.mock('@/views/NotFound', () => ({ default: () => <p>Missing page</p> }));
-// The share page's JSON-LD and its lookup run only on the server.
 vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
 vi.mock('@/server/pageMeta/sharedRunPage', () => ({ loadSharedRunPageSeo: async () => null }));
 
@@ -58,7 +52,7 @@ vi.mock('@/lib/analytics', () => ({
   analytics: new Proxy({}, { get: () => vi.fn(() => []) }),
 }));
 
-describe('route-level error boundary placement', () => {
+describe('route-level error boundary placement, below the site header so a page that crashes leaves the navigation usable', () => {
   it('wraps only the page inside the site layout, leaving the header outside', () => {
     navigation.reset('/pricing');
     const html = renderToStaticMarkup(

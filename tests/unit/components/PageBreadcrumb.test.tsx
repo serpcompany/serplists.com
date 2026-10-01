@@ -13,9 +13,7 @@ beforeEach(() => {
 
 const links = (markup: string) => [...markup.matchAll(/<a [^>]*href="([^"]*)"/g)].map((match) => match[1]);
 
-// A detail page's trail (the category page, a feature page, the template pages): an item with
-// an href is a link, and the one without is the page itself.
-describe('PageBreadcrumb', () => {
+describe("PageBreadcrumb, a detail page's trail", () => {
   it('links Home and every item with an href, and marks the page', () => {
     const markup = renderToStaticMarkup(
       <PageBreadcrumb items={[{ href: '/categories/', label: 'All Categories' }, { label: 'outdoor' }]} />,

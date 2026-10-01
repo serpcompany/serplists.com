@@ -9,6 +9,14 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
+const groupOfLinksNamedByMenuLabel = (html: string, menuLabel: string) => {
+  const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${menuLabel}</p>`))?.[1];
+  expect(labelId, menuLabel).toBeTruthy();
+  const start = html.indexOf(`<div role="group" aria-labelledby="${labelId}"`);
+  expect(start, menuLabel).toBeGreaterThanOrEqual(0);
+  return html.slice(start, html.indexOf('</div>', start));
+};
+
 const renderMenu = (pathname: string, signedIn: boolean) => {
   navigation.reset(pathname);
   return renderToStaticMarkup(
@@ -27,12 +35,7 @@ describe('PublicMobileMenu', () => {
         expect(html).toContain(`>${link.label}</a>`);
       }
       if (item.kind === 'menu') {
-        // A named group: role="group", labelled by the menu's label, around its links.
-        const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${item.label}</p>`))?.[1];
-        expect(labelId, item.label).toBeTruthy();
-        const start = html.indexOf(`<div role="group" aria-labelledby="${labelId}"`);
-        expect(start, item.label).toBeGreaterThanOrEqual(0);
-        const group = html.slice(start, html.indexOf('</div>', start));
+        const group = groupOfLinksNamedByMenuLabel(html, item.label);
         for (const link of item.links) expect(group, `${item.label}: ${link.label}`).toContain(`href="${link.href}"`);
       }
     }

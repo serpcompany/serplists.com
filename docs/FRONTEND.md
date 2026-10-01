@@ -50,6 +50,11 @@ History API that Next.js follows: the page keeps its state and nothing is fetche
 paths travel only in the `next` query parameter (`withReturnPath` and `getReturnPath` in
 `src/lib/auth/returnPath.ts`, which sanitizes them), never in history state.
 
+`Link` prefetches its page on intent, once the pointer rests on it or it is focused or
+touched, not when it scrolls into view as Next.js does by default: each prefetch is a request
+to the Worker, and a page of template cards made a dozen before anyone clicked. A caller's own
+`prefetch` wins.
+
 Every page renders inside `RouteErrorBoundary` (`src/components/RouteErrorBoundary.tsx`):
 `Layout` wraps its content, and routes outside `Layout` (the shared run page) wrap their
 element. A page that throws while rendering shows a "Something went wrong" card with Try
@@ -485,6 +490,11 @@ the first bytes; for the crawlers Next.js lists as HTML-limited, it waits and pu
 
 A path no route matches answers 404 with `src/app/not-found.tsx`, titled "Page not found",
 with `noindex, follow` and no canonical URL. An unknown feature slug shows the same page.
+Next.js prerenders that page once, for `/_not-found/`, and serves the same HTML for every
+missing path, so the HTML and the browser's first render use the public shell. Once the
+session check answers, `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives a signed-in
+user on a missing console path the console shell; a signed-out visitor, or a failed check,
+keeps the public one.
 
 A template or profile that does not exist answers with its own not-found message, and the
 server's lookup gives it a not-found title and `noindex, nofollow`. Only a settled answer

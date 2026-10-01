@@ -6,19 +6,15 @@ import {
   publicSiteLinks,
 } from '@/components/layout/publicSiteLinks';
 
-// The header and every public page's footer render these links. An outbound link must go
-// to a domain we have confirmed; an exact-href test once locked in https://serp.dr, a
-// domain under a top-level domain that does not exist. Add a domain here only once
-// someone has confirmed it is ours.
-const APPROVED_EXTERNAL_DOMAINS = ['serp.co', 'serplists.com'];
+const DOMAINS_CONFIRMED_AS_OURS = ['serp.co', 'serplists.com'];
 
 const isApprovedHost = (hostname: string) =>
-  APPROVED_EXTERNAL_DOMAINS.some(
+  DOMAINS_CONFIRMED_AS_OURS.some(
     (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
   );
 
-describe('public site links', () => {
-  it('sends external links over https to an approved domain', () => {
+describe('public site links in the header and every public footer', () => {
+  it('sends external links over https to a domain confirmed to be ours', () => {
     const external = publicSiteLinks.filter((link) => link.external);
 
     for (const link of external) {
@@ -41,7 +37,6 @@ describe('public site links', () => {
     }
   });
 
-  // The header: "Templates" and "Features" menus, then Pricing as one link.
   it('groups the header into the Templates and Features menus and the Pricing link', () => {
     expect(
       publicHeaderItems.map((item) =>
@@ -62,7 +57,9 @@ describe('public site links', () => {
       },
       { link: 'Pricing /pricing/' },
     ]);
-    // Each menu link says what the page is, in the page's own words.
+  });
+
+  it("describes each header menu link in the page's own words", () => {
     for (const item of publicHeaderItems) {
       if (item.kind === 'menu') for (const link of item.links) expect(link.description, link.label).toBeTruthy();
     }
