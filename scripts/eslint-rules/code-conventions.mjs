@@ -99,10 +99,11 @@ export const APP_CONVENTIONS = [
     message: "The product is SERP Lists: use APP_BRAND_NAME from src/lib/brand.ts, never the old placeholder brand.",
   },
   {
-    selector: "Literal[value=/^(?:checklist-run-history|history)$/]",
+    selector: "Literal[value=/^(?:checklist-run-history|history|detail)$/]",
     message:
-      "Build Changelog query keys with runHistory(), templateHistoryFor() or everyTemplateHistory() from " +
-      "src/lib/queryCache.ts: a key spelled out elsewhere is missed when a save refreshes the history.",
+      "Build Changelog and template detail query keys with runHistory(), templateHistoryFor(), everyTemplateHistory() " +
+      "or templateDetail() from src/lib/queryCache.ts: a key spelled out elsewhere is missed when a save refreshes the " +
+      "history, or when archiving or restoring a Template updates its detail page.",
     owners: ["src/lib/queryCache.ts"],
   },
   {

@@ -10,7 +10,7 @@ import {
   refreshRunsAfterConflict,
 } from '@/contexts/templateListCache';
 import { createApiError } from '@/lib/api-errors';
-import { markRunShared, queryKeys, refreshRunHistory } from '@/lib/queryCache';
+import { isTemplateDetailOf, markRunShared, queryKeys, refreshRunHistory } from '@/lib/queryCache';
 
 import { APP_QUERY_STALE_TIME } from '../../support/appQueryClient';
 
@@ -39,6 +39,23 @@ describe('queryKeys', () => {
     expect(queryKeys.templateHistoryFor('t1', undefined, 'org-1')).toEqual(['templates', 'history', 't1', 'guest', 'org-1']);
     expect(queryKeys.templateHistoryFor('t1').slice(0, 3)).toEqual([...queryKeys.everyTemplateHistory('t1')]);
     expect(queryKeys.runHistory('r1')).toEqual(['checklist-run-history', 'r1']);
+  });
+
+  it('builds the template detail key that isTemplateDetailOf reads, matching by route identifier or by the template it loaded', () => {
+    const client = newClient();
+    client.setQueryData(queryKeys.templateDetail('t1', 'u1'), { id: 't1' });
+    client.setQueryData(queryKeys.templateDetail('launch-qa', undefined), { id: 't1' });
+    client.setQueryData(queryKeys.templateDetail('t2', 'u1'), { id: 't2' });
+
+    const matched = client
+      .getQueryCache()
+      .findAll({ predicate: (query) => isTemplateDetailOf(query, 't1') })
+      .map((query) => query.queryKey);
+
+    expect(matched).toEqual([
+      ['templates', 'detail', 't1', 'u1'],
+      ['templates', 'detail', 'launch-qa', 'guest'],
+    ]);
   });
 });
 

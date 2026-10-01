@@ -1,11 +1,9 @@
 import { focusManager, QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  buildTemplateDetailQueryOptions,
-  getTemplateDetailQueryKey,
-} from '@/features/template-detail/templateDetailQuery';
+import { buildTemplateDetailQueryOptions } from '@/features/template-detail/templateDetailQuery';
 import { createApiError } from '@/lib/api-errors';
+import { queryKeys } from '@/lib/queryCache';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
 import { APP_QUERY_STALE_TIME, createQueryClientWithAppDefaults } from '../../../support/appQueryClient';
@@ -98,7 +96,7 @@ describe('template detail query', () => {
     const loaded = await settled(observer);
 
     const loadedPastTheStaleTime = Date.now() - 2 * APP_QUERY_STALE_TIME;
-    queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), loaded.data, {
+    queryClient.setQueryData(queryKeys.templateDetail('template-1', 'user-1'), loaded.data, {
       updatedAt: loadedPastTheStaleTime,
     });
     try {
@@ -156,10 +154,10 @@ describe('template detail query', () => {
   });
 
   it('keys each template and user under the templates prefix', () => {
-    const key = getTemplateDetailQueryKey('template-1', 'user-1');
+    const key = queryKeys.templateDetail('template-1', 'user-1');
 
     expect(key[0]).toBe('templates');
-    expect(key).not.toEqual(getTemplateDetailQueryKey('template-1', 'user-2'));
-    expect(key).not.toEqual(getTemplateDetailQueryKey('template-2', 'user-1'));
+    expect(key).not.toEqual(queryKeys.templateDetail('template-1', 'user-2'));
+    expect(key).not.toEqual(queryKeys.templateDetail('template-2', 'user-1'));
   });
 });

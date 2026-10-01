@@ -48,6 +48,8 @@ const APP_CASES: Case[] = [
   refused('the old placeholder brand', APP, 'export const Title = () => <h1>Checklist App</h1>;', 'APP_BRAND_NAME'),
   refused('a Changelog query key spelled out', APP, "useQuery({ queryKey: ['checklist-run-history', runId] });", 'queryCache.ts'),
   allowed('a Changelog query key in queryCache.ts', 'src/lib/queryCache.ts', "const key = ['checklist-run-history', runId];"),
+  refused('a template detail query key spelled out', APP, "useQuery({ queryKey: ['templates', 'detail', id, userId] });", 'templateDetail()'),
+  allowed('a template detail query key in queryCache.ts', 'src/lib/queryCache.ts', "const key = ['templates', 'detail', id, userId];"),
   refused('an inline progress percentage', APP, 'const percent = Math.round((completed / total) * 100);', 'toProgressPercent()'),
   allowed('the progress percentage in progress.ts', 'src/lib/progress.ts', 'const percent = Math.round((completed / total) * 100);'),
   refused('the clipboard in a route file', 'src/app/sample/page.tsx', "navigator.clipboard.writeText('x');", 'copyTextToClipboard'),

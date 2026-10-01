@@ -90,8 +90,8 @@ one module:
   `['templates', 'history', templateId, user, context]`. `everyTemplateHistory` is the prefix
   without the last two, so a save refreshes every cached Changelog of the Template, whatever
   user or Organization loaded it.
-- **A private template detail page** (`getTemplateDetailQueryKey` in
-  `src/features/template-detail/templateDetailQuery.ts`) is
+- **A private template detail page** (`queryKeys.templateDetail` in `src/lib/queryCache.ts`, next
+  to `isTemplateDetailOf`, which reads the key by position) is
   `['templates', 'detail', <route identifier>, user]`, and holds `null` once the server said
   the template is gone. The route identifier can be a slug, so `isTemplateDetailOf` also
   matches an entry by the id of the template it loaded. The key names no Ownership Context:
