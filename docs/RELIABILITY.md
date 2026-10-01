@@ -673,9 +673,8 @@ Common failures:
   - `rows()` and `run()` read and write directly, `sqlite` is the node:sqlite database, and
     `readMigration()` reads one migration's SQL.
   - Its `raw()` reads rows as arrays, which Drizzle maps by column position, through
-    `allRowsAsArrays()` (`tests/support/sqliteRowArrays.ts`): it declares node:sqlite's
-    `setReturnArrays()`, which Node 22.16 has and `@types/node` 22.17 lacks, and parses the
-    rows with Zod.
+    `allRowsAsArrays()` (`tests/support/sqliteRowArrays.ts`), which turns on node:sqlite's
+    `setReturnArrays()` and parses the rows with Zod.
 - `pnpm run test:local-d1` runs the API on real local D1 through wrangler's
   `getPlatformProxy`, with no dev server. `startLocalD1()`
   (`tests/integration/local-d1-handler-env.ts`) applies every migration to a throwaway
