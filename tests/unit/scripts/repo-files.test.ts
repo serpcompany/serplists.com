@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { directoriesWithoutFiles, walkFiles } from '../../../scripts/lib/repo-files.mjs';
+import { directoriesAFreshCheckoutLacks, walkFiles } from '../../../scripts/lib/repo-files.mjs';
 
 const repoRoot = process.cwd();
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'repo-files-'));
@@ -32,7 +32,7 @@ writeFixture('docs/plans/logs-only/run.log', 'log\n');
 writeFixture('docs/plans/new/draft.md', '# Draft\n');
 
 describe('walkFiles', () => {
-  it('returns no files for a directory that does not exist', () => {
+  it('returns no files for a folder that does not exist, as git drops one once its last file moves out', () => {
     expect(walkFiles(fixtureRoot, 'docs/plans/missing', () => true)).toEqual([]);
   });
 
@@ -47,8 +47,8 @@ describe('walkFiles', () => {
   });
 });
 
-describe('directoriesWithoutFiles', () => {
-  it('flags directories that a fresh checkout would not have', () => {
+describe('directoriesAFreshCheckoutLacks', () => {
+  it('flags folders holding no file git tracks or would track, so a fresh checkout would not have them', () => {
     const dirs = [
       'docs/plans/active/',
       'docs/plans/completed',
@@ -56,13 +56,23 @@ describe('directoriesWithoutFiles', () => {
       'docs/plans/logs-only/',
       'docs/plans/new/',
     ];
-    expect([...directoriesWithoutFiles(fixtureRoot, dirs)].sort()).toEqual([
+    expect([...directoriesAFreshCheckoutLacks(fixtureRoot, dirs)].sort()).toEqual([
       'docs/plans/emptied/',
       'docs/plans/logs-only/',
     ]);
   });
 
   it('returns nothing when there is nothing to check', () => {
-    expect([...directoriesWithoutFiles(fixtureRoot, [])]).toEqual([]);
+    expect([...directoriesAFreshCheckoutLacks(fixtureRoot, [])]).toEqual([]);
+  });
+
+  it('flags nothing outside a git checkout, where it cannot tell', () => {
+    const notAGitCheckout = mkdtempSync(path.join(tmpdir(), 'repo-files-no-git-'));
+    try {
+      mkdirSync(path.join(notAGitCheckout, 'emptied'));
+      expect([...directoriesAFreshCheckoutLacks(notAGitCheckout, ['emptied/'])]).toEqual([]);
+    } finally {
+      rmSync(notAGitCheckout, { recursive: true, force: true });
+    }
   });
 });

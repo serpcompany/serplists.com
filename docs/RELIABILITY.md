@@ -30,6 +30,55 @@ Lefthook hooks install with `pnpm install` (the `prepare` script); run
 re-run once. If it fails again, treat it as real, and record genuinely flaky tests
 in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
+### Repository checks
+
+- **Docs** (`pnpm run docs:check`, part of `check:repo`) reads `AGENTS.md`, `ARCHITECTURE.md`,
+  `README.md`, every Markdown file under `docs/`, and the skills in `.claude/skills/`. It fails
+  when:
+  - another Markdown file sits at the root (a gitignored one may), or `docs/` holds anything
+    but `design-docs`, `exec-plans`, `generated`, `product-specs`, `references` and the
+    guides in it today;
+  - a relative link, or an anchor into a Markdown file, does not resolve;
+  - a backticked repository path (one starting with `src/`, `functions/`, `scripts/`, `db/`,
+    `tests/`, `docs/`, `.github/`, `.claude/` or `.mcp.json`) does not exist, or names a
+    folder holding no file git tracks, which a fresh checkout would lack. Text with a glob,
+    a placeholder, a space or `...` is not read as a path, and a path git ignores (test
+    output, logs) may be missing: it is made at runtime;
+  - a `pnpm run <script>`, in prose or in a code block, names no script in `package.json`;
+  - a page under `docs/` cannot be reached by links from `AGENTS.md` or `README.md`;
+  - a design doc is missing from `docs/design-docs/index.md` or its row lacks a status and a
+    last-verified date, or a product spec is missing from `docs/product-specs/index.md`;
+  - a skill folder has no `SKILL.md`, its frontmatter `name` is not the folder's name, its
+    description is missing or longer than 1,024 characters (the Agent Skills limit; Claude
+    reads the description to decide when to load the skill), or the skills table in the
+    [agent workflow](design-docs/agent-workflow.md#agent-tooling) does not list it;
+  - `AGENTS.md` grows past 120 lines: it stays a map.
+- **Comments** are not allowed: a name, a test named for the behavior, or the doc that owns
+  the area holds what one would say. Phase 3 of the
+  [harness hardening plan](exec-plans/active/harness-hardening.md) removes the rest and then
+  enforces both checks everywhere; until then ESLint applies the rule only to the folders
+  already clean.
+  - ESLint's `serplists/no-comments` rule (`scripts/eslint-rules/no-comments.mjs`) reports
+    every comment in TypeScript and JavaScript but a shebang: JSDoc, comments inside JSX, and
+    directives (`eslint-disable`, `@ts-expect-error`, `/// <reference>`, `/* global */`). The
+    config sets `noInlineConfig`, so an `eslint-disable` comment cannot hide one.
+  - `node scripts/check-no-comments.mjs [files]` checks the other formats in every file git
+    tracks or would track (or the files named), reading each by its own rules for strings,
+    so a `#` in a URL or a `--` in a quoted name is not a comment. YAML goes through the
+    `yaml` package's parser; in GitHub workflows and actions and the Lefthook config, its
+    `run:` blocks are read as code too: `bash` and `sh` steps by a shell scanner (a `#` starts
+    a comment only at the start of a word, outside quotes, substitutions, heredocs and
+    `${{ }}` expressions), `node` steps as JavaScript, and steps in other shells not at all.
+    TOML comments count outside basic, literal and multi-line strings, and SQL's `--` and
+    `/* */` outside strings and quoted names (`"name"`, backticks, `[name]`). CSS goes through
+    PostCSS's tokenizer (strings and `url()` hold no comments), JSON and JSONC through
+    TypeScript's scanner. In a patch, only the lines it adds are read, in the language of the
+    file it patches, and reported at their line in the patch. Markdown is not checked.
+  - Files a generator writes are skipped: `GENERATED_FILES` in
+    `scripts/check-no-comments-lib.mjs` (the lockfile, the portable template JSON Schema, the
+    bundled sitemap catalog and the example templates' `template.json`), and ESLint ignores
+    `cloudflare-env.d.ts` and `next-env.d.ts`.
+
 ## Deploy pipeline
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `main` and
