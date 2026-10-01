@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { z } from 'zod';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from './apiEnv';
 import { chainSelectsUpdatesAndDeletes, drizzleChainMocks } from './drizzleChainMocks';
 
 export const dbMocks = drizzleChainMocks();
@@ -22,10 +23,7 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
   (await import('./guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
-export const mockEnv: any = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+export const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 export function resetTemplatesHandlerMocks() {
   vi.clearAllMocks();
