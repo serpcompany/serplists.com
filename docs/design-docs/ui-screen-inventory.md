@@ -429,7 +429,7 @@ existing content, invent nothing):
   - The collapsed state lasts until a full page load: reading shadcn's cookie on the server
     would render every console page per request.
   - The rows are 44px tall, the old sidebar's full-size targets
-    (`tests/e2e/template-editor-bugs.spec.ts`), where shadcn's are 32px; collapsed to icons
+    (`tests/e2e/template-screens-layout.spec.ts`), where shadcn's are 32px; collapsed to icons
     they are shadcn's 32px squares.
 
 ### Auth card frame
