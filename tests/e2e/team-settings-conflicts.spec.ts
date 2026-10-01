@@ -1,4 +1,5 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 type Member = {
   id: string;
@@ -15,10 +16,6 @@ type MockState = {
   requests: { method: string; path: string; search: string }[];
   respond: (method: string, path: string) => { status: number; body: unknown } | null;
 };
-
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
 
 const ownerMember: Member = {
   id: 'member-current',
@@ -39,31 +36,11 @@ const editorMember: Member = {
 };
 
 async function mockOrganizationApi(page: Page, state: MockState) {
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-    const method = request.method();
+  await routeTheApi(page, async ({ route, url, path, method }) => {
     state.requests.push({ method, path, search: url.search });
 
     if (path === '/api/auth/get-session' && method === 'GET') {
-      await fulfillJson(route, {
-        session: {
-          id: 'session-1',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          expiresAt: '2026-07-08T00:00:00.000Z',
-          token: 'session-token',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-          userId: 'user-owner',
-        },
-        user: {
-          id: 'user-owner',
-          email: 'owner@example.com',
-          emailVerified: true,
-          name: 'Owner User',
-          username: 'owner',
-        },
-      });
+      await fulfillJson(route, OWNER_SESSION);
       return;
     }
     if (path.startsWith('/api/auth/')) {

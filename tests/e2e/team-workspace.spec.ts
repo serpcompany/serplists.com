@@ -1,46 +1,19 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { fulfillJson, OWNER_SESSION, routeTheApi } from './support/mocked-api';
 
 type InviteRequest = {
   email: string;
   role?: string;
 };
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    body: JSON.stringify(body),
-    contentType: 'application/json',
-    status,
-  });
-}
-
 async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfer?: boolean } = {}) {
   const inviteRequests: InviteRequest[] = [];
   let createdInvite: Record<string, unknown> | null = null;
   let ownershipTransferred = false;
 
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, url, path }) => {
     if (path === '/api/auth/get-session' && request.method() === 'GET') {
-      await fulfillJson(route, {
-        session: {
-          id: 'session-1',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          expiresAt: '2026-07-08T00:00:00.000Z',
-          token: 'session-token',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-          userId: 'user-owner',
-        },
-        user: {
-          id: 'user-owner',
-          email: 'owner@example.com',
-          emailVerified: true,
-          name: 'Owner User',
-          username: 'owner',
-        },
-      });
+      await fulfillJson(route, OWNER_SESSION);
       return;
     }
 
@@ -86,12 +59,7 @@ async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfe
       return;
     }
 
-    if (path === '/api/templates' && request.method() === 'GET') {
-      await fulfillJson(route, []);
-      return;
-    }
-
-    if (path === '/api/checklists' && request.method() === 'GET') {
+    if ((path === '/api/templates' || path === '/api/checklists') && request.method() === 'GET') {
       await fulfillJson(route, []);
       return;
     }
@@ -187,15 +155,18 @@ async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfe
   };
 }
 
+async function openTheAcmeTeamSettings(page: Page) {
+  await page.goto('/dashboard/settings/');
+  await page.getByRole('button', { name: 'Switch context' }).click();
+  await page.getByRole('menuitem', { name: /Acme Team/i }).click();
+}
+
 test('@smoke team workspace settings create link invites and expose owner controls', async ({
   page,
 }) => {
   const apiMock = await mockTeamWorkspaceApi(page);
 
-  await page.goto('/dashboard/settings/');
-
-  await page.getByRole('button', { name: 'Switch context' }).click();
-  await page.getByRole('menuitem', { name: /Acme Team/i }).click();
+  await openTheAcmeTeamSettings(page);
 
   await expect(
     page.getByRole('heading', { name: 'Account Settings' }),
@@ -231,9 +202,7 @@ test('an ownership transfer that saved is not reported as failed when the Organi
 }) => {
   await mockTeamWorkspaceApi(page, { failTeamsAfterTransfer: true });
 
-  await page.goto('/dashboard/settings/');
-  await page.getByRole('button', { name: 'Switch context' }).click();
-  await page.getByRole('menuitem', { name: /Acme Team/i }).click();
+  await openTheAcmeTeamSettings(page);
   await expect(page.getByText('Your role: Owner')).toBeVisible();
 
   page.once('dialog', (dialog) => void dialog.accept());

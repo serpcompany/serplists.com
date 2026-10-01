@@ -1,7 +1,8 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
+import { fulfillJson, routeTheApi } from './support/mocked-api';
 
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
@@ -31,19 +32,8 @@ async function expectRobots(page: Page, expected: string | RegExp) {
   }
 }
 
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({
-    body: JSON.stringify(body),
-    contentType: 'application/json',
-    status,
-  });
-}
-
 async function mockAuthenticatedRouteApi(page: Page) {
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === '/api/auth/get-session' && request.method() === 'GET') {
       await fulfillJson(route, {
         session: {
@@ -70,12 +60,7 @@ async function mockAuthenticatedRouteApi(page: Page) {
       return;
     }
 
-    if (path === '/api/templates' && request.method() === 'GET') {
-      await fulfillJson(route, []);
-      return;
-    }
-
-    if (path === '/api/checklists' && request.method() === 'GET') {
+    if ((path === '/api/templates' || path === '/api/checklists') && request.method() === 'GET') {
       await fulfillJson(route, []);
       return;
     }

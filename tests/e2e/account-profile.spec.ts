@@ -1,14 +1,11 @@
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { fulfillJson, routeTheApi } from './support/mocked-api';
 
 const AVATAR_URL = 'https://avatars.e2e.test/new-avatar.png';
 const TRANSPARENT_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64',
 );
-
-async function fulfillJson(route: Route, body: unknown, status = 200) {
-  await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
-}
 
 async function mockProfileApi(page: Page) {
   const user = {
@@ -25,11 +22,7 @@ async function mockProfileApi(page: Page) {
     route.fulfill({ body: TRANSPARENT_PIXEL_PNG, contentType: 'image/png' }),
   );
 
-  await page.route('**/api/**', async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    const method = request.method();
-
+  await routeTheApi(page, async ({ route, request, path, method }) => {
     if (path === '/api/auth/get-session' && method === 'GET') {
       await fulfillJson(route, {
         session: {
