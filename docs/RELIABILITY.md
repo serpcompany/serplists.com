@@ -296,6 +296,14 @@ Common failures:
 ## Testing conventions
 
 - Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
+- **Tests that make their own git repositories.** The unit test setup (`tests/setup.ts`)
+  clears git's repository variables (`GIT_DIR` and the like) before any test runs.
+  - Inside a git hook git sets them: the pre-push hook runs `pnpm run verify`, and in a linked
+    worktree `GIT_DIR` names that worktree's repository.
+  - Without the clearing, a test that runs `git init`, `add` or `commit` in its fixture would
+    write into the real repository instead.
+  - Scripts that run git in a directory they are given use `withoutGitRepositoryOverrides()`
+    from `scripts/lib/git-env.mjs`.
 - Every test runs. ESLint refuses `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `xit` and a
   `.only` call in Vitest and Playwright files, and a test file excluded from `test:run` must
   be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass

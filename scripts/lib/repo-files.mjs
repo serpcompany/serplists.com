@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { withoutGitRepositoryOverrides } from "./git-env.mjs";
 
 export function walkFiles(root, dir, predicate) {
   const absolute = path.join(root, dir);
@@ -16,6 +17,7 @@ export function directoriesAFreshCheckoutLacks(root, dirs) {
   if (dirs.length === 0) return new Set();
   const listed = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...dirs], {
     cwd: root,
+    env: withoutGitRepositoryOverrides(),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
