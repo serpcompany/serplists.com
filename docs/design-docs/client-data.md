@@ -131,7 +131,9 @@ mark them stale, so they load when a page next shows them.
   `AuthProvider` remove every cached query no mounted page reads, except the public catalog
   (`removeSignedOutUserQueries`), so nothing the previous user loaded is shown to or
   refetched for the next one. It runs once the app has rendered for the new user, whose pages
-  then observe their own keys, so every unobserved entry was the previous user's. Removing a
+  then observe their own keys, so every unobserved entry was the previous user's: it is an
+  effect of `AuthProvider` (`useRemovePreviousUserQueries`), which React runs after the
+  effects of the pages inside it, so it must stay in a provider above every page. Removing a
   query also cancels its fetch, so a late answer for the previous user cannot write its data
   back. The first session restore after a page load is not a change of user
   (`isUserSwitch`): nothing private is cached yet.

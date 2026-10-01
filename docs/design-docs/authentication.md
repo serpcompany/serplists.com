@@ -108,8 +108,10 @@ and user-facing failure states when a supporting service is unavailable.
 - A session check that fails (`5xx`, `429`, or a network error) is not a sign-out:
   only a successful answer with no session, or a `401`, is
   (`classifySessionResult` in `src/contexts/authSession.ts`). `AuthProvider` retries
-  the first check twice with backoff, then reports `sessionStatus: 'unavailable'`,
-  and `RequireAuth` shows a retry instead of redirecting to `/login/`. A failed
+  the first check twice, one and then three seconds later (each attempt counts against
+  the auth rate limit, so there are few), then reports `sessionStatus: 'unavailable'`
+  and checks again when the browser comes back online; `RequireAuth` shows a retry
+  instead of redirecting to `/login/`. A failed
   profile refresh or sign-in session read keeps the current user, and the stored
   Organization choice is cleared only on a confirmed sign-out. Registration takes
   "verify your email" from the sign-up response (no session token), not from a later
@@ -123,19 +125,29 @@ and user-facing failure states when a supporting service is unavailable.
   the local session only when the server confirms it, or answers that there is no
   session (`400 FAILED_TO_GET_SESSION`, `401`). On a `429`, `403`, `5xx`, or network
   failure the session cookie is still valid, so the user stays signed in and the menu
-  shows the error. Callers navigate away only on `{ ok: true }`, and a page that sends
+  shows the error. A second sign-out while one is in flight shares its request.
+  Callers navigate away only on `{ ok: true }`, and a page that sends
   the user to `/login/` after signing out must wait for it (`signOutAndReturn` in
   `src/features/auth/signOut.ts`): Login redirects a signed-in visitor straight to
   the return path.
 - Tabs share one session cookie, so every tab follows a sign-in or sign-out made in
   another (`src/contexts/sessionSync.ts`). A tab that signs in, signs out, or loads
   the session announces its user id on a `BroadcastChannel` (a `localStorage`
-  storage event where that is missing). A tab showing a different user re-reads the
+  storage event where that is missing; each write carries a timestamp, since the
+  browser fires the event only when the stored value changes). Loading counts because
+  an email verification link signs in the tab it opens, and tabs still showing the
+  previous user must re-check. A tab showing a different user re-reads the
   session and trusts only the server's answer: a new user replaces the old one (whose
   cached queries are then dropped), a confirmed sign-out sends protected pages to
   `/login/`, and a failed check changes nothing. A tab also re-reads the session when
-  it comes back into view, at most once a minute, and after a back/forward cache
-  restore. A re-check that finds the same user with a changed profile (name,
+  it comes back into view, at most once a minute (each read is a D1 query; a minute is
+  also the Organizations list's stale time, so that list's refetch on focus rarely runs
+  without a session check), and after a back/forward cache restore, which may have
+  missed messages. Answers can arrive out of order, so each read takes a ticket when it
+  starts and its answer is dropped when a later read, or a sign-in or sign-out in this
+  tab, was applied first; a failed read never outranks an older answer. One re-check
+  runs at a time, and a request made during one queues one more, since the running
+  check may have read the session before the change. A re-check that finds the same user with a changed profile (name,
   username, avatar, email) shows the new one, and a tab that saves a profile change
   announces it (`refreshProfile`), so the other tabs showing that user re-read the
   session: share links and the Profile link are built from the session's username.

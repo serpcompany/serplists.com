@@ -9,22 +9,16 @@ export interface AuthActionResult {
 }
 
 type AuthClientError = { status?: number; code?: string; message?: string } | null | undefined;
-// Better Auth client calls resolve a failed request (non-2xx, or status 0 when the network
-// failed) as { data: null, error } instead of rejecting.
 export type AuthClientResult = { data?: unknown; error?: AuthClientError } | null | undefined;
 
 export const SIGN_OUT_FAILED_MESSAGE = 'Sign out failed. Check your connection and try again.';
 export const SIGN_OUT_RATE_LIMITED_MESSAGE = 'Sign out failed: too many requests. Wait a moment and try again.';
 
-// Better Auth answers sign-out with 400 FAILED_TO_GET_SESSION when the request has no valid
-// session cookie (it expired, or another tab signed out), and clears the cookie.
 const hasNoSession = (error: NonNullable<AuthClientError>): boolean =>
   error.status === 401 ||
   (error.status === 400 &&
     (error.code === 'FAILED_TO_GET_SESSION' || /failed to get session/i.test(error.message ?? '')));
 
-// Signed out only when the server confirms it. On any other failure (429, 403, 5xx, network)
-// the session cookie is still valid, so the user must stay signed in and see the error.
 export function interpretSignOutResult(result: AuthClientResult): AuthActionResult {
   const error = result?.error;
   if (!error || hasNoSession(error)) {
@@ -37,8 +31,6 @@ export function interpretSignOutResult(result: AuthClientResult): AuthActionResu
   };
 }
 
-// Returns logout(): signs out, and clears the local session only once the server has.
-// Calls made while a sign-out is in flight share its request.
 export function createSignOutRunner(
   signOut: () => Promise<AuthClientResult>,
   onSignedOut: () => void,
@@ -66,8 +58,6 @@ export function createSignOutRunner(
   };
 }
 
-// 'unavailable': the session check failed (5xx, 429, network), so whether the user is signed
-// in is unknown. Their cookie may still be valid: never treat this as signed out.
 export type SessionStatus = 'loading' | 'authenticated' | 'unauthenticated' | 'unavailable';
 
 const sessionUserSchema = z
@@ -87,8 +77,6 @@ export type SessionCheck =
   | { kind: 'unauthenticated' }
   | { kind: 'unknown'; status?: number };
 
-// Only a successful answer without a session (or a 401) means signed out. Any other failure
-// is unknown, including a network failure, which the client reports as status 0.
 export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result) {
     return { kind: 'unknown' };
@@ -112,14 +100,10 @@ export const SESSION_UNCONFIRMED_MESSAGE =
 const SESSION_NOT_ESTABLISHED_MESSAGE = 'Unable to establish session';
 
 export type SignInSessionOutcome = {
-  // The session to store, or null to keep the current state.
-  check: Exclude<SessionCheck, { kind: 'unknown' }> | null;
+  sessionToStore: Exclude<SessionCheck, { kind: 'unknown' }> | null;
   result: AuthActionResult;
 };
 
-// Better Auth's sign-in response carries a partial user (no username), so after a successful
-// sign-in the session is always read and its user stored. The sign-in user is only a fallback
-// for when that read fails: the session cookie is set, so the sign-in still counts.
 export async function resolveSignInSession(
   signInData: unknown,
   readSession: () => Promise<SessionCheck>,
@@ -131,22 +115,20 @@ export async function resolveSignInSession(
     session = { kind: 'unknown' };
   }
   if (session.kind === 'authenticated') {
-    return { check: session, result: { ok: true } };
+    return { sessionToStore: session, result: { ok: true } };
   }
   const signIn = classifySessionResult({ data: signInData });
   if (signIn.kind === 'authenticated') {
-    return { check: signIn, result: { ok: true } };
+    return { sessionToStore: signIn, result: { ok: true } };
   }
   if (session.kind === 'unknown') {
-    return { check: null, result: { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: 'UNKNOWN' } };
+    return { sessionToStore: null, result: { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: 'UNKNOWN' } };
   }
-  return { check: session, result: { ok: false, error: SESSION_NOT_ESTABLISHED_MESSAGE, errorCode: 'UNKNOWN' } };
+  return { sessionToStore: session, result: { ok: false, error: SESSION_NOT_ESTABLISHED_MESSAGE, errorCode: 'UNKNOWN' } };
 }
 
 export type SessionState = { user: SessionUser | null; session: unknown; status: SessionStatus };
 
-// An unknown check never signs anyone out: a signed-in user stays signed in, and a first
-// check that fails reports 'unavailable' so the app can offer a retry instead of /login.
 export function applySessionCheck(check: SessionCheck, current: SessionState): SessionState {
   if (check.kind === 'authenticated') {
     return { user: check.user, session: check.session, status: 'authenticated' };
@@ -161,8 +143,6 @@ export function applySessionCheck(check: SessionCheck, current: SessionState): S
 
 export const SESSION_RETRY_DELAYS_MS = [1_000, 3_000];
 
-// Checks the session, retrying a few times with backoff while the answer is unknown. Every
-// retry counts against the auth rate limit, so the attempts are few and spaced out.
 export async function checkSessionWithRetry(
   getSession: () => Promise<AuthClientResult>,
   options: { retryDelaysMs?: number[]; wait?: (ms: number) => Promise<void> } = {},
@@ -188,7 +168,6 @@ export async function checkSessionWithRetry(
 
 export type ProtectedRouteAction = 'render' | 'wait' | 'redirect' | 'unavailable';
 
-// RequireAuth sends a user to /login only when the server said there is no session.
 export function resolveProtectedRouteAction(status: SessionStatus): ProtectedRouteAction {
   switch (status) {
     case 'authenticated':
@@ -202,9 +181,6 @@ export function resolveProtectedRouteAction(status: SessionStatus): ProtectedRou
   }
 }
 
-// Better Auth's sign-up returns a session token unless the account must verify its email
-// first (or auto sign-in is off), so the answer comes from the server, not from whether a
-// later session check happened to succeed.
 export function signUpRequiresEmailVerification(signUpData: unknown): boolean {
   const token = (signUpData as { token?: unknown } | null | undefined)?.token;
   return typeof token !== 'string' || token.length === 0;

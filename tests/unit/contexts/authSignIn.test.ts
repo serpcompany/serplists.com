@@ -28,8 +28,8 @@ describe('resolveSignInSession', () => {
 
     expect(readSession).toHaveBeenCalledTimes(1);
     expect(outcome.result).toEqual({ ok: true });
-    expect(outcome.check).toMatchObject({ kind: 'authenticated', user: { username: 'john' } });
-    expect(outcome.check).toEqual(fullSession);
+    expect(outcome.sessionToStore).toMatchObject({ kind: 'authenticated', user: { username: 'john' } });
+    expect(outcome.sessionToStore).toEqual(fullSession);
   });
 
   it.each([
@@ -40,14 +40,14 @@ describe('resolveSignInSession', () => {
     const outcome = await resolveSignInSession(signInData, readSession);
 
     expect(outcome.result).toEqual({ ok: true });
-    expect(outcome.check).toMatchObject({ kind: 'authenticated', user: { id: 'user-john', email: 'john@test.com' } });
+    expect(outcome.sessionToStore).toMatchObject({ kind: 'authenticated', user: { id: 'user-john', email: 'john@test.com' } });
   });
 
   it('keeps the current state when neither answer has a user and the session could not be read', async () => {
     const outcome = await resolveSignInSession({ redirect: false }, async () => ({ kind: 'unknown' }));
 
     expect(outcome).toEqual({
-      check: null,
+      sessionToStore: null,
       result: { ok: false, error: SESSION_UNCONFIRMED_MESSAGE, errorCode: 'UNKNOWN' },
     });
   });
@@ -56,7 +56,7 @@ describe('resolveSignInSession', () => {
     const outcome = await resolveSignInSession(null, async () => ({ kind: 'unauthenticated' }));
 
     expect(outcome).toEqual({
-      check: { kind: 'unauthenticated' },
+      sessionToStore: { kind: 'unauthenticated' },
       result: { ok: false, error: 'Unable to establish session', errorCode: 'UNKNOWN' },
     });
   });

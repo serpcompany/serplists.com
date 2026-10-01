@@ -1,39 +1,15 @@
 import { z } from 'zod';
 
-import { getLocalStorage } from '@/lib/browserStorage';
+import { getLocalStorage, succeedsWithoutThrowing } from '@/lib/browserStorage';
 import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
 
 import { applySessionCheck, type SessionCheck, type SessionState, type SessionUser } from './authSession';
 
-// Every tab of a browser sends the same session cookie, so when one tab signs in as someone
-// else or signs out, the others must follow before they show or write anything as the old user.
-// A tab that signs in or out announces it on a BroadcastChannel (a storage event where that is
-// missing). The message is only a hint: the other tabs re-read the session and trust the
-// server's answer. A tab that changes the user's profile (name, username, avatar) announces
-// that too, so tabs showing the same user re-read it and show the new one. A tab also
-// re-reads the session when it comes back into view, at most once per
-// SESSION_RECHECK_INTERVAL_MS (each check reads the session from D1), and after a restore from
-// the back/forward cache, where it may have missed messages.
-//
-// The session can also end on the server (it expired, or the user signed out other sessions or
-// changed their password elsewhere). Every API request then gets a 401, which the API client
-// reports; the tab re-reads the session and signs out only if the server confirms it is gone.
-//
-// A background sign-out, or a switch to another user, unmounts the signed-in pages without
-// asking. Just before it is applied, beforeSessionLost lets pages keep their unsaved work
-// (keepGuardedWork in src/lib/navigation/leaveGuard.ts).
-
 export const SESSION_SYNC_CHANNEL = 'serplists-auth';
 export const SESSION_SYNC_STORAGE_KEY = 'serplists.sessionChanged';
-// Matches the Organizations list staleTime, so a focus refetch rarely runs without a check.
 export const SESSION_RECHECK_INTERVAL_MS = 60_000;
-// A burst of 401s from parallel requests costs one check, and repeats wait this long.
 export const SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS = 5_000;
-// Only GET /api/auth/get-session extends a session: Better Auth refreshes it at most once a
-// day and resends the 7-day cookie, which only reaches the browser from that route. So a tab
-// left open (and visible) for days reads it at least this often (keepAlive()).
 export const SESSION_KEEPALIVE_INTERVAL_MS = 60 * 60 * 1000;
-// How often a visible, signed-in tab asks whether its keep-alive read is due.
 export const SESSION_KEEPALIVE_TICK_MS = 15 * 60 * 1000;
 
 export type SessionSyncChannel = {
@@ -64,20 +40,15 @@ const parseReport = (data: unknown): SessionReport | undefined => {
   return report.success ? report.data : undefined;
 };
 
-// The profile fields the app shows and builds links from. The session record itself
-// (expiresAt, updatedAt) changes on every refresh and is not compared.
-const sameProfile = (a: SessionUser, b: SessionUser): boolean =>
+const sameDisplayedProfile = (a: SessionUser, b: SessionUser): boolean =>
   a.email === b.email &&
   a.name === b.name &&
   a.username === b.username &&
   (a.image ?? null) === (b.image ?? null);
 
-// Applies a background re-check. A confirmed different user or a sign-out replaces the
-// state, and so does the same user with a changed profile (a rename in another tab). An
-// unchanged user keeps the current state object, so nothing re-renders.
 export function applySessionRecheck(check: ConfirmedSessionCheck, current: SessionState): SessionState {
   if (check.kind === 'authenticated' && current.user?.id === check.user.id) {
-    return current.status === 'authenticated' && sameProfile(current.user, check.user)
+    return current.status === 'authenticated' && sameDisplayedProfile(current.user, check.user)
       ? current
       : { user: check.user, session: check.session, status: 'authenticated' };
   }
@@ -85,7 +56,6 @@ export function applySessionRecheck(check: ConfirmedSessionCheck, current: Sessi
   return applySessionCheck(check, current);
 }
 
-// True when the check signs out, or replaces, the user this tab shows.
 const endsSessionOf = (previous: SessionState, check: ConfirmedSessionCheck): boolean =>
   previous.user !== null && (check.kind === 'unauthenticated' || check.user.id !== previous.user.id);
 
@@ -97,21 +67,14 @@ export function describeSessionChange(previous: SessionState, check: ConfirmedSe
 
 export function createSessionSync(deps: {
   readSession: () => Promise<SessionCheck>;
-  // The state before the first observe().
   initialState: SessionState;
   setState: (update: (current: SessionState) => SessionState) => void;
   notify: (message: string) => void;
   now?: () => number;
-  // Runs before a background check signs this tab out or switches it to another user,
-  // while the state still holds the previous user.
   beforeSessionLost?: () => void;
 }) {
   const now = deps.now ?? Date.now;
-  // The state this tab shows, as its provider last reported it (observe).
-  let shown = deps.initialState;
-  // Session answers can arrive out of order. Each read takes a ticket when it starts, and its
-  // answer is used only if no read that started later, and no sign-in or sign-out in this tab,
-  // was applied first.
+  let shownState = deps.initialState;
   let ticketsIssued = 0;
   let appliedTicket = 0;
   let lastReadAt = Number.NEGATIVE_INFINITY;
@@ -140,21 +103,18 @@ export function createSessionSync(deps: {
     } catch {
       check = { kind: 'unknown' };
     }
-    // A failed check never changes who is signed in, and does not outrank an older answer.
     if (check.kind === 'unknown') {
       lastReadAt = now();
       return;
     }
     if (!acceptRead(ticket)) return;
-    const previous = shown;
+    const previous = shownState;
     const message = describeSessionChange(previous, check);
     if (endsSessionOf(previous, check)) deps.beforeSessionLost?.();
     deps.setState((current) => applySessionRecheck(check, current));
     if (message) deps.notify(message);
   };
 
-  // One check at a time. A request made while one runs schedules one more after it: the
-  // running check may have read the session before the change it is now asked about.
   const recheck = (): Promise<void> => {
     if (running) {
       checkAgain = true;
@@ -172,7 +132,7 @@ export function createSessionSync(deps: {
   };
 
   const onReport = ({ userId, profileChanged }: SessionReport) => {
-    const current = shown;
+    const current = shownState;
     if (current.status === 'loading') return;
     const sameUser = (current.user?.id ?? null) === userId;
     if (sameUser && !(profileChanged && userId)) return;
@@ -182,27 +142,18 @@ export function createSessionSync(deps: {
   return {
     beginRead,
     acceptRead,
-    // The provider reports the state it shows after each change (an effect), so re-checks
-    // compare an answer with what this tab shows.
     observe: (state: SessionState) => {
-      shown = state;
+      shownState = state;
     },
-    // This tab set the session itself (sign-in, sign-out, profile refresh): it wins over any
-    // read still in flight.
     claim: () => {
       appliedTicket = beginRead();
       lastReadAt = now();
     },
-    // Tell the other tabs who this tab is signed in as, after a sign-in, sign-out or page load.
-    // Tabs never announce what they learned from a re-check, so a change is announced once.
     announce: (userId: string | null) => post?.({ userId }),
-    // This tab changed the signed-in user's profile: tabs showing the same user re-read it.
     announceProfileChange: (userId: string) => post?.({ userId, profileChanged: true }),
     recheck,
-    // Re-reads the session for a signed-in tab that has not read it for
-    // SESSION_KEEPALIVE_INTERVAL_MS, never while another check runs. Returns whether it started.
     keepAlive: (): boolean => {
-      const current = shown;
+      const current = shownState;
       if (!current.user || current.status === 'loading' || running) return false;
       if (now() - lastReadAt < SESSION_KEEPALIVE_INTERVAL_MS) return false;
       void recheck();
@@ -223,11 +174,7 @@ export function createSessionSync(deps: {
           if (report) onReport(report);
         });
         post = (report) => {
-          try {
-            open.postMessage(report);
-          } catch {
-            // A closed channel: the other tabs fall back to their visibility re-check.
-          }
+          succeedsWithoutThrowing(() => open.postMessage(report));
         };
         stops.push(() => open.close());
       } else {
@@ -242,17 +189,16 @@ export function createSessionSync(deps: {
           const report = parseReport(data);
           if (report) onReport(report);
         }));
-        // The timestamp makes every write a change, so the storage event always fires.
         post = (report) => environment.writeStorage(SESSION_SYNC_STORAGE_KEY, JSON.stringify({ ...report, at: now() }));
       }
       stops.push(environment.onVisible(() => {
-        if (shown.status !== 'loading' && now() - lastReadAt >= SESSION_RECHECK_INTERVAL_MS) void recheck();
+        if (shownState.status !== 'loading' && now() - lastReadAt >= SESSION_RECHECK_INTERVAL_MS) void recheck();
       }));
       stops.push(environment.onRestored(() => {
-        if (shown.status !== 'loading') void recheck();
+        if (shownState.status !== 'loading') void recheck();
       }));
       stops.push(environment.onUnauthorized(() => {
-        const current = shown;
+        const current = shownState;
         if (!current.user || current.status === 'loading' || running) return;
         if (now() - lastUnauthorizedCheckAt < SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS) return;
         lastUnauthorizedCheckAt = now();
@@ -281,10 +227,6 @@ const browserKeepAliveEnvironment = (): SessionKeepAliveEnvironment => ({
   },
 });
 
-// Asks keepAlive (SessionSync.keepAlive, which reads at most once per
-// SESSION_KEEPALIVE_INTERVAL_MS) when the tab regains focus and every
-// SESSION_KEEPALIVE_TICK_MS, while the tab is visible. AuthProvider runs it while a user is
-// signed in. Returns the function that stops it.
 export function startSessionKeepAlive(
   keepAlive: () => unknown,
   environment: SessionKeepAliveEnvironment = browserKeepAliveEnvironment(),
@@ -300,8 +242,6 @@ export function startSessionKeepAlive(
   };
 }
 
-// The browser wiring for createSessionSync().connect(). Storage and BroadcastChannel can be
-// missing or blocked (private modes, site data blocked), so every access is guarded.
 export function browserSessionSyncEnvironment(): SessionSyncEnvironment {
   return {
     openChannel: () => {
@@ -319,11 +259,7 @@ export function browserSessionSyncEnvironment(): SessionSyncEnvironment {
       };
     },
     writeStorage: (key, value) => {
-      try {
-        getLocalStorage()?.setItem(key, value);
-      } catch {
-        // Storage is unavailable: other tabs fall back to their visibility re-check.
-      }
+      succeedsWithoutThrowing(() => getLocalStorage()?.setItem(key, value));
     },
     onStorage: (listener) => {
       const handle = (event: StorageEvent) => listener(event.key, event.newValue);
