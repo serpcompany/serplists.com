@@ -17,7 +17,6 @@ export function useRunKeys() {
     enabled: Boolean(userId),
     staleTime: 30 * 1000,
   });
-  // The server knows which hosts its MCP check accepts; until it answers, assume this one.
   const connectionQuery = useQuery({
     queryKey: agentMcpConnectionQueryKey,
     queryFn: () => api.getAgentMcpConnection(),
