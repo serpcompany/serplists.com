@@ -49,13 +49,11 @@ export async function startRun(
   const template = await getOwnedTemplate(env, identity.userId, args.templateId);
 
   const owner = { userId: identity.userId, teamId: null };
-  // Fast path for a friendly error; the guarded insert below is what enforces the limit.
   const limit = await assertActiveRunCapacity(env, owner);
 
   const normalized = normalizeSectionsPayload(parseJsonArray(template.items) ?? []);
   if (normalized.error) throw new ToolError("Template content is invalid", "invalid_template");
   const sections = resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalized.sections)));
-  // Checked before the write, as a web start checks it, so a run too large to save is never stored.
   assertRunContentFits(sections);
 
   const now = new Date().toISOString();
@@ -78,9 +76,6 @@ export async function startRun(
     revision: 1,
     retired_items: "[]",
   };
-  // Built before writing: once the batch commits, start_run must return the run rather than an
-  // error, or the agent retries and creates duplicate runs. A run too large for one result comes
-  // back without its sections (startedRunResult never fails).
   const result = startedRunResult(runView(run));
   const auditEvent = await buildAuditEventValues({
     actorUserId: identity.userId,
@@ -92,8 +87,6 @@ export async function startRun(
     request,
     createdAt: now,
   });
-  // Concurrent start_run calls can all pass the pre-check, so with a limit the insert
-  // enforces it again in the same statement, and a refused run writes no audit event.
   const batchResults = await db.batch(runInsertStatements(db, run, auditEvent, owner, limit));
   if (limit !== null && batchChanges(batchResults[0]) === 0) {
     throw new ToolError("Active run limit reached", "limit_reached", { limit, current: await countActiveRuns(env, owner) });
@@ -101,7 +94,6 @@ export async function startRun(
   return result;
 }
 
-/** Throws limit_reached when the context is at its active-run limit; returns the limit. */
 async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promise<number | null> {
   const { limit, hit } = await checkActiveRunCapacity(env, owner, owner.userId);
   if (hit) throw new ToolError("Active run limit reached", "limit_reached", { ...hit });
@@ -209,10 +201,6 @@ export async function updateRun(
   const now = new Date().toISOString();
   const updates: JsonRecord = { revision: currentRevision + 1, updated_at: now };
   if (args.operation === "set_run_status") {
-    // Status only: the run content is unchanged, so it is not rewritten. Match the
-    // checklist status endpoint: progress stays as it is, reopening does not erase
-    // completion attribution, and marking an already completed run completed again
-    // does not restamp it.
     updates.status = args.status;
     updates.progress = typeof existing.progress === "number" ? existing.progress : 0;
     Object.assign(updates, completionStamps({
@@ -224,9 +212,6 @@ export async function updateRun(
     }));
   } else {
     applyRunOperation(sections, args);
-    // Only notes change the size the content limit counts (it counts every task and Sub-task as
-    // unticked). Checked before the write, so an oversized update never commits; a run already
-    // over the limit can still take shorter notes.
     if (args.operation === "set_task_notes") assertRunContentFits(sections, parseStoredSections(existing.items));
     updates.items = JSON.stringify(sections);
     updates.progress = calculateRunProgress(sections);
@@ -276,7 +261,6 @@ export async function updateRun(
     throw new ToolError("Run changed while it was being updated; fetch it again", "edit_conflict");
   }
   if (auditChanges !== 1 || updateChanges !== 1) {
-    // The audit insert and the run update disagree; an orphaned audit row is possible.
     log("error", "mcp_tool_invariant", {
       requestId: request.headers.get("X-Request-Id") ?? undefined,
       tool: "update_run",

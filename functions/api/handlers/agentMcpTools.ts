@@ -2,9 +2,6 @@ import { z } from "zod";
 import type { RunKeyPermission } from "../../../src/lib/schemas/runKeyPermissions";
 import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcpTemplateTools";
 
-// Tool argument validators, the tool list advertised by the personal run MCP endpoint
-// (functions/api/handlers/agentMcp.ts), and the Run Key permission each tool needs.
-
 export type JsonRecord = Record<string, unknown>;
 
 export class ToolError extends Error {
@@ -21,21 +18,12 @@ export const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 export const MAX_TASK_NOTES_LENGTH = 20_000;
-
-/**
- * The most notes one update_run writes, in UTF-8 bytes. 20,000 characters of three-byte text
- * (Chinese, Japanese) is about 60KB, more than one result holds (MAX_RESULT_BYTES, 32KB, in
- * agentMcpPages.ts); 30KB leaves room for the task and run around the notes, so an agent reads
- * back what it wrote in one call. Notes written in the web app can be longer: get_run reads them
- * in parts, and an agent can replace them with notes within the limit.
- */
 export const MAX_TASK_NOTES_BYTES = 30 * 1024;
 
 const formatNumber = (value: number) => value.toLocaleString("en-US");
 const TASK_NOTES_LIMITS = `${formatNumber(MAX_TASK_NOTES_LENGTH)} characters and ${MAX_TASK_NOTES_BYTES / 1024}KB `
   + `(${formatNumber(MAX_TASK_NOTES_BYTES)} bytes of UTF-8)`;
 
-// Either limit's refusal names both, and the notes' size, so an agent knows how far to cut them.
 const taskNotesArg = z.string().superRefine((notes, context) => {
   const bytes = new TextEncoder().encode(notes).byteLength;
   if (notes.length <= MAX_TASK_NOTES_LENGTH && bytes <= MAX_TASK_NOTES_BYTES) return;
@@ -99,8 +87,6 @@ export type UpdateRunArgs = z.infer<typeof updateRunArgs>;
 
 const MAX_REPORTED_ISSUES = 5;
 
-// Models often send fields a call does not use as null (OpenAI strict mode does so for
-// every optional field). Treat a null field as absent; every other value is validated.
 function dropNullFields(rawArguments: unknown): unknown {
   if (!isRecord(rawArguments)) return rawArguments ?? {};
   return Object.fromEntries(Object.entries(rawArguments).filter(([, value]) => value !== null));
@@ -109,7 +95,6 @@ function dropNullFields(rawArguments: unknown): unknown {
 export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, rawArguments: unknown): z.infer<Schema> {
   const parsed = schema.safeParse(dropNullFields(rawArguments));
   if (parsed.success) return parsed.data;
-  // Name the field in every message ("notes: Required") so an agent can correct its call.
   const issues = parsed.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({
     path: issue.path.join("."),
     message: issue.message,
@@ -197,9 +182,6 @@ export const toolDefinitions = [
       + "Returns the run's fields with its new revision and, after a task operation, the changed task (sectionId "
       + "and taskId name it) when it fits in one result (32KB); taskOmitted otherwise, so read it with get_run and "
       + "taskId.",
-    // One flat object: model APIs reject a oneOf/anyOf/allOf at the root of a tool schema,
-    // and many clients read only top-level properties. updateRunArgs enforces which
-    // fields each operation needs.
     inputSchema: {
       type: "object",
       properties: {
@@ -243,7 +225,6 @@ export function isReadOnlyTool(name: string): boolean {
 
 type ToolName = (typeof toolDefinitions)[number]["name"];
 
-// The Run Key permission each tool needs (src/lib/schemas/runKeyPermissions.ts).
 const toolPermissions: Record<ToolName, RunKeyPermission> = {
   list_templates: "templates:read",
   get_template: "templates:read",
@@ -255,7 +236,6 @@ const toolPermissions: Record<ToolName, RunKeyPermission> = {
   update_run: "runs:write",
 };
 
-/** The permission a tool needs; undefined for a name that is not a tool. */
 export function toolPermission(name: string): RunKeyPermission | undefined {
   return Object.prototype.hasOwnProperty.call(toolPermissions, name) ? toolPermissions[name as ToolName] : undefined;
 }

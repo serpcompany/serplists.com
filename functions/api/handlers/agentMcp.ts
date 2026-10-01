@@ -25,8 +25,6 @@ import {
 } from "./agentMcpTools";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
-// serverInfo's version: a minor bump when what tools take or return changes, with release notes
-// for agents in docs/product-specs/features.md ("MCP Changes For Agents").
 export const MCP_SERVER_VERSION = "0.3.0";
 const MAX_REQUEST_BYTES = 1024 * 1024;
 
@@ -44,8 +42,6 @@ const initializeArgs = z.object({
   }).passthrough(),
 }).passthrough();
 
-// toJson replaces lone surrogates in every string, so stored text can never make a response
-// that strict JSON parsers (Codex's serde_json) reject.
 function jsonResponse(value: unknown, status = 200): Response {
   return new Response(toJson(value), {
     status,
@@ -77,10 +73,6 @@ function toolResult(id: JsonRpcId, structuredContent: JsonRecord, text: string, 
   });
 }
 
-// Every tool builds its result to fit MAX_RESULT_BYTES (agentMcpPages.ts); this catches a
-// mistake. A read that does not fit fails. A mutation has already committed and must never report
-// failure (the agent would retry it, and a retried start_run makes a duplicate run), so it is
-// logged and returned.
 function checkResultBound(request: Request, identity: PersonalRunKeyIdentity, tool: string, data: JsonRecord): void {
   if (fits(data)) return;
   if (isReadOnlyTool(tool)) throw resultTooLarge();
@@ -103,12 +95,10 @@ function acceptsMcpResponse(request: Request): boolean {
   return values.includes("application/json") && values.includes("text/event-stream");
 }
 
-// The router sets X-Request-Id on every API request before dispatch.
 function requestIdOf(request: Request): string | undefined {
   return request.headers.get("X-Request-Id") ?? undefined;
 }
 
-// params.name comes from the client: log it only when it names a real tool.
 function toolNameForLog(name: string): string {
   return toolDefinitions.some((tool) => tool.name === name) ? name : "unknown";
 }
@@ -120,7 +110,6 @@ async function callTool(
   name: string,
   rawArguments: unknown,
 ): Promise<{ data: JsonRecord; text: string }> {
-  // A tool the key's permissions do not cover is refused before it reads anything.
   if (!keyAllowsTool(identity.permissions, name)) {
     const permission = toolPermission(name);
     if (!permission) throw new ToolError(`Unknown tool: ${name}`, "tool_not_found");
@@ -204,7 +193,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
   try {
     identity = await authenticatePersonalRunKey(request, env);
   } catch (error) {
-    // Never log the Authorization header or any part of the Run Key.
     log("error", "mcp_auth_error", { requestId: requestIdOf(request), ...describeErrorForLog(error) });
     return rpcError(null, -32603, "Internal error", undefined, 500);
   }
@@ -213,8 +201,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     return rpcError(null, -32001, "Unauthorized", undefined, 401);
   }
 
-  // Logging the key ID for every authenticated request, even a malformed one, lets an abused
-  // key be found and revoked.
   const requestId = requestIdOf(request);
   log("info", "mcp_request", { requestId, keyId: identity.keyId });
   const rateLimitResult = limitPersonalRunKey(identity);
@@ -231,7 +217,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
     if (bytes.byteLength > MAX_REQUEST_BYTES) {
       return rpcError(null, -32600, "Request body is too large", undefined, 413);
     }
-    // Workers types require both options; ignoreBOM: false is the spec default.
     payload = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
   } catch {
     return rpcError(null, -32700, "Parse error");
@@ -286,7 +271,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
       try {
         await markPersonalRunKeyUsed(env, identity);
       } catch (error) {
-        // Usage telemetry must not turn a committed tool mutation into a retryable failure.
         log("warn", "mcp_key_usage_error", {
           requestId,
           keyId: identity.keyId,
@@ -308,8 +292,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
           ...(error.details ? { details: error.details } : {}),
         }, error.message, true);
       }
-      // Expected ToolErrors above are client outcomes; anything else is a server fault.
-      // Never log the tool arguments: they carry run notes and titles.
       log("error", "mcp_tool_error", {
         requestId,
         tool: toolNameForLog(params.name),
@@ -317,7 +299,6 @@ export async function handleAgentMcp(request: Request, env: Env): Promise<Respon
         userId: identity.userId,
         ...describeErrorForLog(error),
       });
-      // JSON-RPC errors stay HTTP 200: a 5xx can make MCP clients retry a committed write.
       return rpcError(id, -32603, "Internal error");
     }
   }

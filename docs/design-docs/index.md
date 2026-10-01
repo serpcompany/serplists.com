@@ -18,6 +18,7 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Authentication and accounts](authentication.md) | current | 2026-09-27 | Better Auth integration, auth contract, verification, troubleshooting |
 | [Organizations](organizations.md) | current | 2026-09-19 | Roles, data model, API routes, invites, audit history |
 | [Billing](billing.md) | current | 2026-09-25 | Stripe setup, portal, webhooks, local and production verification |
+| [Agent access](agent-access.md) | current | 2026-09-30 | Run Keys and the MCP endpoint: transport, tool arguments, permissions, result bounds and paging |
 | [Template content types](template-content-types.md) | current | 2026-09-27 | Adding a checklist content type or editor tab |
 | [Development environment](development-environment.md) | current | 2026-09-27 | Setup, running, signing in, UI snapshots, logs, local D1, tests |
 | [Agent workflow](agent-workflow.md) | current | 2026-09-29 | Issue to merge, agent tooling (skills, Chrome, permissions), triage labels, weekly maintenance, admin settings |

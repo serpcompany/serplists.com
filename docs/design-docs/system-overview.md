@@ -75,6 +75,7 @@ Organization scoping applies.
 - Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `GET /api/checklists/archived`, `GET /api/checklists/:id/history`, `POST /api/checklists` (the only `POST` that creates a run), `PUT|DELETE /api/checklists/:id` (`DELETE` archives), `POST /api/checklists/:id/restore`, `POST /api/checklists/:id/revalidate`, `POST|DELETE /api/checklists/run/:id/share` (share, or stop sharing), `GET|PUT /api/checklists/shared/:token` (the share link, no sign-in; [SECURITY.md](../SECURITY.md#model))
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
+- Agent access: `GET|POST /api/agent-keys`, `DELETE /api/agent-keys/:id`, `GET /api/agent-keys/connection`, and the MCP endpoint `POST /api/mcp` (see [agent access](agent-access.md))
 - Uploads: `POST /api/uploads`, `GET|HEAD|DELETE /api/uploads/file?key=...`
 - Health: `GET|HEAD /api/health`
 

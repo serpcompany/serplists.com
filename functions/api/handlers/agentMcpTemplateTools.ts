@@ -5,15 +5,8 @@ import {
   portableChecklistSectionSchema,
 } from "../../../src/lib/schemas/checklistSchema";
 
-// The personal run MCP's template tools: their argument validators and the definitions
-// functions/api/handlers/agentMcpTools.ts advertises. Nothing here imports the MCP handlers, so
-// every handler module can import it. Their results stay within MAX_RESULT_BYTES
-// (agentMcpPages.ts): get_template reads a larger template in parts
-// (agentMcpTemplatePages.ts), and update_template's operations edit it a part at a time.
-
 const idArg = z.string().trim().min(1);
 
-// The nextCursor of a paged result, for every tool that pages (agentMcpPages.ts).
 export const cursorArg = z.string().trim().min(1).max(4096);
 export const cursorJsonSchema = {
   type: "string",
@@ -29,8 +22,6 @@ export const getTemplateArgs = z.object({
   cursor: cursorArg.optional(),
 }).strict();
 
-// Template writes are private Personal templates only: no visibility, Organization, or slug
-// fields (.strict() refuses them).
 const templateTitleArg = z.string().trim().min(1).max(160);
 const templateDescriptionArg = z.string().max(5000);
 const templateSectionsArg = z.array(portableChecklistSectionSchema).min(1).max(100);
@@ -57,8 +48,6 @@ export const updateTemplateArgs = z.object({
   "Provide at least one of title, description, sections, categories, or tags",
 );
 
-// The part of a section or task a replace operation changes: the fields it passes replace
-// the stored ones, and the ones it leaves out are kept.
 const sectionChangeArg = z.object({
   id: z.string().optional(),
   title: z.string().min(1).optional(),
@@ -73,11 +62,6 @@ const taskChangeArg = z.object({
 
 const operationBase = { templateId: idArg, expectedVersion: z.number().int().positive() };
 
-/**
- * update_template's operations, each of which changes one section or task. A template too
- * large to read in one result is read a section or task at a time, so it must be editable at
- * the same size: an operation never sends more than get_template returned.
- */
 export const templateOperationArgs = z.discriminatedUnion("operation", [
   z.object({ ...operationBase, operation: z.literal("replace_section"), sectionId: idArg, section: sectionChangeArg }).strict(),
   z.object({
@@ -266,8 +250,6 @@ export const templateToolDefinitions = [
       + "ids. Returns the template whole when it fits in one result (32KB), otherwise its fields with "
       + "sectionsOmitted and the section or task the operation changed; sectionId and taskId name it. "
       + "In-progress private runs of the template pick up the change.",
-    // One flat object, as update_run's: model APIs reject a oneOf at the root of a tool schema.
-    // templateOperationArgs enforces which fields each operation needs.
     inputSchema: {
       type: "object",
       properties: {

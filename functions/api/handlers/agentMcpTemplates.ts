@@ -10,12 +10,6 @@ import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agen
 import { createTemplateForUser } from "./template-create";
 import { updateTemplateForUser } from "./template-update";
 
-// The personal run MCP's template tools. Writes go through the web editor's code
-// (createTemplateForUser, updateTemplateForUser), so they get its validation, template limit,
-// version check, history, and in-progress run sync, restricted to the key owner's private
-// Personal templates. Every result stays within MAX_TEMPLATE_RESULT_BYTES
-// (agentMcpTemplatePages.ts).
-
 const templateWriteErrorCodes: Record<number, string> = {
   400: "invalid_template",
   403: "forbidden",
@@ -67,11 +61,6 @@ async function readTemplateWrite(response: Response): Promise<JsonRecord> {
   );
 }
 
-// A write has already committed, so its result must never come back as an error: the agent
-// would retry, and a retried create makes a duplicate. A template too large for one result
-// comes back without its sections (with the section or task an operation changed, if it
-// fits); one that cannot be read back (archived since, or a failed read) as the write's own
-// summary. Either way the agent reads the rest with get_template.
 async function loadWrittenTemplate(
   request: Request,
   env: Env,
@@ -123,9 +112,19 @@ export async function createTemplate(
   return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
 }
 
-// An operation changes one section or task of the version the agent read. It is applied to
-// that version's sections, and the whole checklist is then saved as the editor saves it,
-// against the same version, so a change made in between fails with edit_conflict.
+function assertTemplateEditableAt(
+  stored: Pick<Awaited<ReturnType<typeof getOwnedTemplate>>, "is_public" | "version">,
+  expectedVersion: number,
+): void {
+  if (stored.is_public) throw new ToolError("Public templates can only be edited in SERP Lists", "template_is_public");
+  if (expectedVersion !== stored.version) {
+    throw new ToolError("Template changed since it was loaded. Refresh before saving again.", "edit_conflict", {
+      expectedVersion,
+      currentVersion: stored.version,
+    });
+  }
+}
+
 async function updateTemplatePart(
   request: Request,
   env: Env,
@@ -134,14 +133,7 @@ async function updateTemplatePart(
 ): Promise<JsonRecord> {
   const args = parseToolArguments(templateOperationArgs, rawArguments);
   const stored = await getOwnedTemplate(env, identity.userId, args.templateId);
-  // The editor's own refusals, before the operation reads sections it could not save.
-  if (stored.is_public) throw new ToolError("Public templates can only be edited in SERP Lists", "template_is_public");
-  if (args.expectedVersion !== stored.version) {
-    throw new ToolError("Template changed since it was loaded. Refresh before saving again.", "edit_conflict", {
-      expectedVersion: args.expectedVersion,
-      currentVersion: stored.version,
-    });
-  }
+  assertTemplateEditableAt(stored, args.expectedVersion);
   const edit = applyTemplateOperation(templateSections(stored.items), args);
 
   const updated = await readTemplateWrite(await updateTemplateForUser(

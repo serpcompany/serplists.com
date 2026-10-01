@@ -19,20 +19,8 @@ import {
 } from "./agentMcpPages";
 import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
 
-// What the template tools return, each result within MAX_RESULT_BYTES (agentMcpPages.ts).
-// get_template returns a template whole when it fits. A larger one comes back as an outline of
-// its sections, and sectionId or taskId reads one section or task. A section too large for one
-// result comes back a page of tasks at a time, and anything too large for a result on its own
-// (a template's fields, an outline entry, a section's fields, a task) as parts of its JSON text.
-// A result with more to read has nextCursor, which holds the version it was read from.
-
 export type TemplateView = { header: JsonRecord; sections: JsonRecord[] };
 
-/**
- * The sections an agent reads and sends back. Entries stored without ids get the ids a save
- * stores, as the web editor reads them, so run progress follows them through update_template;
- * text fields are always text, and every section has a list of tasks.
- */
 export function templateSections(items: unknown): JsonRecord[] {
   const { sections } = normalizeSectionsPayload(parseJsonArray(items) ?? []);
   return sanitizeStoredSections(withStableTemplateIdentities(sections))
@@ -59,7 +47,6 @@ export function templateView(row: JsonRecord): TemplateView {
 
 const wholeTemplate = ({ header, sections }: TemplateView): JsonRecord => ({ template: { ...header, sections } });
 
-// Names the template on a page that does not carry its fields.
 function pagedTemplate(header: JsonRecord): Paged {
   return {
     key: "template",
@@ -69,7 +56,6 @@ function pagedTemplate(header: JsonRecord): Paged {
   };
 }
 
-// The page a cursor asks for, once it is known to belong to this version of this template.
 function continueRead(view: TemplateView, value: string, args: { sectionId?: string; taskId?: string }): JsonRecord {
   const cursor = decodeCursor(value, readCursorSchema, "get_template");
   const { header, sections } = view;
@@ -83,7 +69,6 @@ function continueRead(view: TemplateView, value: string, args: { sectionId?: str
   return continuePage(pagedTemplate(header), header, sections, cursor, args);
 }
 
-/** get_template's result (see the notes at the top). */
 export function readTemplate(view: TemplateView, args: { sectionId?: string; taskId?: string; cursor?: string }): JsonRecord {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
   if (args.taskId !== undefined || args.sectionId !== undefined) {
@@ -93,7 +78,6 @@ export function readTemplate(view: TemplateView, args: { sectionId?: string; tas
   return fits(whole) ? whole : outlinePage(pagedTemplate(view.header), view.header, view.sections, START);
 }
 
-/** The line get_template's result starts its text with, for clients that show text. */
 export function describeTemplateRead(result: JsonRecord): string {
   const template = isRecord(result.template) ? result.template : {};
   return describePage(result, "get_template", "Template") ?? `Loaded template "${boundedText(template.title)}".`;
@@ -108,12 +92,6 @@ function locateTask(sections: JsonRecord[], taskId: string | undefined) {
   }
 }
 
-/**
- * A template write's result: the template whole when it fits in one result, otherwise its
- * fields with sectionsOmitted and, when the write changed one section or task, that section or
- * task if it fits. The write has already committed, so this never fails: it leaves out what
- * does not fit, down to the template's id, title, and version.
- */
 export function writtenTemplateResult(view: TemplateView, changed: { sectionId?: string; taskId?: string } = {}): JsonRecord {
   const { header, sections } = view;
   const taskAt = locateTask(sections, changed.taskId);

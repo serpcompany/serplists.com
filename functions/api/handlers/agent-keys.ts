@@ -17,10 +17,7 @@ import {
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
 
-// GET /api/agent-keys/connection. Key ids are UUIDs, so this segment never names a key.
-const CONNECTION_PATH = "connection";
-
-// Active keys are capped, so this bounds the list to every active key plus recent revoked ones.
+const CONNECTION_SEGMENT = "connection";
 const MAX_LISTED_KEYS = 50;
 
 const createKeyBodySchema = z.object({
@@ -58,7 +55,7 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
   const keyId = handlerPath[1];
 
-  if (request.method === "GET" && keyId === CONNECTION_PATH) {
+  if (request.method === "GET" && keyId === CONNECTION_SEGMENT) {
     return json(resolveAgentMcpConnection(request, env));
   }
 
@@ -134,8 +131,6 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
       .returning({ revokedAt: personal_run_keys.revoked_at });
     if (revoked?.revokedAt) return json({ id: keyId, revokedAt: revoked.revokedAt });
 
-    // Already revoked (in another tab, or a retry after a lost response): report the stored
-    // time rather than a new one. A missing key and another user's key get the same 404.
     const [existing] = await db
       .select({ revokedAt: personal_run_keys.revoked_at })
       .from(personal_run_keys)
