@@ -7,32 +7,15 @@ import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
 import { GET as profilesShardGet } from '@/app/sitemaps/profiles/[page]/route';
 import { GET as templatesShardGet } from '@/app/sitemaps/templates/[page]/route';
-import { serverContext } from '../../support/nextServerContext';
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
 
-// A sitemap route handler, given the Worker's bindings and waitUntil through
-// getCloudflareContext, and the page's file name as Next.js passes it (`1.xml`).
-type RouteGet = (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response>;
-type SitemapRequest = {
-  request: Request;
-  env: unknown;
-  waitUntil?: (promise: Promise<unknown>) => void;
-  params?: { page?: string };
-};
-const sitemapRoute = (GET: RouteGet) => async ({ request, env, waitUntil, params }: SitemapRequest) => {
-  serverContext.env = env as Record<string, unknown>;
-  serverContext.waitUntil = [];
-  const response = await GET(request, { params: Promise.resolve({ page: `${params?.page ?? ''}.xml` }) });
-  serverContext.waitUntil.forEach((promise) => waitUntil?.(promise));
-  return response;
-};
-
-const sitemapIndex = sitemapRoute(sitemapIndexGet);
-const categoriesShard = sitemapRoute(categoriesShardGet);
-const profilesShard = sitemapRoute(profilesShardGet);
-const templatesShard = sitemapRoute(templatesShardGet);
+const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
+const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
+const profilesShard = sitemapRouteInTheWorker(profilesShardGet);
+const templatesShard = sitemapRouteInTheWorker(templatesShardGet);
 type SitemapHandler = typeof sitemapIndex;
 
 let revisions: Array<[string, string]>;
@@ -40,9 +23,7 @@ let publishedShards: Array<[string, number]>;
 let statements: string[];
 let cacheStore: Map<string, Response>;
 
-// Drizzle maps field selects from `.raw()` rows. sitemap_revisions and the published
-// shard lookup answer from the fixtures; every other query (the shard builds) is empty.
-const env = {
+const envWithFixtureRevisionsAndEmptyShardBuilds = {
   DB: {
     prepare: (query: string) => {
       statements.push(query);
@@ -69,7 +50,7 @@ const env = {
 function context(url: string, method = 'GET') {
   const pending: Promise<unknown>[] = [];
   return {
-    ctx: { request: new Request(url, { method }), env, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); } },
+    ctx: { request: new Request(url, { method }), env: envWithFixtureRevisionsAndEmptyShardBuilds, waitUntil: (promise: Promise<unknown>) => { pending.push(promise); } },
     settled: () => Promise.all(pending),
   };
 }
@@ -91,22 +72,21 @@ async function serve(
 const allKinds = ['categories', 'profiles', 'templates'] as const;
 type RevisionKind = (typeof allKinds)[number];
 
-// Each family, the route that serves it, and the revision kinds its output depends on.
-const families: Array<{ name: string; handler: SitemapHandler; path: string; deps: readonly RevisionKind[] }> = [
-  { name: 'index', handler: sitemapIndex, path: '/sitemap.xml', deps: allKinds },
-  { name: 'categories', handler: categoriesShard, path: '/sitemaps/categories/1.xml', deps: ['categories'] },
-  { name: 'profiles', handler: profilesShard, path: '/sitemaps/profiles/1.xml', deps: ['profiles'] },
-  { name: 'templates', handler: templatesShard, path: '/sitemaps/templates/1.xml', deps: ['templates'] },
+const families: Array<{ name: string; handler: SitemapHandler; path: string; revisionKindsItsOutputDependsOn: readonly RevisionKind[] }> = [
+  { name: 'index', handler: sitemapIndex, path: '/sitemap.xml', revisionKindsItsOutputDependsOn: allKinds },
+  { name: 'categories', handler: categoriesShard, path: '/sitemaps/categories/1.xml', revisionKindsItsOutputDependsOn: ['categories'] },
+  { name: 'profiles', handler: profilesShard, path: '/sitemaps/profiles/1.xml', revisionKindsItsOutputDependsOn: ['profiles'] },
+  { name: 'templates', handler: templatesShard, path: '/sitemaps/templates/1.xml', revisionKindsItsOutputDependsOn: ['templates'] },
 ];
 
-// Serves a family's real route and reports whether it rebuilt: every build reads
-// `users` or `templates`, and a cache hit reads only the revision rows.
-async function rebuilds(family: (typeof families)[number]): Promise<boolean> {
+const QUERY_ONLY_A_BUILD_SENDS = /from "(users|templates)"/;
+
+async function servingTheRealRouteRebuilds(family: (typeof families)[number]): Promise<boolean> {
   statements = [];
   const { ctx, settled } = context(`https://serplists.com${family.path}`);
   await family.handler({ ...ctx, params: { page: '1' } });
   await settled();
-  return statements.some((sql) => /from "(users|templates)"/.test(sql));
+  return statements.some((sql) => QUERY_ONLY_A_BUILD_SENDS.test(sql));
 }
 
 function setRevision(kind: RevisionKind, revisedAt: string) {
@@ -175,8 +155,6 @@ describe('cached sitemaps', () => {
     expect(build).toHaveBeenCalledTimes(2);
   });
 
-  // Pages Functions match routes ignoring case and allow one trailing slash, so every one
-  // of these reaches the same route with the same parsed page.
   it('keys by the parsed sitemap and page, so case and trailing-slash variants share one entry', async () => {
     const build = builder();
     for (const [path, page] of [['1.xml', '1'], ['1.XML', '1'], ['1.xMl/', '1'], ['1.xml/', '1'], ['001.XML/', '001']]) {
@@ -256,25 +234,25 @@ describe('cached sitemaps', () => {
 
   it.each(allKinds)('rebuilds only the sitemaps that list %s after a change to that kind alone', async (kind) => {
     revisions = allKinds.map((each) => [each, '2030-01-01 00:00:00.000']);
-    for (const family of families) expect(await rebuilds(family), family.name).toBe(true);
-    for (const family of families) expect(await rebuilds(family), family.name).toBe(false);
+    for (const family of families) expect(await servingTheRealRouteRebuilds(family), family.name).toBe(true);
+    for (const family of families) expect(await servingTheRealRouteRebuilds(family), family.name).toBe(false);
 
     setRevision(kind, '2030-01-02 00:00:00.000');
     const rebuilt: string[] = [];
-    for (const family of families) if (await rebuilds(family)) rebuilt.push(family.name);
+    for (const family of families) if (await servingTheRealRouteRebuilds(family)) rebuilt.push(family.name);
 
-    expect(rebuilt).toEqual(families.filter((family) => family.deps.includes(kind)).map((family) => family.name));
+    expect(rebuilt).toEqual(families.filter((family) => family.revisionKindsItsOutputDependsOn.includes(kind)).map((family) => family.name));
   });
 
   it('keys a missing revision row as a stable value that a new row replaces', async () => {
     const categories = families.find((family) => family.name === 'categories')!;
     revisions = [['profiles', '2030-01-01 00:00:00.000'], ['templates', '2030-01-01 00:00:00.000']];
-    expect(await rebuilds(categories)).toBe(true);
-    expect(await rebuilds(categories)).toBe(false);
+    expect(await servingTheRealRouteRebuilds(categories)).toBe(true);
+    expect(await servingTheRealRouteRebuilds(categories)).toBe(false);
 
     setRevision('categories', '2030-01-01 00:00:00.000');
-    expect(await rebuilds(categories)).toBe(true);
-    expect(await rebuilds(categories)).toBe(false);
+    expect(await servingTheRealRouteRebuilds(categories)).toBe(true);
+    expect(await servingTheRealRouteRebuilds(categories)).toBe(false);
   });
 
   it('passes each build only the revisions its key depends on', async () => {

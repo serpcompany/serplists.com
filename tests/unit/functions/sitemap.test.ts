@@ -36,9 +36,7 @@ async function expectValidXml(xml: string, schema: string, fileName: string) {
 
 type SitemapRoute = { GET: (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response> };
 
-// A request to a sitemap route handler, as Next.js hands it one: `params.page` is the file
-// name in the URL (`1.xml` for /sitemaps/pages/1.xml).
-async function request(
+async function callTheRouteAsNextJsDoes(
   route: SitemapRoute,
   path: string,
   options: { method?: string; params?: Record<string, string> } = {},
@@ -77,16 +75,18 @@ describe('public sitemap behavior', () => {
     await expectValidXml(xml, sitemapIndexSchema, 'sitemap-index.xml');
   });
 
+  it('makes every <loc> canonical: a page with its trailing slash, a sitemap file without one', () => {
+    expect(canonicalUrl('/profile/alice/')).toBe('https://serplists.com/profile/alice/');
+    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice/');
+    expect(canonicalUrl('/sitemaps/pages/1.xml')).toBe('https://serplists.com/sitemaps/pages/1.xml');
+  });
+
   it('escapes canonical URL values and preserves entry order', async () => {
     const xml = renderUrlset([
       { path: '/profile/alice/a&b', lastmod: '2026-01-02 03:04:05' },
       { path: '/profile/bob/second', lastmod: null },
     ]);
 
-    expect(canonicalUrl('/profile/alice/')).toBe('https://serplists.com/profile/alice/');
-    // Every <loc> is canonical: a page with its trailing slash, a sitemap file without one.
-    expect(canonicalUrl('/profile/alice')).toBe('https://serplists.com/profile/alice/');
-    expect(canonicalUrl('/sitemaps/pages/1.xml')).toBe('https://serplists.com/sitemaps/pages/1.xml');
     expect(xml).toContain('<loc>https://serplists.com/profile/alice/a&amp;b/</loc>');
     expect(xml).toContain('<loc>https://serplists.com/profile/bob/second/</loc>');
     expect(xml.indexOf('/profile/alice')).toBeLessThan(xml.indexOf('/profile/bob'));
@@ -233,11 +233,11 @@ describe('public sitemap behavior', () => {
   });
 
   it('publishes canonical static pages and supports HEAD without an XML body', async () => {
-    const getResponse = await request(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
+    const getResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       params: { page: '1' },
     });
     const xml = await getResponse.text();
-    const headResponse = await request(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
+    const headResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       method: 'HEAD',
       params: { page: '1' },
     });
@@ -253,22 +253,24 @@ describe('public sitemap behavior', () => {
     await expectValidXml(xml, sitemapSchema, 'pages-sitemap.xml');
   });
 
-  it('rejects unsupported methods and permanently redirects obsolete endpoints', async () => {
-    // Next.js answers any other method with 405 before the route runs; the sitemap code
-    // refuses one itself too.
+  it('exports only GET, so Next.js answers any other method with 405 before the route runs, and refuses one itself too', async () => {
     for (const route of [pagesSitemapRoute, legacyStaticSitemapRoute, legacyCategoriesSitemapRoute]) {
       expect(Object.keys(route)).toEqual(['GET']);
     }
-    const postResponse = await request(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
+    const postResponse = await callTheRouteAsNextJsDoes(pagesSitemapRoute, '/sitemaps/pages/1.xml', {
       method: 'POST',
       params: { page: '1' },
     });
-    const staticResponse = await request(legacyStaticSitemapRoute, '/sitemaps/static.xml?page=2');
-    const categoryResponse = await request(legacyCategoriesSitemapRoute, '/categories/sitemap.xml?page=2');
-    const firstCategoryResponse = await request(legacyCategoriesSitemapRoute, '/categories/sitemap.xml');
 
     expect(postResponse.status).toBe(405);
     expect(postResponse.headers.get('allow')).toBe('GET, HEAD');
+  });
+
+  it('permanently redirects obsolete endpoints', async () => {
+    const staticResponse = await callTheRouteAsNextJsDoes(legacyStaticSitemapRoute, '/sitemaps/static.xml?page=2');
+    const categoryResponse = await callTheRouteAsNextJsDoes(legacyCategoriesSitemapRoute, '/categories/sitemap.xml?page=2');
+    const firstCategoryResponse = await callTheRouteAsNextJsDoes(legacyCategoriesSitemapRoute, '/categories/sitemap.xml');
+
     expect(staticResponse.status).toBe(308);
     expect(staticResponse.headers.get('location')).toBe('https://serplists.com/sitemaps/pages/2.xml');
     expect(categoryResponse.status).toBe(308);

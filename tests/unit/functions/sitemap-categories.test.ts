@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
@@ -8,58 +8,22 @@ import { categorySlug } from '../../../functions/sitemap/shared';
 import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
-import { serverContext } from '../../support/nextServerContext';
+import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
+import { createSqliteD1, type SqliteD1 } from './api/support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
 
-// A sitemap route handler, given the Worker's bindings and waitUntil through
-// getCloudflareContext, and the page's file name as Next.js passes it (`1.xml`).
-type RouteGet = (request: Request, context: { params: Promise<{ page: string }> }) => Response | Promise<Response>;
-type SitemapRequest = {
-  request: Request;
-  env: unknown;
-  waitUntil?: (promise: Promise<unknown>) => void;
-  params?: { page?: string };
-};
-const sitemapRoute = (GET: RouteGet) => async ({ request, env, waitUntil, params }: SitemapRequest) => {
-  serverContext.env = env as Record<string, unknown>;
-  serverContext.waitUntil = [];
-  const response = await GET(request, { params: Promise.resolve({ page: `${params?.page ?? ''}.xml` }) });
-  serverContext.waitUntil.forEach((promise) => waitUntil?.(promise));
-  return response;
-};
+const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
+const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);
 
-const sitemapIndex = sitemapRoute(sitemapIndexGet);
-const categoriesShard = sitemapRoute(categoriesShardGet);
-
-// The sitemap index hashes each shard's rendering to decide when that shard's <lastmod>
-// moves. These tests run the real index and categories shard handlers against SQLite
-// with the real sitemap triggers, so any difference between what the index hashes and
-// what the shard serves shows up as a hash mismatch.
-
+let d1: SqliteD1;
 let db: DatabaseSync;
-
-// The subset of D1's prepared statement API that Drizzle's D1 driver calls.
-function d1(database: DatabaseSync) {
-  return {
-    prepare(query: string) {
-      let params: Array<string | number | null> = [];
-      const statement = {
-        bind: (...values: Array<string | number | null>) => { params = values; return statement; },
-        raw: async () => database.prepare(query).all(...params).map((row) => Object.values(row)),
-        all: async () => ({ results: database.prepare(query).all(...params) }),
-        run: async () => { database.prepare(query).run(...params); return { success: true, meta: {} }; },
-      };
-      return statement;
-    },
-  };
-}
 
 async function get(handler: typeof sitemapIndex, path: string, params: { page?: string } = {}) {
   const response = await handler({
     request: new Request(`https://serplists.com${path}`),
-    env: { DB: d1(db) },
+    env: { DB: d1.binding },
     params,
   });
   expect(response.status, path).toBe(200);
@@ -88,9 +52,10 @@ function expectIndexMatchesShard(result: Awaited<ReturnType<typeof buildBoth>>) 
   expect(result.indexLastmod! >= result.shardLastmods.at(-1)!).toBe(true);
 }
 
-describe('categories sitemap index and shard', () => {
+describe('categories sitemap index and shard on SQLite with the real triggers, where the index hashes exactly the shard it serves', () => {
   beforeEach(() => {
-    db = new DatabaseSync(':memory:');
+    d1 = createSqliteD1();
+    db = d1.sqlite;
     db.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY, username TEXT, name TEXT, avatar_url TEXT, email TEXT,
@@ -118,8 +83,7 @@ describe('categories sitemap index and shard', () => {
     `);
   });
 
-  it('hashes exactly the categories shard it serves when the family revision is newer', async () => {
-    // The template triggers bump every sitemap_revisions kind on any public Template change.
+  it('hashes exactly the categories shard it serves when the family revision is newer, as any public Template change makes it', async () => {
     db.exec(`UPDATE sitemap_revisions SET revised_at = '2099-01-01 00:00:00'`);
 
     expectIndexMatchesShard(await buildBoth());

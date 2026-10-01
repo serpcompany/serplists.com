@@ -92,8 +92,6 @@ describe('sitemap revision migrations', () => {
     db.close();
   });
 
-  // functions/sitemap/cache.ts keys each shard by its own kind only, so these pin which
-  // kinds each write bumps. A write that changes a shard's output must bump its kind.
   it('bumps only the revision kinds whose sitemaps a write changes', () => {
     const db = new DatabaseSync(':memory:');
     db.exec(`
@@ -124,25 +122,25 @@ describe('sitemap revision migrations', () => {
       ).all().map((row) => row.kind);
     };
 
-    // Profile-only writes leave the templates and categories shards byte-identical.
-    expect(bumped(`INSERT INTO users VALUES ('new', 'new_user', NULL, NULL, 'new@example.com', 0, '2026-09-02 00:00:00', NULL, NULL)`)).toEqual(['profiles']);
-    expect(bumped(`UPDATE users SET avatar_url = 'https://example.com/a.png' WHERE id = 'author'`)).toEqual(['profiles']);
-    expect(bumped(`UPDATE users SET username = 'plain_renamed' WHERE id = 'plain'`)).toEqual(['profiles']);
-    expect(bumped(`UPDATE users SET name = 'Plain Renamed' WHERE id = 'plain'`)).toEqual(['profiles']);
-    expect(bumped(`UPDATE users SET email = 'other@example.com', email_verified = 0 WHERE id = 'author'`)).toEqual([]);
-    expect(bumped(`INSERT INTO templates VALUES ('private', 'plain', 'user', NULL, 0, NULL, '2026-09-02 00:00:00', NULL, 'SEO')`)).toEqual([]);
+    const profilesOnly = ['profiles'];
+    const noFamily: string[] = [];
+    const ownerFamilies = ['profiles', 'templates'];
+    const everyFamily = ['categories', 'profiles', 'templates'];
+    expect(bumped(`INSERT INTO users VALUES ('new', 'new_user', NULL, NULL, 'new@example.com', 0, '2026-09-02 00:00:00', NULL, NULL)`)).toEqual(profilesOnly);
+    expect(bumped(`UPDATE users SET avatar_url = 'https://example.com/a.png' WHERE id = 'author'`)).toEqual(profilesOnly);
+    expect(bumped(`UPDATE users SET username = 'plain_renamed' WHERE id = 'plain'`)).toEqual(profilesOnly);
+    expect(bumped(`UPDATE users SET name = 'Plain Renamed' WHERE id = 'plain'`)).toEqual(profilesOnly);
+    expect(bumped(`UPDATE users SET email = 'other@example.com', email_verified = 0 WHERE id = 'author'`)).toEqual(noFamily);
+    expect(bumped(`INSERT INTO templates VALUES ('private', 'plain', 'user', NULL, 0, NULL, '2026-09-02 00:00:00', NULL, 'SEO')`)).toEqual(noFamily);
 
-    // An owner's username feeds the templates shard; categories follow categorized Templates.
-    expect(bumped(`UPDATE users SET username = 'owner_renamed' WHERE id = 'owner'`)).toEqual(['profiles', 'templates']);
-    expect(bumped(`UPDATE users SET name = 'Author Renamed' WHERE id = 'author'`)).toEqual(['categories', 'profiles', 'templates']);
+    expect(bumped(`UPDATE users SET username = 'owner_renamed' WHERE id = 'owner'`)).toEqual(ownerFamilies);
+    expect(bumped(`UPDATE users SET name = 'Author Renamed' WHERE id = 'author'`)).toEqual(everyFamily);
 
-    // Public Template writes change every family.
-    const all = ['categories', 'profiles', 'templates'];
-    expect(bumped(`INSERT INTO templates VALUES ('published', 'plain', 'user', NULL, 1, NULL, '2026-09-02 00:00:00', NULL, NULL)`)).toEqual(all);
-    expect(bumped(`UPDATE templates SET updated_at = '2026-09-03 00:00:00' WHERE id = 'published'`)).toEqual(all);
-    expect(bumped(`UPDATE templates SET is_public = 1 WHERE id = 'private'`)).toEqual(all);
-    expect(bumped(`DELETE FROM templates WHERE id = 'published'`)).toEqual(all);
-    expect(bumped(`DELETE FROM users WHERE id = 'author'`)).toEqual(all);
+    expect(bumped(`INSERT INTO templates VALUES ('published', 'plain', 'user', NULL, 1, NULL, '2026-09-02 00:00:00', NULL, NULL)`)).toEqual(everyFamily);
+    expect(bumped(`UPDATE templates SET updated_at = '2026-09-03 00:00:00' WHERE id = 'published'`)).toEqual(everyFamily);
+    expect(bumped(`UPDATE templates SET is_public = 1 WHERE id = 'private'`)).toEqual(everyFamily);
+    expect(bumped(`DELETE FROM templates WHERE id = 'published'`)).toEqual(everyFamily);
+    expect(bumped(`DELETE FROM users WHERE id = 'author'`)).toEqual(everyFamily);
 
     db.close();
   });

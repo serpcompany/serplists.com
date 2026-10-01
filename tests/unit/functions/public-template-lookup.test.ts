@@ -4,10 +4,6 @@ import type { Env } from '../../../functions/api/types';
 import { loadPublicTemplate } from '../../../functions/seo/public-template-lookup';
 import { SqliteD1 } from '../../support/sqlite-d1';
 
-// The server-rendered <head> of /profile/<user>/<identifier> mirrors the page's lookup.
-// Templates saved before UUID slugs were refused can have a slug that looks like an id, and
-// their public URL is built from it, so an id miss falls back to the slug.
-
 const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
 
@@ -34,7 +30,7 @@ beforeEach(() => {
   );
 });
 
-describe('public template lookup for a UUID-shaped identifier', () => {
+describe('public template lookup for a UUID-shaped identifier, which like the page tries the id and then a slug saved before UUID slugs were refused', () => {
   it('finds a public template whose slug looks like an id', async () => {
     insertTemplate(TEMPLATE_ID, UUID_SLUG);
 
