@@ -1,37 +1,9 @@
 import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = {
-    values: vi.fn(),
-    select: vi.fn(),
-    onConflictDoNothing: vi.fn(),
-  };
-  const updateChain = {
-    set: vi.fn(),
-    where: vi.fn(),
-  };
-  const deleteChain = {
-    where: vi.fn(),
-  };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    delete: vi.fn(() => deleteChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, deleteChain, db };
-});
+const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
 
 const sessionMocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn(),
@@ -124,15 +96,10 @@ const previewRequest = (token = "invite-token") =>
 describe("Organization invite preview, which writes nothing so opening a link joins no one", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.deleteChain.where.mockReturnValue(dbMocks.deleteChain);
     dbMocks.db.batch.mockResolvedValue([]);
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   });
@@ -256,14 +223,10 @@ describe("Organization invite preview, which writes nothing so opening a link jo
 describe("Organization invite decline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   });
@@ -344,15 +307,13 @@ describe("Organization invite decline", () => {
 describe("Leaving an Organization", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     const membershipLookupChainsOn = dbMocks.selectChain;
     const pendingInvitesTheLeaverCreated: never[] = [];
     dbMocks.selectChain.where.mockReset().mockReturnValueOnce(membershipLookupChainsOn).mockResolvedValue(pendingInvitesTheLeaverCreated);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
     dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.deleteChain.where.mockReturnValue(dbMocks.deleteChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   });

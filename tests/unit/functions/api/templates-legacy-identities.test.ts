@@ -1,23 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn(), select: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, db };
-});
+const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
 
 vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
@@ -192,9 +176,7 @@ describe('saving a Template stored without ids the API accepts, which the editor
   beforeEach(() => {
     vi.clearAllMocks();
     responses.length = 0;
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
@@ -286,9 +268,7 @@ describe('saving a Template whose content blocks have no ids', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     responses.length = 0;
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');

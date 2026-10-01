@@ -1,24 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = {
-    values: vi.fn(),
-  };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, db };
-});
+const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
 
 vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
@@ -51,9 +34,7 @@ describe('portable template import/export API', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);

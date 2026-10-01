@@ -1,16 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const db = { select: vi.fn(() => selectChain) };
-  return { selectChain, db };
-});
+const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
 
 vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
@@ -108,9 +99,7 @@ async function get(path: string) {
 describe('public template responses, which never say who in an Organization created or edited a template, or which Organization owns it', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.orderBy.mockReset().mockResolvedValue([]);
     dbMocks.selectChain.limit.mockReset().mockResolvedValue([]);
     vi.mocked(getSessionUserId).mockResolvedValue(null);

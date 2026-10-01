@@ -365,19 +365,18 @@ Common failures:
   the legacy template backup explicitly with `?format=backup`; the default export
   is portable.
 - API handler unit tests mock `drizzle-orm/d1` at the adapter boundary with
-  `vi.hoisted` chains and keep real schema and query expressions. Call
-  `vi.clearAllMocks()` in `beforeEach()` when hoisted chains are reused. It keeps the
-  values a test queued with `mockResolvedValueOnce()`, so also `mockReset()` the calls a
-  test queues rows on: a test that stops early (an early `400`) would leave its rows to
-  the next one.
+  `vi.hoisted` chains and keep real schema and query expressions. `drizzleChainMocks()`
+  (`tests/support/drizzleChainMocks.ts`) builds the select, insert, update and delete chains
+  (an insert's `select` is the `INSERT ... SELECT` of a guarded write) and a `db` that
+  returns them. Each `beforeEach()` calls `chainSelectsUpdatesAndDeletes(dbMocks)`, so
+  `from`, `leftJoin`, `where` and `set` chain again whatever an earlier test made them
+  return, and then sets what each read resolves to. Call `vi.clearAllMocks()` there too. It
+  keeps the values a test queued with `mockResolvedValueOnce()`, so also `mockReset()` the
+  calls a test queues rows on: a test that stops early (an early `400`) would leave its rows
+  to the next one.
 
   ```ts
-  const dbMocks = vi.hoisted(() => {
-    const selectChain = { from: vi.fn(), where: vi.fn(), limit: vi.fn() };
-    const insertChain = { values: vi.fn() };
-    const db = { select: vi.fn(() => selectChain), insert: vi.fn(() => insertChain) };
-    return { selectChain, insertChain, db };
-  });
+  const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
   vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
   ```
 

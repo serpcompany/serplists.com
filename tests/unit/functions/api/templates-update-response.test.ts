@@ -1,24 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn(), select: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
+const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
 
 vi.mock('drizzle-orm/d1', () => ({
   drizzle: vi.fn(() => dbMocks.db),
@@ -62,15 +45,11 @@ describe('PUT /api/templates/:id response, which names the version and slug it s
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([]);
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
   });
