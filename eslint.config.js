@@ -150,16 +150,10 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/**/*.{ts,tsx}", "functions/**/*.ts"],
-    rules: {
-      "max-lines": ["error", { max: MAX_LINES }],
-    },
-  },
-  {
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
     linterOptions: { noInlineConfig: true },
     plugins: { serplists: { rules: { "no-comments": noComments } } },
-    rules: { "serplists/no-comments": "error" },
+    rules: { "max-lines": ["error", { max: MAX_LINES }], "serplists/no-comments": "error" },
   },
   {
     files: ["src/**/*.{ts,tsx}"],

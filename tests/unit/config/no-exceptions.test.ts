@@ -5,6 +5,7 @@ import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
+import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
 import { walkFiles } from '../../../scripts/lib/repo-files.mjs';
 
 const repoRoot = process.cwd();
@@ -32,10 +33,10 @@ const commandSources = [
 const commandsMatching = (pattern: RegExp) =>
   commandSources.filter(({ text }) => pattern.test(text)).map(({ where }) => where);
 
-const sourceFiles = [
-  ...walkFiles(repoRoot, 'src', (file: string) => /\.(ts|tsx)$/.test(file) && !file.endsWith('.d.ts')),
-  ...walkFiles(repoRoot, 'functions', (file: string) => file.endsWith('.ts') && !file.endsWith('.d.ts')),
-];
+const AUTHORED_CODE = /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/;
+const authoredCodeFiles = filesGitTracksOrWouldTrack().filter(
+  (file: string) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)),
+);
 
 const dependencyRules = z
   .object({ forbidden: z.array(z.object({ name: z.string(), severity: z.string() })) })
@@ -47,10 +48,10 @@ const testFileArguments = (script: string, flag?: string) =>
     .sort();
 
 describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
-  it('holds every source file in src/ and functions/ to the same 500-line limit', async () => {
+  it('holds every authored JavaScript and TypeScript file to the same 500-line limit', async () => {
     const eslint = new ESLint({ cwd: repoRoot });
     const exempt: string[] = [];
-    for (const file of sourceFiles) {
+    for (const file of authoredCodeFiles) {
       const rule = (await eslint.calculateConfigForFile(file))?.rules?.['max-lines'];
       const options = Array.isArray(rule) ? rule[1] : undefined;
       const held =

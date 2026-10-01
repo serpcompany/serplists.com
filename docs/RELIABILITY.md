@@ -25,6 +25,13 @@ migrations, backups, and R2 storage are in
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
 
+ESLint's `max-lines` holds every authored JavaScript and TypeScript file
+(`**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}`: source, tests, browser specs, scripts, seeds and root
+config) to 500 lines, blank lines included. Only the generated files in ESLint's global ignores are outside it, and
+`tests/unit/config/no-exceptions.test.ts` fails on any other file it misses. Split a file
+that grows past the limit by responsibility; `pnpm run maintenance:report` lists the files
+at 450 lines or more.
+
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
 files, so they stay fast; the push hook runs the full gate. The CI Quality Gate checks out
@@ -524,6 +531,13 @@ Common failures:
   from `tests/support/guardedInserts.ts`, so they reach the plain insert mock. The guards
   themselves are tested in `audit-guards.test.ts` and the local D1 tests
   (`pnpm run test:local-d1`).
+
+  The files a handler's tests are split into share these mocks through one support module
+  that calls `vi.mock()` itself (`tests/support/templatesHandler.ts`, `agentMcpHandler.ts`,
+  `checklistsHandler.ts`, `teamsHandler.ts`): Vitest hoists the calls to the top of that
+  module, so a test file that imports it before the code under test gets the mocks in
+  everything it imports after. A value made with `vi.hoisted()` there is exported with a
+  separate `export { ... }`, since Vitest refuses `export const x = vi.hoisted(...)`.
 
 - To test SQL guards or races, run the real handler against `MigratedSqliteD1` from
   `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that

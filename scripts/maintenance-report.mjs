@@ -3,6 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { filesGitTracksOrWouldTrack, GENERATED_FILES } from "./check-no-comments-lib.mjs";
 import { walkFiles } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -47,15 +48,15 @@ sections.push(
     : staleDocs.map(({ doc, changed }) => `- \`${doc}\`: ${changed.slice(0, 5).map((ref) => `\`${ref}\``).join(", ")}${changed.length > 5 ? `, +${changed.length - 5} more` : ""}`).join("\n"),
 );
 
-const nearLimit = walk("src", (file) => /\.(ts|tsx)$/.test(file))
-  .concat(walk("functions", (file) => file.endsWith(".ts")))
-  .filter((file) => !file.endsWith(".d.ts"))
+const AUTHORED_CODE = /\.(js|jsx|mjs|cjs|ts|tsx|mts|cts)$/;
+const nearLimit = filesGitTracksOrWouldTrack()
+  .filter((file) => AUTHORED_CODE.test(file) && !GENERATED_FILES.includes(file) && existsSync(path.join(repoRoot, file)))
   .map((file) => ({ file, lines: read(file).split("\n").length }))
   .filter(({ lines }) => lines >= NEAR_LIMIT_LINES)
   .sort((a, b) => b.lines - a.lines);
 sections.push(
   "## Files near the size limit",
-  `${nearLimit.length} files have ${NEAR_LIMIT_LINES} lines or more. ESLint \`max-lines\` stops every source file at ${MAX_LINES}, with no exceptions: split one of these by responsibility before a change has to.`,
+  `${nearLimit.length} files have ${NEAR_LIMIT_LINES} lines or more. ESLint \`max-lines\` stops every authored JavaScript and TypeScript file at ${MAX_LINES}, with no exceptions: split one of these by responsibility before a change has to.`,
   nearLimit.length === 0 ? "None." : nearLimit.map(({ file, lines }) => `- \`${file}\`: ${lines}`).join("\n"),
 );
 

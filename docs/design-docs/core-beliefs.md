@@ -30,7 +30,7 @@ lint rule, dependency rule, or check with an error message that explains the fix
 | Respect layer boundaries | Keeps domains independently changeable | `pnpm run deps:check`; see [ARCHITECTURE.md](../../ARCHITECTURE.md) |
 | Log through the structured logger in the API; never log emails, tokens, or other personal data | Logs must be queryable JSON with a `requestId` | ESLint `no-restricted-syntax` on `console.*` in `functions/` |
 | Use [PRODUCT_SENSE.md](../PRODUCT_SENSE.md) vocabulary in user-visible text | Product language drifts fast | ESLint `no-restricted-syntax` on Team/Workspace copy in UI code |
-| Keep files under 500 lines | Large files are hard for agents to change safely | ESLint `max-lines` on every source file in `src/` and `functions/`, with no per-file caps or excluded folders |
+| Keep files under 500 lines | Large files are hard for agents to change safely | ESLint `max-lines` on every authored code file (every JavaScript and TypeScript file but the generated ones), tests, scripts, seeds and config included, with no per-file caps or excluded folders (`tests/unit/config/no-exceptions.test.ts`) |
 | No unused code | Dead code gets copied and "fixed" by mistake | ESLint `@typescript-eslint/no-unused-vars`, `deps:check` |
 | Every test runs | A skipped test hides behavior that stopped working | ESLint `no-restricted-syntax` on `.skip`, `.todo`, `skipIf`, `runIf`, `fixme`, `x*` and `.only` in Vitest and Playwright files; a test file left out of `test:run` must be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`) |
 | Keep docs true and in their place | Stale or scattered docs mislead every future run | `pnpm run docs:check` in CI (layout, links, paths, catalogs); a weekly doc-gardening agent opens fix-up PRs ([maintenance](agent-workflow.md#weekly-maintenance)) |
@@ -45,7 +45,7 @@ per-file size caps, or skipped tests: when a check fails, fix the code. If a rul
 seems wrong, stop and ask a human. An exception needs an extremely good reason, recorded
 in the [harness hardening plan](../exec-plans/active/harness-hardening.md#exceptions-allowed).
 
-`tests/unit/config/no-exceptions.test.ts` fails when one comes back: a source file not held
-to `max-lines` 500, `eslint-suppressions.json` or a suppression flag, a dependency-cruiser
+`tests/unit/config/no-exceptions.test.ts` fails when one comes back: an authored code file not
+held to `max-lines` 500, `eslint-suppressions.json` or a suppression flag, a dependency-cruiser
 baseline, `--ignore-known` or a rule below `error`, or a test file no suite runs. ESLint
 refuses skipped, todo, fixme and focused tests.
