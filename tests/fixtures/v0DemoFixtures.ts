@@ -324,7 +324,6 @@ export function buildV0DemoPublicTemplate(): DemoPublicTemplate {
   };
 }
 
-// Only fields the API returns: no view, copy or run counts exist for a private template.
 export function buildV0DemoPrivateTemplate(): ChecklistTemplate {
   return {
     id: V0_DEMO_PRIVATE_TEMPLATE_ID,

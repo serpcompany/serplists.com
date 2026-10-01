@@ -1,5 +1,3 @@
-// Category names that the SPA (src/lib/routes.ts) and the sitemap
-// (functions/sitemap/shared.ts) must slug the same way.
 export const CATEGORY_SLUG_FIXTURES = [
   'Technical SEO',
   ' SEO & Analytics ',

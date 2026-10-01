@@ -10,7 +10,7 @@ import {
 } from '@/lib/utils/checklistSections';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
-import { hostileSections } from '../../../fixtures/malformedSections';
+import { malformedSectionsStoredBeforeValidation } from '../../../fixtures/malformedSections';
 
 describe('section and sub-task display titles', () => {
   it('names a section by its 1-based position', () => {
@@ -97,7 +97,7 @@ describe('normalizeSections with entries that are not objects', () => {
 });
 
 describe('normalizeSections on stored content', () => {
-  it.each(hostileSections)('never throws on %s, and the result saves back without a 400', (_label, sections) => {
+  it.each(malformedSectionsStoredBeforeValidation)('never throws on %s, and the result saves back without a 400', (_label, sections) => {
     const normalized = normalizeSections(sections);
 
     expect(() => calculateSectionsProgress(normalized)).not.toThrow();

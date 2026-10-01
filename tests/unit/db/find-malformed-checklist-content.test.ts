@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
-import { hostileSections } from '../../fixtures/malformedSections';
+import { malformedSectionsStoredBeforeValidation } from '../../fixtures/malformedSections';
 import { createMigratedD1 } from '../../fixtures/sqliteD1';
 
 const query = readFileSync(new URL('../../../db/maintenance/find-malformed-checklist-content.sql', import.meta.url), 'utf8');
@@ -54,7 +54,7 @@ describe('find-malformed-checklist-content.sql, the read-only maintenance query 
     expect(findings(db)).toEqual([]);
   });
 
-  it.each(hostileSections)('finds a run with %s', (_label, sections) => {
+  it.each(malformedSectionsStoredBeforeValidation)('finds a run with %s', (_label, sections) => {
     const db = migratedDatabase();
     insertRun(db, 'run-bad', JSON.stringify(sections));
     insertRun(db, 'run-ok', JSON.stringify(validSections));

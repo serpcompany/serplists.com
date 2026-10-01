@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
-import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
+import { answeringPwnedPasswordRangesAsNotFound } from '../../../fixtures/pwnedPasswords';
 import { postToBetterAuth } from '../../../support/betterAuth';
 
 const EMAIL = 'new-user@example.com';
@@ -25,7 +25,7 @@ describe('sign-up when the verification email cannot be sent, through the app\'s
       RESEND_API_KEY: 're_test_123',
     };
     emailProvider = vi.fn(async () => new Response(`rate limited for ${EMAIL}`, { status: 429 }));
-    vi.stubGlobal('fetch', answeringPwnedPasswords(emailProvider));
+    vi.stubGlobal('fetch', answeringPwnedPasswordRangesAsNotFound(emailProvider));
     logged = [];
     for (const level of ['info', 'warn', 'error'] as const) {
       vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {

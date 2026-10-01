@@ -6,11 +6,6 @@ const MIGRATIONS_DIR = new URL('../../db/migrations/', import.meta.url);
 
 type Row = Record<string, unknown>;
 
-/**
- * A D1Database stand-in backed by node:sqlite with every migration applied, so
- * unit tests can run real Drizzle (and Better Auth's Drizzle adapter) queries
- * without Wrangler. Covers the D1 methods Drizzle's d1 driver calls.
- */
 export function createMigratedD1() {
   const sqlite = new DatabaseSync(':memory:');
   for (const file of readdirSync(MIGRATIONS_DIR).filter((name) => name.endsWith('.sql')).sort()) {

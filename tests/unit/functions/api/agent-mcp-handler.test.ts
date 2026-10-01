@@ -48,9 +48,9 @@ import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-ke
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
 import {
-  LEGACY_ID_RUN_SECTIONS,
-  LEGACY_ID_TEMPLATE_SECTIONS,
-  TICKED_TEMPLATE_SECTIONS,
+  RUN_SECTIONS_WITH_LEGACY_IDS,
+  TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS,
+  TEMPLATE_SECTIONS_CARRYING_RUN_STATE,
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
 import {
@@ -529,8 +529,8 @@ describe("personal run MCP handler", () => {
   });
 
   it.each([
-    ["", TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS],
-    [" and the ids its Template's next save stores", LEGACY_ID_TEMPLATE_SECTIONS, LEGACY_ID_RUN_SECTIONS],
+    ["", TEMPLATE_SECTIONS_CARRYING_RUN_STATE, UNTICKED_RUN_SECTIONS],
+    [" and the ids its Template's next save stores", TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS, RUN_SECTIONS_WITH_LEGACY_IDS],
   ])("starts a run with every task and Sub-task unticked%s, exactly as a web start stores it", async (_ids, templateSections, runSections) => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{
       id: "template-1",
@@ -554,11 +554,11 @@ describe("personal run MCP handler", () => {
     const ids = (sections: any[]) => sections.map((section) => [section.id, section.items.map((item: any) => item.id)]);
 
     it("reads a template stored without ids with the ids its runs and next save use, so sending them back keeps the runs' progress", async () => {
-      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(LEGACY_ID_TEMPLATE_SECTIONS)]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS)]);
       const read = await toolBody(await handleAgentMcp(mcpToolCall("get_template", { templateId: "template-1" }), env));
 
       expect(read.result.isError).toBeUndefined();
-      expect(ids(read.result.structuredContent.template.sections)).toEqual(ids(LEGACY_ID_RUN_SECTIONS));
+      expect(ids(read.result.structuredContent.template.sections)).toEqual(ids(RUN_SECTIONS_WITH_LEGACY_IDS));
     });
 
     it("treats null optional fields as absent, as every other tool does", async () => {

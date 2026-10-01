@@ -4,12 +4,12 @@ import {
   findStoredSectionsIssue,
   sanitizeStoredSections,
 } from '@/lib/schemas/storedSections';
-import { hostileSections } from '../../../fixtures/malformedSections';
+import { malformedSectionsStoredBeforeValidation } from '../../../fixtures/malformedSections';
 
 const withContent = (content: unknown) => [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Task', contents: [content] }] }];
 
 describe('findStoredSectionsIssue', () => {
-  it.each(hostileSections)('rejects %s and names the path', (_label, sections) => {
+  it.each(malformedSectionsStoredBeforeValidation)('rejects %s and names the path', (_label, sections) => {
     expect(findStoredSectionsIssue(sections)).toMatch(/^sections\[0\]/);
   });
 
@@ -49,7 +49,7 @@ describe('findStoredSectionsIssue', () => {
 });
 
 describe('sanitizeStoredSections', () => {
-  it.each(hostileSections)('makes %s safe to store and render', (_label, sections) => {
+  it.each(malformedSectionsStoredBeforeValidation)('makes %s safe to store and render', (_label, sections) => {
     const sanitized = sanitizeStoredSections(sections);
 
     expect(findStoredSectionsIssue(sanitized)).toBeNull();

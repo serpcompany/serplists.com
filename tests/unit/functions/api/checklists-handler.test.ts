@@ -50,9 +50,9 @@ import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { calculateSectionsProgress, normalizeSections } from '@/lib/utils/checklistSections';
 import {
-  LEGACY_ID_RUN_SECTIONS,
-  LEGACY_ID_TEMPLATE_SECTIONS,
-  TICKED_TEMPLATE_SECTIONS,
+  RUN_SECTIONS_WITH_LEGACY_IDS,
+  TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS,
+  TEMPLATE_SECTIONS_CARRYING_RUN_STATE,
   UNTICKED_RUN_SECTIONS,
 } from '../../../fixtures/runStartFixtures';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -274,8 +274,8 @@ describe('Checklists Handlers', () => {
   });
 
   it.each([
-    ['', TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS],
-    [' and the ids its next save stores', LEGACY_ID_TEMPLATE_SECTIONS, LEGACY_ID_RUN_SECTIONS],
+    ['', TEMPLATE_SECTIONS_CARRYING_RUN_STATE, UNTICKED_RUN_SECTIONS],
+    [' and the ids its next save stores', TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS, RUN_SECTIONS_WITH_LEGACY_IDS],
   ])('starts web runs from a template with every task and Sub-task unticked%s, as MCP start_run does', async (_ids, templateSections, runSections) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit

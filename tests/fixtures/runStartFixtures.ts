@@ -1,9 +1,4 @@
-// A stored template that carries run state (ticked tasks and Sub-tasks, the legacy
-// `completed` key, run notes), as API-written, legacy, or cloned templates can. Every path
-// that starts a run from it (web create, MCP start_run) must store UNTICKED_RUN_SECTIONS.
-// Content blocks carry a text `value`, as stored content must (src/lib/schemas/storedSections.ts).
-
-export const TICKED_TEMPLATE_SECTIONS = [
+export const TEMPLATE_SECTIONS_CARRYING_RUN_STATE = [
   {
     id: 'section-1',
     title: 'Release',
@@ -60,10 +55,7 @@ export const UNTICKED_RUN_SECTIONS = [
   },
 ];
 
-// A template stored without ids the API accepts (rows older than stable ids, or a numeric,
-// blank or whitespace id). A run starts with the ids the Template's editor shows and its next
-// save stores, so that save reconciles the run by id instead of retiring its work.
-export const LEGACY_ID_TEMPLATE_SECTIONS = [
+export const TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS = [
   {
     id: '  ',
     title: 'Release',
@@ -89,7 +81,7 @@ export const LEGACY_ID_TEMPLATE_SECTIONS = [
   },
 ];
 
-export const LEGACY_ID_RUN_SECTIONS = [
+export const RUN_SECTIONS_WITH_LEGACY_IDS = [
   {
     id: 'legacy-section-1',
     title: 'Release',

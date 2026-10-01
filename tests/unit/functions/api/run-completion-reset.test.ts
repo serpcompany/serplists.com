@@ -3,22 +3,22 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { calculateRunProgress, resetRunCompletionState } from '@functions/api/utils/template-reconciliation';
-import { TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS } from '../../../fixtures/runStartFixtures';
+import { TEMPLATE_SECTIONS_CARRYING_RUN_STATE, UNTICKED_RUN_SECTIONS } from '../../../fixtures/runStartFixtures';
 
 describe('resetRunCompletionState', () => {
   it('unticks every task and Sub-task and drops run notes and the legacy completed key', () => {
-    const sections = resetRunCompletionState(TICKED_TEMPLATE_SECTIONS);
+    const sections = resetRunCompletionState(TEMPLATE_SECTIONS_CARRYING_RUN_STATE);
 
     expect(sections).toEqual(UNTICKED_RUN_SECTIONS);
     expect(calculateRunProgress(sections)).toBe(0);
   });
 
   it('does not change its input', () => {
-    const input = structuredClone(TICKED_TEMPLATE_SECTIONS);
+    const input = structuredClone(TEMPLATE_SECTIONS_CARRYING_RUN_STATE);
 
     resetRunCompletionState(input);
 
-    expect(input).toEqual(TICKED_TEMPLATE_SECTIONS);
+    expect(input).toEqual(TEMPLATE_SECTIONS_CARRYING_RUN_STATE);
   });
 
   it('leaves non-task entries and non-Sub-task content alone', () => {

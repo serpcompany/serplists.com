@@ -1,15 +1,14 @@
 type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
-/**
- * Under the production auth policy (AUTH_EMAIL_VERIFICATION_REQUIRED=true),
- * Better Auth checks new passwords against Have I Been Pwned. Answer those range
- * lookups with "not found" and pass every other request (the email provider) on.
- */
-export function answeringPwnedPasswords(next: Fetch): Fetch {
+const PWNED_PASSWORDS_RANGE_API = 'https://api.pwnedpasswords.com/';
+
+const rangeWithNoBreachedPassword = () => new Response('', { status: 200 });
+
+export function answeringPwnedPasswordRangesAsNotFound(everyOtherRequest: Fetch): Fetch {
   return async (input, init) => {
-    if (String(input).startsWith('https://api.pwnedpasswords.com/')) {
-      return new Response('', { status: 200 });
+    if (String(input).startsWith(PWNED_PASSWORDS_RANGE_API)) {
+      return rangeWithNoBreachedPassword();
     }
-    return next(input, init);
+    return everyOtherRequest(input, init);
   };
 }

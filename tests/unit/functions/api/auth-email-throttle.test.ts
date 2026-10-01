@@ -6,7 +6,7 @@ import {
   type AuthEmailKind,
 } from '@functions/api/utils/auth-email-throttle';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
-import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
+import { answeringPwnedPasswordRangesAsNotFound } from '../../../fixtures/pwnedPasswords';
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth } from '../../../support/betterAuth';
 
 const START = Date.parse('2026-01-01T00:00:00Z');
@@ -63,7 +63,7 @@ describe('auth email throttle, through the real Better Auth configuration on the
     sent = [];
     vi.stubGlobal(
       'fetch',
-      answeringPwnedPasswords(async (_url: string, init?: RequestInit) => {
+      answeringPwnedPasswordRangesAsNotFound(async (_url: string, init?: RequestInit) => {
         const payload = JSON.parse(String(init?.body));
         sent.push({ to: payload.to, subject: payload.subject });
         return new Response('{}', { status: 200 });

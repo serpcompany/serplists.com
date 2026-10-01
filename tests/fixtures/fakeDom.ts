@@ -1,7 +1,3 @@
-// Vitest runs in node with no DOM, and the repo has no jsdom. React DOM needs only these few
-// node methods to render a page into a container and to dispatch a click through the
-// listeners it adds to that container, so a test can drive a page the way a user does.
-
 const TEXT_NODE = 3;
 const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 
@@ -99,9 +95,8 @@ export class FakeElement extends FakeNode {
     return this.attributes.get(name) ?? null;
   }
 
-  // Element.closest for a tag name ('button'), which some components' click handlers call.
-  closest(selector: string): FakeElement | null {
-    const tagName = selector.toUpperCase();
+  closest(tagNameSelector: string): FakeElement | null {
+    const tagName = tagNameSelector.toUpperCase();
     for (let node: FakeNode | null = this; node; node = node.parentNode) {
       if (node instanceof FakeElement && node.nodeName === tagName) return node;
     }
@@ -133,24 +128,16 @@ class FakeDocument extends FakeNode {
 
 const fakeDocument = new FakeDocument();
 
-/** A container to pass to createRoot. */
 export const createFakeContainer = () => new FakeElement('div', HTML_NAMESPACE);
 
-/**
- * Gives React DOM a window while it commits (it reads the focused element) and turns on act().
- * Call from beforeAll, and call the returned function from afterAll. A page that navigates
- * passes the in-memory browser's window (`navigation.window` from
- * tests/support/nextNavigation.tsx), whose location, history and events the page then uses.
- */
-export function installFakeDomGlobals(browserWindow?: object): () => void {
+export function installFakeDomGlobals(navigationWindow?: object): () => void {
   const globals = globalThis as Record<string, unknown>;
   const saved = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
   globals.window = Object.assign(
-    Object.create(browserWindow ?? { addEventListener() {}, removeEventListener() {} }),
+    Object.create(navigationWindow ?? { addEventListener() {}, removeEventListener() {} }),
     {
       HTMLIFrameElement: class {},
-      // React DOM preloads images it commits.
-      Image: class {
+      Image: class ImageReactDomPreloads {
         src = '';
         decode = () => Promise.resolve();
       },
@@ -169,20 +156,24 @@ export const findAll = (node: FakeNode, match: (node: FakeNode) => boolean): Fak
   ...node.childNodes.flatMap((child) => findAll(child, match)),
 ];
 
-/** The first element with this tag (for example 'A' or 'BUTTON') whose text is `label`. */
 export const findByText = (container: FakeNode, nodeName: string, label: string): FakeNode => {
   const [node] = findAll(container, (entry) => entry.nodeName === nodeName && entry.textContent === label);
   if (!node) throw new Error(`No ${nodeName} labelled ${label}`);
   return node;
 };
 
-// `detail` is the click count: 2 for the second click of a double click (src/lib/utils/repeatClick.ts).
-type ClickModifiers = { button?: number; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; detail?: number };
+type ClickCount = number;
 
-/**
- * A left click as the browser delivers it (or another button, or with modifier keys):
- * capture listeners on the root first, then bubble.
- */
+type ClickModifiers = { button?: number; ctrlKey?: boolean; metaKey?: boolean; shiftKey?: boolean; altKey?: boolean; detail?: ClickCount };
+
+const deliverToCaptureThenBubbleListeners = <E extends { type: string }>(container: FakeElement, event: E) => {
+  const listeners = container.listeners.filter((entry) => entry.type === event.type);
+  for (const entry of [...listeners.filter((l) => l.capture), ...listeners.filter((l) => !l.capture)]) {
+    entry.listener(event);
+  }
+  return event;
+};
+
 export const click = (container: FakeElement, target: FakeNode, modifiers: ClickModifiers = {}) => {
   const event = {
     type: 'click',
@@ -200,14 +191,9 @@ export const click = (container: FakeElement, target: FakeNode, modifiers: Click
     },
     stopPropagation() {},
   };
-  const listeners = container.listeners.filter((entry) => entry.type === 'click');
-  for (const entry of [...listeners.filter((l) => l.capture), ...listeners.filter((l) => !l.capture)]) {
-    entry.listener(event);
-  }
-  return event;
+  return deliverToCaptureThenBubbleListeners(container, event);
 };
 
-/** Dispatches any other event (focusin, touchstart, ...) through the container's listeners. */
 export const dispatch = (container: FakeElement, target: FakeNode, type: string) => {
   const event = {
     type,
@@ -219,9 +205,5 @@ export const dispatch = (container: FakeElement, target: FakeNode, type: string)
     },
     stopPropagation() {},
   };
-  const listeners = container.listeners.filter((entry) => entry.type === type);
-  for (const entry of [...listeners.filter((l) => l.capture), ...listeners.filter((l) => !l.capture)]) {
-    entry.listener(event);
-  }
-  return event;
+  return deliverToCaptureThenBubbleListeners(container, event);
 };
