@@ -512,6 +512,8 @@ Common failures:
     not its attributes. After unmounting a tree that used TanStack Query, wait one timer tick
     before `afterAll` restores the globals: Query hands React its batched notifications on a
     timer, and React fails on one that runs after the fake window is gone.
+    `letQueryUpdatesReachObservers()` (`tests/support/queryNotifications.ts`) waits, inside
+    `act()`, the few timer rounds an answer takes to reach the observers and render.
 
   Base UI's overlays render nothing until they open, and their portals render nothing without
   a DOM, so component tests replace dialogs, alert dialogs, menus and select popups with the
@@ -519,7 +521,10 @@ Common failures:
   statically seeds the failure with `seedQueryError()` on `createTestQueryClient()`
   (`tests/fixtures/queryClient.ts`), which does not retry on mount, so the error shows instead
   of the fetching state of a query about to retry; `data` makes it a refresh that failed after
-  a successful load.
+  a successful load. A static render runs no effects, so a page never counts as shown to
+  `usePageVisit` and drops every late result: a test that acts as a user still on the page
+  mocks `@/hooks/usePageVisit` with `pageVisitOfAUserStillOnThePage`
+  (`tests/support/pageVisitMock.ts`).
 - The App Router exists only in a Next.js app, so `tests/support/` stands in for what the
   app imports from Next.js:
   - `nextNavigation.tsx` replaces `next/navigation` and `next/link` with an in-memory
