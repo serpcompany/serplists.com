@@ -1,10 +1,18 @@
 import './reactHooksKeptBetweenRenders';
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 
-export const accessHook = {
-  allTemplates: [] as Array<{ id: string; userId: string; teamId: string | null }>,
-  maxTemplates: 1 as number | null,
-  listRequests: [] as unknown[],
+type AccessHook = {
+  allTemplates: Array<{ id: string; userId: string; teamId: string | null }>;
+  maxTemplates: number | null;
+  listRequests: unknown[];
+  invalidateQueries: Mock<(filters: unknown) => Promise<undefined>>;
+  startBillingCheckout: Mock<(billingEnabled: boolean) => Promise<boolean>>;
+};
+
+export const accessHook: AccessHook = {
+  allTemplates: [],
+  maxTemplates: 1,
+  listRequests: [],
   invalidateQueries: vi.fn<(filters: unknown) => Promise<undefined>>(async () => undefined),
   startBillingCheckout: vi.fn<(billingEnabled: boolean) => Promise<boolean>>(async () => true),
 };
