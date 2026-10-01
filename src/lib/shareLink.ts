@@ -5,11 +5,6 @@ export type ShareLinkResult =
   | { kind: 'error'; message: string }
   | { kind: 'skipped' };
 
-// Creating a share link and copying it are separate steps. Once the API has created the
-// link (and made the run public with a new token), a failed copy must not lose it:
-// Safari rejects a clipboard write that follows a network request, and any browser can
-// reject on denied permission or lost focus. Callers always show the returned link, and
-// report an error only when creating it failed. A null link means nothing was created.
 export async function createShareLinkAndCopy(
   createShareUrl: () => Promise<string | null>,
   copy: (text: string) => Promise<boolean> = copyTextToClipboard,

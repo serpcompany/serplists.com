@@ -16,12 +16,9 @@ export type ImageUploadPlan =
       resized: boolean;
     };
 
-// An image within the limits and under this size is uploaded as it is.
 const KEEP_ORIGINAL_MAX_BYTES = 1024 * 1024;
 
-// Types the template-images bucket stores, re-encoded in their own format so PNG and
-// WebP keep their transparency. GIF is never drawn to a canvas: that keeps one frame.
-const SAME_FORMAT: Record<string, EncodedImageType> = {
+const REENCODED_IN_OWN_FORMAT: Record<string, EncodedImageType> = {
   'image/png': 'image/png',
   'image/jpeg': 'image/jpeg',
   'image/webp': 'image/webp',
@@ -33,9 +30,6 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   'image/webp': 'webp',
 };
 
-// Decides how an image is uploaded. Other decodable types (SVG, AVIF, BMP, HEIC where
-// the browser reads it) become PNG, which keeps any transparency; never JPEG, which
-// would turn transparent pixels black.
 export const planImageUpload = (
   source: { type: string; size: number; width: number; height: number },
   limits: { maxWidth: number; maxHeight: number },
@@ -46,7 +40,7 @@ export const planImageUpload = (
 
   const scale = Math.min(1, limits.maxWidth / source.width, limits.maxHeight / source.height);
   const resized = scale < 1;
-  const sameFormat = SAME_FORMAT[source.type];
+  const sameFormat = REENCODED_IN_OWN_FORMAT[source.type];
 
   if (sameFormat && !resized && source.size <= KEEP_ORIGINAL_MAX_BYTES) {
     return { action: 'keep' };
@@ -101,8 +95,6 @@ const encodeCanvas = (
     );
   });
 
-// Shrinks an image for a template Image block without changing what it shows. Returns
-// the original file when re-encoding would not help.
 export const optimizeImage = async (
   file: File,
   options: ImageOptimizationOptions = {},
@@ -139,15 +131,13 @@ export const optimizeImage = async (
   ctx.drawImage(img, 0, 0, plan.width, plan.height);
 
   const blob = await encodeCanvas(canvas, plan.mimeType, quality);
-  if (!plan.resized && SAME_FORMAT[file.type] && blob.size >= file.size) {
+  if (!plan.resized && REENCODED_IN_OWN_FORMAT[file.type] && blob.size >= file.size) {
     return file;
   }
 
-  // A browser that cannot encode the requested type returns PNG; name and type the
-  // file after the bytes it actually holds.
-  const type = blob.type || plan.mimeType;
-  return new File([blob], renameForType(file.name, file.type, type), {
-    type,
+  const encodedType = blob.type || plan.mimeType;
+  return new File([blob], renameForType(file.name, file.type, encodedType), {
+    type: encodedType,
     lastModified: Date.now(),
   });
 };

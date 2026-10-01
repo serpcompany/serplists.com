@@ -38,6 +38,16 @@ The error handler only records the failure: it never sets `src`, and there is no
 remote placeholder, so a broken image makes one request and stops.
 `tests/unit/components/TaskImage.test.tsx` checks this.
 
+An image uploaded into an Image block is shrunk in the browser first, without changing
+what it shows (`optimizeImage` in `src/lib/imageOptimization.ts`; a File block keeps the
+file's own bytes). One larger than 1920x1080 is scaled to fit; one within those bounds and
+under 1MB is uploaded as it is, and so is the original when a re-encoded copy would not be
+smaller. PNG, JPEG and WebP are re-encoded in their own format, so transparency survives;
+other types the browser can decode (SVG, AVIF, BMP, HEIC where supported) become PNG, never
+JPEG, which would turn transparent pixels black; a GIF is uploaded untouched, since drawing
+it to a canvas keeps one frame. A browser that cannot encode the requested type returns PNG,
+so the file is named and typed after the bytes it actually holds.
+
 ## Embed blocks
 
 An embed block holds a URL, pasted `<iframe>` code or plain text, and viewers never get it
