@@ -182,10 +182,10 @@ Authenticated:
   can be one Stripe no longer has, so for a user with a Stripe customer Stripe
   decides: checkout lists the customer's subscriptions in Stripe
   (`GET /v1/subscriptions?customer=...`), stores them, and applies the same rules
-  to what Stripe lists, whatever D1 holds for that customer. One page of 100 holds
-  them, since Stripe's default filter leaves out canceled subscriptions; a list with
-  more pages fails closed unless what it shows already blocks checkout, and an
-  `incomplete` subscription does not on its own. A subscription stored
+  to what Stripe lists, whatever D1 holds for that customer. It reads one page of 100
+  (Stripe's default filter leaves out canceled subscriptions, so the list stays short);
+  a list with more pages fails closed unless what it shows already blocks checkout, and
+  an `incomplete` subscription does not on its own. A subscription stored
   for any other customer is read by id (`GET /v1/subscriptions/{id}`): one Stripe
   has is stored and the same rules apply to it; one Stripe does not have (`404`,
   such as one made with the other mode's keys) no longer blocks, and its row is
@@ -286,8 +286,8 @@ A failed Stripe call throws `StripeApiError` (`functions/api/utils/stripe.ts`) w
 HTTP status and Stripe's error `type`, `code` and `param`. Stripe's message text can
 echo request data such as an email address, so it never enters the error message that
 gets logged. A customer Stripe does not have in this mode (deleted, or made with the
-other mode's keys) is `resource_missing` on `customer`, and it lists no open Checkout
-Sessions.
+other mode's keys) is `resource_missing` on `customer`, and checkout treats it as having
+no open Checkout Sessions.
 
 Webhook event rows provide idempotency and retry state
 (`functions/api/utils/stripe-webhook-events.ts`). A row with no error records an
