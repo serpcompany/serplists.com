@@ -181,10 +181,6 @@ export default tseslint.config(
       "tests/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
     ],
     ignores: [
-      "tests/unit/views/**",
-      "tests/unit/contexts/**",
-      "tests/unit/server/**",
-      "tests/unit/seo/**",
       "tests/unit/scripts/**",
       "tests/unit/config/**",
       "tests/unit/workflows/**",
