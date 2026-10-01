@@ -477,7 +477,7 @@ Common failures:
   that checks a file can be chosen again checks that the input is empty after each choice.
 - A double click whose second click must land on what the first one changed (the next
   task's button, a dialog that opened) is two `page.mouse` clicks with `clickCount` 1 and 2,
-  the `event.detail` the browser reports (`run-saves.spec.ts`). `page.mouse` does not
+  the `event.detail` the browser reports (`run-double-clicks.spec.ts`). `page.mouse` does not
   scroll, so the spec first scrolls the button into view with
   `scrollIntoView({ block: 'nearest' })`, as a person would: `scrollIntoViewIfNeeded()`
   centres it, which pushes the task title out of view, so moving on to the next task scrolls
