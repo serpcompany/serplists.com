@@ -56,22 +56,26 @@ pnpm run preview    # build with OpenNext and serve the Worker in workerd, as de
 only when nothing accepts a connection on `127.0.0.1` or `::1` and it binds on
 `127.0.0.1`, `::1`, `0.0.0.0` and `::` in turn (`isPortAvailable` in
 `scripts/dev-auto-lib.mjs`): on Windows a bind to one address succeeds while another
-process holds the port on a different one. The smoke runner and the Stripe listener's
-predicted target pick ports the same way. The URL is printed and saved in
-`tmp/dev-session.json`. The Worker vars that name the server cannot come from
-`.dev.vars`, since the port is picked at start: the launcher passes `FRONTEND_URL` (the
-server's origin), `CORS_ALLOWED_ORIGINS` (the configured origins plus that one) and the
-auth secret to `next dev` in `SERPLISTS_DEV_BINDINGS`, and `next.config.ts` sets them
-over the bindings (`scripts/lib/dev-bindings.mjs`), so the API's own links (Stripe
-returns, invites) come back to this server. `next.config.ts` sets them once
-`initOpenNextCloudflareForDev()` has set up the bindings; Next.js also loads the config in a
-process that serves no requests and has no bindings, where nothing is set. A connection
-probe that is refused or gets no answer within half a second leaves the answer to the binds,
-since on some Windows setups a refused loopback connection takes a second or more, and an
-address the machine lacks (`::1` with IPv6 off) does not make a port busy. Use
-`pnpm run dev:stop` to stop: killing only the launcher leaves Next.js and workerd running
-on Windows and holding the port. The launcher itself stops the server's whole process tree
-on Ctrl+C, on `SIGTERM`, and when its terminal window closes (`SIGHUP` on Windows).
+process holds the port on a different one. A connection probe that is refused or gets no
+answer within half a second leaves the answer to the binds, since on some Windows setups a
+refused loopback connection takes a second or more, and an address the machine lacks
+(`::1` with IPv6 off) does not make a port busy. The smoke runner and the Stripe
+listener's predicted target pick ports the same way. The URL is printed and saved in
+`tmp/dev-session.json`.
+
+The Worker vars that name the server cannot come from `.dev.vars`, since the port is
+picked at start: the launcher passes `FRONTEND_URL` (the server's origin),
+`CORS_ALLOWED_ORIGINS` (the configured origins plus that one) and the auth secret to
+`next dev` in `SERPLISTS_DEV_BINDINGS`, and `next.config.ts` sets them over the bindings
+(`scripts/lib/dev-bindings.mjs`), so the API's own links (Stripe returns, invites) come
+back to this server. It sets them once `initOpenNextCloudflareForDev()` has set up the
+bindings; Next.js also loads the config in a process that serves no requests and has no
+bindings, where nothing is set.
+
+Use `pnpm run dev:stop` to stop: killing only the launcher leaves Next.js and workerd
+running on Windows and holding the port. The launcher itself stops the server's whole
+process tree on Ctrl+C, on `SIGTERM`, and when its terminal window closes (`SIGHUP` on
+Windows).
 
 The session records the launcher's pid with its process start time. A launch or
 `dev:stop` trusts a recorded pid only while that pid still runs
@@ -243,15 +247,17 @@ Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools thro
 and `execPnpm` runs pnpm itself through the pnpm that launched the script (`npm_execpath`).
 A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin. Outside
 `pnpm run` there is no pnpm script to reuse, so on Windows `execPnpm` goes through `cmd.exe`
-and refuses any argument that is not a plain token. Never
-spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
-shell fails with `ENOENT` (or, since Node 18.20.2, `EINVAL` for `npx.cmd`), and passing
-arguments through a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%`
-in values like the auth secret. `killPidTree` and `killProcessTree` stop a process with
-everything it started: on Windows they end the tree with `taskkill`, since the children
-(Next.js, workerd) would otherwise keep running and hold their ports; elsewhere the process
-gets the signal, which the dev launcher and Wrangler pass on. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
-`npx` or `pnpm` as a command. `opennextjs-cloudflare preview` itself hands its extra
+and refuses any argument that is not a plain token. Never spawn `npx` or `pnpm` by name: on
+Windows they are `.cmd` shims, so a spawn without a shell fails with `ENOENT` (or, since
+Node 18.20.2, `EINVAL` for `npx.cmd`), and passing arguments through a shell lets `cmd.exe`
+reinterpret characters such as `&`, `^` and `%` in values like the auth secret.
+`tests/unit/scripts/tool-spawns.test.ts` fails when a script names `npx` or `pnpm` as a
+command.
+
+`killPidTree` and `killProcessTree` stop a process with everything it started: on Windows
+they end the tree with `taskkill`, since the children (Next.js, workerd) would otherwise
+keep running and hold their ports; elsewhere the process gets the signal, which the dev
+launcher and Wrangler pass on. `opennextjs-cloudflare preview` itself hands its extra
 arguments to `wrangler dev` through a shell without quoting them, so the smoke runner
 (`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`) and `d1:profile` pass it only plain
 values, with no spaces or shell characters.
