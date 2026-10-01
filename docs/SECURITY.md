@@ -170,8 +170,10 @@ Rules:
 
 - `pnpm run typecheck:env` and the runtime validate env the same way, with
   `@t3-oss/env-core` and Zod (`functions/api/env.ts`, `src/env.ts` for `NEXT_PUBLIC_`
-  client variables, `emptyStringAsUndefined: true`). URL values are strictly
-  validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
+  client variables, `emptyStringAsUndefined: true`). Next.js inlines a `NEXT_PUBLIC_` value
+  into the browser bundle only where the code names it in full, so `src/env.ts` lists each
+  one in `runtimeEnv` as `process.env.<NAME>`, never `process.env` as a whole. URL values
+  are strictly validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
   host (`functions/api/utils/origin-list.ts`, mirrored for the script in
   `scripts/lib/origin-list.mjs`, which `tests/unit/scripts/origin-list-parity.test.ts`

@@ -1,7 +1,3 @@
-/**
- * Predefined categories for templates
- */
-
 export const PREDEFINED_CATEGORIES = [
   "wedding",
   "moving", 

@@ -5,8 +5,6 @@ import {
   UploadCloud,
 } from 'lucide-react';
 
-// The feature pages (/features/<slug>). Any other slug shows the 404 page
-// (src/app/(site)/features/[featureSlug]/page.tsx).
 export const FEATURES = [
   {
     slug: "template-builder",

@@ -2,8 +2,6 @@ import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 import { isLoopbackHostname } from "@/lib/utils/loopbackHostname";
 
-// Next.js inlines NEXT_PUBLIC_* values into the browser bundle at build time, but only where
-// the code names them in full, so runtimeEnv lists each one.
 export const env = createEnv({
   clientPrefix: "NEXT_PUBLIC_",
   client: {

@@ -1,4 +1,3 @@
-// Centralized type definitions for checklist functionality
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
@@ -9,13 +8,13 @@ export type ChecklistSubItem = {
 };
 
 export type ChecklistItemContent = {
-  id?: string; // Assigned by the template editor; imported, repo, and legacy content may not have one
+  id?: string;
   type: "text" | "image" | "video" | "file" | "embed" | "subItems";
-  value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
-  uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
-  fileName?: string; // Original filename for uploaded files
-  fileSize?: number; // File size in bytes for uploaded files
-  subItems?: ChecklistSubItem[]; // Only used when type is "subItems"
+  value: string;
+  uploadType?: "url" | "upload";
+  fileName?: string;
+  fileSize?: number;
+  subItems?: ChecklistSubItem[];
 };
 
 export type ChecklistItem = {
@@ -33,8 +32,6 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
-// Rules are always parsed with portableTemplateRuleSchema (API responses, imports, repo packs),
-// so `severity` has its default applied.
 export type TemplateRule = PortableTemplateRule;
 
 export type ChecklistTemplate = {
@@ -60,7 +57,6 @@ export type ChecklistTemplate = {
     username?: string;
   };
   teamId?: string;
-  // Public catalog rows carry no teamId, so this is what marks an Organization template there.
   ownerType?: "user" | "team";
 };
 
@@ -70,7 +66,6 @@ export type TemplateSavePayload = {
   description?: string;
   type?: "checklist" | "recipe";
   sections: ChecklistSection[];
-  // Left out when the editor did not change visibility, so a save never resends a stale value.
   isPublic?: boolean;
   seoTitle?: string;
   seoDescription?: string;
@@ -79,15 +74,11 @@ export type TemplateSavePayload = {
   categories?: string[];
   tags?: string[];
   slug?: string;
-  // The version the editor loaded; the API answers 409 edit_conflict if it has moved on.
   version?: number;
 };
 
-// What a template save returns (src/lib/templateUpdateResult.ts).
 export type { TemplateUpdateResult };
 
-// Work a Template change removed from a Run. It keeps its completion and notes, stays
-// read-only, and never counts toward progress (parsed in features/run-execution).
 export type RetiredRunSubTask = {
   id: string;
   title: string;
@@ -162,15 +153,11 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  // Resolves with the version and slug the server stored; the next save sends that version.
   updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
-  // State saves (ticks, notes, completion) leave the title out; only a rename passes
-  // { includeTitle: true }. See src/contexts/runUpdatePayload.ts.
   updateRun: (run: ChecklistRun, options?: { includeTitle?: boolean }) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
-  // Marks a run just shared (now public) in the cached runs lists and refreshes its Changelog.
   markRunShared?: (runId: string) => void;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;

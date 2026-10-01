@@ -180,7 +180,11 @@ Template backup and portable import/export are implemented through `src/lib/util
 
 The portable contract is shared by uploaded files and repo-backed public packs.
 Repo packs live in `src/data/public-template-packs/*.json` and are normalized by
-the same validation path as uploaded packs. Public URLs are
+the same validation path as uploaded packs. Every pack in that folder is in the bundled
+library (`templatePackModules` in `src/data/public-template-packs/index.ts`, read by
+`src/lib/repoTemplateCatalog.ts`), so a new pack needs no other change. The
+`import.meta.glob` sits beside the packs because Turbopack matches only patterns below the
+calling file's directory: a pattern that starts with `../` matches nothing. Public URLs are
 `/profile/<owner>/<slug>/`, so the public catalog merges a repo entry and a D1
 template only when both the owner and the slug match (an official `serp` copy of a
 starter, where the repo entry wins); another owner's template with the same slug
