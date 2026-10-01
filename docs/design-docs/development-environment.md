@@ -229,6 +229,12 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 | Stripe (test mode) | `stripe:local:setup`, `stripe:local:listen`, `stripe:local:scrub-live`, `stripe:portal:configure` |
 | Promotion | `promote:prepare` (the staging to main promotion branch; see [agent workflow](agent-workflow.md)) |
 
+`pnpm run promote:prepare -- --dry-run` prints the commit the promotion script would push
+without pushing it. Its hotfix check takes the last promotion to be the newest `main`
+commit whose files match a commit `staging` has had, and passes when `main` is unchanged
+since then or when merging `main`'s later changes into `staging` leaves `staging`'s files
+as they are.
+
 ## Writing scripts
 
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
