@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import { mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from './apiHandlerMocks';
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { apiRequest } from './apiRequest';
 
-export { dbMocks, mockEnv } from './apiHandlerMocks';
+export { dbMocks, expectTheOrganizationOwnsIt, expectTheOrganizationPlanChecked, mockEnv } from './apiHandlerMocks';
 
 const exportedTemplate = z
   .object({
@@ -18,16 +19,15 @@ export function resetPortableTemplatesHandlerMocks() {
   signInWithPlans('user-123', PRO_PLAN, TEAM_PLAN);
 }
 
-export const importPack = (templates: unknown[]) =>
+type PackOptions = { teamId?: string; schemaVersion?: string };
+
+export const importPack = (templates: unknown[], { teamId, schemaVersion = '2.0.0' }: PackOptions = {}) =>
   handleTemplates(
-    new Request('http://localhost/api/templates/backup', {
-      method: 'POST',
-      body: JSON.stringify({
-        kind: 'serplists-template-pack',
-        schemaVersion: '2.0.0',
-        exportedAt: '2026-03-21T00:00:00.000Z',
-        templates,
-      }),
+    apiRequest(`templates/backup${teamId ? `?teamId=${teamId}` : ''}`, 'POST', {
+      kind: 'serplists-template-pack',
+      schemaVersion,
+      exportedAt: '2026-03-21T00:00:00.000Z',
+      templates,
     }),
     mockEnv,
   );

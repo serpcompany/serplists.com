@@ -4,7 +4,43 @@ import { dbMocks, mockEnv, resetChecklistsHandlerMocks, runBody, successBody } f
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
+import {
+  activeMember,
+  organizationRunRow,
+  personalRunRow,
+  sharedRunRow,
+  startedJustNow,
+} from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
+
+const ONE_UNTICKED_ITEM = '[{"id":"item-1","title":"Item 1","isCompleted":false}]';
+
+const createShareLink = () => handleChecklists(apiRequest('checklists/run/run-1/share', 'POST', {}), mockEnv);
+
+function theOrganizationRunAndAMember(role: string) {
+  dbMocks.selectChain.limit
+    .mockResolvedValueOnce([organizationRunRow({ is_public: false, ...startedJustNow() })])
+    .mockResolvedValueOnce([activeMember(role)])
+    .mockResolvedValueOnce([activeMember(role)]);
+}
+
+async function expectShareCreated(response: Response, audit: Record<string, unknown>) {
+  const data = await readJson(response, runBody);
+
+  expect(response.status).toBe(200);
+  expect(data.id).toBe('run-1');
+  expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
+    expect.objectContaining({
+      is_public: true,
+      share_token: expect.any(String),
+    }),
+  );
+  expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
+    expect.objectContaining({ action: 'checklist_run.share_created', ...audit }),
+  );
+  return data;
+}
 
 describe('Checklists Handlers', () => {
   beforeEach(resetChecklistsHandlerMocks);
@@ -12,120 +48,26 @@ describe('Checklists Handlers', () => {
   it('should create share links for personal checklist run owners', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      {
-        id: 'run-1',
-        user_id: 'user-123',
-        team_id: null,
-        title: 'Personal Run',
-        items: '[]',
-        status: 'in_progress',
-        is_public: false,
-        started_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-      },
+      personalRunRow({ title: 'Personal Run', is_public: false, ...startedJustNow() }),
     ]);
 
-    const request = new Request('http://localhost/api/checklists/run/run-1/share', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const response = await handleChecklists(request, mockEnv);
-    const data = await readJson(response, runBody);
+    const data = await expectShareCreated(await createShareLink(), { resource_type: 'checklist_run', resource_id: 'run-1' });
 
-    expect(response.status).toBe(200);
-    expect(data.id).toBe('run-1');
     expect(data.sharePath).toMatch(/^\/share\//);
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        is_public: true,
-        share_token: expect.any(String),
-      }),
-    );
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'checklist_run.share_created',
-        resource_type: 'checklist_run',
-        resource_id: 'run-1',
-      }),
-    );
   });
 
   it('should create share links for team checklist runs when the user can run team templates', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: 'run-1',
-          user_id: 'creator-1',
-          team_id: 'team-1',
-          title: 'Team Run',
-          items: '[]',
-          status: 'in_progress',
-          is_public: false,
-          started_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' },
-      ]);
+    theOrganizationRunAndAMember('runner');
 
-    const request = new Request('http://localhost/api/checklists/run/run-1/share', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const response = await handleChecklists(request, mockEnv);
-    const data = await readJson(response, runBody);
-
-    expect(response.status).toBe(200);
-    expect(data.id).toBe('run-1');
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        is_public: true,
-        share_token: expect.any(String),
-      }),
-    );
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'checklist_run.share_created',
-        subject_type: 'team',
-        subject_id: 'team-1',
-        resource_id: 'run-1',
-      }),
-    );
+    await expectShareCreated(await createShareLink(), { subject_type: 'team', subject_id: 'team-1', resource_id: 'run-1' });
   });
 
   it('should reject team checklist share links for viewers', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: 'run-1',
-          user_id: 'creator-1',
-          team_id: 'team-1',
-          title: 'Team Run',
-          items: '[]',
-          status: 'in_progress',
-          is_public: false,
-          started_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-        },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'viewer', status: 'active' },
-      ])
-      .mockResolvedValueOnce([
-        { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'viewer', status: 'active' },
-      ]);
+    theOrganizationRunAndAMember('viewer');
 
-    const request = new Request('http://localhost/api/checklists/run/run-1/share', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    const response = await handleChecklists(request, mockEnv);
+    const response = await createShareLink();
 
     expect(response.status).toBe(403);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
@@ -135,28 +77,10 @@ describe('Checklists Handlers', () => {
   it('should serve shared checklist runs without authentication', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      {
-        id: 'shared-run',
-        template_id: 'template-2',
-        title: 'Shared Run',
-        status: 'in_progress',
-        items: '[{"id":"item-1","title":"Item 1","isCompleted":false}]',
-        started_at: '2026-01-01T00:00:00.000Z',
-        completed_at: null,
-        user_id: 'owner-123',
-        share_token: 'shared-run',
-        is_public: true,
-        revision: 3,
-        template_version: 1,
-        current_template_version: 2,
-      },
+      sharedRunRow({ items: ONE_UNTICKED_ITEM, template_version: 1, current_template_version: 2 }),
     ]);
 
-    const request = new Request('http://localhost/api/checklists/shared/shared-run', {
-      method: 'GET',
-    });
-
-    const response = await handleChecklists(request, mockEnv);
+    const response = await handleChecklists(apiRequest('checklists/shared/shared-run'), mockEnv);
     const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
@@ -214,7 +138,7 @@ describe('Checklists Handlers', () => {
       ...everyColumn,
       ...privateValues,
       title: 'Shared Run',
-      items: '[{"id":"item-1","title":"Item 1","isCompleted":false}]',
+      items: ONE_UNTICKED_ITEM,
       status: 'in_progress',
       progress: 0,
       is_public: true,
@@ -239,33 +163,13 @@ describe('Checklists Handlers', () => {
 
   it('should update completion on shared checklist runs without changing their tasks', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      {
-        id: 'shared-run',
-        template_id: 'template-2',
-        title: 'Shared Run',
-        status: 'in_progress',
-        items: '[{"id":"item-1","title":"Item 1","isCompleted":false}]',
-        started_at: '2026-01-01T00:00:00.000Z',
-        completed_at: null,
-        user_id: 'owner-123',
-        team_id: null,
-        share_token: 'shared-run',
-        is_public: true,
-        revision: 3,
-      },
-    ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRunRow({ items: ONE_UNTICKED_ITEM, team_id: null })]);
 
-    const request = new Request('http://localhost/api/checklists/shared/shared-run', {
-      method: 'PUT',
-      body: JSON.stringify({
-        sections: [{ id: '1', title: 'Renamed', items: [{ id: 'item-1', title: 'Renamed item', isCompleted: true }] }],
-        status: 'completed',
-        expected_revision: 3,
-      }),
-    });
-
-    const response = await handleChecklists(request, mockEnv);
+    const response = await handleChecklists(apiRequest('checklists/shared/shared-run', 'PUT', {
+      sections: [{ id: '1', title: 'Renamed', items: [{ id: 'item-1', title: 'Renamed item', isCompleted: true }] }],
+      status: 'completed',
+      expected_revision: 3,
+    }), mockEnv);
     const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
@@ -294,15 +198,10 @@ describe('Checklists Handlers', () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
-    const request = new Request('http://localhost/api/checklists/shared/missing-run', {
-      method: 'PUT',
-      body: JSON.stringify({
-        sections: [{ id: '1', title: 'Checklist', items: [] }],
-        expected_revision: 1,
-      }),
-    });
-
-    const response = await handleChecklists(request, mockEnv);
+    const response = await handleChecklists(apiRequest('checklists/shared/missing-run', 'PUT', {
+      sections: [{ id: '1', title: 'Checklist', items: [] }],
+      expected_revision: 1,
+    }), mockEnv);
 
     expect(response.status).toBe(404);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();

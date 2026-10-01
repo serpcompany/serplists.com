@@ -3,6 +3,7 @@ import { dbMocks, mockEnv, resetTemplatesHandlerMocks, slugBody } from '../../..
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { paramValuesIn } from '../../../support/drizzleSql';
+import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const templateWithASlugTheMigrationBackfillsLeftUnstripped = () => ({
@@ -19,6 +20,12 @@ const templateWithASlugTheMigrationBackfillsLeftUnstripped = () => ({
   created_at: new Date().toISOString(),
   updated_at: null,
 });
+
+async function putToTheTemplateWithALegacySlug(body: Record<string, unknown>) {
+  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+  dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
+  return handleTemplates(apiRequest('templates/template-1', 'PUT', body), mockEnv);
+}
 
 describe('Templates Handlers', () => {
   beforeEach(resetTemplatesHandlerMocks);
@@ -156,19 +163,11 @@ describe('Templates Handlers', () => {
   });
 
   it('saves a template whose stored legacy slug is echoed back unchanged', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
-
-    const request = new Request('http://localhost/api/templates/template-1', {
-      method: 'PUT',
-      body: JSON.stringify({
-        title: 'Q&A: Launch plan (fixed typo)',
-        slug: 'qanda:-launch-plan-1a2b3c4d',
-        expected_version: 3,
-      }),
+    const response = await putToTheTemplateWithALegacySlug({
+      title: 'Q&A: Launch plan (fixed typo)',
+      slug: 'qanda:-launch-plan-1a2b3c4d',
+      expected_version: 3,
     });
-
-    const response = await handleTemplates(request, mockEnv);
 
     expect(response.status).toBe(200);
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
@@ -177,15 +176,7 @@ describe('Templates Handlers', () => {
   });
 
   it('toggles visibility on a template with a legacy slug', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
-
-    const request = new Request('http://localhost/api/templates/template-1', {
-      method: 'PUT',
-      body: JSON.stringify({ is_public: true, slug: 'qanda:-launch-plan-1a2b3c4d' }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await putToTheTemplateWithALegacySlug({ is_public: true, slug: 'qanda:-launch-plan-1a2b3c4d' });
 
     expect(response.status).toBe(200);
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
@@ -194,15 +185,7 @@ describe('Templates Handlers', () => {
   });
 
   it('still rejects a changed slug the slug rule cannot keep anything of', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
-
-    const request = new Request('http://localhost/api/templates/template-1', {
-      method: 'PUT',
-      body: JSON.stringify({ title: 'Launch plan', slug: '?!?' }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await putToTheTemplateWithALegacySlug({ title: 'Launch plan', slug: '?!?' });
     const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
@@ -211,15 +194,7 @@ describe('Templates Handlers', () => {
   });
 
   it('rejects a PUT whose only field is the unchanged slug', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
-
-    const request = new Request('http://localhost/api/templates/template-1', {
-      method: 'PUT',
-      body: JSON.stringify({ slug: 'qanda:-launch-plan-1a2b3c4d' }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await putToTheTemplateWithALegacySlug({ slug: 'qanda:-launch-plan-1a2b3c4d' });
 
     expect(response.status).toBe(400);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   dbMocks,
+  expectTheOrganizationOwnsIt,
   importBody,
   importPack,
   mockEnv,
@@ -9,7 +10,11 @@ import {
 } from '../../../support/portableTemplatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
+import { activeMember } from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+
+const ONE_ITEM_CHECKLIST = [{ title: 'Checklist', items: [{ title: 'Item' }] }];
 
 describe('portable template import/export API', () => {
   beforeEach(resetPortableTemplatesHandlerMocks);
@@ -17,34 +22,24 @@ describe('portable template import/export API', () => {
   it('imports portable template packs', async () => {
     dbMocks.selectChain.limit.mockResolvedValue([]);
 
-    const request = new Request('http://localhost/api/templates/backup', {
-      method: 'POST',
-      body: JSON.stringify({
-        kind: 'serplists-template-pack',
-        schemaVersion: '2.0.0',
-        exportedAt: '2026-03-21T00:00:00.000Z',
-        templates: [
+    const response = await importPack([
+      {
+        title: 'Imported Portable Template',
+        visibility: 'public',
+        seoTitle: 'Imported SEO Title',
+        seoDescription: 'Imported SEO Description',
+        rules: [
           {
-            title: 'Imported Portable Template',
-            visibility: 'public',
-            seoTitle: 'Imported SEO Title',
-            seoDescription: 'Imported SEO Description',
-            rules: [
-              {
-                id: 'rule-1',
-                type: 'required-field',
-                path: 'sections[].items[].title',
-                value: 'Every item needs a title',
-                severity: 'error',
-              },
-            ],
-            sections: [{ title: 'Checklist', items: [{ title: 'Item' }] }],
+            id: 'rule-1',
+            type: 'required-field',
+            path: 'sections[].items[].title',
+            value: 'Every item needs a title',
+            severity: 'error',
           },
         ],
-      }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+        sections: ONE_ITEM_CHECKLIST,
+      },
+    ]);
     const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
@@ -68,27 +63,12 @@ describe('portable template import/export API', () => {
   });
 
   it('imports portable template packs into paid team workspaces', async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
-    ]).mockResolvedValue([]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([activeMember('editor')]).mockResolvedValue([]);
 
-    const request = new Request('http://localhost/api/templates/backup?teamId=team-1', {
-      method: 'POST',
-      body: JSON.stringify({
-        kind: 'serplists-template-pack',
-        schemaVersion: '2.0.0',
-        exportedAt: '2026-03-21T00:00:00.000Z',
-        templates: [
-          {
-            title: 'Imported Team Template',
-            visibility: 'private',
-            sections: [{ title: 'Checklist', items: [{ title: 'Item' }] }],
-          },
-        ],
-      }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await importPack(
+      [{ title: 'Imported Team Template', visibility: 'private', sections: ONE_ITEM_CHECKLIST }],
+      { teamId: 'team-1' },
+    );
     const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
@@ -96,29 +76,14 @@ describe('portable template import/export API', () => {
 
     expect(dbMocks.db.batch).toHaveBeenCalled();
     expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
-    expect(inserted.owner_type).toBe('team');
-    expect(inserted.team_id).toBe('team-1');
-    expect(inserted.created_by_user_id).toBe('user-123');
+    expectTheOrganizationOwnsIt(dbMocks.insertChain.values.mock.calls[0][0]);
   });
 
   it('rejects unsupported portable schema versions', async () => {
-    const request = new Request('http://localhost/api/templates/backup', {
-      method: 'POST',
-      body: JSON.stringify({
-        kind: 'serplists-template-pack',
-        schemaVersion: '9.9.9',
-        exportedAt: '2026-03-21T00:00:00.000Z',
-        templates: [
-          {
-            title: 'Imported Portable Template',
-            sections: [{ title: 'Checklist', items: [{ title: 'Item' }] }],
-          },
-        ],
-      }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await importPack(
+      [{ title: 'Imported Portable Template', sections: ONE_ITEM_CHECKLIST }],
+      { schemaVersion: '9.9.9' },
+    );
     const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
@@ -242,7 +207,7 @@ describe('portable template import/export API', () => {
     it('exports a pack that passes the portable schema and re-imports', async () => {
       dbMocks.selectChain.orderBy.mockResolvedValueOnce(editorRows());
 
-      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', { method: 'GET' }), mockEnv);
+      const response = await handleTemplates(apiRequest('templates/backup'), mockEnv);
       const pack = await readJson(response, packBody);
 
       expect(response.status).toBe(200);
@@ -260,10 +225,7 @@ describe('portable template import/export API', () => {
         { id: 'c-4', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }] },
       ]);
 
-      const importResponse = await handleTemplates(new Request('http://localhost/api/templates/backup', {
-        method: 'POST',
-        body: JSON.stringify(pack),
-      }), mockEnv);
+      const importResponse = await handleTemplates(apiRequest('templates/backup', 'POST', pack), mockEnv);
       const summary = await readJson(importResponse, importBody);
 
       expect(importResponse.status).toBe(200);
@@ -271,21 +233,13 @@ describe('portable template import/export API', () => {
     });
 
     it('imports older packs with blank fields and fails only the invalid template', async () => {
-      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', {
-        method: 'POST',
-        body: JSON.stringify({
-          kind: 'serplists-template-pack',
-          schemaVersion: '2.0.0',
-          exportedAt: '2026-03-21T00:00:00.000Z',
-          templates: [
-            { title: 'No tasks', sections: [] },
-            {
-              title: 'Old export',
-              sections: [{ title: '', items: [{ title: 'Pack', contents: [{ type: 'video', value: '' }] }] }],
-            },
-          ],
-        }),
-      }), mockEnv);
+      const response = await importPack([
+        { title: 'No tasks', sections: [] },
+        {
+          title: 'Old export',
+          sections: [{ title: '', items: [{ title: 'Pack', contents: [{ type: 'video', value: '' }] }] }],
+        },
+      ]);
       const summary = await readJson(response, importBody);
 
       expect(response.status).toBe(200);

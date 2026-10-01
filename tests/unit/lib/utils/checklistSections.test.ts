@@ -10,7 +10,12 @@ import {
 } from '@/lib/utils/checklistSections';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
-import { malformedSectionsStoredBeforeValidation } from '../../../fixtures/malformedSections';
+import {
+  MALFORMED_CONTENTS_A_TEMPLATE_STORED,
+  malformedSectionsStoredBeforeValidation,
+  sectionsWithContents,
+  THE_SAME_CONTENTS_MADE_SAFE,
+} from '../../../fixtures/malformedSections';
 
 describe('section and sub-task display titles', () => {
   it('names a section by its 1-based position', () => {
@@ -106,19 +111,9 @@ describe('normalizeSections on stored content', () => {
   });
 
   it('turns a malformed Sub-task list into an empty one and a non-text value into empty text', () => {
-    const [section] = normalizeSections([{
-      id: 's1',
-      title: 'Launch',
-      items: [{ id: 'i1', title: 'Task', contents: [
-        { type: 'subItems', value: '', subItems: 'x' },
-        { type: 'text', value: {} },
-      ] }],
-    }]);
+    const [section] = normalizeSections(sectionsWithContents(...MALFORMED_CONTENTS_A_TEMPLATE_STORED));
 
-    expect(section.items[0].contents).toEqual([
-      { type: 'subItems', value: '', subItems: [] },
-      { type: 'text', value: '' },
-    ]);
+    expect(section.items[0].contents).toEqual(THE_SAME_CONTENTS_MADE_SAFE);
     expect(calculateSectionsProgress([section])).toBe(0);
   });
 

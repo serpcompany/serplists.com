@@ -1,14 +1,23 @@
 import { vi } from 'vitest';
 import { z } from 'zod';
 
-export { dbMocks, mockEnv, resetToASignedOutVisitorOnTheFreePlan as resetTemplatesHandlerMocks } from './apiHandlerMocks';
+export {
+  dbMocks,
+  expectSuccessUpdating,
+  expectTheOrganizationOwnsIt,
+  expectTheOrganizationPlanChecked,
+  mockEnv,
+  PRO_PLAN,
+  resetToASignedOutVisitorOnTheFreePlan as resetTemplatesHandlerMocks,
+  successBody,
+  TEAM_PLAN,
+} from './apiHandlerMocks';
 
 vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
   (await import('./guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 export const createdBody = z.object({ id: z.string() }).passthrough();
 export const slugBody = z.object({ slug: z.string() }).passthrough();
-export const successBody = z.object({ success: z.boolean() }).passthrough();
 export const importBody = z
   .object({
     imported: z.number(),

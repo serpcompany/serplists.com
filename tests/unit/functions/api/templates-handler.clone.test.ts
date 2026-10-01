@@ -1,33 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createdBody, dbMocks, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
+import { createdBody, dbMocks, mockEnv, PRO_PLAN, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { activeMember, publicTemplateSource } from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+
+const publicSource = publicTemplateSource({ created_at: new Date().toISOString() });
+
+const clone = (body: Record<string, unknown>) => handleTemplates(apiRequest('templates/template-1/clone', 'POST', body), mockEnv);
 
 describe('Templates Handlers', () => {
   beforeEach(resetTemplatesHandlerMocks);
 
   describe('copying a public template', () => {
-    const publicSource = {
-      id: 'template-1',
-      title: 'Public Template',
-      description: '',
-      items: JSON.stringify([]),
-      category: '[]',
-      tags: '[]',
-      user_id: 'other-user',
-      is_public: true,
-      slug: 'public-template',
-      created_at: new Date().toISOString(),
-      updated_at: null,
-      version: 1,
-    };
-    const editor = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' };
-    const clone = (body: Record<string, unknown>) => handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }), mockEnv);
+    const editor = activeMember('editor');
 
     afterEach(() => {
       dbMocks.selectChain.limit.mockReset();
@@ -82,7 +70,7 @@ describe('Templates Handlers', () => {
 
     it('starts the copy at version 1, keeping the source counters only as provenance', async () => {
       vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-      vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
       dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...publicSource, version: 37, content_version: 12 }]).mockResolvedValueOnce([]);
 
       const response = await clone({ visibility: 'private' });
@@ -101,34 +89,11 @@ describe('Templates Handlers', () => {
 
   it('clones a public template for Pro users, whose copies no template count limits', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({
-      plan: 'pro',
-      limits: { maxTemplates: null, maxActiveRuns: null },
-    });
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
     const templatesHoldingTheBaseSlug: never[] = [];
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      {
-        id: 'template-1',
-        title: 'Public Template',
-        description: '',
-        items: JSON.stringify([]),
-        category: '[]',
-        tags: '[]',
-        user_id: 'other-user',
-        is_public: true,
-        slug: 'public-template',
-        created_at: new Date().toISOString(),
-        updated_at: null,
-        version: 1,
-      },
-    ]).mockResolvedValueOnce(templatesHoldingTheBaseSlug);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([publicSource]).mockResolvedValueOnce(templatesHoldingTheBaseSlug);
 
-    const request = new Request('http://localhost/api/templates/template-1/clone', {
-      method: 'POST',
-      body: JSON.stringify({ visibility: 'private' }),
-    });
-
-    const response = await handleTemplates(request, mockEnv);
+    const response = await clone({ visibility: 'private' });
     const data = await readJson(response, createdBody);
 
     expect(response.status).toBe(200);

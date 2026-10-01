@@ -174,15 +174,17 @@ const storedIds = (items: unknown): string[] => (JSON.parse(String(items)) as Ro
   ]),
 ]);
 
+function signInWithNoResponsesYet() {
+  vi.clearAllMocks();
+  responses.length = 0;
+  chainSelectsUpdatesAndDeletes(dbMocks);
+  dbMocks.insertChain.values.mockResolvedValue(undefined);
+  dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
+  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+}
+
 describe('saving a Template stored without ids the API accepts, which the editor resends so a second save never renumbers it', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    responses.length = 0;
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  });
+  beforeEach(signInWithNoResponsesYet);
 
   it.each(cases)('keeps the ids and run progress over two saves in one editor session (%s)', async (_name, subItemIds) => {
     const store = createStore(subItemIds);
@@ -267,14 +269,7 @@ const sectionsWithContentBlocksWithoutIds = (run = false) => [
 ];
 
 describe('saving a Template whose content blocks have no ids', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    responses.length = 0;
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  });
+  beforeEach(signInWithNoResponsesYet);
 
   it('keeps content_version and the run when a save changes only the description', async () => {
     const { template, run } = createStore(cases[0][1]);

@@ -1,9 +1,11 @@
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
+import { z } from 'zod';
 import { type Entitlements, getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiEnv } from './apiEnv';
-import { chainSelectsUpdatesAndDeletes } from './drizzleChainMocks';
+import { resetChainsToEmptyResults } from './drizzleChainMocks';
 import { dbMocks } from './mockedDrizzleD1';
+import { readJson } from './readJson';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -26,14 +28,7 @@ export const EVERY_GUARDED_WRITE_APPLIED = [{ meta: { changes: 1 } }, { meta: { 
 
 export function resetToASignedOutVisitorOnTheFreePlan() {
   vi.clearAllMocks();
-  for (const queue of [dbMocks.selectChain.orderBy, dbMocks.selectChain.limit, dbMocks.db.batch]) queue.mockReset();
-  chainSelectsUpdatesAndDeletes(dbMocks);
-  dbMocks.selectChain.orderBy.mockResolvedValue([]);
-  dbMocks.selectChain.limit.mockResolvedValue([]);
-  dbMocks.insertChain.values.mockResolvedValue(undefined);
-  dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-  dbMocks.deleteChain.where.mockResolvedValue(undefined);
-  dbMocks.db.batch.mockResolvedValue([]);
+  resetChainsToEmptyResults(dbMocks);
 
   vi.mocked(getSessionUserId).mockResolvedValue(null);
   vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
@@ -50,4 +45,27 @@ export function signInWithPlans(userId: string, personalPlan: Entitlements, orga
   vi.mocked(getSessionUserId).mockResolvedValue(userId);
   vi.mocked(getEntitlementsForUser).mockResolvedValue(personalPlan);
   vi.mocked(getEntitlementsForContext).mockResolvedValue(organizationPlan);
+}
+
+export const successBody = z.object({ success: z.boolean() }).passthrough();
+
+export async function expectSuccessUpdating(response: Response, columns: Record<string, unknown>) {
+  const data = await readJson(response, successBody);
+
+  expect(response.status).toBe(200);
+  expect(data.success).toBe(true);
+  expect(dbMocks.updateChain.set).toHaveBeenCalledWith(expect.objectContaining(columns));
+}
+
+export function expectTheOrganizationPlanChecked() {
+  expect(vi.mocked(getEntitlementsForContext)).toHaveBeenCalledWith(
+    mockEnv,
+    expect.objectContaining({ type: 'team', teamId: 'team-1', userId: 'user-123' }),
+  );
+}
+
+export function expectTheOrganizationOwnsIt(inserted: Record<string, unknown>) {
+  expect(inserted.owner_type).toBe('team');
+  expect(inserted.team_id).toBe('team-1');
+  expect(inserted.created_by_user_id).toBe('user-123');
 }

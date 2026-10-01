@@ -1,39 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
+import { activeMember, publicTemplateSource } from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext } from '@functions/api/utils/entitlements';
 
-const membership = (role: string) => [
-  { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role, status: 'active' },
-];
+const membership = (role: string) => [activeMember(role)];
 
-const publicSource = [
-  {
-    id: 'template-1',
-    title: 'Public Template',
-    description: '',
-    items: JSON.stringify([]),
-    category: '[]',
-    tags: '[]',
-    user_id: 'other-user',
-    is_public: true,
-    slug: 'public-template',
-    created_at: '2026-04-18T00:00:00.000Z',
-    updated_at: null,
-    version: 1,
-  },
-];
+const publicSource = [publicTemplateSource()];
 
 const cloneIntoOrganization = () =>
-  handleTemplates(
-    new Request('http://localhost/api/templates/template-1/clone', {
-      method: 'POST',
-      body: JSON.stringify({ teamId: 'team-1', visibility: 'private' }),
-    }),
-    mockEnv,
-  );
+  handleTemplates(apiRequest('templates/template-1/clone', 'POST', { teamId: 'team-1', visibility: 'private' }), mockEnv);
 
 describe('POST /api/templates/:id/clone into an Organization, which decides for the template detail page whether a Free Organization may take the copy', () => {
   beforeEach(() => {

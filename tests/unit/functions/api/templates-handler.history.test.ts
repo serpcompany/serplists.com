@@ -13,14 +13,18 @@ const historyBody = z
   })
   .passthrough();
 
+function chainTheVersionAndEventReads() {
+  dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain).mockReturnValueOnce(dbMocks.selectChain);
+}
+
 describe('Templates Handlers', () => {
-  beforeEach(resetTemplatesHandlerMocks);
+  beforeEach(() => {
+    resetTemplatesHandlerMocks();
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+  });
 
   it('returns template history to active team members, each version with the metadata of its audit event, and the events with them', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.orderBy
-      .mockReturnValueOnce(dbMocks.selectChain)
-      .mockReturnValueOnce(dbMocks.selectChain);
+    chainTheVersionAndEventReads();
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
         {
@@ -127,10 +131,7 @@ describe('Templates Handlers', () => {
   });
 
   it('returns audit events without diffs, also for templates that have no versions', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.orderBy
-      .mockReturnValueOnce(dbMocks.selectChain)
-      .mockReturnValueOnce(dbMocks.selectChain);
+    chainTheVersionAndEventReads();
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([{ id: 'template-1', title: 'Legacy', items: '[]', version: 1, user_id: 'user-123', owner_type: 'user', team_id: null, is_public: false }])
       .mockResolvedValueOnce([])
@@ -159,7 +160,6 @@ describe('Templates Handlers', () => {
   });
 
   it('gives each version the metadata of the audit event its write recorded, naming a Run Key, and null to one older than the newest events read', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     const actor = { actor_email: 'owner@example.com', actor_name: 'Owner', actor_username: 'owner' };
     const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
     const version = (version: number, action: string, createdAt: string) => ({
@@ -180,9 +180,7 @@ describe('Templates Handlers', () => {
       created_at: createdAt,
       ...actor,
     });
-    dbMocks.selectChain.orderBy
-      .mockReturnValueOnce(dbMocks.selectChain)
-      .mockReturnValueOnce(dbMocks.selectChain);
+    chainTheVersionAndEventReads();
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([{ id: 'template-1', title: 'Launch', items: '[]', version: 3, user_id: 'user-123', owner_type: 'user', team_id: null, is_public: false }])
       .mockResolvedValueOnce([
@@ -209,7 +207,6 @@ describe('Templates Handlers', () => {
   });
 
   it('should not expose public template history to non-owners', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: 'template-1',

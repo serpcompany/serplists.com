@@ -7,6 +7,7 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { columnNamesIn } from '../../../support/drizzleSql';
+import { storedSections, storedSectionsAsTheEditorResendsThem } from '../../../fixtures/editorResentSections';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const reconciledBody = z.object({ reconciledRuns: z.number() }).passthrough();
@@ -202,37 +203,6 @@ describe('Templates Handlers', () => {
   });
 
   describe('template saves that resend unchanged sections', () => {
-    const storedSections = [
-      {
-        id: 'section-1',
-        title: 'Launch',
-        items: [
-          {
-            id: 'item-1',
-            title: 'Write copy',
-            description: 'Draft it',
-            contents: [{ id: 'content-1', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }] }],
-          },
-          { id: 'item-2', title: 'Publish' },
-        ],
-      },
-    ];
-    const storedSectionsAsTheEditorResendsThem = [
-      {
-        title: 'Launch',
-        id: 'section-1',
-        items: [
-          {
-            isCompleted: false,
-            contents: [{ value: '', type: 'subItems', id: 'content-1', subItems: [{ title: 'Short', id: 'sub-1', isCompleted: false }] }],
-            description: 'Draft it',
-            title: 'Write copy',
-            id: 'item-1',
-          },
-          { id: 'item-2', title: 'Publish', description: '', contents: [], isCompleted: false, completed: false },
-        ],
-      },
-    ];
     const storedTemplate = {
       id: 'template-1',
       user_id: 'user-123',

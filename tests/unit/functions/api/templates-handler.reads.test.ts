@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks, slugBody } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiRequest } from '../../../support/apiRequest';
 import { columnNamesIn } from '../../../support/drizzleSql';
 import { jsonObject, jsonObjects, readJson } from '../../../support/readJson';
 
@@ -103,16 +104,20 @@ describe('Templates Handlers', () => {
     });
   });
 
-  it('should scope authenticated template lists to public or personal-owned templates', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+  async function columnsTheListFiltersOn(path: string) {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([]);
 
-    const request = new Request('http://localhost/api/templates', { method: 'GET' });
-    const response = await handleTemplates(request, mockEnv);
-    const predicate = dbMocks.selectChain.where.mock.calls[0][0];
-    const columnNames = columnNamesIn(predicate);
+    const response = await handleTemplates(apiRequest(path), mockEnv);
 
     expect(response.status).toBe(200);
+    return columnNamesIn(dbMocks.selectChain.where.mock.calls[0][0]);
+  }
+
+  it('should scope authenticated template lists to public or personal-owned templates', async () => {
+    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+
+    const columnNames = await columnsTheListFiltersOn('templates');
+
     expect(columnNames).toContain('is_public');
     expect(columnNames).toContain('owner_type');
     expect(columnNames).toContain('user_id');
@@ -121,14 +126,8 @@ describe('Templates Handlers', () => {
   });
 
   it('should scope public profile template lists to personal-owned public templates', async () => {
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([]);
+    const columnNames = await columnsTheListFiltersOn('templates/public?userId=user-123');
 
-    const request = new Request('http://localhost/api/templates/public?userId=user-123', { method: 'GET' });
-    const response = await handleTemplates(request, mockEnv);
-    const predicate = dbMocks.selectChain.where.mock.calls[0][0];
-    const columnNames = columnNamesIn(predicate);
-
-    expect(response.status).toBe(200);
     expect(columnNames).toContain('owner_type');
     expect(columnNames).toContain('user_id');
     expect(columnNames).toContain('team_id');

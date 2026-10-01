@@ -23,3 +23,14 @@ export function chainSelectsUpdatesAndDeletes({ selectChain, updateChain, delete
   updateChain.where.mockReturnValue(updateChain);
   deleteChain.where.mockReturnValue(deleteChain);
 }
+
+export function resetChainsToEmptyResults(mocks: DrizzleChainMocks) {
+  for (const queue of [mocks.selectChain.orderBy, mocks.selectChain.limit, mocks.db.batch]) queue.mockReset();
+  chainSelectsUpdatesAndDeletes(mocks);
+  mocks.selectChain.orderBy.mockResolvedValue([]);
+  mocks.selectChain.limit.mockResolvedValue([]);
+  mocks.insertChain.values.mockResolvedValue(undefined);
+  mocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
+  mocks.deleteChain.where.mockResolvedValue(undefined);
+  mocks.db.batch.mockResolvedValue([]);
+}

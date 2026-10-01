@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dbMocks } from '../../../support/mockedDrizzleD1';
 import { jsonObject, readJson } from '../../../support/readJson';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
+import { resetChainsToEmptyResults } from '../../../support/drizzleChainMocks';
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),
@@ -40,13 +40,7 @@ const put = async (body: Record<string, unknown>) => {
 describe('PUT /api/templates/:id response, which names the version and slug it stored so the editor\'s next save needs no list reload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-    dbMocks.db.batch.mockResolvedValue([]);
+    resetChainsToEmptyResults(dbMocks);
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
   });
 
