@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-53.**
+then you raise it. **Next ID: TD-54.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -48,6 +48,7 @@ then you raise it. **Next ID: TD-53.**
 | TD-47 | Tests | `tests/unit/db/officialTemplatesSeed.test.ts` and `tests/unit/db/seeds/official-templates.test.ts` both check the official seed's line breaks. | Keep one check. Small. | None |
 | TD-48 | Duplication | The `.env` file parser is written three times: `parseEnvFile` in `scripts/check-env.mjs`, `scripts/dev-auto-lib.mjs` and `scripts/stripe/_env.mjs`. | Export one from `scripts/lib/` and import it in all three. Small. | None |
 | TD-49 | Tests | `tests/integration/local-d1-handler-env.ts` repeats the `.local-d1-env-disabled` literal that `NO_DEV_VARS_OR_DOTENV_FILES` names. | Import the constant. Small. | None |
-| TD-50 | Tests | 42 response reads in tests still cast instead of parsing with `readJson()`: `agent-mcp-handler.test.ts` (31), `agent-mcp-lists`, `agent-mcp-result-bounds`, `teams-sqlite.test.ts`, `templateHistoryTimeline.contract.test.ts` (needs TD-2's history schema), and 11 `response.json()` reads in browser specs, typed `any`. | Read them with `readJson()` and a schema. Medium. | None |
+| TD-50 | Tests | 42 response reads in tests still cast instead of parsing with `readJson()`: the `agent-mcp-handler.*.test.ts` files (31, through `toolBody` in `tests/support/agentMcpHandler.ts`), `agent-mcp-lists`, `agent-mcp-result-bounds`, `asUser` in `tests/support/teamsSqlite.ts`, `templateHistoryTimeline.contract.test.ts` (needs TD-2's history schema), and 11 `response.json()` reads in browser specs, typed `any`. | Read them with `readJson()` and a schema. Medium. | None |
 | TD-51 | Dependencies | Two `postcss` versions (8.5.6 at the root, 8.5.23 under `@tailwindcss/postcss`) have types that don't match, so `tests/unit/styles/tailwindTypography.test.ts` narrows the plugin at runtime. | Dedupe `postcss`, then drop the runtime check. Small. | None |
 | TD-52 | Dependencies | `@types/node` 22.17 lacks `node:sqlite`'s `setReturnArrays()`, so `tests/support/sqliteRowArrays.ts` declares it. | Bump `@types/node` to 22.20 or newer and delete the declaration. Small. | None |
+| TD-53 | Types | `scripts/check-production-d1-schema-lib.mjs`, `scripts/lib/d1-schema-pragmas.mjs` and `scripts/lib/d1-schema-drift.mjs` have no `.d.mts`, so the tests that import them get types TypeScript infers from the JavaScript. | Add the declaration files, as RELIABILITY's convention asks. Small. | None |
