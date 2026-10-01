@@ -57,17 +57,18 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
   `updated_at` (else `created_at`) or its `sitemap_profile_revisions` row. Bundled
   starters and static pages carry the dates the bundled catalog records from git
   ([RELIABILITY.md](../RELIABILITY.md#deploy-pipeline)).
-- `/templates/` and `/categories/` take the newest of their own date, the bundled
-  inventory's date and their family's revision. `/categories/` lists every category, so it
-  also follows every category revision, including the row of a category whose last public
-  Template just left. It ignores `sitemap_revisions['categories']`, which the triggers bump
-  on every public Template change, with or without a category, and the `'[]'` that
-  uncategorized Templates store (and the triggers record) dates nothing. The category list
-  takes nothing a caller could pass differently, because the index hashes it to date the
-  categories shard and the shard serves the same list.
+- `/templates/` takes the newest of its own date, the bundled inventory's date and the
+  `templates` revision. `/categories/` lists every category, so it takes the newest of its
+  own date, the bundled inventory's date, every category entry and every category
+  revision, including the row of a category whose last public Template just left. It
+  ignores `sitemap_revisions['categories']`, which the triggers bump on every public
+  Template change, with or without a category, and the `'[]'` that uncategorized
+  Templates store (and the triggers record) dates nothing. The category list takes nothing
+  a caller could pass differently, because the index hashes it to date the categories
+  shard and the shard serves the same list.
 - The index dates each shard from `sitemap_shard_revisions`: a hash of the shard's rendered
   content and when it last changed. An unchanged hash keeps its date; a changed one takes
-  the family's revision or the newest entry in the shard. The index records every page it
+  the newer of the family's revision and the shard's newest entry. The index records every page it
   lists there before it responds, and deletes the rows of pages the family no longer fills.
   Each family's revision also follows the catalog's `implementationLastmod`, the newest
   commit to the code that shapes sitemap output (`SITEMAP_IMPLEMENTATION_SOURCES` in
