@@ -1,5 +1,5 @@
 import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../support/elements';
 
 import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
@@ -243,7 +243,8 @@ describe('cached sitemaps', () => {
   });
 
   it('keys a missing revision row as a stable value that a new row replaces', async () => {
-    const categories = families.find((family) => family.name === 'categories')!;
+    const categories = families.find((family) => family.name === 'categories');
+    assert.exists(categories);
     revisions = [['profiles', '2030-01-01 00:00:00.000'], ['templates', '2030-01-01 00:00:00.000']];
     expect(await servingTheRealRouteRebuilds(categories)).toBe(true);
     expect(await servingTheRealRouteRebuilds(categories)).toBe(false);

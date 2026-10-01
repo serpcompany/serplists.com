@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firstOf, sectionAt, taskAt } from '../../../support/elements';
+import { firstOf, present, sectionAt, taskAt } from '../../../support/elements';
 
 import { applyTemplateSaveDefaults as applyTemplateDefaults } from '@/hooks/useTemplateValidation';
 import {
@@ -25,9 +25,9 @@ const templateTheEditorSavedWithEveryContentTypeBlank = (): ChecklistTemplate =>
   const item = createTemplateEditorItem();
   item.title = 'Write copy';
   item.contents = everyContentTypeTheEditorCanAdd.map((type) => createTemplateEditorContent(type));
-  const subItems = item.contents.find((content) => content.type === 'subItems');
+  const subItems = present(item.contents.find((content) => content.type === 'subItems'), 'a Sub-tasks block');
   const trailingBlankSubTask = createTemplateEditorSubItem();
-  subItems!.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, trailingBlankSubTask];
+  subItems.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, trailingBlankSubTask];
   sectionAt(form, 0).items = [item];
   const { title, sections } = applyTemplateDefaults(form.title, form.sections as ChecklistSection[]);
 

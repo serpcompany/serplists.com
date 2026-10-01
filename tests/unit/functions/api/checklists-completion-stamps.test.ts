@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { jsonObject, readJson } from '../../../support/readJson';
@@ -57,8 +57,8 @@ function auditDiff(): Record<string, unknown> {
   const auditRow = dbMocks.insertChain.values.mock.calls
     .map(([row]) => row as Record<string, unknown>)
     .find((row) => typeof row.diff_json === 'string');
-  expect(auditRow).toBeDefined();
-  return JSON.parse(auditRow!.diff_json as string);
+  assert.exists(auditRow);
+  return JSON.parse(auditRow.diff_json as string);
 }
 
 describe('run completion stamps on PUT /api/checklists/:id, which only a transition into completed writes', () => {

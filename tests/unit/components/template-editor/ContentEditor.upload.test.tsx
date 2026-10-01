@@ -85,9 +85,9 @@ function renderEditorFileUploadFromCurrentForm() {
 
 function selectFile(tree: unknown): Promise<void> {
   const input = findElement(tree, (element) => element.props.type === 'file');
-  expect(input).not.toBeNull();
+  assert.exists(input, 'the file input');
   const file = new File(['png'], 'photo.png', { type: 'image/png' });
-  return (input!.props.onChange as (event: unknown) => Promise<void>)({
+  return (input.props.onChange as (event: unknown) => Promise<void>)({
     target: { files: [file] },
   });
 }
@@ -144,8 +144,8 @@ describe('ContentEditor media uploads', () => {
 
     const tree = renderEditorFileUploadFromCurrentForm();
     const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
-    expect(removeButton).not.toBeNull();
-    await (removeButton!.props.onClick as () => unknown)();
+    assert.exists(removeButton, 'the Remove uploaded image button');
+    await (removeButton.props.onClick as () => unknown)();
 
     const cleared = contentAt(0);
     expect(cleared?.id).toBe('c1');
@@ -160,9 +160,11 @@ describe('ContentEditor media uploads', () => {
     const textBlockInsertedAbove = { id: 'c0', type: 'text', value: 'Intro' };
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
+    const blockBeingUploadedTo = contentAt(0);
+    assert.exists(blockBeingUploadedTo);
     harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, [
       textBlockInsertedAbove,
-      contentAt(0)!,
+      blockBeingUploadedTo,
     ]);
     finishUpload({ url: UPLOADED_URL, fileName: 'photo.png', fileSize: 123 });
     await pending;
@@ -229,8 +231,8 @@ describe('ContentEditor media URL typed over an upload', () => {
       tree,
       (element) => element.props.id === 'content-editor-test' && typeof element.props.onChange === 'function',
     );
-    expect(input).not.toBeNull();
-    (input!.props.onChange as (event: unknown) => void)({ target: { value } });
+    assert.exists(input, 'the URL field');
+    (input.props.onChange as (event: unknown) => void)({ target: { value } });
   }
 
   it('drops the uploaded file name and size and records a URL source, so runs never label the new link with the old file', () => {

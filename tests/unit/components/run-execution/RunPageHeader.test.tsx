@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { RunPageHeader } from '@/components/run-execution/RunPageHeader';
 import { Button } from '@/components/ui/button';
@@ -37,8 +37,8 @@ const clickButton = (props: HeaderProps, label: string, detail: number) => {
     header.props.actions as ReactNode,
     (element) => element.type === Button && [element.props.children].flat().includes(label),
   );
-  expect(button, label).toBeDefined();
-  (button!.props.onClick as (event: { detail: number }) => void)({ detail });
+  assert.exists(button, label);
+  (button.props.onClick as (event: { detail: number }) => void)({ detail });
 };
 
 describe("RunPageHeader rename buttons, which take each other's place under the pointer", () => {

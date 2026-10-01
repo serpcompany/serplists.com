@@ -53,7 +53,7 @@ async function createStaleCompletedRun(page: Page, title: string) {
   return { runId: run.id, templateId: template.id };
 }
 
-test('the run page shows the share link when the clipboard refuses the copy, and the same link when reopened', async ({ page, context }) => {
+test('the run page shows the share link when the clipboard refuses the copy, and the same link when reopened', async ({ page, browser }) => {
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
   const runId = await createRun(page, `Share QA ${Date.now()}`);
@@ -77,7 +77,7 @@ test('the run page shows the share link when the clipboard refuses the copy, and
   await expect(page.getByRole('textbox', { name: 'Share link' })).toHaveValue(shareUrl);
   expect(shareRequests).toEqual([200]);
 
-  const guest = await context.browser()!.newPage();
+  const guest = await browser.newPage();
   await guest.goto(shareUrl);
   await expect(guest.getByText('Shared run snapshot').first()).toBeVisible();
   await guest.close();

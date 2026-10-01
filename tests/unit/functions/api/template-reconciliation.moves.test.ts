@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { contentAt, elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
 
 import { calculateRunProgress, reconcileRunSections } from '@functions/api/utils/template-reconciliation';
@@ -189,7 +189,8 @@ describe('work that moves to another section or task, which keeps its run state 
     for (const rearranged of rearrangements) {
       const result = reconcileRunSections(run, layout(rearranged), []);
       for (const [id, after] of notesAndOwnCompletionById(result.sections as Array<{ items: Entry[] }>)) {
-        const had = before.get(id)!;
+        const had = before.get(id);
+        assert.exists(had, id);
         expect(after.notes, id).toBe(had.notes);
         if ('isCompleted' in after && 'isCompleted' in had) expect(after.isCompleted, id).toBe(had.isCompleted);
       }

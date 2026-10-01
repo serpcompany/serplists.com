@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { metadata as rootMetadata } from '@/app/layout';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
@@ -13,7 +13,8 @@ const pngSize = (file: string) => {
 
 const expectShippedCardImage = (url: string | undefined) => {
   expect(url).toMatch(/^https:\/\/serplists\.com\/[\w/-]+\.png$/);
-  const file = path.join('public', new URL(url!).pathname);
+  assert.exists(url);
+  const file = path.join('public', new URL(url).pathname);
   expect(existsSync(file), file).toBe(true);
   expect(pngSize(file)).toEqual({ width: 1200, height: 630 });
 };

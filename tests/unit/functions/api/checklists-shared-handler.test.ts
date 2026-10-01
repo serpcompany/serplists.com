@@ -322,8 +322,10 @@ describe('shared run updates, which take only completion and notes from a guest 
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
     (taskIn(sections, 0, 0) as Record<string, unknown>).notes = 'Guest note';
-    elementAt(contentsOfTheFirstTask(sections), 1).subItems!.reverse();
-    const sub2AfterTheReverse = firstOf(elementAt(contentsOfTheFirstTask(sections), 1).subItems!);
+    const { subItems } = elementAt(contentsOfTheFirstTask(sections), 1);
+    assert.exists(subItems);
+    subItems.reverse();
+    const sub2AfterTheReverse = firstOf(subItems);
     sub2AfterTheReverse.isCompleted = true;
 
     const { response } = await putShared({ sections, expected_revision: 3 });

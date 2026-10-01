@@ -2,7 +2,7 @@ import '../../support/mockedNextNavigation';
 import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
 import { renderTheCategoryPageAt } from '../../support/categoryPage';
 import { FileText } from 'lucide-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
 import { findCategoryByLegacySlug } from '@/components/checklist-library/discovery-utils';
@@ -117,8 +117,8 @@ describe('CategoryDetail for categories in other scripts', () => {
       );
 
       const path = buildPublicCategoryPath(name);
-      expect(path).not.toBeNull();
-      const markup = renderCategoryPage(path!);
+      assert.exists(path);
+      const markup = renderCategoryPage(path);
 
       expect(markup).not.toContain('That page does not exist');
       expect(markup).toContain('Guide Checklist');

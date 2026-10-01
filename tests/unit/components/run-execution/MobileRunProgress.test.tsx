@@ -1,5 +1,5 @@
 import '../../../support/reactHooksKeptBetweenRenders';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MobileRunProgress } from '@/components/run-execution/MobileRunProgress';
 import { Sheet } from '@/components/ui/sheet';
@@ -33,8 +33,8 @@ const renderTaskSheet = () => {
     }),
   );
   const sheet = findElement(tree, (element) => element.type === Sheet);
-  expect(sheet).not.toBeNull();
-  return sheet!;
+  assert.exists(sheet);
+  return sheet;
 };
 
 const openTaskSheet = () => {

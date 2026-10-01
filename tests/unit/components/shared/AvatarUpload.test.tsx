@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
@@ -45,16 +45,20 @@ function render(onAvatarUpdate = vi.fn()) {
   const tree = AvatarUpload({ currentAvatarUrl: CURRENT_URL, onAvatarUpdate });
   const input = findElement(tree, (element) => element.props.type === 'file');
   const removeButton = findByAriaLabel(tree, 'Remove avatar');
+  assert.exists(input, 'the file input');
   return {
     onAvatarUpdate,
-    input: input!,
+    input,
     selectFile: (file: File) => {
       const target = { files: [file], value: 'C:\\fakepath\\file' };
-      return (input!.props.onChange as (event: unknown) => Promise<void>)({ target }).then(
+      return (input.props.onChange as (event: unknown) => Promise<void>)({ target }).then(
         () => target,
       );
     },
-    remove: () => (removeButton!.props.onClick as () => Promise<void>)(),
+    remove: () => {
+      assert.exists(removeButton, 'the Remove avatar button');
+      return (removeButton.props.onClick as () => Promise<void>)();
+    },
   };
 }
 

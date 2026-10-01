@@ -1,4 +1,5 @@
 import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
+import { capturedGroup } from '../../../support/elements';
 import { handleProfileByUsername } from '@functions/api/handlers/auth';
 import { buildProfilePreviewPath } from '@/lib/routes';
 import { apiEnv } from '../../../support/apiEnv';
@@ -58,7 +59,8 @@ describe('GET /api/profiles/by-username casing, on the migrated tables with thei
     addUser('newer', 'janedoe');
 
     const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
-    const previewUsername = decodeURIComponent(/^\/profile\/([^/]+)\/$/.exec(previewPath!)![1]!);
+    assert.exists(previewPath);
+    const previewUsername = decodeURIComponent(capturedGroup(/^\/profile\/([^/]+)\/$/.exec(previewPath), 1));
 
     expect(await (await lookUp(previewUsername)).json()).toMatchObject({ id: 'legacy' });
   });

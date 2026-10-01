@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
@@ -13,10 +13,10 @@ describe('TaskImageView', () => {
       TaskImageView({ alt: 'Task content', onFail, src: 'https://cdn.example.com/missing.png' }),
       (element) => element.type === 'img',
     );
-    expect(img).not.toBeNull();
+    assert.exists(img);
 
     const target = { src: 'https://cdn.example.com/missing.png' };
-    const onError = (img!.props as { onError: (event: unknown) => void }).onError;
+    const onError = (img.props as { onError: (event: unknown) => void }).onError;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       onError({ currentTarget: target, target });
     }

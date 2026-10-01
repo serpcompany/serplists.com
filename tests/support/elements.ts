@@ -2,6 +2,11 @@ export class MissingElementError extends Error {
   override name = 'MissingElementError';
 }
 
+export function present<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new MissingElementError(`Expected ${what}, but there is none.`);
+  return value;
+}
+
 export function elementAt<T>(list: readonly T[], index: number): T {
   for (const [position, element] of list.entries()) {
     if (position === index) return element;

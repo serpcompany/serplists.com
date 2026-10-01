@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FormProvider, useForm } from 'react-hook-form';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { SectionEditor } from '@/components/template-editor/SectionEditor';
 import { SEOMetaEditor } from '@/components/template-editor/SEOMetaEditor';
@@ -159,8 +159,9 @@ describe('Template form panels name every control for screen readers', () => {
     );
 
     const publicSwitch = getByAccessibleName(html, 'Public Template');
-    expect(publicSwitch?.attrs.role).toBe('switch');
-    expect(accessibleDescription(html, publicSwitch!)).toBe(
+    assert.exists(publicSwitch, 'a control named Public Template');
+    expect(publicSwitch.attrs.role).toBe('switch');
+    expect(accessibleDescription(html, publicSwitch)).toBe(
       'Make this template visible in the Template Library',
     );
   });
@@ -176,11 +177,13 @@ describe('Template form panels name every control for screen readers', () => {
     expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     const searchTitle = getByAccessibleName(html, 'Search Title');
     const slug = getByAccessibleName(html, 'URL Slug');
-    expect(searchTitle?.tag).toBe('input');
-    expect(slug?.tag).toBe('input');
+    assert.exists(searchTitle, 'a control named Search Title');
+    assert.exists(slug, 'a control named URL Slug');
+    expect(searchTitle.tag).toBe('input');
+    expect(slug.tag).toBe('input');
     expect(getByAccessibleName(html, 'Search Description')?.tag).toBe('textarea');
-    expect(accessibleDescription(html, searchTitle!)).toBe('Leave blank to use the template name');
-    expect(accessibleDescription(html, slug!)).toBe('The URL-friendly identifier for this template');
+    expect(accessibleDescription(html, searchTitle)).toBe('Leave blank to use the template name');
+    expect(accessibleDescription(html, slug)).toBe('The URL-friendly identifier for this template');
   });
 
   it('links the Section Title label, with ids unique across panels shown together', () => {

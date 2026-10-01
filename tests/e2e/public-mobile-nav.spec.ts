@@ -62,8 +62,8 @@ test.describe('public navigation on phones', () => {
     const menuButton = page.getByRole('button', { name: 'Open menu' });
     await expect(menuButton).toBeVisible();
     const box = await menuButton.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    if (!box) throw new Error('The menu button is not shown');
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
   });
 
   test('keeps the desktop header unchanged', async ({ page }) => {

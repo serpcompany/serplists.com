@@ -141,7 +141,7 @@ describe('useTemplateEditorModel saved values after defaults', () => {
       );
 
       vi.setSystemTime(new Date('2026-09-28T10:05:00.000Z'));
-      await model.save(first.savedValues!);
+      await model.save(first.savedValues);
       const itemIds = (payload: TemplateSavePayload) =>
         payload.sections.map((section) => section.items.map((item) => item.id));
       expect(itemIds(elementAt(sent, 1))).toEqual(itemIds(firstOf(sent)));

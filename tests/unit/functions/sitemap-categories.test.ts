@@ -2,8 +2,8 @@ import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { capturedGroup } from '../../support/elements';
+import { assert, beforeEach, describe, expect, it } from 'vitest';
+import { capturedGroup, lastOf } from '../../support/elements';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
@@ -31,13 +31,13 @@ async function get(handler: typeof sitemapIndex, path: string, params: { page?: 
 async function buildBoth() {
   const index = await get(sitemapIndex, '/sitemap.xml');
   const shard = await get(categoriesShard, '/sitemaps/categories/1.xml', { page: '1' });
-  const indexLastmod = index.match(
+  const indexLastmod = capturedGroup(index.match(
     /<loc>https:\/\/serplists\.com\/sitemaps\/categories\/1\.xml<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
-  )?.[1];
+  ), 1);
   const stored = db.prepare(
     `SELECT content_hash FROM sitemap_shard_revisions WHERE kind = 'categories' AND page = 1`,
   ).get() as { content_hash: string };
-  const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => match[1]).sort();
+  const shardLastmods = Array.from(shard.matchAll(/<lastmod>([^<]+)<\/lastmod>/g), (match) => capturedGroup(match, 1)).sort();
   const landingLastmod = shard.match(
     /<loc>https:\/\/serplists\.com\/categories\/<\/loc>\s*<lastmod>([^<]+)<\/lastmod>/,
   )?.[1];
@@ -46,8 +46,7 @@ async function buildBoth() {
 
 function expectIndexMatchesShard(result: Awaited<ReturnType<typeof buildBoth>>) {
   expect(createHash('sha256').update(result.shard).digest('hex')).toBe(result.storedHash);
-  expect(result.indexLastmod).toBeDefined();
-  expect(result.indexLastmod! >= result.shardLastmods.at(-1)!).toBe(true);
+  expect(result.indexLastmod >= lastOf(result.shardLastmods)).toBe(true);
 }
 
 describe('categories sitemap index and shard on SQLite with the real triggers, where the index hashes exactly the shard it serves', () => {
@@ -107,8 +106,10 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
     const after = await buildBoth();
 
     expect(after.shard).not.toContain('/categories/outdoor-gear');
-    expect(after.landingLastmod! > before.landingLastmod!).toBe(true);
-    expect(after.indexLastmod! > before.indexLastmod!).toBe(true);
+    assert.exists(before.landingLastmod);
+    assert.exists(after.landingLastmod);
+    expect(after.landingLastmod > before.landingLastmod).toBe(true);
+    expect(after.indexLastmod > before.indexLastmod).toBe(true);
     expectIndexMatchesShard(after);
   });
 

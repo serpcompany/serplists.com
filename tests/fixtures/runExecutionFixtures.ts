@@ -7,7 +7,11 @@ export const runExecutionApiClient = () => ({
   getChecklistById: vi.fn(),
   getSharedChecklist: vi.fn(),
   revokeChecklistRunShare: vi.fn(),
-  updateSharedChecklist: vi.fn(),
+  updateSharedChecklist: vi.fn(async (_shareToken: string, body: { expected_revision?: number | undefined }) => ({
+    success: true as const,
+    revision: body.expected_revision ?? 1,
+    progress: 0,
+  })),
 });
 
 export const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({

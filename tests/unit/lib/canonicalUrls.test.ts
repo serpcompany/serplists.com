@@ -1,6 +1,6 @@
 import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
 import { describe, expect, it } from 'vitest';
-import { capturedGroup } from '../../support/elements';
+import { capturedGroup, present } from '../../support/elements';
 
 import { buildTeamInvitePath } from '@functions/api/utils/team-invite-delivery';
 import {
@@ -43,14 +43,14 @@ const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildPublicTemplatesPath', routes.buildPublicTemplatesPath()],
   ['buildPublicCategoriesPath', routes.buildPublicCategoriesPath()],
   ['buildPublicCategoryPathForSlug', routes.buildPublicCategoryPathForSlug('seo')],
-  ['buildPublicCategoryPath', routes.buildPublicCategoryPath('日本語')!],
-  ['resolveLegacyTemplatesCategoryRedirectPath', routes.resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=SEO'))!],
+  ['buildPublicCategoryPath', present(routes.buildPublicCategoryPath('日本語'), 'the path of a category')],
+  ['resolveLegacyTemplatesCategoryRedirectPath', present(routes.resolveLegacyTemplatesCategoryRedirectPath(new URLSearchParams('category=SEO')), 'the redirect of a legacy category link')],
   ['buildPublicProfilePath', routes.buildPublicProfilePath('alice')],
   ['buildPublicProfilePath (a username that looks like a file)', routes.buildPublicProfilePath('john.doe')],
-  ['buildProfilePreviewPath', routes.buildProfilePreviewPath('Alice', 'alice')!],
-  ['getCanonicalProfilePath', routes.getCanonicalProfilePath('Alice', 'alice')!],
+  ['buildProfilePreviewPath', present(routes.buildProfilePreviewPath('Alice', 'alice'), 'the preview path of a profile')],
+  ['getCanonicalProfilePath', present(routes.getCanonicalProfilePath('Alice', 'alice'), 'the canonical path of a profile')],
   ['buildPublicTemplatePath', routes.buildPublicTemplatePath('alice', 'weekly-review')],
-  ['buildCanonicalPublicTemplatePath', routes.buildCanonicalPublicTemplatePath(template)!],
+  ['buildCanonicalPublicTemplatePath', present(routes.buildCanonicalPublicTemplatePath(template), 'the canonical path of a template')],
   ['buildPublicFeaturesPath', routes.buildPublicFeaturesPath()],
   ['buildPublicFeaturePath', routes.buildPublicFeaturePath('template-builder')],
   ['buildSharePath', routes.buildSharePath('share-token')],

@@ -1,5 +1,5 @@
 import React, { act } from 'react';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { PasswordInput } from '@/components/auth/PasswordInput';
@@ -23,7 +23,12 @@ const mount = async () => {
     findAll(container, (node) => node instanceof FakeElement && node.nodeName === 'BUTTON' && node.getAttribute('aria-label') === name)[0] as
       | FakeElement
       | undefined;
-  return { container, toggle, typePropertyOf };
+  const press = (name: string) => {
+    const button = toggle(name);
+    assert.exists(button, `a button named ${name}`);
+    act(() => click(container, button));
+  };
+  return { container, press, toggle, typePropertyOf };
 };
 
 describe('PasswordInput on Log in and Register', () => {
@@ -32,18 +37,18 @@ describe('PasswordInput on Log in and Register', () => {
     expect(page.typePropertyOf('password')).toBe('password');
     expect(page.toggle('Hide password')).toBeUndefined();
 
-    act(() => click(page.container, page.toggle('Show password')!));
+    page.press('Show password');
     expect(page.typePropertyOf('password')).toBe('text');
     expect(page.toggle('Hide password')).toBeDefined();
 
-    act(() => click(page.container, page.toggle('Hide password')!));
+    page.press('Hide password');
     expect(page.typePropertyOf('password')).toBe('password');
   });
 
   it('names the button after its field and leaves the other field hidden', async () => {
     const page = await mount();
 
-    act(() => click(page.container, page.toggle('Show confirm password')!));
+    page.press('Show confirm password');
 
     expect(page.typePropertyOf('confirmPassword')).toBe('text');
     expect(page.typePropertyOf('password')).toBe('password');

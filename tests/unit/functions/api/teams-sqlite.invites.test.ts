@@ -219,8 +219,9 @@ describe("Organization membership writes against SQLite, which leave every Organ
 
       expect(pending.data).toEqual([expect.objectContaining({ id: created.data?.id, teamId: "team-1" })]);
       const inviteQuery = d1.queries.find((query) => query.sql.includes('from "team_invites"'));
-      expect(inviteQuery?.params).toContain("new@example.test");
-      const plan = d1.queryPlan(inviteQuery!).join(" | ");
+      assert.exists(inviteQuery);
+      expect(inviteQuery.params).toContain("new@example.test");
+      const plan = d1.queryPlan(inviteQuery).join(" | ");
       expect(plan).toContain("USING INDEX idx_team_invites_email");
       expect(plan).not.toContain("SCAN team_invites");
       expect(plan).not.toMatch(/SCAN (team_members|active_manager|active_member)\b/);

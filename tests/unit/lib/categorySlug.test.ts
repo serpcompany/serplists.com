@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
+import { lastOf } from '../../support/elements';
 
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import {
@@ -11,7 +12,7 @@ import { generateSlug } from '@/utils/urlHelpers';
 
 import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
-const categorySlugInPath = (path: string) => decodeURIComponent(path.split('/').filter(Boolean).pop()!);
+const categorySlugInPath = (path: string) => decodeURIComponent(lastOf(path.split('/').filter(Boolean)));
 
 describe('buildCategorySlug, which keeps the letters of every script so no two categories share an empty slug', () => {
   it.each([
@@ -62,8 +63,8 @@ describe('buildPublicCategoryPath', () => {
     const named = CATEGORY_SLUG_FIXTURES.filter((name) => buildCategorySlug(name));
     named.forEach((name) => {
       const path = buildPublicCategoryPath(name);
-      expect(path).not.toBeNull();
-      expect(findCategoryNameBySlug(named, categorySlugInPath(path!))).toBe(
+      assert.exists(path);
+      expect(findCategoryNameBySlug(named, categorySlugInPath(path))).toBe(
         named.find((candidate) => buildCategorySlug(candidate) === buildCategorySlug(name)),
       );
     });

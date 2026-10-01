@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { generateSlug, getVideoEmbedSource, getYoutubeVideoId } from '@/utils/urlHelpers';
 import { getOutboundLinkProps, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
@@ -125,7 +125,8 @@ describe('getVideoEmbedSource for YouTube links', () => {
   it.each(YOUTUBE_VIDEO_LINKS)("embeds %s in the video's player, whichever origin and start time the link keeps", (link) => {
     const source = getVideoEmbedSource(link);
     expect(source?.kind).toBe('iframe');
-    const player = new URL(source!.url);
+    assert.exists(source);
+    const player = new URL(source.url);
     expect(['https://www.youtube.com', 'https://www.youtube-nocookie.com']).toContain(player.origin);
     expect(player.pathname).toBe(`/embed/${YOUTUBE_VIDEO_ID}`);
   });

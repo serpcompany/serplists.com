@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
@@ -91,9 +91,9 @@ describe('useTemplateLists catalog state', () => {
     mockGetTemplates.mockRejectedValue(new Error('Network down'));
     renderCatalogOnlyDiscoveryPage(client);
     const query = client.getQueryCache().find({ queryKey: CATALOG_KEY });
-    expect(query).toBeDefined();
+    assert.exists(query);
 
-    await expect(query!.fetch()).rejects.toThrow('Network down');
+    await expect(query.fetch()).rejects.toThrow('Network down');
 
     const lists = renderCatalogOnlyDiscoveryPage(client);
     expect(lists.catalogPending).toBe(false);

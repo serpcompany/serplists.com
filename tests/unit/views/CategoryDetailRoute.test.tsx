@@ -1,6 +1,6 @@
 import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
@@ -34,15 +34,14 @@ vi.mock('@/views/CategoryDetail', async () => {
 
 const fakeDom = aFakeDomForEachTest(navigation.window);
 
-let root: Root | null = null;
 beforeEach(() => {
   probe.mounts = 0;
   probe.renders = [];
 });
 const mountCategoryRoute = (initialPath: string) => {
   navigation.reset(initialPath, { routes: ['/categories/[categorySlug]'] });
-  root = fakeDom.track(createRoot(createFakeContainer() as unknown as HTMLElement));
-  act(() => root!.render(<CategoryDetailRoute />));
+  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as HTMLElement));
+  act(() => root.render(<CategoryDetailRoute />));
 };
 
 const lastRender = () => probe.renders[probe.renders.length - 1];

@@ -74,8 +74,10 @@ test('markdown text stays readable in dark mode', async ({ page }) => {
 
   const colors = await preview.evaluate((root) => {
     document.documentElement.classList.add('dark');
+    const paragraph = root.querySelector('p');
+    if (!paragraph) throw new Error('The preview shows no paragraph');
     return {
-      text: getComputedStyle(root.querySelector('p')!).color,
+      text: getComputedStyle(paragraph).color,
       background: getComputedStyle(document.body).backgroundColor,
       foreground: getComputedStyle(document.body).color,
     };

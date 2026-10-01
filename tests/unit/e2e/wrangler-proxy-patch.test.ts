@@ -3,7 +3,7 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 import type { AddressInfo, Socket } from 'node:net';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it } from 'vitest';
 
 const KEEP_ALIVE_TIMEOUT_DISABLED = 0;
 const PAST_A_NODE_SERVERS_DEFAULT_IDLE_CLOSE_MS = 6_500;
@@ -34,9 +34,9 @@ function createEchoingWorker() {
 describe("wrangler's dev proxy patch", () => {
   it('is listed for the installed wrangler version, in an LF patch file that exists', () => {
     const patchFile = pnpm?.patchedDependencies?.[`wrangler@${version}`];
-    expect(patchFile, `package.json has no pnpm.patchedDependencies entry for wrangler@${version}`).toBeDefined();
-    expect(existsSync(patchFile!), `${patchFile} is missing`).toBe(true);
-    expect(readFileSync(patchFile!, 'utf8')).not.toContain('\r');
+    assert.exists(patchFile, `package.json has no pnpm.patchedDependencies entry for wrangler@${version}`);
+    expect(existsSync(patchFile), `${patchFile} is missing`).toBe(true);
+    expect(readFileSync(patchFile, 'utf8')).not.toContain('\r');
   });
 
   it('points the ProxyWorker that wrangler dev runs at the relay, and closes it on teardown', () => {
@@ -78,7 +78,8 @@ describe('the relay between the dev proxy and the worker', () => {
   async function relayUrl() {
     const message = await relays.relay({ type: 'play', proxyData: { userWorkerUrl: workerUrl, headers: { 'MF-Proxy-Shared-Secret': 's' } } });
     expect(message.proxyData?.headers).toEqual({ 'MF-Proxy-Shared-Secret': 's' });
-    return message.proxyData!.userWorkerUrl;
+    assert.exists(message.proxyData);
+    return message.proxyData.userWorkerUrl;
   }
 
   function send(to: WorkerUrl, method: string, pathname: string, body?: string) {
@@ -87,14 +88,19 @@ describe('the relay between the dev proxy and the worker', () => {
         const req = http.request({ host: to.hostname, port: Number(to.port), method, path: pathname, agent: proxyPool }, (res) => {
           let text = '';
           res.on('data', (chunk: Buffer) => (text += chunk.toString()));
-          res.on('end', () =>
+          res.on('end', () => {
+            const { socket } = req;
+            if (res.statusCode === undefined || !socket) {
+              reject(new Error('The proxy answered without a status or a socket'));
+              return;
+            }
             resolve({
-              status: res.statusCode!,
+              status: res.statusCode,
               setCookie: res.headers['set-cookie'] ?? [],
               json: JSON.parse(text) as Record<string, string>,
-              socket: req.socket!,
-            }),
-          );
+              socket,
+            });
+          });
         });
         req.on('error', reject);
         req.end(body);
@@ -142,12 +148,13 @@ describe('the relay between the dev proxy and the worker', () => {
     const stoppedWorkerUrl = { ...workerUrl, port: String((stopped.address() as AddressInfo).port) };
     await new Promise((resolve) => stopped.close(resolve));
     const { proxyData } = await relays.relay({ type: 'play', proxyData: { userWorkerUrl: stoppedWorkerUrl } });
-    const relay = proxyData!.userWorkerUrl;
+    assert.exists(proxyData);
+    const relay = proxyData.userWorkerUrl;
 
     const outcome = await new Promise<number | NodeJS.ErrnoException>((resolve) => {
       const req = http.request({ host: relay.hostname, port: Number(relay.port), method: 'POST', path: '/invite', agent: proxyPool }, (res) => {
         res.resume();
-        resolve(res.statusCode!);
+        resolve(res.statusCode ?? new Error('The proxy answered without a status'));
       });
       req.on('error', resolve);
       req.end('invite');

@@ -1,6 +1,6 @@
 import '../../support/reactHooksKeptBetweenRenders';
 import { navigation } from '../../support/mockedNextNavigation';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: null }) }));
 
@@ -12,8 +12,8 @@ import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../supp
 
 const renderSheet = () => {
   const sheet = findElement(renderUntilNoStateIsSetDuringRender(() => PublicMobileNav()), (element) => element.type === Sheet);
-  expect(sheet).not.toBeNull();
-  return sheet!;
+  assert.exists(sheet);
+  return sheet;
 };
 
 const openSheet = () => {

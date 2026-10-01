@@ -76,13 +76,8 @@ const mountEditor = async ({ dirty = true } = {}) => {
   unsubscribe = subscribeToNavigations(navigations);
 };
 
-const clickLink = async (label: string, modifiers?: Parameters<typeof click>[2]) => {
-  let event: ReturnType<typeof click> | undefined;
-  await act(async () => {
-    event = click(container, findByText(container, 'A', label), modifiers);
-  });
-  return event!;
-};
+const clickLink = (label: string, modifiers?: Parameters<typeof click>[2]) =>
+  act(async () => click(container, findByText(container, 'A', label), modifiers));
 
 describe('Link prefetching on intent, not when the link scrolls into view', () => {
   const mountLinks = async () => {
