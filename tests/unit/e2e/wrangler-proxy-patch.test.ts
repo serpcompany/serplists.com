@@ -5,15 +5,8 @@ import type { AddressInfo, Socket } from 'node:net';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// The browser tests' preview runs `wrangler dev`, whose dev proxy (ProxyWorker) keeps its
-// connections to the local worker open. The worker's workerd closes a connection 5 seconds after
-// its last response, and while the worker is busy it reads no new request and runs no timer, so a
-// request that reached an idle connection in the meantime can lose to that timer: the proxy then
-// answers 500 "Network connection lost", and resends only a GET or HEAD
-// (cloudflare/workers-sdk#14641, docs/RELIABILITY.md). patches/wrangler@<version>.patch puts a relay
-// between the two that sends every request to the worker over a new connection and never closes
-// an idle one itself. pnpm applies the patch on install; these checks fail if a wrangler upgrade
-// leaves it behind.
+const KEEP_ALIVE_TIMEOUT_DISABLED = 0;
+const PAST_A_NODE_SERVERS_DEFAULT_IDLE_CLOSE_MS = 6_500;
 
 type WorkerUrl = { protocol: string; hostname: string; port: string };
 type ProxyMessage = { type: string; proxyData?: { userWorkerUrl: WorkerUrl; headers?: Record<string, string> } };
@@ -26,6 +19,17 @@ const { pnpm } = JSON.parse(readFileSync('package.json', 'utf8')) as {
   pnpm?: { patchedDependencies?: Record<string, string> };
 };
 const relayModule = path.join(wranglerDir, 'wrangler-dist', 'serplists-user-worker-relay.js');
+
+function createEchoingWorker() {
+  return http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+    req.on('end', () => {
+      res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
+      res.end(JSON.stringify({ method: req.method, url: req.url, host: req.headers.host, body }));
+    });
+  });
+}
 
 describe("wrangler's dev proxy patch", () => {
   it('is listed for the installed wrangler version, in an LF patch file that exists', () => {
@@ -54,22 +58,13 @@ describe('the relay between the dev proxy and the worker', () => {
 
   beforeEach(async () => {
     workerConnections = 0;
-    // Stands in for the worker: echoes what it received, and never closes a connection itself.
-    worker = http.createServer((req, res) => {
-      let body = '';
-      req.on('data', (chunk: Buffer) => (body += chunk.toString()));
-      req.on('end', () => {
-        res.setHeader('set-cookie', ['a=1; Path=/', 'b=2; Path=/']);
-        res.end(JSON.stringify({ method: req.method, url: req.url, host: req.headers.host, body }));
-      });
-    });
-    worker.keepAliveTimeout = 0;
+    worker = createEchoingWorker();
+    worker.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_DISABLED;
     worker.on('connection', () => (workerConnections += 1));
     await new Promise<void>((resolve) => worker.listen(0, '127.0.0.1', resolve));
     workerUrl = { protocol: 'http:', hostname: '127.0.0.1', port: String((worker.address() as AddressInfo).port) };
     const { UserWorkerRelays } = require(relayModule) as { UserWorkerRelays: new () => UserWorkerRelays };
     relays = new UserWorkerRelays();
-    // Like the proxy's own pool: one connection, kept open between requests.
     proxyPool = new http.Agent({ keepAlive: true, maxSockets: 1 });
   });
 
@@ -122,20 +117,18 @@ describe('the relay between the dev proxy and the worker', () => {
     ]);
     expect(second.status).toBe(200);
     expect(second.setCookie).toEqual(['a=1; Path=/', 'b=2; Path=/']);
-    // One kept-alive connection from the proxy, a new one to the worker for each request.
-    expect(new Set([first.socket, second.socket, third.socket]).size).toBe(1);
+    const proxySockets = new Set([first.socket, second.socket, third.socket]);
+    expect(proxySockets.size).toBe(1);
     expect(workerConnections).toBe(3);
   });
 
-  it("never closes the proxy's idle connection itself", { timeout: 15_000 }, async () => {
+  it("never closes the proxy's idle connection itself, even past a Node server's default idle time", { timeout: 15_000 }, async () => {
     const relay = await relayUrl();
     const { socket } = await send(relay, 'GET', '/before');
     let closedByRelay = false;
     socket.on('close', () => (closedByRelay = true));
 
-    // A Node server closes a connection once it has been idle for its keepAliveTimeout plus a
-    // second (6 seconds by default), which would bring the race back between proxy and relay.
-    await new Promise((resolve) => setTimeout(resolve, 6_500));
+    await new Promise((resolve) => setTimeout(resolve, PAST_A_NODE_SERVERS_DEFAULT_IDLE_CLOSE_MS));
     const after = await send(relay, 'POST', '/after', 'late');
 
     expect(closedByRelay).toBe(false);

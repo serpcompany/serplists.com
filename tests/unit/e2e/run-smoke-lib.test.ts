@@ -14,11 +14,6 @@ import {
   SMOKE_PERSIST_PATH,
 } from '../../e2e/run-smoke-lib.mjs';
 
-// run-smoke.mjs used to set PLAYWRIGHT_WRANGLER_PERSIST_TO only when it picked the
-// ports itself. With any port or URL preset it still wiped and seeded
-// .wrangler/smoke-state, but Playwright's server ran on the default .wrangler/state:
-// the developer's own local D1.
-
 const repoRoot = path.resolve('/repo');
 const openPort = 4180;
 
@@ -36,7 +31,7 @@ describe('resolveSmokeEnv', () => {
     ['PLAYWRIGHT_API_URL', { PLAYWRIGHT_API_URL: 'http://localhost:4173/api' }],
     ['every port and URL', { PLAYWRIGHT_BASE_URL: 'http://localhost:5173', PLAYWRIGHT_PORT: '5173', PLAYWRIGHT_API_URL: 'http://localhost:5173/api' }],
     ['PLAYWRIGHT_REUSE_EXISTING_SERVER=0', { PLAYWRIGHT_REUSE_EXISTING_SERVER: '0', PLAYWRIGHT_PORT: '5173' }],
-  ])('runs the preview on the D1 it seeds with %s preset', (_, processEnv) => {
+  ])("runs the preview on the D1 it seeds, never the developer's own, with %s preset", (_, processEnv) => {
     const { env, seedPath } = resolve(processEnv);
 
     expect(seedPath).toBe(SMOKE_PERSIST_PATH);
@@ -103,8 +98,7 @@ describe('assertSmokePersistPath', () => {
     expect(assertSmokePersistPath('.wrangler/custom-smoke', repoRoot)).toBe(path.join(repoRoot, '.wrangler', 'custom-smoke'));
   });
 
-  // The preview hands it to wrangler through a shell, unquoted.
-  it('refuses a path a shell would split or change', () => {
+  it('refuses a path a shell would split or change, since the preview hands it to wrangler unquoted', () => {
     expect(() => assertSmokePersistPath('.wrangler/smoke state', repoRoot)).toThrow(/through a shell/);
     expect(() => assertSmokePersistPath('.wrangler/smoke&state', repoRoot)).toThrow(/through a shell/);
   });
@@ -136,8 +130,6 @@ describe('buildPreviewArgs', () => {
     ]);
   });
 
-  // The browser tests run the production configuration, which the build bakes into its
-  // headers and static pages: the preview gets the same SITE_ENV the runner builds with.
   it('runs the preview with the production SITE_ENV the build was made with', () => {
     expect(E2E_SITE_ENV).toBe('production');
     expect(buildPreviewArgs({})).toEqual(expect.arrayContaining(['--var', 'SITE_ENV:production']));
