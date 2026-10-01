@@ -1,24 +1,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
+import { parseEnvFile } from "./lib/env-file.mjs";
 import { describeFrontendUrlProblem, describeOriginListProblem } from "./lib/origin-list.mjs";
-
-const parseEnvFile = (path) => {
-  if (!existsSync(path)) return {};
-  const contents = readFileSync(path, "utf8");
-  const entries = {};
-  for (const line of contents.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const idx = trimmed.indexOf("=");
-    if (idx === -1) continue;
-    const key = trimmed.slice(0, idx).trim();
-    const rawValue = trimmed.slice(idx + 1).trim();
-    const value = rawValue.replace(/^['"]|['"]$/g, "");
-    entries[key] = value;
-  }
-  return entries;
-};
 
 const hasNonCommentEnvEntries = (path) => {
   if (!existsSync(path)) return false;

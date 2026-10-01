@@ -16,7 +16,6 @@ export const DEV_SESSION_PATH: string;
 export const START_TIME_TOLERANCE_MS: number;
 export const DEV_FALLBACK_AUTH_SECRET: string;
 
-export function parseEnvFile(filePath: string): Record<string, string>;
 export function buildCorsAllowedOrigins(existingValue: string | undefined, origin: string): string;
 export function buildDevServerConfig(options: { port: number; baseEnv?: Env }): DevServerConfig;
 export function buildDevServerCommand(options: {

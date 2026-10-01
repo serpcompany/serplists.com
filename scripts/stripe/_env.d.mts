@@ -2,7 +2,6 @@ type EnvValues = Readonly<Record<string, string | undefined>>;
 
 export const TEST_SECRET_KEY_HINT: string;
 
-export function parseEnvFile(path: string): Record<string, string>;
 export function loadLocalEnv(): Record<string, string | undefined>;
 export function resolveTestSecretKey(env: EnvValues): string | undefined;
 export function resolveLiveSecretKey(env: EnvValues): string | undefined;

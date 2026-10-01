@@ -1,4 +1,5 @@
-import { loadLocalEnv, parseEnvFile, resolveTestSecretKey, TEST_SECRET_KEY_HINT, updateEnvFile } from "./_env.mjs";
+import { parseEnvFile } from "../lib/env-file.mjs";
+import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT, updateEnvFile } from "./_env.mjs";
 import { describePriceMismatch, PRO_CURRENCY, PRO_MONTHLY_CENTS } from "./_price.mjs";
 
 const localEnv = parseEnvFile(".dev.vars");

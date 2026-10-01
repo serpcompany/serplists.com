@@ -4,12 +4,12 @@ import {
   buildDevServerConfig,
   DEFAULT_DEV_PORT,
   DEV_SESSION_PATH,
-  parseEnvFile,
   readDevSession,
   releaseDevSession,
   resolveDevServerPort,
   writeDevSession,
 } from "./dev-auto-lib.mjs";
+import { parseEnvFile } from "./lib/env-file.mjs";
 import { currentProcessStartedAt } from "./lib/process-info.mjs";
 import { DEV_LOG_PATH, mirrorOutputToLog } from "./lib/log-mirror.mjs";
 import { describeSpawnError, killProcessTree } from "./lib/run-tool.mjs";

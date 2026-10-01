@@ -1,4 +1,5 @@
-import { parseEnvFile, removeEnvKeys, stripeSecretKeyIsLive } from "./_env.mjs";
+import { parseEnvFile } from "../lib/env-file.mjs";
+import { removeEnvKeys, stripeSecretKeyIsLive } from "./_env.mjs";
 
 const path = ".dev.vars";
 const env = parseEnvFile(path);

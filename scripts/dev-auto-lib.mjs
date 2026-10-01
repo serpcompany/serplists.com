@@ -38,29 +38,6 @@ function normalizeDevSession(value) {
   };
 }
 
-export function parseEnvFile(filePath) {
-  if (!existsSync(filePath)) return {};
-
-  const contents = readFileSync(filePath, "utf8");
-  const entries = {};
-
-  for (const line of contents.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex === -1) continue;
-
-    const key = trimmed.slice(0, separatorIndex).trim();
-    const rawValue = trimmed.slice(separatorIndex + 1).trim();
-    const value = rawValue.replace(/^['"]|['"]$/g, "");
-
-    entries[key] = value;
-  }
-
-  return entries;
-}
-
 export function buildCorsAllowedOrigins(existingValue, origin) {
   const origins = new Set();
 
