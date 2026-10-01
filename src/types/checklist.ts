@@ -2,7 +2,7 @@ import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
 export type ChecklistSubItem = {
-  id: string;
+  id?: string | undefined;
   title: string;
   isCompleted?: boolean | undefined;
 };

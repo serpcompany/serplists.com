@@ -1,5 +1,7 @@
+import { z } from "zod";
+
 import { toProgressPercent } from "@/lib/progress";
-import { sanitizeStoredItem } from "@/lib/schemas/storedSections";
+import { CHECKLIST_CONTENT_TYPES, sanitizeStoredItem } from "@/lib/schemas/storedSections";
 import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
 
 export function sectionFallbackTitle(sectionIndex: number): string {
@@ -61,6 +63,20 @@ const normalizeContent = (content: JsonRecord): JsonRecord => {
   };
 };
 
+const shownSubItemSchema = z.object({ title: z.string(), isCompleted: z.boolean().optional() }).passthrough();
+
+const shownContentSchema = z.object({
+  type: z.enum(CHECKLIST_CONTENT_TYPES),
+  value: z.string(),
+  subItems: z.array(shownSubItemSchema).optional(),
+}).passthrough();
+
+const shownContents = (contents: unknown[]): ChecklistItemContent[] =>
+  contents.flatMap((content) => {
+    const parsed = shownContentSchema.safeParse(content);
+    return parsed.success ? [parsed.data] : [];
+  });
+
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
@@ -80,9 +96,7 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
             ? { ...titled, contents: titled.contents.filter(isJsonRecord).map(normalizeContent) }
             : titled,
         );
-        const contents = Array.isArray(it.contents)
-          ? (it.contents as unknown as ChecklistItemContent[])
-          : undefined;
+        const contents = Array.isArray(it.contents) ? shownContents(it.contents) : undefined;
 
         const { completed: _completed, ...rest } = it;
         return [{
