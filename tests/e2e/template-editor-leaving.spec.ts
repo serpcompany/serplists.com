@@ -7,6 +7,7 @@ import {
   createTemplate,
   createTwoTaskTemplate,
   deleteTemplate,
+  deleteTheSavedTemplate,
   findTemplateByTitle,
   getTemplateSections,
   holdUntilReleased,
@@ -224,9 +225,7 @@ test.describe("template editor regressions", () => {
     await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await deleteTheSavedTemplate(page, savedTemplate);
   });
 
   test("leaves a new template without asking once it is saved", async ({ page }) => {
@@ -244,9 +243,7 @@ test.describe("template editor regressions", () => {
     expect(dialogs).toEqual([]);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await deleteTheSavedTemplate(page, savedTemplate);
   });
 });
 

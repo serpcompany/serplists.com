@@ -3,15 +3,18 @@ import { expect, test, type Page } from "@playwright/test";
 import { dismissTheNextConfirm } from "./support/navigation";
 import { loginAsAdmin } from "./support/sign-in";
 import {
+  addABlock,
   createTwoTaskTemplate,
   deleteTemplate,
+  deleteTheSavedTemplate,
+  expectTheFirstTaskSavedWithBlocks,
   findTemplateByTitle,
   getTemplateSections,
   holdUntilReleased,
   ONE_PIXEL_PNG,
-  registerAccount,
-  saveAndReturnToTemplates,
+  saveAndReadTheSavedSections,
   saveAndWaitUntilSaved,
+  startANewTemplateWithATask,
 } from "./support/template-editor";
 
 async function answerUploadsWithoutStoringThem(
@@ -54,13 +57,9 @@ test.describe("template editor regressions", () => {
     const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/${stamp}.png`)}`;
     await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "photo.png", fileSize: ONE_PIXEL_PNG.length });
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(`Task with image ${stamp}`);
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+    await addABlock(page, "Image");
 
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
       name: "photo.png",
@@ -80,18 +79,7 @@ test.describe("template editor regressions", () => {
     });
     await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    expect(savedTemplate).toBeTruthy();
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
-    expect(sections[0]?.items[0]?.contents).toEqual([
-      expect.objectContaining({ type: "image", value: uploadedUrl }),
-    ]);
-
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await expectTheFirstTaskSavedWithBlocks(page, templateTitle, [{ type: "image", value: uploadedUrl }]);
   });
 
   test("waits for a file upload before saving, and asks before leaving a form whose only change is the upload", async ({ page }) => {
@@ -109,8 +97,7 @@ test.describe("template editor regressions", () => {
     const templateId = await createTwoTaskTemplate(page, templateTitle);
     await page.goto(`/dashboard/templates/${templateId}/edit/`);
     await page.getByRole("button", { exact: true, name: "First task" }).click();
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+    await addABlock(page, "Image");
     await saveAndWaitUntilSaved(page);
 
     await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
@@ -158,8 +145,7 @@ test.describe("template editor regressions", () => {
       { name: "logo.png", mimeType: "image/png", buffer: transparentPng },
       { name: "steps.gif", mimeType: "image/gif", buffer: animatedGif },
     ]) {
-      await page.getByRole("button", { name: "Add Block" }).last().click();
-      await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+      await addABlock(page, "Image");
       await page.locator('input[type="file"][accept="image/*"]').last().setInputFiles(upload);
       await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
     }
@@ -179,8 +165,7 @@ test.describe("template editor regressions", () => {
       { name: "report.zip", mimeType: "application/x-zip-compressed", buffer: Buffer.from([0x50, 0x4b, 0x05, 0x06]) },
       { name: "data.csv", mimeType: "application/vnd.ms-excel", buffer: Buffer.from("a,b\n1,2\n") },
     ]) {
-      await page.getByRole("button", { name: "Add Block" }).last().click();
-      await page.getByRole("menuitem", { name: "File", exact: true }).click();
+      await addABlock(page, "File");
       const input = page.locator('input[type="file"]').last();
       await expect(input).not.toHaveAttribute("accept", "*/*");
       await expect(input).toHaveAttribute("accept", /\.zip/);
@@ -193,8 +178,7 @@ test.describe("template editor regressions", () => {
     page.on("request", (request) => {
       if (request.method() === "POST" && request.url().endsWith("/api/uploads")) uploadRequests += 1;
     });
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "File", exact: true }).click();
+    await addABlock(page, "File");
     await page.locator('input[type="file"]').last().setInputFiles({
       name: "page.html",
       mimeType: "text/html",
@@ -211,13 +195,9 @@ test.describe("template editor regressions", () => {
     const externalUrl = "https://example.com/pricing.pdf";
     await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "report.pdf", fileSize: 2048 });
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(`Task with file ${stamp}`);
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "File", exact: true }).click();
+    await addABlock(page, "File");
     await page.locator('input[type="file"]').last().setInputFiles({
       name: "report.pdf",
       mimeType: "application/pdf",
@@ -230,18 +210,12 @@ test.describe("template editor regressions", () => {
     await expect(page.getByText("report.pdf", { exact: true })).toHaveCount(0);
     await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    expect(savedTemplate).toBeTruthy();
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
     const saved = sections[0]?.items[0]?.contents?.[0] as Record<string, unknown> | undefined;
     expect(saved).toEqual(expect.objectContaining({ type: "file", value: externalUrl, uploadType: "url" }));
     expect(saved).not.toHaveProperty("fileName");
     expect(saved).not.toHaveProperty("fileSize");
 
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await deleteTheSavedTemplate(page, savedTemplate);
   });
 });

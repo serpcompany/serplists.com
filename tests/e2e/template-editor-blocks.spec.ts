@@ -3,13 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 import { apiJson, apiRequest } from "./support/api-requests";
 import { loginAsAdmin } from "./support/sign-in";
 import {
+  addABlock,
   deleteTemplate,
   dragAndDropBefore,
-  findTemplateByTitle,
-  getTemplateSections,
+  expectTheFirstTaskSavedWithBlocks,
   ONE_PIXEL_PNG,
-  registerAccount,
-  saveAndReturnToTemplates,
+  saveAndReadTheSavedSections,
+  startANewTemplateWithATask,
 } from "./support/template-editor";
 
 async function createRun(page: Page, body: Record<string, unknown>) {
@@ -62,14 +62,7 @@ test.describe("template editor regressions", () => {
     const secondTaskDescription = "Second task details should persist separately";
     let createdTemplateId: string | null = null;
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-
-    await page.getByRole("button", {
-      name: /add task to section 1/i,
-    }).click();
+    await startANewTemplateWithATask(page, templateTitle);
 
     await expect(page.getByRole("button", { name: /^Task 1$/ })).toBeVisible();
     await page.getByLabel("Task Title").fill(firstTaskTitle);
@@ -103,15 +96,9 @@ test.describe("template editor regressions", () => {
       secondTaskDescription,
     );
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
     createdTemplateId =
       savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
-
-    expect(savedTemplate).toBeTruthy();
-
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
     expect(sections[0]?.items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -142,17 +129,10 @@ test.describe("template editor regressions", () => {
     const contentValue = contentLines.join("\n");
     let createdTemplateId: string | null = null;
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", {
-      name: /add task to section 1/i,
-    }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(taskTitle);
 
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
+    await addABlock(page, "Text");
 
     await expect(
       page.getByPlaceholder("Enter text or markdown content"),
@@ -161,15 +141,9 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Enter text or markdown content")
       .fill(contentValue);
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
     createdTemplateId =
       savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
-
-    expect(savedTemplate).toBeTruthy();
-
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
     expect(sections[0]?.items[0]?.contents).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -208,8 +182,7 @@ test.describe("template editor regressions", () => {
     await loginAsAdmin(page);
     await page.goto("/dashboard/templates/new/");
     await page.getByRole("button", { name: /add task to section 1/i }).click();
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+    await addABlock(page, "Image");
 
     const urlField = page.getByLabel("Image URL");
     const preview = page.getByRole("img", { name: "Preview" });
@@ -233,22 +206,14 @@ test.describe("template editor regressions", () => {
     const stamp = Date.now();
     const templateTitle = `QA Blank titles ${stamp}`;
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(`Task with sub-tasks ${stamp}`);
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Sub-tasks", exact: true }).click();
+    await addABlock(page, "Sub-tasks");
     await page.getByPlaceholder("Sub-task 1").fill("Check title");
     await page.getByPlaceholder("Sub-task 1").press("Enter");
     await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    expect(savedTemplate).toBeTruthy();
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
     expect((sections[0] as { title?: string }).title).toBe("Section 1");
     const subItems = (sections[0]?.items[0]?.contents?.[0] as { subItems?: Array<{ title: string }> })
       ?.subItems;
@@ -275,13 +240,9 @@ test.describe("template editor regressions", () => {
     const templateTitle = `QA Embed ${stamp}`;
     const embedUrl = "https://www.loom.com/share/abc";
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(`Task with embed ${stamp}`);
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
+    await addABlock(page, "Embed");
 
     const field = page.getByLabel("Embed Code or URL");
     await field.click();
@@ -301,18 +262,7 @@ test.describe("template editor regressions", () => {
     await expect(field).toHaveValue(embedUrl);
     await expect(field).toBeFocused();
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    expect(savedTemplate).toBeTruthy();
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
-    expect(sections[0]?.items[0]?.contents).toEqual([
-      expect.objectContaining({ type: "embed", value: embedUrl }),
-    ]);
-
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await expectTheFirstTaskSavedWithBlocks(page, templateTitle, [{ type: "embed", value: embedUrl }]);
   });
 
   test("reorders content blocks by keyboard and by drag and saves the order", async ({ page }) => {
@@ -320,16 +270,11 @@ test.describe("template editor regressions", () => {
     const templateTitle = `QA Block order ${stamp}`;
     const embedUrl = "https://www.loom.com/share/order";
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
-    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await startANewTemplateWithATask(page, templateTitle);
     await page.getByLabel("Task Title").fill(`Task with blocks ${stamp}`);
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
+    await addABlock(page, "Text");
     await page.getByPlaceholder("Enter text or markdown content").fill("Intro text");
-    await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
+    await addABlock(page, "Embed");
     await page.getByLabel("Embed Code or URL").fill(embedUrl);
 
     const handles = page.getByRole("button", { name: /^Drag (Text|Embed) block$/ });
@@ -348,18 +293,6 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("ArrowUp");
     await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
-    expect(savedTemplate).toBeTruthy();
-    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
-    expect(sections[0]?.items[0]?.contents).toEqual([
-      expect.objectContaining({ type: "embed", value: embedUrl }),
-      expect.objectContaining({ type: "text", value: "Intro text" }),
-    ]);
-
-    if (savedTemplate && typeof savedTemplate.id === "string") {
-      await deleteTemplate(page, savedTemplate.id);
-    }
+    await expectTheFirstTaskSavedWithBlocks(page, templateTitle, [{ type: "embed", value: embedUrl }, { type: "text", value: "Intro text" }]);
   });
 });

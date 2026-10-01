@@ -125,3 +125,38 @@ export async function confirmTheTemplateDelete(page: Page, templateId: string, d
   await dialog.getByRole("button", { name: "Delete" }).click();
   expect((await deleted).status()).toBe(200);
 }
+
+export async function startANewTemplateWithATask(page: Page, templateTitle: string) {
+  await registerAccount(page);
+  await page.goto("/dashboard/templates/new/");
+  await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+  await page.getByRole("button", { name: /add task to section 1/i }).click();
+}
+
+export async function addABlock(page: Page, kind: string) {
+  await page.getByRole("button", { name: "Add Block" }).last().click();
+  await page.getByRole("menuitem", { name: kind, exact: true }).click();
+}
+
+export async function saveAndReadTheSavedSections(page: Page, templateTitle: string) {
+  await saveAndReturnToTemplates(page);
+  const savedTemplate = await findTemplateByTitle(page, templateTitle);
+  expect(savedTemplate).toBeTruthy();
+  return { savedTemplate, sections: getTemplateSections(savedTemplate ?? {}) };
+}
+
+export async function deleteTheSavedTemplate(page: Page, savedTemplate: Record<string, unknown> | null) {
+  if (savedTemplate && typeof savedTemplate.id === "string") {
+    await deleteTemplate(page, savedTemplate.id);
+  }
+}
+
+export async function expectTheFirstTaskSavedWithBlocks(
+  page: Page,
+  templateTitle: string,
+  blocks: Array<{ type: string; value: string }>,
+) {
+  const { savedTemplate, sections } = await saveAndReadTheSavedSections(page, templateTitle);
+  expect(sections[0]?.items[0]?.contents).toEqual(blocks.map((block) => expect.objectContaining(block)));
+  await deleteTheSavedTemplate(page, savedTemplate);
+}
