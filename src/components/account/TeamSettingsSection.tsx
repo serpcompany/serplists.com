@@ -10,7 +10,6 @@ import { Separator } from '@/components/ui/separator';
 import type { TeamMember, TeamMemberStatus, TeamRole } from '@/lib/api';
 import { getOrganizationNameError, ORGANIZATION_NAME_MAX } from '@/lib/schemas/nameLimits';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
-import { persistAcceptedWorkspace } from '@/features/teams/acceptTeamInvite';
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 import {
   acceptIncomingTeamInvite,
@@ -170,7 +169,6 @@ export function TeamSettingsSection() {
         rememberTeam(acceptedInvite.team);
       }
 
-      persistAcceptedWorkspace(acceptedInvite.teamId);
       selectWorkspace(acceptedInvite.teamId);
       await reload.incomingInvites();
       void refreshTeams().catch(() => undefined);
