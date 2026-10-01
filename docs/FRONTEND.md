@@ -221,8 +221,8 @@ write: [client data](design-docs/client-data.md).
 
 - `src/lib/api/request.ts` handles the base URL, JSON, and structured errors, and sends the
   Better Auth session cookie with `credentials: 'include'`. It never stores tokens.
-  Responses are not yet parsed with Zod (TD-2 in the
-  [tech debt tracker](exec-plans/tech-debt-tracker.md)).
+  Each call passes the Zod schema of what its endpoint answers and returns the schema's
+  output ([client data](design-docs/client-data.md#the-api-client)).
 - Contexts and feature models own server state with React Query. Query keys include
   the user id and the active Ownership Context so Personal and Organization data
   never mix. Switching context only marks the Template and Run lists stale

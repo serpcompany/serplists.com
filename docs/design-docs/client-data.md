@@ -14,11 +14,31 @@ upload (`src/lib/api/request.ts`), which sends the Better Auth session cookie
 is also reported to `src/lib/unauthorizedResponses.ts`, which re-checks the session
 ([authentication](authentication.md#contract)).
 
-A successful body is returned as the declared type without parsing (TD-2 in the
-[tech debt tracker](../exec-plans/tech-debt-tracker.md)). The calls that do parse their answer
-with Zod are the MCP connection (`src/lib/schemas/agentMcpConnection.ts`), created and
-previewed invites (`src/lib/schemas/teamInvite.ts`) and a template save
-(`parseTemplateUpdateResponse` in `src/lib/templateUpdateResult.ts`).
+Every call passes the Zod schema of what its endpoint answers, and `apiRequest` returns the
+schema's output. The schemas live in `src/lib/schemas/`: `apiTemplates.ts`, `apiRuns.ts`,
+`historyResponses.ts`, `teamResponses.ts`, `accountResponses.ts`, `teamInvite.ts`,
+`agentMcpConnection.ts` and `apiResponses.ts` (success, URL and list helpers), with the
+template save's in `src/lib/templateUpdateResult.ts` and the import summary's in
+`src/lib/templates/templateImportSummary.ts`.
+- The client's response types are `z.infer` of these schemas, not separate interfaces, and a
+  schema strips the fields it does not name. So a field a page reads but the schema lacks is
+  a type error, never a value that silently disappears.
+- A body that fails its schema, or is not JSON, becomes the usual `ApiError`: the response's
+  status, code `unreadable_response`, the message "Unexpected response from the server",
+  the Zod issues in `details` and the `ZodError` as its `cause` (`isUnreadableResponseError`
+  in `src/lib/api-errors.ts`). A template save reports it as `TEMPLATE_UPDATE_RESPONSE_ERROR`
+  instead, which asks for a reload, since the save itself went through.
+- The Template and run lists leave out a row their schema cannot read (`readableRowsOf`), as
+  the lists already left out a Template they could not map, rather than failing the whole
+  list.
+- Values the database stores as free text read the way the server normalizes them: an
+  unknown Organization role as `viewer`, an unknown member status as `disabled`. Older
+  shapes the mappers still accept (a Template's `items` or string `tags`, `is_public` as `1`)
+  are optional fields of the schemas.
+- The server-side page loaders parse their API reads the same way (`fetchApiJson` in
+  `src/server/api.ts`). `getAuthStatus` (`src/lib/auth-client.ts`) parses `/api/auth/status`
+  with `authStatusSchema` (`src/lib/schemas/authStatus.ts`), the type the server's
+  `getAuthEmailPolicy` returns.
 
 Every mapper from an API template row to a `ChecklistTemplate` reads its Organization with
 `readApiTemplateTeamId` (`src/lib/templates/apiTemplateOwner.ts`), which follows the server's
@@ -46,6 +66,7 @@ decide by status and code, never by message text:
 | `isAuthRequiredError` | `401` | No valid session: sign in and come back to the page. |
 | `isUpgradeRequiredError` | `403 upgrade_required`, or `403 limit_reached` for a Personal limit | A plan gate that Personal checkout can lift. `details.context` names whose limit was reached. A Personal Pro plan never lifts an Organization's limit, so an Organization limit is a plain error with the server's message, and an answer without a context (from an API older than contexts) counts as Personal. |
 | `isEditConflictError` | `409 edit_conflict` | The template or run changed after the page loaded it. |
+| `isUnreadableResponseError` | `unreadable_response`, with the answer's status | The body was not what the endpoint's schema describes ([above](#the-api-client)). A plain error to the page. |
 | `isStaleRecordError` (`src/lib/editConflicts.ts`) | `404`, `409 edit_conflict`, `409 shared_run_conflict` | The page's cached copy is out of date ([below](#stale-copies-and-conflicts)). |
 | `isBillingUnavailableError` | `billing_unavailable` | Checkout cannot start. |
 | `isSubscriptionNeedsAttentionError`, `isOpenSubscriptionConflictError`, `isBillingCustomerMissingError` | `409` from checkout or the Customer Portal | The stored plan or Stripe account differs from what the page shows ([billing](billing.md#app-endpoints)). |

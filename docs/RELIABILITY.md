@@ -17,9 +17,9 @@ migrations, backups, and R2 storage are in
 
 | Where | What runs |
 | --- | --- |
-| Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
+| Pre-commit hook | Secret scan, ESLint (`eslint.config.js`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (code conventions and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, external data parsed at the boundary and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -49,6 +49,13 @@ that is right for that case, or throw an error that says what was missing. Add
 `| undefined` to an optional property only where a caller really passes `undefined`, and
 never silence the error with a `!` or a cast. The tests' tsconfig turns the four settings off
 until the tests meet them ([testing conventions](#testing-conventions)).
+
+`pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
+`eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
+app, API and node projects ([repository checks](#repository-checks)). Type information makes a
+run about 2.4 times as long (49 s against 21 s for `eslint .` on the owner's machine), so the
+pre-commit hook and editors use `eslint.config.js` alone and the type-aware rules fail at
+`pnpm run verify` (the push hook) and in CI.
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
@@ -160,6 +167,26 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
   comments, generated output), harness configuration and test fixtures is allowed because
   of what those reads name, not through a list of files. The testing conventions say how to
   test instead.
+- **External data is parsed at the boundary.** A cast trusts a guessed shape, so data from
+  outside the code is parsed with a Zod schema where it arrives:
+  - `serplists/no-external-data-casts` (`scripts/eslint-rules/no-external-data-casts.mjs`)
+    refuses, in `src/`, `functions/`, `scripts/` and `db/`, a cast (`as T` or `<T>`) of
+    `JSON.parse(...)`, a response body (`.json()`, awaited or not, and `.json<T>()`), a
+    `getItem(...)` result, `event.data` or `message.data`, `request.formData()` or a form's
+    `get()`/`getAll()`, and every `as unknown as T`. Widening to `unknown` is allowed. Each
+    message names what to use: `apiRequest(endpoint, schema)` for the API, a schema's
+    `parse` or `safeParse` for the rest, Drizzle's `$inferSelect` for D1 rows.
+  - The type-aware rules `no-unsafe-assignment`, `no-unsafe-member-access`, `no-unsafe-call`,
+    `no-unsafe-return` and `no-unsafe-argument` refuse an `any` flowing on uncast, as in
+    `const data: Foo = await response.json()`, in the TypeScript files of the same folders
+    (`eslint.type-aware.config.js`, run by `pnpm run lint`). The `.mjs` scripts are not
+    type-checked, so only the cast rule reads them.
+  - Tests join in a later round of the
+    [harness hardening plan](exec-plans/active/harness-hardening.md); until then they read
+    responses with `readJson(response, schema)` from `tests/support/readJson.ts`.
+  - `tests/unit/scripts/no-external-data-casts-rule.test.ts` covers the rule, and
+    `tests/unit/config/external-data-boundaries.test.ts` fails if `pnpm run lint` stops using
+    the type-aware config or a folder loses the rules.
 - **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
   that scans the code:
   - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the

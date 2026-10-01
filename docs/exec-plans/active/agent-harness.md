@@ -40,7 +40,7 @@
 - [ ] Admin settings: required status checks, auto-merge, the Claude GitHub App, and the
   `CLAUDE_CODE_OAUTH_TOKEN` secret
   (see [agent workflow](../../design-docs/agent-workflow.md#repository-settings-admin-only)).
-- [ ] Burn down the tracked debt: TD-1 (tests `strict`) and TD-2 (parse client
+- [x] Burn down the tracked debt: TD-1 (tests `strict`) and TD-2 (parse client
   responses) first.
 
 ## Decision log
