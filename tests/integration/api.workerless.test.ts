@@ -1,6 +1,17 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import apiWorker from '../../functions/api/[[route]].ts';
+import { apiErrorBody, readJson } from '../support/readJson';
 import { varFromWranglerToml } from '../support/wranglerToml';
+
+const healthBody = z.object({ status: z.string() }).passthrough();
+const authStatusBody = z
+  .object({
+    emailAuthAvailable: z.boolean(),
+    emailVerificationRequired: z.boolean(),
+    accountRegistrationAvailable: z.boolean(),
+  })
+  .passthrough();
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
@@ -24,7 +35,7 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*');
     expect(response.headers.get('X-Request-Id')).toBeTruthy();
 
-    const data = await response.json();
+    const data = await readJson(response, healthBody);
     expect(data.status).toBe('ok');
   });
 
@@ -38,7 +49,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, healthBody);
     expect(data.status).toBe('ok');
   });
 
@@ -49,7 +60,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe('Server configuration error');
   });
 
@@ -65,7 +76,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    expect((await response.json()).error).toBe('Server configuration error');
+    expect((await readJson(response, apiErrorBody)).error).toBe('Server configuration error');
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
 
@@ -85,7 +96,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(500);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe('Server configuration error');
   });
 
@@ -132,7 +143,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(403);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe("Test accounts are disabled in production");
   });
 
@@ -150,7 +161,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(403);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe("Test accounts are disabled in production");
   });
 
@@ -172,7 +183,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(503);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
     expect(data.code).toBe("auth_email_unavailable");
   });
@@ -198,7 +209,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(503);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.code).toBe("auth_email_unavailable");
   });
 
@@ -219,7 +230,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(503);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
     expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
     expect(data.code).toBe("auth_email_unavailable");
   });
@@ -234,7 +245,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, authStatusBody);
     expect(data.emailAuthAvailable).toBe(false);
     expect(data.emailVerificationRequired).toBe(false);
     expect(data.accountRegistrationAvailable).toBe(true);
@@ -249,7 +260,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, authStatusBody);
     expect(data.emailAuthAvailable).toBe(true);
     expect(data.emailVerificationRequired).toBe(true);
     expect(data.accountRegistrationAvailable).toBe(true);
@@ -265,7 +276,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, authStatusBody);
     expect(data.emailAuthAvailable).toBe(false);
     expect(data.emailVerificationRequired).toBe(true);
     expect(data.accountRegistrationAvailable).toBe(false);
@@ -285,7 +296,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, authStatusBody);
     expect(data.emailAuthAvailable).toBe(false);
     expect(data.emailVerificationRequired).toBe(false);
     expect(data.accountRegistrationAvailable).toBe(true);
@@ -302,7 +313,7 @@ describe('API Worker (no-wrangler integration)', () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = await readJson(response, authStatusBody);
     expect(data.emailAuthAvailable).toBe(false);
     expect(data.emailVerificationRequired).toBe(true);
     expect(data.accountRegistrationAvailable).toBe(false);

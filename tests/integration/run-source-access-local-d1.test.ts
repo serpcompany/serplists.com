@@ -1,6 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { readJson } from "../support/readJson";
 import { schema } from "../../functions/api/db";
 import { checklistRunSelectFor } from "../../functions/api/utils/checklist-runs";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
@@ -12,7 +14,8 @@ vi.mock("../../functions/api/utils/session", () => ({
 import { handleChecklists } from "../../functions/api/handlers/checklists";
 import { getSessionUserId } from "../../functions/api/utils/session";
 
-type RunRow = { id: string; is_stale: boolean; items: string };
+const runRows = z.array(z.object({ id: z.string(), is_stale: z.boolean(), items: z.string() }).passthrough());
+type RunRow = z.output<typeof runRows>[number];
 
 let d1: LocalD1;
 const now = "2026-09-28T00:00:00.000Z";
@@ -57,7 +60,7 @@ async function listAs(userId: string, query = ""): Promise<Record<string, RunRow
   vi.mocked(getSessionUserId).mockResolvedValue(userId);
   const response = await handleChecklists(new Request(`http://localhost/api/checklists${query}`), d1.env as never);
   expect(response.status).toBe(200);
-  const runs = (await response.json()) as RunRow[];
+  const runs = await readJson(response, runRows);
   return Object.fromEntries(runs.map((run) => [run.id, run]));
 }
 

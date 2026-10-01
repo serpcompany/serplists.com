@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
+import { jsonObject, readJson } from "../support/readJson";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES } from "../../functions/api/handlers/agentMcpPages";
 import { MAX_TASK_NOTES_LENGTH } from "../../functions/api/handlers/agentMcpTools";
@@ -80,7 +81,7 @@ async function callTool(name: string, args: JsonRecord = {}, id = 1): Promise<Re
 }
 
 async function bodyOf(response: Response): Promise<JsonRecord> {
-  return response.json() as Promise<JsonRecord>;
+  return readJson(response, jsonObject);
 }
 
 function toolPayload(body: JsonRecord): JsonRecord {

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { jsonObject, readJson } from "../support/readJson";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
 vi.mock("../../functions/api/utils/session", () => ({
@@ -58,7 +59,7 @@ async function call(path: string, method: string, userId: string | null, body?: 
     method,
     body: body === undefined ? undefined : JSON.stringify(body),
   }), d1.env as never);
-  return { status: response.status, body: await response.json() as Record<string, unknown> };
+  return { status: response.status, body: await readJson(response, jsonObject) };
 }
 
 async function auditActions(): Promise<string[]> {

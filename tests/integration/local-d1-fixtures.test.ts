@@ -4,7 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { count, eq, inArray } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, assert, beforeAll, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { readJson } from "../support/readJson";
 import {
   DEV_PASSWORD_HASH,
   TEST_RUN_IDS,
@@ -153,7 +155,7 @@ describe("local Drizzle fixture commands", () => {
       runOfficialTemplateSeed();
       runLocalData("seed-official-login");
 
-      let initialTestAccountIds: string[] = [];
+      let initialTestAccountIds: Array<string | null> = [];
       await withLocalD1(persistPath, async (db) => {
         expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
 
@@ -172,16 +174,19 @@ describe("local Drizzle fixture commands", () => {
         const overridesThatAloneMakeThePersonasPro = await db
           .select({ userId: entitlement_overrides.user_id, plan: entitlement_overrides.plan })
           .from(entitlement_overrides)
-          .where(inArray(entitlement_overrides.user_id, ["user-1", "user-3"]));
-        expect(overridesThatAloneMakeThePersonasPro.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
+          .where(inArray(entitlement_overrides.user_id, ["user-1", "user-3"]))
+          .orderBy(entitlement_overrides.user_id);
+        expect(overridesThatAloneMakeThePersonasPro).toEqual([
           { userId: "user-1", plan: "pro" },
           { userId: "user-3", plan: "pro" },
         ]);
-        expect(admin.auth_created_at?.getTime() % 1000).toBe(0);
-        expect(admin.auth_updated_at?.getTime() % 1000).toBe(0);
+        assert.exists(admin.auth_created_at);
+        assert.exists(admin.auth_updated_at);
+        expect(admin.auth_created_at.getTime() % 1000).toBe(0);
+        expect(admin.auth_updated_at.getTime() % 1000).toBe(0);
         expect(teamRun).toMatchObject({ progress: 33, assigned_to_user_id: "user-4" });
         expect(invite).toMatchObject({ email: "john@test.com", role: "editor" });
-        expect(testAccounts.every(({ id }) => /^[0-9a-f]{32}$/.test(id))).toBe(true);
+        expect(testAccounts.every(({ id }) => id !== null && /^[0-9a-f]{32}$/.test(id))).toBe(true);
         expect(
           testAccounts.every(
             ({ createdAt, updatedAt }) =>
@@ -406,11 +411,11 @@ describe("local Drizzle fixture commands", () => {
 
         for (const template of seeded) {
           const newestHistory = Math.max(0, ...history.filter((row) => row.templateId === template.id).map((row) => row.version));
-          expect(newestHistory, template.id).toBeLessThanOrEqual(template.version);
+          expect(newestHistory, String(template.id)).toBeLessThanOrEqual(template.version);
         }
         for (const run of runs) {
           const template = seeded.find(({ id }) => id === run.templateId);
-          if (template) expect(run.templateVersion, run.id).toBeLessThanOrEqual(template.contentVersion);
+          if (template) expect(run.templateVersion, String(run.id)).toBeLessThanOrEqual(template.contentVersion);
         }
       });
 
@@ -421,7 +426,7 @@ describe("local Drizzle fixture commands", () => {
         const load = async () => {
           const response = await handleTemplates(new Request(url), env);
           expect(response.status).toBe(200);
-          return (await response.json()) as { title: string; version: number };
+          return readJson(response, z.object({ title: z.string(), version: z.number() }).passthrough());
         };
         vi.mocked(getSessionUserId).mockResolvedValue("user-1");
 

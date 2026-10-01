@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { jsonObject, jsonObjects, readJson } from "../support/readJson";
 import apiWorker from "../../functions/api/[[route]]";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
@@ -38,7 +39,7 @@ const signIn = (email: string, password: string) =>
   send("auth/sign-in/email", { body: { email, password }, origin: true });
 
 async function json(response: Response): Promise<Json> {
-  return (await response.json()) as Json;
+  return readJson(response, jsonObject);
 }
 
 function sessionCookieOf(response: Response): string {
@@ -188,8 +189,8 @@ describe.sequential("the API router against local D1", () => {
     it("lists a private template for its owner only", async () => {
       const id = await createTemplate({ title: "Private Template", is_public: false });
 
-      const own = (await (await asOwner("templates")).json()) as Json[];
-      const anonymous = (await (await send("templates")).json()) as Json[];
+      const own = await readJson(await asOwner("templates"), jsonObjects);
+      const anonymous = await readJson(await send("templates"), jsonObjects);
 
       expect(own.map((template) => template.id)).toContain(id);
       expect(anonymous.map((template) => template.id)).not.toContain(id);
@@ -276,7 +277,7 @@ describe.sequential("the API router against local D1", () => {
       const id = await startRun("Listed Run");
 
       const response = await asOwner("checklists");
-      const runs = (await response.json()) as Json[];
+      const runs = await readJson(response, jsonObjects);
 
       expect(response.status).toBe(200);
       expect(runs.map((run) => run.id)).toContain(id);

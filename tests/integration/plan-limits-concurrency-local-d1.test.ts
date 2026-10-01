@@ -1,6 +1,8 @@
 import { sql, type SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+import { jsonObject, readJson } from "../support/readJson";
 import { activeRunCapacityAvailableSql } from "../../functions/api/utils/active-run-limit";
 import { templateCapacityAvailableSql } from "../../functions/api/utils/template-writes";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
@@ -18,6 +20,13 @@ import { getSessionUserId } from "../../functions/api/utils/session";
 const PARALLEL = 10;
 const now = "2026-09-28T00:00:00.000Z";
 const sections = JSON.stringify([{ id: "s1", title: "S", items: [{ id: "i1", title: "Task" }] }]);
+const startRunAnswer = z
+  .object({
+    result: z
+      .object({ isError: z.boolean().optional(), structuredContent: z.object({ error: z.string().optional() }).passthrough() })
+      .passthrough(),
+  })
+  .passthrough();
 let d1: LocalD1;
 let mcpKey = "";
 
@@ -70,7 +79,7 @@ async function burst(userIds: string[], handler: Handler, makeRequest: (index: n
     return handler(request, d1.env as never);
   }));
   const statuses = responses.map((response) => response.status);
-  const bodies = await Promise.all(responses.map((response) => response.json() as Promise<Record<string, unknown>>));
+  const bodies = await Promise.all(responses.map((response) => readJson(response, jsonObject)));
   return { statuses, bodies };
 }
 
@@ -130,7 +139,7 @@ describe.sequential("Free plan limits under concurrent requests (local D1), chec
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: index + 1, method: "tools/call", params: { name: "start_run", arguments: { templateId: "mcp-template" } } }),
     }), d1.env as never)));
-    const payloads = await Promise.all(responses.map(async (response) => ((await response.json()) as { result: { isError?: boolean; structuredContent: { error?: string } } }).result));
+    const payloads = await Promise.all(responses.map(async (response) => (await readJson(response, startRunAnswer)).result));
     expect(payloads.filter((payload) => !payload.isError)).toHaveLength(1);
     expect(payloads.filter((payload) => payload.structuredContent.error === "limit_reached")).toHaveLength(PARALLEL - 1);
     expect(await scalar("SELECT count(*) AS value FROM checklist_runs WHERE user_id = 'mcp' AND status = 'in_progress' AND deleted_at IS NULL")).toBe(3);
