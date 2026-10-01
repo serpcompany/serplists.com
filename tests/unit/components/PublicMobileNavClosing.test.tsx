@@ -1,10 +1,7 @@
+import '../../support/reactHooksKeptBetweenRenders';
 import { navigation } from '../../support/mockedNextNavigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: null }) }));
 
 import { PublicMobileNav } from '@/components/layout/PublicMobileNav';

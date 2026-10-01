@@ -1,25 +1,16 @@
-import { navigation } from '../../support/mockedNextNavigation';
+import '../../support/mockedNextNavigation';
 import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
+import { renderTheCategoryPageAt } from '../../support/categoryPage';
 import { FileText } from 'lucide-react';
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveCategoryPresentation } from '@/components/checklist-library/categoryPresentation';
 import { findCategoryByLegacySlug } from '@/components/checklist-library/discovery-utils';
 import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { buildPublicCategoryPath } from '@/lib/routes';
-import CategoryDetail from '@/views/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: null }),
-}));
-
-const renderCategoryPage = (location: string) => {
-  navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
-  return renderToStaticMarkup(<CategoryDetail />);
-};
+const renderCategoryPage = renderTheCategoryPageAt;
 
 const robotsTagThePageAdds = (markup: string) => markup.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 

@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { workspaceRoles } from '../../support/mockedWorkspaceRoles';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -21,17 +22,6 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => mockUseTemplates(),
   useTemplateLists: () => mockUseTemplates(),
 }));
-
-const workspaceRoles = vi.hoisted(() => ({ roles: {} as Record<string, 'viewer' | 'editor' | 'admin'> }));
-
-vi.mock('@/contexts/WorkspaceContext', async () => {
-  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
-  return {
-    useWorkspace: () => ({
-      getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
-    }),
-  };
-});
 
 vi.mock('sonner', () => ({
   toast: {

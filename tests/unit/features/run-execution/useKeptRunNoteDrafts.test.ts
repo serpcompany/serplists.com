@@ -1,9 +1,6 @@
+import '../../../support/reactHooksKeptBetweenRenders';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
 vi.mock('sonner', () => ({ toast: vi.fn() }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({ useAuth: () => ({ user: { id: 'user-1' } }) }));
 

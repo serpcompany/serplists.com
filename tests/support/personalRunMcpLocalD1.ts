@@ -7,6 +7,7 @@ import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { createPersonalRunKeySecret } from "../../functions/api/utils/personal-run-key";
 import { contentSaveBytes, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
 import { platformProxyOnLocalD1, runToolInRepo } from "../integration/local-d1-handler-env";
+import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { jsonObject, readJson } from "./readJson";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -147,23 +148,7 @@ async function seedPreMigrationData(): Promise<void> {
       "user-a",
       "Personal Release SOP",
       "A personal SOP",
-      JSON.stringify([{
-        id: "section-1",
-        title: "Release",
-        items: [{
-          id: "task-1",
-          title: "Verify release",
-          notes: "",
-          isCompleted: false,
-          contents: [{
-            type: "subItems",
-            subItems: [
-              { id: "sub-1", title: "Tests pass", isCompleted: false },
-              { id: "sub-2", title: "Preview checked", isCompleted: false },
-            ],
-          }],
-        }],
-      }]),
+      JSON.stringify(releaseSectionWithTwoSubTasks({ title: "Verify release", notes: "" })),
       "release",
       "[]",
       createdAt,

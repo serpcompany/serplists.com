@@ -1,12 +1,13 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TeamSettingsSection } from '@/components/account/TeamSettingsSection';
 import { queryKeys } from '@/lib/queryKeys';
 
-import { createFakeContainer, dispatch, FakeElement, findAll, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer, dispatch, FakeElement, findAll } from '../../fixtures/fakeDom';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 type TeamWorkspace = {
   id: string;
@@ -70,12 +71,6 @@ const rebuildActiveWorkspaceWithPatch = (_teamId: string, patch: Partial<TeamWor
   workspace.active = { ...workspace.active, ...patch };
 };
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
-
 let root: Root | null = null;
 let container: FakeElement;
 let queryClient: QueryClient;
@@ -91,10 +86,10 @@ beforeEach(() => {
   queryClient.setQueryData(queryKeys.teamActivity('user-1', 'team-1'), []);
 });
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   queryClient.clear();
 });
+
+const fakeDom = aFakeDomForEachTest();
 
 const renderWithCurrentWorkspace = async () => {
   await act(async () => {
@@ -108,7 +103,7 @@ const renderWithCurrentWorkspace = async () => {
 
 const mount = async () => {
   container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
+  root = fakeDom.track(createRoot(container as unknown as Element));
   await renderWithCurrentWorkspace();
 };
 

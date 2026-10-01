@@ -79,3 +79,26 @@ export function templateRowToExport(overrides: Row = {}): Row {
     ...overrides,
   };
 }
+
+export const releaseSectionWithTwoSubTasks = (task: { title: string; notes?: string }) => [
+  {
+    id: 'section-1',
+    title: 'Release',
+    items: [
+      {
+        id: 'task-1',
+        ...task,
+        isCompleted: false,
+        contents: [
+          {
+            type: 'subItems',
+            subItems: [
+              { id: 'sub-1', title: 'Tests pass', isCompleted: false },
+              { id: 'sub-2', title: 'Preview checked', isCompleted: false },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];

@@ -1,9 +1,5 @@
+import '../../../support/reactHooksKeptBetweenRenders';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('../../../support/hookStateSlots')).hooksKeptBetweenRenders,
-}));
 
 import { useOutlineDrag, type OutlineDragState } from '@/components/template-editor/useOutlineDrag';
 

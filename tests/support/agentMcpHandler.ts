@@ -5,6 +5,7 @@ import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/a
 import { mcpToolCall, runKeyWithEveryPermission } from "./agentMcp";
 import { apiEnv } from "./apiEnv";
 import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
+import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 
@@ -37,22 +38,7 @@ export function personalRun(overrides: JsonRecord = {}): JsonRecord {
     team_id: null,
     template_id: "template-1",
     title: "Release SOP",
-    items: JSON.stringify([{
-      id: "section-1",
-      title: "Release",
-      items: [{
-        id: "task-1",
-        title: "Verify",
-        isCompleted: false,
-        contents: [{
-          type: "subItems",
-          subItems: [
-            { id: "sub-1", title: "Tests pass", isCompleted: false },
-            { id: "sub-2", title: "Preview checked", isCompleted: false },
-          ],
-        }],
-      }],
-    }]),
+    items: JSON.stringify(releaseSectionWithTwoSubTasks({ title: "Verify" })),
     status: "in_progress",
     progress: 0,
     revision: 1,

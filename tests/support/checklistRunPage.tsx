@@ -1,13 +1,11 @@
+import { renderPageAt } from './mockedNextNavigation';
 import { vi } from 'vitest';
+
+import './mockedWorkspaceRoles';
 
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
-
-import { renderPageAt } from './nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('./nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('./nextNavigation')).nextLinkMock);
 
 export const mockUseRunExecutionModel = vi.fn();
 
@@ -26,22 +24,6 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   }),
 }));
 
-const workspaceRoles = vi.hoisted(() => ({
-  roles: {} as Record<string, 'viewer' | 'runner' | 'admin'>,
-  teamsUnavailable: false,
-}));
-
-vi.mock('@/contexts/WorkspaceContext', async () => {
-  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
-  return {
-    useWorkspace: () => ({
-      getPermissions: (teamId?: string) => getResourcePermissions(teamId, (id) => workspaceRoles.roles[id]),
-      isRoleUnavailable: (teamId?: string) =>
-        Boolean(teamId) && workspaceRoles.teamsUnavailable && !(teamId! in workspaceRoles.roles),
-      retryWorkspace: vi.fn(),
-    }),
-  };
-});
 
 vi.mock('sonner', () => ({
   toast: {
@@ -105,7 +87,7 @@ export const runPageModel = (overrides: Record<string, unknown>) => ({
   ...overrides,
 });
 
-export { workspaceRoles };
+export { workspaceRoles } from './mockedWorkspaceRoles';
 
 export const twoTaskRun = (completed: [boolean, boolean], status: ChecklistRun['status'] = 'in_progress'): ChecklistRun => ({
   ...baseRun,

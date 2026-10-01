@@ -6,15 +6,15 @@ import {
   mockUseTemplateLibrary,
   movingTemplate,
 } from '../../support/mockedTemplateLibrary';
+import { renderTheCategoryPageAt } from '../../support/categoryPage';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { metadata as libraryMetadata } from '@/app/(site)/templates/page';
 import ChecklistLibrary from '@/views/ChecklistLibrary';
 import Categories from '@/views/Categories';
-import CategoryDetail from '@/views/CategoryDetail';
 import { LIBRARY_FILTER_UPDATE_STATE } from '@/components/checklist-library/libraryFilters';
 import {
   REPO_TEMPLATE_OWNER_SLUG,
@@ -28,13 +28,8 @@ import {
 import type { ChecklistTemplate } from '@/types/checklist';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: null }),
-}));
-
 const renderCategoryPage = (location: string) => {
-  navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
-  const markup = renderToStaticMarkup(<CategoryDetail />);
+  const markup = renderTheCategoryPageAt(location);
   return { markup, robots: markup.match(/<meta name="robots"[^>]*>/)?.[0] ?? '' };
 };
 

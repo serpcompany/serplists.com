@@ -67,6 +67,14 @@ function runLocalData(command: "seed-test" | "seed-official-login" | "cleanup" |
   runToolInRepo("tsx", ["scripts/data/local-d1-data.ts", command, "--persist-to", persistPath]);
 }
 
+const EVERY_FIXTURE_SEEDED = [4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5];
+const NO_FIXTURES_LEFT = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+async function expectTheOutsiderKept(db: LocalDb) {
+  expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
+  expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+}
+
 async function fixtureCounts(db: LocalDb) {
   const results = await Promise.all([
     db.select({ value: count() }).from(users).where(inArray(users.id, TEST_USER_IDS)),
@@ -157,7 +165,7 @@ describe("local Drizzle fixture commands", () => {
 
       let initialTestAccountIds: Array<string | null> = [];
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
 
         const [admin] = await db.select().from(users).where(eq(users.id, "user-1"));
         const [teamRun] = await db
@@ -197,14 +205,13 @@ describe("local Drizzle fixture commands", () => {
 
         expect(OFFICIAL_TEMPLATE_IDS).toHaveLength(5);
         expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
       });
 
       runLocalData("cleanup");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        expect(await fixtureCounts(db)).toEqual(NO_FIXTURES_LEFT);
         expect(await officialTemplateIds(db)).toEqual(OFFICIAL_TEMPLATE_IDS);
         expect(await db.select().from(users).where(eq(users.id, "serp-user"))).toHaveLength(1);
         expect(
@@ -216,8 +223,7 @@ describe("local Drizzle fixture commands", () => {
             .from(entitlement_overrides)
             .where(eq(entitlement_overrides.user_id, "serp-user")),
         ).toHaveLength(1);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
 
         await db.insert(users).values({
           id: "user-1",
@@ -242,7 +248,7 @@ describe("local Drizzle fixture commands", () => {
       runLocalData("seed-test");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
         const recoveredTestAccountIds = (
           await db.select({ id: account.id }).from(account).where(inArray(account.userId, TEST_USER_IDS))
         )
@@ -358,7 +364,7 @@ describe("local Drizzle fixture commands", () => {
       runLocalData("cleanup");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        expect(await fixtureCounts(db)).toEqual(NO_FIXTURES_LEFT);
         const remainingTeams = await db
           .select({ id: teams.id })
           .from(teams)
@@ -376,14 +382,13 @@ describe("local Drizzle fixture commands", () => {
         expect(
           await db.select({ id: templates.id }).from(templates).where(eq(templates.id, "outsider-team-template")),
         ).toEqual([{ id: "outsider-team-template" }]);
-        expect(await db.select().from(users).where(eq(users.id, OUTSIDER_ID))).toHaveLength(1);
-        expect(await db.select().from(account).where(eq(account.id, OUTSIDER_ACCOUNT_ID))).toHaveLength(1);
+        await expectTheOutsiderKept(db);
       });
 
       runLocalData("seed-test");
 
       await withLocalD1(persistPath, async (db) => {
-        expect(await fixtureCounts(db)).toEqual([4, 4, 2, 2, 6, 1, 1, 7, 5, 5, 4, 3, 5]);
+        expect(await fixtureCounts(db)).toEqual(EVERY_FIXTURE_SEEDED);
       });
     },
     60_000,

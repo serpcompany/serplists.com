@@ -1,3 +1,4 @@
+import { navigation } from './mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { vi } from 'vitest';
@@ -5,10 +6,6 @@ import { vi } from 'vitest';
 import { navigateToLoginWithReturnPath } from '@/lib/access-flow';
 import TemplateDetail from '@/views/TemplateDetail';
 import { buildV0DemoPrivateTemplate } from '../fixtures/v0DemoFixtures';
-import { navigation } from './nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('./nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('./nextNavigation')).nextLinkMock);
 
 export const mockUseTemplateDetailModel = vi.fn();
 const {

@@ -1,13 +1,10 @@
+import { navigation } from './mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from './nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('./nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('./nextNavigation')).nextLinkMock);
 
 const {
   authState,

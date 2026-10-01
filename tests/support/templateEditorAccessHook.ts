@@ -1,3 +1,4 @@
+import './reactHooksKeptBetweenRenders';
 import { vi } from 'vitest';
 
 export const accessHook = {
@@ -6,10 +7,6 @@ export const accessHook = {
   startBillingCheckout: vi.fn<(billingEnabled: boolean) => Promise<boolean>>(async () => true),
 };
 
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  ...(await import('./hookStateSlots')).hooksKeptBetweenRenders,
-}));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: { billingEnabled: true, limits: { maxTemplates: 1 } } }),
   useQueryClient: () => ({ invalidateQueries: accessHook.invalidateQueries }),
