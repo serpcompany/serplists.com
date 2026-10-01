@@ -175,7 +175,9 @@ Authenticated:
   `409 checkout_incomplete`, which the client shows without opening the portal;
   so does a stored `incomplete` status with no Stripe customer to ask. Billing and
   Pricing keep offering Upgrade for an `incomplete` status. An active manual override
-  returns `409 plan_managed_by_support` before any Stripe call.
+  returns `409 plan_managed_by_support` before any Stripe call: an override outranks
+  Stripe, so a subscription bought under a Free override would bill without ever
+  granting Pro.
   Stored rows come from webhooks, which can lag or fail, and the stored customer
   can be one Stripe no longer has, so for a user with a Stripe customer Stripe
   decides: checkout lists the customer's subscriptions in Stripe
@@ -208,8 +210,10 @@ Authenticated:
   created with the other mode's keys) is replaced: when Stripe answers
   `resource_missing` for `customer`, checkout creates a new customer (with an
   idempotency key, so a double click creates one), swaps the mapping only if it
-  still holds the missing id, and retries once. Other Stripe errors never
-  replace the customer. Subscriptions stored for the missing customer keep their
+  still holds the missing id, and retries once. A deleted customer still lists its
+  subscriptions (none), so it can show up only when the Checkout Session is created;
+  checkout replaces it there the same way. Other Stripe errors never replace the
+  customer. Subscriptions stored for the missing customer keep their
   rows (no webhook will update them); they stop blocking checkout and stop showing
   in billing status because they are no longer on the stored customer.
   The customer is never replaced while the user has an open stored subscription
@@ -225,10 +229,14 @@ Authenticated:
   `customer-<userId>-<email digest>`, so concurrent or retried first checkouts
   share one customer, and stores the mapping with `ON CONFLICT DO NOTHING`: a
   mapping another request or the webhook stored first is kept, and that request
-  gets `409 checkout_in_progress`. The Checkout idempotency key includes the
-  customer id and a digest of the price and return URLs. When Stripe refuses a
-  key that is still in flight (`idempotency_key_in_use`) or was used with other
-  parameters (`idempotency_error`), checkout returns `409 checkout_in_progress`
+  gets `409 checkout_in_progress`. The Checkout idempotency key is the user, the
+  customer id, a digest of the price and return URLs, and the five-minute window the
+  request falls in, so a retry or double submit in that window joins one Checkout
+  Session, which later checkouts reuse or expire. The customer and the digest are in
+  the key because Stripe rejects a reused key whose parameters changed, as they do
+  after a customer is replaced or for a request from another origin. When Stripe
+  refuses a key that is still in flight (`idempotency_key_in_use`) or was used with
+  other parameters (`idempotency_error`), checkout returns `409 checkout_in_progress`
   (try again in a moment) instead of a server error. The client also joins a
   second `startBillingCheckout` call to the one still pending.
 - `POST /api/billing/portal` → returns `{ url }` to redirect user to Stripe Customer Portal,
@@ -277,9 +285,12 @@ a row with a recorded error. A failed write, a lost error record, or a Worker
 stopped mid-delivery therefore leaves the event retryable. Processing failures
 return `500` so Stripe delivers the event again, and the error is recorded best
 effort without overwriting a row a concurrent delivery already marked handled.
+Two deliveries of one event can both process it; the writes are upserts, so the
+second changes nothing.
 Events the webhook does not act on (such as `invoice.*`) are recorded as handled.
 A subscription event for an unknown or deleted user is logged and acknowledged
-rather than retried. Subscription events upsert their customer mapping together
+rather than retried, since a deleted user's subscription row would fail its foreign
+key on every retry. Subscription events upsert their customer mapping together
 with subscription state; checkout completion may use `metadata.userId` when
 `client_reference_id` is absent. A completed subscription-mode Checkout also
 reads its subscription from Stripe and stores it, so Pro does not wait on a late

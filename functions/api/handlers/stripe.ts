@@ -67,7 +67,6 @@ async function subscriptionWrites(
   subscription: SubscriptionSnapshot,
   nowIso: string,
 ): Promise<BatchItem<"sqlite">[]> {
-  // A deleted user's subscription row would fail its foreign key on every retry.
   if (!(await userExists(db, userId))) return logSkippedEvent(event, "user_deleted");
   const linkCustomer = isTerminalSubscriptionStatus(subscription.status)
     ? linkStripeCustomerIfUnmapped
@@ -78,10 +77,6 @@ async function subscriptionWrites(
   ];
 }
 
-/**
- * The subscription a completed subscription-mode Checkout created, read from Stripe.
- * Storing it here grants Pro even when its customer.subscription.* event is late or lost.
- */
 async function loadCheckoutSubscription(
   env: Env,
   event: StripeEvent,
@@ -100,7 +95,6 @@ async function loadCheckoutSubscription(
   return retrieveSubscription(env.STRIPE_SECRET_KEY, subscriptionId);
 }
 
-/** Reads what the event needs and returns its writes, unexecuted. */
 async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: string): Promise<BatchItem<"sqlite">[]> {
   const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
 
@@ -129,8 +123,6 @@ async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: st
   const userId = row?.user_id ?? eventSnapshot.metadataUserId;
   if (!userId) return logSkippedEvent(event, "unknown_user");
 
-  // The event snapshot may be older than state already stored, so write what
-  // Stripe reports now (see loadCurrentSubscription).
   const subscription = await loadCurrentSubscription(env, eventSnapshot);
   if (!subscription) return [];
   return subscriptionWrites(db, event, userId, subscription, nowIso);
@@ -138,10 +130,9 @@ async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: st
 
 export async function handleStripe(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const pathParts = url.pathname.split("/").filter(Boolean); // ["api", "stripe", ...]
-  const stripeSubpath = pathParts.slice(2); // after /api/stripe
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  const stripeSubpath = pathParts.slice(2);
 
-  // Webhook: POST /api/stripe/webhook
   if (request.method === "POST" && stripeSubpath[0] === "webhook") {
     const { webhookSecret } = assertStripeWebhookConfigured(env);
     const payload = await request.text();
@@ -177,25 +168,19 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
     };
 
     try {
-      // Idempotency: a replay of an event whose writes committed changes nothing.
       if (await isStripeEventHandled(db, event.id)) {
         return json({ received: true, duplicate: true });
       }
 
       const writes = await buildEventWrites(env, db, event, record.processedAt);
-      // D1 runs a batch as one transaction, so the event is recorded as handled only
-      // together with its writes. Concurrent deliveries may both get here; the writes
-      // are idempotent upserts.
       await db.batch([markStripeEventHandled(db, record), ...writes]);
       return json({ received: true });
     } catch (err) {
-      // Never the bound values of a failed Drizzle query: they would reach the log and D1.
       const described = describeErrorForLog(err);
       log("error", "stripe_webhook_failed", { eventId: event.id, type: event.type, ...described });
       try {
         await recordStripeEventFailure(db, record, described.errorMessage);
       } catch {
-        // Without an error row the event is still unhandled, so Stripe's retry reprocesses it.
         log("warn", "stripe_webhook_failure_not_recorded", { eventId: event.id, type: event.type });
       }
       return jsonError("Stripe webhook processing failed", 500);

@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 describe("Stripe return URLs", () => {
-  it("returns Checkout to the settings page with the billing result", async () => {
+  it("returns Checkout to the settings page the app builds, with the billing result", async () => {
     const response = await handleBilling(
       new Request("http://localhost/api/billing/checkout", { method: "POST", body: "{}" }),
       env(),
@@ -66,7 +66,7 @@ describe("Stripe return URLs", () => {
     expect(sentForm().get("line_items[0][price]")).toBe("price_pro");
   });
 
-  it("returns the Customer Portal to the settings page", async () => {
+  it("returns the Customer Portal to the settings page the app builds", async () => {
     const response = await handleBilling(
       new Request("http://localhost/api/billing/portal", { method: "POST", body: "{}" }),
       env(),
