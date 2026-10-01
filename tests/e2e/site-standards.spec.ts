@@ -3,21 +3,10 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { SMOKE_TEST_HEADER } from '../../scripts/check-site-standards.mjs';
 import { APP_URL } from './support/stack';
 
-// The SERP URL and environment standards on the production build (the browser tests run it
-// with SITE_ENV=production, tests/e2e/run-smoke-lib.mjs):
-// - a page ends in a slash and a file never does; the other form answers 308 with the
-//   canonical URL, in one hop, and only the canonical URL answers 200;
-// - the API is not a page and answers at the path it is called with, never with a redirect;
-// - the site links only to canonical URLs, so no link depends on a redirect;
-// - production may be indexed, and every other host redirects to serplists.com.
-// Staging's side (noindex, crawlers disallowed) is checked by tests/unit/seo/siteEnvIndexing.test.ts
-// and, on a running staging build, by scripts/check-site-standards.mjs.
-
 const get = (request: APIRequestContext, path: string, headers: Record<string, string> = {}) =>
   request.get(`${APP_URL}${path}`, { headers, maxRedirects: 0 });
 
-/** Where a redirect sends the request, as an absolute URL. */
-const locationOf = (response: { headers(): Record<string, string> }, base = APP_URL) =>
+const redirectTargetOf = (response: { headers(): Record<string, string> }, base = APP_URL) =>
   new URL(response.headers().location ?? '', base).href;
 
 const PAGES = [
@@ -48,20 +37,18 @@ test.describe('URL form', () => {
     for (const page of PAGES.filter((path) => path !== '/')) {
       const response = await get(request, page.slice(0, -1));
       expect(response.status(), page).toBe(308);
-      expect(locationOf(response), page).toBe(`${APP_URL}${page}`);
+      expect(redirectTargetOf(response), page).toBe(`${APP_URL}${page}`);
     }
     for (const file of FILES) {
       const response = await get(request, `${file}/`);
       expect(response.status(), file).toBe(308);
-      expect(locationOf(response), file).toBe(`${APP_URL}${file}`);
+      expect(redirectTargetOf(response), file).toBe(`${APP_URL}${file}`);
     }
     const withQuery = await get(request, '/login?next=%2Fdashboard%2Ftemplates%2F');
     expect(withQuery.status()).toBe(308);
-    expect(locationOf(withQuery)).toBe(`${APP_URL}/login/?next=%2Fdashboard%2Ftemplates%2F`);
+    expect(redirectTargetOf(withQuery)).toBe(`${APP_URL}/login/?next=%2Fdashboard%2Ftemplates%2F`);
   });
 
-  // Better Auth, the Stripe webhook and agents (MCP) call these paths directly, and do not
-  // follow redirects.
   test('@smoke the API answers at the path it is called with, with or without a slash', async ({ request }) => {
     for (const path of ['/api/health', '/api/auth/get-session', '/api/mcp', '/api/stripe/webhook', '/api/uploads/file']) {
       for (const form of [path, `${path}/`]) {
@@ -95,8 +82,7 @@ test.describe('URL form', () => {
     });
     await page.goto('/');
     const header = page.getByRole('banner');
-    // "Templates" and "Features" open menus of their pages (in a popup outside the header).
-    const openMenu = page.locator('[data-slot="navigation-menu-content"][data-open]');
+    const openMenuPopupAfterThePage = page.locator('[data-slot="navigation-menu-content"][data-open]');
     for (const [menu, name, path] of [
       ['Templates', 'Template Library', '/templates/'],
       ['Templates', 'Categories', '/categories/'],
@@ -104,7 +90,7 @@ test.describe('URL form', () => {
       ['Features', 'Import + Export', '/features/import-export/'],
     ] as const) {
       await header.getByRole('button', { name: menu, exact: true }).click();
-      await openMenu.getByRole('link', { name, exact: true }).click();
+      await openMenuPopupAfterThePage.getByRole('link', { name, exact: true }).click();
       await expect(page).toHaveURL(`${APP_URL}${path}`);
     }
     await header.getByRole('link', { name: 'Pricing', exact: true }).click();
@@ -126,7 +112,7 @@ test.describe('URL form', () => {
 });
 
 test.describe('production environment', () => {
-  test('lets crawlers in: robots.txt allows crawling and lists the sitemap, and nothing is noindex', async ({ request }) => {
+  test('lets crawlers in: robots.txt allows crawling and lists the sitemap, and only share pages are noindex', async ({ request }) => {
     const robots = await (await get(request, '/robots.txt')).text();
     expect(robots).toMatch(/^Allow: \/$/m);
     expect(robots).not.toMatch(/^Disallow: \/$/m);
@@ -134,7 +120,6 @@ test.describe('production environment', () => {
     for (const path of ['/', '/templates/', '/profile/serp/ultimate-camping-checklist/', '/api/health', '/og-default.png']) {
       expect((await get(request, path)).headers()['x-robots-tag'], path).toBeUndefined();
     }
-    // A share link's page is one person's run, never indexed, on production too.
     expect((await get(request, '/share/e2e-no-such-share/')).headers()['x-robots-tag']).toBe('noindex, nofollow');
   });
 
@@ -151,9 +136,6 @@ test.describe('production environment', () => {
     expect(response?.headers()['x-robots-tag']).toBeUndefined();
   });
 
-  // Each environment answers on one host. The Worker's workers.dev URL and www serve the same
-  // deployment, so they redirect to serplists.com in one hop, in the canonical form. CI tests a
-  // deployment on its workers.dev URL with the smoke-test header, which skips that redirect.
   test('@smoke other hosts redirect to serplists.com in one hop, and the smoke-test header serves workers.dev', async ({ request }) => {
     const workersDev = 'serp-checklists-production.serp.workers.dev';
     for (const [host, path, canonical] of [
@@ -167,7 +149,7 @@ test.describe('production environment', () => {
     ] as const) {
       const response = await get(request, path, { host });
       expect(response.status(), `${host}${path}`).toBe(308);
-      expect(locationOf(response), `${host}${path}`).toBe(canonical);
+      expect(redirectTargetOf(response), `${host}${path}`).toBe(canonical);
     }
 
     const smokeTest = await get(request, '/about/', { host: workersDev, [SMOKE_TEST_HEADER]: '1' });

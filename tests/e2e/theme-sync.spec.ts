@@ -1,8 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// A theme change reaches other tabs only as a `storage` event. The other tab must apply
-// it to its page, not just to its toggle label and toasts.
-
 const expectTheme = async (page: Page, theme: 'light' | 'dark') => {
   const html = page.locator('html');
   if (theme === 'dark') {

@@ -1,16 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// The site header's navigation (src/components/layout/SiteNavigationMenu.tsx): "Templates" and
-// "Features" open menus of their pages, "Pricing" is a link. The menus open from a click or the
-// keyboard, name each link by its page, and mark the page that is open. Phones get the same
-// groups in the menu sheet (public-mobile-nav.spec.ts).
-
 test.use({ viewport: { width: 1280, height: 800 } });
 
-// The open menu's content. Base UI renders it in a popup after the page, outside the header.
-const openMenu = (page: Page) => page.locator('[data-slot="navigation-menu-content"][data-open]');
+const openMenuPopupAfterThePage = (page: Page) => page.locator('[data-slot="navigation-menu-content"][data-open]');
 
-test('the Templates menu opens the Template Library and Categories, and marks the page open', async ({ page }) => {
+const countUnnamedNavigationLandmarks = (page: Page) =>
+  page
+    .getByRole('navigation')
+    .evaluateAll((navs) => navs.filter((nav) => !nav.getAttribute('aria-label') && !nav.getAttribute('aria-labelledby')).length);
+
+test('the Templates menu opens the Template Library and Categories, marks the page open, and adds no unnamed navigation', async ({ page }) => {
   await page.goto('/pricing/');
   const nav = page.getByRole('banner').getByRole('navigation', { name: 'Site' });
   const templates = nav.getByRole('button', { name: 'Templates', exact: true });
@@ -19,40 +18,33 @@ test('the Templates menu opens the Template Library and Categories, and marks th
 
   await templates.click();
   await expect(templates).toHaveAttribute('aria-expanded', 'true');
-  // The open menu adds no landmark of its own: Base UI's popup was a <nav> whose links the
-  // trigger claims for the "Site" navigation, an empty, unlabelled navigation after the page.
-  await expect(openMenu(page).getByRole('link', { name: 'Categories', exact: true })).toBeVisible();
-  const unnamedNavigations = await page
-    .getByRole('navigation')
-    .evaluateAll((navs) => navs.filter((nav) => !nav.getAttribute('aria-label') && !nav.getAttribute('aria-labelledby')).length);
-  expect(unnamedNavigations).toBe(0);
-  await openMenu(page).getByRole('link', { name: 'Categories', exact: true }).click();
+  await expect(openMenuPopupAfterThePage(page).getByRole('link', { name: 'Categories', exact: true })).toBeVisible();
+  expect(await countUnnamedNavigationLandmarks(page)).toBe(0);
+  await openMenuPopupAfterThePage(page).getByRole('link', { name: 'Categories', exact: true }).click();
   await expect(page).toHaveURL(/\/categories\/$/);
-  // A link closes the menu it was picked from.
   await expect(templates).toHaveAttribute('aria-expanded', 'false');
 
   await templates.click();
-  await expect(openMenu(page).getByRole('link', { name: 'Categories', exact: true })).toHaveAttribute(
+  await expect(openMenuPopupAfterThePage(page).getByRole('link', { name: 'Categories', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await openMenu(page).getByRole('link', { name: 'Template Library', exact: true }).click();
+  await openMenuPopupAfterThePage(page).getByRole('link', { name: 'Template Library', exact: true }).click();
   await expect(page).toHaveURL(/\/templates\/$/);
 });
 
-test('the Features menu works from the keyboard', async ({ page }) => {
+test('the Features menu works from the keyboard: Tab enters it, the arrow keys move in it, and Escape closes it and returns focus', async ({ page }) => {
   await page.goto('/');
   const features = page.getByRole('banner').getByRole('button', { name: 'Features', exact: true });
 
   await features.focus();
   await page.keyboard.press('Enter');
   await expect(features).toHaveAttribute('aria-expanded', 'true');
-  const menu = openMenu(page);
+  const menu = openMenuPopupAfterThePage(page);
   for (const name of ['Template Builder', 'Checklist Runs', 'Public Sharing', 'Import + Export']) {
     await expect(menu.getByRole('link', { name, exact: true })).toBeVisible();
   }
 
-  // Tab enters the menu, the arrow keys move within it, and Escape closes it and returns focus.
   await page.keyboard.press('Tab');
   await expect(menu.getByRole('link', { name: 'Template Builder', exact: true })).toBeFocused();
   await page.keyboard.press('ArrowDown');

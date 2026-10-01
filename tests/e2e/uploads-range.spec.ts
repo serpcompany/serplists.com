@@ -2,11 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
 
-// Uploaded videos are served with byte ranges (functions/api/utils/r2-file-response.ts),
-// which Safari needs to play them and every browser needs to seek. This runs against
-// Miniflare's real R2 binding, so it also catches misuse of the R2 range options.
-
-test('an uploaded video answers byte-range requests with 206', async ({ request }) => {
+test('an uploaded video answers byte-range requests with 206 from the local R2 binding', async ({ request }) => {
   const signIn = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
     data: { email: 'john@test.com', password: 'password123' },
   });

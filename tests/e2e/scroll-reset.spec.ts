@@ -1,8 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// A link click opens the next page at the top, Back restores the previous offset, and
-// typing in the library search (a search-only URL change) does not jump the page.
-
 const scrollY = (page: Page) => page.evaluate(() => window.scrollY);
 
 test.describe('scroll reset on navigation', () => {

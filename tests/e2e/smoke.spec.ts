@@ -5,6 +5,18 @@ import { validateXML } from "xmllint-wasm";
 
 const sitemapSchema = readFileSync(new URL("../fixtures/sitemap.xsd", import.meta.url), "utf8");
 const sitemapIndexSchema = readFileSync(new URL("../fixtures/siteindex.xsd", import.meta.url), "utf8");
+const EMPTY_REGISTRY_CATEGORY_PAGES = [
+  "https://serplists.com/categories/engineering/",
+  "https://serplists.com/categories/compliance/",
+];
+const PRIVATE_TEMPLATE_PAGES = [
+  "https://serplists.com/profile/admin/internal-publishing-checklist/",
+  "https://serplists.com/profile/admin/shared-growth-launch-checklist/",
+  "https://serplists.com/profile/jane/client-reporting-qa-checklist/",
+];
+const SHARDS_THE_INDEX_NEVER_LISTED = ["profiles/999999", "templates/2", "templates/999", "categories/2"];
+const CACHE_DIRECTIVES_THAT_STORE = /^(public|immutable|s-maxage=|stale-|max-age=(?!0$))/;
+const WINDOWS_PATH_WITH_BACKSLASH_N = "Save the list to C:\\new_folder";
 
 async function expectSchemaValid(xml: string, schema: string, fileName: string) {
   const result = await validateXML({ xml: [{ fileName, contents: xml }], schema: [schema] });
@@ -12,8 +24,7 @@ async function expectSchemaValid(xml: string, schema: string, fileName: string) 
   expect(result.valid, result.rawOutput).toBe(true);
 }
 
-// Admin's public sample Template from `seed-test` (db/seeds/local.ts), as the API returns it.
-const apiTemplate = {
+const seededSampleTemplateResponse = {
   id: "template-1",
   user_id: "user-1",
   title: "Technical SEO Audit Checklist",
@@ -86,7 +97,7 @@ async function mockApiBackedPublicTemplate(page: Page) {
     if (path === "/api/templates/slug/sample-technical-seo-audit-checklist") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify(apiTemplate),
+        body: JSON.stringify(seededSampleTemplateResponse),
       });
       return;
     }
@@ -94,7 +105,7 @@ async function mockApiBackedPublicTemplate(page: Page) {
     if (path === "/api/templates") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify([apiTemplate]),
+        body: JSON.stringify([seededSampleTemplateResponse]),
       });
       return;
     }
@@ -155,7 +166,7 @@ test("@smoke public document installs the configured Google Tag Manager containe
   expect(csp).toContain("frame-src");
 });
 
-test("@smoke authenticated template API returns the seeded private template", async ({ request }) => {
+test("@smoke the template API returns the owner's seeded private template, and the public catalog every visitor shares never lists it", async ({ request }) => {
   const apiBaseUrl = API_BASE_URL;
   const signInResponse = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
     data: {
@@ -180,8 +191,6 @@ test("@smoke authenticated template API returns the seeded private template", as
     ]),
   );
 
-  // The public catalog is edge-cached and shared by every visitor, so it must never
-  // include a private template, even for its owner.
   const catalogResponse = await request.get(`${apiBaseUrl}/templates?scope=public`);
   expect(catalogResponse.status()).toBe(200);
   const catalogIds = ((await catalogResponse.json()) as Array<{ id: string }>).map((template) => template.id);
@@ -248,9 +257,9 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
     if (childLocation.includes("/sitemaps/categories/")) {
-      // The index dates the categories shard from the same entries the shard serves.
-      const indexLastmod = Date.parse(shardLastmods.find(([loc]) => loc === childLocation)?.[1] ?? "");
-      expect(indexLastmod, childLocation).toBeGreaterThanOrEqual(Math.max(...lastmods.map((value) => Date.parse(value))));
+      const shardDateInIndex = Date.parse(shardLastmods.find(([loc]) => loc === childLocation)?.[1] ?? "");
+      const newestEntryInShard = Math.max(...lastmods.map((value) => Date.parse(value)));
+      expect(shardDateInIndex, childLocation).toBeGreaterThanOrEqual(newestEntryInShard);
     }
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");
@@ -268,20 +277,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist/",
   );
   expect(allPageLocations).toContain("https://serplists.com/categories/seo/");
-  // SERP URL standard: every page URL a sitemap lists is canonical, with its trailing slash.
-  expect([...allPageLocations].filter((location) => !location.endsWith("/"))).toEqual([]);
-  // Registry categories no public Template uses are empty pages, so they stay unlisted.
-  expect(allPageLocations).not.toContain("https://serplists.com/categories/engineering/");
-  expect(allPageLocations).not.toContain("https://serplists.com/categories/compliance/");
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/internal-publishing-checklist/",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/shared-growth-launch-checklist/",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/jane/client-reporting-qa-checklist/",
-  );
+  const listedWithoutTheirTrailingSlash = [...allPageLocations].filter((location) => !location.endsWith("/"));
+  expect(listedWithoutTheirTrailingSlash).toEqual([]);
+  for (const unlisted of [...EMPTY_REGISTRY_CATEGORY_PAGES, ...PRIVATE_TEMPLATE_PAGES]) {
+    expect(allPageLocations).not.toContain(unlisted);
+  }
 
   const unchangedIndexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
   const unchangedIndexXml = await unchangedIndexResponse.text();
@@ -302,17 +302,12 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
-  // Pages the index never listed are refused before any build, and not cached. The route
-  // answers `no-store`; OpenNext sends every 404 as "private, no-cache, no-store, ...".
-  for (const unpublished of ["profiles/999999", "templates/2", "templates/999", "categories/2"]) {
+  for (const unpublished of SHARDS_THE_INDEX_NEVER_LISTED) {
     const unpublishedResponse = await request.get(`${pagesOrigin}/sitemaps/${unpublished}.xml`);
     expect(unpublishedResponse.status(), unpublished).toBe(404);
     const directives = (unpublishedResponse.headers()["cache-control"] ?? "").split(",").map((directive) => directive.trim());
     expect(directives, unpublished).toContain("no-store");
-    expect(
-      directives.filter((directive) => /^(public|immutable|s-maxage=|stale-|max-age=(?!0$))/.test(directive)),
-      unpublished,
-    ).toEqual([]);
+    expect(directives.filter((directive) => CACHE_DIRECTIVES_THAT_STORE.test(directive)), unpublished).toEqual([]);
   }
   expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
   expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
@@ -328,12 +323,11 @@ test("@smoke login link renders the login page without refresh", async ({ page }
   ).toBeVisible();
 });
 
-test("@smoke protected routes render login after redirect without refresh", async ({
+test("@smoke protected routes render login after redirect without refresh, with the page they came from in ?next=", async ({
   page,
 }) => {
   await page.goto("/dashboard/settings/");
 
-  // The page it came from travels in ?next= (never in history state).
   await expect(page).toHaveURL(/\/login\/\?next=%2Fdashboard%2Fsettings%2F$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
@@ -357,7 +351,7 @@ test("@smoke API-backed public template single renders", async ({ page }) => {
 
 test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   const description =
-    "First URL instruction line\nSecond URL instruction line\nSave the list to C:\\new_folder\nThird URL instruction line";
+    `First URL instruction line\nSecond URL instruction line\n${WINDOWS_PATH_WITH_BACKSLASH_N}\nThird URL instruction line`;
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -482,8 +476,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   await expect(renderedDescription).toBeVisible();
   await expect(renderedDescription).toContainText("Second URL instruction line");
   await expect(renderedDescription).toContainText("Third URL instruction line");
-  // A typed backslash-n (here in a Windows path) is text, not a line break.
-  await expect(renderedDescription).toContainText("Save the list to C:\\new_folder");
+  await expect(renderedDescription).toContainText(WINDOWS_PATH_WITH_BACKSLASH_N);
 
   const whiteSpace = await renderedDescription.evaluate(
     (node) => getComputedStyle(node).whiteSpace,

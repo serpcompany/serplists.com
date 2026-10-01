@@ -90,9 +90,11 @@ the `GET` body, so it never caches an empty sitemap.
 Crawlers learn shard numbers only from the index, so a page above 1 that the index never
 published (no `sitemap_shard_revisions` row) is refused with a `404` after a one-row
 primary-key read, instead of missing the cache and scanning every public row. The refusal
-is `no-store`, so a page the index adds later is served at once. Page 1 is always built: it
-holds the landing entry, and a new database has no shard rows until the index is first
-built.
+is `no-store`, so a page the index adds later is served at once. OpenNext sends every `404`
+as `private, no-cache, no-store` and more, so the smoke test checks for `no-store` and for
+no directive that would let a cache keep it, not for the whole header. Page 1 is always
+built: it holds the landing entry, and a new database has no shard rows until the index is
+first built.
 
 Each shard depends only on its own kind, so a sign-up or an avatar change (which bump only
 `profiles`) leaves the templates and categories shards cached; the index lists every family
