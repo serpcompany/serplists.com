@@ -228,7 +228,7 @@ Scheduling:
 - 2026-10-01: staging deploys to its Worker (`deploy-staging.yml`) on a push to `staging` that
   passes CI, replacing the disconnected Pages deploy. Staging lives on
   `https://serp-checklists-preview.serpcompany.workers.dev` until its domain moves.
-- 2026-10-01: phase 4 and the other leftovers are tracked in a GitHub issue for the next PR.
+- 2026-10-01: phase 4 and the other leftovers are tracked in issue #259 for the next PR.
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
