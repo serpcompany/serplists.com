@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { dismissTheNextConfirm } from "./support/navigation";
 import { loginAsAdmin } from "./support/sign-in";
 import {
   createTwoTaskTemplate,
@@ -119,13 +120,9 @@ test.describe("template editor regressions", () => {
     });
     await expect(page.locator("header").getByRole("button", { name: "Uploading..." })).toBeDisabled();
 
-    let confirmMessage: string | null = null;
-    page.once("dialog", async (dialog) => {
-      confirmMessage = dialog.message();
-      await dialog.dismiss();
-    });
+    const confirmMessage = dismissTheNextConfirm(page);
     await page.getByRole("button", { name: "Back to templates" }).click();
-    await expect.poll(() => confirmMessage).toContain("still uploading");
+    await expect.poll(confirmMessage).toContain("still uploading");
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
     upload.release();

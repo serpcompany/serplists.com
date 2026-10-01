@@ -37,3 +37,19 @@ export async function loginAsAdmin(page: Page) {
 export async function endSessionSilently(context: BrowserContext) {
   await context.clearCookies();
 }
+
+export function uniqueSuffix() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function registerNewAccount(page: Page, account: { name: string; email: string; password: string }) {
+  await page.goto('/register/');
+  await page.getByLabel('Name').fill(account.name);
+  await page.getByLabel('Email').fill(account.email);
+  await page.locator('#password').fill(account.password);
+  await page.locator('#confirmPassword').fill(account.password);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
+    timeout: 30_000,
+  });
+}

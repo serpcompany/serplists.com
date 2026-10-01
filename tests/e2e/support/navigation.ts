@@ -29,3 +29,12 @@ export async function returnToTabAfter(page: Page, timeAway: string) {
   await page.clock.fastForward(timeAway);
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange', { bubbles: true })));
 }
+
+export function dismissTheNextConfirm(page: Page) {
+  const shown: { message: string | null } = { message: null };
+  page.once('dialog', async (dialog) => {
+    shown.message = dialog.message();
+    await dialog.dismiss();
+  });
+  return () => shown.message;
+}

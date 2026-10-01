@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { z } from 'zod';
 
 const RUN_LIMIT_MESSAGE = 'Active run limit reached. Upgrade to Pro to create more checklist runs.';
+export const TEMPLATE_LIMIT_MESSAGE = 'Template limit reached. Upgrade to create more templates.';
 
 const billingStatusSchema = z.record(z.unknown());
 

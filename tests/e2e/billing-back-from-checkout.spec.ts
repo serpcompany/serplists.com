@@ -1,10 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { answerRunStartsAtActiveRunLimit, reportBillingEnabled } from './support/billing';
-import { loginAsAdmin } from './support/sign-in';
+import { answerRunStartsAtActiveRunLimit, reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from './support/billing';
+import { loginAsAdmin, registerNewAccount, uniqueSuffix } from './support/sign-in';
 
-const TEMPLATE_LIMIT_MESSAGE = 'Template limit reached. Upgrade to create more templates.';
 const PASSWORD = 'Aa!back-from-checkout-password-12345';
 
 async function stubCheckoutWithSamePageLink(page: Page) {
@@ -21,16 +20,10 @@ async function sendBackForwardCacheRestore(page: Page) {
 }
 
 async function registerFreeAccount(page: Page) {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  await page.goto('/register/');
-  await page.getByLabel('Name').fill('Back From Checkout QA');
-  await page.getByLabel('Email').fill(`back-from-checkout+${suffix}@e2e.local`);
-  await page.locator('#password').fill(PASSWORD);
-  await page.locator('#confirmPassword').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
+  await registerNewAccount(page, {
+    name: 'Back From Checkout QA',
+    email: `back-from-checkout+${uniqueSuffix()}@e2e.local`,
+    password: PASSWORD,
   });
 }
 

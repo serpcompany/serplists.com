@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { apiJson, apiRequest } from "./api-requests";
+import { registerNewAccount, uniqueSuffix } from "./sign-in";
 
 const PASSWORD = "Aa!template-editor-password-12345";
 export const ONE_PIXEL_PNG = Buffer.from(
@@ -8,21 +9,13 @@ export const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 
-export function uniqueSuffix() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
+export { uniqueSuffix };
 
 export async function registerAccount(page: Page) {
-  const suffix = uniqueSuffix();
-
-  await page.goto("/register/");
-  await page.getByLabel("Name").fill("Template Editor QA");
-  await page.getByLabel("Email").fill(`template-editor+${suffix}@e2e.local`);
-  await page.locator("#password").fill(PASSWORD);
-  await page.locator("#confirmPassword").fill(PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible({
-    timeout: 30_000,
+  await registerNewAccount(page, {
+    name: "Template Editor QA",
+    email: `template-editor+${uniqueSuffix()}@e2e.local`,
+    password: PASSWORD,
   });
 }
 

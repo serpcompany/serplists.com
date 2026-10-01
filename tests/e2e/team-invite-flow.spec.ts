@@ -1,21 +1,11 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
+import { registerNewAccount, uniqueSuffix } from './support/sign-in';
+
 const PASSWORD = 'Aa!team-flow-password-12345';
 
-function uniqueSuffix() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 async function registerAccount(page: Page, account: { email: string; name: string }) {
-  await page.goto('/register/');
-  await page.getByLabel('Name').fill(account.name);
-  await page.getByLabel('Email').fill(account.email);
-  await page.locator('#password').fill(PASSWORD);
-  await page.locator('#confirmPassword').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
+  await registerNewAccount(page, { ...account, password: PASSWORD });
 }
 
 async function registerAccountInItsOwnBrowser(browser: Browser, account: { email: string; name: string }) {
@@ -69,11 +59,9 @@ function captureTeamApiResponses(page: Page) {
   return responses;
 }
 
-async function expectInviteAccepted(page: Page, responses: string[]) {
+async function withThePageDescribedOnFailure(page: Page, responses: string[], check: () => Promise<void>) {
   try {
-    await expect(page.getByText('Invite accepted.')).toBeVisible({
-      timeout: 30_000,
-    });
+    await check();
   } catch (error) {
     const bodyText = await page.locator('body').innerText().catch(() => '<unreadable page>');
     throw new Error(
@@ -87,27 +75,46 @@ async function expectInviteAccepted(page: Page, responses: string[]) {
   }
 }
 
+async function expectInviteAccepted(page: Page, responses: string[]) {
+  await withThePageDescribedOnFailure(page, responses, () =>
+    expect(page.getByText('Invite accepted.')).toBeVisible({
+      timeout: 30_000,
+    }),
+  );
+}
+
 async function expectWorkspaceSelected(
   page: Page,
   teamName: string,
   responses: string[],
 ) {
-  try {
-    await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
+  await withThePageDescribedOnFailure(page, responses, () =>
+    expect(page.getByRole('button', { name: 'Switch context' })).toContainText(
       teamName,
       { timeout: 15_000 },
-    );
-  } catch (error) {
-    const bodyText = await page.locator('body').innerText().catch(() => '<unreadable page>');
-    throw new Error(
-      [
-        error instanceof Error ? error.message : String(error),
-        `Current URL: ${page.url()}`,
-        `Team API responses: ${responses.length ? responses.join('\n') : '<none>'}`,
-        `Visible page text:\n${bodyText}`,
-      ].join('\n\n'),
-    );
-  }
+    ),
+  );
+}
+
+async function registerAnOwnerWithANewOrganization(page: Page, suffix: string, teamName: string) {
+  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
+  await page.goto('/dashboard/settings/');
+  await page.locator('#team-name').fill(teamName);
+  await page.getByRole('button', { name: 'Create Organization' }).click();
+  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
+    timeout: 15_000,
+  });
+}
+
+async function acceptTheInvite(page: Page) {
+  await page.getByRole('button', { name: 'Accept invite' }).click();
+  await expect(page.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+}
+
+async function expectTheInviteGone(page: Page) {
+  await expect(page.getByText('This invite is no longer available.', { exact: false })).toBeVisible({
+    timeout: 30_000,
+  });
 }
 
 test('@smoke team invite flow asks before joining through a link, lets members leave, and works from account settings', async ({ browser, page }) => {
@@ -229,13 +236,7 @@ test('a new invitee who goes through Log in and Sign up from the invite link com
   const teamName = `Signup Team ${suffix}`;
   const inviteeEmail = `signup+${suffix}@e2e.local`;
 
-  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings/');
-  await page.locator('#team-name').fill(teamName);
-  await page.getByRole('button', { name: 'Create Organization' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
-    timeout: 15_000,
-  });
+  await registerAnOwnerWithANewOrganization(page, suffix, teamName);
   const inviteUrl = await createLinkInvite(page, inviteeEmail);
   const invitePath = new URL(inviteUrl).pathname;
 
@@ -254,8 +255,7 @@ test('a new invitee who goes through Log in and Sign up from the invite link com
   await inviteePage.getByRole('button', { name: 'Create account' }).click();
 
   await expect(inviteePage).toHaveURL(new RegExp(`${invitePath}$`), { timeout: 30_000 });
-  await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
-  await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await acceptTheInvite(inviteePage);
   await inviteeContext.close();
 });
 
@@ -266,13 +266,7 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   const teamName = `Relink Team ${suffix}`;
   const inviteeEmail = `relink+${suffix}@e2e.local`;
 
-  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings/');
-  await page.locator('#team-name').fill(teamName);
-  await page.getByRole('button', { name: 'Create Organization' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
-    timeout: 15_000,
-  });
+  await registerAnOwnerWithANewOrganization(page, suffix, teamName);
   const lostInviteUrl = await createLinkInvite(page, inviteeEmail);
 
   await page.reload();
@@ -299,17 +293,12 @@ test('a manager who lost an invite link can replace it, and the old link stops w
   await registerAccount(inviteePage, { email: inviteeEmail, name: 'Relink Invitee' });
 
   await gotoInvite(inviteePage, lostInviteUrl);
-  await expect(inviteePage.getByText('This invite is no longer available.', { exact: false })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expectTheInviteGone(inviteePage);
   await gotoInvite(inviteePage, replacedUrl);
-  await expect(inviteePage.getByText('This invite is no longer available.', { exact: false })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expectTheInviteGone(inviteePage);
 
   await gotoInvite(inviteePage, newInviteUrl);
-  await inviteePage.getByRole('button', { name: 'Accept invite' }).click();
-  await expect(inviteePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await acceptTheInvite(inviteePage);
   await inviteeContext.close();
 });
 
@@ -321,13 +310,7 @@ test('revoking an invite removes its link, and only its link, from the page', as
   const typoEmail = `bob+${suffix}@exmaple.com`;
   const keptEmail = `kept+${suffix}@e2e.local`;
 
-  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings/');
-  await page.locator('#team-name').fill(teamName);
-  await page.getByRole('button', { name: 'Create Organization' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
-    timeout: 15_000,
-  });
+  await registerAnOwnerWithANewOrganization(page, suffix, teamName);
 
   const inviteLink = page.getByRole('textbox', { name: 'Invite link' });
   const copyButton = page.getByRole('button', { name: 'Copy invite link' });
@@ -356,13 +339,7 @@ test('an invite opened in another account offers to sign out and come back to it
   const inviteeEmail = `invitee+${suffix}@e2e.local`;
   const otherEmail = `other+${suffix}@e2e.local`;
 
-  await registerAccount(page, { email: `owner+${suffix}@e2e.local`, name: 'Owner User' });
-  await page.goto('/dashboard/settings/');
-  await page.locator('#team-name').fill(teamName);
-  await page.getByRole('button', { name: 'Create Organization' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toContainText(teamName, {
-    timeout: 15_000,
-  });
+  await registerAnOwnerWithANewOrganization(page, suffix, teamName);
   const inviteUrl = await createLinkInvite(page, inviteeEmail);
   const invitePath = new URL(inviteUrl).pathname;
 
@@ -388,7 +365,6 @@ test('an invite opened in another account offers to sign out and come back to it
   await devicePage.getByRole('button', { name: 'Sign in' }).click();
 
   await expect(devicePage).toHaveURL(new RegExp(`${invitePath}$`), { timeout: 30_000 });
-  await devicePage.getByRole('button', { name: 'Accept invite' }).click();
-  await expect(devicePage.getByText('Invite accepted.')).toBeVisible({ timeout: 30_000 });
+  await acceptTheInvite(devicePage);
   await deviceContext.close();
 });

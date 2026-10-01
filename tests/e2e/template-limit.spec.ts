@@ -1,24 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { dismissTheNextConfirm } from "./support/navigation";
 import { apiJson } from "./support/api-requests";
-import { reportBillingEnabled } from "./support/billing";
+import { reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from "./support/billing";
+import { registerNewAccount, uniqueSuffix } from "./support/sign-in";
 
 const PASSWORD = "Aa!template-limit-password-12345";
-const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.";
 const CHECKOUT_RETURN_PATH = "/account";
 const BILLING_SETTINGS_URL = /\/dashboard\/settings/;
 
 async function registerFreeAccount(page: Page) {
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  await page.goto("/register/");
-  await page.getByLabel("Name").fill("Template Limit QA");
-  await page.getByLabel("Email").fill(`template-limit+${suffix}@e2e.local`);
-  await page.locator("#password").fill(PASSWORD);
-  await page.locator("#confirmPassword").fill(PASSWORD);
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible({
-    timeout: 30_000,
+  await registerNewAccount(page, {
+    name: "Template Limit QA",
+    email: `template-limit+${uniqueSuffix()}@e2e.local`,
+    password: PASSWORD,
   });
 }
 
@@ -41,7 +36,7 @@ async function answerCheckoutWithTheBillingPage(page: Page): Promise<{ requests:
 }
 
 async function waitUntilTheEditorHasCountedTheTemplates(page: Page) {
-  await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
+  await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toBeVisible();
 }
 
 test.describe("template limit upgrade path", () => {
@@ -61,7 +56,7 @@ test.describe("template limit upgrade path", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
-    await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
+    await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
 
     await expect(page).toHaveURL(BILLING_SETTINGS_URL);
@@ -83,21 +78,17 @@ test.describe("template limit upgrade path", () => {
     const title = page.getByPlaceholder("Enter template name...");
     await title.fill("Second template");
     await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
+    await expect(page.getByText(TEMPLATE_LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
     await expect(page).toHaveURL(BILLING_SETTINGS_URL);
     await page.getByRole("link", { name: "Resume template draft" }).click();
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
 
     await title.fill("Another template");
-    let confirmMessage: string | null = null;
-    page.once("dialog", async (dialog) => {
-      confirmMessage = dialog.message();
-      await dialog.dismiss();
-    });
+    const confirmMessage = dismissTheNextConfirm(page);
     await page.getByRole("button", { name: "Restore draft" }).click();
 
-    await expect.poll(() => confirmMessage).toContain("kept draft");
+    await expect.poll(confirmMessage).toContain("kept draft");
     await expect(title).toHaveValue("Another template");
     await expect(page.getByRole("button", { name: "Restore draft" })).toBeVisible();
 

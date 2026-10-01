@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { z } from "zod";
 
+import { dismissTheNextConfirm } from "./support/navigation";
 import { loginAsAdmin } from "./support/sign-in";
 import {
   createTemplate,
@@ -86,13 +87,9 @@ test.describe("template editor regressions", () => {
       "Sent with the first save, then more",
     );
 
-    let confirmMessage: string | null = null;
-    page.once("dialog", async (dialog) => {
-      confirmMessage = dialog.message();
-      await dialog.dismiss();
-    });
+    const confirmMessage = dismissTheNextConfirm(page);
     await page.getByRole("button", { name: "Back to templates" }).click();
-    await expect.poll(() => confirmMessage).toContain("unsaved template changes");
+    await expect.poll(confirmMessage).toContain("unsaved template changes");
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
 
     await saveAndWaitUntilSaved(page);
