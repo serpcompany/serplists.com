@@ -20,7 +20,7 @@ describe('validatePasswordPolicy', () => {
     ['19 emoji (38 characters, 76 bytes)', emoji(19)],
     ['37 accented letters (74 bytes)', 'é'.repeat(37)],
     ['a lone surrogate at the end (3 bytes)', `${ascii(70)}\ud800`],
-    ['72 characters plus trailing spaces', `${ascii(72)}  `],
+    ['72 characters plus trailing spaces, which the server hashes too', `${ascii(72)}  `],
     ['a 100-character password', ascii(100)],
   ])('rejects %s as too long', (_label, password) => {
     const result = validatePasswordPolicy(password);

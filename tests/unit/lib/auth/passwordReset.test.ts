@@ -62,7 +62,7 @@ describe('submitPasswordReset', () => {
     expect(result).toEqual({ ok: false, message: 'Too many attempts. Please wait a few minutes and try again.' });
   });
 
-  it('still reports success when clearing the local session fails', async () => {
+  it('still reports success when clearing the local session fails, since the server already revoked it', async () => {
     const result = await submitPasswordReset({
       resetPassword: async () => ({ data: { status: true }, error: null }),
       signOutLocally: async () => {

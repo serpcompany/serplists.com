@@ -1,11 +1,6 @@
-// A password reset email lands on /reset-password?token=... The page reads the token
-// once and then removes it from the address bar and history, so it does not linger where
-// the browser, extensions or analytics tags can read it.
-
 export interface ResetPasswordLink {
   token: string | null;
   error: string | null;
-  /** The search to replace the URL with when it still carries a token. */
   searchWithoutToken: string | null;
 }
 

@@ -14,7 +14,6 @@ export function validatePasswordPolicy(password: string): PasswordPolicyResult {
   if (password.trim().length < MIN_PASSWORD_LENGTH) {
     return { ok: false, message: PASSWORD_TOO_SHORT_MESSAGE };
   }
-  // The server hashes the raw value, so the byte limit is checked untrimmed.
   if (passwordExceedsMaxBytes(password)) {
     return { ok: false, message: PASSWORD_TOO_LONG_MESSAGE };
   }
