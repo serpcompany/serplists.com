@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-48.**
+then you raise it. **Next ID: TD-50.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -47,3 +47,5 @@ then you raise it. **Next ID: TD-48.**
 | TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None |
 | TD-46 | Tests | Three SQLite stand-ins for D1: `tests/support/sqlite-d1.ts`, `tests/fixtures/sqliteD1.ts` and `tests/unit/functions/api/support/sqlite-d1.ts`. | Merge them into one module with options, and update the tests that use them. Medium. | None |
 | TD-47 | Tests | `tests/unit/db/officialTemplatesSeed.test.ts` and `tests/unit/db/seeds/official-templates.test.ts` both check the official seed's line breaks. | Keep one check. Small. | None |
+| TD-48 | Duplication | The `.env` file parser is written three times: `parseEnvFile` in `scripts/check-env.mjs`, `scripts/dev-auto-lib.mjs` and `scripts/stripe/_env.mjs`. | Export one from `scripts/lib/` and import it in all three. Small. | None |
+| TD-49 | Tests | `tests/integration/local-d1-handler-env.ts` repeats the `.local-d1-env-disabled` literal that `NO_DEV_VARS_OR_DOTENV_FILES` names. | Import the constant. Small. | None |
