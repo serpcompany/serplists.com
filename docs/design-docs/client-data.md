@@ -20,6 +20,15 @@ with Zod are the MCP connection (`src/lib/schemas/agentMcpConnection.ts`), creat
 previewed invites (`src/lib/schemas/teamInvite.ts`) and a template save
 (`parseTemplateUpdateResponse` in `src/lib/templateUpdateResult.ts`).
 
+Every mapper from an API template row to a `ChecklistTemplate` reads its Organization with
+`readApiTemplateTeamId` (`src/lib/templates/apiTemplateOwner.ts`), which follows the server's
+rule (a row is the Organization's only with a `team_id`, and with `owner_type` `team` when the
+row has an owner type), so permission checks that compare `teamId` agree wherever a template
+was loaded from. Public catalog rows never name an Organization
+([SECURITY.md](../SECURITY.md#model)), so `isPersonalTemplateOf`
+(`src/lib/templates/templateOwnership.ts`) also checks the owner type to tell a user's
+Organization template apart from their Personal ones.
+
 History requests ask for what their screen shows, since each entry is an audit row read with
 its user: the run and Template Changelogs ask for `HISTORY_DISPLAY_LIMIT` entries
 (`src/lib/history.ts`), never the API's default of 50, and Organization activity asks for the

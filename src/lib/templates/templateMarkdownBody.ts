@@ -1,23 +1,9 @@
-// The body of a strict Markdown template (everything after the frontmatter and the
-// `# Title` line): `## Section` and `### Item` headings, free-text descriptions, and
-// fenced ```serplists:<type> content blocks.
-//
-// Text and embed blocks hold Markdown, so their values may contain headings and code
-// fences. The format stays unambiguous in both directions:
-// - A block's fence is longer than any run of backticks that starts a line of its
-//   value (as in CommonMark), and a block closes only on a line with exactly its
-//   fence's backticks. Plain values keep today's 3-backtick fences.
-// - Headings are recognized only outside blocks, line by line.
-// - Description lines that would read as a heading or a block opener are written
-//   with one extra leading backslash, and parsing removes it.
-
 const SECTION_HEADING = /^## (.+)$/;
 const ITEM_HEADING = /^### (.+)$/;
 const BLOCK_OPENER = /^(`{3,})serplists:(.*)$/;
 const BLOCK_TYPE_PREFIX = "serplists:";
 const MIN_FENCE_LENGTH = 3;
-// A description line that parsing would read as structure, after any backslashes.
-const STRUCTURAL_LINE = /^\\*(?:#{2,3} |`{3,}serplists:)/;
+const STRUCTURAL_LINE_ESCAPED_OR_NOT = /^\\*(?:#{2,3} |`{3,}serplists:)/;
 const ESCAPED_STRUCTURAL_LINE = /^\\+(?:#{2,3} |`{3,}serplists:)/;
 
 export type TemplateMarkdownBlock = { type: string; body: string };
@@ -46,7 +32,7 @@ export const renderTemplateMarkdownBlock = (type: string, value: string): string
 export const escapeTemplateMarkdownDescription = (description: string): string =>
   description
     .split("\n")
-    .map((line) => (STRUCTURAL_LINE.test(line) ? `\\${line}` : line))
+    .map((line) => (STRUCTURAL_LINE_ESCAPED_OR_NOT.test(line) ? `\\${line}` : line))
     .join("\n");
 
 const unescapeDescriptionLine = (line: string): string =>
@@ -60,6 +46,7 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
 
   const currentSection = () => sections[sections.length - 1];
   const currentItem = () => currentSection()?.items[currentSection().items.length - 1];
+  const inTemplateDescription = () => sections.length === 0;
 
   while (cursor < lines.length) {
     const line = lines[cursor];
@@ -81,8 +68,7 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
       const item = currentItem();
       if (item) {
         item.blocks.push({ type, body: blockLines.join("\n").trim() });
-      } else if (sections.length === 0) {
-        // Outside any item a block is kept as text, as before.
+      } else if (inTemplateDescription()) {
         descriptionLines.push(line, ...blockLines, lines[cursor]);
       }
       cursor += 1;
@@ -90,15 +76,14 @@ export const parseTemplateMarkdownBody = (body: string): TemplateMarkdownBody =>
     }
 
     const sectionHeading = SECTION_HEADING.exec(line);
-    const itemHeading = sections.length > 0 ? ITEM_HEADING.exec(line) : null;
+    const itemHeading = inTemplateDescription() ? null : ITEM_HEADING.exec(line);
     if (sectionHeading) {
       sections.push({ title: sectionHeading[1].trim(), items: [] });
     } else if (itemHeading) {
       currentSection().items.push({ title: itemHeading[1].trim(), description: "", blocks: [], lines: [] });
-    } else if (sections.length === 0) {
+    } else if (inTemplateDescription()) {
       descriptionLines.push(unescapeDescriptionLine(line));
     } else {
-      // Text between a section heading and its first item is not part of the format.
       currentItem()?.lines.push(unescapeDescriptionLine(line));
     }
     cursor += 1;

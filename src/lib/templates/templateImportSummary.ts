@@ -5,10 +5,6 @@ import type { PortableSkippedTemplate } from "@/lib/schemas/portableTemplatePack
 import { formatCount } from "@/lib/utils/pluralize";
 import type { TemplateImportFailure, TemplateImportSummary } from "@/types/checklist";
 
-// POST /api/templates/backup answers with a TemplateImportSummary. When every template
-// fails it is a 400 `template_import_failed` whose `details` hold the same summary
-// (docs/product-specs/portable-templates.md), so the failures can be shown either way.
-
 const templateImportSummarySchema = z.object({
   total: z.number(),
   imported: z.number(),
@@ -27,7 +23,6 @@ const templateImportSummarySchema = z.object({
   })),
 }) satisfies z.ZodType<TemplateImportSummary>;
 
-/** The per-template summary carried by an all-failed import, or null for any other error. */
 export function getImportSummaryFromError(error: unknown): TemplateImportSummary | null {
   if (!isApiError(error) || error.status !== 400 || error.code !== "template_import_failed") return null;
   const parsed = templateImportSummarySchema.safeParse(error.details);
@@ -36,11 +31,9 @@ export function getImportSummaryFromError(error: unknown): TemplateImportSummary
 
 const failureTitle = (failure: TemplateImportFailure): string => failure.title || `Template ${failure.index + 1}`;
 
-/** "Title: reason" for the Failed Templates list; an untitled template is named by position. */
 export const formatImportFailure = (failure: TemplateImportFailure): string =>
   `${failureTitle(failure)}: ${failure.reason}`;
 
-/** The toast for an import result, whether some, all, or none of its templates failed. */
 export function formatImportSummaryMessage(summary: TemplateImportSummary): { kind: "success" | "error"; message: string } {
   if (summary.failed.length === 0) {
     return { kind: "success", message: `Successfully imported ${summary.imported}/${summary.total} templates` };
@@ -49,9 +42,6 @@ export function formatImportSummaryMessage(summary: TemplateImportSummary): { ki
   const overflow = summary.failed.length > 2 ? ` +${summary.failed.length - 2} more` : "";
   return { kind: "error", message: `Imported ${summary.imported}/${summary.total}. Failed: ${named}${overflow}` };
 }
-
-// An export leaves out a template it cannot make valid and lists it only in the file's
-// manifest.skippedTemplates, so the page names those in its toast instead.
 
 const exportedPackSchema = z.object({
   templates: z.array(z.unknown()),
@@ -62,7 +52,6 @@ const exportedPackSchema = z.object({
 
 export type PortableExportSummary = { exported: number; skipped: PortableSkippedTemplate[] };
 
-/** How many templates an export pack holds and which it left out. Throws when it is not a pack. */
 export function getExportSummary(pack: unknown): PortableExportSummary {
   const { templates, manifest } = exportedPackSchema.parse(pack);
   return { exported: templates.length, skipped: manifest?.skippedTemplates ?? [] };
@@ -70,7 +59,6 @@ export function getExportSummary(pack: unknown): PortableExportSummary {
 
 const templateCount = (count: number): string => formatCount(count, "template");
 
-/** The toast for an export: a warning naming each left-out template and its reason, an error when none was written. */
 export function formatExportSummaryMessage(summary: PortableExportSummary): { kind: "success" | "warning" | "error"; message: string } {
   const { exported, skipped } = summary;
   if (skipped.length === 0) {

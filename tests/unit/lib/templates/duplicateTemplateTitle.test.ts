@@ -45,7 +45,7 @@ describe('buildDuplicateTemplateTitle', () => {
     }
   });
 
-  it('trims the title and leaves no double space before "Copy"', () => {
+  it('trims the title, as the API does before it measures one, and leaves no double space before "Copy"', () => {
     expect(buildDuplicateTemplateTitle('  Launch  ')).toBe('Launch Copy');
     expect(buildDuplicateTemplateTitle(`${'word '.repeat(40)}`)).not.toMatch(/\s{2}Copy$/);
   });

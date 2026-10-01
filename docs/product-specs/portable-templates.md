@@ -336,6 +336,9 @@ Rules:
 - `##` headings define sections
 - `###` headings define items
 - item description text can appear between the `###` heading and the first fenced content block
+- everything between the `#` heading and the first `##` heading, fenced blocks included, is
+  the template description; text or blocks between a `##` heading and its first `###` item
+  have no place in the format and are dropped on import
 - structured content uses fenced blocks:
   - ```` ```serplists:text ````
   - ```` ```serplists:image ````

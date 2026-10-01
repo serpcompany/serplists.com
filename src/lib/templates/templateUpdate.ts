@@ -1,7 +1,6 @@
 import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 import type { TemplateSavePayload } from "@/types/checklist";
 
-/** The PUT /api/templates/:id body for an editor save. */
 export const buildTemplateUpdateRequest = (template: TemplateSavePayload) => ({
   title: template.title,
   description: template.description,
@@ -17,10 +16,6 @@ export const buildTemplateUpdateRequest = (template: TemplateSavePayload) => ({
   expected_version: template.version,
 });
 
-/**
- * What to tell the user after a save, and whether run lists changed. Metadata-only saves
- * leave runs untouched, so only a structure change refreshes runs or mentions them.
- */
 export const describeTemplateUpdate = (
   result: Pick<TemplateUpdateResult, "structureChanged" | "reconciledRuns"> | undefined,
 ): { message: string; invalidateRuns: boolean } => {
