@@ -64,8 +64,7 @@ describe('getEmbedLinkUrl', () => {
     expect(getEmbedLinkUrl(value)).toBe('');
   });
 
-  // safeUrl stays as it was: markdown links and uploaded files need relative paths.
-  it('leaves safeUrl allowing relative paths and anchors', () => {
+  it('leaves safeUrl allowing relative paths and anchors, which markdown links and uploaded files need', () => {
     expect(safeUrl('/api/uploads/file?key=template-files/a.pdf')).toBe('/api/uploads/file?key=template-files/a.pdf');
     expect(safeUrl('#step-2')).toBe('#step-2');
   });

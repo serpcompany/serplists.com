@@ -5,8 +5,11 @@ import { isLoopbackHostname } from "@/lib/utils/loopbackHostname";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { isPersonalRunMcpEnabled } from "@functions/api/utils/personal-run-mcp-feature";
 
-// Hostnames come from new URL(...).hostname, the same serialization the router
-// (request.url) and the browser (location.hostname) use: IPv6 keeps its brackets.
+const PAST_THE_HOST_CHECK_WITHOUT_A_RUN_KEY = 401;
+const REFUSED_BY_THE_HOST_CHECK = 403;
+
+const hostnameAsTheRouterAndBrowserSerializeIt = (url: string) => new URL(url).hostname;
+
 const hosts: Array<[url: string, loopback: boolean]> = [
   ["http://localhost:5173", true],
   ["http://LOCALHOST:8788", true],
@@ -23,20 +26,19 @@ const hosts: Array<[url: string, loopback: boolean]> = [
 ];
 
 async function mcpHostIsAccepted(url: string): Promise<boolean> {
-  // No Run Key: a request past the host check fails authentication (401), while a
-  // request the host check refuses gets 403 first.
-  const response = await handleAgentMcp(new Request(new URL("/api/mcp", url), {
+  const requestWithoutARunKey = new Request(new URL("/api/mcp", url), {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
     body: "{}",
-  }), { DB: {} } as never);
-  expect([401, 403]).toContain(response.status);
-  return response.status === 401;
+  });
+  const response = await handleAgentMcp(requestWithoutARunKey, { DB: {} } as never);
+  expect([PAST_THE_HOST_CHECK_WITHOUT_A_RUN_KEY, REFUSED_BY_THE_HOST_CHECK]).toContain(response.status);
+  return response.status === PAST_THE_HOST_CHECK_WITHOUT_A_RUN_KEY;
 }
 
 describe("isLoopbackHostname", () => {
   it.each(hosts)("%s is loopback: %s", (url, loopback) => {
-    expect(isLoopbackHostname(new URL(url).hostname)).toBe(loopback);
+    expect(isLoopbackHostname(hostnameAsTheRouterAndBrowserSerializeIt(url))).toBe(loopback);
   });
 
   it("accepts the bare IPv6 form callers may pass", () => {
@@ -44,11 +46,11 @@ describe("isLoopbackHostname", () => {
     expect(isLoopbackHostname("[::1")).toBe(false);
   });
 
-  // With no explicit flags (as in local development), all three follow the loopback rule.
-  it("agrees with the API gate, the MCP host check, and the UI flag", async () => {
+  it("agrees with the API gate, the MCP host check, and the UI flag when no flag is set, as in local development", async () => {
+    const envWithNoFlags = {} as never;
     for (const [url, loopback] of hosts) {
-      expect(isPersonalRunMcpEnabled({} as never, new URL("/api/mcp", url)), url).toBe(loopback);
-      expect(isPersonalRunMcpUiEnabled(new URL(url).hostname), url).toBe(loopback);
+      expect(isPersonalRunMcpEnabled(envWithNoFlags, new URL("/api/mcp", url)), url).toBe(loopback);
+      expect(isPersonalRunMcpUiEnabled(hostnameAsTheRouterAndBrowserSerializeIt(url)), url).toBe(loopback);
       expect(await mcpHostIsAccepted(url), url).toBe(loopback);
     }
   });

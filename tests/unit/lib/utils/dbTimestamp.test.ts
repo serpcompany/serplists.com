@@ -9,13 +9,13 @@ import {
   toEcmaDateTimeString,
 } from '@/lib/utils/dbTimestamp';
 
-// The ECMAScript date time string format: the only form every engine (Safari too) must parse.
-const SPEC_FORMAT = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{3})?)?(Z|[+-]\d{2}:\d{2}))?$/;
+const ECMASCRIPT_DATE_TIME_FORMAT = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{3})?)?(Z|[+-]\d{2}:\d{2}))?$/;
 
-// Node reads a bare 'YYYY-MM-DD HH:MM:SS' as local time; a zone far from UTC exposes that.
+const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
+
 const originalTz = process.env.TZ;
 beforeAll(() => {
-  process.env.TZ = 'Asia/Tokyo';
+  process.env.TZ = ZONE_FAR_FROM_UTC;
 });
 afterAll(() => {
   process.env.TZ = originalTz;
@@ -66,8 +66,8 @@ describe('toEcmaDateTimeString', () => {
     '2025-12-26T09:18:30.000Z',
     '2025-12-26T09:18:30-05:00',
     '2025-12-26',
-  ])('hands the engine only the spec format for %s', (value) => {
-    expect(toEcmaDateTimeString(value)).toMatch(SPEC_FORMAT);
+  ])('hands the engine only the ECMAScript date time format, which every engine, Safari included, parses, for %s', (value) => {
+    expect(toEcmaDateTimeString(value)).toMatch(ECMASCRIPT_DATE_TIME_FORMAT);
   });
 
   it('never adds a second zone', () => {
@@ -102,15 +102,13 @@ describe('formatMonthYear', () => {
   });
 });
 
-// Some ICU versions put a narrow no-break space before AM/PM.
-const plainSpaces = (value: string) => value.replace(/\s/g, ' ');
+const withNarrowNoBreakSpacesAsPlainSpaces = (value: string) => value.replace(/\s/g, ' ');
 
 describe('formatLocalDate and formatLocalDateTime', () => {
-  it('shows a zoneless database timestamp as UTC in the viewer zone', () => {
-    // 20:30 UTC on July 5 is 05:30 on July 6 in Tokyo.
+  it('shows a zoneless database timestamp as UTC in the viewer zone, so 20:30 UTC on July 5 is July 6 in Tokyo', () => {
     expect(formatLocalDate('2026-07-05 20:30:00')).toBe('7/6/2026');
-    expect(plainSpaces(formatLocalDateTime('2026-07-05 20:30:00'))).toBe('Jul 6, 2026, 5:30 AM');
-    expect(plainSpaces(formatLocalDateTime('2026-07-05T20:30:00.000Z'))).toBe(
+    expect(withNarrowNoBreakSpacesAsPlainSpaces(formatLocalDateTime('2026-07-05 20:30:00'))).toBe('Jul 6, 2026, 5:30 AM');
+    expect(withNarrowNoBreakSpacesAsPlainSpaces(formatLocalDateTime('2026-07-05T20:30:00.000Z'))).toBe(
       'Jul 6, 2026, 5:30 AM',
     );
   });

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { formatCount, pluralize } from '@/lib/utils/pluralize';
 
-// Counts read "1 templates" and "1 sections" across the app (TD-24).
 describe('pluralize', () => {
   it('uses the singular for exactly one and the plural otherwise', () => {
     expect(pluralize(1, 'template')).toBe('template');

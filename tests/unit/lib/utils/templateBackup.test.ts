@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   exportTemplatesToJSON,
   parseBackupFile,
@@ -13,47 +13,7 @@ import {
 import { ChecklistTemplate, TemplateBackup } from '@/lib/schemas/checklistSchema';
 import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 
-// Mock DOM methods
-const mockCreateElement = vi.fn();
-const mockAppendChild = vi.fn();
-const mockRemoveChild = vi.fn();
-const mockClick = vi.fn();
-const mockRevokeObjectURL = vi.fn();
-
 describe('Template Backup Utilities', () => {
-  beforeEach(() => {
-    // Setup DOM mocks using jsdom globals
-    if (typeof document !== 'undefined') {
-      vi.spyOn(document, 'createElement').mockImplementation(() => {
-        const element = {
-          click: mockClick,
-          href: '',
-          download: '',
-          appendChild: vi.fn(),
-          removeChild: vi.fn()
-        } as any;
-        return element;
-      });
-      
-      vi.spyOn(document.body, 'appendChild').mockImplementation(mockAppendChild);
-      vi.spyOn(document.body, 'removeChild').mockImplementation(mockRemoveChild);
-    }
-    
-    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:mock-url');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(mockRevokeObjectURL);
-    
-    
-    mockCreateElement.mockReturnValue({
-      click: mockClick,
-      href: '',
-      download: ''
-    });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   const createMockTemplate = (overrides = {}): ChecklistTemplate => ({
     id: 'template-1',
     title: 'Test Template',
@@ -359,6 +319,21 @@ describe('Template Backup Utilities', () => {
       expect(item.contents?.map((content) => content.value)).toEqual([value]);
     });
 
+    it('imports a blank task title in a portable JSON pack as "Task N", as the editor shows it, instead of rejecting the pack', async () => {
+      const pack = {
+        kind: 'serplists-template-pack',
+        schemaVersion: '2.0.0',
+        exportedAt: '2026-03-22T00:00:00.000Z',
+        templates: [{ title: 'Pack Template', sections: [{ title: 'Prep', items: [{ title: 'Weigh' }, { title: '' }] }] }],
+      };
+
+      const result = await parseTemplatesFromFile(
+        new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
+      );
+
+      expect(result.templates[0].sections[0].items.map((item) => item.title)).toEqual(['Weigh', 'Task 2']);
+    });
+
     describe('readable validation errors', () => {
       const expectReadableRejection = async (file: File, pathPattern: RegExp) => {
         const error = await parseTemplatesFromFile(file).then(
@@ -388,8 +363,7 @@ describe('Template Backup Utilities', () => {
         await expectReadableRejection(new File([markdown], 'template.md', { type: 'text/markdown' }), /title: String must contain/);
       });
 
-      // A blank task title is not an error in a pack: it imports as "Task N", as the editor shows it.
-      it('names the template and item for a portable JSON pack with an invalid item', async () => {
+      it('names the template and item for a portable JSON pack with an invalid item id', async () => {
         const pack = {
           kind: 'serplists-template-pack',
           schemaVersion: '2.0.0',
@@ -662,11 +636,12 @@ describe('Template Backup Utilities', () => {
         createMockTemplate({ id: 'template-2' }),
         createMockTemplate({ id: 'template-3' })
       ];
-      
+
       const result = prepareTemplatesForImport(templates, 'user-123');
-      
+
       expect(result).toHaveLength(3);
-      expect(new Set(result.map(t => t.id)).size).toBe(3); // All IDs unique
+      const uniqueIds = new Set(result.map(t => t.id));
+      expect(uniqueIds.size).toBe(3);
       expect(result.every(t => t.userId === 'user-123')).toBe(true);
     });
 
@@ -769,26 +744,20 @@ describe('Template Backup Utilities', () => {
         })
       ];
       
-      // Export
       const backup = exportTemplatesToJSON(originalTemplates, 'test@example.com');
-      
-      // Simulate file
-      const file = new File([JSON.stringify(backup)], 'backup.json', {
+      const backupFile = new File([JSON.stringify(backup)], 'backup.json', {
         type: 'application/json'
       });
-      
-      // Import
-      const importedTemplates = await parseTemplatesFromJSON(file);
+
+      const importedTemplates = await parseTemplatesFromJSON(backupFile);
       const preparedTemplates = prepareTemplatesForImport(importedTemplates.templates, 'new-user');
-      
-      // Verify structure is maintained
+
       expect(preparedTemplates[0].title).toBe('Complex Template');
       expect(preparedTemplates[0].sections).toHaveLength(1);
       expect(preparedTemplates[0].sections[0].items[0].contents).toHaveLength(4);
       expect(preparedTemplates[0].categories).toEqual(['cat1', 'cat2']);
       expect(preparedTemplates[0].tags).toEqual(['tag1', 'tag2', 'tag3']);
-      
-      // Verify subItems structure
+
       const subItems = preparedTemplates[0].sections[0].items[0].contents?.[3].subItems;
       expect(subItems).toHaveLength(2);
       expect(subItems?.[0].title).toBe('Subtask 1');

@@ -63,11 +63,13 @@ describe('upload type checks', () => {
     ['file', 'page.html', 'text/html', false],
     ['video', 'clip.mp4', 'video/mp4', true],
     ['video', 'movie.mkv', 'video/x-matroska', false],
-    // Image blocks convert other decodable images before upload.
-    ['image', 'photo.avif', 'image/avif', true],
     ['image', 'notes.txt', 'text/plain', false],
   ] as const)('validates a %s block file %s (%s)', (type, name, mime, valid) => {
     expect(validateFile(new File(['x'], name, { type: mime }), type).valid).toBe(valid);
+  });
+
+  it('accepts an AVIF for an image block, which converts any image the browser decodes before upload', () => {
+    expect(validateFile(new File(['x'], 'photo.avif', { type: 'image/avif' }), 'image').valid).toBe(true);
   });
 
   it('refuses an image the browser could not convert, before calling the API', async () => {

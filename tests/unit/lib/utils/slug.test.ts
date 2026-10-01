@@ -7,8 +7,8 @@ import { buildCategorySlug, findCategoryNameBySlug } from '@/lib/routes';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-// Accented and special Latin letters fold to ASCII instead of disappearing. Punctuation
-// between letters is still dropped ('Q&A' -> 'qa'), as before.
+const hasNoLettersOfAnotherScriptThanLatin = (input: string) => !/[^\P{L}\p{Script=Latin}]/u.test(input);
+
 const cases: Array<[string, string]> = [
   ['Café Opening Checklist', 'cafe-opening-checklist'],
   ['Umzugscheckliste für Familien', 'umzugscheckliste-fur-familien'],
@@ -37,10 +37,8 @@ describe('one slug rule for templates, Organizations, and categories', () => {
     expect(categorySlug(input)).toBe(buildCategorySlug(input));
   });
 
-  // Category slugs also keep letters of other scripts (src/lib/categorySlug.ts), so only a
-  // name with no such letters is guaranteed the template slug.
-  it.each(cases.filter(([input]) => !/[^\P{L}\p{Script=Latin}]/u.test(input)))(
-    'gives the Latin-script category %s the template slug',
+  it.each(cases.filter(([input]) => hasNoLettersOfAnotherScriptThanLatin(input)))(
+    'gives the Latin-script category %s the template slug, since a category slug also keeps letters of other scripts',
     (input) => {
       expect(categorySlug(input)).toBe(serverSlug(input));
       expect(buildCategorySlug(input)).toBe(serverSlug(input));

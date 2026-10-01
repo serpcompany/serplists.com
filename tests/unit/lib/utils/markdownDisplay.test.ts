@@ -2,14 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { expandLegacyEscapedNewlines } from '@/lib/utils/markdownDisplay';
 
-// Text is shown as saved. The one exception is the legacy shape of the official seed:
-// a single-line text block with literal backslash-n pairs standing in for line breaks.
-// Anything else that contains a backslash followed by n (code, Windows paths) must
-// survive untouched.
-
 const BS = '\\';
 
-describe('expandLegacyEscapedNewlines', () => {
+describe("expandLegacyEscapedNewlines, which expands only the official seed's legacy single-line shape and leaves code and paths as saved", () => {
   it('leaves text that has real line breaks exactly as saved', () => {
     const typed = [
       'Save the export to C:\\new_folder\\notes.txt',

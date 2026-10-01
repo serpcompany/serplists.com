@@ -2,15 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSingleFlight } from '@/lib/utils/singleFlight';
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, reject, resolve };
-};
+import { deferred } from '../../../support/deferred';
 
 describe('createSingleFlight', () => {
   it('runs the task once when it is called twice in one tick, before React could disable the button', async () => {
@@ -19,16 +11,15 @@ describe('createSingleFlight', () => {
     const pending = deferred<string>();
     const task = vi.fn(() => pending.promise);
 
-    // Two clicks in the same tick, before React re-renders a disabled button.
-    const first = flight.run(task);
-    const second = flight.run(task);
+    const firstClick = flight.run(task);
+    const secondClickInTheSameTick = flight.run(task);
 
     expect(task).toHaveBeenCalledTimes(1);
     expect(flight.isRunning()).toBe(true);
-    await expect(second).resolves.toBeUndefined();
+    await expect(secondClickInTheSameTick).resolves.toBeUndefined();
 
     pending.resolve('done');
-    await expect(first).resolves.toBe('done');
+    await expect(firstClick).resolves.toBe('done');
     expect(flight.isRunning()).toBe(false);
     expect(onRunningChange.mock.calls).toEqual([[true], [false]]);
   });

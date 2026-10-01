@@ -52,13 +52,11 @@ describe('uploaded asset deletion helpers', () => {
     expect(api.deleteFromR2).toHaveBeenCalledWith('avatars/user/avatar.png');
   });
 
-  // Templates, versions, Runs and clones may still reference template media, so
-  // clearing or replacing it only unlinks it; the API refuses the delete anyway.
   it.each([
     'template-files/user/doc.pdf',
     'template-images/user/image.png',
     'template-videos/user/video.mp4',
-  ])('never deletes template media (%s)', async (key) => {
+  ])('never deletes template media (%s), which templates, versions, Runs and clones may still reference', async (key) => {
     await expect(deleteUploadedAsset(`/api/uploads/file?key=${key}`)).resolves.toBe(false);
 
     expect(api.deleteFromR2).not.toHaveBeenCalled();

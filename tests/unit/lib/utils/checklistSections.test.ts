@@ -29,8 +29,7 @@ describe('section and sub-task display titles', () => {
     expect(getSubItemDisplayTitle({ title: 'Check title' }, 0)).toBe('Check title');
   });
 
-  // Stored JSON is not validated (TD-3), so a title can be missing or not a string.
-  it('falls back for a missing title', () => {
+  it('falls back for a missing or non-text title, which content stored before writes were checked can hold', () => {
     expect(getSectionDisplayTitle({} as { title: string }, 0)).toBe('Section 1');
     expect(getSubItemDisplayTitle({ title: 42 } as unknown as { title: string }, 0)).toBe('Sub-task 1');
   });

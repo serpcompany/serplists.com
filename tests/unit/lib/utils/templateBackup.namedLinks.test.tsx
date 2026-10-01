@@ -9,11 +9,7 @@ import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 import { parseTemplatesFromData, parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import type { ChecklistItemContent, ChecklistTemplate } from '@/types/checklist';
 
-// The portable format lists uploadType and fileName as independent optional fields, so
-// a hand-written or third-party pack can name a linked file without uploadType. The
-// editor and the renderers keep a name next to a link only with uploadType "url" (a
-// name next to any other link is left over from an upload), so import marks it.
-const namedLinks = [
+const namedLinksWithoutUploadType = [
   {
     id: 'file-1',
     type: 'file',
@@ -47,9 +43,9 @@ const importPack = (contents: unknown[]): ChecklistTemplate =>
 const importedContents = (template: ChecklistTemplate): ChecklistItemContent[] =>
   template.sections[0].items[0].contents ?? [];
 
-describe('importing a linked file its author named', () => {
-  it('marks it as a link so the editor keeps its name and size', () => {
-    const template = importPack(namedLinks);
+describe('importing a linked file its author named without the uploadType a hand-written pack may leave out', () => {
+  it('marks it as a link so the editor, which keeps a name only next to a link, keeps its name and size', () => {
+    const template = importPack(namedLinksWithoutUploadType);
 
     expect(importedContents(template).map((content) => content.uploadType)).toEqual([
       'url',
@@ -68,14 +64,14 @@ describe('importing a linked file its author named', () => {
 
   it('shows the name in runs', () => {
     const markup = renderToStaticMarkup(
-      <ContentRenderer contents={importedContents(importPack(namedLinks.slice(0, 1)))} />,
+      <ContentRenderer contents={importedContents(importPack(namedLinksWithoutUploadType.slice(0, 1)))} />,
     );
 
     expect(markup).toContain('Setup guide.pdf');
   });
 
   it('marks it in an app backup too', () => {
-    const [template] = parseTemplatesFromData([templateWith(namedLinks.slice(0, 1))]).templates;
+    const [template] = parseTemplatesFromData([templateWith(namedLinksWithoutUploadType.slice(0, 1))]).templates;
 
     expect(importedContents(template)[0]).toMatchObject({
       uploadType: 'url',
@@ -84,7 +80,7 @@ describe('importing a linked file its author named', () => {
   });
 
   it('marks it in a Markdown file', async () => {
-    const markdown = renderTemplateMarkdown(templateWith(namedLinks.slice(0, 1)) as never);
+    const markdown = renderTemplateMarkdown(templateWith(namedLinksWithoutUploadType.slice(0, 1)) as never);
 
     const { templates } = await parseTemplatesFromFile(
       new File([markdown], 'template.md', { type: 'text/markdown' }),

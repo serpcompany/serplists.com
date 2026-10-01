@@ -13,8 +13,7 @@ const uploaded = {
 };
 
 describe('withMediaValue', () => {
-  // The name and size described the uploaded file; a typed URL points somewhere else.
-  it('drops the uploaded file name and size when a URL replaces the upload', () => {
+  it('drops the uploaded file name and size when a URL replaces the upload, since they described the upload', () => {
     expect(withMediaValue(uploaded, 'https://example.com/pricing.pdf')).toEqual({
       id: 'c1',
       type: 'file',
@@ -69,8 +68,7 @@ describe('hasCurrentFileInfo', () => {
     expect(hasCurrentFileInfo({ value: UPLOADED_URL })).toBe(true);
   });
 
-  // The public packs name linked files this way.
-  it('trusts the name an author gave a linked file', () => {
+  it('trusts the name an author gave a linked file, as the public packs do', () => {
     expect(hasCurrentFileInfo({ value: 'https://example.com/a.pdf', uploadType: 'url' })).toBe(true);
   });
 
@@ -81,8 +79,6 @@ describe('hasCurrentFileInfo', () => {
   });
 });
 
-// The image preview loads its value as the <img> src. A half-typed URL ('h', 'https:')
-// is a relative address that loads a page of this site and always fails.
 describe('imagePreviewSrc', () => {
   it.each(['h', 'ht', 'https:', 'https://', '   ', '', 'example.com/photo.png', 'javascript:alert(1)', 'data:image/png;base64,AAAA', 'mailto:a@b.c'])(
     'has nothing to load for %j, which as an img src would load a page of this site and fail',

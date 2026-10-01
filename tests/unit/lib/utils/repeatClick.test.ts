@@ -74,8 +74,7 @@ describe('createJustOpenedGuard', () => {
 });
 
 describe('ignoreRepeatClicksBriefly', () => {
-  // A fake window: the capture-phase click listeners it holds, and a manual timer.
-  const fakeWindow = () => {
+  const fakeWindowWithCaptureClickListenersAndAManualTimer = () => {
     const listeners = new Set<(event: Event) => void>();
     let timer: (() => void) | undefined;
     let delay: number | undefined;
@@ -102,7 +101,7 @@ describe('ignoreRepeatClicksBriefly', () => {
   };
 
   it('swallows the rest of a double click that lands after the page moved under the pointer', () => {
-    const target = fakeWindow();
+    const target = fakeWindowWithCaptureClickListenersAndAManualTimer();
     ignoreRepeatClicksBriefly(target, target.schedule);
 
     const second = target.click(2);
@@ -115,7 +114,7 @@ describe('ignoreRepeatClicksBriefly', () => {
   });
 
   it('lets single, keyboard and programmatic clicks through', () => {
-    const target = fakeWindow();
+    const target = fakeWindowWithCaptureClickListenersAndAManualTimer();
     ignoreRepeatClicksBriefly(target, target.schedule);
 
     for (const detail of [0, 1]) {
@@ -126,7 +125,7 @@ describe('ignoreRepeatClicksBriefly', () => {
   });
 
   it('stops listening once a double click is over', () => {
-    const target = fakeWindow();
+    const target = fakeWindowWithCaptureClickListenersAndAManualTimer();
     ignoreRepeatClicksBriefly(target, target.schedule);
 
     expect(target.delay()).toBe(DOUBLE_CLICK_MS);
