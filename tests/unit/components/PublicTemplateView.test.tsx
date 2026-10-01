@@ -36,8 +36,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
   );
 };
 
-// Every rendered <button> whose label matches, with its opening tag.
-const findButtons = (html: string, label: RegExp): string[] =>
+const buttonsLabelled = (html: string, label: RegExp): string[] =>
   (html.match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? []).filter((button) =>
     label.test(button.replace(/<[^>]+>/g, '')),
   );
@@ -72,15 +71,14 @@ const template: ChecklistTemplate = {
   updatedAt: '2026-03-24T00:00:00.000Z',
 };
 
-// "Updated <date>" under the description, as the reference's detail pages and the private
-// template page ("Last updated") show it. Midday UTC, so the date is the same in any zone.
-describe('PublicTemplateView updated date', () => {
+describe(`PublicTemplateView "Updated <date>" under the description, like the private template page's "Last updated"`, () => {
   it('says when the Template was last updated', () => {
+    const updatedAtMiddayUtc = '2026-09-02T12:00:00.000Z';
     const html = renderView({
-      template: { ...template, createdAt: '2026-01-05T12:00:00.000Z', updatedAt: '2026-09-02T12:00:00.000Z' },
+      template: { ...template, createdAt: '2026-01-05T12:00:00.000Z', updatedAt: updatedAtMiddayUtc },
     });
 
-    expect(html).toContain('<p>Updated <time dateTime="2026-09-02T12:00:00.000Z">9/2/2026</time></p>');
+    expect(html).toContain(`<p>Updated <time dateTime="${updatedAtMiddayUtc}">9/2/2026</time></p>`);
   });
 
   it('reads a database timestamp and falls back to the created date', () => {
@@ -206,9 +204,8 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('href="/categories/%F0');
   });
 
-  // The Start a Run dialog says "Starting…"; the page's buttons wait.
-  it('disables every Start Run button while a run is being created', () => {
-    const buttons = findButtons(renderView({ isCreatingRun: true }), /^Start Run$/);
+  it('disables every Start Run button while a run is being created, as the Start a Run dialog says Starting…', () => {
+    const buttons = buttonsLabelled(renderView({ isCreatingRun: true }), /^Start Run$/);
 
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
@@ -217,7 +214,7 @@ describe('PublicTemplateView', () => {
   });
 
   it('keeps every Start Run button enabled when no run is being created', () => {
-    const buttons = findButtons(renderView(), /^Start Run$/);
+    const buttons = buttonsLabelled(renderView(), /^Start Run$/);
 
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
@@ -226,7 +223,7 @@ describe('PublicTemplateView', () => {
   });
 
   it('disables Save and Copy to Library while a signed-in plan is loading', () => {
-    const buttons = findButtons(
+    const buttons = buttonsLabelled(
       renderView({ isAuthenticated: true, isBillingLoading: true }),
       /^(Save|Checking plan\.\.\.)$/,
     );
@@ -238,7 +235,7 @@ describe('PublicTemplateView', () => {
   });
 
   it('lets signed-out visitors click Save so they can sign in', () => {
-    const buttons = findButtons(
+    const buttons = buttonsLabelled(
       renderView({ isAuthenticated: false, isBillingLoading: false }),
       /^(Save|Copy to Library)$/,
     );
@@ -256,18 +253,17 @@ describe('PublicTemplateView', () => {
     expect(html).not.toContain('Saved');
   });
 
-  // Copying into Personal is a Pro feature: a Free user's click starts checkout.
-  it('tells a signed-in Free user in Personal that Save and Copy lead to an upgrade', () => {
+  it('tells a signed-in Free user in Personal that Save and Copy lead to an upgrade, since copying into Personal is a Pro feature', () => {
     const html = renderView({ isAuthenticated: true, isProUser: false, isTeamWorkspace: false });
 
-    expect(findButtons(html, /^Upgrade to save$/)).toHaveLength(1);
-    expect(findButtons(html, /^Upgrade to copy template$/)).toHaveLength(1);
-    expect(findButtons(html, /^(Save|Copy to Library)$/)).toHaveLength(0);
+    expect(buttonsLabelled(html, /^Upgrade to save$/)).toHaveLength(1);
+    expect(buttonsLabelled(html, /^Upgrade to copy template$/)).toHaveLength(1);
+    expect(buttonsLabelled(html, /^(Save|Copy to Library)$/)).toHaveLength(0);
   });
 
   it('shows plain Save and Copy to Library to a Pro user', () => {
     const html = renderView({ isAuthenticated: true, isProUser: true, isTeamWorkspace: false });
-    const buttons = findButtons(html, /^(Save|Copy to Library)$/);
+    const buttons = buttonsLabelled(html, /^(Save|Copy to Library)$/);
 
     expect(buttons).toHaveLength(2);
     for (const button of buttons) {
@@ -280,7 +276,7 @@ describe('PublicTemplateView', () => {
     const html = renderView({ isAuthenticated: true, isProUser: false, isTeamWorkspace: true });
 
     expect(html).not.toContain('Upgrade to');
-    expect(findButtons(html, /^(Save|Copy to Library)$/)).toHaveLength(2);
+    expect(buttonsLabelled(html, /^(Save|Copy to Library)$/)).toHaveLength(2);
   });
 
   it('never asks a signed-out visitor to upgrade', () => {
@@ -293,42 +289,39 @@ describe('PublicTemplateView', () => {
     const html = renderView({ isAuthenticated: true, isProUser: true, isSaving: true });
 
     for (const label of [/^Saving\.\.\.$/, /^Copying\.\.\.$/]) {
-      const [button] = findButtons(html, label);
+      const [button] = buttonsLabelled(html, label);
       expect(button).toMatch(/<button[^>]*disabled=""/);
     }
   });
 
-  // In an Organization the viewer's role decides: the API refuses the rest with a 403.
-  it('offers no Save or Copy to Library to a role that cannot add Templates', () => {
+  it('offers no Save or Copy to Library to an Organization role that cannot add Templates, which the API would refuse', () => {
     const html = renderView({ canSaveTemplate: false, isTeamWorkspace: true });
 
-    expect(findButtons(html, /^(Save|Saved|Copy to Library|Saving\.\.\.|Copying\.\.\.)$/)).toHaveLength(0);
-    expect(findButtons(html, /^Start Run$/)).toHaveLength(2);
+    expect(buttonsLabelled(html, /^(Save|Saved|Copy to Library|Saving\.\.\.|Copying\.\.\.)$/)).toHaveLength(0);
+    expect(buttonsLabelled(html, /^Start Run$/)).toHaveLength(2);
     expect(html).toContain('Your role in this Organization cannot add Templates.');
   });
 
   it('offers no Start Run to a role that cannot start runs', () => {
     const html = renderView({ canSaveTemplate: false, canStartRun: false, isTeamWorkspace: true });
 
-    expect(findButtons(html, /^(Start Run|Starting\.\.\.)$/)).toHaveLength(0);
-    expect(findButtons(html, /^(Save|Copy to Library)$/)).toHaveLength(0);
+    expect(buttonsLabelled(html, /^(Start Run|Starting\.\.\.)$/)).toHaveLength(0);
+    expect(buttonsLabelled(html, /^(Save|Copy to Library)$/)).toHaveLength(0);
     expect(html).toContain('Your role in this Organization can view Templates only');
     expect(html).not.toContain('save it to your library');
   });
 
-  // A failed teams request leaves a stored Organization unconfirmed, and the public shell has
-  // no WorkspaceGate or switcher: the page itself says why its actions wait.
-  describe('when the Organizations failed to load', () => {
+  describe('when the Organizations failed to load, leaving a stored Organization unconfirmed', () => {
     const workspaceError = { onContinueInPersonal: () => undefined, onRetry: () => undefined };
 
-    it('explains the disabled actions and offers Retry and Continue in Personal', () => {
+    it('explains the disabled actions itself, since the public shell has no WorkspaceGate or switcher, and offers Retry and Continue in Personal', () => {
       const html = renderView({ isWorkspaceLoading: true, workspaceError });
 
       expect(html).toContain('role="alert"');
       expect(html).toContain('Couldn&#x27;t load your Organizations');
-      expect(findButtons(html, /^Retry$/)).toHaveLength(1);
-      expect(findButtons(html, /^Continue in Personal$/)).toHaveLength(1);
-      const actions = findButtons(html, /^(Start Run|Save|Copy to Library)$/);
+      expect(buttonsLabelled(html, /^Retry$/)).toHaveLength(1);
+      expect(buttonsLabelled(html, /^Continue in Personal$/)).toHaveLength(1);
+      const actions = buttonsLabelled(html, /^(Start Run|Save|Copy to Library)$/);
       expect(actions).toHaveLength(4);
       for (const button of actions) {
         expect(button).toMatch(/<button[^>]*disabled=""/);
@@ -345,8 +338,7 @@ describe('PublicTemplateView', () => {
       }
     });
 
-    // The plan shown is Personal's, which may not be the context the user is in.
-    it('never labels Save as an upgrade until the active context is known', () => {
+    it("never labels Save as an upgrade until the active context is known, since the plan loaded is Personal's", () => {
       const html = renderView({ isProUser: false, isWorkspaceLoading: true, workspaceError });
 
       expect(html).not.toContain('Upgrade to');

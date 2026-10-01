@@ -16,10 +16,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// A template listing one category twice, as "SEO" and "seo" or "QA" and "Q&A" (same slug),
-// counted twice: /categories said "SEO - 2 templates" while the SEO page listed one. Imports
-// and direct API calls can store such lists; the editor's picker cannot.
-
 const template = (id: string, categories: string[]): ChecklistTemplate => ({
   categories,
   createdAt: '2026-03-24T00:00:00.000Z',
@@ -41,8 +37,8 @@ const templates = [
   template('plain', ['SEO', 'Travel']),
 ];
 
-describe('category counts', () => {
-  it('count each template once per category, however often it lists it', () => {
+describe('category counts of templates that list one category twice under one slug, as imports and API calls can store', () => {
+  it('count each template once per category, however often it lists it, as "SEO" and "seo" or "QA" and "Q&A"', () => {
     const categories = buildDiscoveryCategories(templates);
     const bySlug = new Map(categories.map((category) => [category.slug, category]));
 

@@ -8,10 +8,6 @@ import {
   syncSearchDraft,
 } from '@/components/checklist-library/libraryFilters';
 
-// The /templates page stays mounted when a link or Back/Forward changes its URL, so the
-// filters have to follow the URL, and the legacy ?category= redirect must only fire for
-// URLs that come from outside, never for one the page wrote while the user was editing.
-
 const params = (search: string) => new URLSearchParams(search);
 
 describe('readLibraryFilters', () => {
@@ -51,7 +47,7 @@ describe('buildLibraryFilterParams', () => {
   });
 });
 
-describe('resolveLibraryLegacyRedirect', () => {
+describe('resolveLibraryLegacyRedirect, only for ?category= links from outside the page', () => {
   it('still redirects an incoming category-only link to the category page', () => {
     expect(resolveLibraryLegacyRedirect(params('?category=moving'), null)).toBe(
       '/categories/moving/',
@@ -64,8 +60,7 @@ describe('resolveLibraryLegacyRedirect', () => {
     ).toBe('/categories/moving/');
   });
 
-  it('does not redirect a category-only URL the library wrote itself', () => {
-    // Clearing the search on ?category=moving&search=box writes ?category=moving.
+  it('does not redirect a category-only URL the library wrote itself, as clearing the search on ?category=moving&search=box does', () => {
     expect(
       resolveLibraryLegacyRedirect(params('?category=moving'), LIBRARY_FILTER_UPDATE_STATE),
     ).toBeNull();
@@ -76,7 +71,7 @@ describe('resolveLibraryLegacyRedirect', () => {
   });
 });
 
-describe('syncSearchDraft', () => {
+describe('syncSearchDraft, which follows the URL while /templates stays mounted through links and Back/Forward', () => {
   it('keeps what the user typed, including a trailing space, while the URL agrees', () => {
     const typed = { draft: 'box ', syncedQuery: 'box' };
     expect(syncSearchDraft(typed, 'box')).toBe(typed);

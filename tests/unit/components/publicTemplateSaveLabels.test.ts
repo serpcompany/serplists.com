@@ -40,18 +40,15 @@ describe('getPublicTemplateSaveLabels', () => {
     ).toEqual({ footer: 'Copy to Library', header: 'Save' });
   });
 
-  it('never asks an Organization, a signed-out visitor or an unconfirmed context to upgrade', () => {
-    for (const params of [
-      // Until a stored Organization is confirmed, the plan loaded is Personal's.
-      { ...signedInPersonal, isProUser: false, isWorkspaceLoading: true },
-      { ...signedInPersonal, isProUser: false, isTeamWorkspace: true },
-      { ...signedInPersonal, isAuthenticated: false, isProUser: false },
-    ]) {
-      expect(getPublicTemplateSaveLabels(params)).toEqual({
-        footer: 'Copy to Library',
-        header: 'Save',
-      });
-    }
+  it.each([
+    ["an unconfirmed stored Organization, whose loaded plan is still Personal's", { ...signedInPersonal, isProUser: false, isWorkspaceLoading: true }],
+    ['an Organization', { ...signedInPersonal, isProUser: false, isTeamWorkspace: true }],
+    ['a signed-out visitor', { ...signedInPersonal, isAuthenticated: false, isProUser: false }],
+  ])('never asks %s to upgrade', (_who, params) => {
+    expect(getPublicTemplateSaveLabels(params)).toEqual({
+      footer: 'Copy to Library',
+      header: 'Save',
+    });
   });
 
   it('shows progress first, whatever the plan', () => {
