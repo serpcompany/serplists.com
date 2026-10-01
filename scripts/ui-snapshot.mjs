@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// Look at a page of the running app without a browser integration.
-//   pnpm run ui:snap -- dashboard/templates --login john@test.com [--mobile] [--out tmp/snapshots/x.png]
-// Flags may come before or after the route. Saves a full-page screenshot (.png, or JPEG
-// for .jpg/.jpeg) with the accessibility tree beside it as <name>.aria.yml, and prints
-// the tree (readable text), console errors, and failed requests. Start the app first
-// with `pnpm run dev:all`.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, devices } from "@playwright/test";
@@ -20,8 +14,6 @@ try {
 }
 const { routePath, outPath, ariaPath } = options;
 
-// The app dev:all runs (tmp/dev-session.json), else Next.js's default port. The API is on
-// the same origin.
 const port = readDevSession()?.port ?? DEFAULT_DEV_PORT;
 const baseUrl = options.base ?? `http://localhost:${port}`;
 const apiUrl = options.api ?? new URL("/api", baseUrl).toString();

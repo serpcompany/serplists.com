@@ -7,7 +7,6 @@ const route = 'dashboard/templates';
 const mobile = ['--mobile'];
 const login = ['--login', 'john@test.com'];
 
-// Every order of the three parts: the route, --mobile, and --login <email>.
 function permutations<T>(items: T[]): T[][] {
   if (items.length <= 1) return [items];
   return items.flatMap((item, index) =>
@@ -30,7 +29,7 @@ describe('parseUiSnapArgs', () => {
     });
   }
 
-  it('ignores the -- that pnpm passes through', () => {
+  it('ignores the -- that pnpm passes through, after which parseArgs would read every flag as a route', () => {
     expect(parseUiSnapArgs(['--', 'templates', '--login', 'x@test.com'])).toMatchObject({
       routePath: '/templates',
       login: 'x@test.com',
@@ -84,9 +83,8 @@ describe('ui:snap output paths', () => {
     });
   });
 
-  // Playwright saves .jpg, .jpeg and .jpe paths as JPEG; the YAML must not replace them.
   for (const extension of ['png', 'jpg', 'jpeg', 'jpe']) {
-    it(`never writes the YAML over a .${extension} screenshot`, () => {
+    it(`never writes the YAML over a .${extension} screenshot, which Playwright saves as an image`, () => {
       const out = path.join('tmp', 'snapshots', `dash.${extension}`);
       const { outPath, ariaPath } = parseUiSnapArgs(['dashboard', '--out', out]);
       expect(outPath).toBe(out);
@@ -100,7 +98,7 @@ describe('ui:snap output paths', () => {
     expect(ariaFor('dash.v2.png')).toBe('dash.v2.aria.yml');
   });
 
-  it('rejects an --out that Playwright cannot save as an image', () => {
+  it('rejects an --out that Playwright cannot save as an image, whose extension it reads case-sensitively', () => {
     for (const out of ['tmp/x.gif', 'tmp/x', 'tmp/x.PNG', 'tmp/x.JPG', 'tmp/x.aria.yml', 'tmp/x.webp']) {
       expect(() => parseUiSnapArgs(['dashboard', '--out', out]), out).toThrow(/--out/);
     }

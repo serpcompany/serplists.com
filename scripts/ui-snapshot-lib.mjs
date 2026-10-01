@@ -1,5 +1,3 @@
-// Argument parsing for scripts/ui-snapshot.mjs (pnpm run ui:snap), kept apart from
-// the Playwright code so it can be unit tested.
 import path from "node:path";
 import { parseArgs } from "node:util";
 
@@ -17,19 +15,13 @@ const OPTIONS = {
   api: { type: "string" },
 };
 
-// Extensions Playwright saves as an image. Its lookup is case-sensitive, so .PNG fails.
-const SCREENSHOT_EXTENSIONS = [".png", ".jpg", ".jpeg", ".jpe"];
+const EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE = [".png", ".jpg", ".jpeg", ".jpe"];
 
-/**
- * The screenshot path and the accessibility YAML beside it (`dash.jpg` gives
- * `dash.aria.yml`). Throws for an extension Playwright cannot save, and never
- * returns a YAML path that would overwrite the screenshot.
- */
 export function resolveSnapshotPaths(outArg, slug) {
   const outPath = outArg ?? path.join("tmp", "snapshots", `${slug}.png`);
   const { dir, name, ext } = path.parse(outPath);
-  if (!SCREENSHOT_EXTENSIONS.includes(ext)) {
-    throw new Error(`--out must end in ${SCREENSHOT_EXTENSIONS.join(", ")} (lowercase), got "${outPath}".`);
+  if (!EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.includes(ext)) {
+    throw new Error(`--out must end in ${EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.join(", ")} (lowercase), got "${outPath}".`);
   }
   const ariaPath = path.join(dir, `${name}.aria.yml`);
   if (path.resolve(ariaPath) === path.resolve(outPath)) {
@@ -38,17 +30,12 @@ export function resolveSnapshotPaths(outArg, slug) {
   return { outPath, ariaPath };
 }
 
-/**
- * Reads ui:snap arguments in any order. Throws on an unknown flag, a flag with no
- * value, more than one route, or an --out that is not a .png or .jpg file, instead
- * of quietly snapshotting another page or losing the screenshot.
- */
 export function parseUiSnapArgs(argv) {
+  const argsWithoutTheSeparatorPnpmForwards = argv.filter((arg) => arg !== "--");
   let parsed;
   try {
-    // pnpm forwards the `--` separator; parseArgs would treat everything after it as a route.
     parsed = parseArgs({
-      args: argv.filter((arg) => arg !== "--"),
+      args: argsWithoutTheSeparatorPnpmForwards,
       options: OPTIONS,
       allowPositionals: true,
       strict: true,
@@ -65,7 +52,6 @@ export function parseUiSnapArgs(argv) {
     throw new Error(`Expected one route, got ${positionals.length}: ${positionals.join(" ")}.`);
   }
 
-  // Routes may omit the leading slash (`dashboard`), which Git Bash would otherwise rewrite into a file path.
   const routeArg = positionals[0] ?? "";
   const routePath = routeArg.startsWith("/") ? routeArg : `/${routeArg}`;
   const slug = routePath.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "home";

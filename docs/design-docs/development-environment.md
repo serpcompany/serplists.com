@@ -137,7 +137,8 @@ pnpm run ui:snap -- templates --mobile
 
 Opens the app `dev:all` runs (its port from `tmp/dev-session.json`, else `3000`; the API
 is on the same origin). Saves a full-page screenshot in `tmp/snapshots/` (or at `--out`, which must end in
-`.png`, `.jpg` or `.jpeg`) with the accessibility tree beside it as `<name>.aria.yml`,
+`.png`, `.jpg` or `.jpeg`, in lower case: Playwright reads the extension case-sensitively)
+with the accessibility tree beside it as `<name>.aria.yml`,
 and prints the tree (a readable text outline of the page), console errors, and
 failed requests. Write routes without the leading slash; Git Bash rewrites `/path`
 arguments into file paths. Flags (`--login`, `--password`, `--mobile`, `--out`, `--base`, `--api`) may
