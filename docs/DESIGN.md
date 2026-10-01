@@ -47,7 +47,9 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   from `sonner`; ESLint blocks the shadcn toast store, which has no renderer. The
   `Toaster` is mounted before the pages because it drops toasts sent before its own
   effect runs, such as a page's first-effect notice on a full page load
-  (`tests/unit/components/ToasterPlacement.test.tsx`).
+  (`tests/unit/components/ToasterPlacement.test.tsx`). A notice an effect shows takes a
+  fixed `id` (the login notices), so StrictMode's second run of the effect replaces it
+  instead of stacking a copy.
 - **Console pages:** compose the console blocks in
   `src/components/dashboard/DashboardContentShell.tsx` (see [Console
   blocks](#console-blocks)) instead of new page chrome.

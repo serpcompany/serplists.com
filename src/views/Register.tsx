@@ -35,8 +35,6 @@ const Register = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
   const router = useAppRouter();
-  // Carried from the page that sent the user here (for example an invite link)
-  // so a new account lands back there, including after email verification.
   const returnPath = getReturnPath(useSearchParams());
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -72,7 +70,6 @@ const Register = () => {
             : "Registration successful",
         );
         if (requiresEmailVerification) {
-          // The login page fills its form with the address; it never goes in the URL.
           handOffLoginEmail(email);
         }
         router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath }));

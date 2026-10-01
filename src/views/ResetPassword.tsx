@@ -20,6 +20,13 @@ import { buildForgotPasswordPath, buildLoginPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
+const removeResetTokenFromUrl = () => {
+  const { searchWithoutToken } = readResetPasswordLink(window.location.search);
+  if (searchWithoutToken !== null) {
+    replaceCurrentUrl(`${window.location.pathname}${searchWithoutToken}${window.location.hash}`);
+  }
+};
+
 const ResetPassword = () => {
   const searchParams = useSearchParams();
   const search = searchParams.toString();
@@ -29,15 +36,10 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Read the link once: the token then leaves the URL, so later renders cannot see it there.
   const [{ token, error }] = useState(() => readResetPasswordLink(search));
 
-  // Takes the token out of the address bar and history, keeping the page and its state.
   useEffect(() => {
-    const { searchWithoutToken } = readResetPasswordLink(window.location.search);
-    if (searchWithoutToken !== null) {
-      replaceCurrentUrl(`${window.location.pathname}${searchWithoutToken}${window.location.hash}`);
-    }
+    removeResetTokenFromUrl();
   }, [search]);
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -77,8 +79,6 @@ const ResetPassword = () => {
     }
   };
 
-  // A reload after the token left the URL lands here with no token: offer a new link
-  // instead of a form that cannot succeed.
   if (error || !token) {
     return (
       <AuthPageShell

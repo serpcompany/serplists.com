@@ -43,7 +43,6 @@ import { buildForgotPasswordPath, buildRegisterPath } from "@/lib/routes";
 
 import { Link } from '@/components/navigation/Link';
 
-// The seeded personas the form can fill in, outside production.
 const DEV_PERSONAS = [
   { email: "checklists@serp.co", label: "Fill SERP" },
   { email: "admin@test.com", label: "Fill Admin" },
@@ -57,9 +56,45 @@ function getVerificationFailure(search: string): string | null {
   return notice?.kind === "verification_failed" ? notice.message : null;
 }
 
-// The address to fill in (readLoginPrefill), from the live URL and this entry's state. It is
-// read, not taken, so rendering can read it: the effect below takes the handed-over address
-// and keeps it in this entry's state, so the value stays the same.
+function useLastVerificationFailure(search: string): string | null {
+  const failureInUrl = getVerificationFailure(search);
+  const [lastFailure, setLastFailure] = useState<string | null>(failureInUrl);
+  const [seenFailure, setSeenFailure] = useState(failureInUrl);
+  if (seenFailure !== failureInUrl) {
+    setSeenFailure(failureInUrl);
+    if (failureInUrl) setLastFailure(failureInUrl);
+  }
+  return lastFailure;
+}
+
+const takeOneShotLoginParams = () => {
+  const currentSearch = window.location.search;
+  const prefill = readLoginPrefill(
+    currentSearch,
+    takeHandedOffLoginEmail() ?? readKeptLoginEmail(window.history.state),
+  );
+  const notice = getLoginNotice(currentSearch);
+
+  if (notice?.kind === "verification_failed") {
+    toast.error(notice.message, { id: "email-verification-failed" });
+  } else if (notice?.kind === "verified") {
+    toast.success(notice.message, { id: "email-verified" });
+  } else if (notice?.kind === "verify_email") {
+    toast.info(notice.message, { id: "verify-email-first" });
+  }
+
+  const remainingSearch =
+    stripLoginNoticeParams(prefill.searchWithoutEmail ?? currentSearch) ?? prefill.searchWithoutEmail;
+  const keptState = prefill.email ? buildKeptLoginState(prefill.email) : null;
+  const keepsEmail = prefill.email !== readKeptLoginEmail(window.history.state);
+  if (remainingSearch !== null || keepsEmail) {
+    replaceCurrentUrl(
+      `${window.location.pathname}${remainingSearch ?? currentSearch}${window.location.hash}`,
+      keptState,
+    );
+  }
+};
+
 const readPrefillEmail = (): string | null =>
   readLoginPrefill(
     window.location.search,
@@ -80,18 +115,7 @@ const Login = () => {
   const router = useAppRouter();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
-  // Read from the URL during the first render so the resend option shows
-  // immediately; it stays after the one-shot params are removed.
-  const failureInUrl = getVerificationFailure(search);
-  const [verificationFailure, setVerificationFailure] = useState<string | null>(failureInUrl);
-  // A failed link opened later (the query changed) shows its resend option too.
-  const [seenFailure, setSeenFailure] = useState(failureInUrl);
-  if (seenFailure !== failureInUrl) {
-    setSeenFailure(failureInUrl);
-    if (failureInUrl) setVerificationFailure(failureInUrl);
-  }
-  // Fills the form when an address arrives: the server has no URL state or storage, so it
-  // and hydration render an empty field.
+  const verificationFailure = useLastVerificationFailure(search);
   const prefillEmail = useSyncExternalStore(subscribeToHistory, readPrefillEmail, () => null);
   const [filledEmail, setFilledEmail] = useState<string | null>(null);
   if (filledEmail !== prefillEmail) {
@@ -101,53 +125,16 @@ const Login = () => {
       setUnverifiedEmail(prefillEmail);
     }
   }
-  // Where the user was headed (with its query and hash): the `next` parameter, which
-  // also survives the email verification link. With none, the console home.
   const returnPath = getReturnPath(searchParams);
   const from = getPostSignInDestination(returnPath);
   const showResendVerification = Boolean(unverifiedEmail || verificationFailure);
 
-  // Runs again whenever the query changes; `search` is only its trigger, the effect reads
-  // the live URL and this entry's state.
   useEffect(() => {
-    const currentSearch = window.location.search;
-    const prefill = readLoginPrefill(
-      currentSearch,
-      takeHandedOffLoginEmail() ?? readKeptLoginEmail(window.history.state),
-    );
-    const notice = getLoginNotice(currentSearch);
-
-    // Stable ids keep a StrictMode double effect from stacking duplicate toasts.
-    if (notice?.kind === "verification_failed") {
-      toast.error(notice.message, { id: "email-verification-failed" });
-    } else if (notice?.kind === "verified") {
-      toast.success(notice.message, { id: "email-verified" });
-    } else if (notice?.kind === "verify_email") {
-      toast.info(notice.message, { id: "verify-email-first" });
-    }
-
-    // Drop the one-shot params so a reload or back navigation does not replay the notice.
-    // The address (from sign-up, or an old ?email= link, in any letter case) stays out of
-    // the URL but moves into this entry's state, so a reload still fills the form. The
-    // rerun that follows finds no params and changes nothing.
-    const remainingSearch =
-      stripLoginNoticeParams(prefill.searchWithoutEmail ?? currentSearch) ?? prefill.searchWithoutEmail;
-    const keptState = prefill.email ? buildKeptLoginState(prefill.email) : null;
-    const keepsEmail = prefill.email !== readKeptLoginEmail(window.history.state);
-    if (remainingSearch !== null || keepsEmail) {
-      replaceCurrentUrl(
-        `${window.location.pathname}${remainingSearch ?? currentSearch}${window.location.hash}`,
-        keptState,
-      );
-    }
+    takeOneShotLoginParams();
   }, [search]);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      // Returning to an invite link after sign-in: if analytics tags run in this document,
-      // load the invite as a new page so they never see its token. The return path
-      // keeps its query and hash, so check both parts. Only a path on this origin is
-      // followed, never the raw value.
       const destination = toSameOriginPath(from, window.location.origin) ?? getPostSignInDestination(null);
       const target = new URL(destination, window.location.origin);
       if (needsFullPageLoad(target.pathname, target.search, window)) {

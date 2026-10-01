@@ -30,7 +30,6 @@ import { createSingleFlight } from '@/lib/utils/singleFlight';
 
 import { Link } from '@/components/navigation/Link';
 
-// A line saying what the page is waiting for, or what just happened.
 function StatusLine({ children, icon }: { children: ReactNode; icon: ReactNode }) {
   return (
     <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -40,12 +39,10 @@ function StatusLine({ children, icon }: { children: ReactNode; icon: ReactNode }
   );
 }
 
-// The page's buttons, one under another across the card.
 function InviteActions({ children }: { children: ReactNode }) {
   return <div className="flex flex-col gap-2">{children}</div>;
 }
 
-// Why the invite could not be shown or answered.
 function InviteError({ message }: { message: string }) {
   return (
     <Alert variant="destructive">
@@ -55,41 +52,27 @@ function InviteError({ message }: { message: string }) {
   );
 }
 
-// Opening an invite link only shows what the invite is. Joining takes a click
-// on Accept, and switching the active context takes another on "Switch to".
 export default function TeamInviteAccept() {
   const { token } = useParams<{ token: string }>();
   const router = useAppRouter();
   const { isAuthenticated, isLoading, logout, user } = useAuth();
   const invite = useTeamInviteLink(token, !isLoading && isAuthenticated ? (user?.id ?? null) : null);
   const preview = invite.preview;
-  // Signing in, signing up, or switching accounts all come back to this path.
   const invitePath = useCurrentPath();
   const [signOutFlight] = useState(() => createSingleFlight());
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleAccept = async () => {
-    try {
-      const result = await invite.accept();
-      if (result) {
-        toast.success('Organization invite accepted');
-      }
-    } catch {
-      // The error renders below the buttons.
+    const result = await invite.accept().catch(() => null);
+    if (result) {
+      toast.success('Organization invite accepted');
     }
   };
 
   const handleDecline = async () => {
-    try {
-      await invite.decline();
-    } catch {
-      // The error renders below the buttons.
-    }
+    await invite.decline().catch(() => null);
   };
 
-  // Waits for sign-out before opening the login page; otherwise the login page
-  // would send the still signed-in account straight back here. A refused
-  // sign-out keeps the user here with the error.
   const handleSignOutAndContinue = () =>
     signOutFlight.run(async () => {
       setIsSigningOut(true);
@@ -167,7 +150,6 @@ export default function TeamInviteAccept() {
     }
 
     if (!isAuthenticated) {
-      // Both links bring the user back here after signing in or signing up.
       return (
         <>
           <p className="text-center text-sm text-muted-foreground">
@@ -189,8 +171,6 @@ export default function TeamInviteAccept() {
       );
     }
 
-    // An answer this account gave wins over a later preview error: after a decline the
-    // invite is revoked, so the preview answers 404.
     if (preview && invite.isAccepted) {
       return renderJoined(preview.teamId, preview.teamName, 'Invite accepted.');
     }
