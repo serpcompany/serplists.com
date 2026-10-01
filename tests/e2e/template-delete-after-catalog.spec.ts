@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { apiJson } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
+import { confirmTheTemplateDelete, createOneTaskTemplate } from './support/template-editor';
 
 const catalogRowsSchema = z.array(z.record(z.unknown()));
 
@@ -29,14 +30,7 @@ test('a deleted public template leaves My Templates after the catalog was loaded
   await loginAsAdmin(page);
 
   const title = `Catalog delete ${Date.now()}`;
-  const { id: templateId } = await apiJson<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: {
-      title,
-      is_public: true,
-      sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
-    },
-  });
+  const templateId = await createOneTaskTemplate(page, title, true);
 
   await loadThePublicCatalogFromTheRunsPage(page);
 
@@ -49,11 +43,7 @@ test('a deleted public template leaves My Templates after the catalog was loaded
   await card.hover();
   await card.getByRole('button', { name: `Actions for ${title}` }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
-  const deleted = page.waitForResponse(
-    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
-  );
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
-  expect((await deleted).status()).toBe(200);
+  await confirmTheTemplateDelete(page, templateId);
 
   await expect(page.getByText('Template deleted')).toBeVisible();
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0, { timeout: 15_000 });
@@ -63,14 +53,7 @@ test('a deleted public template stays off the library while the edge still serve
   await loginAsAdmin(page);
 
   const title = `Catalog edge delete ${Date.now()}`;
-  const { id: templateId } = await apiJson<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: {
-      title,
-      is_public: true,
-      sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
-    },
-  });
+  const templateId = await createOneTaskTemplate(page, title, true);
   const ownRows = await apiJson<Array<Record<string, unknown>>>(page, '/templates?scope=personal');
   const rowTheLibraryCanList = ownRows.find((row) => row.id === templateId);
   expect(rowTheLibraryCanList?.owner_username).toBeTruthy();
@@ -85,11 +68,7 @@ test('a deleted public template stays off the library while the edge still serve
   await navigateInApp(page, `/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Template actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
-  const deleted = page.waitForResponse(
-    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
-  );
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
-  expect((await deleted).status()).toBe(200);
+  await confirmTheTemplateDelete(page, templateId);
   await expect(page.getByText('Template deleted')).toBeVisible();
 
   await navigateInApp(page, search);

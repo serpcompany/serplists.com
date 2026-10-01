@@ -27,3 +27,12 @@ export async function answerRunStartsAtActiveRunLimit(page: Page) {
     });
   });
 }
+
+export async function countCheckoutsSentTo(page: Page, url: string) {
+  const checkout = { requests: 0 };
+  await page.route('**/api/billing/checkout', async (route) => {
+    checkout.requests += 1;
+    await route.fulfill({ body: JSON.stringify({ url }), contentType: 'application/json', status: 200 });
+  });
+  return checkout;
+}

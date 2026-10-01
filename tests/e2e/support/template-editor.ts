@@ -111,3 +111,17 @@ export function getTemplateSections(template: Record<string, unknown>) {
     },
   ];
 }
+
+export const ONE_TASK_SECTIONS = [{ id: "section-1", title: "Section", items: [{ id: "item-1", title: "Task" }] }];
+
+export async function createOneTaskTemplate(page: Page, title: string, isPublic: boolean) {
+  return createTemplate(page, { title, is_public: isPublic, sections: ONE_TASK_SECTIONS });
+}
+
+export async function confirmTheTemplateDelete(page: Page, templateId: string, dialog: Locator = page.getByRole("alertdialog")) {
+  const deleted = page.waitForResponse(
+    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === "DELETE",
+  );
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  expect((await deleted).status()).toBe(200);
+}

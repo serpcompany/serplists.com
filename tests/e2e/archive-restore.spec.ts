@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiRequest } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
+import { confirmTheTemplateDelete, createOneTaskTemplate, ONE_TASK_SECTIONS } from './support/template-editor';
 
 const LATE_READ_WINDOW_MS = 500;
 const DELAYED_READ_MS = 1_500;
@@ -45,14 +46,9 @@ test('an archived template and run can be restored from the archive page', async
   const stamp = Date.now();
   const templateTitle = `Archive restore template ${stamp}`;
   const runTitle = `Archive restore run ${stamp}`;
-  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
 
-  const template = await apiRequest<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: { title: templateTitle, is_public: false, sections },
-  });
-  const templateId = template.body?.id as string;
-  const run = await apiRequest<{ id: string }>(page, '/checklists', { method: 'POST', body: { title: runTitle, sections } });
+  const templateId = await createOneTaskTemplate(page, templateTitle, false);
+  const run = await apiRequest<{ id: string }>(page, '/checklists', { method: 'POST', body: { title: runTitle, sections: ONE_TASK_SECTIONS } });
   const runId = run.body?.id as string;
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
   expect((await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' })).status).toBe(200);
@@ -84,12 +80,7 @@ test('an archived template and run can be restored from the archive page', async
 test('an item restored elsewhere leaves the archive when Restore finds it already restored', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive restored elsewhere ${Date.now()}`;
-  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
-  const template = await apiRequest<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: { title, is_public: false, sections },
-  });
-  const templateId = template.body?.id as string;
+  const templateId = await createOneTaskTemplate(page, title, false);
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
 
   await page.goto('/dashboard/archive/');
@@ -142,12 +133,7 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
 test('a template deleted from My Templates never says it cannot be undone and restores from the archive', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive from list template ${Date.now()}`;
-  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
-  const template = await apiRequest<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: { title, is_public: false, sections },
-  });
-  const templateId = template.body?.id as string;
+  const templateId = await createOneTaskTemplate(page, title, false);
 
   await page.goto('/dashboard/templates/');
   await page.getByPlaceholder('Search templates...').fill(title);
@@ -158,11 +144,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
   await row.getByRole('button', { name: 'Delete' }).click();
 
   const dialog = await expectDeleteDialogThatKeepsItRestorable(page, 'template');
-  const deleted = page.waitForResponse(
-    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
-  );
-  await dialog.getByRole('button', { name: 'Delete' }).click();
-  expect((await deleted).status()).toBe(200);
+  await confirmTheTemplateDelete(page, templateId, dialog);
   await expect(page.getByText('Template deleted')).toBeVisible();
 
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
@@ -178,12 +160,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
 test('a template deleted from its page is not read again and opens normally once restored', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive detail template ${Date.now()}`;
-  const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
-  const template = await apiRequest<{ id: string }>(page, '/templates', {
-    method: 'POST',
-    body: { title, is_public: false, sections },
-  });
-  const templateId = template.body?.id as string;
+  const templateId = await createOneTaskTemplate(page, title, false);
   const isDetailRead = (url: URL, method: string) =>
     method === 'GET' && url.pathname.endsWith(`/api/templates/${templateId}`);
 
@@ -196,11 +173,7 @@ test('a template deleted from its page is not read again and opens normally once
   });
   await page.getByRole('button', { name: 'Template actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
-  const deleted = page.waitForResponse(
-    (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
-  );
-  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
-  expect((await deleted).status()).toBe(200);
+  await confirmTheTemplateDelete(page, templateId);
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
   await page.waitForTimeout(LATE_READ_WINDOW_MS);
   expect(readsAfterArchive).toEqual([]);

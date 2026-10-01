@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { countCheckoutsSentTo } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
 import { deleteTemplate } from './support/template-editor';
@@ -121,15 +122,7 @@ test('does not start checkout from the page the user went Back to when a My Temp
     });
     answered = true;
   });
-  let checkoutRequests = 0;
-  await page.route('**/api/billing/checkout', async (route) => {
-    checkoutRequests += 1;
-    await route.fulfill({
-      body: JSON.stringify({ url: '/pricing/?checkout=stubbed' }),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
+  const checkout = await countCheckoutsSentTo(page, '/pricing/?checkout=stubbed');
 
   await page.goto('/dashboard/runs/');
   await page.goto('/dashboard/templates/');
@@ -143,5 +136,5 @@ test('does not start checkout from the page the user went Back to when a My Temp
   await expect.poll(() => answered).toBe(true);
   await allowTimeForALateNavigation(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
-  expect(checkoutRequests).toBe(0);
+  expect(checkout.requests).toBe(0);
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
-import { answerRunStartsAtActiveRunLimit } from './support/billing';
+import { answerRunStartsAtActiveRunLimit, countCheckoutsSentTo } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 import { runIdInTheUrl } from './support/run-saves';
 
@@ -19,21 +19,13 @@ async function openStartRunDialog(page: Page) {
 test('Start Run at the run limit opens checkout instead of only toasting', async ({ page }) => {
   await loginAsAdmin(page);
   await answerRunStartsAtActiveRunLimit(page);
-  let checkoutRequests = 0;
-  await page.route('**/api/billing/checkout', async (route) => {
-    checkoutRequests += 1;
-    await route.fulfill({
-      body: JSON.stringify({ url: '/pricing/?checkout=stubbed' }),
-      contentType: 'application/json',
-      status: 200,
-    });
-  });
+  const checkout = await countCheckoutsSentTo(page, '/pricing/?checkout=stubbed');
 
   const dialog = await openStartRunDialog(page);
   await dialog.getByRole('button', { name: 'Start Run' }).click();
 
   await expect(page).toHaveURL(/checkout=stubbed/);
-  expect(checkoutRequests).toBe(1);
+  expect(checkout.requests).toBe(1);
 });
 
 test('Start Run with a blank name uses the timestamped default the field shows', async ({ page }) => {

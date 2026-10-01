@@ -86,11 +86,21 @@ async function toggleWithSpace(page: Page, checkbox: Locator) {
   await page.keyboard.press('Space');
 }
 
+async function openAgentAccess(page: Page) {
+  await page.goto('/dashboard/settings/');
+  await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
+}
+
+async function revokeTheKeyIn(page: Page, keyRow: Locator) {
+  await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
+  await page.getByRole('button', { name: 'Revoke key' }).click();
+  await expect(keyRow.getByText('Revoked')).toBeVisible();
+}
+
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.goto('/dashboard/settings/');
-  await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
+  await openAgentAccess(page);
 
   const keyName = `Playwright SOP Runner ${Date.now()}`;
   await page.getByLabel('Key name').fill(keyName);
@@ -203,9 +213,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   await page.goto('/dashboard/settings/');
   const keyRow = page.getByRole('listitem').filter({ hasText: keyName });
   await expect(keyRow).toHaveCount(1);
-  await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
-  await page.getByRole('button', { name: 'Revoke key' }).click();
-  await expect(keyRow.getByText('Revoked')).toBeVisible();
+  await revokeTheKeyIn(page, keyRow);
 
   const denied = await mcpRequest(secret, 'tools/list', undefined, 9);
   expect(denied.response.status).toBe(401);
@@ -216,8 +224,7 @@ test('a Run Key created while the key list is still loading shows in the list', 
 
   const releaseFirstList = await holdFirstRunKeyListUntilReleased(page);
 
-  await page.goto('/dashboard/settings/');
-  await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
+  await openAgentAccess(page);
 
   const keyName = `Playwright Slow List Runner ${Date.now()}`;
   await page.getByLabel('Key name').fill(keyName);
@@ -233,16 +240,13 @@ test('a Run Key created while the key list is still loading shows in the list', 
   await expect(keyRow).toHaveCount(1);
   await expect(page.getByText('No Run Keys yet.')).toHaveCount(0);
 
-  await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
-  await page.getByRole('button', { name: 'Revoke key' }).click();
-  await expect(keyRow.getByText('Revoked')).toBeVisible();
+  await revokeTheKeyIn(page, keyRow);
 });
 
 test('the permissions chosen for a Run Key decide what it can do over MCP', async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.goto('/dashboard/settings/');
-  await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
+  await openAgentAccess(page);
 
   const keyName = `Playwright Template Writer ${Date.now()}`;
   const nameField = page.getByLabel('Key name');
@@ -329,7 +333,5 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
 
   await apiJson(page, `/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
   await page.goto('/dashboard/settings/');
-  await keyRow.getByRole('button', { name: 'Revoke', exact: true }).click();
-  await page.getByRole('button', { name: 'Revoke key' }).click();
-  await expect(keyRow.getByText('Revoked')).toBeVisible();
+  await revokeTheKeyIn(page, keyRow);
 });
