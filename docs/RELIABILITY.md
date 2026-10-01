@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (code conventions and tests that read no source text included), `tsc -b`, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (code conventions and tests that read no source text included), `pnpm run typecheck`, covering the app, node, API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -31,6 +31,24 @@ config) to 500 lines, blank lines included. Only the generated files in ESLint's
 `tests/unit/config/no-exceptions.test.ts` fails on any other file it misses. Split a file
 that grows past the limit by responsibility; `pnpm run maintenance:report` lists the files
 at 450 lines or more.
+
+`pnpm run typecheck` runs `next typegen`, then `tsc -p` over four projects: `tsconfig.json`
+(`src/` and what it imports), `tsconfig.node.json` (root config and `scripts/`),
+`functions/tsconfig.json` (the API and `db/`) and `tests/tsconfig.json`. The first three add
+four settings to `strict`:
+- `noUncheckedIndexedAccess`: an array element or record value read by index may be
+  `undefined`;
+- `exactOptionalPropertyTypes`: an optional property takes `undefined` only when its type
+  says `prop?: T | undefined`, so a value that reaches JSON, a log line or a spread is left out
+  instead of set to `undefined`;
+- `noImplicitOverride`: a class member that overrides its base says `override`;
+- `noFallthroughCasesInSwitch`: a `case` with statements cannot run on into the next one.
+
+Fix an error they report by handling the case it names: narrow the value, give it a default
+that is right for that case, or throw an error that says what was missing. Add
+`| undefined` to an optional property only where a caller really passes `undefined`, and
+never silence the error with a `!` or a cast. The tests' tsconfig turns the four settings off
+until the tests meet them ([testing conventions](#testing-conventions)).
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
