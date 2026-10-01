@@ -34,8 +34,8 @@ at 450 lines or more.
 
 `pnpm run typecheck` runs `next typegen`, then `tsc -p` over four projects: `tsconfig.json`
 (`src/` and what it imports), `tsconfig.node.json` (root config and `scripts/`),
-`functions/tsconfig.json` (the API and `db/`) and `tests/tsconfig.json`. The first three add
-four settings to `strict`:
+`functions/tsconfig.json` (the API and `db/`) and `tests/tsconfig.json`. Each adds four
+settings to `strict`, the tests' tsconfig by inheriting them from the app's:
 - `noUncheckedIndexedAccess`: an array element or record value read by index may be
   `undefined`;
 - `exactOptionalPropertyTypes`: an optional property takes `undefined` only when its type
@@ -47,8 +47,11 @@ four settings to `strict`:
 Fix an error they report by handling the case it names: narrow the value, give it a default
 that is right for that case, or throw an error that says what was missing. Add
 `| undefined` to an optional property only where a caller really passes `undefined`, and
-never silence the error with a `!` or a cast. The tests' tsconfig turns the four settings off
-until the tests meet them ([testing conventions](#testing-conventions)).
+never silence the error with a `!` or a cast. ESLint's `@typescript-eslint/no-non-null-assertion`
+refuses a `!` in every TypeScript file, and `tests/unit/config/typecheck-coverage.test.ts`
+fails when a tsconfig that `pnpm run typecheck` runs turns one of the four settings off. Tests
+read what may be missing through the helpers in `tests/support/elements.ts`
+([testing conventions](#testing-conventions)).
 
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
 `eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
@@ -475,12 +478,11 @@ Common failures:
   them. `tests/tsconfig.json` extends the app's `tsconfig.json`, includes every TypeScript
   file under `tests/` (unit and integration tests, browser specs, support and fixtures) with
   `next-env.d.ts`, `cloudflare-env.d.ts` and `src/js-yaml.d.ts`, and runs in
-  `pnpm run typecheck`. It holds the tests to `strict`, and for now turns off the stricter
-  flags the app's config enables (`noImplicitOverride`, `noFallthroughCasesInSwitch`,
-  `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) until the tests meet them
-  ([harness hardening plan](exec-plans/active/harness-hardening.md)).
+  `pnpm run typecheck`. It holds the tests to `strict` and the four settings the app's config
+  adds, which it inherits ([quality gates](#quality-gates)).
   `tests/unit/config/typecheck-coverage.test.ts` fails when `pnpm run typecheck` runs no
-  tsconfig that includes a TypeScript file the repository holds, or skips a tsconfig. A
+  tsconfig that includes a TypeScript file the repository holds, skips a tsconfig, or runs one
+  that turns off any of the four settings. A
   `.tsx` file next to a `.ts` file of the same name is in no include: TypeScript keeps only
   the `.ts` one, so the test names it.
 - Read a response body with `readJson(response, schema)` from `tests/support/readJson.ts`,
@@ -507,8 +509,18 @@ Common failures:
     so `mock.calls` is typed, and a stand-in for a client has every method of the client's
     type (`runExecutionApiClient()` in `tests/fixtures/runExecutionFixtures.ts`).
   - Narrow a value with Vitest's `assert.exists()`, which fails the test and narrows the
-    type, never with `!`. `findElementOf(tree, Component)` (`tests/support/elementTree.ts`)
-    finds a component's element with its props typed.
+    type, never with `!`, which ESLint refuses. `findElementOf(tree, Component)`
+    (`tests/support/elementTree.ts`) finds a component's element with its props typed.
+  - Read an element, record value or regular expression group that may be missing through
+    `tests/support/elements.ts`: `firstOf`, `lastOf`, `elementAt`, `onlyElement`, `valueAt`,
+    `capturedGroup` and `present` (a value in an expression), and for checklists `sectionAt`,
+    `taskAt`, `taskIn`, `contentAt` and `subTaskAt`. Each returns the value typed as present or
+    throws a `MissingElementError` that says what was missing, so a test that indexes into a
+    result fails by name instead of with a `TypeError`. The module imports nothing, so browser
+    specs use it too; code inside `page.evaluate()`, which runs in the page, throws an `Error`
+    itself.
+  - A request init, a prop or a fixture field with no value is left out
+    (`...(body === undefined ? {} : { body })`), not set to `undefined`, as the app's code does.
   - A JavaScript module a test imports gets a declaration file beside it
     (`scripts/lib/run-tool.d.mts`). Without one, TypeScript infers its types from the code,
     and a parameter that defaults to `null` then accepts only `null`. `tests/tsconfig.json`
