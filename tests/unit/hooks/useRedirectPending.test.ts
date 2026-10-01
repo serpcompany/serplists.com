@@ -1,71 +1,58 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Vitest runs without a DOM, so a minimal stand-in for React's state and effects runs
-// the hook: state lives in `cells`, and effects run at once with their cleanups kept.
-const fakeReact = vi.hoisted(() => ({
-  cells: [] as unknown[],
-  cursor: 0,
-  cleanups: [] as Array<() => void>,
-}));
-
-vi.mock("react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => {
-    const index = fakeReact.cursor++;
-    if (!(index in fakeReact.cells)) fakeReact.cells[index] = initial;
-    const setState = (next: unknown) => {
-      fakeReact.cells[index] = typeof next === "function" ? (next as (value: unknown) => unknown)(fakeReact.cells[index]) : next;
-    };
-    return [fakeReact.cells[index], setState];
-  },
-  useEffect: (effect: () => void | (() => void)) => {
-    const cleanup = effect();
-    if (cleanup) fakeReact.cleanups.push(cleanup);
-  },
-}));
+vi.mock("react", async (importOriginal) => {
+  const { useEffectKeptBetweenRenders, useStateKeptBetweenRenders } = await import("../../support/hookStateSlots");
+  return {
+    ...(await importOriginal<typeof import("react")>()),
+    useEffect: useEffectKeptBetweenRenders,
+    useState: useStateKeptBetweenRenders,
+  };
+});
 
 import { usePageRestoredFromCache, useRedirectPending } from "@/hooks/useRedirectPending";
+import { forgetKeptState, renderKeepingState, unmountEffects } from "../../support/hookStateSlots";
 
 const pageshow = (persisted: boolean) => Object.assign(new Event("pageshow"), { persisted });
+const renderedPending = () => renderKeepingState(useRedirectPending);
+const isPending = () => renderedPending()[0];
 
 beforeEach(() => {
-  fakeReact.cells = [];
-  fakeReact.cursor = 0;
-  fakeReact.cleanups = [];
+  forgetKeptState();
   vi.stubGlobal("window", new EventTarget());
 });
 
 afterEach(() => {
+  unmountEffects();
   vi.unstubAllGlobals();
 });
 
 describe("useRedirectPending", () => {
   it("clears the pending flag when Back restores the page from the back/forward cache", () => {
-    const [, setPending] = useRedirectPending();
+    const [, setPending] = renderedPending();
     setPending(true);
 
     window.dispatchEvent(pageshow(true));
 
-    expect(fakeReact.cells[0]).toBe(false);
+    expect(isPending()).toBe(false);
   });
 
   it("keeps the flag through an ordinary pageshow, so a redirect in progress stays guarded", () => {
-    const [, setPending] = useRedirectPending();
+    const [, setPending] = renderedPending();
     setPending(true);
 
     window.dispatchEvent(pageshow(false));
 
-    expect(fakeReact.cells[0]).toBe(true);
+    expect(isPending()).toBe(true);
   });
 
   it("stops listening on unmount", () => {
-    const [, setPending] = useRedirectPending();
+    const [, setPending] = renderedPending();
     setPending(true);
 
-    for (const cleanup of fakeReact.cleanups) cleanup();
+    unmountEffects();
     window.dispatchEvent(pageshow(true));
 
-    expect(fakeReact.cells[0]).toBe(true);
+    expect(isPending()).toBe(true);
   });
 });
 

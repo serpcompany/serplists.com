@@ -72,19 +72,19 @@ describe("persistTemplateSave", () => {
     expect(createResolved).toBe(true);
   });
 
-  it("sends the version the editor loaded, never the list cache's", async () => {
+  it("sends the version the editor loaded, never the list cache's, and leaves out the rules it does not edit", async () => {
+    const listCopyRefetchedAfterAnotherEditorsSave = {
+      id: "template-1",
+      title: "Newer title",
+      description: "",
+      type: "checklist",
+      sections: baseSections,
+      isPublic: true,
+      version: 6,
+      rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
+    };
     const dependencies = buildDependencies({
-      // A background list refetch has already picked up another editor's save.
-      getTemplate: vi.fn(() => ({
-        id: "template-1",
-        title: "Newer title",
-        description: "",
-        type: "checklist",
-        sections: baseSections,
-        isPublic: true,
-        version: 6,
-        rules: [{ id: "rule-1", type: "required", path: "sections.0" }],
-      })),
+      getTemplate: vi.fn(() => listCopyRefetchedAfterAnotherEditorsSave),
     } as Partial<Parameters<typeof persistTemplateSave>[0]>);
 
     const result = await persistTemplateSave(
@@ -101,7 +101,6 @@ describe("persistTemplateSave", () => {
         version: 5,
       }),
     );
-    // The editor does not edit rules, so the stored rules are left untouched.
     expect(dependencies.updateTemplate.mock.calls[0][0]).not.toHaveProperty("rules");
   });
 
@@ -123,9 +122,7 @@ describe("persistTemplateSave", () => {
     });
   });
 
-  // The editor rebuilds its form from this, so it must match what was stored: an empty
-  // section's placeholder task, "Task N" titles, and "Untitled Template".
-  it("returns the title and sections it sent, after defaults", async () => {
+  it("returns the title and sections it sent after defaults, which the editor rebuilds its form from", async () => {
     const dependencies = buildDependencies({
       applyDefaults: applyTemplateSaveDefaults,
       updateTemplate: vi.fn().mockResolvedValue({ version: 4 }),
@@ -152,7 +149,7 @@ describe("persistTemplateSave", () => {
     expect(result.saved?.sections[2].items.map((item) => item.title)).toEqual(["Task 1"]);
   });
 
-  it("sends no blank section title or blank sub-task", async () => {
+  it("sends no blank section title or blank sub-task, and returns what it sent for the form", async () => {
     const dependencies = buildDependencies({ applyDefaults: applyTemplateSaveDefaults });
 
     const result = await persistTemplateSave(
@@ -178,7 +175,6 @@ describe("persistTemplateSave", () => {
     const sent = dependencies.createTemplate.mock.calls[0][0];
     expect(sent.sections[0].title).toBe("Section 1");
     expect(sent.sections[0].items[0].contents?.[0].subItems).toEqual([{ id: "sub-a", title: "A" }]);
-    // The editor rebuilds its form from what was sent.
     expect(result.saved?.sections).toEqual(sent.sections);
   });
 
@@ -220,8 +216,7 @@ describe("persistTemplateSave", () => {
     expect(dependencies.updateTemplate).not.toHaveBeenCalled();
   });
 
-  it("does not resend a stored slug the user did not change", async () => {
-    // Stored slugs can predate today's limits; resending one would fail validation or move the URL.
+  it("does not resend a stored slug the user did not change, which can predate today's limits and would fail validation or move the URL", async () => {
     const storedSlug = `${"a".repeat(160)}-1a2b3c4d`;
     const dependencies = buildDependencies();
 
@@ -295,8 +290,7 @@ describe("persistTemplateSave", () => {
     });
   });
 
-  // The editor offers an upgrade only if it can tell a plan gate from any other error.
-  it("keeps a plan-limit failure as upgrade_required", async () => {
+  it("keeps a plan-limit failure as upgrade_required, so the editor can offer an upgrade", async () => {
     const message = "Template limit reached. Upgrade to create more templates.";
     const dependencies = buildDependencies({
       createTemplate: vi

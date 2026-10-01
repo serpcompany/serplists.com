@@ -21,9 +21,7 @@ describe("applyTemplateSaveDefaults", () => {
     vi.useRealTimers();
   });
 
-  // Runs match tasks by id: a new placeholder id on every save would retire the
-  // runner's placeholder (with its completion) and add a fresh one each time.
-  it("gives an empty section the same placeholder task id on every save", () => {
+  it("gives an empty section the same placeholder task id on every save, since runs match tasks by id and would retire a renamed placeholder with its completion", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-28T10:00:00.000Z"));
     const first = applyDefaults("Moving", [emptySection("section-2")]);
@@ -36,14 +34,14 @@ describe("applyTemplateSaveDefaults", () => {
   });
 
   it("gives each empty section its own placeholder id, unused by any other task", () => {
+    const placeholderIdOfSectionA = "section-a-first-task";
     const sections: ChecklistSection[] = [
       emptySection("section-a"),
       emptySection("section-b"),
       {
         id: "section-c",
         title: "Taken",
-        // A real task that already has the id a placeholder would get.
-        items: [{ id: "section-a-first-task", title: "Real task" }],
+        items: [{ id: placeholderIdOfSectionA, title: "Real task" }],
       },
     ];
 
@@ -51,7 +49,7 @@ describe("applyTemplateSaveDefaults", () => {
     const ids = result.sections.flatMap((section) => section.items.map((item) => item.id));
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toContain("section-a-first-task");
+    expect(ids).toContain(placeholderIdOfSectionA);
     expect(result.sections[2].items[0].title).toBe("Real task");
     expect(validateStableTemplateIdentities(result.sections)).toBeNull();
   });
@@ -78,9 +76,7 @@ describe("applyTemplateSaveDefaults", () => {
     expect(first.sections[0].items).toHaveLength(1);
   });
 
-  // The outline shows an untitled section as "Section N"; runs and public pages show the
-  // stored title, so the saved title must be the label the author saw.
-  it("titles a blank or whitespace-only section by its position, keeping its id", () => {
+  it("titles a blank or whitespace-only section by its position, the label the outline showed the author, keeping its id", () => {
     const result = applyDefaults("Moving", [
       { id: "section-a", title: "", items: [{ id: "item-1", title: "Pack" }] },
       { id: "section-b", title: "   ", items: [{ id: "item-2", title: "Load" }] },
@@ -106,9 +102,7 @@ describe("applyTemplateSaveDefaults", () => {
     expect(result.sections[0].items[0].title).toBe("New task");
   });
 
-  // Runs draw each sub-task as a checkbox that counts toward progress, so a blank one
-  // (Enter or "Add Sub-task" appends one) would be an unlabeled box the task waits on.
-  it("drops blank sub-tasks and keeps the others with their ids", () => {
+  it("drops blank sub-tasks, which runs would show as unlabeled boxes the task waits on, and keeps the others with their ids", () => {
     const subItemsBlock: ChecklistItemContent = {
       id: "content-1",
       type: "subItems",
@@ -138,7 +132,7 @@ describe("applyTemplateSaveDefaults", () => {
     ]);
   });
 
-  it("removes a Sub-tasks block left with no sub-tasks and keeps the other blocks", () => {
+  it("removes a Sub-tasks block left with no sub-tasks, keeps the other blocks, and leaves a task without contents as it was", () => {
     const result = applyDefaults("Moving", [
       {
         id: "section-1",
@@ -162,7 +156,6 @@ describe("applyTemplateSaveDefaults", () => {
     expect(result.sections[0].items[0].contents).toEqual([
       { id: "content-2", type: "text", value: "Read the brief" },
     ]);
-    // A task without contents is left as it was.
     expect(result.sections[0].items[1]).not.toHaveProperty("contents");
   });
 
@@ -186,9 +179,7 @@ describe("applyTemplateSaveDefaults", () => {
     expect(applyDefaults(result.title, result.sections)).toEqual(result);
   });
 
-  // New sections and Sub-tasks blocks start blank. Whatever the editor produces, the
-  // saved sections must have titled sections and sub-tasks, like the portable format.
-  it("saves sections built from the editor's blank defaults in the portable shape", () => {
+  it("saves sections built from the editor's blank new sections and Sub-tasks blocks in the portable shape", () => {
     const item = {
       ...createTemplateEditorItem(),
       contents: [

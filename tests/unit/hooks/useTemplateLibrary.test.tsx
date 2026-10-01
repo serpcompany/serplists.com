@@ -14,8 +14,7 @@ vi.mock('@/contexts/TemplatesContext', () => ({
 
 type Library = ReturnType<typeof useTemplateLibrary>;
 
-// Server rendering runs no effects, so this captures what the very first render returns.
-const renderFirstPass = (): Library => {
+const renderFirstPassWithoutEffects = (): Library => {
   let captured: Library | undefined;
   const Probe = () => {
     captured = useTemplateLibrary();
@@ -54,7 +53,7 @@ describe('useTemplateLibrary', () => {
       refetchCatalog: vi.fn(),
     });
 
-    const library = renderFirstPass();
+    const library = renderFirstPassWithoutEffects();
 
     expect(library.loading).toBe(true);
     expect(library.catalogError).toBe(false);
@@ -68,7 +67,7 @@ describe('useTemplateLibrary', () => {
       catalogError: false,
       refetchCatalog: vi.fn(),
     });
-    expect(renderFirstPass().loading).toBe(false);
+    expect(renderFirstPassWithoutEffects().loading).toBe(false);
 
     const refetchCatalog = vi.fn();
     mockUseTemplateLists.mockReturnValue({
@@ -78,7 +77,7 @@ describe('useTemplateLibrary', () => {
       catalogError: true,
       refetchCatalog,
     });
-    const failed = renderFirstPass();
+    const failed = renderFirstPassWithoutEffects();
     expect(failed.loading).toBe(false);
     expect(failed.catalogError).toBe(true);
     failed.retryCatalog();
@@ -94,7 +93,7 @@ describe('useTemplateLibrary', () => {
       refetchCatalog: vi.fn(),
     });
 
-    const { allCategories } = renderFirstPass();
+    const { allCategories } = renderFirstPassWithoutEffects();
 
     expect(allCategories).toEqual(expect.arrayContaining(['moving', 'wedding', 'outdoor', 'Tech']));
     expect(allCategories).toEqual([...allCategories].sort());
@@ -123,7 +122,7 @@ describe('useTemplateLibrary', () => {
       refetchCatalog: vi.fn(),
     });
 
-    const library = renderFirstPass();
+    const library = renderFirstPassWithoutEffects();
     const ids = library.templates.map((template) => template.id);
 
     expect(ids).toEqual([...repoTemplates.map((template) => template.id), databaseTemplate.id]);
@@ -132,9 +131,7 @@ describe('useTemplateLibrary', () => {
   });
 });
 
-// Bundled Templates are always present, so a non-empty list says nothing about the
-// catalog API: `loading` follows the catalog query itself.
-describe('useTemplateLibrary loading flags', () => {
+describe('useTemplateLibrary loading, which follows the catalog query, since bundled Templates make the list non-empty from the start', () => {
   const bundledTemplate: ChecklistTemplate = {
     id: 'repo:camping',
     title: 'Camping Checklist',
@@ -155,7 +152,7 @@ describe('useTemplateLibrary loading flags', () => {
       refetchCatalog: vi.fn(),
     });
 
-    const state = renderFirstPass();
+    const state = renderFirstPassWithoutEffects();
 
     expect(state.templates).toHaveLength(1);
     expect(state.loading).toBe(true);
@@ -170,6 +167,6 @@ describe('useTemplateLibrary loading flags', () => {
       refetchCatalog: vi.fn(),
     });
 
-    expect(renderFirstPass().loading).toBe(false);
+    expect(renderFirstPassWithoutEffects().loading).toBe(false);
   });
 });
