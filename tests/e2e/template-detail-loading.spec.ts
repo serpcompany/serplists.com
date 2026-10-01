@@ -4,7 +4,7 @@ import { apiJson } from './support/api-requests';
 import { PAST_THE_TEAMS_LIST_STALE_TIME, returnToTabAfter } from './support/navigation';
 import { loginAs } from './support/sign-in';
 
-const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist/';
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
 
 function countRequests(page: Page, matches: (url: URL) => boolean) {

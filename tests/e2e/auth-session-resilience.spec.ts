@@ -74,7 +74,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
     }
   });
 
-  await page.goto('/dashboard');
+  await page.goto(CONSOLE_HOME_PATH);
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   expect(rejected).toBe(1);
   expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);
@@ -93,7 +93,7 @@ test('a session check that keeps failing offers a retry instead of the login pag
     await route.continue();
   });
 
-  await page.goto('/dashboard');
+  await page.goto(CONSOLE_HOME_PATH);
   const retry = page.getByRole('button', { name: 'Retry' });
   await expect(retry).toBeVisible({ timeout: 30_000 });
   expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);

@@ -41,10 +41,10 @@ test("@smoke protected routes render login after redirect without refresh, with 
 });
 
 [
-  "/templates",
-  "/pricing",
-  "/features",
-  "/categories/outdoor",
+  "/templates/",
+  "/pricing/",
+  "/features/",
+  "/categories/outdoor/",
 ].forEach((startPath) => {
   test(`@smoke login link renders from ${startPath} without refresh`, async ({
     page,

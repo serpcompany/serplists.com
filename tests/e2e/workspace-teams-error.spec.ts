@@ -116,7 +116,7 @@ test('in Personal, a failed teams request is shown on an Organization run and in
   await expect(page.getByRole('menuitem', { name: /Acme Org/ })).toBeVisible();
 });
 
-const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist';
+const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
 
 async function openPublicTemplateWithFailedTeams(page: Page, state: { teamsFail: boolean }) {
   await mockApi(page, state);
