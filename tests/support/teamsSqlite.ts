@@ -1,0 +1,93 @@
+import { expect, vi } from "vitest";
+import { MigratedSqliteD1 } from "./sqlite-d1";
+import { apiEnv } from "./apiEnv";
+
+const sessionMocks = vi.hoisted(() => ({
+  userId: "owner-user" as string | null,
+}));
+
+vi.mock("@functions/api/utils/session", () => ({
+  getSessionUserId: vi.fn(async () => sessionMocks.userId),
+}));
+
+import { handleTeams } from "@functions/api/handlers/teams";
+
+export const createdAt = "2026-01-01T00:00:00.000Z";
+export let d1: MigratedSqliteD1;
+
+function env() {
+  return apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
+}
+
+export async function asUser(userId: string, method: string, path: string, body?: unknown) {
+  sessionMocks.userId = userId;
+  const response = await handleTeams(
+    new Request(`http://localhost/api/teams${path}`, {
+      method,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
+    env(),
+  );
+  const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+  return { status: response.status, data };
+}
+
+function seedOrganization() {
+  const users = [
+    ["owner-user", "owner@example.test"],
+    ["admin-user", "admin@example.test"],
+    ["member-user", "member@example.test"],
+    ["other-user", "other@example.test"],
+    ["new-user", "new@example.test"],
+  ];
+  for (const [id, email] of users) {
+    d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)", id, email, id, createdAt);
+  }
+  d1.run(
+    `INSERT INTO teams (id, name, slug, billing_owner_user_id, created_by_user_id, created_at)
+     VALUES ('team-1', 'Acme', 'acme', 'owner-user', 'owner-user', ?)`,
+    createdAt,
+  );
+  const members = [
+    ["owner-member", "owner-user", "owner"],
+    ["admin-member", "admin-user", "admin"],
+    ["member-m", "member-user", "editor"],
+    ["member-x", "other-user", "viewer"],
+  ];
+  for (const [id, userId, role] of members) {
+    d1.run(
+      `INSERT INTO team_members (id, team_id, user_id, role, status, joined_at, created_at, updated_at)
+       VALUES (?, 'team-1', ?, ?, 'active', ?, ?, ?)`,
+      id, userId, role, createdAt, createdAt, createdAt,
+    );
+  }
+}
+
+export function member(id: string) {
+  return d1.rows<{ role: string; status: string }>("SELECT role, status FROM team_members WHERE id = ?", id)[0];
+}
+
+export function billingOwner() {
+  return d1.rows<{ billing_owner_user_id: string }>("SELECT billing_owner_user_id FROM teams WHERE id = 'team-1'")[0]
+    .billing_owner_user_id;
+}
+
+export function auditActions(action: string) {
+  return d1.rows("SELECT id FROM audit_events WHERE action = ?", action);
+}
+
+function activeOwners() {
+  return d1.rows<{ id: string }>(
+    "SELECT id FROM team_members WHERE team_id = 'team-1' AND role = 'owner' AND status = 'active'",
+  ).map(({ id }) => id);
+}
+
+export function openTheSeededOrganization(): void {
+  d1 = new MigratedSqliteD1();
+  seedOrganization();
+}
+
+export function expectOneActiveOwnerAndClose(): void {
+  expect(activeOwners()).toHaveLength(1);
+  d1.sqlite.close();
+}

@@ -530,7 +530,8 @@ Common failures:
   implements the D1 calls Drizzle makes, whose batches are transactions as on D1. Pass its
   `binding` as `env.DB`. `beforeNextBatch()` commits a competing write just before the
   handler's next `db.batch()`, `queries` records every statement, and `queryPlan()` returns
-  `EXPLAIN QUERY PLAN` for one. See `tests/unit/functions/api/teams-sqlite.test.ts`.
+  `EXPLAIN QUERY PLAN` for one. See `tests/unit/functions/api/teams-sqlite.invites.test.ts`, whose
+  seeded Organization comes from `tests/support/teamsSqlite.ts`.
   `createMigratedD1()` (`tests/fixtures/sqliteD1.ts`) has the same tables behind only the
   calls Drizzle and Better Auth's Drizzle adapter make: it records nothing, and its batches
   are not transactions. TD-46 merges the SQLite stand-ins. Their `raw()` reads rows as
