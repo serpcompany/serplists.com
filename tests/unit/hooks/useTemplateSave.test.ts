@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
+import { firstOf, sectionAt } from "../../support/elements";
 
 import { persistTemplateSave } from "@/hooks/useTemplateSave";
 import { applyTemplateSaveDefaults } from "@/hooks/useTemplateValidation";
@@ -99,7 +100,7 @@ describe("persistTemplateSave", () => {
         version: 5,
       }),
     );
-    expect(dependencies.updateTemplate.mock.calls[0][0]).not.toHaveProperty("rules");
+    expect(firstOf(dependencies.updateTemplate.mock.calls)[0]).not.toHaveProperty("rules");
   });
 
   it("returns the version the server saved so the next save can send it", async () => {
@@ -140,11 +141,12 @@ describe("persistTemplateSave", () => {
       }),
     );
 
-    const sent = dependencies.updateTemplate.mock.calls[0][0];
+    const sent = firstOf(dependencies.updateTemplate.mock.calls)[0];
     expect(result.saved).toEqual({ title: sent.title, sections: sent.sections });
-    expect(result.saved?.title).toBe("Untitled Template");
-    expect(result.saved?.sections[1].items.map((item) => item.title)).toEqual(["New task"]);
-    expect(result.saved?.sections[2].items.map((item) => item.title)).toEqual(["Task 1"]);
+    assert.exists(result.saved);
+    expect(result.saved.title).toBe("Untitled Template");
+    expect(sectionAt(result.saved, 1).items.map((item) => item.title)).toEqual(["New task"]);
+    expect(sectionAt(result.saved, 2).items.map((item) => item.title)).toEqual(["Task 1"]);
   });
 
   it("sends no blank section title or blank sub-task, and returns what it sent for the form", async () => {
@@ -170,7 +172,7 @@ describe("persistTemplateSave", () => {
       }),
     );
 
-    const sent = dependencies.createTemplate.mock.calls[0][0];
+    const sent = firstOf(dependencies.createTemplate.mock.calls)[0];
     expect(sent.sections[0].title).toBe("Section 1");
     expect(sent.sections[0].items[0].contents?.[0].subItems).toEqual([{ id: "sub-a", title: "A" }]);
     expect(result.saved?.sections).toEqual(sent.sections);
@@ -184,7 +186,7 @@ describe("persistTemplateSave", () => {
       buildInput({ title: "", sections: [{ id: "section-1", title: "Prep", items: [] }] }),
     );
 
-    const sent = dependencies.createTemplate.mock.calls[0][0];
+    const sent = firstOf(dependencies.createTemplate.mock.calls)[0];
     expect(result.saved).toEqual({ title: sent.title, sections: sent.sections });
   });
 
@@ -223,7 +225,7 @@ describe("persistTemplateSave", () => {
       buildInput({ id: "template-1", expectedVersion: 3, seoUrl: storedSlug, storedSlug }),
     );
 
-    const payload = dependencies.updateTemplate.mock.calls[0][0];
+    const payload = firstOf(dependencies.updateTemplate.mock.calls)[0];
     expect(payload.slug).toBeUndefined();
     expect(payload.seoUrl).toBeUndefined();
   });
@@ -252,7 +254,7 @@ describe("persistTemplateSave", () => {
     );
 
     expect(result).toMatchObject({ success: true, errors: [], version: 6 });
-    const payload = dependencies.updateTemplate.mock.calls[0][0];
+    const payload = firstOf(dependencies.updateTemplate.mock.calls)[0];
     expect(payload.version).toBe(3);
     expect(payload.isPublic).toBeUndefined();
   });

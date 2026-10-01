@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { taskAt } from '../../support/elements';
 
 import {
   baseRun,
@@ -38,7 +39,7 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
     progress: 35,
     run: baseRun,
     selectedData: {
-      item: baseRun.sections[0].items[0],
+      item: taskAt(baseRun, 0, 0),
       section: baseRun.sections[0],
     },
     selectedItemId: 'item-1',
@@ -101,7 +102,7 @@ describe('ChecklistRunPage layout', () => {
       progress: 29,
       run: { ...baseRun, title: 'Project Setup Checklist' },
       selectedData: {
-        item: baseRun.sections[0].items[0],
+        item: taskAt(baseRun, 0, 0),
         section: baseRun.sections[0],
       },
       selectedItemId: 'item-1',

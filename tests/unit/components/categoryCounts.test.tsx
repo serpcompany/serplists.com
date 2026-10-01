@@ -2,6 +2,7 @@ import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -76,7 +77,7 @@ describe('category lists at the write boundary', () => {
 
     const result = await parseTemplatesFromJSON(file);
 
-    expect(result.templates[0].categories).toEqual(['SEO', 'Travel']);
+    expect(firstOf(result.templates).categories).toEqual(['SEO', 'Travel']);
   });
 
   it('are deduplicated by slug when the editor saves', () => {

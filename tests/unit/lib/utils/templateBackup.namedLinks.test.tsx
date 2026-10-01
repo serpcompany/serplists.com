@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { firstOf, taskAt } from '../../../support/elements';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
@@ -33,15 +34,15 @@ const templateWith = (contents: unknown[]) => ({
 });
 
 const importPack = (contents: unknown[]): ChecklistTemplate =>
-  parseTemplatesFromData({
+  firstOf(parseTemplatesFromData({
     kind: 'serplists-template-pack',
     schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
     exportedAt: '2026-09-01T00:00:00.000Z',
     templates: [{ ...templateWith(contents), visibility: 'private' }],
-  }).templates[0];
+  }).templates);
 
 const importedContents = (template: ChecklistTemplate): ChecklistItemContent[] =>
-  template.sections[0].items[0].contents ?? [];
+  taskAt(template, 0, 0).contents ?? [];
 
 describe('importing a linked file its author named without the uploadType a hand-written pack may leave out', () => {
   it('marks it as a link so the editor, which keeps a name only next to a link, keeps its name and size', () => {
@@ -53,13 +54,13 @@ describe('importing a linked file its author named without the uploadType a hand
       'url',
     ]);
 
-    const editorContents = buildTemplateEditorFormValues(template).sections[0].items[0].contents ?? [];
+    const editorContents = taskAt(buildTemplateEditorFormValues(template), 0, 0).contents ?? [];
     expect(editorContents.map((content) => content.fileName)).toEqual([
       'Setup guide.pdf',
       'Diagram',
       'Walkthrough',
     ]);
-    expect(editorContents[0].fileSize).toBe(2048);
+    expect(firstOf(editorContents).fileSize).toBe(2048);
   });
 
   it('shows the name in runs', () => {
@@ -71,7 +72,7 @@ describe('importing a linked file its author named without the uploadType a hand
   });
 
   it('marks it in an app backup too', () => {
-    const [template] = parseTemplatesFromData([templateWith(namedLinksWithoutUploadType.slice(0, 1))]).templates;
+    const template = firstOf(parseTemplatesFromData([templateWith(namedLinksWithoutUploadType.slice(0, 1))]).templates);
 
     expect(importedContents(template)[0]).toMatchObject({
       uploadType: 'url',
@@ -86,7 +87,7 @@ describe('importing a linked file its author named without the uploadType a hand
       new File([markdown], 'template.md', { type: 'text/markdown' }),
     );
 
-    expect(importedContents(templates[0])[0]).toMatchObject({
+    expect(importedContents(firstOf(templates))[0]).toMatchObject({
       uploadType: 'url',
       fileName: 'Setup guide.pdf',
     });

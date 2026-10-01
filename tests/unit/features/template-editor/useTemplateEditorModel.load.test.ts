@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { firstOf, sectionAt } from "../../../support/elements";
 
 import type { ChecklistTemplate } from "@/types/checklist";
 
@@ -69,7 +70,7 @@ describe("loadTemplateEditorData", () => {
     expect(getCachedTemplate).not.toHaveBeenCalled();
     expect(result.version).toBe(6);
     expect(result.initialValues.title).toBe("New title");
-    expect(result.initialValues.sections[0].items.map((item) => item.title)).toEqual([
+    expect(sectionAt(result.initialValues, 0).items.map((item) => item.title)).toEqual([
       "Bring tent",
       "Added by a teammate",
     ]);
@@ -199,7 +200,7 @@ describe("loadTemplateEditorData", () => {
     };
 
     const result = await loadTemplateEditorData({ id: "template-3" }, { apiClient });
-    const [item] = result.initialValues.sections[0].items;
+    const item = firstOf(sectionAt(result.initialValues, 0).items);
 
     expect(result.version).toBe(4);
     expect(item.description).toBe("12");

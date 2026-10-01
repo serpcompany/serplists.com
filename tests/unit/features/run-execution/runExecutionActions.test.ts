@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { taskAt } from '../../../support/elements';
 
 import type { ChecklistRun } from '@/types/checklist';
 
@@ -304,7 +305,7 @@ describe('a completed run, which is frozen so it never reads Completed with open
 describe('Sub-tasks in more than one block', () => {
   it('keeps the task open while another Sub-tasks block has an unfinished Sub-task', async () => {
     const run = buildRun();
-    run.sections[0].items[0].contents = [
+    taskAt(run, 0, 0).contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short', isCompleted: false }] },
       { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Tagline', isCompleted: false }] },
     ];

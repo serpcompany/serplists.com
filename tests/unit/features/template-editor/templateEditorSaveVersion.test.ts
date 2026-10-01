@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 
 const listSubscriptions = vi.hoisted(() => vi.fn());
 
@@ -89,8 +90,8 @@ describe("template editor versions", () => {
     );
 
     expect(first.success && second.success).toBe(true);
-    expect(updateTemplate.mock.calls[0][0]).toMatchObject({ version: 3, title: "Camping v2" });
-    expect(updateTemplate.mock.calls[1][0]).toMatchObject({ version: 4, title: "Camping v3" });
+    expect(firstOf(updateTemplate.mock.calls)[0]).toMatchObject({ version: 3, title: "Camping v2" });
+    expect(elementAt(updateTemplate.mock.calls, 1)[0]).toMatchObject({ version: 4, title: "Camping v3" });
     expect(second.version).toBe(5);
   });
 
@@ -127,8 +128,8 @@ describe("template editor versions", () => {
       { saveTemplate },
     );
 
-    expect(updateTemplate.mock.calls[0][0]).not.toHaveProperty("rules");
-    expect(updateTemplate.mock.calls[1][0]).not.toHaveProperty("rules");
+    expect(firstOf(updateTemplate.mock.calls)[0]).not.toHaveProperty("rules");
+    expect(elementAt(updateTemplate.mock.calls, 1)[0]).not.toHaveProperty("rules");
   });
 
   it("shows the slug the server stored, including a suffix added after a conflict", () => {

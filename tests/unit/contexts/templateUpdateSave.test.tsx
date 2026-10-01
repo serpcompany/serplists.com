@@ -6,7 +6,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 const apiMock = vi.hoisted(() => ({ updateTemplate: vi.fn() }));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
+import { aTemplatesProviderForEachTest, launchChecklist, savePayloadOf } from '../../support/templatesProviderHarness';
 
 const template = launchChecklist();
 
@@ -32,7 +32,7 @@ describe('updateTemplate', () => {
       staleTime: 5 * 60 * 1000,
     }).subscribe(() => {});
 
-    const outcome = await settledWithin(context.updateTemplate({ ...template, title: 'Launch Checklist v2' }), 200);
+    const outcome = await settledWithin(context.updateTemplate({ ...savePayloadOf(template), title: 'Launch Checklist v2' }), 200);
 
     expect(outcome).toEqual({ value: { version: 4, slug: 'launch-checklist' } });
     expect(listRequestThatNeverAnswers).not.toHaveBeenCalled();

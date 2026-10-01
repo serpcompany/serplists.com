@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 
 import {
   buildTemplateEditorSavedState,
@@ -227,8 +228,8 @@ describe("stale editor protection", () => {
     await saveTemplateEditorData({ id: "template-1", values, ...loaded }, { saveTemplate });
     await saveTemplateEditorData({ id: "template-1", values: { ...values, isPublic: true }, ...loaded }, { saveTemplate });
 
-    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: undefined }));
-    expect(saveTemplate.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: true }));
+    expect(firstOf(saveTemplate.mock.calls)[0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: undefined }));
+    expect(elementAt(saveTemplate.mock.calls, 1)[0]).toEqual(expect.objectContaining({ expectedVersion: 3, isPublic: true }));
   });
 
   it("always sends visibility when creating a template", async () => {
@@ -236,7 +237,7 @@ describe("stale editor protection", () => {
 
     await saveTemplateEditorData({ values }, { saveTemplate });
 
-    expect(saveTemplate.mock.calls[0][0]).toEqual(expect.objectContaining({ id: undefined, isPublic: false }));
+    expect(firstOf(saveTemplate.mock.calls)[0]).toEqual(expect.objectContaining({ id: undefined, isPublic: false }));
   });
 
   it("moves the baseline to what was saved", () => {

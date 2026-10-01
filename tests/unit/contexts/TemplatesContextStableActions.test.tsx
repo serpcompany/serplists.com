@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import type { ChecklistRun, TemplatesContextProps } from '@/types/checklist';
 
@@ -87,7 +88,7 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
     });
 
     expect(context().runs).not.toBe(runsBefore);
-    expect(context().runs[0].isPublic).toBe(true);
+    expect(firstOf(context().runs).isPublic).toBe(true);
     for (const [name, action] of Object.entries(actionsOf(context()))) {
       expect(action, name).toBe(before[name as keyof typeof before]);
     }
@@ -126,7 +127,7 @@ describe('TemplatesProvider markRunShared (the runs list Share)', () => {
       await settle();
     });
 
-    expect(context().runs[0].isPublic).toBe(true);
+    expect(firstOf(context().runs).isPublic).toBe(true);
     expect(queryClient.getQueryState(history)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(otherHistory)?.isInvalidated).toBe(false);
   });

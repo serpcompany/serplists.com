@@ -1,6 +1,7 @@
 import React from 'react';
 import { get } from 'react-hook-form';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
 import { SubItemsEditor } from '@/components/template-editor/content-types/SubItemsEditor';
@@ -34,8 +35,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
         move: (from: number, to: number) => {
           harness.move(from, to);
           const next = [...((valueAt(name) ?? []) as TemplateEditorContent[])];
-          const [moved] = next.splice(from, 1);
-          next.splice(to, 0, moved);
+          next.splice(to, 0, ...next.splice(from, 1));
           harness.form.setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
         },
       }),
@@ -109,14 +109,14 @@ function dragEvent() {
 
 function handle(tree: React.ReactNode, name: string): AnyElement {
   const button = findRenderedDomElement(tree, (element) => element.props['aria-label'] === name);
-  expect(button, `a button named ${name}`).toBeDefined();
-  return button!;
+  assert.exists(button, `a button named ${name}`);
+  return button;
 }
 
 function blockDropTarget(tree: React.ReactNode, index: number): AnyElement {
   const containers = findAllElements(tree, (element) => typeof element.props.onDrop === 'function');
   expect(containers.length).toBeGreaterThan(index);
-  return containers[index];
+  return elementAt(containers, index);
 }
 
 describe('ContentEditor block reordering', () => {
@@ -193,9 +193,9 @@ describe('ContentEditor block reordering', () => {
   });
 
   it('renders the moved sub-task list at its new index under a new key, so its field array, named by that index, remounts instead of keeping a stale name', () => {
-    const before = findAllElements(render(), (element) => element.type === SubItemsEditor)[0];
+    const before = firstOf(findAllElements(render(), (element) => element.type === SubItemsEditor));
     (handle(render(), 'Drag Sub-tasks block').props.onKeyDown as (event: unknown) => void)(keyEvent('ArrowUp'));
-    const after = findAllElements(render(), (element) => element.type === SubItemsEditor)[0];
+    const after = firstOf(findAllElements(render(), (element) => element.type === SubItemsEditor));
 
     expect(before.props.contentIndex).toBe(2);
     expect(after.props.contentIndex).toBe(1);

@@ -1,3 +1,5 @@
+import { capturedGroup } from '../../support/elements';
+
 export type MarkupElement = {
   tag: string;
   attrs: Record<string, string>;
@@ -36,7 +38,7 @@ const textOf = (inner: string): string => decode(inner.replace(/<[^>]+>/g, ' '))
 const parseAttributes = (source: string): Record<string, string> => {
   const attrs: Record<string, string> = {};
   for (const match of source.matchAll(ATTRIBUTE)) {
-    attrs[match[1]] = decode(match[2] ?? '');
+    attrs[capturedGroup(match, 1)] = decode(match[2] ?? '');
   }
   return attrs;
 };
@@ -55,7 +57,7 @@ const findButtons = (html: string): MarkupElement[] =>
   collect(html, /<(button)\b([^>]*)>([\s\S]*?)<\/button>/g, () => 'button');
 
 const findFields = (html: string): MarkupElement[] =>
-  collect(html, /<(input|textarea|select)\b([^>]*?)\/?>()/g, (match) => match[1]);
+  collect(html, /<(input|textarea|select)\b([^>]*?)\/?>()/g, (match) => capturedGroup(match, 1));
 
 const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
   collect(
@@ -64,7 +66,7 @@ const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
       `<((?!(?:button|input|textarea|select)\\b)[a-zA-Z][\\w-]*)\\b([^>]*\\brole="(?:${WIDGET_ROLES.join('|')})"[^>]*)>()`,
       'g',
     ),
-    (match) => match[1],
+    (match) => capturedGroup(match, 1),
   );
 
 const isHidden = ({ attrs }: MarkupElement): boolean =>
@@ -81,7 +83,7 @@ export const findControls = (html: string): MarkupElement[] =>
 const textOfId = (html: string, id: string): string => {
   const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = html.match(new RegExp(`<(\\w+)\\b[^>]*\\bid="${escaped}"[^>]*>([\\s\\S]*?)</\\1>`));
-  return match ? textOf(match[2]) : '';
+  return match ? textOf(capturedGroup(match, 2)) : '';
 };
 
 export const accessibleName = (html: string, element: MarkupElement): string => {
@@ -128,6 +130,6 @@ export const getByAccessibleName = (html: string, name: string): MarkupElement |
   findControls(html).find((element) => accessibleName(html, element) === name);
 
 export const findDuplicateIds = (html: string): string[] => {
-  const ids = [...html.matchAll(/\bid="([^"]*)"/g)].map((match) => match[1]);
+  const ids = [...html.matchAll(/\bid="([^"]*)"/g)].map((match) => capturedGroup(match, 1));
   return ids.filter((id, index) => ids.indexOf(id) !== index);
 };

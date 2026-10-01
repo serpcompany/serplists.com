@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 
 import {
   countOversizedTemplateAssets,
@@ -77,6 +78,6 @@ describe("template asset limits", () => {
     const parsed = parseTemplatesFromData(pack);
 
     expect(parsed.templates).toHaveLength(1);
-    expect(countOversizedTemplateAssets(parsed.templates[0].sections)).toBe(0);
+    expect(countOversizedTemplateAssets(firstOf(parsed.templates).sections)).toBe(0);
   });
 });

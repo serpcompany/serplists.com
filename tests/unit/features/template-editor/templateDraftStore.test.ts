@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt } from "../../../support/elements";
 
 import {
   clearTemplateDraft,
@@ -182,7 +183,7 @@ describe("listing a user's kept drafts across contexts, which the new-template e
     const contexts = listTemplateDraftContexts("u1", storage);
 
     expect(contexts.map((context) => context.teamId)).toEqual([null, "org-1"]);
-    expect(contexts[1].draft.values).toEqual(draftValues);
+    expect(elementAt(contexts, 1).draft.values).toEqual(draftValues);
   });
 
   it("does not mistake another user whose id starts the same for this one", () => {

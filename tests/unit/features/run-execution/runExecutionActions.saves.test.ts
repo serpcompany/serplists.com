@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
+import { firstOf, sectionAt, taskAt } from '../../../support/elements';
 
-import type { ChecklistRun } from '@/types/checklist';
+import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
 
 import {
   completeRunExecution,
@@ -21,7 +22,7 @@ const markTask1Complete = async (noteDrafts: Record<string, string>, run: Checkl
 
 const theOneSaveAtRevision1 = (updateRun: Mock<(saved: ChecklistRun) => Promise<ChecklistRun>>) => {
   expect(updateRun).toHaveBeenCalledOnce();
-  const sent = updateRun.mock.calls[0][0];
+  const sent = firstOf(updateRun.mock.calls)[0];
   expect(sent.revision).toBe(1);
   return sent;
 };
@@ -36,31 +37,33 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
     expect(result.kind).toBe('ok');
     const sent = theOneSaveAtRevision1(updateRun);
-    expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'Deployed build 42, see link' });
-    expect(sent.sections[0].items[1].notes).toBeUndefined();
+    expect(taskAt(sent, 0, 0)).toMatchObject({ isCompleted: true, notes: 'Deployed build 42, see link' });
+    expect(taskAt(sent, 0, 1).notes).toBeUndefined();
   });
 
   const runWhoseFirstTaskWasCompletedFirst = (notes?: string): ChecklistRun => {
     const run = buildRun();
-    const [first, ...rest] = run.sections[0].items;
-    const done = {
+    const section = sectionAt(run, 0);
+    const [, ...rest] = section.items;
+    const { notes: notesBefore, ...first } = firstOf(section.items);
+    const done: ChecklistItem = {
       ...first,
       isCompleted: true,
-      notes,
+      ...(notes === undefined ? {} : { notes }),
       contents: first.contents?.map((content) => ({
         ...content,
         subItems: content.subItems?.map((sub) => ({ ...sub, isCompleted: true })),
       })),
     };
-    return { ...run, sections: [{ ...run.sections[0], items: [done, ...rest] }] };
+    return { ...run, sections: [{ ...section, items: [done, ...rest] }] };
   };
 
   it('Mark Complete saves the draft notes of a task that a teammate or a queued Sub-task save already completed', async () => {
     const { result, updateRun } = await markTask1Complete({ 'item-1': 'x' }, runWhoseFirstTaskWasCompletedFirst());
 
     const sent = theOneSaveAtRevision1(updateRun);
-    expect(sent.sections[0].items[0]).toMatchObject({ isCompleted: true, notes: 'x' });
-    expect(sent.sections[0].items[0].contents?.[0]?.subItems?.every((sub) => sub.isCompleted)).toBe(true);
+    expect(taskAt(sent, 0, 0)).toMatchObject({ isCompleted: true, notes: 'x' });
+    expect(taskAt(sent, 0, 0).contents?.[0]?.subItems?.every((sub) => sub.isCompleted)).toBe(true);
     expect(result).toMatchObject({ kind: 'ok', run: { revision: 2 } });
   });
 
@@ -104,7 +107,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
     expect(result.kind).toBe('ok');
     expect(updateRun).toHaveBeenCalledOnce();
-    expect(updateRun.mock.calls[0][0].sections[0].items.map((item) => item.notes)).toEqual(['first', 'second']);
+    expect(sectionAt(firstOf(updateRun.mock.calls)[0], 0).items.map((item) => item.notes)).toEqual(['first', 'second']);
   });
 });
 

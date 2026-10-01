@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { taskAt } from '../../../support/elements';
 
 import {
   cloneTemplateEditorFormValues,
@@ -153,8 +154,8 @@ describe('resolvePostSaveFormState', () => {
   it('treats a missing optional field and an undefined one as equal', () => {
     const submitted = loaded();
     const current = cloneTemplateEditorFormValues(submitted);
-    delete current.sections[0].items[0].isCompleted;
-    expect('isCompleted' in submitted.sections[0].items[0]).toBe(true);
+    delete taskAt(current, 0, 0).isCompleted;
+    expect('isCompleted' in taskAt(submitted, 0, 0)).toBe(true);
 
     const state = resolvePostSaveFormState({ submitted, current, saved: submitted });
 

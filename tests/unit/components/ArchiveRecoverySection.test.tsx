@@ -2,6 +2,7 @@ import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../support/elements';
 
 import { ArchiveRecoverySection } from '@/components/dashboard/ArchiveRecoverySection';
 import { useArchiveRecovery } from '@/features/archive/useArchiveRecovery';
@@ -101,12 +102,12 @@ describe('ArchiveRecoverySection restore by role', () => {
         <ArchiveRecoverySection />
       </QueryClientProvider>,
     );
-    const [templatesList, runsList] = html.split('Archived runs</h2>');
+    const templatesAndRuns = html.split('Archived runs</h2>');
     const restoreButtons = (list: string) => (list.match(/>Restore<\/button>/g) ?? []).length;
     return {
       html,
-      runs: restoreButtons(runsList),
-      templates: restoreButtons(templatesList),
+      runs: restoreButtons(elementAt(templatesAndRuns, 1)),
+      templates: restoreButtons(firstOf(templatesAndRuns)),
     };
   };
 

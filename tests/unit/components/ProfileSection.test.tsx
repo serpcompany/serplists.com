@@ -2,6 +2,7 @@ import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { ProfileSection } from '@/components/account/ProfileSection';
 import { USER_NAME_MAX_LENGTH } from '@/lib/schemas/userProfileSchema';
@@ -93,7 +94,7 @@ describe('ProfileSection', () => {
 
     (field?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value: typed } });
 
-    const update = onProfileDataChange.mock.calls[0][0] as (current: typeof renderedProfile) => typeof renderedProfile;
+    const update = firstOf(onProfileDataChange.mock.calls)[0] as (current: typeof renderedProfile) => typeof renderedProfile;
     const withNewAvatar = { ...renderedProfile, avatar_url: 'https://cdn.example.com/new-avatar.png' };
     expect(update(withNewAvatar)).toEqual({ ...withNewAvatar, ...change });
   });

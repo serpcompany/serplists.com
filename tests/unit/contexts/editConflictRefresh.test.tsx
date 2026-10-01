@@ -1,5 +1,6 @@
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
@@ -13,7 +14,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
+import { aTemplatesProviderForEachTest, launchChecklist, savePayloadOf } from '../../support/templatesProviderHarness';
 
 const run = (revision: number): ChecklistRun => ({
   id: 'run-1',
@@ -64,7 +65,7 @@ describe('refresh after a conflict, so a retry sends the current revision or ver
     await expect(context.revalidateRun(run(4))).rejects.toMatchObject({ status: 409 });
 
     expect(listFetch).toHaveBeenCalledTimes(1);
-    const [refreshed] = client.getQueryData<ChecklistRun[]>(['runs', 'user-1', 'personal']) ?? [];
+    const refreshed = firstOf(client.getQueryData<ChecklistRun[]>(['runs', 'user-1', 'personal']) ?? []);
     expect(refreshed.revision).toBe(5);
     await context.revalidateRun(refreshed);
     expect(apiMock.revalidateChecklist).toHaveBeenLastCalledWith('run-1', 5);
@@ -103,7 +104,7 @@ describe('refresh after a conflict, so a retry sends the current revision or ver
       createApiError(409, { error: 'Template changed since it was loaded.', code: 'edit_conflict' }),
     );
 
-    await expect(context.updateTemplate({ ...template, isPublic: true })).rejects.toMatchObject({ status: 409 });
+    await expect(context.updateTemplate({ ...savePayloadOf(template), isPublic: true })).rejects.toMatchObject({ status: 409 });
 
     expect(client.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
   });

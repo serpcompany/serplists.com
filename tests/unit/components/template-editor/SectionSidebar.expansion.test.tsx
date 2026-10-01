@@ -1,6 +1,7 @@
 import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf, sectionAt } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import type { TemplateEditorSection } from '@/lib/forms/templateEditorForm';
@@ -48,8 +49,8 @@ function resetSectionsWithNewFieldIds(sections: TemplateEditorSection[]): void {
 }
 
 function dragSecondSectionAboveFirst(): void {
-  harness.fields = [harness.fields[1], harness.fields[0]];
-  harness.sections = [harness.sections[1], harness.sections[0]];
+  harness.fields = [elementAt(harness.fields, 1), firstOf(harness.fields)];
+  harness.sections = [sectionAt(harness, 1), sectionAt(harness, 0)];
 }
 
 function render(): React.ReactNode {
@@ -72,8 +73,7 @@ function toggleLabels(tree: React.ReactNode): string[] {
 }
 
 function clickToggle(tree: React.ReactNode, label: string): void {
-  const [button] = findAllElements(tree, (element) => element.props['aria-label'] === label);
-  expect(button).toBeDefined();
+  const button = firstOf(findAllElements(tree, (element) => element.props['aria-label'] === label));
   (button.props.onClick as () => void)();
 }
 

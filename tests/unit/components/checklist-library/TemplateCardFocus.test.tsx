@@ -2,6 +2,7 @@ import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -41,13 +42,13 @@ describe('TemplateCard (discovery) keyboard focus, with its View Template overla
 
   it('keeps the hover View Template link for pointers but out of the keyboard and screen reader order', () => {
     const root = parseMarkup(renderCard());
-    const [overlayLink] = findAll(
+    const overlayLink = firstOf(findAll(
       root,
       (node) => node.tag === 'a' && textOf(node).includes('View Template'),
-    );
+    ));
 
-    expect(overlayLink?.attrs.href).toBe(TEMPLATE_PATH);
-    expect(overlayLink?.attrs.tabindex).toBe('-1');
+    expect(overlayLink.attrs.href).toBe(TEMPLATE_PATH);
+    expect(overlayLink.attrs.tabindex).toBe('-1');
     expect(selfAndAncestors(overlayLink).some((node) => node.attrs['aria-hidden'] === 'true')).toBe(
       true,
     );

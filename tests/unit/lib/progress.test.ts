@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
@@ -90,10 +91,10 @@ describe('run progress on large runs, where one open unit in 200 must not round 
   });
 
   it('agrees between the client and the server', () => {
-    const sections = sectionsWithOneOf200UnitsOpen();
-    const items = sections[0].items;
+    const section = firstOf(sectionsWithOneOf200UnitsOpen());
+    const { items } = section;
     for (let done = 0; done <= items.length; done += 1) {
-      const partial = [{ ...sections[0], items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];
+      const partial = [{ ...section, items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];
       expect(calculateRunProgress(partial)).toBe(calculateSectionsProgress(partial));
     }
   });

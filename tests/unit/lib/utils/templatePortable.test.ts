@@ -1,9 +1,8 @@
 import { expectThePortableSeoFieldsAndOneRule } from '../../../support/portableTemplateChecks';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-  type ChecklistTemplate,
-} from '@/lib/schemas/checklistSchema';
+import { firstOf } from '../../../support/elements';
+import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from '@/lib/schemas/checklistSchema';
+import type { ChecklistTemplate } from '@/types/checklist';
 import {
   downloadBackupFile,
   exportPortableTemplatesToJSON,
@@ -58,8 +57,8 @@ describe('portable template utilities', () => {
     expect(result.kind).toBe('serplists-template-pack');
     expect(result.schemaVersion).toBe(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION);
     expect(result.templates[0]).not.toHaveProperty('userId');
-    expect(result.templates[0].visibility).toBe('private');
-    expectThePortableSeoFieldsAndOneRule(result.templates[0]);
+    expect(firstOf(result.templates).visibility).toBe('private');
+    expectThePortableSeoFieldsAndOneRule(firstOf(result.templates));
     expect(result.manifest?.includesRules).toBe(true);
   });
 
@@ -96,11 +95,11 @@ describe('portable template utilities', () => {
     const result = await parseTemplatesFromJSON(file);
 
     expect(result.templates).toHaveLength(1);
-    expect(result.templates[0].title).toBe('Imported Portable Template');
-    expect(result.templates[0].isPublic).toBe(true);
-    expect(result.templates[0].seoTitle).toBe('Imported SEO Title');
-    expect(result.templates[0].seoDescription).toBe('Imported SEO Description');
-    expect(result.templates[0].rules).toHaveLength(1);
+    expect(firstOf(result.templates).title).toBe('Imported Portable Template');
+    expect(firstOf(result.templates).isPublic).toBe(true);
+    expect(firstOf(result.templates).seoTitle).toBe('Imported SEO Title');
+    expect(firstOf(result.templates).seoDescription).toBe('Imported SEO Description');
+    expect(firstOf(result.templates).rules).toHaveLength(1);
     expect(result.warnings).toEqual([]);
   });
 

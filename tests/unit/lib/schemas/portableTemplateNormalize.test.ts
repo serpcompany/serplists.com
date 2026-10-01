@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { taskAt } from '../../../support/elements';
 
 import { parsePortableTemplate } from '@/lib/schemas/portableTemplateNormalize';
 
@@ -20,7 +21,7 @@ describe('parsePortableTemplate', () => {
     });
 
     expect(result.success).toBe(true);
-    const contents = result.success ? result.data.sections[0].items[0].contents : [];
+    const contents = result.success ? taskAt(result.data, 0, 0).contents : [];
     expect(contents?.map((content) => [content.type, content.subItems])).toEqual([
       ['text', undefined],
       ['image', undefined],
@@ -37,7 +38,7 @@ const templateWithContents = (contents: unknown[]) => ({
 const contentsOf = (contents: unknown[]) => {
   const result = parsePortableTemplate(templateWithContents(contents));
   if (!result.success) throw new Error(result.reason);
-  return result.data.sections[0].items[0].contents;
+  return taskAt(result.data, 0, 0).contents;
 };
 
 describe('parsePortableTemplate content blocks with ids or file details the strict schema rejects, which an older pack can hold', () => {

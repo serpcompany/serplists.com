@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import {
   keepRunNoteDrafts,
@@ -58,7 +59,7 @@ describe('run note drafts kept when the session ends in the background, for the 
     const storage = createStorage();
     const run = buildRun({ 'item-1': 'Old' });
     keepRunNoteDrafts(owner, { 'item-1': 'Mine' }, run, storage);
-    const [key] = storage.items.keys();
+    const key = firstOf([...storage.items.keys()]);
 
     storage.items.set(key, '{not json');
     expect(takeKeptRunNoteDrafts(owner, run, storage)).toEqual({});

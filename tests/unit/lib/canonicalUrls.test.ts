@@ -1,5 +1,6 @@
 import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
 import { describe, expect, it } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 import { buildTeamInvitePath } from '@functions/api/utils/team-invite-delivery';
 import {
@@ -108,7 +109,7 @@ describe('sitemap entries', () => {
   it('writes every <loc> in canonical form, pages with a slash and sitemap files without', async () => {
     const urlset = renderUrlset([{ path: '/profile/alice' }, { path: '/categories/seo/' }, { path: '/' }]);
     const index = renderSitemapIndex([{ path: '/sitemaps/pages/1.xml' }]);
-    const locs = [...`${urlset}${index}`.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
+    const locs = [...`${urlset}${index}`.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => capturedGroup(match, 1));
     expect(locs).toEqual([
       'https://serplists.com/profile/alice/',
       'https://serplists.com/categories/seo/',

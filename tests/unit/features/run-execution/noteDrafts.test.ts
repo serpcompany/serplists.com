@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sectionAt, taskAt } from '../../../support/elements';
 
 import {
   applyNoteDrafts,
@@ -63,9 +64,9 @@ describe('applyNoteDrafts', () => {
     const drafts = { 'item-1': 'one', 'item-2': 'two' };
 
     const onlyFirst = applyNoteDrafts(run, drafts, ['item-1']);
-    expect(onlyFirst.sections[0].items.map((item) => item.notes)).toEqual(['one', 'old']);
-    expect(applyNoteDrafts(run, drafts).sections[0].items.map((item) => item.notes)).toEqual(['one', 'two']);
-    expect(run.sections[0].items[0].notes).toBeUndefined();
+    expect(sectionAt(onlyFirst, 0).items.map((item) => item.notes)).toEqual(['one', 'old']);
+    expect(sectionAt(applyNoteDrafts(run, drafts), 0).items.map((item) => item.notes)).toEqual(['one', 'two']);
+    expect(taskAt(run, 0, 0).notes).toBeUndefined();
   });
 });
 

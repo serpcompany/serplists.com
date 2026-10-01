@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { firstOf, sectionAt, taskAt } from '../../../support/elements';
 import { parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 import { jsonFile } from '../../../fixtures/jsonFile';
@@ -42,9 +43,9 @@ describe('Template Backup Utilities', () => {
       const result = await parseTemplatesFromFile(file);
 
       expect(result.templates).toHaveLength(1);
-      expect(result.templates[0].title).toBe('Markdown Template');
-      expect(result.templates[0].isPublic).toBe(true);
-      expect(result.templates[0].sections[0].items[0].contents).toHaveLength(2);
+      expect(firstOf(result.templates).title).toBe('Markdown Template');
+      expect(firstOf(result.templates).isPublic).toBe(true);
+      expect(taskAt(firstOf(result.templates), 0, 0).contents).toHaveLength(2);
     });
 
     it('imports a Markdown file whose text block holds a heading and a code fence', async () => {
@@ -63,7 +64,7 @@ describe('Template Backup Utilities', () => {
         new File([markdown], 'template.md', { type: 'text/markdown' }),
       );
 
-      const item = result.templates[0].sections[0].items[0];
+      const item = taskAt(firstOf(result.templates), 0, 0);
       expect(item.description).toBe('Do X');
       expect(item.contents?.map((content) => content.value)).toEqual([value]);
     });
@@ -80,7 +81,7 @@ describe('Template Backup Utilities', () => {
         jsonFile(pack, 'pack.json'),
       );
 
-      expect(result.templates[0].sections[0].items.map((item) => item.title)).toEqual(['Weigh', 'Task 2']);
+      expect(sectionAt(firstOf(result.templates), 0).items.map((item) => item.title)).toEqual(['Weigh', 'Task 2']);
     });
 
     describe('readable validation errors', () => {
@@ -155,8 +156,8 @@ describe('Template Backup Utilities', () => {
       const result = await parseTemplatesFromFile(file);
 
       expect(result.templates).toHaveLength(1);
-      expect(result.templates[0].title).toBe('YAML Template');
-      expect(result.templates[0].isPublic).toBe(false);
+      expect(firstOf(result.templates).title).toBe('YAML Template');
+      expect(firstOf(result.templates).isPublic).toBe(false);
     });
   });
 });

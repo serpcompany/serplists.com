@@ -2,6 +2,7 @@ import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { elementAt, taskIn } from '../../support/elements';
 
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
@@ -51,9 +52,9 @@ describe('blank section and sub-task titles saved before the editor defaulted th
   it('shows "Section N" in the task breadcrumb', () => {
     const html = renderToStaticMarkup(
       <TaskExecutionPanel
-        section={sectionsWithLegacyBlankTitles[1]}
+        section={elementAt(sectionsWithLegacyBlankTitles, 1)}
         sectionIndex={1}
-        task={sectionsWithLegacyBlankTitles[1].items[0]}
+        task={taskIn(sectionsWithLegacyBlankTitles, 1, 0)}
         taskIndex={0}
         totalTasks={1}
         onFinishRun={noop}
@@ -75,7 +76,7 @@ describe('blank section and sub-task titles saved before the editor defaulted th
 
   it('labels a blank sub-task by its position in a run', () => {
     const html = renderToStaticMarkup(
-      <ContentRenderer contents={sectionsWithLegacyBlankTitles[1].items[0].contents ?? []} />,
+      <ContentRenderer contents={taskIn(sectionsWithLegacyBlankTitles, 1, 0).contents ?? []} />,
     );
 
     expect(html).toContain('Check title');

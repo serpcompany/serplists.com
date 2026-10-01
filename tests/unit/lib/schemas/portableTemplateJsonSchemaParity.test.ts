@@ -1,11 +1,11 @@
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import {
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
   portableTemplatePackSchema,
 } from '@/lib/schemas/checklistSchema';
-import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import {
   exportPortableTemplatesToJSON,
@@ -15,11 +15,12 @@ import {
 import type { ChecklistTemplate } from '@/types/checklist';
 import foundationalChecklists from '@/data/public-template-packs/foundational-checklists.json';
 
+import { portableTemplatePackJsonSchema } from '../../../support/portableTemplateChecks';
 import fullExample from '../../../../docs/product-specs/portable-templates/examples/full/template.json';
 import minimalExample from '../../../../docs/product-specs/portable-templates/examples/minimal/template.json';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
-const validateWithJsonSchema = ajv.compile(buildPortableTemplatePackJsonSchema());
+const validateWithJsonSchema = ajv.compile(portableTemplatePackJsonSchema());
 
 const verdicts = (data: unknown) => ({
   jsonSchema: validateWithJsonSchema(data) as boolean,
@@ -131,10 +132,10 @@ describe('portable export', () => {
 
   it('leaves out run state and other keys that are not part of the portable format', () => {
     const exported = exportPortableTemplatesToJSON([storedTemplateWithRunStateAsTheAppHoldsIt()]);
-    const serialized = JSON.stringify(exported.templates[0].sections);
+    const serialized = JSON.stringify(firstOf(exported.templates).sections);
 
     expect(serialized).not.toMatch(/"(isCompleted|completed|notes)"/);
-    expect(exported.templates[0].sections).toEqual([
+    expect(firstOf(exported.templates).sections).toEqual([
       {
         id: 's1',
         title: 'Prep',

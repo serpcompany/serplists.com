@@ -9,6 +9,8 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { firstOf } from '../../support/elements';
 
 import Categories from '@/views/Categories';
 import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
@@ -101,21 +103,22 @@ describe('Categories page catalog states, which never present the bundled starte
 });
 
 const fieldNamedByItsLabel = (container: FakeNode, labelText: string) => {
-  const [label] = findAll(
+  const label = firstOf(findAll(
     container,
     (node) => node instanceof FakeElement && node.nodeName === 'LABEL' && node.textContent === labelText,
-  ) as FakeElement[];
-  const [field] = findAll(
+  ) as FakeElement[]);
+  return firstOf(findAll(
     container,
     (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
-  ) as FakeElement[];
-  return field;
+  ) as FakeElement[]);
 };
 
+const propsReactKeepsOnAField = z.object({ onChange: z.function().args(z.unknown()) }).passthrough();
+
 const typeThroughTheFieldsOwnOnChange = async (field: FakeElement, value: string) => {
-  const propsKey = Object.keys(field).find((key) => key.startsWith('__reactProps$'));
-  const props = (field as unknown as Record<string, { onChange: (event: unknown) => void }>)[propsKey ?? ''];
-  await act(async () => props.onChange({ target: { value }, currentTarget: { value } }));
+  const [, props] = Object.entries(field).find(([key]) => key.startsWith('__reactProps$')) ?? [];
+  const { onChange } = propsReactKeepsOnAField.parse(props);
+  await act(async () => onChange({ target: { value }, currentTarget: { value } }));
 };
 
 describe('Categories page search', () => {
@@ -137,12 +140,12 @@ describe('Categories page search', () => {
     const search = fieldNamedByItsLabel(container, 'Search categories');
     const type = (value: string) => typeThroughTheFieldsOwnOnChange(search, value);
     const allCategoriesSectionLinks = () => {
-      const [allCategories] = findAll(
+      const allCategories = firstOf(findAll(
         container,
         (node) =>
           node.nodeName === 'SECTION' &&
           findAll(node, (child) => child.nodeName === 'H2' && child.textContent === 'All Categories').length > 0,
-      );
+      ));
       return findAll(allCategories, (node) => node instanceof FakeElement && node.nodeName === 'A').map((node) =>
         (node as FakeElement).getAttribute('href'),
       );
@@ -159,8 +162,7 @@ describe('Categories page search', () => {
     expect(page.container.textContent).toContain('No categories match "zzz no such category"');
     const [heading] = findAll(page.container, (node) => node.nodeName === 'H3' && node.textContent.startsWith('No categories match'));
     expect(heading).toBeDefined();
-    const [clear] = findAll(page.container, (node) => node.nodeName === 'BUTTON' && node.textContent === 'Clear search');
-    expect(clear).toBeDefined();
+    const clear = firstOf(findAll(page.container, (node) => node.nodeName === 'BUTTON' && node.textContent === 'Clear search'));
 
     act(() => click(page.container, clear));
 

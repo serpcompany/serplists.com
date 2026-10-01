@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { firstOf, sectionAt, taskAt } from "../../../support/elements";
 
 import { mapApiTemplateToChecklistTemplate } from "@/features/template-detail/templateDetailMappers";
 import {
@@ -46,7 +47,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
   });
 
   it("keeps what the stored content says", () => {
-    const [unknownType, numeric, file, bare] = buildTemplateEditorFormValues({
+    const [unknownType, numeric, file, bare] = taskAt(buildTemplateEditorFormValues({
       sections: [
         {
           id: "section-1",
@@ -66,7 +67,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
           ],
         },
       ] as unknown as ChecklistSection[],
-    }).sections[0].items[0].contents ?? [];
+    }), 0, 0).contents ?? [];
 
     expect(unknownType).toEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
     expect(numeric).toEqual(expect.objectContaining({ id: "1", type: "text", value: "5" }));
@@ -77,7 +78,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
   });
 
   it("drops a file name and size left over from an upload the value no longer points to, so the next save stores the fix, and keeps a name an author gave a linked file", () => {
-    const contents = buildTemplateEditorFormValues({
+    const contents = taskAt(buildTemplateEditorFormValues({
       sections: [
         {
           id: "section-1",
@@ -96,7 +97,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
           ],
         },
       ] as unknown as ChecklistSection[],
-    }).sections[0].items[0].contents ?? [];
+    }), 0, 0).contents ?? [];
 
     expect(contents[0]).toEqual(
       expect.objectContaining({ value: "https://example.com/pricing.pdf", fileName: undefined, fileSize: undefined, uploadType: "url" }),
@@ -131,7 +132,7 @@ describe("buildTemplateEditorFormValues with content stored before the API check
 describe("validateTemplateEditorFormForSave", () => {
   it("names the section, task, and block of an invalid content block", () => {
     const values = buildTemplateEditorFormValues({ title: "T" });
-    values.sections[0].items.push({
+    sectionAt(values, 0).items.push({
       id: "item-1",
       title: "Task",
       contents: [{ id: 1 as unknown as string, type: "text", value: "x" }],
@@ -140,6 +141,6 @@ describe("validateTemplateEditorFormForSave", () => {
     const errors = validateTemplateEditorFormForSave(values);
 
     expect(errors).toHaveLength(1);
-    expect(errors[0].message).toMatch(/^Section 1, task 1, content block 1: /);
+    expect(firstOf(errors).message).toMatch(/^Section 1, task 1, content block 1: /);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { contentAt, firstOf, sectionAt, subTaskAt, taskAt } from '../../../support/elements';
 import {
   exportTemplatesToJSON,
   generateUniqueIds,
@@ -15,10 +16,10 @@ describe('Template Backup Utilities', () => {
       
       const result = generateUniqueIds(templates);
       
-      expect(result[0].id).not.toBe('template-1');
-      expect(result[0].id).toMatch(/^imported_\d+_[a-z0-9]+$/);
-      expect(result[0].sections[0].id).not.toBe('section-1');
-      expect(result[0].sections[0].items[0].id).not.toBe('item-1');
+      expect(firstOf(result).id).not.toBe('template-1');
+      expect(firstOf(result).id).toMatch(/^imported_\d+_[a-z0-9]+$/);
+      expect(sectionAt(firstOf(result), 0).id).not.toBe('section-1');
+      expect(taskAt(firstOf(result), 0, 0).id).not.toBe('item-1');
     });
 
     it('should update timestamps', () => {
@@ -29,8 +30,8 @@ describe('Template Backup Utilities', () => {
       
       const result = generateUniqueIds([oldTemplate]);
       
-      expect(new Date(result[0].createdAt).getFullYear()).toBeGreaterThan(2020);
-      expect(new Date(result[0].updatedAt).getFullYear()).toBeGreaterThan(2020);
+      expect(new Date(firstOf(result).createdAt).getFullYear()).toBeGreaterThan(2020);
+      expect(new Date(firstOf(result).updatedAt).getFullYear()).toBeGreaterThan(2020);
     });
 
     it('should clear slug for regeneration', () => {
@@ -38,7 +39,7 @@ describe('Template Backup Utilities', () => {
       
       const result = generateUniqueIds([template]);
       
-      expect(result[0].slug).toBe('');
+      expect(firstOf(result).slug).toBe('');
     });
 
     it('should handle nested subItems', () => {
@@ -69,18 +70,18 @@ describe('Template Backup Utilities', () => {
       });
       
       const result = generateUniqueIds([template]);
-      const subItems = result[0].sections[0].items[0].contents?.[0].subItems;
+      const firstSubTask = subTaskAt(contentAt(taskAt(firstOf(result), 0, 0), 0), 0);
       
-      expect(subItems?.[0].id).not.toBe('sub-1');
-      expect(subItems?.[0].id).toMatch(/^subitem_\d+_[a-z0-9]+$/);
+      expect(firstSubTask.id).not.toBe('sub-1');
+      expect(firstSubTask.id).toMatch(/^subitem_\d+_[a-z0-9]+$/);
     });
 
     it('should preserve content values', () => {
       const template = createMockTemplate();
       const result = generateUniqueIds([template]);
       
-      expect(result[0].title).toBe('Test Template');
-      expect(result[0].sections[0].items[0].contents?.[0].value).toBe('Test content');
+      expect(firstOf(result).title).toBe('Test Template');
+      expect(contentAt(taskAt(firstOf(result), 0, 0), 0).value).toBe('Test content');
     });
   });
 
@@ -90,7 +91,7 @@ describe('Template Backup Utilities', () => {
       
       const result = prepareTemplatesForImport(templates, 'new-user-123');
       
-      expect(result[0].userId).toBe('new-user-123');
+      expect(firstOf(result).userId).toBe('new-user-123');
     });
 
     it('should set public status', () => {
@@ -109,7 +110,7 @@ describe('Template Backup Utilities', () => {
       
       const result = prepareTemplatesForImport(templates, 'user-123', { visibility: 'private' });
       
-      expect(result[0].isPublic).toBe(false);
+      expect(firstOf(result).isPublic).toBe(false);
     });
 
     it('should reset completion states', () => {
@@ -141,8 +142,8 @@ describe('Template Backup Utilities', () => {
       
       const result = prepareTemplatesForImport([template], 'user-123');
       
-      expect(result[0].sections[0].items[0].isCompleted).toBe(false);
-      expect(result[0].sections[0].items[0].contents?.[0].subItems?.[0].isCompleted).toBe(false);
+      expect(taskAt(firstOf(result), 0, 0).isCompleted).toBe(false);
+      expect(subTaskAt(contentAt(taskAt(firstOf(result), 0, 0), 0), 0).isCompleted).toBe(false);
     });
 
     it('should generate unique IDs', () => {
@@ -150,8 +151,8 @@ describe('Template Backup Utilities', () => {
       
       const result = prepareTemplatesForImport(templates, 'user-123');
       
-      expect(result[0].id).not.toBe('template-1');
-      expect(result[0].id).toMatch(/^imported_\d+_[a-z0-9]+$/);
+      expect(firstOf(result).id).not.toBe('template-1');
+      expect(firstOf(result).id).toMatch(/^imported_\d+_[a-z0-9]+$/);
     });
 
     it('should handle multiple templates', () => {
@@ -188,9 +189,9 @@ describe('Template Backup Utilities', () => {
 
       const result = prepareTemplatesForImport(templates, 'user-123');
 
-      expect(result[0].seoTitle).toBe('SEO Title');
-      expect(result[0].seoDescription).toBe('SEO Description');
-      expect(result[0].rules).toHaveLength(1);
+      expect(firstOf(result).seoTitle).toBe('SEO Title');
+      expect(firstOf(result).seoDescription).toBe('SEO Description');
+      expect(firstOf(result).rules).toHaveLength(1);
     });
   });
 
@@ -237,7 +238,7 @@ describe('Template Backup Utilities', () => {
       const template = createMockTemplate({ sections: [] });
       const result = generateUniqueIds([template]);
       
-      expect(result[0].sections).toEqual([]);
+      expect(firstOf(result).sections).toEqual([]);
     });
 
     it('should handle items without contents', () => {
@@ -257,7 +258,7 @@ describe('Template Backup Utilities', () => {
       });
       
       const result = generateUniqueIds([template]);
-      expect(result[0].sections[0].items[0].contents).toBeUndefined();
+      expect(taskAt(firstOf(result), 0, 0).contents).toBeUndefined();
     });
 
     it('should handle very large template collections', () => {
@@ -296,8 +297,8 @@ describe('Template Backup Utilities', () => {
       });
       
       const result = generateUniqueIds([template]);
-      expect(result[0].title).toBe('Template with "quotes" and \'apostrophes\'');
-      expect(result[0].sections[0].items[0].contents?.[0].value).toBe('<script>alert("xss")</script>');
+      expect(firstOf(result).title).toBe('Template with "quotes" and \'apostrophes\'');
+      expect(contentAt(taskAt(firstOf(result), 0, 0), 0).value).toBe('<script>alert("xss")</script>');
     });
   });
 });

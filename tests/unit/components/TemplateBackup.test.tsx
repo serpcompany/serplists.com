@@ -79,7 +79,6 @@ vi.mock('@/lib/api', () => ({
 }));
 
 const failedBillingQuery = (): BillingQueryResult => ({
-  data: undefined,
   error: new Error('HTTP 500'),
   fetchStatus: 'idle',
   isError: true,

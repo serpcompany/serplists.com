@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf, taskIn } from '../../support/elements';
 
 import { canFinishRun } from '@/features/run-execution/primaryTaskAction';
 import { mapChecklistToRun } from '@/features/run-execution/runExecutionMappers';
@@ -46,7 +47,7 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
 
     applyRunOperation(sections, { runId: 'run-1', expectedRevision: 1, operation: 'set_subtask_completed', taskId: 'task-1', subtaskId: 'visible', completed: true });
 
-    expect(sections[0].items[0].isCompleted).toBe(true);
+    expect(taskIn(sections, 0, 0).isCompleted).toBe(true);
     expect(findOpenRunTasks(sections).open).toEqual([]);
   });
 
@@ -82,7 +83,7 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
   });
 
   it('are the only sub-items stored content keeps on a block', () => {
-    const [section] = sanitizeStoredSections(sectionsOf(task({ contents: [onText(false), subTasksBlock(true)] })));
+    const section = firstOf(sanitizeStoredSections(sectionsOf(task({ contents: [onText(false), subTasksBlock(true)] }))));
 
     expect(section.items).toEqual([expect.objectContaining({
       contents: [{ type: 'text', value: 'Steps' }, { type: 'subItems', value: '', subItems: [visible(true)] }],

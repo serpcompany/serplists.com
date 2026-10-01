@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { lastOf } from '../../../support/elements';
 
 import { createApiError } from '@/lib/api-errors';
 
@@ -77,7 +78,7 @@ let root: Root | undefined;
 let queryClient: QueryClient;
 let renderedModels: Model[];
 
-const latest = () => renderedModels[renderedModels.length - 1];
+const latest = () => lastOf(renderedModels);
 
 const Probe = ({ options }: { options: UseTemplateDetailModelOptions }) => {
   renderedModels.push(useTemplateDetailModel(options));

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../support/elements";
 import { PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION } from "@/lib/schemas/checklistSchema";
 import {
   REPO_TEMPLATE_FALLBACK_TIMESTAMP,
@@ -70,8 +71,8 @@ describe("repo template catalog", () => {
     vi.setSystemTime(new Date("2031-06-15T12:00:00.000Z"));
     const second = normalizeRepoTemplateSources(portablePackSource("2026-03-22T00:00:00.000Z"));
 
-    expect(first[0].createdAt).toBe("2026-03-22T00:00:00.000Z");
-    expect(first[0].updatedAt).toBe("2026-03-22T00:00:00.000Z");
+    expect(firstOf(first).createdAt).toBe("2026-03-22T00:00:00.000Z");
+    expect(firstOf(first).updatedAt).toBe("2026-03-22T00:00:00.000Z");
     expect(second.map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt }))).toEqual(
       first.map(({ createdAt, updatedAt }) => ({ createdAt, updatedAt })),
     );
@@ -80,7 +81,7 @@ describe("repo template catalog", () => {
   it("uses a fixed fallback date when a pack's exportedAt is not a date", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2030-01-01T00:00:00.000Z"));
-    const [template] = normalizeRepoTemplateSources(portablePackSource("not-a-date"));
+    const template = firstOf(normalizeRepoTemplateSources(portablePackSource("not-a-date")));
 
     expect(REPO_TEMPLATE_FALLBACK_TIMESTAMP).toBe("2026-03-22T00:00:00.000Z");
     expect(template.createdAt).toBe(REPO_TEMPLATE_FALLBACK_TIMESTAMP);
@@ -150,7 +151,7 @@ describe("repo template catalog", () => {
     });
 
     expect(templates).toHaveLength(1);
-    expect(templates[0].updatedAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(firstOf(templates).updatedAt).toBe("2026-05-01T00:00:00.000Z");
   });
 
   it("dates the bundled starter templates by their pack", () => {
@@ -227,14 +228,14 @@ describe("repo template catalog", () => {
     const templates = normalizeRepoTemplateSources(PORTABLE_CHECKLIST_PACK_SOURCE);
 
     expect(templates).toHaveLength(1);
-    expect(templates[0].title).toBe("Portable Checklist");
-    expect(templates[0].slug).toBe("portable-checklist");
-    expect(templates[0].isPublic).toBe(true);
-    expect(templates[0].userId).toBe(REPO_TEMPLATE_USER_ID);
+    expect(firstOf(templates).title).toBe("Portable Checklist");
+    expect(firstOf(templates).slug).toBe("portable-checklist");
+    expect(firstOf(templates).isPublic).toBe(true);
+    expect(firstOf(templates).userId).toBe(REPO_TEMPLATE_USER_ID);
   });
 
   it("builds a private copy payload from a repo template without its slug, which the server derives from the title and suffixes", () => {
-    const [template] = normalizeRepoTemplateSources(PORTABLE_CHECKLIST_PACK_SOURCE);
+    const template = firstOf(normalizeRepoTemplateSources(PORTABLE_CHECKLIST_PACK_SOURCE));
 
     const payload = buildRepoTemplateCreatePayload(template, undefined);
 

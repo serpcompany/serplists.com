@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 
 import { createApiError } from '@/lib/api-errors';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
@@ -202,8 +203,8 @@ describe('template detail actions', () => {
       template: buildTemplate({ isPublic: true, teamId: 'team-b' }),
     });
 
-    expect(createTemplate.mock.calls[0][0]).toMatchObject({ teamId: 'team-b' });
-    expect(createTemplate.mock.calls[1][0]).toMatchObject({ teamId: 'team-a' });
+    expect(firstOf(createTemplate.mock.calls)[0]).toMatchObject({ teamId: 'team-b' });
+    expect(elementAt(createTemplate.mock.calls, 1)[0]).toMatchObject({ teamId: 'team-a' });
   });
   it('returns an error, not upgrade_required, when an Organization limit blocks a run', async () => {
     const message =

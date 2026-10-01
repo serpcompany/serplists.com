@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 
 import { buildRunUpdatePayload } from "@/contexts/runUpdatePayload";
 import { mapApiTemplate } from "@/contexts/templateListFetchers";
@@ -38,8 +39,8 @@ function withTextBlockPaddingTo(sections: Sections, target: number, char = "a"):
   const charBytes = contentSaveBytes([{ value: char }]) - contentSaveBytes([{ value: "" }]);
   const padded = structuredClone(sections);
   const block = { id: "pad", type: "text", value: "" };
-  (padded[0].items as Array<Record<string, unknown>>)[0].contents = [
-    ...(((padded[0].items as Array<Record<string, unknown>>)[0].contents as unknown[]) ?? []),
+  firstOf(firstOf(padded).items as Array<Record<string, unknown>>).contents = [
+    ...((firstOf(firstOf(padded).items as Array<Record<string, unknown>>).contents as unknown[]) ?? []),
     block,
   ];
   const missing = target - contentSaveBytes(padded);
@@ -182,7 +183,7 @@ describe("content size limits, so every stored Template and run fits back throug
   });
 
   it("measure a run the same whichever tasks are ticked, so a run at the limit can still be ticked and unticked", () => {
-    const [, subTasksWithNoTitleOrCompletion] = contentMissingEveryDefaultTheAppFillsIn[2];
+    const [, subTasksWithNoTitleOrCompletion] = elementAt(contentMissingEveryDefaultTheAppFillsIn, 2);
     const run = runAsPostChecklistsStoresIt(withTextBlockPaddingTo(subTasksWithNoTitleOrCompletion, TEMPLATE_CONTENT_MAX_BYTES));
     expect(contentSaveBytes(setEveryCompletion(run, true))).toBe(contentSaveBytes(run));
     expect(contentSaveBytes(setEveryCompletion(run, false))).toBe(contentSaveBytes(run));

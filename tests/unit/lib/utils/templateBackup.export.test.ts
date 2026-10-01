@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { contentAt, firstOf, subTaskAt, taskAt } from '../../../support/elements';
 import { exportTemplatesToJSON, parseTemplatesFromJSON, prepareTemplatesForImport } from '@/lib/utils/templateBackup';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
 import { jsonFile } from '../../../fixtures/jsonFile';
@@ -78,15 +79,15 @@ describe('Template Backup Utilities', () => {
       const importedTemplates = await parseTemplatesFromJSON(backupFile);
       const preparedTemplates = prepareTemplatesForImport(importedTemplates.templates, 'new-user');
 
-      expect(preparedTemplates[0].title).toBe('Complex Template');
-      expect(preparedTemplates[0].sections).toHaveLength(1);
-      expect(preparedTemplates[0].sections[0].items[0].contents).toHaveLength(4);
-      expect(preparedTemplates[0].categories).toEqual(['cat1', 'cat2']);
-      expect(preparedTemplates[0].tags).toEqual(['tag1', 'tag2', 'tag3']);
+      expect(firstOf(preparedTemplates).title).toBe('Complex Template');
+      expect(firstOf(preparedTemplates).sections).toHaveLength(1);
+      expect(taskAt(firstOf(preparedTemplates), 0, 0).contents).toHaveLength(4);
+      expect(firstOf(preparedTemplates).categories).toEqual(['cat1', 'cat2']);
+      expect(firstOf(preparedTemplates).tags).toEqual(['tag1', 'tag2', 'tag3']);
 
-      const subItems = preparedTemplates[0].sections[0].items[0].contents?.[3].subItems;
-      expect(subItems).toHaveLength(2);
-      expect(subItems?.[0].title).toBe('Subtask 1');
+      const subTasks = contentAt(taskAt(firstOf(preparedTemplates), 0, 0), 3);
+      expect(subTasks.subItems).toHaveLength(2);
+      expect(subTaskAt(subTasks, 0).title).toBe('Subtask 1');
     });
   });
 });

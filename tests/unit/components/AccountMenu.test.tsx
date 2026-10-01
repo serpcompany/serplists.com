@@ -2,6 +2,7 @@ import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 const authState = vi.hoisted(() => ({ username: 'alice' as string | null }));
 
@@ -25,9 +26,9 @@ const renderMenu = () => {
 };
 
 const menuItemLabelsWithHrefs = (html: string) =>
-  [...html.matchAll(/<(a|div)([^>]*)role="menuitem"([^>]*)>(.*?)<\/\1>/g)].map(([, , before, after, label]) => {
-    const href = `${before}${after}`.match(/href="([^"]*)"/)?.[1];
-    const text = label.replace(/<[^>]*>/g, '').trim();
+  [...html.matchAll(/<(a|div)([^>]*)role="menuitem"([^>]*)>(.*?)<\/\1>/g)].map((menuItem) => {
+    const href = `${capturedGroup(menuItem, 2)}${capturedGroup(menuItem, 3)}`.match(/href="([^"]*)"/)?.[1];
+    const text = capturedGroup(menuItem, 4).replace(/<[^>]*>/g, '').trim();
     return href ? `${text} -> ${href}` : text;
   });
 

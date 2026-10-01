@@ -3,6 +3,7 @@ import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../../support/elements';
 
 import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
@@ -28,10 +29,10 @@ const breaksRevealRule = (value: string) =>
   !value.includes(HOVER_ONLY_DUPLICATE) &&
   (!KEYBOARD_REVEAL.test(value) || !showsOnTouchScreens(value));
 const pointerOnlyStartRunWrapperClass = (html: string) =>
-  html.match(/<div aria-hidden="true" class="([^"]*)"><button/)?.[1];
+  capturedGroup(html.match(/<div aria-hidden="true" class="([^"]*)"><button/), 1);
 
 const classLists = (html: string) =>
-  [...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]);
+  [...html.matchAll(/class="([^"]*)"/g)].map((match) => capturedGroup(match, 1));
 
 const template = PRIVATE_LAUNCH_TEMPLATE;
 
@@ -81,8 +82,7 @@ describe('dashboard hover-revealed controls', () => {
   it('keeps the Start Run overlay a hover-only duplicate that touch screens never show', () => {
     const overlay = pointerOnlyStartRunWrapperClass(rendered['the My Templates grid card']());
 
-    expect(overlay).toBeDefined();
-    expect(isHoverRevealed(overlay!)).toBe(true);
+    expect(isHoverRevealed(overlay)).toBe(true);
     expect(overlay).toContain(HOVER_ONLY_DUPLICATE);
   });
 

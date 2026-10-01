@@ -1,5 +1,6 @@
 import { expectThePortableSeoFieldsAndOneRule } from '../../../support/portableTemplateChecks';
 import { describe, it, expect } from 'vitest';
+import { contentAt, elementAt, firstOf } from '../../../support/elements';
 import { parseBackupFile, parseTemplatesFromData, parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
 import { TemplateBackup } from '@/lib/schemas/checklistSchema';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
@@ -54,7 +55,7 @@ describe('Template Backup Utilities', () => {
       const result = await parseTemplatesFromJSON(file);
       
       expect(result.templates).toHaveLength(1);
-      expect(result.templates[0].title).toBe('Test Template');
+      expect(firstOf(result.templates).title).toBe('Test Template');
     });
 
     it('should parse simple array format', async () => {
@@ -68,7 +69,7 @@ describe('Template Backup Utilities', () => {
       const result = await parseTemplatesFromJSON(file);
       
       expect(result.templates).toHaveLength(2);
-      expect(result.templates[1].title).toBe('Second Template');
+      expect(elementAt(result.templates, 1).title).toBe('Second Template');
     });
 
     it('should preserve seo metadata and rules from portable imports', async () => {
@@ -97,7 +98,7 @@ describe('Template Backup Utilities', () => {
 
       const result = await parseTemplatesFromJSON(file);
 
-      expectThePortableSeoFieldsAndOneRule(result.templates[0]);
+      expectThePortableSeoFieldsAndOneRule(firstOf(result.templates));
     });
 
     it('should surface warnings for uploaded assets', async () => {
@@ -131,7 +132,7 @@ describe('Template Backup Utilities', () => {
       const result = await parseTemplatesFromJSON(file);
 
       expect(result.warnings).toHaveLength(1);
-      expect(result.warnings[0].message).toMatch(/uploaded asset/i);
+      expect(firstOf(result.warnings).message).toMatch(/uploaded asset/i);
     });
 
 
@@ -179,7 +180,7 @@ describe('Template Backup Utilities', () => {
 
     it('imports the flat items form and a stringified array the same way', () => {
       const flat = parseTemplatesFromData([{ title: 'Groceries', items: ['Milk', { title: 'Eggs' }] }]);
-      expect(flat.templates[0].sections.map((section) => section.title)).toEqual(['Checklist']);
+      expect(firstOf(flat.templates).sections.map((section) => section.title)).toEqual(['Checklist']);
       expect(itemsOf(flat).map((item) => item.title)).toEqual(['Milk', 'Eggs']);
       expectCleanItems(flat);
 
@@ -203,7 +204,7 @@ describe('Template Backup Utilities', () => {
         ],
       });
 
-      const subItems = itemsOf(result)[0].contents?.[0].subItems ?? [];
+      const subItems = contentAt(firstOf(itemsOf(result)), 0).subItems ?? [];
       expect(subItems.map((subItem) => subItem.title)).toEqual(['Milk', 'Cheese']);
       for (const subItem of subItems) {
         expect(Object.keys(subItem).filter((key) => /^\d+$/.test(key))).toEqual([]);

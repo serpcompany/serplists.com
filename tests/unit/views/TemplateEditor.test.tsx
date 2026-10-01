@@ -2,6 +2,7 @@ import { renderPageAt } from '../../support/mockedNextNavigation';
 import React from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
@@ -290,7 +291,7 @@ describe('TemplateEditor page', () => {
       '/dashboard/templates/[id]/edit',
     );
 
-    expect(useFormCalls.mock.calls[0][0]).toEqual(
+    expect(firstOf(useFormCalls.mock.calls)[0]).toEqual(
       expect.objectContaining({
         defaultValues: expect.objectContaining({ title: 'Moving checklist' }),
       }),

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { usePathname } from 'next/navigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorFallback } from '@/components/RouteErrorBoundary';
@@ -145,7 +146,7 @@ describe('ErrorBoundary', () => {
     page.crash();
 
     expect(page.html()).toContain('Retry');
-    fallback.mock.calls[0][0].reset();
+    firstOf(fallback.mock.calls)[0].reset();
     expect(page.boundary.state.hasError).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { elementAt, sectionAt, taskAt } from '../../../support/elements';
 
 import {
   canFinishRun,
@@ -63,7 +64,7 @@ describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, 
   });
   const everyTaskTickedWithAnOpenSubTaskOn = (taskIndex: number): ChecklistRun => {
     const run = buildRun([true, true, true]);
-    run.sections[0].items[taskIndex].contents = [subTasks(true), subTasks(true, false)];
+    elementAt(sectionAt(run, 0).items, taskIndex).contents = [subTasks(true), subTasks(true, false)];
     return run;
   };
 
@@ -85,7 +86,7 @@ describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, 
 
   it('treats a ticked task with an empty Sub-tasks block as done', () => {
     const run = buildRun([true, true]);
-    run.sections[0].items[0].contents = [subTasks()];
+    taskAt(run, 0, 0).contents = [subTasks()];
 
     expect(getPrimaryTaskAction(run, 'item-2', false)).toEqual({ kind: 'finish_run' });
   });
@@ -96,10 +97,10 @@ describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, 
     for (let ticks = 0; ticks < tickCombinations; ticks += 1) {
       const isTicked = (bit: number) => (ticks & (1 << bit)) !== 0;
       const run = buildRun([0, 1, 2].map((index) => isTicked(index)));
-      run.sections[0].items.forEach((item, index) => {
+      sectionAt(run, 0).items.forEach((item, index) => {
         item.contents = [subTasks(isTicked(index + taskCount))];
       });
-      run.sections[0].items.forEach((item, index) => {
+      sectionAt(run, 0).items.forEach((item, index) => {
         expect(getPrimaryTaskAction(run, item.id, index < 2).kind, `ticks ${ticks}, ${item.id}`).not.toBe('run_completed');
       });
     }

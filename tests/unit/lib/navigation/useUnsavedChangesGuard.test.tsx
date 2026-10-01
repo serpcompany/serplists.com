@@ -57,7 +57,7 @@ async function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWor
         pages={{
           '/': <p>Home page</p>,
           '/runs': <p>Runs page</p>,
-          '/runs/[id]': <RunPage dirty={dirty} keepWork={keepWork} />,
+          '/runs/[id]': <RunPage dirty={dirty} {...(keepWork ? { keepWork } : {})} />,
         }}
       />,
     );

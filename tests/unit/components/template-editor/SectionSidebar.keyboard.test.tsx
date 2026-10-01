@@ -2,6 +2,7 @@ import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { get } from 'react-hook-form';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
@@ -34,8 +35,7 @@ vi.mock('react-hook-form', async (importOriginal) =>
           remove: vi.fn(),
           move: (from: number, to: number) => {
             const next = [...values];
-            const [moved] = next.splice(from, 1);
-            next.splice(to, 0, moved);
+            next.splice(to, 0, ...next.splice(from, 1));
             harness.form.setValue(name as 'sections', next as never, { shouldDirty: true });
           },
         };
@@ -182,18 +182,15 @@ describe('SectionSidebar title rename in place', () => {
   });
 
   const doubleClickTitle = (title: string) => {
-    const [button] = findAllElements(
+    const button = firstOf(findAllElements(
       render(),
       (element) => element.type === 'button' && element.props.children === title,
-    );
-    expect(button, title).toBeDefined();
+    ));
     (button.props.onDoubleClick as () => void)();
   };
 
   const titleField = () => {
-    const [field] = findAllElements(render(), (element) => element.type === Input);
-    expect(field).toBeDefined();
-    return field;
+    return firstOf(findAllElements(render(), (element) => element.type === Input));
   };
 
   const typeAndPress = (text: string, key: string) => {

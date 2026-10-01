@@ -8,6 +8,7 @@ import {
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import Templates from '@/views/Templates';
 
@@ -71,7 +72,7 @@ describe('Templates page', () => {
       template({ id: 'n2', title: 'Imported Recently', createdAt: '2026-09-10T00:00:00.000Z', updatedAt: '' }),
       template({ id: 'b', title: 'Twentieth Of September Edit', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-09-20T00:00:00.000Z' }),
     ];
-    showTheTemplatesModel({ templates, totalTemplateItems: 8, selectedTemplate: templates[0], selectedTemplateId: 'n1' });
+    showTheTemplatesModel({ templates, totalTemplateItems: 8, selectedTemplate: firstOf(templates), selectedTemplateId: 'n1' });
 
     const html = renderTemplatesAt('/');
     const order = ['Twentieth Of September Edit', 'Imported Recently', 'Second Of September Edit', 'Untouched Plan'].map(

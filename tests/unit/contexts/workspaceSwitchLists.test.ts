@@ -1,5 +1,6 @@
 import { QueryClient, QueryObserver, type QueryKey } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { markListsStaleForWorkspaceSwitch } from '@/contexts/templateListCache';
 
@@ -67,7 +68,7 @@ describe('markListsStaleForWorkspaceSwitch', () => {
   it('does not refetch the lists of the context being left, or the catalog', async () => {
     const { fetchers, unsubscribe } = await loadedOnOrganization();
 
-    markListsStaleForWorkspaceSwitch(clients[0], { fromWorkspaceId: 'team-a', toWorkspaceId: 'personal' });
+    markListsStaleForWorkspaceSwitch(firstOf(clients), { fromWorkspaceId: 'team-a', toWorkspaceId: 'personal' });
     await settle();
 
     expect(fetchers.templatesA).not.toHaveBeenCalled();

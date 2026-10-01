@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { taskAt } from '../../support/elements';
 
 import { renderRunPage, twoTaskRun } from '../../support/checklistRunPage';
 import type { ChecklistRun } from '@/types/checklist';
@@ -28,7 +29,7 @@ describe('ChecklistRunPage completion', () => {
 
   it('points the last task at a ticked task with an open Sub-task, as older runs and API writes can hold, never "Run completed"', async () => {
     const run = twoTaskRun([true, true]);
-    run.sections[0].items[0].contents = [
+    taskAt(run, 0, 0).contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Step one', isCompleted: false }] },
     ];
     const html = await renderRunPage(run, { selectedItemId: 'item-2' });
@@ -55,7 +56,7 @@ describe('ChecklistRunPage on a completed run, which is frozen so unticking cann
   const isDisabledOrAriaDisabled = (tag: string) => tag.includes('disabled=""') || tag.includes('aria-disabled="true"');
   const completedRun = (): ChecklistRun => {
     const run = twoTaskRun([true, true], 'completed');
-    run.sections[0].items[0].contents = [
+    taskAt(run, 0, 0).contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Step one', isCompleted: true }] },
     ];
     return run;
@@ -88,7 +89,7 @@ describe('ChecklistRunPage on a completed run, which is frozen so unticking cann
 describe('ChecklistRunPage task notes', () => {
   it('shows the unsaved draft for the selected task after moving between tasks', async () => {
     const run = twoTaskRun([true, false]);
-    run.sections[0].items[0].notes = 'saved note';
+    taskAt(run, 0, 0).notes = 'saved note';
     const html = await renderRunPage(run, {
       noteDrafts: { 'item-1': 'Deployed build 42, see link' },
       selectedItemId: 'item-1',

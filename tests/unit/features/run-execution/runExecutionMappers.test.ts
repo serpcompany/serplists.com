@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sectionAt, taskAt } from '../../../support/elements';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
 import {
@@ -42,7 +43,7 @@ describe('getNextSelectedItemId', () => {
 describe('a ticked task with an open Sub-task, which older runs and API writes can hold, is not done', () => {
   const withOpenSubTask = (): ChecklistRun => {
     const legacy = run(['a', 'b', 'c', 'd']);
-    legacy.sections[0].items[1].contents = [
+    taskAt(legacy, 0, 1).contents = [
       { type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Done', isCompleted: true }] },
       { type: 'subItems', value: '', subItems: [{ id: 'sub-2', title: 'Open', isCompleted: false }] },
     ];
@@ -60,7 +61,7 @@ describe('a ticked task with an open Sub-task, which older runs and API writes c
 
   it('is not skipped for an empty Sub-tasks block on a ticked task', () => {
     const done = run(['a', 'b', 'c', 'd']);
-    done.sections[0].items[1].contents = [{ type: 'subItems', value: '', subItems: [] }];
+    taskAt(done, 0, 1).contents = [{ type: 'subItems', value: '', subItems: [] }];
 
     expect(getNextSelectedItemId(done, 'd')).toBe('d');
     expect(getInitialSelectedItemId(done)).toBe('a');
@@ -345,7 +346,7 @@ describe('mapChecklistRuns', () => {
   it('maps a run with malformed content instead of throwing (the run page showed "Unable to load run")', () => {
     const run = mapChecklistToRun(malformed, 'run-bad');
 
-    expect(run.sections[0].items[0].contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
+    expect(taskAt(run, 0, 0).contents).toEqual([{ type: 'subItems', value: '', subItems: [] }]);
     expect(run.progress).toBe(0);
   });
 
@@ -394,6 +395,6 @@ describe('mapChecklistToRun', () => {
       userId: '',
       templateId: '',
     });
-    expect(mapped.sections[0].items.map((item) => item.isCompleted)).toEqual([true, false]);
+    expect(sectionAt(mapped, 0).items.map((item) => item.isCompleted)).toEqual([true, false]);
   });
 });

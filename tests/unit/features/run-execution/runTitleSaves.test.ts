@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { sectionAt } from '../../../support/elements';
 
 import { checklistPayloadSchema } from '@functions/api/utils/payloads';
 import { buildRunUpdatePayload, type RunUpdateOptions } from '@/contexts/runUpdatePayload';
@@ -53,7 +54,7 @@ describe('private run saves, which leave out an unchanged title, since a run sta
     await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun() }, dependencies);
     await saveRunItemNotes({ itemId: 'item-1', notes: 'Checked with legal', run: buildRun() }, dependencies);
     const runWithEveryTaskDone = buildRun();
-    runWithEveryTaskDone.sections[0].items.forEach((item) => {
+    sectionAt(runWithEveryTaskDone, 0).items.forEach((item) => {
       item.isCompleted = true;
     });
     await completeRunExecution({ run: runWithEveryTaskDone }, dependencies);

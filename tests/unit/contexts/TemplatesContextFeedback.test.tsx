@@ -15,7 +15,7 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: toastMock }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
+import { aTemplatesProviderForEachTest, launchChecklist, savePayloadOf } from '../../support/templatesProviderHarness';
 import { getTemplateSaveSuccessMessage } from '@/features/template-editor/useTemplateEditorModel';
 import type { TemplatesContextProps } from '@/types/checklist';
 import { buildRun } from '../../fixtures/runExecutionFixtures';
@@ -69,7 +69,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template, isPublic: true });
+    await context.updateTemplate({ ...savePayloadOf(template), isPublic: true });
 
     expectNoToasts();
     expect(isInvalidated(client, ['templates', 'user-1', 'personal'])).toBe(true);
@@ -79,7 +79,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template, isPublic: true });
+    await context.updateTemplate({ ...savePayloadOf(template), isPublic: true });
 
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(false);
   });
@@ -93,7 +93,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...template });
+    await context.updateTemplate(savePayloadOf(template));
 
     expectNoToasts();
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(true);
@@ -103,7 +103,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockRejectedValue(new Error('Version conflict'));
     const { context } = renderProvider();
 
-    await expect(context.updateTemplate({ ...template, isPublic: true })).rejects.toThrow('Version conflict');
+    await expect(context.updateTemplate({ ...savePayloadOf(template), isPublic: true })).rejects.toThrow('Version conflict');
     expectNoToasts();
   });
 

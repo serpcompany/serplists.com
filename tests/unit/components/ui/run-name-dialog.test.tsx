@@ -1,6 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { capturedGroup } from '../../../support/elements';
 
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX_LENGTH } from '@/lib/runs/runName';
@@ -55,9 +56,9 @@ describe('RunNameDialog wording, the same wherever a Run starts: My Templates, t
       />,
     );
   const buttons = (html: string) =>
-    [...html.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map(([, attributes, label]) => ({
-      disabled: attributes.includes('disabled=""'),
-      label,
+    [...html.matchAll(/<button([^>]*)>([^<]*)<\/button>/g)].map((button) => ({
+      disabled: capturedGroup(button, 1).includes('disabled=""'),
+      label: capturedGroup(button, 2),
     }));
 
   it('asks "Start a Run" with a visibly labelled Run name field, Cancel and Start Run', () => {

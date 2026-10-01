@@ -15,16 +15,19 @@ const sections = (done: Record<string, boolean>, notes: Record<string, string> =
   {
     id: 'section-1',
     title: 'Checklist',
-    items: ['item-1', 'item-2', 'item-3'].map((id) => ({
-      id,
-      title: id,
-      isCompleted: done[id] === true,
-      notes: notes[id],
-      contents:
-        id === 'item-3'
-          ? [{ type: 'subItems' as const, value: '', subItems: [{ id: 'sub-1', title: 'Sub', isCompleted: done['sub-1'] === true }] }]
-          : [],
-    })),
+    items: ['item-1', 'item-2', 'item-3'].map((id) => {
+      const note = notes[id];
+      return {
+        id,
+        title: id,
+        isCompleted: done[id] === true,
+        ...(note === undefined ? {} : { notes: note }),
+        contents:
+          id === 'item-3'
+            ? [{ type: 'subItems' as const, value: '', subItems: [{ id: 'sub-1', title: 'Sub', isCompleted: done['sub-1'] === true }] }]
+            : [],
+      };
+    }),
   },
 ];
 

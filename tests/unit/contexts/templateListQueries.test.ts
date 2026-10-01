@@ -31,7 +31,7 @@ async function requestsFromTheProviderAndAPage(params: {
   clients.push(client);
   const page = resolveTemplateListObservers(
     { ...queries, runs: { enabled: queries.ready } },
-    { catalog: params.catalog, workspace: params.workspace },
+    params,
   );
   const observers = [
     new QueryObserver(client, { ...queries.catalog, enabled: false }),
