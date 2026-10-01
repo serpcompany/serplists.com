@@ -24,8 +24,14 @@ export function chainSelectsUpdatesAndDeletes({ selectChain, updateChain, delete
   deleteChain.where.mockReturnValue(deleteChain);
 }
 
+export const EVERY_GUARDED_WRITE_APPLIED = [{ meta: { changes: 1 } }, { meta: { changes: 1 } }];
+
+export function dropQueuedRowsAndBatchResults({ selectChain, db }: DrizzleChainMocks) {
+  for (const queue of [selectChain.orderBy, selectChain.limit, db.batch]) queue.mockReset();
+}
+
 export function resetChainsToEmptyResults(mocks: DrizzleChainMocks) {
-  for (const queue of [mocks.selectChain.orderBy, mocks.selectChain.limit, mocks.db.batch]) queue.mockReset();
+  dropQueuedRowsAndBatchResults(mocks);
   chainSelectsUpdatesAndDeletes(mocks);
   mocks.selectChain.orderBy.mockResolvedValue([]);
   mocks.selectChain.limit.mockResolvedValue([]);

@@ -91,3 +91,26 @@ export function expectOneActiveOwnerAndClose(): void {
   expect(activeOwners()).toHaveLength(1);
   d1.sqlite.close();
 }
+
+export async function createInvite(inviterUserId: string, email: string, role: string) {
+  const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email, role });
+  expect(created.status).toBe(200);
+  return { id: String(created.data?.id), token: String(created.data?.inviteToken) };
+}
+
+export function inviteColumns<T extends Record<string, unknown>>(id: string, columns: string): T {
+  return d1.rows<T>(`SELECT ${columns} FROM team_invites WHERE id = ?`, id)[0];
+}
+
+export const revocationAndAcceptance = (id: string) =>
+  inviteColumns<{ revoked_at: string | null; accepted_at: string | null }>(id, "revoked_at, accepted_at");
+
+export function revokedInviteAudits() {
+  return d1.rows<{ resource_id: string; metadata_json: string | null }>(
+    "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
+  );
+}
+
+export function newUserMembership() {
+  return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+}

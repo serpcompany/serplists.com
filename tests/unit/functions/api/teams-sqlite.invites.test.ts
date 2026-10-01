@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { asUser, auditActions, createdAt, d1, expectOneActiveOwnerAndClose, member, openTheSeededOrganization } from "../../../support/teamsSqlite";
+import {
+  asUser,
+  auditActions,
+  createdAt,
+  createInvite,
+  d1,
+  expectOneActiveOwnerAndClose,
+  inviteColumns,
+  member,
+  newUserMembership,
+  openTheSeededOrganization,
+  revocationAndAcceptance,
+} from "../../../support/teamsSqlite";
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -14,12 +26,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       );
     }
 
-    function inviteState(id: string) {
-      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
-        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
-        id,
-      )[0];
-    }
+    const inviteState = revocationAndAcceptance;
 
     it("hides the invite, refuses it without changing the role, and revokes it", async () => {
       insertInvite("stale-invite", "member@example.test", "admin");
@@ -73,19 +80,9 @@ describe("Organization membership writes against SQLite, which leave every Organ
   });
 
   describe("an invite whose link is reissued while it is being accepted", () => {
-    async function inviteNewUser(role = "admin") {
-      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role });
-      expect(created.status).toBe(200);
-      return { id: created.data?.id as string, token: created.data?.inviteToken as string };
-    }
+    const inviteNewUser = (role = "admin") => createInvite("admin-user", "new@example.test", role);
 
-    function inviteRow(id: string) {
-      return d1.rows<{ role: string; accepted_at: string | null }>("SELECT role, accepted_at FROM team_invites WHERE id = ?", id)[0];
-    }
-
-    function newUserMembership() {
-      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
-    }
+    const inviteRow = (id: string) => inviteColumns<{ role: string; accepted_at: string | null }>(id, "role, accepted_at");
 
     function reissueBeforeTheAccept(inviteId: string, role: string) {
       let newToken = "";
@@ -144,22 +141,24 @@ describe("Organization membership writes against SQLite, which leave every Organ
   });
 
   describe("invite revocation", () => {
-    async function createInvite() {
-      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });
-      expect(created.status).toBe(200);
-      return created.data?.id as string;
-    }
+    const createViewerInvite = async () => (await createInvite("admin-user", "new@example.test", "viewer")).id;
 
-    function revokedAudits() {
-      return auditActions("team_invite.revoked");
-    }
+    const revokedAudits = () => auditActions("team_invite.revoked");
 
-    function newUserMembership() {
-      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
+    async function expectOneOfTwoRevokesAtOnceToLand(inviteId: string) {
+      d1.beforeNextBatch(async () => {
+        const first = await asUser("owner-user", "DELETE", `/team-1/invites/${inviteId}`);
+        expect(first.status).toBe(200);
+      });
+
+      const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
+
+      expect(result.status).toBe(404);
+      expect(revokedAudits()).toHaveLength(1);
     }
 
     it("revokes a pending invite and records one audit event", async () => {
-      const inviteId = await createInvite();
+      const inviteId = await createViewerInvite();
 
       const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
 
@@ -169,7 +168,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
     });
 
     it("reports a conflict and logs nothing when the invite is accepted before the revoke writes", async () => {
-      const inviteId = await createInvite();
+      const inviteId = await createViewerInvite();
       d1.beforeNextBatch(async () => {
         const accepted = await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`);
         expect(accepted.status).toBe(200);
@@ -184,34 +183,19 @@ describe("Organization membership writes against SQLite, which leave every Organ
     });
 
     it("logs one revoke when two revokes of the same invite share a timestamp", async () => {
-      const inviteId = await createInvite();
+      const inviteId = await createViewerInvite();
       vi.useFakeTimers({ toFake: ["Date"], now: Date.now() });
       try {
-        d1.beforeNextBatch(async () => {
-          const first = await asUser("owner-user", "DELETE", `/team-1/invites/${inviteId}`);
-          expect(first.status).toBe(200);
-        });
-
-        const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
-
-        expect(result.status).toBe(404);
-        expect(revokedAudits()).toHaveLength(1);
+        await expectOneOfTwoRevokesAtOnceToLand(inviteId);
       } finally {
         vi.useRealTimers();
       }
     });
 
     it("logs one revoke when two admins revoke the same invite at once", async () => {
-      const inviteId = await createInvite();
-      d1.beforeNextBatch(async () => {
-        const first = await asUser("owner-user", "DELETE", `/team-1/invites/${inviteId}`);
-        expect(first.status).toBe(200);
-      });
+      const inviteId = await createViewerInvite();
 
-      const result = await asUser("admin-user", "DELETE", `/team-1/invites/${inviteId}`);
-
-      expect(result.status).toBe(404);
-      expect(revokedAudits()).toHaveLength(1);
+      await expectOneOfTwoRevokesAtOnceToLand(inviteId);
     });
   });
 

@@ -1,52 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 import { z } from "zod";
-import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
-
-const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-
-const sessionMocks = vi.hoisted(() => ({
-  getSessionUserId: vi.fn(),
-}));
-
-const auditMocks = vi.hoisted(() => ({
-  buildAuditEventValues: vi.fn(async (input: { action: string; before?: unknown; after?: unknown }) => ({
-    id: "audit-event",
-    actor_user_id: "user-1",
-    subject_type: "team",
-    subject_id: "team-1",
-    resource_type: "team_invite",
-    resource_id: "invite-1",
-    action: input.action,
-    before_json: JSON.stringify(input.before ?? null),
-    after_json: JSON.stringify(input.after ?? null),
-    diff_json: null,
-    metadata_json: null,
-    request_id: null,
-    ip_hash: null,
-    user_agent: null,
-    created_at: "2026-01-01T00:00:00.000Z",
-  })),
-}));
-
-vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock("@functions/api/utils/session", () => ({
-  getSessionUserId: sessionMocks.getSessionUserId,
-}));
-
-vi.mock("@functions/api/utils/audit", () => ({
-  buildAuditEventValues: auditMocks.buildAuditEventValues,
-}));
 
 import { handleTeams } from "@functions/api/handlers/teams";
-import { apiEnv } from "../../../support/apiEnv";
 import { columnNamesIn } from "../../../support/drizzleSql";
 import { jsonObject, readJson } from "../../../support/readJson";
 import { sha256Hex } from "@functions/api/utils/crypto";
-
-const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
 const inviteLinkBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
 const inviteBody = z.object({ role: z.string() }).passthrough();
@@ -85,16 +44,8 @@ async function replaceTheLinkAsAnAdmin() {
 
 describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost link since only its token hash is kept", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.db.batch.mockReset();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    resetTeamsHandlerMocks();
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   it("replaces the pending invite's token and returns a new link", async () => {

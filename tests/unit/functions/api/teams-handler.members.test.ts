@@ -1,8 +1,37 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
+import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
 import { columnNamesIn } from "../../../support/drizzleSql";
 import { apiErrorBody, jsonObjects, readJson } from "../../../support/readJson";
+
+const OWNER_USER = teamMember("owner", { id: "owner-member", user_id: "owner-user" });
+const ADMIN_USER_2 = teamMember("admin", { id: "member-2", user_id: "user-2" });
+
+const send = (path: string, method = "GET", body?: unknown) =>
+  handleTeams(
+    new Request(`http://localhost/api/teams/${path}`, body === undefined ? { method } : { method, body: JSON.stringify(body) }),
+    mockEnv,
+  );
+
+const transferOwnershipTo = (memberId: string) => send("team-1/owner", "PUT", { memberId });
+
+async function expectRefusedWithoutWriting(response: Response, status: number, code: string) {
+  const data = await readJson(response, apiErrorBody);
+
+  expect(response.status).toBe(status);
+  expect(data.code).toBe(code);
+  expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
+  expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+}
+
+async function expectAConflictWithNothingInserted(response: Response, code: string) {
+  const data = await readJson(response, apiErrorBody);
+
+  expect(response.status).toBe(409);
+  expect(data.code).toBe(code);
+  expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+  expect(dbMocks.insertChain.select).toHaveBeenCalled();
+}
 
 describe("Teams handler", () => {
   beforeEach(resetTeamsHandlerMocks);
@@ -27,9 +56,7 @@ describe("Teams handler", () => {
   });
 
   it("lists the full team roster for team admins", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-    ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([teamMember("admin")]);
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {
         id: "member-disabled",
@@ -40,10 +67,7 @@ describe("Teams handler", () => {
       },
     ]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/members"),
-      mockEnv,
-    );
+    const response = await send("team-1/members");
     const data = await readJson(response, jsonObjects);
     const memberListPredicate = dbMocks.selectChain.where.mock.calls[1]?.[0];
 
@@ -53,14 +77,9 @@ describe("Teams handler", () => {
   });
 
   it("limits the team roster to active members for non-admin members", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "member-1", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },
-    ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([teamMember("viewer")]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/members"),
-      mockEnv,
-    );
+    const response = await send("team-1/members");
     const memberListPredicate = dbMocks.selectChain.where.mock.calls[1]?.[0];
 
     expect(response.status).toBe(200);
@@ -68,21 +87,9 @@ describe("Teams handler", () => {
   });
 
   it("transfers ownership to an active team member and records audit history", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "owner-member", team_id: "team-1", user_id: "owner-user", role: "owner", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "admin", status: "active" },
-      ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([OWNER_USER]).mockResolvedValueOnce([ADMIN_USER_2]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/owner", {
-        method: "PUT",
-        body: JSON.stringify({ memberId: "member-2" }),
-      }),
-      mockEnv,
-    );
+    const response = await transferOwnershipTo("member-2");
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -115,59 +122,23 @@ describe("Teams handler", () => {
   });
 
   it("rejects ownership transfer attempts from non-owner admins", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "admin-member", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-    ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([teamMember("admin", { id: "admin-member" })]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/owner", {
-        method: "PUT",
-        body: JSON.stringify({ memberId: "member-2" }),
-      }),
-      mockEnv,
-    );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(403);
-    expect(data.code).toBe("owner_required");
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
-    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+    await expectRefusedWithoutWriting(await transferOwnershipTo("member-2"), 403, "owner_required");
   });
 
   it("rejects ownership transfer to the current owner member", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { id: "owner-member", team_id: "team-1", user_id: "user-1", role: "owner", status: "active" },
-    ]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([teamMember("owner", { id: "owner-member" })]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/owner", {
-        method: "PUT",
-        body: JSON.stringify({ memberId: "owner-member" }),
-      }),
-      mockEnv,
-    );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(400);
-    expect(data.code).toBe("owner_transfer_noop");
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
-    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+    await expectRefusedWithoutWriting(await transferOwnershipTo("owner-member"), 400, "owner_transfer_noop");
   });
 
   it("rejects ownership transfer to inactive or missing members", async () => {
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "owner-member", team_id: "team-1", user_id: "user-1", role: "owner", status: "active" },
-      ])
+      .mockResolvedValueOnce([teamMember("owner", { id: "owner-member" })])
       .mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/owner", {
-        method: "PUT",
-        body: JSON.stringify({ memberId: "member-disabled" }),
-      }),
-      mockEnv,
-    );
+    const response = await transferOwnershipTo("member-disabled");
 
     expect(response.status).toBe(404);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
@@ -176,12 +147,8 @@ describe("Teams handler", () => {
 
   it("returns a conflict when the ownership transfer write changes nothing", async () => {
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "owner-member", team_id: "team-1", user_id: "owner-user", role: "owner", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "admin", status: "active" },
-      ])
+      .mockResolvedValueOnce([OWNER_USER])
+      .mockResolvedValueOnce([ADMIN_USER_2])
       .mockResolvedValueOnce([]);
     dbMocks.db.batch.mockResolvedValueOnce([
       { meta: { changes: 0 } },
@@ -190,91 +157,39 @@ describe("Teams handler", () => {
       { meta: { changes: 0 } },
     ]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/owner", {
-        method: "PUT",
-        body: JSON.stringify({ memberId: "member-2" }),
-      }),
-      mockEnv,
-    );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(409);
-    expect(data.code).toBe("owner_transfer_conflict");
-    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
-    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+    await expectAConflictWithNothingInserted(await transferOwnershipTo("member-2"), "owner_transfer_conflict");
   });
 
   it("returns a conflict when a member update write changes nothing", async () => {
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "admin-member", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "member-2", team_id: "team-1", user_id: "user-2", role: "editor", status: "active" },
-      ]);
+      .mockResolvedValueOnce([teamMember("admin", { id: "admin-member" })])
+      .mockResolvedValueOnce([teamMember("editor", { id: "member-2", user_id: "user-2" })]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/members/member-2", {
-        method: "PUT",
-        body: JSON.stringify({ role: "viewer" }),
-      }),
-      mockEnv,
-    );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(409);
-    expect(data.code).toBe("member_update_conflict");
-    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
-    expect(dbMocks.insertChain.select).toHaveBeenCalled();
+    await expectAConflictWithNothingInserted(await send("team-1/members/member-2", "PUT", { role: "viewer" }), "member_update_conflict");
   });
 
   it("rejects self membership updates for team admins", async () => {
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-      ]);
+      .mockResolvedValueOnce([teamMember("admin")])
+      .mockResolvedValueOnce([teamMember("admin")]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/members/member-1", {
-        method: "PUT",
-        body: JSON.stringify({ status: "disabled" }),
-      }),
-      mockEnv,
+    await expectRefusedWithoutWriting(
+      await send("team-1/members/member-1", "PUT", { status: "disabled" }),
+      400,
+      "self_membership_update_forbidden",
     );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(400);
-    expect(data.code).toBe("self_membership_update_forbidden");
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
-    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 
   it("rejects owner membership updates through the member endpoint", async () => {
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        { id: "admin-member", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "owner-member", team_id: "team-1", user_id: "owner-user", role: "owner", status: "active" },
-      ]);
+      .mockResolvedValueOnce([teamMember("admin", { id: "admin-member" })])
+      .mockResolvedValueOnce([OWNER_USER]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/team-1/members/owner-member", {
-        method: "PUT",
-        body: JSON.stringify({ status: "disabled" }),
-      }),
-      mockEnv,
+    await expectRefusedWithoutWriting(
+      await send("team-1/members/owner-member", "PUT", { status: "disabled" }),
+      400,
+      "owner_membership_update_forbidden",
     );
-    const data = await readJson(response, apiErrorBody);
-
-    expect(response.status).toBe(400);
-    expect(data.code).toBe("owner_membership_update_forbidden");
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
-    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
   });
 });

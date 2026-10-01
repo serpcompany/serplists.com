@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import { apiEnv } from "./apiEnv";
-import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
+import { chainSelectsUpdatesAndDeletes, dropQueuedRowsAndBatchResults } from "./drizzleChainMocks";
 
 const dbMocks = await vi.hoisted(async () => (await import("./drizzleChainMocks")).drizzleChainMocks());
 
@@ -54,8 +54,11 @@ export { auditMocks, dbMocks, sessionMocks };
 
 export const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
+export { EVERY_GUARDED_WRITE_APPLIED } from "./drizzleChainMocks";
+
 export function resetTeamsHandlerMocks() {
   vi.clearAllMocks();
+  dropQueuedRowsAndBatchResults(dbMocks);
   chainSelectsUpdatesAndDeletes(dbMocks);
   dbMocks.selectChain.orderBy.mockResolvedValue([]);
   dbMocks.selectChain.limit.mockResolvedValue([]);
@@ -66,3 +69,9 @@ export function resetTeamsHandlerMocks() {
   auditMocks.buildAuditEventValues.mockClear();
   sessionMocks.getSessionUserId.mockResolvedValue("user-1");
 }
+
+export function teamMember(role: string, overrides: Record<string, unknown> = {}) {
+  return { id: "member-1", team_id: "team-1", user_id: "user-1", role, status: "active", ...overrides };
+}
+
+export const inAMinute = () => new Date(Date.now() + 60_000).toISOString();

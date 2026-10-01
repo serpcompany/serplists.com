@@ -1,43 +1,54 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
-import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
+import { auditMocks, dbMocks, inAMinute, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
+import { handleTeams } from "@functions/api/handlers/teams";
 
 const joinedTeamBody = z.object({ teamId: z.string(), memberId: z.string(), team: z.record(z.unknown()) }).passthrough();
+
+const ACCEPT_BY_TOKEN = "http://localhost/api/teams/invites/invite-token/accept";
+const ACCEPT_BY_ID = "http://localhost/api/teams/invites/pending/invite-1/accept";
+
+const ADMIN_INVITER = teamMember("admin", { id: "inviter-member", user_id: "admin-1" });
+
+function invite(role: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id: "invite-1",
+    team_id: "team-1",
+    email: "new@example.com",
+    role,
+    invited_by_user_id: "admin-1",
+    expires_at: inAMinute(),
+    accepted_at: null,
+    revoked_at: null,
+    ...overrides,
+  };
+}
+
+function theInviteItsTeamAndTheEmailSignedIn(pending: Record<string, unknown>, email = "new@example.com") {
+  return dbMocks.selectChain.limit
+    .mockResolvedValueOnce([pending])
+    .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
+    .mockResolvedValueOnce([{ email }]);
+}
+
+function anAcceptanceThatCreates(role: string) {
+  theInviteItsTeamAndTheEmailSignedIn(invite(role))
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([ADMIN_INVITER])
+    .mockResolvedValueOnce([{ id: "invite-1" }])
+    .mockResolvedValueOnce([teamMember(role, { id: "member-created" })]);
+}
+
+const accept = (url: string) => handleTeams(new Request(url, { method: "POST" }), mockEnv);
 
 describe("Teams handler", () => {
   beforeEach(resetTeamsHandlerMocks);
 
   it("accepts an invite for the matching user email", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "editor",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([{ id: "invite-1" }])
-      .mockResolvedValueOnce([
-        { id: "member-created", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
-      ]);
+    anAcceptanceThatCreates("editor");
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_TOKEN);
     const data = await readJson(response, joinedTeamBody);
 
     expect(response.status).toBe(200);
@@ -71,36 +82,9 @@ describe("Teams handler", () => {
   });
 
   it("accepts an incoming invite by id for the signed-in user", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "viewer",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([{ id: "invite-1" }])
-      .mockResolvedValueOnce([
-        { id: "member-created", team_id: "team-1", user_id: "user-1", role: "viewer", status: "active" },
-      ]);
+    anAcceptanceThatCreates("viewer");
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/pending/invite-1/accept", {
-        method: "POST",
-      }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_ID);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -118,26 +102,12 @@ describe("Teams handler", () => {
   });
 
   it.each([
-    ["an invite link", "http://localhost/api/teams/invites/invite-token/accept"],
-    ["an incoming invite", "http://localhost/api/teams/invites/pending/invite-1/accept"],
+    ["an invite link", ACCEPT_BY_TOKEN],
+    ["an incoming invite", ACCEPT_BY_ID],
   ])("tells a different account that %s is for another email, without naming it", async (_label, url) => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "work@acme.example",
-          role: "editor",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "personal@example.com" }]);
+    theInviteItsTeamAndTheEmailSignedIn(invite("editor", { email: "work@acme.example" }), "personal@example.com");
 
-    const response = await handleTeams(new Request(url, { method: "POST" }), mockEnv);
+    const response = await accept(url);
     const body = await response.text();
 
     expect(response.status).toBe(403);
@@ -152,31 +122,12 @@ describe("Teams handler", () => {
   });
 
   it("returns a conflict when invite acceptance is lost during the write", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "editor",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
+    theInviteItsTeamAndTheEmailSignedIn(invite("editor"))
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
-      ])
+      .mockResolvedValueOnce([ADMIN_INVITER])
       .mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_TOKEN);
     const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
@@ -187,32 +138,11 @@ describe("Teams handler", () => {
   });
 
   it("refuses an invite for an already active member without changing their role", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "viewer",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
-      .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-      ])
-      .mockResolvedValueOnce([
-        { id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "admin", status: "active" },
-      ]);
+    theInviteItsTeamAndTheEmailSignedIn(invite("viewer"))
+      .mockResolvedValueOnce([teamMember("admin")])
+      .mockResolvedValueOnce([ADMIN_INVITER]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_TOKEN);
     const data = await response.json();
 
     expect(response.status).toBe(409);
@@ -234,30 +164,13 @@ describe("Teams handler", () => {
 
   it.each([
     ["no longer an active member", []],
-    ["below admin", [{ id: "inviter-member", team_id: "team-1", user_id: "admin-1", role: "editor", status: "active" }]],
+    ["below admin", [teamMember("editor", { id: "inviter-member", user_id: "admin-1" })]],
   ])("refuses an invite whose inviter is %s", async (_label, inviterRows) => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "admin",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_at: null,
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
+    theInviteItsTeamAndTheEmailSignedIn(invite("admin"))
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce(inviterRows);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/pending/invite-1/accept", { method: "POST" }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_ID);
 
     expect(response.status).toBe(404);
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
@@ -265,30 +178,10 @@ describe("Teams handler", () => {
   });
 
   it("returns success when the same user retries an accepted invite", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([
-        {
-          id: "invite-1",
-          team_id: "team-1",
-          email: "new@example.com",
-          role: "editor",
-          invited_by_user_id: "admin-1",
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-          accepted_by_user_id: "user-1",
-          accepted_at: new Date().toISOString(),
-          revoked_at: null,
-        },
-      ])
-      .mockResolvedValueOnce([{ id: "team-1", name: "Acme Team", slug: "acme-team" }])
-      .mockResolvedValueOnce([{ email: "new@example.com" }])
-      .mockResolvedValueOnce([
-        { id: "member-1", team_id: "team-1", user_id: "user-1", role: "editor", status: "active" },
-      ]);
+    theInviteItsTeamAndTheEmailSignedIn(invite("editor", { accepted_by_user_id: "user-1", accepted_at: new Date().toISOString() }))
+      .mockResolvedValueOnce([teamMember("editor")]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
-      mockEnv,
-    );
+    const response = await accept(ACCEPT_BY_TOKEN);
     const data = await response.json();
 
     expect(response.status).toBe(200);

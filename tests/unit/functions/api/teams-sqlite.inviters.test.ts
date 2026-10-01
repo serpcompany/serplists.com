@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { asUser, auditActions, d1, expectOneActiveOwnerAndClose, openTheSeededOrganization } from "../../../support/teamsSqlite";
+import {
+  asUser,
+  auditActions,
+  createInvite,
+  d1,
+  expectOneActiveOwnerAndClose,
+  inviteColumns,
+  newUserMembership,
+  openTheSeededOrganization,
+  revocationAndAcceptance,
+  revokedInviteAudits,
+} from "../../../support/teamsSqlite";
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -7,27 +18,10 @@ describe("Organization membership writes against SQLite, which leave every Organ
 
   describe("invites from a manager who loses access", () => {
     async function inviteNewUser(inviterUserId = "admin-user", role = "admin") {
-      const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role });
-      expect(created.status).toBe(200);
-      return created.data?.id as string;
+      return (await createInvite(inviterUserId, "new@example.test", role)).id;
     }
 
-    function inviteState(id: string) {
-      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
-        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
-        id,
-      )[0];
-    }
-
-    function revokedInviteAudits() {
-      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
-        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
-      );
-    }
-
-    function newUserMembership() {
-      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
-    }
+    const inviteState = revocationAndAcceptance;
 
     it.each([
       ["disabled", { status: "disabled" }],
@@ -105,28 +99,10 @@ describe("Organization membership writes against SQLite, which leave every Organ
   });
 
   describe("invites whose inviter left the Organization", () => {
-    async function inviteNewUser(inviterUserId = "admin-user") {
-      const created = await asUser(inviterUserId, "POST", "/team-1/invites", { email: "new@example.test", role: "editor" });
-      expect(created.status).toBe(200);
-      return { id: created.data?.id as string, token: created.data?.inviteToken as string };
-    }
+    const inviteNewUser = (inviterUserId = "admin-user") => createInvite(inviterUserId, "new@example.test", "editor");
 
-    function inviteRow(id: string) {
-      return d1.rows<{ revoked_at: string | null; invited_by_user_id: string }>(
-        "SELECT revoked_at, invited_by_user_id FROM team_invites WHERE id = ?",
-        id,
-      )[0];
-    }
-
-    function revokedInviteAudits() {
-      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
-        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
-      );
-    }
-
-    function newUserMembership() {
-      return d1.rows("SELECT role, status FROM team_members WHERE team_id = 'team-1' AND user_id = 'new-user'");
-    }
+    const inviteRow = (id: string) =>
+      inviteColumns<{ revoked_at: string | null; invited_by_user_id: string }>(id, "revoked_at, invited_by_user_id");
 
     it("revokes the pending invites an admin created when the admin leaves", async () => {
       const invite = await inviteNewUser();

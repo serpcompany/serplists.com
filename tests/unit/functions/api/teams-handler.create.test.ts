@@ -1,10 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, sessionMocks } from "../../../support/teamsHandler";
+import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, sessionMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 
 const teamBody = z.object({ slug: z.string() }).passthrough();
+
+const createRequest = (body: unknown) => new Request("http://localhost/api/teams", { method: "POST", body: JSON.stringify(body) });
+
+const createTeam = (body: unknown) => handleTeams(createRequest(body), mockEnv);
+
+async function expectTheSlugIsTaken(response: Response) {
+  const data = await response.json();
+
+  expect(response.status).toBe(409);
+  expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+}
 
 describe("Teams handler", () => {
   beforeEach(resetTeamsHandlerMocks);
@@ -20,13 +31,7 @@ describe("Teams handler", () => {
   it("creates a team and owner membership", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "Acme Team" }),
-      }),
-      mockEnv,
-    );
+    const response = await createTeam({ name: "Acme Team" });
     const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
@@ -57,13 +62,7 @@ describe("Teams handler", () => {
   it("folds the accented letters of an Organization name into its slug", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "Équipe Café Straße" }),
-      }),
-      mockEnv,
-    );
+    const response = await createTeam({ name: "Équipe Café Straße" });
     const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
@@ -73,17 +72,7 @@ describe("Teams handler", () => {
   it("rejects team creation with an explicitly requested slug that is taken", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "Acme", slug: "acme" }),
-      }),
-      mockEnv,
-    );
-    const data = await response.json();
-
-    expect(response.status).toBe(409);
-    expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    await expectTheSlugIsTaken(await createTeam({ name: "Acme", slug: "acme" }));
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
     expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
@@ -92,13 +81,7 @@ describe("Teams handler", () => {
   it("creates a team with an explicitly requested free slug unchanged", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "Acme", slug: "acme" }),
-      }),
-      mockEnv,
-    );
+    const response = await createTeam({ name: "Acme", slug: "acme" });
     const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
@@ -109,13 +92,7 @@ describe("Teams handler", () => {
   it("suffixes a name-derived slug that is taken", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "Acme" }),
-      }),
-      mockEnv,
-    );
+    const response = await createTeam({ name: "Acme" });
     const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
@@ -125,10 +102,6 @@ describe("Teams handler", () => {
 
   describe("slug races between the check and the write", () => {
     const slugViolation = () => new Error("D1_ERROR: UNIQUE constraint failed: teams.slug: SQLITE_CONSTRAINT");
-
-    function createRequest(body: unknown) {
-      return new Request("http://localhost/api/teams", { method: "POST", body: JSON.stringify(body) });
-    }
 
     function createdAuditSlugs() {
       return auditMocks.buildAuditEventValues.mock.calls
@@ -140,7 +113,7 @@ describe("Teams handler", () => {
     it("retries a name-derived slug that another request took and records the slug it wrote", async () => {
       dbMocks.db.batch.mockRejectedValueOnce(slugViolation()).mockResolvedValueOnce([]);
 
-      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const response = await createTeam({ name: "Marketing" });
       const data = await readJson(response, teamBody);
 
       expect(response.status).toBe(200);
@@ -156,7 +129,7 @@ describe("Teams handler", () => {
     it("gives up with a 409 after a bounded number of slug collisions", async () => {
       dbMocks.db.batch.mockRejectedValue(slugViolation());
 
-      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const response = await createTeam({ name: "Marketing" });
       const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
@@ -167,11 +140,7 @@ describe("Teams handler", () => {
     it("returns 409 without retrying when a requested slug is taken between the check and the write", async () => {
       dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
 
-      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
-      const data = await response.json();
-
-      expect(response.status).toBe(409);
-      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+      await expectTheSlugIsTaken(await createTeam({ name: "Marketing", slug: "marketing" }));
       expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
     });
 
@@ -189,16 +158,14 @@ describe("Teams handler", () => {
     it("recognizes the slug conflict when it is wrapped as the cause of another error", async () => {
       dbMocks.db.batch.mockRejectedValueOnce(new Error("Failed query", { cause: slugViolation() }));
 
-      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
+      const response = await createTeam({ name: "Marketing", slug: "marketing" });
 
       expect(response.status).toBe(409);
     });
 
     function updateRequest(body: { name?: string; slug?: string }) {
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([
-          { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
-        ])
+        .mockResolvedValueOnce([teamMember("admin")])
         .mockResolvedValueOnce([{ id: "team-1", name: "Old Team", slug: "old-team", archived_at: null }]);
       if (body.slug) {
         const organizationsWithTheSlugWhenChecked: never[] = [];
@@ -210,11 +177,7 @@ describe("Teams handler", () => {
     it("returns 409 when another Organization saves the same new slug first", async () => {
       dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
 
-      const response = await handleTeams(updateRequest({ slug: "new-team" }), mockEnv);
-      const data = await response.json();
-
-      expect(response.status).toBe(409);
-      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+      await expectTheSlugIsTaken(await handleTeams(updateRequest({ slug: "new-team" }), mockEnv));
     });
 
     it("rethrows a slug error from an update that did not change the slug", async () => {
@@ -227,13 +190,7 @@ describe("Teams handler", () => {
   it("keeps a colliding Organization slug within 120 characters", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
 
-    const response = await handleTeams(
-      new Request("http://localhost/api/teams", {
-        method: "POST",
-        body: JSON.stringify({ name: "a".repeat(120) }),
-      }),
-      mockEnv,
-    );
+    const response = await createTeam({ name: "a".repeat(120) });
     const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);

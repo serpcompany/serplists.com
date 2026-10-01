@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { asUser, auditActions, billingOwner, createdAt, d1, expectOneActiveOwnerAndClose, member, openTheSeededOrganization } from "../../../support/teamsSqlite";
+import {
+  asUser,
+  auditActions,
+  billingOwner,
+  createdAt,
+  createInvite,
+  d1,
+  expectOneActiveOwnerAndClose,
+  member,
+  openTheSeededOrganization,
+  revocationAndAcceptance,
+  revokedInviteAudits,
+} from "../../../support/teamsSqlite";
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(openTheSeededOrganization);
@@ -113,24 +125,9 @@ describe("Organization membership writes against SQLite, which leave every Organ
   });
 
   describe("member status changes and pending invites", () => {
-    async function inviteMember(role = "editor") {
-      const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "member@example.test", role });
-      expect(created.status).toBe(200);
-      return created.data?.id as string;
-    }
+    const inviteMember = async (role = "editor") => (await createInvite("admin-user", "member@example.test", role)).id;
 
-    function invite(id: string) {
-      return d1.rows<{ revoked_at: string | null; accepted_at: string | null }>(
-        "SELECT revoked_at, accepted_at FROM team_invites WHERE id = ?",
-        id,
-      )[0];
-    }
-
-    function revokedInviteAudits() {
-      return d1.rows<{ resource_id: string; metadata_json: string | null }>(
-        "SELECT resource_id, metadata_json FROM audit_events WHERE action = 'team_invite.revoked'",
-      );
-    }
+    const invite = revocationAndAcceptance;
 
     it("does not let a disabled member rejoin through an invite made before a re-enable", async () => {
       await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" });

@@ -1,38 +1,10 @@
 import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQL } from "drizzle-orm";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
-
-const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-
-const sessionMocks = vi.hoisted(() => ({
-  getSessionUserId: vi.fn(),
-}));
-
-const auditMocks = vi.hoisted(() => ({
-  buildAuditEventValues: vi.fn(async (input: { action: string }) => ({
-    id: "audit-event",
-    action: input.action,
-  })),
-}));
-
-vi.mock("drizzle-orm/d1", () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock("@functions/api/utils/session", () => ({
-  getSessionUserId: sessionMocks.getSessionUserId,
-}));
-
-vi.mock("@functions/api/utils/audit", () => ({
-  buildAuditEventValues: auditMocks.buildAuditEventValues,
-}));
+import { beforeEach, describe, expect, it } from "vitest";
+import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 
 import { handleTeams } from "@functions/api/handlers/teams";
-import { apiEnv } from "../../../support/apiEnv";
 import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
-
-const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -93,15 +65,7 @@ const previewRequest = (token = "invite-token") =>
   new Request(`http://localhost/api/teams/invites/${token}`);
 
 describe("Organization invite preview, which writes nothing so opening a link joins no one", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
-  });
+  beforeEach(resetTeamsHandlerMocks);
 
   it("describes a pending invite without accepting it", async () => {
     dbMocks.selectChain.limit
@@ -221,13 +185,8 @@ describe("Organization invite preview, which writes nothing so opening a link jo
 
 describe("Organization invite decline", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    resetTeamsHandlerMocks();
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   const declineRequest = () =>
@@ -305,16 +264,11 @@ describe("Organization invite decline", () => {
 
 describe("Leaving an Organization", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
+    resetTeamsHandlerMocks();
     const membershipLookupChainsOn = dbMocks.selectChain;
     const pendingInvitesTheLeaverCreated: never[] = [];
     dbMocks.selectChain.where.mockReset().mockReturnValueOnce(membershipLookupChainsOn).mockResolvedValue(pendingInvitesTheLeaverCreated);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue(dbMocks.insertChain);
-    dbMocks.insertChain.select.mockReturnValue(dbMocks.insertChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    sessionMocks.getSessionUserId.mockResolvedValue("user-1");
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   const leaveRequest = () =>
