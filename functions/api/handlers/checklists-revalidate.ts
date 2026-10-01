@@ -21,15 +21,10 @@ export async function revalidateChecklistRun(
 ): Promise<Response> {
   const { checklist_runs, templates } = schema;
 
-  let body: unknown = {};
-  try {
-    body = await request.json();
-  } catch {
-    // An empty body is valid for explicit revalidation.
-  }
+  const optionalBody: unknown = await request.json().catch(() => ({}));
   const revalidateBody = z.object({
     expected_revision: z.number().int().positive().optional(),
-  }).safeParse(body);
+  }).safeParse(optionalBody);
   if (!revalidateBody.success) {
     return jsonError(revalidateBody.error.issues[0]?.message || 'Invalid revalidation payload', 400);
   }
@@ -73,13 +68,9 @@ export async function revalidateChecklistRun(
     .from(templates)
     .where(and(eq(templates.id, existingRun.template_id), isNull(templates.deleted_at)))
     .limit(1);
-  // Same answer whether the template is gone or no longer usable here, so the
-  // response does not reveal that a private template exists. The code tells the page
-  // the run itself is still there.
   if (!sourceTemplate || !canUseTemplateAsRunSource(sourceTemplate, { userId, runTeamId: existingRun.team_id ?? null })) {
     return jsonError('Source template not found', 404, { code: 'source_template_unavailable' });
   }
-  // Revalidation always leaves the run in_progress, which reopens a completed run.
   if (isReopening(existingRun.status, 'in_progress')) {
     const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
     const limitHit = await findActiveRunLimitHit(env, runOwner, userId);

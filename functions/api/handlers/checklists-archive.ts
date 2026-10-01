@@ -74,7 +74,6 @@ export async function restoreChecklistRun(
     teamId ? eq(checklist_runs.team_id, teamId) : eq(checklist_runs.user_id, userId),
     isNotNull(checklist_runs.deleted_at),
   );
-  // With a limit, the restore re-checks it in the same statement.
   const batchResults = await db.batch(auditedRunUpdate(db, checklistId, capacity.limit === null
     ? archivedRun
     : and(archivedRun, activeRunCapacityAvailableSql(owner, capacity.limit)), restoreUpdates, auditEvent));
@@ -83,7 +82,6 @@ export async function restoreChecklistRun(
       const current = await countActiveRuns(env, owner);
       if (current >= capacity.limit) return activeRunLimitResponse(owner, { limit: capacity.limit, current }, 'restore');
     }
-    // A concurrent request restored it first.
     return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
   }
 
@@ -99,7 +97,6 @@ export async function archiveChecklistRun(
 ): Promise<Response> {
   const { checklist_runs } = schema;
 
-  // First check if the checklist exists and belongs to the user or team.
   const [existingChecklist] = await db
     .select()
     .from(checklist_runs)
@@ -144,7 +141,6 @@ export async function archiveChecklistRun(
     isNull(checklist_runs.deleted_at),
   ), archiveUpdates, auditEvent));
   if (batchUpdateMissed(batchResults[1])) {
-    // A concurrent request archived it first.
     return jsonError('Checklist not found or unauthorized', 404);
   }
 

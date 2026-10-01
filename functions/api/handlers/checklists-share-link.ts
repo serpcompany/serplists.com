@@ -52,7 +52,6 @@ export async function shareChecklistRun(
     request,
     createdAt: now,
   });
-  // The new token replaces the old one, so the previous link stops working.
   const batchResults = await db.batch(auditedRunUpdate(db, runId, and(
     run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
     isNull(checklist_runs.deleted_at),
@@ -90,13 +89,11 @@ export async function stopSharingChecklistRun(
   if (!(await canUpdateRun(env, runRecord, userId))) {
     return jsonError('Forbidden', 403);
   }
-  // Already private (or a concurrent request got there first): nothing to write.
   if (!run.is_public) {
     return json({ id: runId, isPublic: false });
   }
 
   const now = new Date().toISOString();
-  // No revision bump: share state is not run content, so open run pages keep saving.
   const revokeUpdates = { is_public: false, share_token: null, share_expires_at: null, share_used_at: null, updated_at: now };
   const sharedRun = and(
     run.team_id ? eq(checklist_runs.team_id, run.team_id) : eq(checklist_runs.user_id, userId),
@@ -114,7 +111,6 @@ export async function stopSharingChecklistRun(
     request,
     createdAt: now,
   });
-  // Written only while the run is still shared, so a repeat or concurrent revoke records nothing.
   await db.batch(auditedRunUpdate(db, runId, sharedRun, revokeUpdates, auditEvent));
 
   return json({ id: runId, isPublic: false });

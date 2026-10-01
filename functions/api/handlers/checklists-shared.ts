@@ -17,9 +17,6 @@ import { canViewRun } from '../utils/run-access';
 import { completionStamps, findRunCompletionRefusal } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
 
-// /api/checklists/shared/:token needs no login: holding the link is the only credential.
-// Guests may read the run and change completion state and task notes, nothing else.
-
 export async function handleSharedChecklist(
   request: Request,
   env: Env,
@@ -48,7 +45,6 @@ export async function handleSharedChecklist(
     return new Response('Method Not Allowed', { status: 405 });
   }
 
-  // No session is required here, so check the token before reading the body.
   const [existingSharedRun] = await db.select().from(checklist_runs).where(activeShare).limit(1);
 
   if (!existingSharedRun || !existingSharedRun.id) {
@@ -62,7 +58,6 @@ export async function handleSharedChecklist(
     return jsonError('Invalid JSON payload', 400);
   }
 
-  // Fields a guest may not set (title, progress, completed_at, ...) are dropped here.
   const parsed = sharedRunUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return jsonError(parsed.error.issues[0]?.message || 'Invalid checklist payload', 400);
@@ -81,7 +76,6 @@ export async function handleSharedChecklist(
     });
   }
 
-  // Reopening adds an active run to the owner's context, whoever holds the link.
   if (isReopening(existingSharedRun.status, status)) {
     const owner = { userId: existingSharedRun.user_id, teamId: existingSharedRun.team_id ?? null };
     const limitHit = await findActiveRunLimitHit(env, owner, userId);
@@ -94,8 +88,6 @@ export async function handleSharedChecklist(
   }
 
   const runRecord = existingSharedRun as unknown as Record<string, unknown>;
-  // A signed-in visitor is named only if they already belong to the run's owner context
-  // (see share-link-actors.ts); anonymous saves skip the membership lookup.
   const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
 
   const now = new Date().toISOString();
@@ -111,9 +103,6 @@ export async function handleSharedChecklist(
     if (tooLarge) return tooLarge;
     updates.items = JSON.stringify(nextSections);
   }
-  // A link holder completes a run only as the run page would: it has tasks and none is left
-  // open, counting the ticks this save makes. The share page checks this too, but the link
-  // is not a trusted client. Guests get the open count, not task ids.
   if (status === 'completed' && existingSharedRun.status !== 'completed') {
     const refusal = findRunCompletionRefusal(nextSections);
     if (refusal) {
@@ -129,8 +118,6 @@ export async function handleSharedChecklist(
   if (status === 'completed') {
     updates.share_used_at = now;
   }
-  // Same rule as the private PUT and MCP: only a real completion stamps the time and the
-  // completer (the attributed actor, or no one for a guest); reopening keeps both.
   Object.assign(updates, completionStamps({
     currentStatus: existingSharedRun.status,
     currentCompletedAt: existingSharedRun.completed_at,

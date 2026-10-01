@@ -72,8 +72,6 @@ async function resolveTemplateRunSource(
   const isPrivateTeamTemplate = sourceTemplate.owner_type === 'team' && sourceTeamId && !sourceIsPublic;
   const effectiveTeamId = isPrivateTeamTemplate ? sourceTeamId : requestedTeamId;
 
-  // A private Organization template's content never goes into another context's Run. Its own
-  // members learn where it belongs; to anyone else it does not exist.
   if (isPrivateTeamTemplate && requestedTeamId && requestedTeamId !== sourceTeamId) {
     return {
       error: await getActiveTeamMembership(env, sourceTeamId, userId)
@@ -96,7 +94,6 @@ async function resolveTemplateRunSource(
   return {
     source: {
       effectiveTeamId,
-      // A run starts with the ids its Template's editor and later saves use (see template-identities.ts).
       sections: resetRunCompletionState(sanitizeStoredSections(withStableTemplateIdentities(normalizedSections.sections))),
       title: sourceTemplate.title || '',
       version: typeof sourceTemplate.version === 'number' ? sourceTemplate.version : 1,
@@ -151,7 +148,6 @@ export async function createChecklistRun(
   if (normalizedSections.error) {
     return jsonError(normalizedSections.error, 400);
   }
-  // A run its page could never save is never created.
   const tooLarge = contentTooLargeResponse('run', normalizedSections.sections);
   if (tooLarge) return tooLarge;
 
@@ -170,7 +166,6 @@ export async function createChecklistRun(
     template_version: templateRunSource.source?.version ?? 1,
     revision: 1,
     retired_items: '[]',
-    // A run created as completed is stamped like any other completion.
     ...completionStamps({ currentStatus: null, currentCompletedAt: null, nextStatus: status, userId, now }),
   };
 

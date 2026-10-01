@@ -34,7 +34,6 @@ export async function updateChecklistRun(
   const { title, items, sections, status, progress, completed_at, expected_revision } = parsed.data;
   const rawBody = body as Record<string, unknown>;
 
-  // Build dynamic update query
   const updates: Record<string, unknown> = {};
   let nextSections: unknown[] | null = null;
 
@@ -55,8 +54,6 @@ export async function updateChecklistRun(
   if (progress !== undefined) {
     updates.progress = progress;
   }
-  // completed_at is not a field of its own: completionStamps below uses it only when the
-  // run becomes completed, and ignores the value the run page echoes on later saves.
 
   if (Object.keys(updates).length === 0) {
     return jsonError('No fields to update', 400);
@@ -86,7 +83,6 @@ export async function updateChecklistRun(
     const tooLarge = contentTooLargeResponse('run', nextSections, parseJsonArray(existingRun.items) ?? []);
     if (tooLarge) return tooLarge;
   }
-  // Only a real reopen counts: the run page sends the current status with every save.
   if (isReopening(existingRun.status, status)) {
     const runOwner = { userId: existingRun.user_id, teamId: existingRun.team_id ?? null };
     const limitHit = await findActiveRunLimitHit(env, runOwner, userId);
@@ -96,8 +92,6 @@ export async function updateChecklistRun(
   const now = new Date().toISOString();
   updates.updated_at = now;
   updates.revision = currentRevision + 1;
-  // Only a real completion names the completer; the revision guard below keeps
-  // existingRun.status current for this decision.
   Object.assign(updates, completionStamps({
     currentStatus: existingRun.status,
     currentCompletedAt: existingRun.completed_at,
