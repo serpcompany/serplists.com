@@ -13,7 +13,7 @@ const deferred = <T>() => {
 };
 
 describe('createSingleFlight', () => {
-  it('runs the task once when it is called twice before the first finishes', async () => {
+  it('runs the task once when it is called twice in one tick, before React could disable the button', async () => {
     const onRunningChange = vi.fn();
     const flight = createSingleFlight(onRunningChange);
     const pending = deferred<string>();

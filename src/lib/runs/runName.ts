@@ -1,5 +1,5 @@
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
-import { truncateToLength } from '@/lib/utils/truncateText';
+import { truncateToUtf16Length } from '@/lib/utils/truncateText';
 
 // POST /api/checklists rejects a run title longer than this (checklistPayloadSchema in
 // functions/api/utils/payloads.ts); src/lib/schemas/nameLimits.ts holds the number and a
@@ -21,7 +21,7 @@ export const buildDefaultRunName = (
   const tail = (typeof suffix === 'string' ? suffix : suffix.toLocaleString()).trim();
 
   if (!title) {
-    return truncateToLength(tail, maxLength).trim();
+    return truncateToUtf16Length(tail, maxLength).trim();
   }
 
   const fullName = tail ? `${title}${SEPARATOR}${tail}` : title;
@@ -32,10 +32,10 @@ export const buildDefaultRunName = (
   const titleBudget = maxLength - SEPARATOR.length - tail.length - ELLIPSIS.length;
   // A suffix that leaves no room (or none at all): the title alone is the better name.
   if (!tail || titleBudget < 1) {
-    return truncateToLength(title, maxLength).trimEnd();
+    return truncateToUtf16Length(title, maxLength).trimEnd();
   }
 
-  return `${truncateToLength(title, titleBudget).trimEnd()}${ELLIPSIS}${SEPARATOR}${tail}`;
+  return `${truncateToUtf16Length(title, titleBudget).trimEnd()}${ELLIPSIS}${SEPARATOR}${tail}`;
 };
 
 // A typed run name (trimmed), or the default name when the field was left blank.

@@ -215,3 +215,22 @@ page, so a page's sticky parts stick to the window.
   every save) never moves it under the pointer. A sticky element needs every box around it
   to clip (`overflow-clip`), not scroll: an `overflow-auto` or `overflow-hidden` ancestor
   holds it instead of the window (`src/components/run-execution/TaskExecutionPanel.tsx`).
+- A double click acts once. Its second click lands on whatever is under the pointer by
+  then, and a click's `detail` counts the clicks (0 for the keyboard and for programmatic
+  clicks), so the helpers in `src/lib/utils/repeatClick.ts` tell the repeat apart. A
+  control that changes what it does after a click (Next Task becoming the next task's
+  Mark Complete, Rename becoming Save title) takes `onSingleClick`. A dialog that a click
+  opens passes `createJustOpenedGuard`'s `markOpened` as its popup's ref and calls
+  `onOutsidePress` from `onOpenChange` when it closes for an outside press, so the rest of
+  the double click, landing on its overlay, does not close it. A page that scrolls under
+  the pointer (the run page moving to another task) calls
+  `ignoreRepeatClicksBriefly(window)`, which swallows repeat clicks in the capture phase,
+  before any control acts. Those two last `DOUBLE_CLICK_MS`, 500 ms, the longest
+  double-click interval browsers use (the Windows default). An action that must not run
+  twice (a save, an export) goes through `createSingleFlight`
+  (`src/lib/utils/singleFlight.ts`; `useSingleFlight` for a button), which sets its guard
+  synchronously, before React can re-render the button as disabled, and clears it however
+  the action ends.
+- Write a count with its noun through `formatCount` or `pluralize`
+  (`src/lib/utils/pluralize.ts`): "1 template", "2 templates", "0 tasks", never
+  "1 templates".

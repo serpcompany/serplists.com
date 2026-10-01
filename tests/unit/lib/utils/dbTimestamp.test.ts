@@ -92,7 +92,7 @@ describe('formatMonthYear', () => {
     expect(formatMonthYear('2025-12-26 09:18:30')).toBe('December 2025');
   });
 
-  it('uses the UTC month for a value on a month boundary', () => {
+  it('uses the UTC month for a value on a month boundary, so every viewer sees the same month', () => {
     expect(formatMonthYear('2025-11-30 20:00:00')).toBe('November 2025');
   });
 
