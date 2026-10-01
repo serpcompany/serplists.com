@@ -241,9 +241,7 @@ describe('buildDashboardTemplatesState', () => {
     expect(state.canCreateRun).toBe(false);
   });
 
-  // Public catalog rows leave out team_id, so an Organization template the user created
-  // is recognised by its owner type and stays out of Personal.
-  it('leaves an Organization template from the public catalog out of Personal', () => {
+  it('leaves an Organization template from the public catalog, whose rows have no team_id, out of Personal by its owner type', () => {
     const state = buildDashboardTemplatesState({
       allTemplates: [
         buildTemplate({ id: 'personal', ownerType: 'user' }),
@@ -409,8 +407,6 @@ describe('createDashboardTemplateRun', () => {
   });
 });
 
-// The run launcher awaited the run and then navigated to it, even when the user had
-// pressed Back meanwhile, pulling them to the new run.
 describe('finishDashboardTemplateRun', () => {
   const run = { kind: 'ok' as const, runId: 'run-9' };
 
@@ -424,14 +420,13 @@ describe('finishDashboardTemplateRun', () => {
     expect(navigate).toHaveBeenCalledWith('/dashboard/runs/run-9/');
   });
 
-  it('does not navigate once the user has left the page', () => {
+  it('does not pull a user who left the page, with Back for example, to the new run, and still closes the launcher since the run exists', () => {
     const closeLauncher = vi.fn();
     const navigate = vi.fn();
 
     finishDashboardTemplateRun(run, { isCurrent: () => false }, { closeLauncher, navigate });
 
     expect(navigate).not.toHaveBeenCalled();
-    // The run exists: the launcher is done either way.
     expect(closeLauncher).toHaveBeenCalledTimes(1);
   });
 
@@ -562,10 +557,7 @@ describe('reportDashboardTemplateRunFailure', () => {
     expect(actions.upgrade).not.toHaveBeenCalled();
   });
 
-  // Start Run failed after the user had left My Templates (Escape, then a sidebar link,
-  // or Back): the checkout redirect and the stale sign-in navigate still ran, pulling
-  // them from the page they had moved to.
-  it('does not start checkout once the user has left the page', async () => {
+  it('does not start checkout once the user has left My Templates, so it never pulls them from the page they moved to', async () => {
     const actions = buildActions(true);
 
     const redirecting = await reportDashboardTemplateRunFailure(

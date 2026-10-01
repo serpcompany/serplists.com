@@ -3,11 +3,6 @@ import type { Env } from '../types';
 export type AuthEmailTag = 'password-reset' | 'email-verification';
 type AuthEmailProvider = 'resend' | 'usesend';
 
-/**
- * The email provider did not accept an auth email: a non-2xx reply or a network
- * failure. It carries no address or provider response body (which can echo the
- * recipient), so it is safe to log.
- */
 export class AuthEmailDeliveryError extends Error {
   constructor(
     readonly provider: AuthEmailProvider,
@@ -62,7 +57,6 @@ async function sendEmail(env: Env, params: { to: string; subject: string; text: 
     return postEmail('usesend', 'https://app.usesend.com/api/v1/emails', env.USESEND_API_KEY, params.tag, payload);
   }
 
-  // A configuration error, not a delivery failure: callers must not swallow it.
   throw new Error('Auth email provider is not configured. Set RESEND_API_KEY or USESEND_API_KEY.');
 }
 

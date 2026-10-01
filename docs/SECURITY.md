@@ -43,7 +43,8 @@
   path, including username sign-in (`functions/api/utils/test-email-block.ts`).
 - **Auth requests are CSRF-protected in the router.** Better Auth also parses
   form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
-  so a cross-site HTML form could sign a visitor into another account or sign them
+  and a cross-site HTML form needs no CORS preflight and sends no `SameSite=Lax`
+  session cookie, so it could sign a visitor into another account or sign them
   out. `functions/api/utils/auth-request-guard.ts` requires every non-`GET`
   `/api/auth/*` request to send `Content-Type: application/json` (`415` otherwise),
   which forces a CORS preflight for other origins, and refuses with `403` a request
@@ -58,7 +59,8 @@
   and `src/lib/schemas/userProfileSchema.ts`) rejects with `400` a name that is not
   1-100 characters of text after trimming, a display username over 30 characters,
   and an avatar that is not an upload served by SERP Lists (the request or frontend
-  origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters).
+  origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters),
+  so an avatar is never a `data:` URI or a third-party tracker.
   `null` or an empty string removes the avatar. Updates check only the fields they
   write, so Better Auth's internal updates (email verification, username) pass.
 - **Agents act through Run Keys**, revocable credentials limited to the owner's
@@ -301,13 +303,20 @@ Clients that share a /64 (some office or campus networks) share one budget.
   starts_with(http.request.uri.path, "/api/mcp")`, 20 requests per 10 seconds per IP,
   then Block for 10 seconds. Unlike the in-memory limits, it applies across all edges.
 - Password-reset and verification emails are also limited per account, whatever
-  the IP: at most one of each kind a minute and five an hour
+  the IP, so a request loop can neither flood an inbox nor spend the email
+  provider's quota: at most one of each kind a minute and five an hour
   (`functions/api/utils/auth-email-throttle.ts`, called from the Better Auth send
   callbacks). The count is one primary-key upsert in D1 (a `verification` row with
-  id `auth-email-throttle:<kind>:<userId>`), so it holds across edges and concurrent
-  requests. A skipped send returns the same response as a sent one, and the unused
-  reset token is deleted. A send the provider rejects does not count. Verification emails are never sent to an address that is
-  already verified. If D1 fails, the email is sent (fail open).
+  id `auth-email-throttle:<kind>:<userId>`, which no Better Auth lookup reads), so it
+  holds across edges and concurrent requests. The row's `value` counts the window's
+  sends, `expires_at` ends the window (Better Auth's expired-row cleanup then deletes
+  it) and `updated_at` is the last send. A skipped send returns the same response as
+  a sent one, and the unused reset token is deleted: Better Auth stores it before it
+  calls the send callback, so every throttled request would otherwise leave a row
+  nobody can use. A send the provider rejects does not count, so the person can retry
+  at once. Verification emails are never sent to an address that is already verified.
+  If D1 fails, the email is sent (fail open), so a database problem never blocks
+  sign-up or password recovery.
 
 The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
 consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is

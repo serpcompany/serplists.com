@@ -10,16 +10,9 @@ import {
 type UserWrite = Record<string, unknown>;
 
 export type UserProfileWritePolicy = {
-  /** URL prefixes an avatar image may start with: uploads served by SERP Lists. */
   avatarUrlPrefixes: string[];
 };
 
-/**
- * Avatars are uploaded through POST /api/uploads, which returns
- * `${R2_PUBLIC_BASE_URL || request origin}/api/uploads/file?key=...`. Accept
- * those URLs on the request origin, the configured frontend origins and the
- * public R2 base, and nothing else (no data: URIs or third-party trackers).
- */
 export function buildUserProfileWritePolicy(env: Env, trustedOrigins: Iterable<string>): UserProfileWritePolicy {
   const bases = new Set<string>(trustedOrigins);
   if (env.R2_PUBLIC_BASE_URL) {
@@ -38,7 +31,6 @@ function firstIssue(error: ZodError): string {
 }
 
 function parseAvatarUrl(value: unknown, policy: UserProfileWritePolicy): string | null {
-  // AvatarUpload removes an avatar with `image: null`; an empty string means the same.
   if (value === null || value === '') return null;
   if (typeof value !== 'string') reject('Avatar image must be a URL.');
   if (value.length > USER_IMAGE_URL_MAX_LENGTH) {
@@ -57,13 +49,6 @@ function parseAvatarUrl(value: unknown, policy: UserProfileWritePolicy): string 
   return value;
 }
 
-/**
- * Validates the user fields people can set through Better Auth (sign-up and
- * update-user). Runs from databaseHooks, so it sees every user write: on an
- * update it checks only the fields being written, because Better Auth also
- * updates users internally (email verification, username, timestamps).
- * Throws a 400 APIError; returns the data with the name trimmed.
- */
 export function validateUserProfileWrite(
   data: UserWrite,
   action: 'create' | 'update',

@@ -34,6 +34,8 @@ and user-facing failure states when a supporting service is unavailable.
   hostname, turns on the other production-only checks: breached-password lookups
   and test-email blocking (`functions/api/utils/auth-policy.ts`). Preview sets it to
   `false`, so `staging.serplists.com` and `*.pages.dev` previews behave the same.
+  Every deployed environment sets it; where it is unset (tests, ad hoc runs),
+  verification is required whenever an email provider is configured.
 - Verification emails return to `/login/?verified=1`. Links expire after Better
   Auth's default of one hour; a failed link (expired, invalid, or for a deleted
   account) returns to the same URL with `&error=<code>` appended. Login checks
@@ -47,7 +49,11 @@ and user-facing failure states when a supporting service is unavailable.
   exception: sign-up creates the account before it sends the verification email,
   so a provider failure there is logged (`auth_email_send_failed`, user id only)
   and sign-up still succeeds. Register then sends the person to
-  `/login/?verify_email=1`, where they can resend it. Sign-up is refused with
+  `/login/?verify_email=1`, where they can resend it. Only a delivery failure is
+  passed over that way: an `AuthEmailDeliveryError` (a non-2xx reply or a network
+  error), which names the provider, the email kind and the status, never the address
+  or the provider's reply, which can echo it. A missing provider is a configuration
+  error and fails the request. Sign-up is refused with
   `503 auth_email_unavailable` before any account is created when verification is
   required and no provider is configured. `GET /api/auth/status` reports whether
   email delivery is available.
@@ -84,8 +90,9 @@ and user-facing failure states when a supporting service is unavailable.
 - A handler's session lookup (`getSessionUserId`) returns `null`, and the handler
   answers `401`, only when there is no valid session. If the lookup itself fails
   (a D1 outage, or Better Auth cannot be set up), it logs `session_lookup_failed`
-  and rethrows, so the API answers `500`. A `401` there would send a signed-in user
-  to `/login/`, or quietly show them anonymous data. Anonymous requests never reach
+  (the error's name and status only, since a wrapped query error can carry the
+  session token) and rethrows, so the API answers `500`. A `401` there would send a
+  signed-in user to `/login/`, or quietly show them anonymous data. Anonymous requests never reach
   D1 here, so public pages are unaffected.
 - Auth errors the API router sends itself, before Better Auth runs (rate limit,
   blocked test account, `auth_email_unavailable`, a non-JSON body or an untrusted
@@ -179,7 +186,8 @@ and user-facing failure states when a supporting service is unavailable.
   (`idx_users_username`). The plugin's "already taken" check never runs on
   `/update-user` in Better Auth 1.3.4, because it looks for a session before the
   endpoint loads one, so `databaseHooks.user.update` repeats it with the caller's
-  session (`functions/api/utils/username-conflict.ts`). A write that still hits the
+  session (`functions/api/utils/username-conflict.ts`); an update with no signed-in
+  caller (Better Auth's own writes) skips it. A write that still hits the
   unique index, when two requests claim a name at once, is mapped to the same
   `422 USERNAME_IS_ALREADY_TAKEN` instead of a bodyless 500. Re-saving your own
   username in a different case is allowed.
