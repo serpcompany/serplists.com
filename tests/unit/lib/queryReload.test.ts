@@ -3,18 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { reloadQuery } from '@/lib/queryReload';
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-};
+import { deferred } from '../../support/deferred';
 
 const queryKey = ['agent-keys'];
 
-// Starts the component's first load the way a mounted useQuery does.
-const startFirstLoad = (queryClient: QueryClient, queryFn: () => Promise<string[]>) => {
+const startFirstLoadLikeAMountedUseQuery = (queryClient: QueryClient, queryFn: () => Promise<string[]>) => {
   const observer = new QueryObserver(queryClient, { queryKey, queryFn });
   const unsubscribe = observer.subscribe(() => undefined);
   return { observer, unsubscribe };
@@ -25,7 +18,7 @@ describe('reloadQuery', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const staleList = deferred<string[]>();
     const queryFn = vi.fn().mockReturnValueOnce(staleList.promise).mockResolvedValue(['key-new']);
-    const { observer, unsubscribe } = startFirstLoad(queryClient, queryFn);
+    const { observer, unsubscribe } = startFirstLoadLikeAMountedUseQuery(queryClient, queryFn);
 
     const refetched = observer.refetch();
     staleList.resolve([]);
@@ -40,7 +33,7 @@ describe('reloadQuery', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const staleList = deferred<string[]>();
     const queryFn = vi.fn().mockReturnValueOnce(staleList.promise).mockResolvedValue(['key-new']);
-    const { unsubscribe } = startFirstLoad(queryClient, queryFn);
+    const { unsubscribe } = startFirstLoadLikeAMountedUseQuery(queryClient, queryFn);
 
     const reloaded = reloadQuery(queryClient, queryKey);
     staleList.resolve([]);
@@ -56,7 +49,7 @@ describe('reloadQuery', () => {
     const staleList = deferred<string[]>();
     const freshList = deferred<string[]>();
     const queryFn = vi.fn().mockReturnValueOnce(staleList.promise).mockReturnValueOnce(freshList.promise);
-    const { unsubscribe } = startFirstLoad(queryClient, queryFn);
+    const { unsubscribe } = startFirstLoadLikeAMountedUseQuery(queryClient, queryFn);
 
     const reloaded = reloadQuery<string[]>(queryClient, queryKey, (keys = []) => ['key-new', ...keys]);
     await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
@@ -75,7 +68,7 @@ describe('reloadQuery', () => {
   it('refetches a query that already has data', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const queryFn = vi.fn().mockResolvedValueOnce(['key-old']).mockResolvedValueOnce(['key-old', 'key-new']);
-    const { unsubscribe } = startFirstLoad(queryClient, queryFn);
+    const { unsubscribe } = startFirstLoadLikeAMountedUseQuery(queryClient, queryFn);
     await vi.waitFor(() => expect(queryClient.getQueryData(queryKey)).toEqual(['key-old']));
 
     await reloadQuery(queryClient, queryKey);
@@ -87,7 +80,7 @@ describe('reloadQuery', () => {
   it("marks a query no page shows stale instead of refetching it with the last page's query function", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const queryFn = vi.fn().mockResolvedValue(['key-old']);
-    const { unsubscribe } = startFirstLoad(queryClient, queryFn);
+    const { unsubscribe } = startFirstLoadLikeAMountedUseQuery(queryClient, queryFn);
     await vi.waitFor(() => expect(queryClient.getQueryData(queryKey)).toEqual(['key-old']));
     unsubscribe();
 

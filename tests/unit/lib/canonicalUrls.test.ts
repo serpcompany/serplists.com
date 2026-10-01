@@ -24,10 +24,6 @@ vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
   return openNextBuildConfig();
 });
 
-// SERP URL standard: every URL the app writes is the canonical form, so no link depends on a
-// redirect. Each path below must be canonical and must be served, not redirected, by the
-// production build's routing (the Worker's and Next.js's alike).
-
 const { redirects } = await loadBuiltRoutes('production');
 
 const pathOf = (url: string) => new URL(url, 'https://serplists.com').pathname;
@@ -42,7 +38,7 @@ async function expectServedAsIs(url: string) {
 
 const template = { id: 'tpl-1', slug: 'weekly-review', userId: 'user-1', ownerProfile: { username: 'john.doe' } };
 
-const BUILT_PATHS: Array<[string, string]> = [
+const ROUTE_BUILDER_PATHS: Array<[string, string]> = [
   ['buildHomePath', routes.buildHomePath()],
   ['buildLoginPath', routes.buildLoginPath()],
   ['buildRegisterPath', routes.buildRegisterPath()],
@@ -75,24 +71,32 @@ const BUILT_PATHS: Array<[string, string]> = [
   ['buildConsoleRunPath', routes.buildConsoleRunPath('run-1')],
   ['buildConsoleSettingsPath', routes.buildConsoleSettingsPath()],
   ['buildConsoleArchivePath', routes.buildConsoleArchivePath()],
-  // Links and callbacks the auth pages and the API write.
+];
+
+const AUTH_PAGE_AND_API_LINKS: Array<[string, string]> = [
   ['EMAIL_VERIFIED_CALLBACK_URL', EMAIL_VERIFIED_CALLBACK_URL],
   ['VERIFY_EMAIL_LOGIN_PATH', VERIFY_EMAIL_LOGIN_PATH],
   ['withReturnPath', withReturnPath(routes.buildLoginPath(), '/dashboard/templates/')],
   ['getPostRegisterDestination', getPostRegisterDestination({ requiresEmailVerification: false, returnPath: null })],
   ['getPostSignInDestination', getPostSignInDestination(null)],
   ['buildTeamInvitePath (API)', buildTeamInvitePath('invite-token')],
-  ...publicSiteLinks.filter((link) => !link.external).map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]),
 ];
 
+const PUBLIC_SITE_LINK_PATHS = publicSiteLinks
+  .filter((link) => !link.external)
+  .map((link): [string, string] => [`publicSiteLinks ${link.label}`, link.href]);
+
 describe('route builders and the URLs the app writes', () => {
-  it.each(BUILT_PATHS)('%s gives a canonical URL that is served as it is', async (_name, url) => {
-    await expectServedAsIs(url);
-  });
+  it.each([...ROUTE_BUILDER_PATHS, ...AUTH_PAGE_AND_API_LINKS, ...PUBLIC_SITE_LINK_PATHS])(
+    '%s gives a canonical URL that is served as it is',
+    async (_name, url) => {
+      await expectServedAsIs(url);
+    },
+  );
 
   it('checks every route builder routes.ts exports', () => {
     const builders = Object.keys(routes).filter((name) => /^build\w*Path$/.test(name));
-    const checked = new Set(BUILT_PATHS.map(([name]) => name.split(' ')[0]));
+    const checked = new Set(ROUTE_BUILDER_PATHS.map(([name]) => name.split(' ')[0]));
     expect(builders.filter((name) => !checked.has(name))).toEqual([]);
   });
 });
@@ -123,10 +127,14 @@ describe('sitemap entries', () => {
   });
 });
 
-// Hard-coded page links in the app: JSX hrefs and the paths handed to the router and the
-// sign-in links. Builders cover the rest; this catches a new literal written without its slash,
-// or one that only redirects (a legacy path such as /account/, or /dashboard/).
-describe('hard-coded links in src', () => {
+const HARD_CODED_LINK_PATTERNS = {
+  jsxHref: /\bhref=["'](\/[^"']*)["']/g,
+  jsxHrefExpression: /\bhref=\{\s*["'`](\/[^"'`$]*)["'`]\s*\}/g,
+  routerOrSignInPath: /\b(?:push|replace|navigate|withReturnPath)\(\s*["'`](\/[^"'`$]*)["'`]/g,
+  hrefProperty: /\bhref:\s*["'`](\/[^"'`$]*)["'`]/g,
+};
+
+describe('hard-coded links in src, which the route builders do not cover', () => {
   const sourceFiles = (directory: string): string[] =>
     readdirSync(directory).flatMap((name) => {
       const file = path.join(directory, name);
@@ -134,18 +142,10 @@ describe('hard-coded links in src', () => {
       return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [file] : [];
     });
 
-  const LINK_PATTERNS = [
-    /\bhref=["'](\/[^"']*)["']/g,
-    /\bhref=\{\s*["'`](\/[^"'`$]*)["'`]\s*\}/g,
-    /\b(?:push|replace|navigate|withReturnPath)\(\s*["'`](\/[^"'`$]*)["'`]/g,
-    /\bhref:\s*["'`](\/[^"'`$]*)["'`]/g,
-  ];
-
   const linksIn = (source: string): string[] =>
-    LINK_PATTERNS.flatMap((pattern) => Array.from(source.matchAll(pattern), (match) => match[1]));
+    Object.values(HARD_CODED_LINK_PATTERNS).flatMap((pattern) => Array.from(source.matchAll(pattern), (match) => match[1]));
 
-  /** The links that are not in canonical form, or that the production build redirects. */
-  const badLinks = async (source: string): Promise<string[]> => {
+  const linksNotCanonicalOrRedirected = async (source: string): Promise<string[]> => {
     const bad: string[] = [];
     for (const link of linksIn(source)) {
       const pathname = pathOf(link);
@@ -155,7 +155,7 @@ describe('hard-coded links in src', () => {
     return bad;
   };
 
-  it('finds a link written without its slash, or one that redirects', async () => {
+  it('finds a link written without its slash, or one that only redirects, such as a legacy path or /dashboard/', async () => {
     const source = [
       '<Link href="/login">Log in</Link>',
       "<Link href={'/pricing?x=1'}>Pricing</Link>",
@@ -167,7 +167,7 @@ describe('hard-coded links in src', () => {
       "router.replace('/dashboard/');",
       '<Link href="/account/">Account</Link>',
     ].join('\n');
-    expect(await badLinks(source)).toEqual([
+    expect(await linksNotCanonicalOrRedirected(source)).toEqual([
       '/login',
       '/account/',
       '/pricing?x=1',
@@ -181,7 +181,7 @@ describe('hard-coded links in src', () => {
   it('links only to canonical URLs, which answer without a redirect', async () => {
     const found: string[] = [];
     for (const file of sourceFiles('src')) {
-      for (const link of await badLinks(readFileSync(file, 'utf8'))) found.push(`${file}: ${link}`);
+      for (const link of await linksNotCanonicalOrRedirected(readFileSync(file, 'utf8'))) found.push(`${file}: ${link}`);
     }
     expect(found).toEqual([]);
   });

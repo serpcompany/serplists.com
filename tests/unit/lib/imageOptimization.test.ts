@@ -128,8 +128,8 @@ describe('optimizeImage', () => {
     await expect(optimizeImage(jpeg)).resolves.toBe(jpeg);
   });
 
-  it('names and types the file from the bytes the browser produced', async () => {
-    blobType = 'image/png'; // a browser without WebP encoding falls back to PNG
+  it('names and types the file from the bytes the browser produced, as when a browser without WebP encoding falls back to PNG', async () => {
+    blobType = 'image/png';
     const result = await optimizeImage(file('photo.webp', 'image/webp'));
 
     expect(result.type).toBe('image/png');
@@ -170,10 +170,7 @@ describe('optimizeImage', () => {
   });
 });
 
-// optimizeImage used to create an object URL for every uploaded image and never revoke it,
-// so each file stayed referenced until the tab closed. It also left the promise pending
-// forever when drawing threw, so uploadFile never fell back to the original file.
-describe('object URL release', () => {
+describe('object URL release, so no uploaded image stays referenced until the tab closes', () => {
   type ImageOutcome = 'load' | 'error';
 
   let imageOutcome: ImageOutcome = 'load';
@@ -262,7 +259,7 @@ describe('object URL release', () => {
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-1');
     });
 
-    it('rejects instead of hanging when drawing throws, and still releases the URL', async () => {
+    it('rejects instead of hanging when drawing throws, so the upload falls back to the original file, and still releases the URL', async () => {
       drawImage = vi.fn(() => {
         throw new Error('InvalidStateError');
       });

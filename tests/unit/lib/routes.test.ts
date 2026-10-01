@@ -59,8 +59,6 @@ describe('routes', () => {
       '/categories/technical-seo/',
     );
     expect(buildPublicProfilePath('alice')).toBe('/profile/alice/');
-    // A username may look like a file name; its profile is still a page.
-    expect(buildPublicProfilePath('john.doe')).toBe('/profile/john.doe/');
     expect(buildPublicTemplatePath('alice', 'video-downloader')).toBe(
       '/profile/alice/video-downloader/',
     );
@@ -70,9 +68,15 @@ describe('routes', () => {
     expect(buildSharePath('share-123')).toBe('/share/share-123/');
   });
 
-  it('builds the canonical console routes', () => {
-    // Links go straight to the dashboard's home; /dashboard/ only redirects there.
+  it('gives a profile whose username looks like a file name a page URL', () => {
+    expect(buildPublicProfilePath('john.doe')).toBe('/profile/john.doe/');
+  });
+
+  it("links the console home straight to the dashboard's home, since /dashboard/ only redirects there", () => {
     expect(buildConsoleHomePath()).toBe('/dashboard/templates/');
+  });
+
+  it('builds the canonical console routes', () => {
     expect(buildConsoleTemplatesPath()).toBe('/dashboard/templates/');
     expect(buildConsoleTemplateCreatePath()).toBe('/dashboard/templates/new/');
     expect(buildConsoleTemplateImportPath()).toBe('/dashboard/import-templates/');
@@ -89,13 +93,12 @@ describe('routes', () => {
     expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
   });
 
-  it('flags template editor routes that should render on a blank workspace shell', () => {
+  it('flags template editor routes that should render on a blank workspace shell, with or without the trailing slash the router reports', () => {
     expect(isBlankTemplateEditorRoute('/dashboard/templates/new')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/edit')).toBe(true);
     expect(isBlankTemplateEditorRoute('/console/templates/template-1/edit')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates')).toBe(false);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1')).toBe(false);
-    // The router reports the canonical, slashed form.
     expect(isBlankTemplateEditorRoute('/dashboard/templates/new/')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/edit/')).toBe(true);
     expect(isBlankTemplateEditorRoute('/dashboard/templates/')).toBe(false);
@@ -144,7 +147,7 @@ describe('routes', () => {
     ).toBeNull();
   });
 
-  it('classifies routes into public and console shells', () => {
+  it('classifies routes into public and console shells, with or without the trailing slash the router reports', () => {
     expect(resolveRouteShell('/')).toBe('public');
     expect(resolveRouteShell('/templates')).toBe('public');
     expect(resolveRouteShell('/checklists')).toBe('public');
@@ -157,14 +160,13 @@ describe('routes', () => {
     expect(resolveRouteShell('/dashboard/runs/run-1')).toBe('console');
     expect(resolveRouteShell('/console')).toBe('console');
     expect(resolveRouteShell('/account')).toBe('console');
-    // The router reports the canonical, slashed form.
     expect(resolveRouteShell('/templates/')).toBe('public');
     expect(resolveRouteShell('/profile/alice/ultimate-camping-checklist/')).toBe('public');
     expect(resolveRouteShell('/dashboard/templates/')).toBe('console');
     expect(resolveRouteShell('/dashboard/runs/run-1/')).toBe('console');
   });
 
-  it('labels public routes by discovery emphasis', () => {
+  it('labels public routes by discovery emphasis, with or without the trailing slash the router reports', () => {
     expect(resolvePublicRouteTier('/')).toBe('marketing');
     expect(resolvePublicRouteTier('/templates')).toBe('core');
     expect(resolvePublicRouteTier('/checklists')).toBe('core');
@@ -177,7 +179,6 @@ describe('routes', () => {
       'secondary',
     );
     expect(resolvePublicRouteTier('/share/share-123')).toBe('minimal');
-    // The router reports the canonical, slashed form.
     expect(resolvePublicRouteTier('/templates/')).toBe('core');
     expect(resolvePublicRouteTier('/profile/alice/')).toBe('core');
     expect(resolvePublicRouteTier('/categories/')).toBe('secondary');
@@ -187,7 +188,7 @@ describe('routes', () => {
     expect(resolvePublicRouteTier('/pricing/')).toBe('marketing');
   });
 
-  it('maps console routes to persistent navigation sections', () => {
+  it('maps console routes to persistent navigation sections, with or without the trailing slash the router reports', () => {
     expect(resolveConsoleSection('/dashboard')).toBe('home');
     expect(resolveConsoleSection('/dashboard/templates')).toBe('templates');
     expect(resolveConsoleSection('/dashboard/templates/template-1')).toBe(
@@ -206,7 +207,6 @@ describe('routes', () => {
     expect(resolveConsoleSection('/account')).toBe('account');
     expect(resolveConsoleSection('/templates')).toBeNull();
     expect(resolveConsoleSection('/checklists')).toBeNull();
-    // The router reports the canonical, slashed form.
     expect(resolveConsoleSection('/dashboard/')).toBe('home');
     expect(resolveConsoleSection('/dashboard/templates/')).toBe('templates');
     expect(resolveConsoleSection('/dashboard/templates/template-1/edit/')).toBe('templates');
@@ -304,7 +304,9 @@ describe('getCanonicalProfilePath', () => {
 
   it('stays on a URL that already uses the stored username', () => {
     expect(getCanonicalProfilePath('johndoe', 'johndoe')).toBeNull();
-    // A legacy mixed-case username is its own canonical form.
+  });
+
+  it('treats a legacy mixed-case username as its own canonical form', () => {
     expect(getCanonicalProfilePath('MixedCase', 'MixedCase')).toBeNull();
   });
 

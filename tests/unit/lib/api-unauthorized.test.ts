@@ -4,16 +4,12 @@ import { api } from '@/lib/api';
 import { ApiError } from '@/lib/api-errors';
 import { onUnauthorizedResponse } from '@/lib/unauthorizedResponses';
 
-// A 401 means the request carried no valid session: it expired, or it was revoked from another
-// device. The API client reports it so AuthProvider can re-check the session and sign the tab
-// out, instead of leaving it "signed in" while every request fails.
-
 const respond = (status: number, body: unknown = { error: 'Unauthorized' }) =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }),
   );
 
-describe('API client 401 reporting', () => {
+describe('API client 401 reporting, so AuthProvider re-checks the session instead of leaving the tab signed in', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

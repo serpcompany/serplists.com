@@ -82,8 +82,7 @@ describe('getTemplateActionPermissions', () => {
     expect(permissions.canEdit).toBe(false);
   });
 
-  // The API sends team_id only to active members of the Organization.
-  it('gives the Creator no Edit on a public Organization Template sent without its Organization', () => {
+  it('gives the Creator no Edit on a public Organization Template sent without its Organization, which the API sends only to active members', () => {
     expect(
       getTemplateActionPermissions({
         activeTeamId: undefined,
@@ -107,8 +106,7 @@ describe('getTemplateActionPermissions', () => {
     ).toEqual({ canCopy: false, canEdit: false, canStartRun: true, isOwner: false });
   });
 
-  // Its runs go to its own Organization whatever the active context, so the role there decides.
-  it('runs a private Organization Template by the role in its own Organization, from any context', () => {
+  it('runs a private Organization Template by the role in its own Organization, where its runs go from any context', () => {
     const base = { isRepoTemplate: false, permissionsFor, template: template({ teamId: 'beta' }), userId: 'user-1' };
 
     expect(getTemplateActionPermissions({ ...base, activeTeamId: undefined }).canStartRun).toBe(true);

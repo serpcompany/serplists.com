@@ -97,9 +97,7 @@ describe('theme helpers', () => {
   });
 });
 
-// Chrome's "Don't allow sites to save data" (or blocked cookies) makes reading
-// window.localStorage itself throw, so a default parameter that reads it crashes the app.
-const stubWindowWithBlockedStorage = () => {
+const stubWindowWhereReadingLocalStorageThrows = () => {
   const dispatchEvent = vi.fn();
   const windowStub = {
     addEventListener: vi.fn(),
@@ -122,7 +120,7 @@ describe('theme helpers when the browser blocks site data', () => {
   });
 
   it('falls back to light mode instead of throwing', () => {
-    stubWindowWithBlockedStorage();
+    stubWindowWhereReadingLocalStorageThrows();
     const harness = createThemeHarness();
 
     expect(getStoredTheme()).toBe('light');
@@ -130,8 +128,8 @@ describe('theme helpers when the browser blocks site data', () => {
     expect(harness.isDark()).toBe(false);
   });
 
-  it('still toggles, announces and remembers the theme for the session', () => {
-    const { dispatchEvent } = stubWindowWithBlockedStorage();
+  it('still toggles, announces and remembers the theme for the session, so a component that mounts later and applies the stored theme keeps the choice', () => {
+    const { dispatchEvent } = stubWindowWhereReadingLocalStorageThrows();
     const harness = createThemeHarness();
 
     expect(toggleDocumentTheme(harness.document)).toBe('dark');
@@ -140,14 +138,13 @@ describe('theme helpers when the browser blocks site data', () => {
       expect.objectContaining({ type: THEME_CHANGE_EVENT, detail: 'dark' }),
     );
 
-    // A component that mounts later re-applies the stored theme; it must not undo the choice.
     expect(applyStoredTheme(harness.document)).toBe('dark');
     expect(harness.isDark()).toBe(true);
     setStoredTheme('light', harness.document);
   });
 
   it('survives a storage whose reads and writes throw', () => {
-    const { dispatchEvent } = stubWindowWithBlockedStorage();
+    const { dispatchEvent } = stubWindowWhereReadingLocalStorageThrows();
     const harness = createThemeHarness();
     const throwingStorage = {
       getItem: () => {
@@ -166,10 +163,7 @@ describe('theme helpers when the browser blocks site data', () => {
   });
 });
 
-// A theme change in one tab reaches the others only as a `storage` event. Each tab has to
-// apply it to its own document, or its toggle label and toasts say dark while the page
-// stays light, and the next click does the opposite of what the label promised.
-describe('theme changes from another tab', () => {
+describe('theme changes from another tab, which arrive only as a storage event and must reach this document so its labels agree with the page', () => {
   const storageEvent = (key: string | null, storageArea: unknown) =>
     Object.assign(new Event('storage'), { key, storageArea });
 
@@ -291,8 +285,8 @@ describe('theme changes from another tab', () => {
         const path = join(dir, name);
         return statSync(path).isDirectory() ? listFiles(path) : [path];
       });
-    // sessionSync.ts listens only for its own session key, never the theme's.
-    const allowed = new Set(['src/lib/theme.ts', 'src/contexts/sessionSync.ts']);
+    const sessionSyncListeningOnlyForItsOwnKey = 'src/contexts/sessionSync.ts';
+    const allowed = new Set(['src/lib/theme.ts', sessionSyncListeningOnlyForItsOwnKey]);
     const offenders = listFiles('src')
       .filter((path) => /\.(ts|tsx)$/.test(path))
       .filter((path) => !allowed.has(path.split('\\').join('/')))

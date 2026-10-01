@@ -127,16 +127,16 @@ describe("getPersonalBillingAction", () => {
     },
   );
 
-  it("offers checkout again when the first payment did not go through", () => {
-    // Checkout sends the buyer back to the session that can still pay it; the Customer
-    // Portal cannot.
+  it("offers checkout again when the first payment did not go through, since only its checkout session can still pay it", () => {
     expect(getPersonalBillingAction({ plan: "free", subscriptionStatus: "incomplete", canManageBilling: true }))
       .toBe("upgrade");
   });
 
   it("manages Pro", () => {
     expect(getPersonalBillingAction({ plan: "pro", canManageBilling: true })).toBe("manage");
-    // A response from before canManageBilling existed keeps the portal.
+  });
+
+  it("keeps the portal for Pro in a response from before canManageBilling existed", () => {
     expect(getPersonalBillingAction({ plan: "pro" })).toBe("manage");
   });
 
@@ -148,8 +148,7 @@ describe("getPersonalBillingAction", () => {
     expect(getPersonalBillingAction({ plan: "pro", managedBySupport: true, canManageBilling: true })).toBe("support");
   });
 
-  it("never sends Pro without a Stripe customer to a portal that cannot open", () => {
-    // Pro that support granted without a managedBySupport flag (an older response).
+  it("leaves Pro with no Stripe customer, which support granted in a response older than managedBySupport, to support, never to a portal that cannot open", () => {
     expect(getPersonalBillingAction({ plan: "pro", canManageBilling: false })).toBe("support");
   });
 });

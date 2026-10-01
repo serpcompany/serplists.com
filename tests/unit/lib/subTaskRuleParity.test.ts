@@ -12,12 +12,6 @@ import {
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
 
-// The run page shows and counts as Sub-tasks only the rows of a task's Sub-tasks blocks
-// (content type 'subItems'). Stored content can also hold sub-items the page never shows: on
-// a text or media block (a hand-written pack, a direct API write) or on the task itself (older
-// rows). The API must read the same Sub-tasks, or an agent could never finish a task the
-// page shows as done, and a Template update would reopen it.
-
 type Json = Record<string, any>;
 
 const hidden = (isCompleted: boolean) => ({ id: 'hidden', title: 'Hidden', isCompleted });
@@ -36,7 +30,7 @@ const fixtures: Array<[string, Json[]]> = [
   ['an open Sub-task beside a done hidden one', sectionsOf(task({ isCompleted: true, contents: [onText(true), subTasksBlock(false)] }))],
 ];
 
-describe('the Sub-tasks of a task', () => {
+describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks blocks,', () => {
   it.each(fixtures)('are the same on the run page and in the API for %s', (_label, sections) => {
     const run = mapChecklistToRun({ id: 'run-1', status: 'in_progress', items: JSON.stringify(sections) }, 'run-1');
     const counts = countRunTasks(run.sections);

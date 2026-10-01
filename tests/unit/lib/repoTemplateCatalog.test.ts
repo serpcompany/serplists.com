@@ -235,7 +235,7 @@ describe("repo template catalog", () => {
     expect(templates[0].userId).toBe(REPO_TEMPLATE_USER_ID);
   });
 
-  it("builds a private copy payload from a repo template", () => {
+  it("builds a private copy payload from a repo template without its slug, which the server derives from the title and suffixes", () => {
     const [template] = normalizeRepoTemplateSources({
       "../docs/schema/portable-checklist.json": {
         default: {
@@ -272,7 +272,6 @@ describe("repo template catalog", () => {
       tags: ["portable"],
     });
     expect(payload.sections).toEqual(template.sections);
-    // The starter keeps its slug: the copy gets one from its title, which the server suffixes.
     expect(payload.seoUrl).toBeUndefined();
   });
 

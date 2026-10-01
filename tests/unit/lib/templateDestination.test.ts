@@ -7,10 +7,6 @@ import {
   resolveTemplateDestinationTeamId,
 } from '@/lib/templateDestination';
 
-// A private template of Organization B opened while Organization A or Personal is active gets
-// its Runs and copies in B. The success toast names B, or the user would look for the Run or
-// copy in the active context's lists and not find it.
-
 const teams = [
   { id: 'team-a', name: 'Acme Agency' },
   { id: 'team-b', name: 'Beta Studio' },
@@ -28,7 +24,7 @@ describe('template destination', () => {
   it.each([
     ['Organization A', 'team-a'],
     ['Personal', undefined],
-  ])('names the other Organization while %s is active', (_label, activeTeamId) => {
+  ])('names the other Organization while %s is active, so the user looks for the Run or copy there', (_label, activeTeamId) => {
     const organization = nameOtherTemplateDestination(privateTeamBTemplate, activeTeamId, teams);
 
     expect(organization).toBe('Beta Studio');

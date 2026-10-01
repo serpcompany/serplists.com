@@ -32,8 +32,7 @@ describe("api-errors", () => {
     });
   });
 
-  it("keeps server errors retryable instead of asking a signed-in user to sign in", () => {
-    // The API answers 500 when it cannot look up a session (utils/session.ts).
+  it("keeps server errors retryable instead of asking a signed-in user to sign in, since a failed session lookup answers 500", () => {
     expect(getAccessFailure(createApiError(500, { error: "Internal Server Error" }), "fallback")).toEqual({
       kind: "error",
       message: "Internal Server Error",
@@ -113,8 +112,7 @@ describe("api-errors", () => {
     });
   });
 
-  it("recognizes checkout refusals that mean billing status is out of date", () => {
-    // Checkout may find a subscription the page does not show yet, so the page refetches.
+  it("recognizes checkout refusals that mean billing status is out of date, so the page refetches it", () => {
     expect(isOpenSubscriptionConflictError(createApiError(409, { code: "already_subscribed" }))).toBe(true);
     expect(isOpenSubscriptionConflictError(createApiError(409, { code: "subscription_needs_attention" }))).toBe(true);
     expect(isOpenSubscriptionConflictError(createApiError(409, { code: "plan_managed_by_support" }))).toBe(false);
@@ -122,8 +120,7 @@ describe("api-errors", () => {
     expect(isOpenSubscriptionConflictError(new Error("already_subscribed"))).toBe(false);
   });
 
-  it("recognizes a portal refusal for a billing account Stripe no longer has", () => {
-    // The API replaced the account, so the page refetches billing status to offer Upgrade.
+  it("recognizes a portal refusal for a billing account Stripe no longer has, after which the page refetches billing status to offer Upgrade", () => {
     expect(isBillingCustomerMissingError(createApiError(409, { code: "billing_customer_missing" }))).toBe(true);
     expect(isBillingCustomerMissingError(createApiError(409, { code: "no_billing_account" }))).toBe(false);
     expect(isBillingCustomerMissingError(new Error("billing_customer_missing"))).toBe(false);

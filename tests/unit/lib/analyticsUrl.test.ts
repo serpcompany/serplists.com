@@ -25,7 +25,7 @@ describe('needsFullPageLoad', () => {
   const withTagManager = { dataLayer: [{ 'gtm.start': 1, event: 'gtm.js' }] };
   const withoutTagManager = {};
 
-  it('reports whether the index.html bootstrap loaded the container', () => {
+  it("reports whether the root layout's Tag Manager bootstrap loaded the container", () => {
     expect(isTagManagerLoaded(withTagManager)).toBe(true);
     expect(isTagManagerLoaded(withoutTagManager)).toBe(false);
     expect(isTagManagerLoaded({ dataLayer: [{ event: 'custom' }, null] })).toBe(false);

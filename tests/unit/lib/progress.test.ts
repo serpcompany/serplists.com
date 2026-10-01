@@ -8,17 +8,14 @@ import { toProgressPercent } from '@/lib/progress';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun, ChecklistSection } from '@/types/checklist';
 
-// Every progress figure was Math.round(completed / total * 100). With 200 or more tasks
-// and sub-tasks, one unchecked one is 99.5%, which rounded to 100: the dashboard showed
-// "100% complete" and a full bar for a run with work left, and the stored progress that
-// MCP agents read was 100. The client and the server now share one rule.
+const TASKS = 40;
+const SUB_TASKS_PER_TASK = 4;
 
-// 40 tasks, each with a 4-item Sub-tasks block: 200 units. Everything is done except one sub-task.
-const nearlyDoneSections = (): ChecklistSection[] => [
+const sectionsWithOneOf200UnitsOpen = (): ChecklistSection[] => [
   {
     id: 'section-1',
     title: 'Launch',
-    items: Array.from({ length: 40 }, (_, itemIndex) => ({
+    items: Array.from({ length: TASKS }, (_, itemIndex) => ({
       id: `item-${itemIndex}`,
       title: `Task ${itemIndex}`,
       isCompleted: true,
@@ -26,10 +23,10 @@ const nearlyDoneSections = (): ChecklistSection[] => [
         {
           type: 'subItems' as const,
           value: '',
-          subItems: Array.from({ length: 4 }, (_, subIndex) => ({
+          subItems: Array.from({ length: SUB_TASKS_PER_TASK }, (_, subIndex) => ({
             id: `sub-${itemIndex}-${subIndex}`,
             title: `Step ${subIndex}`,
-            isCompleted: !(itemIndex === 39 && subIndex === 3),
+            isCompleted: !(itemIndex === TASKS - 1 && subIndex === SUB_TASKS_PER_TASK - 1),
           })),
         },
       ],
@@ -78,9 +75,9 @@ describe('toProgressPercent', () => {
   });
 });
 
-describe('run progress on large runs', () => {
+describe('run progress on large runs, where one open unit in 200 must not round to 100', () => {
   it('is 99 in every calculator when one of 200 units is left', () => {
-    const sections = nearlyDoneSections();
+    const sections = sectionsWithOneOf200UnitsOpen();
     const run = { id: 'run-1', sections } as unknown as ChecklistRun;
 
     expect(calculateSectionsProgress(sections)).toBe(99);
@@ -95,7 +92,7 @@ describe('run progress on large runs', () => {
   });
 
   it('agrees between the client and the server', () => {
-    const sections = nearlyDoneSections();
+    const sections = sectionsWithOneOf200UnitsOpen();
     const items = sections[0].items;
     for (let done = 0; done <= items.length; done += 1) {
       const partial = [{ ...sections[0], items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];

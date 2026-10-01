@@ -14,15 +14,16 @@ import {
 import { createApiError } from '@/lib/api-errors';
 import { markRunShared, queryKeys, refreshRunHistory } from '@/lib/queryCache';
 
+import { APP_QUERY_STALE_TIME } from '../../support/appQueryClient';
+
 const clients: QueryClient[] = [];
 const newClient = () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 60_000 } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: APP_QUERY_STALE_TIME } } });
   clients.push(client);
   return client;
 };
 
-// An open Changelog: an active query that stays fresh for 60s, like the app default.
-const openHistory = async (client: QueryClient, queryKey: readonly unknown[]) => {
+const openChangelog = async (client: QueryClient, queryKey: readonly unknown[]) => {
   const fetches = vi.fn(async () => ({ fetch: fetches.mock.calls.length }));
   const observer = new QueryObserver(client, { queryKey, queryFn: fetches });
   observer.subscribe(() => {});
@@ -57,13 +58,12 @@ describe('queryKeys', () => {
   });
 });
 
-// The Changelogs used to keep their first fetch for 60s after every save.
-describe('refreshing history after a save', () => {
+describe('refreshing history after a save, within the time an open Changelog stays fresh', () => {
   it('refetches every open Changelog of a Template after it is saved', async () => {
     const client = newClient();
-    const mine = await openHistory(client, queryKeys.templateHistoryFor('t1', 'u1'));
-    const organization = await openHistory(client, queryKeys.templateHistoryFor('t1', 'u1', 'org-1'));
-    const other = await openHistory(client, queryKeys.templateHistoryFor('t2', 'u1'));
+    const mine = await openChangelog(client, queryKeys.templateHistoryFor('t1', 'u1'));
+    const organization = await openChangelog(client, queryKeys.templateHistoryFor('t1', 'u1', 'org-1'));
+    const other = await openChangelog(client, queryKeys.templateHistoryFor('t2', 'u1'));
 
     refreshAfterTemplateSave(client, 't1');
 
@@ -72,11 +72,10 @@ describe('refreshing history after a save', () => {
     expect(other).toHaveBeenCalledTimes(1);
   });
 
-  // Removing a Changelog the detail page still observes made it fetch again at once.
-  it('marks the Changelog of an archived Template stale instead of refetching it', async () => {
+  it('marks the Changelog of an archived Template stale instead of removing it, which the detail page would fetch again at once', async () => {
     const client = newClient();
     const key = queryKeys.templateHistoryFor('t1', 'u1');
-    const history = await openHistory(client, key);
+    const history = await openChangelog(client, key);
 
     refreshAfterTemplateDelete(client, 't1');
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -85,9 +84,9 @@ describe('refreshing history after a save', () => {
     expect(client.getQueryState(key)?.isInvalidated).toBe(true);
   });
 
-  it('refetches the run Changelog after a run save or revalidate', async () => {
+  it('refetches the run Changelog after a run save, a revalidate, and a Share or Stop sharing on the runs list', async () => {
     const client = newClient();
-    const history = await openHistory(client, queryKeys.runHistory('r1'));
+    const history = await openChangelog(client, queryKeys.runHistory('r1'));
 
     await refreshRunHistory(client, 'r1');
     await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(2));
@@ -95,7 +94,6 @@ describe('refreshing history after a save', () => {
     await refreshAfterRunRevalidated(client, 'r1');
     await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(3));
 
-    // Share and Stop sharing on the runs list write to the Changelog too.
     await refreshAfterRunShared(client, 'r1');
     await vi.waitFor(() => expect(history).toHaveBeenCalledTimes(4));
   });

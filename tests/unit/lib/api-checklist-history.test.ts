@@ -3,9 +3,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api';
 import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 
-// The run page shows the latest few history events. Without a limit the API reads 50 audit
-// rows (and their users) for every run that has had 50 saves.
-
 const stubFetch = () =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response(JSON.stringify({ checklistId: 'run-1', subject: { type: 'user', id: 'u1' }, events: [] }), {
@@ -16,7 +13,7 @@ const stubFetch = () =>
 
 const requestedUrl = (fetchSpy: ReturnType<typeof stubFetch>) => String(fetchSpy.mock.calls[0]?.[0]);
 
-describe('api.getChecklistHistory', () => {
+describe('api.getChecklistHistory, which asks for only the events a page shows so the API reads no more audit rows', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

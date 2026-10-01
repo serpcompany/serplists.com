@@ -11,9 +11,9 @@ import { generateSlug } from '@/utils/urlHelpers';
 
 import { CATEGORY_SLUG_FIXTURES } from '../../fixtures/categorySlugFixtures';
 
-// Category slugs used to keep only ASCII letters and digits, so every Japanese or
-// Russian category became '' and shared one broken chip that linked to a 404.
-describe('buildCategorySlug', () => {
+const categorySlugInPath = (path: string) => decodeURIComponent(path.split('/').filter(Boolean).pop()!);
+
+describe('buildCategorySlug, which keeps the letters of every script so no two categories share an empty slug', () => {
   it.each([
     ['日本語', '日本語'],
     ['Русский', 'русский'],
@@ -63,9 +63,7 @@ describe('buildPublicCategoryPath', () => {
     named.forEach((name) => {
       const path = buildPublicCategoryPath(name);
       expect(path).not.toBeNull();
-      // /categories/<slug>/
-      const segment = decodeURIComponent(path!.split('/').filter(Boolean).pop()!);
-      expect(findCategoryNameBySlug(named, segment)).toBe(
+      expect(findCategoryNameBySlug(named, categorySlugInPath(path!))).toBe(
         named.find((candidate) => buildCategorySlug(candidate) === buildCategorySlug(name)),
       );
     });

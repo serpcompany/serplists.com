@@ -2,21 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { isLoopbackHostname, resolveApiBaseUrl, resolveApiServerOrigin } from '@/lib/apiBaseUrl';
 
-// The app serves the API on its own origin (/api), in development and in every deployment.
-// NEXT_PUBLIC_API_URL can name another API; a loopback one only counts on a loopback page, so
-// a bundle built on a developer machine never sends a deployed site's traffic to localhost.
-describe('resolveApiBaseUrl', () => {
+describe('resolveApiBaseUrl, which uses a loopback NEXT_PUBLIC_API_URL only on a loopback page', () => {
   it.each([
-    // [configuredUrl, pageHostname, expected]
-    [undefined, 'localhost', '/api'],
-    [undefined, 'serplists.com', '/api'],
-    ['http://localhost:9788/api', 'localhost', 'http://localhost:9788/api'],
-    ['http://localhost:9788/api', '127.0.0.1', 'http://localhost:9788/api'],
-    ['http://localhost:9788/api', 'serplists.com', '/api'],
-    ['http://127.0.0.1:9788/api', 'staging.serplists.com', '/api'],
-    ['http://[::1]:9788/api', undefined, '/api'],
-    ['https://api.example.test/api', 'serplists.com', 'https://api.example.test/api'],
-  ] as const)('configured=%s on %s resolves to %s', (configuredUrl, pageHostname, expected) => {
+    { configuredUrl: undefined, pageHostname: 'localhost', expected: '/api' },
+    { configuredUrl: undefined, pageHostname: 'serplists.com', expected: '/api' },
+    { configuredUrl: 'http://localhost:9788/api', pageHostname: 'localhost', expected: 'http://localhost:9788/api' },
+    { configuredUrl: 'http://localhost:9788/api', pageHostname: '127.0.0.1', expected: 'http://localhost:9788/api' },
+    { configuredUrl: 'http://localhost:9788/api', pageHostname: 'serplists.com', expected: '/api' },
+    { configuredUrl: 'http://127.0.0.1:9788/api', pageHostname: 'staging.serplists.com', expected: '/api' },
+    { configuredUrl: 'http://[::1]:9788/api', pageHostname: undefined, expected: '/api' },
+    { configuredUrl: 'https://api.example.test/api', pageHostname: 'serplists.com', expected: 'https://api.example.test/api' },
+  ] as const)('configured=$configuredUrl on $pageHostname resolves to $expected', ({ configuredUrl, pageHostname, expected }) => {
     expect(resolveApiBaseUrl({ configuredUrl, pageHostname })).toBe(expected);
   });
 });

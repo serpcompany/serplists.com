@@ -20,6 +20,8 @@ import {
 import { BILLING_UNAVAILABLE_MESSAGE, createApiError } from '@/lib/api-errors';
 import { getBillingStatusQueryKey } from '@/lib/billing';
 
+import { deferred } from '../../support/deferred';
+
 describe('startBillingCheckout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -39,12 +41,12 @@ describe('startBillingCheckout', () => {
   });
 
   it('starts one checkout when it is asked again while the first is still starting', async () => {
-    let finish: (value: { url: string }) => void = () => {};
-    apiMocks.createBillingCheckout.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const checkout = deferred<{ url: string }>();
+    apiMocks.createBillingCheckout.mockReturnValueOnce(checkout.promise);
 
     const first = startBillingCheckout(true);
     const second = startBillingCheckout(true);
-    finish({ url: 'https://checkout.stripe.test/cs_1' });
+    checkout.resolve({ url: 'https://checkout.stripe.test/cs_1' });
 
     await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
     expect(apiMocks.createBillingCheckout).toHaveBeenCalledTimes(1);
@@ -153,9 +155,7 @@ describe('handleUpgradeRequiredForContext', () => {
   });
 });
 
-// Template import and export await a request and then handle its failure. A checkout
-// or sign-in redirect for that failure ran even after the user had left the page.
-describe('handleAccessFailure', () => {
+describe('handleAccessFailure after a template import or export request fails', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('window', {
@@ -208,7 +208,7 @@ describe('handleAccessFailure', () => {
     expect(toastMocks.error).toHaveBeenCalledTimes(1);
   });
 
-  it('goes to sign-in while the user is still on the page', async () => {
+  it('goes to sign-in while the user is still on the page, with the page, its query and its hash as the way back', async () => {
     const navigate = vi.fn();
 
     await handleAccessFailure(createApiError(401, { error: 'Unauthorized' }), {
@@ -217,18 +217,13 @@ describe('handleAccessFailure', () => {
       navigate,
     });
 
-    // Back to this page, with its query and hash, after sign-in.
     expect(navigate).toHaveBeenCalledWith(
       '/login/?next=%2Fdashboard%2Fimport-templates%2F%3Fbilling%3Dsuccess%23export',
     );
   });
 });
 
-// Checkout asks Stripe, so it can find a subscription (or a plan support manages) that the
-// cached billing status does not show yet. Every page that starts checkout through here
-// gates Pro features on that cached plan, so the plan must be reloaded, or each click asks
-// for checkout again.
-describe('refreshBillingStatusOnCheckoutConflict', () => {
+describe('refreshBillingStatusOnCheckoutConflict, so a page gating Pro on a cached plan stops asking for checkout', () => {
   const personalKey = getBillingStatusQueryKey('user-1', null);
   const organizationKey = getBillingStatusQueryKey('user-1', 'team-1');
   let client: QueryClient;
@@ -252,7 +247,7 @@ describe('refreshBillingStatusOnCheckoutConflict', () => {
   const conflict = (code: string, status = 409) =>
     createApiError(status, { error: 'You already have Pro.', code });
 
-  it('reloads the plan a page shows when checkout finds an existing subscription', async () => {
+  it('reloads the plan a page shows, and marks the plan of every other context stale, when checkout finds an existing subscription', async () => {
     apiMocks.createBillingCheckout.mockRejectedValueOnce(conflict('already_subscribed'));
     const statusFetch = vi.fn().mockResolvedValue({ plan: 'pro' });
     const observer = new QueryObserver(client, { queryKey: personalKey, queryFn: statusFetch, staleTime: 60_000 });
@@ -263,7 +258,6 @@ describe('refreshBillingStatusOnCheckoutConflict', () => {
     await vi.waitFor(() => expect(client.getQueryData(personalKey)).toEqual({ plan: 'pro' }));
     expect(statusFetch).toHaveBeenCalledTimes(1);
     expect(toastMocks.error).toHaveBeenCalledWith('You already have Pro.');
-    // Every cached plan is marked stale, whichever context a page shows next.
     expect(client.getQueryState(organizationKey)?.isInvalidated).toBe(true);
     unsubscribe();
   });
@@ -308,12 +302,12 @@ describe('refreshBillingStatusOnCheckoutConflict', () => {
 
   it('reloads the plan once when a second click joined the same checkout', async () => {
     const invalidate = vi.spyOn(client, 'invalidateQueries');
-    let fail: (error: unknown) => void = () => {};
-    apiMocks.createBillingCheckout.mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+    const checkout = deferred<{ url: string }>();
+    apiMocks.createBillingCheckout.mockReturnValueOnce(checkout.promise);
 
     const first = startBillingCheckout(true);
     const second = startBillingCheckout(true);
-    fail(conflict('already_subscribed'));
+    checkout.reject(conflict('already_subscribed'));
 
     await expect(Promise.all([first, second])).resolves.toEqual([false, false]);
     expect(invalidate).toHaveBeenCalledTimes(1);
