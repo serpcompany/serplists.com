@@ -2,9 +2,6 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import type { ProfileSurfaceRecord, UserProfileRecord } from './loadUserProfile';
 
-// How a public profile describes itself: the page shows these, and its server metadata
-// (src/server/pageMeta/profilePage.ts) puts the same text in the title and description.
-
 export type UserStats = {
   averageItemsPerTemplate: number;
   categoriesUsed: string[];
