@@ -25,7 +25,7 @@ function withTaskIds(task: JsonRecord): JsonRecord {
 
 type Section = JsonRecord & { items: JsonRecord[] };
 
-function withSectionIds(section: JsonRecord): Section {
+function withSectionIds(section: JsonRecord): Section & { id: string } {
   return { ...section, id: getId(section) ?? newEditorId("section"), items: tasksOf(section).map(withTaskIds) };
 }
 
@@ -36,7 +36,8 @@ function taskInsertionPoint(sections: Section[], sectionId?: string, beforeTaskI
     const { sectionIndex, taskIndex } = findTask(sections, beforeTaskId, sectionId, "beforeTaskId");
     return { tasks: sectionAt(sections, sectionIndex).items, at: taskIndex };
   }
-  const tasks = sectionAt(sections, findSection(sections, sectionId as string)).items;
+  if (sectionId === undefined) throw new ToolError("sectionId: Pass sectionId, beforeTaskId, or both", "invalid_arguments");
+  const tasks = sectionAt(sections, findSection(sections, sectionId)).items;
   return { tasks, at: tasks.length };
 }
 
@@ -59,7 +60,7 @@ export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOpera
         ? sections.length
         : findSection(sections, args.beforeSectionId, "beforeSectionId");
       sections.splice(at, 0, section);
-      return { sections, sectionId: section.id as string };
+      return { sections, sectionId: section.id };
     }
     case "move_section": {
       const from = findSection(sections, args.sectionId);

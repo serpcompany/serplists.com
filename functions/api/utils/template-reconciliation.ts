@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { toProgressPercent } from '../../../src/lib/progress';
 import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
 import {
@@ -42,16 +43,30 @@ function preserveRunState(templateValue: JsonRecord, runValue: JsonRecord | unde
 
 type EarlierRetired = ReturnType<typeof createEarlierRetiredLookup>;
 
+const storedRecord = z.record(z.unknown());
+const storedRetiredWork = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('section'), section: storedRecord }),
+  z.object({ kind: z.literal('item'), item: storedRecord }),
+  z.object({ kind: z.literal('subItem'), subItem: storedRecord }),
+]);
+
+function retiredWorkOf(entry: unknown): { kind: RetiredRunEntry['kind']; record: JsonRecord } | null {
+  const parsed = storedRetiredWork.safeParse(entry);
+  if (!parsed.success) return null;
+  const work = parsed.data;
+  const record = work.kind === 'section' ? work.section : work.kind === 'item' ? work.item : work.subItem;
+  return { kind: work.kind, record };
+}
+
 function createEarlierRetiredLookup(previousRetired: unknown[]) {
-  const remaining = previousRetired.filter(isRecord) as RetiredRunEntry[];
+  const remaining: JsonRecord[] = previousRetired.filter(isRecord);
   const take = (kind: RetiredRunEntry['kind'], id: string): JsonRecord | undefined => {
     for (let index = remaining.length - 1; index >= 0; index -= 1) {
-      const entry = remaining[index];
-      if (entry?.kind !== kind) continue;
-      const record = entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.subItem;
-      if (isRecord(record) && getId(record) === id) {
+      const work = retiredWorkOf(remaining[index]);
+      if (work?.kind !== kind) continue;
+      if (getId(work.record) === id) {
         remaining.splice(index, 1);
-        return record;
+        return work.record;
       }
     }
     return undefined;
@@ -166,7 +181,7 @@ export function reconcileRunSections(
   previousSections: unknown[],
   templateSections: unknown[],
   previousRetired: unknown[],
-): { sections: JsonRecord[]; retired: RetiredRunEntry[]; newlyRetired: RetiredRunEntry[] } {
+): { sections: JsonRecord[]; retired: JsonRecord[]; newlyRetired: RetiredRunEntry[] } {
   const previousSectionShape = normalizeLegacySectionShape(previousSections);
   const templateSectionShape = sanitizeStoredSections(normalizeLegacySectionShape(templateSections));
   const normalizedPreviousSections = assignMissingStableTemplateIdentities(previousSectionShape);

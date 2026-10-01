@@ -107,4 +107,20 @@ describe('retired run work', () => {
     expect(sectionsOf(result)[0].items[0].notes).toBe('TTL lowered to 300');
     expect(result.retired).toEqual([stale]);
   });
+
+  it('keeps stored retired entries it cannot read, as they were, and restores nothing from them', () => {
+    const unreadable = [
+      { kind: 'task', item: { ...dns, notes: 'Unknown kind' } },
+      { kind: 'item', item: [dns] },
+      { kind: 'section' },
+    ];
+    const result = reconcileRunSections(section([copy]), section([{ id: 'item-dns', title: 'Check DNS' }]), [
+      ...unreadable,
+      'not an entry',
+    ]);
+
+    expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ id: 'item-dns', isCompleted: false }));
+    expect(sectionsOf(result)[0].items[0]).not.toHaveProperty('notes');
+    expect(result.retired.slice(0, unreadable.length)).toEqual(unreadable);
+  });
 });
