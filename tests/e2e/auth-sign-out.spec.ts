@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const HOME_PAGE_URL = /^https?:\/\/[^/]+\/(?:[?#].*)?$/;
 
@@ -13,10 +13,7 @@ async function expectStillSignedInAfterReload(page: Page) {
 }
 
 test('a failed sign-out keeps the user signed in, and a later one signs them out for good', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAsAdmin(page);
 
   await page.route('**/api/auth/sign-out', (route) =>
     route.fulfill({ status: 429, contentType: 'application/json', body: '{"error":"Too many requests"}' }),

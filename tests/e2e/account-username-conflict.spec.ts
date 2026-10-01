@@ -1,11 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
+import { loginAs } from './support/sign-in';
 
 test('saving a username another account has says it is taken instead of failing the update', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'john');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAs(page, 'john');
 
   await page.goto('/dashboard/settings/');
   const usernameInput = page.getByLabel('Username');

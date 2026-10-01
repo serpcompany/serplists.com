@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
+import { loginAs } from './support/sign-in';
 
 const MARKDOWN = [
   '# Launch steps',
@@ -15,10 +15,7 @@ const MARKDOWN = [
 ].join('\n');
 
 async function openEditorPreview(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'john');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAs(page, 'john');
 
   await page.goto('/dashboard/templates/new/');
   await page.getByRole('button', { name: /add task to section 1/i }).click();

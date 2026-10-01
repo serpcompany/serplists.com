@@ -1,8 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
+import { loginAsAdmin } from './support/sign-in';
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
-import { fillSignInForm } from './support/sign-in';
 
 const protocolVersion = '2025-06-18';
 const MCP_RESULT_BYTE_LIMIT = 32 * 1024;
@@ -87,12 +87,7 @@ async function toggleWithSpace(page: Page, checkbox: Locator) {
 }
 
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
+  await loginAsAdmin(page);
 
   await page.goto('/dashboard/settings/');
   await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
@@ -217,12 +212,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
 });
 
 test('a Run Key created while the key list is still loading shows in the list', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
+  await loginAsAdmin(page);
 
   const releaseFirstList = await holdFirstRunKeyListUntilReleased(page);
 
@@ -249,12 +239,7 @@ test('a Run Key created while the key list is still loading shows in the list', 
 });
 
 test('the permissions chosen for a Run Key decide what it can do over MCP', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
+  await loginAsAdmin(page);
 
   await page.goto('/dashboard/settings/');
   await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 async function outlineProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {
@@ -69,10 +69,7 @@ test.describe('on a phone', () => {
 
 test('console pages keep one h1 and never skip a heading level', async ({ page }) => {
   test.setTimeout(180_000);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAsAdmin(page);
 
   for (const [path, h1] of [
     ['/dashboard/templates/', 'My Templates'],
