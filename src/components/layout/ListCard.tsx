@@ -13,25 +13,17 @@ import {
 import { cn } from '@/lib/utils';
 
 type ListCardProps = {
-  // Buttons or links on the card's right (under the text on phones). Only on a card without
-  // an href: the card itself is then no link.
   actions?: ReactNode;
   className?: string;
   description?: ReactNode;
-  // The page the card opens; the whole card is the link.
   href?: string;
   icon: ReactNode;
-  // Trailing text, such as a count.
   meta?: ReactNode;
-  // `vertical` puts the icon on its own row above the title, as in category tiles.
   orientation?: 'horizontal' | 'vertical';
   title: ReactNode;
-  // Makes the title a heading, for cards that are a page's sections (Contact's channels).
   titleAs?: 'h2' | 'h3';
 };
 
-// A bordered card with an icon tile and a title (the shadcn Item, outline variant): list
-// rows, feature lists and category tiles.
 export function ListCard({
   actions,
   className,

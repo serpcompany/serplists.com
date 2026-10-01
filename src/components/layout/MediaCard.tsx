@@ -5,33 +5,21 @@ import { Link } from '@/components/navigation/Link';
 import { cn } from '@/lib/utils';
 
 type MediaCardProps = {
-  // A control on the card's top right corner (over the media), such as an actions menu. It
-  // stays clickable above the card's link, and comes after the title in the tab order.
   action?: ReactNode;
-  // Over the media's top right corner, such as a count or a step number.
   badge?: ReactNode;
-  // Anything under the text: meta, an owner, actions. Links and buttons here stay clickable
-  // above the card's link.
   children?: ReactNode;
   className?: string;
-  // Cut the description to two lines, for grids of many cards.
   clampDescription?: boolean;
   description?: ReactNode;
-  // A short line above the title, such as categories. Text only: the card's link covers it.
   eyebrow?: ReactNode;
-  // The page the card opens. Its title links there, and the link covers the whole card.
   href?: string | null;
   icon: ReactNode;
-  // Laid over the media area, such as a hover shortcut.
   mediaOverlay?: ReactNode;
-  // `horizontal` puts the media beside the text from sm up: a list row with a thumbnail.
   orientation?: 'vertical' | 'horizontal';
   title: ReactNode;
   titleAs?: 'h2' | 'h3';
 };
 
-// A card in a grid or list: a muted media area holding an icon, and the title with a muted
-// description beside or below it. With an href, the whole card opens that page.
 export function MediaCard({
   action,
   badge,

@@ -10,7 +10,6 @@ import {
 type PageContainerProps = HTMLAttributes<HTMLDivElement> &
   VariantProps<typeof pageContainerVariants>;
 
-// The page width (page-shell.styles.ts). Shells and page sections line up to it.
 export function PageContainer({
   children,
   className,
@@ -37,7 +36,6 @@ type PageSectionProps = HTMLAttributes<HTMLElement> &
     containerClassName?: string;
   };
 
-// A band of the page: vertical spacing around a PageContainer.
 export function PageSection({
   as: Component = 'section',
   children,

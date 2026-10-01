@@ -6,13 +6,10 @@ type CtaBannerProps = {
   actions: ReactNode;
   className?: string;
   description?: ReactNode;
-  // The heading level for the page's outline.
   titleAs?: 'h2' | 'h3';
   title: ReactNode;
 };
 
-// A call to action closing a page or section: a muted panel with a title and description on
-// the left and its buttons on the right (stacked on phones).
 export function CtaBanner({ actions, className, description, title, titleAs: Title = 'h2' }: CtaBannerProps) {
   return (
     <div

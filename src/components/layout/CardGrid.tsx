@@ -19,8 +19,6 @@ const cardGridVariants = cva('grid gap-6', {
 
 type CardGridProps = HTMLAttributes<HTMLDivElement> & VariantProps<typeof cardGridVariants>;
 
-// The responsive grid under a section header: one column on phones, then two, then three
-// (or four, for small tiles, which start at two). One column is a list of wide cards.
 export function CardGrid({ className, columns, ...props }: CardGridProps) {
   return <div className={cn(cardGridVariants({ columns }), className)} data-slot="card-grid" {...props} />;
 }

@@ -17,14 +17,10 @@ export type BreadcrumbTrailItem = { href?: string; label: ReactNode };
 
 type PageBreadcrumbProps = {
   className?: string;
-  // False leaves Home out of the trail, for a console page whose trail starts at its section.
   home?: boolean;
-  // The trail after Home: an item with an href is a link, and the one without is the page.
   items: BreadcrumbTrailItem[];
 };
 
-// The row above a page's header: Home (an icon), then the trail to the page (shadcn's
-// Breadcrumb).
 export function PageBreadcrumb({ className, home = true, items }: PageBreadcrumbProps) {
   return (
     <Breadcrumb className={cn('mb-8', className)}>

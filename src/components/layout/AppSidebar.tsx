@@ -48,10 +48,7 @@ import { cn } from '@/lib/utils';
 
 type NavItem = { href: string; icon: typeof FileText; label: string };
 
-// Console targets are full-size (44px tall, like the old sidebar's rows; guarded by
-// tests/e2e/template-editor-bugs.spec.ts) instead of shadcn's 32px rows. Collapsed to
-// icons they stay shadcn's 32px squares.
-const TARGET_CLASS = 'h-11';
+const FULL_SIZE_TARGET_CLASS = 'h-11';
 
 const mainItems: NavItem[] = [
   { href: buildConsoleTemplatesPath(), icon: FileText, label: 'Templates' },
@@ -66,7 +63,6 @@ const secondaryItems: NavItem[] = [
   { href: buildConsoleSettingsPath(), icon: Settings, label: 'Settings' },
 ];
 
-// A page under an item's path belongs to it: a Run's page (/dashboard/runs/<id>/) to Runs.
 function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
   return (
     <SidebarMenu>
@@ -75,7 +71,7 @@ function NavItems({ items, pathname }: { items: NavItem[]; pathname: string }) {
         return (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
-              className={TARGET_CLASS}
+              className={FULL_SIZE_TARGET_CLASS}
               isActive={active}
               tooltip={item.label}
               render={<Link href={item.href} aria-current={active ? 'page' : undefined} />}
@@ -96,7 +92,7 @@ function ThemeMenuButton() {
   return (
     <SidebarMenuButton
       aria-label={accessibleLabel}
-      className={TARGET_CLASS}
+      className={FULL_SIZE_TARGET_CLASS}
       tooltip={label}
       onClick={toggle}
       type="button"
@@ -107,9 +103,6 @@ function ThemeMenuButton() {
   );
 }
 
-// The console sidebar (the shadcn Sidebar block, collapsible to icons): the brand and the
-// context switcher, the console navigation, and the theme switch and account menu. On
-// phones it opens as a sheet from the top bar's trigger.
 export function AppSidebar() {
   const pathname = usePathname();
   const { canEditTemplates } = useWorkspace();
@@ -144,7 +137,7 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       tooltip="New Template"
                       className={cn(
-                        TARGET_CLASS,
+                        FULL_SIZE_TARGET_CLASS,
                         'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground',
                       )}
                       render={<Link href={buildConsoleTemplateCreatePath()} />}

@@ -7,33 +7,21 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
 type DetailPageLayoutProps = {
-  // Buttons under the header text.
   actions?: ReactNode;
-  // The panel beside the header on wide screens (under it on phones).
   aside?: ReactNode;
-  // The trail after Home; the last one, the current page, has no href. A page with no place
-  // in a hierarchy (a Public Profile) has none.
   breadcrumbs?: BreadcrumbTrailItem[];
-  // False leaves Home out of the trail, for a console page whose trail starts at its section.
   breadcrumbHome?: boolean;
-  // The page's content, under a separator.
   children?: ReactNode;
   className?: string;
   description?: ReactNode;
   icon?: ReactNode;
-  // Shown as it is in the icon tile's place, such as an avatar.
   media?: ReactNode;
-  // Small facts under the description: owner, dates, chips.
   meta?: ReactNode;
-  // Above the header: notices the page needs to show first.
   notice?: ReactNode;
-  // A short muted line under the title, such as a handle.
   subtitle?: ReactNode;
   title: ReactNode;
 };
 
-// A detail page: breadcrumb, a header (icon tile or other media, title, subtitle, description,
-// meta and actions) with a panel beside it, then the content.
 export function DetailPageLayout({
   actions,
   aside,
@@ -56,8 +44,6 @@ export function DetailPageLayout({
       {notice ? <div className="mb-6">{notice}</div> : null}
 
       <div className={cn('grid gap-8', aside && 'lg:grid-cols-2 lg:items-start lg:gap-12')}>
-        {/* A div, not <header>: inside <main> a header is no landmark, and the site's header
-            stays the page's only one. */}
         <div className="flex min-w-0 flex-col items-start gap-4" data-slot="detail-page-header">
           {media ?? (icon ? <IconTile size="lg">{icon}</IconTile> : null)}
           <div className="flex min-w-0 flex-col gap-1">

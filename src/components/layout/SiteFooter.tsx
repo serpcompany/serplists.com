@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils';
 
 const footerLinkClassName = 'text-sm text-muted-foreground transition-colors hover:text-foreground';
 
-// The site footer: the brand and its line on the left, the link columns on the right.
 export function SiteFooter({ className }: { className?: string }) {
   return (
     <footer className={cn('border-t bg-background', className)}>

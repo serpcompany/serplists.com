@@ -1,7 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 
-// The page width every shell and page lines up to: the site header and footer, the sidebar
-// inset's content, and each page's sections.
 export const pageContainerVariants = cva(
   'mx-auto w-full px-4 md:px-6',
   {
@@ -46,8 +44,6 @@ export const pageHeroVariants = cva('flex flex-col gap-4', {
   },
 });
 
-// A square tile holding an icon: the shadcn muted media tile (EmptyMedia's icon variant) in
-// three sizes. The `card` tone sits a tile on a muted area, as in a card's media.
 export const iconTileVariants = cva(
   "flex shrink-0 items-center justify-center rounded-lg text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {

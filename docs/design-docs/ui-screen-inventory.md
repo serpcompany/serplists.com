@@ -350,7 +350,10 @@ existing content, invent nothing):
     unlabelled navigation landmark at the end of the page while a menu was open, so
     `SiteNavigationMenu` composes the menu's root itself and renders the popup as a `div`
     (`tests/e2e/site-navigation.spec.ts`).
-  - The footer's empty "Network" column is left out.
+  - The footer's "Network" column is left out until someone confirms the address of its "SERP DR"
+    link, which pointed at `https://serp.dr`, under a top-level domain that does not exist. It comes
+    back as an external https link, with its domain added to the allowlist in
+    `tests/unit/components/publicSiteLinks.test.ts`.
   - The footer's column titles are h2s since step 2b, so a page whose last heading is its h1
     (My Runs, a sign-in page on a phone) never skips a level into them.
 

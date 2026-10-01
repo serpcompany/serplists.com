@@ -12,16 +12,12 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 
 type PageEmptyStateProps = {
-  // Buttons or links under the text.
   actions?: ReactNode;
   description: ReactNode;
   icon?: ReactNode;
   title: ReactNode;
 };
 
-// A public page whose record could not be shown (it failed to load or does not exist), in
-// place of the page: the shadcn Empty in the narrow page width, its title the page's h1. The
-// public template page and the Public Profile.
 export function PageEmptyState({ actions, description, icon, title }: PageEmptyStateProps) {
   return (
     <PageSection spacing="spacious" width="narrow">
@@ -39,7 +35,6 @@ export function PageEmptyState({ actions, description, icon, title }: PageEmptyS
   );
 }
 
-// A public page while its record loads: the shadcn Spinner over what is loading.
 export function PageLoadingState({ label }: { label: string }) {
   return (
     <PageSection spacing="spacious" width="narrow">

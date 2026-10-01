@@ -28,9 +28,6 @@ import {
   buildPublicProfilePath,
 } from '@/lib/routes';
 
-// The signed-in user's menu: the console pages (My Templates, the console home, then My Runs
-// and Settings), the Public Profile and Sign out. The site header opens it from an avatar
-// button, the console sidebar from its footer row.
 function AccountMenuContent({
   side,
   trigger,
@@ -42,8 +39,6 @@ function AccountMenuContent({
   const router = useAppRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // Signing out unmounts the page, so a page with unsaved changes is asked first. If the
-  // server refuses the sign-out the user stays, and that page asks again next time.
   const handleLogout = async () => {
     await leaveAfterConfirmed(async () => {
       setIsSigningOut(true);
@@ -115,7 +110,6 @@ const useUserInitial = () => {
   );
 };
 
-// The site header's account menu: an avatar button.
 export function AccountMenu() {
   const initial = useUserInitial();
 
@@ -135,7 +129,6 @@ export function AccountMenu() {
   );
 }
 
-// The console sidebar's account menu: the user's name and handle in the sidebar footer.
 export function SidebarAccountMenu() {
   const { user } = useAuth();
   const { isMobile } = useSidebar();

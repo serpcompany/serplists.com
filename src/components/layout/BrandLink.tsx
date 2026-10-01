@@ -5,7 +5,6 @@ import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildHomePath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
-// The app's mark: its icon on the primary color.
 export function BrandMark({ className }: { className?: string }) {
   return (
     <span
@@ -20,7 +19,6 @@ export function BrandMark({ className }: { className?: string }) {
   );
 }
 
-// The mark and the name, linking home: the site header and footer.
 export function BrandLink({ className }: { className?: string }) {
   return (
     <Link

@@ -8,8 +8,6 @@ import { SiteNavigationMenu } from '@/components/layout/SiteNavigationMenu';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 
-// The signed-in console: the sidebar, and beside it a top bar (the sidebar trigger and, from
-// md up, the site navigation the public header has) over the page and the site footer.
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider data-app-shell="console">

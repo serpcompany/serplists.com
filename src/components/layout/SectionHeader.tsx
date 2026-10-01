@@ -6,19 +6,15 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type SectionHeaderProps = {
-  // A link to everything in the section, shown on the right ("View all" style).
   action?: { href: string; label: string };
-  // The heading level for the page's outline.
   as?: 'h2' | 'h3';
   className?: string;
   description?: ReactNode;
-  // A short label above the title.
   eyebrow?: ReactNode;
   id?: string;
   title: ReactNode;
 };
 
-// The row above a section's content: its title on the left and an optional link on the right.
 export function SectionHeader({
   action,
   as: Heading = 'h2',

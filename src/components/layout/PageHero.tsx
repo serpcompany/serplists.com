@@ -6,21 +6,15 @@ import { pageHeroVariants } from '@/components/layout/page-shell.styles';
 import { cn } from '@/lib/utils';
 
 type PageHeroProps = VariantProps<typeof pageHeroVariants> & {
-  // Buttons under the text.
   actions?: ReactNode;
-  // A row of filter chips under the search field.
   chips?: ReactNode;
   className?: string;
   description?: ReactNode;
-  // A short label above the title.
   eyebrow?: ReactNode;
-  // A search field (SearchField) under the text.
   search?: ReactNode;
   title: ReactNode;
 };
 
-// The top of a page: a large title with an optional eyebrow, a muted description, and then
-// actions, a search field and filter chips. Pages pass their own text; the hero adds none.
 export function PageHero({
   actions,
   align,

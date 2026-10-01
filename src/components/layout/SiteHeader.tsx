@@ -12,10 +12,6 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { buildLoginPath, buildRegisterPath } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
-// The public site's header: the brand on the left, the site navigation (the "Templates" and
-// "Features" menus and "Pricing") in the middle, and the theme switch with the account
-// actions on the right. Below md the navigation, Log in and the theme switch move into the
-// menu sheet (PublicMobileNav), whose button sits before the brand.
 export function SiteHeader() {
   const { user } = useAuth();
 

@@ -6,8 +6,6 @@ import { cn } from '@/lib/utils';
 
 type IconTileProps = HTMLAttributes<HTMLDivElement> & VariantProps<typeof iconTileVariants>;
 
-// A square tile holding one icon: category tiles, list cards, card media, detail headers.
-// The icon is decoration, so the tile is hidden from assistive technology.
 export function IconTile({ children, className, size, tone, ...props }: IconTileProps) {
   return (
     <div

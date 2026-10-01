@@ -21,15 +21,12 @@ import {
 import { isPathWithin } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
-/** True on the page a header item links to, or on any page of a menu's links or section. */
 const isHeaderItemActive = (pathname: string, item: PublicHeaderItem): boolean =>
   item.kind === 'link'
     ? isPathWithin(pathname, item.link.href)
     : item.links.some((link) => isPathWithin(pathname, link.href)) ||
-      (item.section !== undefined && isPathWithin(pathname, item.section));
+      (item.sectionPath !== undefined && isPathWithin(pathname, item.sectionPath));
 
-// A link in a menu: its label names it and its description describes it, so a screen reader
-// reads "Categories, link" and then the line under it.
 function MenuLink({ link, pathname }: { link: PublicSiteLink; pathname: string }) {
   const id = useId();
   const labelId = `${id}-label`;
@@ -59,11 +56,6 @@ function MenuLink({ link, pathname }: { link: PublicSiteLink; pathname: string }
   );
 }
 
-// shadcn's NavigationMenu (src/components/ui/navigation-menu.tsx) with the same classes, except
-// that the popup the open menu shows in is a div. Base UI renders that popup as a <nav>, and the
-// menu's trigger claims the links inside it (aria-owns), so screen readers read them in the "Site"
-// navigation and the popup was left an empty, unlabelled navigation landmark after the page.
-// The shadcn component cannot pass the popup a `render`, so the root is composed here.
 function SiteNavigationMenuRoot({
   align,
   children,
@@ -100,10 +92,6 @@ function SiteNavigationMenuRoot({
   );
 }
 
-// The site's navigation in the public header and the console's top bar: "Templates" and
-// "Features" open menus of their pages, "Pricing" is a link. Menu content stays in the HTML
-// (hidden) while closed, so crawlers find every page it links. The current page's link is
-// marked, and so is the menu that holds it.
 export function SiteNavigationMenu({
   align = 'start',
   className,

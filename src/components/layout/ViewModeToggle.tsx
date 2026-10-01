@@ -8,8 +8,6 @@ type ViewModeToggleProps = {
   value: ViewMode;
 };
 
-// The grid and list buttons over a list of Templates (My Templates, a category page): each
-// names the view it shows and is pressed while that view is on.
 export function ViewModeToggle({ onChange, value }: ViewModeToggleProps) {
   return (
     <div className="flex shrink-0 items-center gap-1" data-slot="view-mode-toggle">

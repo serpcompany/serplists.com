@@ -38,7 +38,6 @@ function MobileMenuLink({ link, onNavigate, pathname }: MenuLinkProps) {
   );
 }
 
-// A header menu's links under its label, as a named group.
 function MobileMenuGroup({
   label,
   links,
@@ -57,8 +56,6 @@ function MobileMenuGroup({
   );
 }
 
-// The menu body: the desktop header's navigation, its menus as groups (so a new header link
-// shows up on phones too), the theme switch, and the account actions.
 export const PublicMobileMenu = ({
   onNavigate,
   pathname,
@@ -111,19 +108,20 @@ export const PublicMobileMenu = ({
   </div>
 );
 
-// Below md the public header hides its nav and Log in, so this is how phone visitors
-// reach them. The console shell has its own sidebar sheet and never renders this.
-export function PublicMobileNav() {
+function useOpenUntilPathnameChanges(pathname: string) {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
-  const { user } = useAuth();
-
-  // Close on any navigation, including browser back and forward.
-  const [openedAt, setOpenedAt] = useState(pathname);
-  if (openedAt !== pathname) {
-    setOpenedAt(pathname);
+  const [shownPathname, setShownPathname] = useState(pathname);
+  if (shownPathname !== pathname) {
+    setShownPathname(pathname);
     setOpen(false);
   }
+  return [open, setOpen] as const;
+}
+
+export function PublicMobileNav() {
+  const pathname = usePathname();
+  const [open, setOpen] = useOpenUntilPathnameChanges(pathname);
+  const { user } = useAuth();
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
