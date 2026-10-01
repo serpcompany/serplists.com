@@ -157,7 +157,6 @@ export default tseslint.config(
   },
   {
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
-    ignores: ["tests/unit/workflows/cloudflare-pages-deploy.test.ts"],
     linterOptions: { noInlineConfig: true },
     plugins: { serplists: { rules: { "no-comments": noComments } } },
     rules: { "serplists/no-comments": "error" },

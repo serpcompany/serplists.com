@@ -108,3 +108,10 @@ jobs:
 
       - name: Compare migrations with the Drizzle schema
         run: pnpm run check:db:drizzle-parity
+
+  deploy-staging:
+    name: Deploy staging
+    needs: [quality, db-parity]
+    if: github.event_name == 'push' && github.ref_name == 'staging'
+    uses: ./.github/workflows/deploy-staging.yml
+    secrets: inherit

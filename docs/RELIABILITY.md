@@ -102,20 +102,21 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
 ## Deploy pipeline
 
-`.github/workflows/ci.yml` runs on pull requests and pushes to `main` and
-`staging`, and deploys nothing while the app moves to Next.js on Workers: the app now
-builds for Workers through OpenNext, so `pnpm run build` no longer makes the `./dist`
-that Pages deployed. `.github/workflows/cloudflare-pages-deploy.yml` has no caller, and
-its first step fails, so it cannot publish a broken Pages deployment
-(`tests/unit/workflows/cloudflare-pages-deploy.test.ts`). The Workers deploy replaces it
-at launch ([Next.js migration](exec-plans/active/nextjs-migration.md), phase 4) and keeps
-its release checks. Until then, the Pages deploy workflow did this:
+`.github/workflows/ci.yml` runs on pull requests and pushes to `main` and `staging`. A push
+to `staging` that passes the Quality Gate and the schema parity check deploys staging, through
+`.github/workflows/deploy-staging.yml` (`tests/unit/workflows/deploy-staging.test.ts`).
 
-1. validates the env contract with a placeholder `BETTER_AUTH_SECRET` (the real
-   secret lives only in Cloudflare Pages)
-2. blocks on pending D1 migrations: `pnpm run verify:prod:d1` for `main`,
-   `pnpm run verify:staging` for other branches
-3. builds with full git history (`fetch-depth: 0`), because sitemap `lastmod`
+Nothing deploys production yet. Production moves to Workers at launch
+([Next.js migration](exec-plans/active/nextjs-migration.md#left-for-launch)); until then
+`serplists.com` keeps serving the last Pages deployment, and so does `staging.serplists.com`.
+
+The staging deploy:
+
+1. validates the env contract with a placeholder `BETTER_AUTH_SECRET`. The real secret is a
+   Worker secret: `wrangler secret put BETTER_AUTH_SECRET --env preview`.
+2. blocks on pending migrations in staging's D1: `pnpm run verify:staging`.
+3. builds the Worker with `SITE_ENV=staging` and `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED=true`, from
+   full git history (`fetch-depth: 0`), because sitemap `lastmod`
    values come from `git log`; a shallow clone would stamp every page with the
    deploy date, so `sitemap:generate` fails on one in CI. Each bundled Template is
    dated by the newest commit on the built branch (first-parent) that changed its
@@ -125,33 +126,33 @@ its release checks. Until then, the Pages deploy workflow did this:
    old date. Content that is not committed yet gets the local build time, kept while it
    stays the same; the previous catalog is read only for that, and for a static page
    git has no date for.
-4. runs `wrangler pages deploy ./dist --branch <branch>`
-5. probes the new deployment's `/api/health` (the Worker boots) and
-   `/api/templates` (D1 is bound) with `scripts/verify-deployment.mjs`, up to six
-   tries 10 seconds apart, since a new `*.pages.dev` hostname can take a few seconds to
-   resolve. A 5xx or no response (DNS, connect, TLS, or a 30-second timeout) fails the
-   run; other statuses, such as an access policy, only warn. The probe follows no
-   redirect, so an access login counts as its redirect status
+4. runs `opennextjs-cloudflare deploy --env preview`, which uploads the `serp-checklists-preview`
+   Worker. The step fails when the output names no `workers.dev` URL, so a deployment is never
+   left unchecked.
+5. probes the new deployment's `/api/health` (the Worker boots) and `/api/templates` (D1 is
+   bound) with `scripts/verify-deployment.mjs`.
+   - It tries up to six times, 10 seconds apart, since a new hostname can take a few seconds
+     to resolve.
+   - A 5xx or no response (DNS, connect, TLS, or a 30-second timeout) fails the run. Other
+     statuses, such as an access policy, only warn.
+   - The probe follows no redirect, so an access login counts as its redirect status.
+6. checks the deployment against the site standards with `scripts/check-site-standards.mjs`.
 
-Cloudflare Pages settings:
+Settings:
 
-- Project name `serplists-com`, set directly in the workflow. Do not use the
-  `serp-checklists.pages.dev` domain or the `wrangler.toml` `name` as the project name.
-- Domains: `serp-checklists.pages.dev`, `serplists.com`, `staging.serplists.com`.
-- Which environment may be indexed, and which host each one answers on, is set by
-  `SITE_ENV` and `next.config.ts` now, not by the host a request names (see
-  [environments and hosts](#environments-and-hosts)).
-- GitHub secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, `CLOUDFLARE_API_KEY`.
-  The workflow uses email plus global key because the repo's legacy
-  `CLOUDFLARE_API_TOKEN` could not read the Pages project.
-- `main` deploys use production D1 (`serp-checklists-db`); `staging` and preview
-  deploys use `serp-checklists-staging-db` through the preview binding.
-- Keep `actions/checkout` and `actions/setup-node` on v5 or newer. Node is pinned
-  to 22 in both workflows.
-
-There is no deploy by hand until the Workers deploy exists. `pnpm run build` refuses a
-localhost `NEXT_PUBLIC_API_URL` (unless `ALLOW_LOCAL_API_URL=1`), so a local API URL
-cannot ship.
+- **Address:** staging answers on its `workers.dev` address. Its CORS and MCP host lists in
+  `wrangler.toml` name that address.
+- **Database:** the `preview` environment binds `serp-checklists-staging-db`.
+- **Secrets:** the Worker has `BETTER_AUTH_SECRET`. Stripe and auth email secrets are not set,
+  so billing and password emails show as unavailable on staging (see [SECURITY.md](SECURITY.md)).
+- **GitHub secrets:** `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL` and `CLOUDFLARE_API_KEY`, the
+  account email and global key.
+- **Indexing:** which environment may be indexed is set by `SITE_ENV` and `next.config.ts`, not
+  by the host a request names (see [environments and hosts](#environments-and-hosts)).
+- **Actions versions:** keep `actions/checkout` and `actions/setup-node` on v5 or newer. Node is
+  pinned to 22.
+- **Local API URL:** `pnpm run build` refuses a localhost `NEXT_PUBLIC_API_URL` (unless
+  `ALLOW_LOCAL_API_URL=1`), so a local API URL cannot ship.
 
 ## Environments and hosts
 
