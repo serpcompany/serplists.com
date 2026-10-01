@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const TAG_HOSTS = /(^|\.)(googletagmanager\.com|google-analytics\.com|analytics\.google\.com|doubleclick\.net)$/;
+import { TAG_HOSTS } from './support/analytics';
 
 async function recordTagRequests(page: Page): Promise<string[]> {
   const requests: string[] = [];

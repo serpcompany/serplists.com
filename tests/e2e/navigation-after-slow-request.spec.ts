@@ -1,16 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const LATE_NAVIGATION_WINDOW_MS = 500;
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });

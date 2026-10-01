@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const PRODUCTION_ORIGIN = 'https://serplists.com';
 const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
@@ -90,13 +90,6 @@ async function mockAuthenticatedRouteApi(page: Page) {
 
     await route.continue();
   });
-}
-
-async function signInAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page).toHaveURL(CONSOLE_HOME_URL, { timeout: 30_000 });
 }
 
 async function reportFreeThenProBillingStatus(page: Page) {
@@ -252,7 +245,7 @@ test.describe('route structure', () => {
     await expect(page.getByRole('contentinfo')).toBeVisible();
     await expect(consoleNavigation).toHaveCount(0);
 
-    await signInAsAdmin(page);
+    await loginAsAdmin(page);
     await page.goto('/dashboard/definitely-missing/');
     await expect(heading).toBeVisible();
     await expect(consoleNavigation).toBeVisible();
@@ -308,7 +301,7 @@ test.describe('route structure', () => {
   }) => {
     test.setTimeout(120_000);
 
-    await signInAsAdmin(page);
+    await loginAsAdmin(page);
 
     const createdRun = await apiJson<{ id?: string }>(page, '/checklists', {
       method: 'POST',

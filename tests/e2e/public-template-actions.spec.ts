@@ -1,17 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
-import { fillSignInForm, type TestUser } from './support/sign-in';
+import { loginAs, type TestUser } from './support/sign-in';
 
 const PUBLIC_TEMPLATE_PATH = '/profile/serp/ultimate-camping-checklist/';
 const FREE_PERSONAL_USER: TestUser = 'john';
-
-async function loginAs(page: Page, user: TestUser) {
-  await page.goto('/login/');
-  await fillSignInForm(page, user);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 async function openPublicTemplate(page: Page) {
   await page.goto(PUBLIC_TEMPLATE_PATH);

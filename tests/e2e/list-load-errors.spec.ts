@@ -1,14 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { loginAsAdmin } from './support/sign-in';
 
 async function failGetRequestsUntilRecovered(page: Page, matches: (url: URL) => boolean) {
   let failing = true;

@@ -1,16 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES = 160;
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
   return apiJson<Record<string, unknown>>(page, path, { method, body });

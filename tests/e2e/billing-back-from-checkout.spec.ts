@@ -1,20 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { answerRunStartsAtActiveRunLimit, reportBillingEnabled } from './support/billing';
+import { loginAsAdmin } from './support/sign-in';
 
-const RUN_LIMIT_MESSAGE =
-  'Active run limit reached. Upgrade to Pro to create more checklist runs.';
 const TEMPLATE_LIMIT_MESSAGE = 'Template limit reached. Upgrade to create more templates.';
 const PASSWORD = 'Aa!back-from-checkout-password-12345';
-
-async function reportBillingEnabled(page: Page) {
-  await page.route('**/api/billing/status**', async (route) => {
-    const response = await route.fetch();
-    const status = (await response.json()) as Record<string, unknown>;
-    await route.fulfill({ response, json: { ...status, billingEnabled: true } });
-  });
-}
 
 async function stubCheckoutWithSamePageLink(page: Page) {
   await page.route('**/api/billing/checkout', async (route) => {
@@ -27,13 +18,6 @@ async function sendBackForwardCacheRestore(page: Page) {
   await page.evaluate(() => {
     window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
   });
-}
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
 async function registerFreeAccount(page: Page) {
@@ -52,20 +36,6 @@ async function registerFreeAccount(page: Page) {
 
 async function reachFreeTemplateLimit(page: Page) {
   await apiJson(page, '/templates', { method: 'POST', body: { title: 'First template', is_public: false, sections: [] } });
-}
-
-async function answerRunStartsAtActiveRunLimit(page: Page) {
-  await page.route('**/api/checklists', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      body: JSON.stringify({ code: 'limit_reached', error: RUN_LIMIT_MESSAGE }),
-      contentType: 'application/json',
-      status: 403,
-    });
-  });
 }
 
 test.afterEach(async ({ page }) => {

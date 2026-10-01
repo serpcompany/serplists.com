@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { TAG_HOSTS } from './support/analytics';
 import { fillSignInForm } from './support/sign-in';
 
 const OFFSITE_RETURN_PATH = '/.//evil.com/share/x';
 const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
-const TAG_HOSTS = /(^|\.)(googletagmanager\.com|google-analytics\.com|analytics\.google\.com|doubleclick\.net)$/;
 
 async function stubTagManagerContainer(page: Page) {
   await page.route(

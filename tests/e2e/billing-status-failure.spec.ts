@@ -1,12 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { expect, test } from '@playwright/test';
+import { loginAsAdmin } from './support/sign-in';
 
 test('import and export stay usable when the plan check fails', async ({ page }) => {
   await loginAsAdmin(page);

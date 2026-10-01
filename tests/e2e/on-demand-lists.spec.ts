@@ -1,14 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { openRunFromRunsList } from './support/navigation';
+import { loginAsAdmin } from './support/sign-in';
 
 async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
@@ -20,11 +14,6 @@ async function deleteTemplate(page: Page, templateId: string) {
 
 async function createTemplate(page: Page, body: Record<string, unknown>): Promise<string> {
   return (await apiJson<{ id: string }>(page, '/templates', { method: 'POST', body })).id;
-}
-
-async function openRunFromRunsList(page: Page, title: string) {
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
 }
 
 test('starts a run from a public template page opened directly', async ({ page }) => {

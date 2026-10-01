@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const CONSOLE_HOME_PATH = '/dashboard/templates/';
 
@@ -68,13 +68,6 @@ test('a failing session check keeps the page and the Organization, then recovers
   });
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 });
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 test('a 429 on the page-load session check retries instead of redirecting to login', async ({ page }) => {
   await loginAsAdmin(page);

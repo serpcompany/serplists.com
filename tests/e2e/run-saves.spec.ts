@@ -1,21 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { apiJson, apiRequest } from './support/api-requests';
+import { openRunFromRunsList } from './support/navigation';
+import { loginAsAdmin } from './support/sign-in';
 
 const STRAY_SAVE_WINDOW_MS = 500;
 const DIALOG_CLOSE_ANIMATION_MS = 400;
 const RUN_TITLE_LIMIT = 160;
-
-async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
-  await apiRequests.settled();
-}
 
 async function postRun(page: Page, body: Record<string, unknown>) {
   return (await apiJson<{ id: string }>(page, '/checklists', { method: 'POST', body })).id;
@@ -54,11 +45,6 @@ async function tickEveryTaskWithoutCompleting(page: Page, runId: string) {
       status: 'in_progress',
     },
   });
-}
-
-async function openRunFromRunsList(page: Page, title: string) {
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
 }
 
 async function readRun(page: Page, runId: string) {

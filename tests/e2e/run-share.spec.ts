@@ -1,19 +1,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
+import { apiJson, apiRequest } from './support/api-requests';
+import { openRunFromRunsList } from './support/navigation';
+import { loginAsAdmin } from './support/sign-in';
 
 const SHARE_URL = /\/share\/[0-9a-f-]{36}\/$/;
-
-async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
-  await apiRequests.settled();
-}
 
 async function refuseClipboardWrites(page: Page) {
   await page.addInitScript(() => {
@@ -44,11 +35,6 @@ async function deleteRun(page: Page, runId: string) {
 
 function footerCloseButton(dialog: Locator) {
   return dialog.getByRole('button', { name: 'Close' }).first();
-}
-
-async function openRunFromRunsList(page: Page, title: string) {
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
 }
 
 async function createStaleCompletedRun(page: Page, title: string) {

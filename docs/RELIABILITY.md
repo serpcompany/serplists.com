@@ -228,11 +228,18 @@ Common failures:
   and a preset `PLAYWRIGHT_WRANGLER_PERSIST_TO` must be a folder inside `.wrangler/`
   other than `.wrangler/state`. It stops if `PLAYWRIGHT_API_URL` is not on the app's
   origin, and seeds nothing for a remote app or with `PLAYWRIGHT_REUSE_EXISTING_SERVER=1`.
-- The production build has no dev helpers: specs sign in with `fillSignInForm()` from
-  `tests/e2e/support/sign-in.ts` (the login page's Fill buttons exist only in
-  `next dev`), and move inside the app without a reload with `navigateInApp()` from
-  `tests/e2e/support/navigation.ts` (Next.js's router; a synthetic `pushState` only
-  changes the URL).
+- The production build has no dev helpers, so the specs bring their own:
+  - Sign in with `loginAsAdmin()` or `loginAs()` from `tests/e2e/support/sign-in.ts`. They
+    fill the login form with a seeded user (`fillSignInForm()`, as the Fill buttons do in
+    `next dev`), wait for My Templates, where signing in lands, and let its requests finish,
+    so the spec's next API call is the only one in flight. They wait for its heading, not
+    the Switch context button, which sits in the closed sidebar sheet below `md`, so they
+    sign in at any width.
+  - Move inside the app without a reload with `navigateInApp()` from
+    `tests/e2e/support/navigation.ts`. It calls Next.js's router, which Next.js exposes as
+    `window.next.router` for debugging (a synthetic `pushState` only changes the URL), and
+    resolves once the new page is on screen, when Next.js changes the address: a second
+    navigation sent before that replaces the first, and the page it left never unmounts.
 - A spec about what the app keeps in memory between pages (the query cache across a
   sign-out and the next sign-in, the session read right after signing in, a page title
   after a client-side navigation) gets there through the app: `navigateInApp()`, a link or
@@ -269,10 +276,13 @@ Common failures:
   connection that has been idle for 5 seconds; a request sent on it at that moment is
   lost. Playwright's request client (`page.request`, the `request` fixture,
   `route.fetch`) keeps idle connections with no limit of its own, so its request
-  failed with `socket hang up`. `playwright.config.ts` calls `disableRequestKeepAlive()`
-  from `tests/e2e/support/request-connections.ts`, which gives each of its requests a
-  new connection; `tests/unit/e2e/request-connections.test.ts` fails if a Playwright
-  upgrade undoes that.
+  failed with `socket hang up`. Playwright has no option for it, so `playwright.config.ts`,
+  which the runner and every worker load, calls `disableRequestKeepAlive()` from
+  `tests/e2e/support/request-connections.ts`: it turns keep-alive off on the HTTP agent
+  Playwright's request client sends every `http://` request through, so each request gets a
+  new connection, which the server reads before any idle timer applies.
+  `tests/unit/e2e/request-connections.test.ts` fails if a Playwright upgrade moves that
+  agent or stops using it.
 - Wrangler's dev proxy (its ProxyWorker) keeps its connections to the worker open the same
   way, and there the risk is not one moment: while the worker is busy (a page render, the API
   calls a page sends at once), its workerd reads no new request and runs no timer, so a
@@ -324,9 +334,6 @@ Common failures:
   double-click interval, so between the two the spec waits only for an element to exist,
   polled per animation frame: waiting for it to be visible and measuring it took over
   500 ms on a busy machine.
-- Sign in at the default desktop width and set a phone viewport afterwards: below `md` the
-  Switch context button that the specs' sign-in helpers wait for sits in the closed sidebar
-  sheet.
 - To trace a failed request to the local API, open wrangler's debug log for that run:
   every session writes one, with timestamps and the API's own `api_request` lines, to
   `.wrangler/logs` in your home folder (`%APPDATA%\xdg.config\.wrangler\logs` on

@@ -2,18 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
 const LATE_READ_WINDOW_MS = 500;
 const DELAYED_READ_MS = 1_500;
 const CACHED_ANSWER_WINDOW_MS = 700;
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 function archiveRow(page: Page, title: string) {
   return page.getByRole('listitem').filter({ hasText: title });

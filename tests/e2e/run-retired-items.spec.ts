@@ -1,17 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, trackApiRequests } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-async function loginAsAdmin(page: Page) {
-  const apiRequests = trackApiRequests(page, API_BASE_URL);
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
-  await apiRequests.settled();
-}
+import { apiJson } from './support/api-requests';
+import { loginAsAdmin } from './support/sign-in';
 
 async function api<T>(page: Page, path: string, method: string, body?: unknown): Promise<T> {
   return apiJson<T>(page, path, { method, body });

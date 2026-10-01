@@ -1,31 +1,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-const RUN_LIMIT_MESSAGE =
-  'Active run limit reached. Upgrade to Pro to create more checklist runs.';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
-
-async function answerRunStartsAtActiveRunLimit(page: Page) {
-  await page.route('**/api/checklists', async (route) => {
-    if (route.request().method() !== 'POST') {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      body: JSON.stringify({ code: 'limit_reached', error: RUN_LIMIT_MESSAGE }),
-      contentType: 'application/json',
-      status: 403,
-    });
-  });
-}
+import { answerRunStartsAtActiveRunLimit } from './support/billing';
+import { loginAsAdmin } from './support/sign-in';
 
 async function expectFullyOpaque(locator: Locator) {
   await expect.poll(() => locator.evaluate((node) => getComputedStyle(node).opacity)).toBe('1');

@@ -6,11 +6,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { disableRequestKeepAlive, playwrightHttpAgent } from '../../e2e/support/request-connections';
 
-// The browser-test API (workerd, behind wrangler's dev proxy) closes a connection that has
-// been idle for 5 seconds. A Playwright request sent on a pooled connection at that moment
-// fails with "socket hang up" before it reaches the API, so playwright.config.ts makes
-// Playwright's request client open a new connection for every request.
-
 let server: http.Server;
 let baseUrl: string;
 let connections: number;
