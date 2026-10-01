@@ -22,7 +22,7 @@ async function createTemplate(page: Page, body: Record<string, unknown>): Promis
   return (await apiJson<{ id: string }>(page, '/templates', { method: 'POST', body })).id;
 }
 
-async function openRunFromRunsDashboard(page: Page, title: string) {
+async function openRunFromRunsList(page: Page, title: string) {
   await page.goto('/dashboard/runs/');
   await page.getByRole('link', { name: title }).click();
 }
@@ -52,7 +52,7 @@ test('keeps toggled tasks and advances on a run opened from the runs dashboard',
     },
   });
 
-  await openRunFromRunsDashboard(page, title);
+  await openRunFromRunsList(page, title);
 
   const completeTask = async () => {
     const saved = page.waitForResponse(
