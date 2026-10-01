@@ -5,7 +5,9 @@ that checkout's `.wrangler/`, and the launcher picks a free port. The app is one
 server: the pages and the API (`src/app/api/[[...route]]/route.ts`) share an origin, and
 the Cloudflare bindings (D1, R2, vars) come from `wrangler.toml` and `.dev.vars` through
 `getCloudflareContext()`. Requirements: Node.js 22 and pnpm 9 (Wrangler is a dev
-dependency).
+dependency). Next.js takes the workspace root from the nearest lockfile it finds, which can be
+one in a folder above the checkout, so `next.config.ts` sets `turbopack.root` to the checkout
+itself.
 
 ## Set up
 

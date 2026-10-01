@@ -1,7 +1,3 @@
-# The Worker that serves the Next.js app (pages and the API) through OpenNext. The top level
-# is local development; `preview` (staging) and `production` are deployed environments, and
-# bindings are not inherited, so each environment repeats them. See
-# docs/exec-plans/active/nextjs-migration.md.
 name = "serp-checklists"
 main = ".open-next/worker.js"
 compatibility_date = "2026-09-28"
@@ -14,7 +10,6 @@ directory = ".open-next/assets"
 [observability]
 enabled = true
 
-# OpenNext calls its own Worker for cache revalidation.
 [[services]]
 binding = "WORKER_SELF_REFERENCE"
 service = "serp-checklists"
@@ -30,9 +25,6 @@ service = "serp-checklists-production"
 [vars]
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
 
-# SITE_ENV marks production explicitly: anything else is kept out of search engines and loads
-# no analytics (src/lib/seo/siteOrigin.ts). The build reads it too (next.config.ts headers and
-# redirects, public/_headers, static pages), so each environment's build sets the same value.
 [env.preview.vars]
 SITE_ENV = "staging"
 AUTH_EMAIL_VERIFICATION_REQUIRED = "false"
@@ -45,9 +37,6 @@ AUTH_EMAIL_VERIFICATION_REQUIRED = "true"
 PERSONAL_RUN_MCP_ENABLED = "true"
 CORS_ALLOWED_ORIGINS = "https://serplists.com"
 
-# Local development and production D1 binding. Preview deployments must not use
-# this database. After creating the staging D1 database, paste its UUID into
-# `preview_database_id` below before enabling preview deployments.
 [[d1_databases]]
 binding = "DB"
 database_name = "serp-checklists-db"
@@ -70,7 +59,6 @@ database_id = "b62ccc0a-9c69-4828-9e9b-3bac6ba0e4f1"
 migrations_table = "d1_migrations"
 migrations_dir = "db/migrations"
 
-# R2 bucket binding (create bucket + set name to match)
 [[r2_buckets]]
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
@@ -82,5 +70,3 @@ bucket_name = "serp-checklists-uploads"
 [[env.production.r2_buckets]]
 binding = "R2_UPLOADS"
 bucket_name = "serp-checklists-uploads"
-
-# Secrets are set per Worker: `wrangler secret put <NAME> --env <preview|production>`.

@@ -157,7 +157,9 @@
 ## Secrets and environment
 
 `.dev.vars` is the only local env file and holds local/test values only. `.env`
-and `.env.local` are deprecated. Production values are Cloudflare Pages secrets.
+and `.env.local` are deprecated. Production values are Cloudflare Pages secrets. On
+Workers, each environment's Worker has its own secrets:
+`wrangler secret put <NAME> --env <preview|production>`.
 
 | Variable | Purpose |
 | --- | --- |

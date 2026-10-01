@@ -7,6 +7,7 @@ SERP Lists is a Next.js app on Cloudflare Workers (through OpenNext); the same W
 ## High-Level Components
 
 - Frontend: Next.js App Router in `src/app` (routes, layouts, page metadata), with the screens in `src/views`.
+- Rendering: the pages Next.js prerenders at build time (the marketing pages and sign-in forms) are read from the Worker's static assets, and OpenNext's cache interception answers them without loading the Next.js server, so they cost the Worker almost no CPU (`open-next.config.ts`). Every other page renders per request, and nothing revalidates on a timer, which the read-only static assets cache could not do. Each environment's Worker is bound to itself as `WORKER_SELF_REFERENCE`, which OpenNext calls for cache revalidation.
 - API: the router in `functions/api/[[route]].ts`, run for every `/api/*` request by the route handler `src/app/api/[[...route]]/route.ts`.
 - Database: Cloudflare D1 through the `DB` binding, queried with Drizzle in `functions/api/db.ts`.
 - Object storage: Cloudflare R2 bucket bound as `R2_UPLOADS`.

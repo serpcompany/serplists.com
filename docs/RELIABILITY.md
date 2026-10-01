@@ -144,6 +144,9 @@ explicitly per environment, never inferred from the host.
 | Staging | `preview` | `staging` | `staging.serplists.com` |
 | Local (`next dev`, `pnpm preview`) | top level | unset | none |
 
+A Wrangler environment inherits no bindings from the top level of `wrangler.toml`, so each
+one repeats its D1, R2 and self-reference bindings.
+
 - **Indexing and analytics.** Only a site marked `SITE_ENV=production` may be indexed or
   load analytics ([FRONTEND.md](FRONTEND.md#production-and-other-environments)). Any other
   value, or none, sends `X-Robots-Tag: noindex, nofollow` with every page, API response
