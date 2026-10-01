@@ -1,16 +1,16 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TeamSummary } from '@/lib/api';
 
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 
-const apiMocks = vi.hoisted(() => ({ createTeam: vi.fn(), getTeams: vi.fn() }));
+const { getTeams } = vi.hoisted(() => ({ getTeams: vi.fn() }));
 const signedIn = vi.hoisted(() => ({ userId: 'user-1' }));
 
-vi.mock('@/lib/api', () => ({ api: apiMocks }));
+vi.mock('@/lib/api', () => ({ api: { getTeams } }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ isLoading: false, sessionStatus: 'authenticated', user: { id: signedIn.userId } }),
 }));
@@ -31,34 +31,6 @@ const settleQueries = () =>
   });
 
 let restoreGlobals: () => void = () => undefined;
-let root: Root | null = null;
-
-async function mountWorkspace() {
-  const rendered: { value?: ReturnType<typeof useWorkspace> } = {};
-  const Probe = () => {
-    rendered.value = useWorkspace();
-    return null;
-  };
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const render = () =>
-    act(() =>
-      root?.render(
-        <QueryClientProvider client={queryClient}>
-          <WorkspaceProvider>
-            <Probe />
-          </WorkspaceProvider>
-        </QueryClientProvider>,
-      ),
-    );
-  root = createRoot(createFakeContainer() as unknown as Element);
-  render();
-  await settleQueries();
-  const workspace = () => {
-    if (!rendered.value) throw new Error('WorkspaceProvider did not render');
-    return rendered.value;
-  };
-  return { render, workspace, shownTeamIds: () => workspace().teams.map(({ id }) => id) };
-}
 
 beforeAll(() => {
   restoreGlobals = installFakeDomGlobals();
@@ -68,37 +40,69 @@ afterAll(() => restoreGlobals());
 
 beforeEach(() => {
   signedIn.userId = 'user-1';
-  apiMocks.getTeams.mockReset();
-  apiMocks.getTeams.mockRejectedValue(new Error('Teams unavailable'));
+  getTeams.mockReset();
+  getTeams.mockRejectedValue(new Error('Teams unavailable'));
 });
 
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-});
+async function withWorkspace(
+  test: (tab: { rerender: () => void; workspace: () => ReturnType<typeof useWorkspace> }) => Promise<void>,
+) {
+  const shown: { value?: ReturnType<typeof useWorkspace> } = {};
+  const Probe = () => {
+    shown.value = useWorkspace();
+    return null;
+  };
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const root = createRoot(createFakeContainer() as unknown as Element);
+  const rerender = () =>
+    act(() =>
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <WorkspaceProvider>
+            <Probe />
+          </WorkspaceProvider>
+        </QueryClientProvider>,
+      ),
+    );
+  rerender();
+  await settleQueries();
+  try {
+    await test({
+      rerender,
+      workspace: () => {
+        if (!shown.value) throw new Error('WorkspaceProvider did not render');
+        return shown.value;
+      },
+    });
+  } finally {
+    act(() => root.unmount());
+  }
+}
+
+const teamIdsOf = (workspace: ReturnType<typeof useWorkspace>) => workspace.teams.map(({ id }) => id);
 
 describe('Organizations remembered in this tab', () => {
-  it('are shown until the next list the server sends, which replaces them', async () => {
-    const { workspace, shownTeamIds } = await mountWorkspace();
-    act(() => workspace().rememberTeam(organization('created')));
-    expect(shownTeamIds()).toEqual(['created']);
+  it('are shown until the next list the server sends, which replaces them', () =>
+    withWorkspace(async ({ workspace }) => {
+      act(() => workspace().rememberTeam(organization('created')));
+      expect(teamIdsOf(workspace())).toEqual(['created']);
 
-    apiMocks.getTeams.mockResolvedValue([organization('listed')]);
-    act(() => workspace().retryWorkspace());
-    await settleQueries();
+      getTeams.mockResolvedValue([organization('listed')]);
+      act(() => workspace().retryWorkspace());
+      await settleQueries();
 
-    expect(shownTeamIds()).toEqual(['listed']);
-  });
+      expect(teamIdsOf(workspace())).toEqual(['listed']);
+    }));
 
-  it('are never shown to the next user who signs in on the tab', async () => {
-    const { render, workspace, shownTeamIds } = await mountWorkspace();
-    act(() => workspace().rememberTeam(organization('created')));
-    expect(shownTeamIds()).toEqual(['created']);
+  it('are never shown to the next user who signs in on the tab', () =>
+    withWorkspace(async ({ rerender, workspace }) => {
+      act(() => workspace().rememberTeam(organization('created')));
+      expect(teamIdsOf(workspace())).toEqual(['created']);
 
-    signedIn.userId = 'user-2';
-    render();
-    await settleQueries();
+      signedIn.userId = 'user-2';
+      rerender();
+      await settleQueries();
 
-    expect(shownTeamIds()).toEqual([]);
-  });
+      expect(teamIdsOf(workspace())).toEqual([]);
+    }));
 });

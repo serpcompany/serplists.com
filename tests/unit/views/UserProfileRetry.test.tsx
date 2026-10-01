@@ -1,6 +1,6 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createRoot } from 'react-dom/client';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { LoadUserProfileResult } from '@/features/profile/loadUserProfile';
 
@@ -23,30 +23,21 @@ const alice: LoadUserProfileResult = {
   templates: [],
 };
 
-let restoreGlobals: () => void = () => undefined;
-let root: Root | null = null;
-
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(navigation.window);
-});
-
-afterAll(() => restoreGlobals());
-
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-  loadUserProfile.mockReset();
-});
-
-async function mountProfile(): Promise<FakeElement> {
+async function onAlicesProfile(test: (page: FakeElement) => Promise<void>) {
+  const restoreGlobals = installFakeDomGlobals(navigation.window);
   navigation.reset('/profile/alice/', { params: { username: 'alice' } });
-  const container = createFakeContainer();
-  root = createRoot(container as unknown as Element);
-  await act(async () => {
-    root?.render(<UserProfile />);
-    await settle();
-  });
-  return container;
+  const page = createFakeContainer();
+  const root = createRoot(page as unknown as Element);
+  try {
+    await act(async () => {
+      root.render(<UserProfile />);
+      await settle();
+    });
+    await test(page);
+  } finally {
+    act(() => root.unmount());
+    restoreGlobals();
+  }
 }
 
 describe('UserProfile Try again', () => {
@@ -54,22 +45,24 @@ describe('UserProfile Try again', () => {
     loadUserProfile.mockResolvedValueOnce({ kind: 'error', message: 'Unable to load this public profile.' });
     const retried = deferred<LoadUserProfileResult>();
     loadUserProfile.mockReturnValueOnce(retried.promise);
-    const container = await mountProfile();
-    expect(container.textContent).toContain('Unable to load profile');
 
-    await act(async () => {
-      click(container, findByText(container, 'BUTTON', 'Try again'));
-      await settle();
+    await onAlicesProfile(async (page) => {
+      expect(page.textContent).toContain('Unable to load profile');
+
+      await act(async () => {
+        click(page, findByText(page, 'BUTTON', 'Try again'));
+        await settle();
+      });
+
+      expect(page.textContent).toContain('Loading profile...');
+      expect(page.textContent).not.toContain('Unable to load profile');
+
+      await act(async () => {
+        retried.resolve(alice);
+        await settle();
+      });
+
+      expect(page.textContent).toContain('Alice Example');
     });
-
-    expect(container.textContent).toContain('Loading profile...');
-    expect(container.textContent).not.toContain('Unable to load profile');
-
-    await act(async () => {
-      retried.resolve(alice);
-      await settle();
-    });
-
-    expect(container.textContent).toContain('Alice Example');
   });
 });
