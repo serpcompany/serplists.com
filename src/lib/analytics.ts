@@ -124,7 +124,8 @@ const trackUncaughtErrors = () => {
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    analytics.trackError(new Error(event.reason), 'unhandled_promise_rejection');
+    const reason: unknown = event.reason;
+    analytics.trackError(new Error(reason === undefined ? undefined : String(reason)), 'unhandled_promise_rejection');
   });
 };
 

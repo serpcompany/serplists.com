@@ -7,7 +7,7 @@ export const THEME_CHANGE_EVENT = 'serplists-theme-change';
 
 export type SerpListsTheme = 'light' | 'dark';
 
-const isTheme = (value: string | null): value is SerpListsTheme =>
+const isTheme = (value: unknown): value is SerpListsTheme =>
   value === 'light' || value === 'dark';
 
 export const getStoredTheme = (
@@ -106,11 +106,8 @@ export const subscribeToThemeChanges = (
   const target = options.target ?? window;
 
   const handleThemeChange = (event: Event) => {
-    onChange(
-      event instanceof CustomEvent && isTheme(event.detail)
-        ? event.detail
-        : getDocumentTheme(documentRef),
-    );
+    const detail: unknown = event instanceof CustomEvent ? event.detail : undefined;
+    onChange(isTheme(detail) ? detail : getDocumentTheme(documentRef));
   };
   const handleStorage = (event: Event) => {
     const storageEvent = readStorageEvent(event);

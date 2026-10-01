@@ -49,12 +49,14 @@ const generateTempId = (prefix: string) => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 };
 
+const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+
 const parseJsonArray = (value: unknown): unknown[] | null => {
-  if (Array.isArray(value)) return value;
+  if (isArray(value)) return value;
   if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : null;
+      const parsed: unknown = JSON.parse(value);
+      return isArray(parsed) ? parsed : null;
     } catch {
       return null;
     }
@@ -288,10 +290,13 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
-    reader.onload = (event) => {
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Failed to read file"));
+        return;
+      }
       try {
-        const jsonString = event.target?.result as string;
-        const data = JSON.parse(jsonString);
+        const data: unknown = JSON.parse(reader.result);
         const validatedBackup = validateBackup(data);
         resolve(validatedBackup);
       } catch (error) {
@@ -369,16 +374,22 @@ export const parseTemplatesFromData = (
   }
 };
 
-export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
-  const jsonString = await new Promise<string>((resolve, reject) => {
+const readFileText = (file: File): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = (event) => resolve(event.target?.result as string);
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Failed to read file"));
+    };
     reader.onerror = () => reject(new Error("Failed to read file"));
     reader.readAsText(file);
   });
 
+export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
+  const jsonString = await readFileText(file);
+
   try {
-    const data = JSON.parse(jsonString);
+    const data: unknown = JSON.parse(jsonString);
     return parseTemplatesFromData(data);
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -389,12 +400,7 @@ export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImport
 };
 
 export const parseTemplatesFromFile = async (file: File): Promise<TemplateImportResult> => {
-  const sourceString = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => resolve(event.target?.result as string);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsText(file);
-  });
+  const sourceString = await readFileText(file);
 
   const extension = detectTemplateSourceExtension(file.name);
   if (!extension) {
@@ -410,7 +416,8 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
       return normalizePortableData(parseTemplateYaml(sourceString));
     }
 
-    return parseTemplatesFromData(JSON.parse(sourceString));
+    const data: unknown = JSON.parse(sourceString);
+    return parseTemplatesFromData(data);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
