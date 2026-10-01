@@ -64,33 +64,19 @@ type WorkspaceContextValue = {
   canManageTeam: boolean;
   canRunTemplates: boolean;
   createTeam: (input: CreateTeamInput) => Promise<void>;
-  // Permissions on a resource owned by this Organization (Personal when teamId is empty),
-  // from the user's role there, whichever context is active.
   getPermissions: (teamId?: string) => ResourcePermissions;
-  // True for an Organization's resource when the role there is unknown only because the
-  // teams request failed with no list: pages say so with Retry instead of going read-only.
   isRoleUnavailable: (teamId?: string) => boolean;
   isTeamWorkspace: boolean;
-  // True until the session and the active context are known, including while the stored
-  // Organization is unconfirmed ('loading' or 'error' status). Lists wait for it.
   isWorkspaceLoading: boolean;
-  /** Applies a confirmed change to one cached Organization without refetching. */
   patchTeam: (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => void;
   refreshTeams: () => Promise<TeamSummary[]>;
-  // Shows a created or joined Organization at once. Call refreshTeams() after it: when no
-  // list was loaded yet, only that request confirms the stored Organization.
   rememberTeam: (team: TeamSummary) => void;
-  // Retries the teams request after it failed, in any context.
   retryWorkspace: () => void;
   selectWorkspace: (workspaceId: string) => void;
   teams: TeamSummary[];
-  // The teams request failed and there is no list, in any context. Personal work still goes
-  // ahead ('ready'), but the switcher and Settings say the Organizations could not load.
   teamsUnavailable: boolean;
   workspaces: Workspace[];
   workspaceScopeId: string;
-  // 'loading' or 'error' while the stored Organization is not confirmed by the teams query.
-  // The context then falls back to Personal only for display: never write to it.
   workspaceStatus: WorkspaceStatus;
 };
 
@@ -108,10 +94,31 @@ const personalWorkspace: Workspace = {
 const readStoredWorkspaceId = (): string =>
   safeLocalStorage.getItem(ACTIVE_WORKSPACE_STORAGE_KEY) || PERSONAL_WORKSPACE_ID;
 
-// safeLocalStorage never throws; when storage is blocked the choice lasts for the session.
 const writeStoredWorkspaceId = (workspaceId: string): void => {
   safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 };
+
+function useRememberedTeams(
+  userId: string | undefined,
+  teamsList: { dataUpdatedAt: number; isSuccess: boolean },
+) {
+  const [rememberedTeams, setRememberedTeams] = useState<TeamSummary[]>([]);
+  const { dataUpdatedAt: teamsUpdatedAt, isSuccess: teamsSucceeded } = teamsList;
+  const [seenTeamsList, setSeenTeamsList] = useState({ userId, teamsUpdatedAt, teamsSucceeded });
+  if (
+    seenTeamsList.userId !== userId ||
+    seenTeamsList.teamsUpdatedAt !== teamsUpdatedAt ||
+    seenTeamsList.teamsSucceeded !== teamsSucceeded
+  ) {
+    setSeenTeamsList({ userId, teamsUpdatedAt, teamsSucceeded });
+    if (seenTeamsList.userId !== userId || teamsSucceeded) {
+      setRememberedTeams((currentTeams) =>
+        currentTeams.length === 0 ? currentTeams : [],
+      );
+    }
+  }
+  return [rememberedTeams, setRememberedTeams] as const;
+}
 
 export function WorkspaceProvider({
   children,
@@ -121,10 +128,9 @@ export function WorkspaceProvider({
   const { isLoading: isAuthLoading, sessionStatus, user } = useAuth();
   const userId = user?.id;
   const queryClient = useQueryClient();
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(
     readStoredWorkspaceId,
   );
-  const [optimisticTeams, setOptimisticTeams] = useState<TeamSummary[]>([]);
   const selectionMemoryRef = useRef(createWorkspaceSelectionMemory());
 
   const teamsQuery = useQuery({
@@ -133,16 +139,16 @@ export function WorkspaceProvider({
     enabled: Boolean(user),
     staleTime: 60 * 1000,
   });
+  const [rememberedTeams, setRememberedTeams] = useRememberedTeams(userId, teamsQuery);
 
   const queriedTeams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const { teamsFailed, teamsLoaded, teamsSettled } = describeTeamsQuery(teamsQuery);
-  // A failed refetch keeps the last list, which stays valid; only a failure with no list is.
   const teamsUnavailable = teamsFailed && !teamsLoaded;
 
   const teams = useMemo(() => {
     const mergedTeams = new Map<string, TeamSummary>();
 
-    for (const team of optimisticTeams) {
+    for (const team of rememberedTeams) {
       mergedTeams.set(team.id, team);
     }
 
@@ -151,24 +157,7 @@ export function WorkspaceProvider({
     }
 
     return Array.from(mergedTeams.values());
-  }, [optimisticTeams, queriedTeams]);
-
-  // Teams remembered in this tab (created or joined) last until the next list the server
-  // sends, and never outlive the user who signed in.
-  const { dataUpdatedAt: teamsUpdatedAt, isSuccess: teamsSucceeded } = teamsQuery;
-  const [seenTeamsList, setSeenTeamsList] = useState({ userId, teamsUpdatedAt, teamsSucceeded });
-  if (
-    seenTeamsList.userId !== userId ||
-    seenTeamsList.teamsUpdatedAt !== teamsUpdatedAt ||
-    seenTeamsList.teamsSucceeded !== teamsSucceeded
-  ) {
-    setSeenTeamsList({ userId, teamsUpdatedAt, teamsSucceeded });
-    if (seenTeamsList.userId !== userId || teamsSucceeded) {
-      setOptimisticTeams((currentTeams) =>
-        currentTeams.length === 0 ? currentTeams : [],
-      );
-    }
-  }
+  }, [rememberedTeams, queriedTeams]);
 
   const workspaces = useMemo<Workspace[]>(
     () => [
@@ -186,14 +175,12 @@ export function WorkspaceProvider({
     [teams],
   );
 
-  // Forget the stored context only on a confirmed sign-out. When the session check failed
-  // the user may still be signed in, so keep it for when the session comes back.
   const signedOut = !isAuthLoading && !user && isConfirmedSignOut(sessionStatus);
   const [seenSignedOut, setSeenSignedOut] = useState(false);
   if (seenSignedOut !== signedOut) {
     setSeenSignedOut(signedOut);
     if (signedOut) {
-      setActiveWorkspaceId(PERSONAL_WORKSPACE_ID);
+      setSelectedWorkspaceId(PERSONAL_WORKSPACE_ID);
     }
   }
 
@@ -210,10 +197,8 @@ export function WorkspaceProvider({
       return;
     }
 
-    // See workspaceSelection.ts: storage seeds the tab once per user, so a teams refetch never
-    // moves this tab to an Organization another tab stored.
     const nextWorkspaceId = reconcileWorkspaceSelection(selectionMemoryRef.current, {
-      activeWorkspaceId,
+      activeWorkspaceId: selectedWorkspaceId,
       readStoredWorkspaceId,
       userId: user.id,
       teamIds: teams.map((team) => team.id),
@@ -221,12 +206,12 @@ export function WorkspaceProvider({
       teamsLoaded,
       teamsFailed,
     });
-    if (nextWorkspaceId !== activeWorkspaceId) {
-      setActiveWorkspaceId(nextWorkspaceId);
+    if (nextWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(nextWorkspaceId);
     }
   }, [
-    activeWorkspaceId,
     isAuthLoading,
+    selectedWorkspaceId,
     teams,
     teamsFailed,
     teamsLoaded,
@@ -236,46 +221,35 @@ export function WorkspaceProvider({
 
   const activeWorkspace = useMemo(
     () =>
-      workspaces.find((workspace) => workspace.id === activeWorkspaceId) ??
+      workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ??
       personalWorkspace,
-    [activeWorkspaceId, workspaces],
+    [selectedWorkspaceId, workspaces],
   );
 
   const selectWorkspace = useCallback(
     (workspaceId: string) => {
       const nextWorkspaceId = workspaceId || PERSONAL_WORKSPACE_ID;
 
-      // Recorded and stored even when unchanged: createTeam and invite acceptance rely on
-      // the explicit selection while the teams query catches up.
       recordWorkspaceSelection(selectionMemoryRef.current, nextWorkspaceId);
-      setActiveWorkspaceId(nextWorkspaceId);
+      setSelectedWorkspaceId(nextWorkspaceId);
       writeStoredWorkspaceId(nextWorkspaceId);
-      // Compared with the raw state, which may hold a stored Organization that still resolves
-      // to Personal. Lists are only marked stale (see templateListCache.ts).
       markListsStaleForWorkspaceSwitch(queryClient, {
-        fromWorkspaceId: activeWorkspaceId,
+        fromWorkspaceId: selectedWorkspaceId,
         toWorkspaceId: nextWorkspaceId,
       });
     },
-    [activeWorkspaceId, queryClient],
+    [queryClient, selectedWorkspaceId],
   );
 
   const rememberTeam = useCallback(
     (team: TeamSummary) => {
-      setOptimisticTeams((currentTeams) => [
+      setRememberedTeams((currentTeams) => [
         team,
         ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id),
       ]);
 
       if (userId) {
-        // A teams request still in flight read the server before this change and would
-        // drop the team when it lands. Cancelling reverts the query to its last data,
-        // and the write below is kept as that data.
         void queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
-        // Only added to a list the server sent. With none (the first load failed or was
-        // cancelled), a one-team list would read as a settled server list without the
-        // stored Organization and move the tab to Personal; optimisticTeams shows the team
-        // until the caller's refreshTeams() loads the list.
         queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
           currentTeams
             ? [team, ...currentTeams.filter((currentTeam) => currentTeam.id !== team.id)]
@@ -283,12 +257,12 @@ export function WorkspaceProvider({
         );
       }
     },
-    [queryClient, userId],
+    [queryClient, setRememberedTeams, userId],
   );
 
   const patchTeam = useCallback(
     (teamId: string, patch: Partial<Omit<TeamSummary, 'id'>>) => {
-      setOptimisticTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
+      setRememberedTeams((currentTeams) => patchTeamSummary(currentTeams, teamId, patch));
 
       if (userId) {
         queryClient.setQueryData<TeamSummary[]>(['teams', userId], (currentTeams) =>
@@ -296,7 +270,7 @@ export function WorkspaceProvider({
         );
       }
     },
-    [queryClient, userId],
+    [queryClient, setRememberedTeams, userId],
   );
 
   const refreshTeams = useCallback(async () => {
@@ -304,7 +278,6 @@ export function WorkspaceProvider({
       return [];
     }
 
-    // fetchQuery joins a request already in flight, which predates the caller's write.
     await queryClient.cancelQueries({ queryKey: ['teams', userId], exact: true });
     return queryClient.fetchQuery({
       queryKey: ['teams', userId],
@@ -325,7 +298,7 @@ export function WorkspaceProvider({
 
   const workspaceStatus = getWorkspaceStatus({
     hasUser: Boolean(user),
-    activeWorkspaceId,
+    activeWorkspaceId: selectedWorkspaceId,
     teamIds: teams.map((team) => team.id),
     teamsFailed,
   });
@@ -345,8 +318,6 @@ export function WorkspaceProvider({
     [teams, teamsUnavailable],
   );
 
-  // Memoized so a background teams refetch (isFetching toggles on window focus) does not
-  // re-render every consumer.
   const value = useMemo<WorkspaceContextValue>(() => {
     const isTeamWorkspace = activeWorkspace.type === 'team';
     const teamRole = isTeamWorkspace ? activeWorkspace.role : undefined;

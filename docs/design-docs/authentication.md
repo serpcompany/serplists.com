@@ -111,11 +111,10 @@ and user-facing failure states when a supporting service is unavailable.
   the first check twice, one and then three seconds later (each attempt counts against
   the auth rate limit, so there are few), then reports `sessionStatus: 'unavailable'`
   and checks again when the browser comes back online; `RequireAuth` shows a retry
-  instead of redirecting to `/login/`. A failed
-  profile refresh or sign-in session read keeps the current user, and the stored
-  Organization choice is cleared only on a confirmed sign-out. Registration takes
-  "verify your email" from the sign-up response (no session token), not from a later
-  session check.
+  instead of redirecting to `/login/`. A failed profile refresh or sign-in session read
+  keeps the current user, and the stored Organization choice is cleared only on a
+  confirmed sign-out. Registration takes "verify your email" from the sign-up response
+  (no session token), not from a later session check.
 - Sign-in stores the user from a session read, not from the sign-in response, whose
   user has no `username` (so the account menu's Profile link and the `@username`
   label would be missing until a reload). If that read fails after a successful
@@ -147,10 +146,11 @@ and user-facing failure states when a supporting service is unavailable.
   starts and its answer is dropped when a later read, or a sign-in or sign-out in this
   tab, was applied first; a failed read never outranks an older answer. One re-check
   runs at a time, and a request made during one queues one more, since the running
-  check may have read the session before the change. A re-check that finds the same user with a changed profile (name,
-  username, avatar, email) shows the new one, and a tab that saves a profile change
-  announces it (`refreshProfile`), so the other tabs showing that user re-read the
-  session: share links and the Profile link are built from the session's username.
+  check may have read the session before the change. A re-check that finds the same
+  user with a changed profile (name, username, avatar, email) shows the new one, and a
+  tab that saves a profile change announces it (`refreshProfile`), so the other tabs
+  showing that user re-read the session: share links and the Profile link are built
+  from the session's username.
   Tabs never re-announce what they learned, so one change costs one session
   read per other tab. Before a background sign-out or switch to another user is
   applied, pages with unsaved work keep it on the tab to offer it back after sign-in
