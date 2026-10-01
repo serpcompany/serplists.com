@@ -6,9 +6,9 @@ import {
   isSectionsShape,
   normalizeSections as normalizeChecklistSections,
 } from '@/lib/utils/checklistSections';
+import type { PublicProfile } from '@/lib/schemas/accountResponses';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
-
-type ApiRecord = Record<string, unknown>;
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
@@ -16,7 +16,7 @@ const asString = (value: unknown): string | undefined =>
 const asStringArray = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : undefined;
 
-const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] => {
+const normalizeTemplateSections = (rawTemplate: ApiTemplate): ChecklistSection[] => {
   if (Array.isArray(rawTemplate.sections)) {
     return normalizeChecklistSections(rawTemplate.sections);
   }
@@ -26,7 +26,7 @@ const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] =
   }
 
   try {
-    const rawItems =
+    const rawItems: unknown =
       typeof rawTemplate.items === 'string'
         ? JSON.parse(rawTemplate.items)
         : rawTemplate.items;
@@ -52,7 +52,7 @@ const normalizeTemplateSections = (rawTemplate: ApiRecord): ChecklistSection[] =
 };
 
 export const mapApiTemplateToChecklistTemplate = (
-  foundTemplate: ApiRecord,
+  foundTemplate: ApiTemplate,
   fallbackSlug: string,
 ): ChecklistTemplate => {
   const categories =
@@ -72,9 +72,7 @@ export const mapApiTemplateToChecklistTemplate = (
     seoTitle: asString(foundTemplate.seoTitle) ?? '',
     seoDescription: asString(foundTemplate.seoDescription) ?? '',
     seoUrl: asString(foundTemplate.seoUrl),
-    rules: Array.isArray(foundTemplate.rules)
-      ? (foundTemplate.rules as ChecklistTemplate['rules'])
-      : undefined,
+    rules: foundTemplate.rules ?? undefined,
     sections: normalizeTemplateSections(foundTemplate),
     categories,
     tags: asStringArray(foundTemplate.tags) ?? [],
@@ -102,7 +100,7 @@ export const mapApiTemplateToChecklistTemplate = (
 
 export const resolveTemplateOwnerProfile = (
   template: ChecklistTemplate,
-  profile?: ApiRecord | null,
+  profile?: Pick<PublicProfile, 'username' | 'full_name'> | null,
 ): {
   ownerSlug: string | null;
   template: ChecklistTemplate;

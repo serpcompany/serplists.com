@@ -24,7 +24,6 @@ export type {
   TemplateHistoryEvent,
   TemplateHistoryResponse,
   TemplateHistoryVersion,
-  TemplateUpdateResponse,
 } from "@/lib/api/templates";
 
 export const api = { ...templatesApi, ...runsApi, ...teamsApi, ...accountApi };

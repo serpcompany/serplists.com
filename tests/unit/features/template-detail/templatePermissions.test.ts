@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { toPublicTemplate } from '@functions/api/utils/template-public';
+import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import { getCopyTemplateButton } from '@/features/template-detail/copyTemplateButton';
 import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import { getTemplateDetailPermissions } from '@/features/template-detail/templatePermissions';
@@ -154,7 +155,7 @@ describe('getTemplateDetailPermissions', () => {
       user_id: 'alice',
       version: 3,
     };
-    const asSentToANonMember = mapApiTemplateToChecklistTemplate(toPublicTemplate(storedRow), 'audit');
+    const asSentToANonMember = mapApiTemplateToChecklistTemplate(apiTemplateSchema.parse(toPublicTemplate(storedRow)), 'audit');
 
     expect(
       getTemplateDetailPermissions({

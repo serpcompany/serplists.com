@@ -9,9 +9,13 @@ describe('history requests', () => {
   });
 
   it('asks for only the entries the Changelog cards show', async () => {
-    const fetchMock = vi.fn(
-      async (_url: RequestInfo | URL) => new Response(JSON.stringify({ versions: [], events: [] }), { status: 200 }),
-    );
+    const subject = { type: 'user', id: 'user-1' };
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const body = String(url).includes('/templates/')
+        ? { templateId: 'template-1', subject, versions: [], events: [] }
+        : { checklistId: 'run-1', subject, events: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     await api.getTemplateHistory('template-1');

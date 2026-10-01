@@ -12,6 +12,8 @@ import {
   getProfileDisplayName,
 } from '@/features/profile/profileSummary';
 import { PROFILE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
+import { publicProfileSchema } from '@/lib/schemas/accountResponses';
+import { apiTemplateListSchema } from '@/lib/schemas/apiTemplates';
 import { buildPublicProfilePath } from '@/lib/routes';
 import type { PageSeo } from '@/lib/seo/pageMetadata';
 
@@ -29,9 +31,9 @@ const foundProfileSchema = z.object({
 
 const profileApi: UserProfileApiClient = {
   getProfileByUsername: (username: string) =>
-    fetchApiJson(`/api/profiles/by-username?username=${encodeURIComponent(username)}`),
+    fetchApiJson(`/api/profiles/by-username?username=${encodeURIComponent(username)}`, publicProfileSchema),
   getPublicTemplatesForUser: (userId: string) =>
-    fetchApiJson(`/api/templates/public?userId=${encodeURIComponent(userId)}`),
+    fetchApiJson(`/api/templates/public?userId=${encodeURIComponent(userId)}`, apiTemplateListSchema),
 };
 
 export type ProfilePageSeo =

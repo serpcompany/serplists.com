@@ -89,9 +89,7 @@ export const hydrateTemplateOwner = async (
   }
 
   try {
-    const profile = (await apiClient.getProfileById(
-      template.userId,
-    )) as Record<string, unknown>;
+    const profile = await apiClient.getProfileById(template.userId);
     return resolveTemplateOwnerProfile(template, profile).template;
   } catch {
     return template;
@@ -110,7 +108,7 @@ export const resolveShareOwnerTemplate = async (
 
   if (owner.userId && template.userId && template.userId !== owner.userId) {
     try {
-      const profile = (await apiClient.getProfileById(template.userId)) as Record<string, unknown>;
+      const profile = await apiClient.getProfileById(template.userId);
       return resolveTemplateOwnerProfile(template, profile).template;
     } catch {
       return template;

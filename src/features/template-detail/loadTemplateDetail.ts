@@ -6,6 +6,7 @@ import {
 } from '@/lib/repoTemplateCatalog';
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
 import { looksLikeTemplateId } from '@/lib/utils/slug';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import {
@@ -42,7 +43,7 @@ const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
 const fetchPrivateTemplate = async (
   identifier: string,
   apiClient: TemplateDetailApiClient,
-): Promise<unknown> => {
+): Promise<ApiTemplate> => {
   try {
     return await apiClient.getTemplateById(identifier);
   } catch (error) {
@@ -57,7 +58,7 @@ const fetchPrivateTemplate = async (
 const findTemplateById = async (
   identifier: string,
   apiClient: TemplateDetailApiClient,
-): Promise<unknown> => {
+): Promise<ApiTemplate | null> => {
   try {
     return await apiClient.getTemplateById(identifier);
   } catch (error) {
@@ -67,15 +68,12 @@ const findTemplateById = async (
 };
 
 const toOwnedPublicTemplate = async (
-  rawTemplate: unknown,
+  rawTemplate: ApiTemplate,
   options: { identifier: string; ownerUsername: string },
   apiClient: TemplateDetailApiClient,
 ): Promise<ChecklistTemplate | null> => {
   const mappedTemplate = await hydrateTemplateOwner(
-    mapApiTemplateToChecklistTemplate(
-      rawTemplate as Record<string, unknown>,
-      options.identifier,
-    ),
+    mapApiTemplateToChecklistTemplate(rawTemplate, options.identifier),
     apiClient,
   );
   const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
@@ -149,10 +147,7 @@ export const loadTemplateDetailData = async (
   try {
     const rawTemplate = await fetchPrivateTemplate(identifier, apiClient);
     const mappedTemplate = await hydrateTemplateOwner(
-      mapApiTemplateToChecklistTemplate(
-        rawTemplate as Record<string, unknown>,
-        identifier,
-      ),
+      mapApiTemplateToChecklistTemplate(rawTemplate, identifier),
       apiClient,
     );
 

@@ -1,7 +1,7 @@
-import { z } from 'zod';
-
 import { mapChecklistRuns } from '@/features/run-execution/runExecutionMappers';
 import { isApiError } from '@/lib/api-errors';
+import type { ApiRun } from '@/lib/schemas/apiRuns';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
@@ -10,44 +10,48 @@ export type TemplateListRequest = { teamId?: string; scope?: 'public' | 'persona
 
 export const CATALOG_QUERY_KEY = ['templates', 'catalog'] as const;
 
-type ApiRow = Record<string, unknown>;
-const apiRows = z.array(z.record(z.unknown()));
-
 export type TemplateListClient = {
-  getTemplates: (request: TemplateListRequest) => Promise<unknown>;
-  getChecklists: (params?: { teamId?: string }) => Promise<unknown>;
+  getTemplates: (request: TemplateListRequest) => Promise<ApiTemplate[]>;
+  getChecklists: (params?: { teamId?: string }) => Promise<ApiRun[]>;
 };
 
 const optionalString = (value: unknown): string | undefined => (typeof value === 'string' ? value : undefined);
 
 const parseJsonField = (value: unknown): unknown => (typeof value === 'string' ? JSON.parse(value) : value);
 
-const templateSections = (template: ApiRow): unknown => {
+const isSectionRecord = (value: unknown): boolean =>
+  typeof value === 'object' && value !== null && 'items' in value && Boolean(value.items);
+
+const startsWithASection = (value: unknown): boolean =>
+  Array.isArray(value) && isSectionRecord(value[0]);
+
+const parsedTags = (tags: string): string[] => {
+  const parsed: unknown = JSON.parse(tags);
+  return Array.isArray(parsed) ? parsed.filter((tag): tag is string => typeof tag === 'string') : [];
+};
+
+const templateSections = (template: ApiTemplate): unknown => {
   if (template.sections) return template.sections;
   if (!template.items) return [];
   const parsedItems = parseJsonField(template.items);
-  if (Array.isArray(parsedItems) && parsedItems.length > 0 && parsedItems[0]?.items) {
+  if (startsWithASection(parsedItems)) {
     return parsedItems;
   }
   return [{ id: '1', title: 'Checklist', items: parsedItems }];
 };
 
-export const mapApiTemplate = (template: ApiRow): ChecklistTemplate => ({
+export const mapApiTemplate = (template: ApiTemplate): ChecklistTemplate => ({
   id: String(template.id),
   title: String(template.title || ''),
   description: optionalString(template.description) ?? '',
-  type: typeof template.type === 'string' ? template.type as 'checklist' | 'recipe' : 'checklist',
+  type: template.type === 'recipe' ? 'recipe' : 'checklist',
   seoTitle: optionalString(template.seoTitle) ?? '',
   seoDescription: optionalString(template.seoDescription) ?? '',
-  rules: Array.isArray(template.rules) ? template.rules as ChecklistTemplate['rules'] : undefined,
+  rules: template.rules ?? undefined,
   seoUrl: optionalString(template.slug) ?? '',
   sections: normalizeSections(templateSections(template)),
-  categories: Array.isArray(template.categories)
-    ? template.categories as string[]
-    : (template.category ? [String(template.category)] : []),
-  tags: typeof template.tags === 'string'
-    ? JSON.parse(template.tags)
-    : (Array.isArray(template.tags) ? template.tags as string[] : []),
+  categories: template.categories ?? (template.category ? [template.category] : []),
+  tags: typeof template.tags === 'string' ? parsedTags(template.tags) : (template.tags ?? []),
   userId: optionalString(template.user_id) ?? '',
   createdAt: optionalString(template.created_at) ?? '',
   updatedAt: String(template.updated_at || template.created_at || ''),
@@ -62,8 +66,8 @@ export const mapApiTemplate = (template: ApiRow): ChecklistTemplate => ({
       : undefined,
 });
 
-const mapReadableRows = <T>(rows: unknown, mapRow: (row: ApiRow) => T, kind: string): T[] =>
-  apiRows.parse(rows).flatMap((row) => {
+const mapReadableRows = <T>(rows: ApiTemplate[], mapRow: (row: ApiTemplate) => T, kind: string): T[] =>
+  rows.flatMap((row) => {
     try {
       return [mapRow(row)];
     } catch (error) {
@@ -79,7 +83,7 @@ export const createTemplateListFetcher =
     mapReadableRows(await client.getTemplates(request), mapApiTemplate, 'template');
 
 export const fetchRunList = async (client: TemplateListClient, teamId?: string): Promise<ChecklistRun[]> =>
-  mapChecklistRuns(apiRows.parse(await client.getChecklists(teamId ? { teamId } : undefined)));
+  mapChecklistRuns(await client.getChecklists(teamId ? { teamId } : undefined));
 
 export const shouldRetryListFetch = (failureCount: number, error: unknown): boolean =>
   failureCount < 1 && !(isApiError(error) && error.status < 500);

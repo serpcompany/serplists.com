@@ -68,7 +68,7 @@ const createServerRefusingStaleRevisions = (initial: SavedRun) => {
       revokeChecklistRunShare: vi.fn(),
       updateSharedChecklist: vi.fn(async (_token: string, body: { expected_revision: number; sections: ChecklistSection[]; status: string }) => {
         const saved = accept({ ...stored, revision: body.expected_revision, sections: body.sections, status: body.status as ChecklistRun['status'] });
-        return { revision: saved.revision };
+        return { success: true as const, revision: saved.revision, progress: saved.progress };
       }),
     },
     record,

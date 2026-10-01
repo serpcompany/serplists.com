@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
+import { readSuccessfulJson } from '../../../support/readJson';
 
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
-import type { TemplateHistoryResponse } from '@/lib/api';
 import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
+import { templateHistorySchema, type TemplateHistoryResponse } from '@/lib/schemas/historyResponses';
 import { handleTemplates } from '@functions/api/handlers/templates';
 
 const at = (minute: number) => `2026-07-03T12:0${minute}:00.000Z`;
@@ -32,8 +33,7 @@ const loadHistory = async (versions: unknown[], events: unknown[]): Promise<Temp
     new Request(`http://localhost/api/templates/template-1/history?limit=${HISTORY_DISPLAY_LIMIT}`, { method: 'GET' }),
     mockEnv,
   );
-  expect(response.status).toBe(200);
-  return (await response.json()) as TemplateHistoryResponse;
+  return readSuccessfulJson(response, templateHistorySchema);
 };
 
 describe("GET /api/templates/:id/history fed straight into the Changelog builder keeps the events the Changelog needs", () => {

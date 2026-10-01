@@ -12,14 +12,15 @@ import type {
   ChecklistSubItem,
 } from '@/types/checklist';
 import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
+import type { ApiRun } from '@/lib/schemas/apiRuns';
 
-type ApiRecord = Record<string, unknown>;
+const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
 
 const parseJsonArray = (value: unknown): unknown[] => {
-  if (Array.isArray(value)) {
+  if (isArray(value)) {
     return value;
   }
 
@@ -28,15 +29,15 @@ const parseJsonArray = (value: unknown): unknown[] => {
   }
 
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed: unknown = JSON.parse(value);
+    return isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 };
 
-const normalizeChecklistSections = (checklist: ApiRecord): ChecklistSection[] => {
-  const rawSections = Array.isArray(checklist.sections)
+const normalizeChecklistSections = (checklist: ApiRun): ChecklistSection[] => {
+  const rawSections = isArray(checklist.sections)
     ? checklist.sections
     : parseJsonArray(checklist.items);
 
@@ -54,7 +55,7 @@ const normalizeChecklistSections = (checklist: ApiRecord): ChecklistSection[] =>
 };
 
 export const mapChecklistToRun = (
-  checklist: ApiRecord,
+  checklist: ApiRun,
   fallbackId: string,
 ): ChecklistRun => {
   const sections = normalizeChecklistSections(checklist);
@@ -85,17 +86,13 @@ export const mapChecklistToRun = (
   };
 };
 
-export const mapChecklistRuns = (checklists: unknown): ChecklistRun[] =>
-  (Array.isArray(checklists) ? checklists : []).flatMap((checklist): ChecklistRun[] => {
-    if (typeof checklist !== 'object' || checklist === null || typeof (checklist as ApiRecord).id !== 'string') {
-      return [];
-    }
-    const record = checklist as ApiRecord;
+export const mapChecklistRuns = (checklists: ApiRun[]): ChecklistRun[] =>
+  checklists.map((checklist) => {
     try {
-      return [mapChecklistToRun(record, record.id as string)];
+      return mapChecklistToRun(checklist, checklist.id);
     } catch (error) {
-      console.error('Unable to read run content', { runId: record.id, error });
-      return [mapChecklistToRun({ ...record, items: '[]', sections: undefined, retired_items: '[]' }, record.id as string)];
+      console.error('Unable to read run content', { runId: checklist.id, error });
+      return mapChecklistToRun({ ...checklist, items: '[]', sections: undefined, retired_items: '[]' }, checklist.id);
     }
   });
 

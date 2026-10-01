@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import { api } from '@/lib/api';
 import { isNotFoundError } from '@/lib/api-errors';
 import {
@@ -9,19 +7,10 @@ import {
   getRepoCatalogCreatedAt,
   repoTemplates,
 } from '@/lib/repoTemplateCatalog';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 import { normalizeSections } from '@/lib/utils/checklistSections';
 import { normalizeDbTimestamp } from '@/lib/utils/dbTimestamp';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-const userProfileSchema = z.object({
-  avatar_url: z.string().nullable().optional(),
-  created_at: z.union([z.string(), z.number()]).nullable().optional(),
-  full_name: z.string().nullable().optional(),
-  id: z.string().min(1),
-  username: z.string().min(1),
-});
-
-const publicTemplateRowsSchema = z.array(z.record(z.unknown()));
 
 export type UserProfileRecord = {
   avatar_url: string | null;
@@ -55,7 +44,7 @@ const normalizeUsername = (value: string | undefined) =>
   value?.trim().toLowerCase() ?? '';
 
 const mapApiTemplate = (
-  template: Record<string, unknown>,
+  template: ApiTemplate,
 ): ChecklistTemplate => {
   const sections = Array.isArray(template.sections)
     ? template.sections
@@ -83,10 +72,8 @@ const mapApiTemplate = (
         : String(template.created_at),
     isPublic: Boolean(template.is_public ?? true),
     slug: typeof template.slug === 'string' ? template.slug : '',
-    categories: Array.isArray(template.categories)
-      ? (template.categories as string[])
-      : [],
-    tags: Array.isArray(template.tags) ? (template.tags as string[]) : [],
+    categories: template.categories ?? [],
+    tags: Array.isArray(template.tags) ? template.tags : [],
     version: typeof template.version === 'number' ? template.version : 1,
     ownerProfile:
       typeof template.owner_username === 'string' ||
@@ -151,18 +138,13 @@ const fetchProfile = async (
   apiClient: UserProfileApiClient,
 ): Promise<UserProfileRecord | 'not_found' | null> => {
   try {
-    const parsed = userProfileSchema.safeParse(
-      await apiClient.getProfileByUsername(username),
-    );
-    if (!parsed.success) {
-      return null;
-    }
-
+    const profile = await apiClient.getProfileByUsername(username);
     return {
-      ...parsed.data,
-      avatar_url: parsed.data.avatar_url ?? null,
-      created_at: normalizeDbTimestamp(parsed.data.created_at),
-      full_name: parsed.data.full_name ?? null,
+      id: profile.id,
+      username: profile.username,
+      avatar_url: profile.avatar_url ?? null,
+      created_at: normalizeDbTimestamp(profile.created_at),
+      full_name: profile.full_name ?? null,
     };
   } catch (error) {
     return isNotFoundError(error) ? 'not_found' : null;
@@ -174,12 +156,8 @@ const fetchPublicTemplates = async (
   apiClient: UserProfileApiClient,
 ): Promise<ChecklistTemplate[] | null> => {
   try {
-    const parsed = publicTemplateRowsSchema.safeParse(
-      await apiClient.getPublicTemplatesForUser(profile.id),
-    );
-    return parsed.success
-      ? mergeProfileTemplates(profile.username, parsed.data.map(mapApiTemplate))
-      : null;
+    const templates = await apiClient.getPublicTemplatesForUser(profile.id);
+    return mergeProfileTemplates(profile.username, templates.map(mapApiTemplate));
   } catch {
     return null;
   }

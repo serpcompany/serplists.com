@@ -15,8 +15,8 @@ export class ApiError extends Error {
   readonly code: string | undefined;
   readonly details?: unknown;
 
-  constructor(params: { status: number; message: string; code?: string | undefined; details?: unknown }) {
-    super(params.message);
+  constructor(params: { status: number; message: string; code?: string | undefined; details?: unknown; cause?: unknown }) {
+    super(params.message, params.cause === undefined ? undefined : { cause: params.cause });
     this.name = "ApiError";
     this.status = params.status;
     this.code = params.code;
@@ -41,6 +41,12 @@ export const createApiError = (status: number, payload?: unknown): ApiError => {
 };
 
 export const isApiError = (error: unknown): error is ApiError => error instanceof ApiError;
+
+export const UNREADABLE_RESPONSE_MESSAGE = "Unexpected response from the server";
+export const UNREADABLE_RESPONSE_CODE = "unreadable_response";
+
+export const isUnreadableResponseError = (error: unknown): error is ApiError =>
+  isApiError(error) && error.code === UNREADABLE_RESPONSE_CODE;
 
 export const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
   return error instanceof Error && error.message ? error.message : fallbackMessage;

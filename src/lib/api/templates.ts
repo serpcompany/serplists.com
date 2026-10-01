@@ -1,50 +1,34 @@
-import { parseTemplateUpdateResponse, type TemplateUpdateResult } from "@/lib/templateUpdateResult";
+import { z } from "zod";
+
+import { isUnreadableResponseError } from "@/lib/api-errors";
+import {
+  TEMPLATE_UPDATE_RESPONSE_ERROR,
+  templateUpdateResultSchema,
+  type TemplateUpdateResult,
+} from "@/lib/templateUpdateResult";
 import { HISTORY_DISPLAY_LIMIT } from "@/lib/history";
 import type { TemplateImportSummary } from "@/types/checklist";
-import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
+import { templateEditorFormSchema } from "@/lib/forms/templateEditorForm";
+import { templateImportSummarySchema } from "@/lib/templates/templateImportSummary";
+import { successResponseSchema } from "@/lib/schemas/apiResponses";
+import {
+  apiTemplateListSchema,
+  apiTemplateSchema,
+  exportedTemplatePackSchema,
+  savedTemplateSchema,
+  type SavedTemplate,
+} from "@/lib/schemas/apiTemplates";
+import { templateHistorySchema, type TemplateHistoryResponse } from "@/lib/schemas/historyResponses";
 import { apiRequest } from "@/lib/api/request";
 
-export type TemplateHistoryActor = {
-  userId?: string | null;
-  email?: string | null;
-  name?: string | null;
-  username?: string | null;
-};
+export type {
+  HistoryActor as TemplateHistoryActor,
+  HistoryEvent as TemplateHistoryEvent,
+  TemplateHistoryResponse,
+  TemplateHistoryVersion,
+} from "@/lib/schemas/historyResponses";
 
-export type TemplateHistoryVersion = {
-  id: string;
-  version: number;
-  action: string;
-  contentHash?: string | null;
-  createdAt: string;
-  metadata?: unknown;
-  actor: TemplateHistoryActor;
-};
-
-export type TemplateHistoryEvent = {
-  id: string;
-  action: string;
-  createdAt: string;
-  requestId?: string | null;
-  metadata?: unknown;
-  actor: TemplateHistoryActor;
-};
-
-export type TemplateUpdateResponse = {
-  success: boolean;
-  slug?: string;
-  version?: number;
-  content_version?: number;
-  structureChanged?: boolean;
-  reconciledRuns?: number;
-};
-
-export type TemplateHistoryResponse = {
-  templateId: string;
-  subject: { type: 'user' | 'team'; id: string };
-  versions: TemplateHistoryVersion[];
-  events: TemplateHistoryEvent[];
-};
+const clipyDraftSchema = z.object({ draft: templateEditorFormSchema });
 
 export const templatesApi = {
   async getTemplates(params?: { teamId?: string; scope?: 'public' | 'personal' }) {
@@ -52,37 +36,37 @@ export const templatesApi = {
     if (params?.teamId) search.set('teamId', params.teamId);
     if (params?.scope) search.set('scope', params.scope);
     const query = search.toString();
-    return apiRequest(`/templates${query ? `?${query}` : ''}`);
+    return apiRequest(`/templates${query ? `?${query}` : ''}`, apiTemplateListSchema);
   },
 
   async getArchivedTemplates(params?: { teamId?: string }) {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
     const query = search.toString();
-    return apiRequest(`/templates/archived${query ? `?${query}` : ''}`);
+    return apiRequest(`/templates/archived${query ? `?${query}` : ''}`, apiTemplateListSchema);
   },
 
   async getTemplateById(id: string) {
-    return apiRequest(`/templates/${encodeURIComponent(id)}`);
+    return apiRequest(`/templates/${encodeURIComponent(id)}`, apiTemplateSchema);
   },
 
-  async generateTemplateFromClipy(url: string): Promise<{ draft: TemplateEditorFormValues }> {
-    return apiRequest('/templates/generate-from-clipy', {
+  async generateTemplateFromClipy(url: string) {
+    return apiRequest('/templates/generate-from-clipy', clipyDraftSchema, {
       method: 'POST',
       body: JSON.stringify({ url }),
     });
   },
 
   async getTemplateHistory(id: string): Promise<TemplateHistoryResponse> {
-    return apiRequest(`/templates/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`);
+    return apiRequest(`/templates/${encodeURIComponent(id)}/history?limit=${HISTORY_DISPLAY_LIMIT}`, templateHistorySchema);
   },
 
   async getTemplateBySlug(slug: string) {
-    return apiRequest(`/templates/slug/${encodeURIComponent(slug)}`);
+    return apiRequest(`/templates/slug/${encodeURIComponent(slug)}`, apiTemplateSchema);
   },
 
   async getPublicTemplatesForUser(userId: string) {
-    return apiRequest(`/templates/public?userId=${encodeURIComponent(userId)}`);
+    return apiRequest(`/templates/public?userId=${encodeURIComponent(userId)}`, apiTemplateListSchema);
   },
 
   async createTemplate(template: {
@@ -99,8 +83,8 @@ export const templatesApi = {
     is_public?: boolean;
     categories?: string[];
     tags?: string[];
-  }): Promise<{ id: string; slug?: string }> {
-    return apiRequest('/templates', {
+  }): Promise<SavedTemplate> {
+    return apiRequest('/templates', savedTemplateSchema, {
       method: 'POST',
       body: JSON.stringify(template),
     });
@@ -120,21 +104,24 @@ export const templatesApi = {
     slug?: string | undefined;
     expected_version?: number | undefined;
   }): Promise<TemplateUpdateResult> {
-    const body: unknown = await apiRequest(`/templates/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates),
-    });
-    return parseTemplateUpdateResponse(body);
+    try {
+      return await apiRequest(`/templates/${id}`, templateUpdateResultSchema, {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
+    } catch (error) {
+      throw isUnreadableResponseError(error) ? new Error(TEMPLATE_UPDATE_RESPONSE_ERROR, { cause: error }) : error;
+    }
   },
 
   async deleteTemplate(id: string) {
-    return apiRequest(`/templates/${id}`, {
+    return apiRequest(`/templates/${id}`, successResponseSchema, {
       method: 'DELETE',
     });
   },
 
-  async restoreTemplate(id: string): Promise<{ success: true }> {
-    return apiRequest(`/templates/${encodeURIComponent(id)}/restore`, {
+  async restoreTemplate(id: string) {
+    return apiRequest(`/templates/${encodeURIComponent(id)}/restore`, successResponseSchema, {
       method: 'POST',
       body: JSON.stringify({}),
     });
@@ -145,7 +132,7 @@ export const templatesApi = {
     if (params?.teamId) search.set('teamId', params.teamId);
     search.set('format', params?.format ?? 'portable');
     const query = search.toString();
-    return apiRequest(`/templates/backup${query ? `?${query}` : ''}`);
+    return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, exportedTemplatePackSchema);
   },
 
   async importTemplateBackup(payload: {
@@ -157,11 +144,14 @@ export const templatesApi = {
     if (payload.teamId) search.set('teamId', payload.teamId);
     const query = search.toString();
     const { teamId: _teamId, ...body } = payload;
-    return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, { method: 'POST', body: JSON.stringify(body) });
+    return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, templateImportSummarySchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   },
 
-  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve'; teamId?: string | undefined }): Promise<{ id: string; slug?: string }> {
-    return apiRequest(`/templates/${encodeURIComponent(templateId)}/clone`, {
+  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve'; teamId?: string | undefined }): Promise<SavedTemplate> {
+    return apiRequest(`/templates/${encodeURIComponent(templateId)}/clone`, savedTemplateSchema, {
       method: 'POST',
       body: JSON.stringify(payload ?? {}),
     });

@@ -40,9 +40,7 @@ export const loadRunExecutionData = async (
     }
 
     try {
-      const checklist = (await apiClient.getChecklistById(
-        options.runId,
-      )) as Record<string, unknown>;
+      const checklist = await apiClient.getChecklistById(options.runId);
       const run = mapChecklistToRun(checklist, options.runId);
       return {
         kind: 'ok',
@@ -68,9 +66,7 @@ export const loadRunExecutionData = async (
   }
 
   try {
-    const checklist = (await apiClient.getSharedChecklist(
-      options.shareToken,
-    )) as Record<string, unknown>;
+    const checklist = await apiClient.getSharedChecklist(options.shareToken);
     const run = mapChecklistToRun(checklist, options.shareToken);
 
     return {

@@ -189,9 +189,7 @@ export const loadTemplateEditorData = async (
   }
 
   try {
-    const fetchedTemplate = (await getApiClient(dependencies).getTemplateById(
-      options.id,
-    )) as Record<string, unknown>;
+    const fetchedTemplate = await getApiClient(dependencies).getTemplateById(options.id);
     const template = mapApiTemplateToChecklistTemplate(fetchedTemplate, options.id);
     const storedSections = Array.isArray(fetchedTemplate.sections)
       ? fetchedTemplate.sections

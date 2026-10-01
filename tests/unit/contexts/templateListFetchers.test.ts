@@ -9,8 +9,10 @@ import {
   type TemplateListClient,
 } from '@/contexts/templateListFetchers';
 import { createApiError } from '@/lib/api-errors';
+import type { ApiRun } from '@/lib/schemas/apiRuns';
+import type { ApiTemplate } from '@/lib/schemas/apiTemplates';
 
-const templateRow = (id: string, overrides: Record<string, unknown> = {}) => ({
+const templateRow = (id: string, overrides: Partial<ApiTemplate> = {}): ApiTemplate => ({
   id,
   title: `Template ${id}`,
   user_id: 'user-1',
@@ -21,7 +23,7 @@ const templateRow = (id: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const runRow = (id: string, overrides: Record<string, unknown> = {}) => ({
+const runRow = (id: string, overrides: Partial<ApiRun> = {}): ApiRun => ({
   id,
   title: `Run ${id}`,
   template_id: 'template-1',
@@ -33,7 +35,7 @@ const runRow = (id: string, overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const clientReturning = (templates: unknown, runs: unknown = []): TemplateListClient => ({
+const clientReturning = (templates: ApiTemplate[], runs: ApiRun[] = []): TemplateListClient => ({
   getTemplates: vi.fn(async () => templates),
   getChecklists: vi.fn(async () => runs),
 });
@@ -55,13 +57,6 @@ describe('template and run list fetchers', () => {
 
     await expect(createTemplateListFetcher(client)({ scope: 'personal' })()).rejects.toBe(error);
     await expect(fetchRunList(client)).rejects.toBe(error);
-  });
-
-  it('reject a response that is not a list', async () => {
-    const client = clientReturning({ error: 'nope' }, { error: 'nope' });
-
-    await expect(createTemplateListFetcher(client)({ scope: 'personal' })()).rejects.toThrow();
-    await expect(fetchRunList(client)).rejects.toThrow();
   });
 
   it('keep one malformed run listed with no tasks, so it can still be deleted, instead of emptying the list', async () => {

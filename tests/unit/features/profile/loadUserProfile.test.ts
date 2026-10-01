@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadUserProfile } from '@/features/profile/loadUserProfile';
-import { createApiError } from '@/lib/api-errors';
+import { ApiError, createApiError, UNREADABLE_RESPONSE_CODE, UNREADABLE_RESPONSE_MESSAGE } from '@/lib/api-errors';
 import { REPO_TEMPLATE_OWNER_SLUG, repoTemplates } from '@/lib/repoTemplateCatalog';
 
 const profileRow = {
@@ -88,7 +88,9 @@ describe('loadUserProfile', () => {
 
   it('reports a profile response of the wrong shape as a failed load', async () => {
     const apiClient = buildApiClient({
-      getProfileByUsername: vi.fn().mockResolvedValue({ error: 'unexpected' }),
+      getProfileByUsername: vi.fn().mockRejectedValue(
+        new ApiError({ status: 200, message: UNREADABLE_RESPONSE_MESSAGE, code: UNREADABLE_RESPONSE_CODE }),
+      ),
     });
 
     const result = await loadUserProfile('alice', { apiClient });

@@ -11,7 +11,7 @@ const event = (
   metadata?: Record<string, unknown>,
 ): TemplateHistoryEvent => ({ id: action, action, actor, createdAt: '2026-07-03T12:00:00.000Z', metadata });
 
-const owner = { userId: 'user-1', name: 'Jane Runner' };
+const owner = { userId: 'user-1', name: 'Jane Runner', username: null, email: null };
 
 const render = (events: TemplateHistoryEvent[]) =>
   renderToStaticMarkup(
