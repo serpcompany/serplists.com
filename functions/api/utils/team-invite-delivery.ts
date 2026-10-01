@@ -18,29 +18,20 @@ type BuildTeamInviteDeliveryOptions = {
   token: string;
 };
 
-function resolveInviteOrigin(request: Request, frontendUrl?: string): string {
-  const originHeader = request.headers.get("Origin")?.trim();
-  if (originHeader) {
-    try {
-      return new URL(originHeader).origin;
-    } catch {
-      // Fall through to configured origin.
-    }
+function originOf(url: string | null | undefined): string | null {
+  const trimmed = url?.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return null;
   }
-
-  const configuredFrontendUrl = frontendUrl?.trim();
-  if (configuredFrontendUrl) {
-    try {
-      return new URL(configuredFrontendUrl).origin;
-    } catch {
-      // Fall through to request URL.
-    }
-  }
-
-  return new URL(request.url).origin;
 }
 
-// The invite page's canonical path, with its trailing slash (src/lib/http/urlStandard.ts).
+function resolveInviteOrigin(request: Request, frontendUrl?: string): string {
+  return originOf(request.headers.get("Origin")) ?? originOf(frontendUrl) ?? new URL(request.url).origin;
+}
+
 export function buildTeamInvitePath(token: string): string {
   return `/team-invites/${encodeURIComponent(token)}/`;
 }

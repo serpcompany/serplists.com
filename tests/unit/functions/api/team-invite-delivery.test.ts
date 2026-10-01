@@ -31,4 +31,16 @@ describe("team invite delivery", () => {
 
     expect(delivery.inviteUrl).toBe("https://serplists.com/team-invites/abc123/");
   });
+
+  it("skips an origin header or frontend URL that is not a URL and uses the request's own origin", () => {
+    const delivery = buildTeamInviteDelivery({
+      frontendUrl: "serplists.com",
+      request: new Request("https://api.serplists.test/api/teams/team-1/invites", {
+        headers: { Origin: "not a url" },
+      }),
+      token: "abc123",
+    });
+
+    expect(delivery.inviteUrl).toBe("https://api.serplists.test/team-invites/abc123/");
+  });
 });

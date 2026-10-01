@@ -11,7 +11,6 @@ function hasId(invite: typeof schema.team_invites.$inferSelect): invite is TeamI
   return typeof invite.id === "string";
 }
 
-/** Pending (not accepted, revoked, or expired) invites in the Organization for the user's email. */
 export async function selectPendingInvitesForUser(
   db: Db,
   teamId: string,
@@ -20,7 +19,6 @@ export async function selectPendingInvitesForUser(
 ): Promise<TeamInvite[]> {
   const { team_invites, users } = schema;
 
-  // Scoped to one Organization's invites; lower() also matches legacy rows stored in mixed case.
   const invites = await db
     .select()
     .from(team_invites)
@@ -36,7 +34,6 @@ export async function selectPendingInvitesForUser(
   return invites.filter(hasId);
 }
 
-/** Pending (not accepted, revoked, or expired) invites that `inviterUserId` created in the Organization. */
 export async function selectPendingInvitesFromInviter(
   db: Db,
   teamId: string,
@@ -45,7 +42,6 @@ export async function selectPendingInvitesFromInviter(
 ): Promise<TeamInvite[]> {
   const { team_invites } = schema;
 
-  // Reads one Organization's invites through the (team_id, email) index prefix.
   const invites = await db
     .select()
     .from(team_invites)
@@ -61,12 +57,6 @@ export async function selectPendingInvitesFromInviter(
   return invites.filter(hasId);
 }
 
-/**
- * The two batch statements that revoke a pending invite and record `team_invite.revoked`.
- * The revoke applies only while the invite is still pending (and `guard` holds, if given);
- * the audit event is written only when this revoke happened. An invite is revoked once, so
- * the event is also skipped if one exists: two revokes in the same millisecond share `now`.
- */
 export async function buildInviteRevocation({
   db,
   invite,

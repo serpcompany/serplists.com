@@ -96,11 +96,6 @@ export async function userHasTeamRole(
   };
 }
 
-/**
- * SQL that holds while `userId` is an active member of `teamId` (with one of `roles`, if
- * given), for guarding or filtering in the same statement. Pass values, or columns of the
- * outer query to correlate.
- */
 export function activeTeamMemberExists(
   db: ReturnType<typeof createDb>,
   teamId: SQLiteColumn | string,
@@ -120,7 +115,6 @@ export function activeTeamMemberExists(
   );
 }
 
-/** SQL that holds while `userId` is an active owner or admin of `teamId`. */
 export function activeTeamManagerExists(
   db: ReturnType<typeof createDb>,
   teamId: SQLiteColumn | string,

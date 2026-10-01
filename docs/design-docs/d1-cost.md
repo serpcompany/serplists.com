@@ -57,7 +57,11 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    `is_public` index. Never wrap an indexed column in a function: `lower(email) = ?`
    cannot use the email index and reads the whole table. Normalize on write and compare
    with plain equality (invite emails are lowercased by the create-invite Zod schema, so
-   incoming invites match `email = ?`).
+   incoming invites match `email = ?`). The pending-invite reads that revoke a member's
+   invites (`functions/api/utils/team-invite-revocation.ts`) read one Organization's
+   invites through the `(team_id, email)` index prefix, so the one by the member's email
+   can compare `lower(email)`: it only filters that Organization's rows, and it still
+   matches legacy rows stored in mixed case.
 3. **Never write on a read path.** Make upserts conditional so an unchanged value writes
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
