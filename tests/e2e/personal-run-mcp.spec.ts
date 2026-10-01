@@ -1,5 +1,15 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { z } from 'zod';
 
+import {
+  mcpResultResponse,
+  mcpRunResult,
+  mcpRunsPage,
+  mcpTemplateResult,
+  mcpTemplatesPage,
+  mcpToolList,
+  mcpToolResponse,
+} from '../support/mcpResponses';
 import { apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
@@ -11,6 +21,18 @@ const ROOT_SCHEMA_COMBINATORS = ['oneOf', 'anyOf', 'allOf', 'not', '$ref'];
 test.use({ screenshot: 'off', trace: 'off', video: 'off' });
 
 type JsonRecord = Record<string, unknown>;
+type McpTool = z.output<typeof mcpToolList>['result']['tools'][number];
+
+const runWithTasks = z.object({
+  run: z.object({
+    id: z.string(),
+    revision: z.number(),
+    sections: z.array(z.object({
+      id: z.string(),
+      items: z.array(z.object({ id: z.string(), title: z.string() }).passthrough()).min(1),
+    }).passthrough()).min(1),
+  }).passthrough(),
+}).passthrough();
 
 async function mcpRequest(
   secret: string,
@@ -35,18 +57,20 @@ async function mcpRequest(
     }),
   });
 
-  const body = await response.json() as JsonRecord;
+  const body: unknown = await response.json();
   return { body, response };
 }
 
-function structuredContentWithinResultLimit(body: JsonRecord): JsonRecord {
-  const structuredContent = (body.result as JsonRecord).structuredContent as JsonRecord;
+const toolResultOf = (body: unknown) => mcpToolResponse.parse(body).result;
+
+function structuredContentWithinResultLimit(body: unknown): JsonRecord {
+  const { structuredContent } = toolResultOf(body);
   expect(new TextEncoder().encode(JSON.stringify(structuredContent)).byteLength).toBeLessThanOrEqual(MCP_RESULT_BYTE_LIMIT);
   return structuredContent;
 }
 
-function expectFlatObjectInputSchema(tool: JsonRecord) {
-  const inputSchema = tool.inputSchema as JsonRecord;
+function expectFlatObjectInputSchema(tool: McpTool) {
+  const { inputSchema } = tool;
   expect(inputSchema.type).toBe('object');
   expect(typeof inputSchema.properties).toBe('object');
   for (const keyword of ROOT_SCHEMA_COMBINATORS) {
@@ -123,7 +147,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     clientInfo: { name: 'serplists-playwright', version: '1.0.0' },
   });
   expect(initialized.response.status).toBe(200);
-  expect((initialized.body.result as JsonRecord).protocolVersion).toBe(protocolVersion);
+  expect(mcpResultResponse.parse(initialized.body).result.protocolVersion).toBe(protocolVersion);
 
   const shownEndpoint = await page.getByLabel('SERP Lists MCP endpoint').inputValue();
   const initializedAtShownEndpoint = await mcpRequest(secret, 'initialize', {
@@ -134,7 +158,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   expect(initializedAtShownEndpoint.response.status).toBe(200);
 
   const listed = await mcpRequest(secret, 'tools/list', undefined, 10);
-  for (const tool of (listed.body.result as JsonRecord).tools as JsonRecord[]) {
+  for (const tool of mcpToolList.parse(listed.body).result.tools) {
     expectFlatObjectInputSchema(tool);
   }
 
@@ -144,7 +168,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   }, 2);
   expect(templateResult.response.status).toBe(200);
   const templateContent = structuredContentWithinResultLimit(templateResult.body);
-  const templates = templateContent.templates as JsonRecord[];
+  const { templates } = mcpTemplatesPage.parse(templateContent);
   expect(templates.length).toBeGreaterThan(0);
 
   const template = templates[0];
@@ -155,12 +179,12 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   }, 3);
   expect(started.response.status).toBe(200);
   const startedContent = structuredContentWithinResultLimit(started.body);
-  const startedRun = startedContent.run as JsonRecord;
-  const sections = startedRun.sections as JsonRecord[];
-  const firstTask = (sections[0].items as JsonRecord[])[0];
-  const runId = String(startedRun.id);
-  const taskId = String(firstTask.id);
-  const taskTitle = String(firstTask.title);
+  const startedRun = runWithTasks.parse(startedContent).run;
+  const { sections } = startedRun;
+  const firstTask = sections[0].items[0];
+  const runId = startedRun.id;
+  const taskId = firstTask.id;
+  const taskTitle = firstTask.title;
   const note = 'Verified through the local browser-to-MCP Playwright flow.';
 
   const noted = await mcpRequest(secret, 'tools/call', {
@@ -174,7 +198,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     },
   }, 4);
   expect(noted.response.status).toBe(200);
-  const notedRun = ((noted.body.result as JsonRecord).structuredContent as JsonRecord).run as JsonRecord;
+  const notedRun = mcpRunResult.parse(toolResultOf(noted.body).structuredContent).run;
 
   const completed = await mcpRequest(secret, 'tools/call', {
     name: 'update_run',
@@ -188,22 +212,22 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   }, 5);
   expect(completed.response.status).toBe(200);
   const completedContent = structuredContentWithinResultLimit(completed.body);
-  const completedRun = completedContent.run as JsonRecord;
+  const completedRun = mcpRunResult.parse(completedContent).run;
   expect(completedContent).toMatchObject({ taskId, task: { id: taskId, isCompleted: true, notes: note } });
 
   const read = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId } }, 6);
-  const readRun = structuredContentWithinResultLimit(read.body).run as JsonRecord;
+  const readRun = runWithTasks.parse(structuredContentWithinResultLimit(read.body)).run;
   expect(readRun).toMatchObject({ id: runId, revision: completedRun.revision, progress: completedRun.progress });
-  const readTask = ((readRun.sections as JsonRecord[])[0].items as JsonRecord[])[0];
+  const readTask = readRun.sections[0].items[0];
   expect(readTask).toMatchObject({ id: taskId, isCompleted: true, notes: note });
   const oneTask = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId, taskId } }, 7);
   expect(structuredContentWithinResultLimit(oneTask.body)).toEqual({
     run: { id: runId, revision: completedRun.revision },
-    sectionId: (sections[0] as JsonRecord).id,
+    sectionId: sections[0].id,
     task: readTask,
   });
   const runList = await mcpRequest(secret, 'tools/call', { name: 'list_runs', arguments: { status: 'in_progress' } }, 8);
-  const [newest] = structuredContentWithinResultLimit(runList.body).runs as JsonRecord[];
+  const [newest] = mcpRunsPage.parse(structuredContentWithinResultLimit(runList.body)).runs;
   expect(newest).toMatchObject({ id: runId, title: runTitle, revision: completedRun.revision });
   expect(newest).not.toHaveProperty('sections');
 
@@ -275,7 +299,7 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     .toHaveText(['Read templates', 'Write templates', 'Read runs']);
 
   const listed = await mcpRequest(secret, 'tools/list', undefined, 20);
-  expect(((listed.body.result as JsonRecord).tools as JsonRecord[]).map(({ name }) => name)).toEqual([
+  expect(mcpToolList.parse(listed.body).result.tools.map(({ name }) => name)).toEqual([
     'list_templates',
     'get_template',
     'create_template',
@@ -287,7 +311,7 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     name: 'start_run',
     arguments: { templateId: 'template-1' },
   }, 21);
-  expect((denied.body.result as JsonRecord).structuredContent).toMatchObject({
+  expect(toolResultOf(denied.body).structuredContent).toMatchObject({
     error: 'permission_denied',
     details: { permission: 'runs:write' },
   });
@@ -297,9 +321,9 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     name: 'create_template',
     arguments: { title, sections: [{ title: 'Setup', items: [{ title: 'Install' }] }] },
   }, 22);
-  const createdTemplate = ((created.body.result as JsonRecord).structuredContent as JsonRecord).template as JsonRecord;
+  const createdTemplate = mcpTemplateResult.parse(toolResultOf(created.body).structuredContent).template;
   expect(createdTemplate).toMatchObject({ title, version: 1 });
-  const templateId = String(createdTemplate.id);
+  const templateId = createdTemplate.id;
   expect(await apiJson<JsonRecord>(page, `/templates/${encodeURIComponent(templateId)}`)).toMatchObject({
     title,
     is_public: false,
@@ -311,12 +335,12 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     name: 'update_template',
     arguments: { templateId, expectedVersion: 2, title: `${title} (stale)` },
   }, 23);
-  expect(((stale.body.result as JsonRecord).structuredContent as JsonRecord).error).toBe('edit_conflict');
+  expect(toolResultOf(stale.body).structuredContent.error).toBe('edit_conflict');
   const updated = await mcpRequest(secret, 'tools/call', {
     name: 'update_template',
     arguments: { templateId, expectedVersion: 1, title: `${title} v2` },
   }, 24);
-  expect(((updated.body.result as JsonRecord).structuredContent as JsonRecord).template).toMatchObject({
+  expect(toolResultOf(updated.body).structuredContent.template).toMatchObject({
     title: `${title} v2`,
     version: 2,
   });

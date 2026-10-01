@@ -464,6 +464,13 @@ Common failures:
   `jsonObject`, `jsonObjects`, the API's error body (`apiErrorBody`, from `jsonError()` and
   `authJsonError()`) and Better Auth's (`betterAuthErrorBody`). A test that only compares the
   whole body may pass `await response.json()` straight to `expect()`.
+  - The MCP endpoint's JSON-RPC bodies, tool results and paged lists have schemas in
+    `tests/support/mcpResponses.ts`; `toolBody()` and `rpcErrorBody()`
+    (`tests/support/agentMcpHandler.ts`) and `callToolWithAFreshRunKey()`
+    (`tests/support/agentMcpOnSqlite.ts`) read with them.
+  - Browser specs run in Playwright, which cannot load Vitest, so they parse with the schema
+    itself (`schema.parse(await response.json())`) and import only modules that do not
+    import Vitest, such as `mcpResponses.ts`.
 - Fixtures and mocks have the types of what the code under test receives, with no casts:
   - `apiEnv(vars)` (`tests/support/apiEnv.ts`) is a complete `Env`. Its `DB` and
     `R2_UPLOADS` throw, naming the binding, when the code under test uses them; pass the one

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { z } from 'zod';
 
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
 
@@ -28,6 +29,6 @@ test('a cross-site form cannot sign the visitor into another account', async ({ 
 
   const session = await page.request.get(`${apiBaseUrl}/auth/get-session`);
   expect(session.status()).toBe(200);
-  const body = (await session.json()) as { user?: { email?: string } } | null;
-  expect(body?.user?.email).toBe('john@test.com');
+  const body = z.object({ user: z.object({ email: z.string() }).passthrough() }).passthrough().parse(await session.json());
+  expect(body.user.email).toBe('john@test.com');
 });

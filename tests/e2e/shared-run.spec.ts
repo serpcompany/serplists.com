@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { z } from 'zod';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
@@ -53,7 +54,7 @@ test('a share-link guest can tick tasks but cannot rewrite or wipe the run', asy
   const guest = await guestContext.newPage();
   const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
   const guestRevision = async () =>
-    ((await (await guest.request.get(sharedUrl)).json()) as { revision: number }).revision;
+    z.object({ revision: z.number() }).passthrough().parse(await (await guest.request.get(sharedUrl)).json()).revision;
 
   await guest.goto(`/share/${shareToken}/`);
   await expect(guest.getByRole('heading', { name: 'Task A' })).toBeVisible();

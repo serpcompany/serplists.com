@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
 import { countCheckoutsSentTo } from './support/billing';
@@ -39,7 +40,7 @@ async function holdRunCreationUntilReleased(page: Page) {
 
     await held;
     const response = await route.fetch();
-    const body = (await response.json()) as { id?: string };
+    const body = z.object({ id: z.string().optional() }).passthrough().parse(await response.json());
     created.runId = body.id ?? null;
     await route.fulfill({ response });
   });

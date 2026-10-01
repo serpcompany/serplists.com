@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { z } from "zod";
 import { API_BASE_URL, APP_URL } from "./support/stack";
 import { routeTheApi } from "./support/mocked-api";
 
@@ -139,8 +140,7 @@ test("@smoke the template API returns the owner's seeded private template, and t
   const templatesResponse = await request.get(`${apiBaseUrl}/templates?scope=personal`);
   expect(templatesResponse.status()).toBe(200);
 
-  const templates = await templatesResponse.json();
-  expect(templates).toEqual(
+  expect(await templatesResponse.json()).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
         id: "template-4",
@@ -152,7 +152,8 @@ test("@smoke the template API returns the owner's seeded private template, and t
 
   const catalogResponse = await request.get(`${apiBaseUrl}/templates?scope=public`);
   expect(catalogResponse.status()).toBe(200);
-  const catalogIds = ((await catalogResponse.json()) as Array<{ id: string }>).map((template) => template.id);
+  const catalog = z.array(z.object({ id: z.string() }).passthrough()).parse(await catalogResponse.json());
+  const catalogIds = catalog.map((template) => template.id);
   expect(catalogIds).not.toContain("template-4");
 });
 

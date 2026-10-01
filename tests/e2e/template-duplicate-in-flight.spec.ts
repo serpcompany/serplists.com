@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
@@ -53,7 +54,7 @@ test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page
       (response) => response.url().endsWith('/api/templates') && response.request().method() === 'POST',
     );
     releaseCopy();
-    const copy = (await (await copied).json()) as { id: string };
+    const copy = z.object({ id: z.string() }).passthrough().parse(await (await copied).json());
     copyIds.push(copy.id);
     await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${copy.id}/$`));
     expect(copyRequests).toBe(1);
