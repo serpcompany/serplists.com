@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readSqlOnlySchema } from "./lib/sql-only-schema.mjs";
 
 export const REQUIRED_D1_SCHEMA = Object.freeze({
   sitemap_revisions: ["kind", "revised_at"],
@@ -307,21 +307,9 @@ export const REQUIRED_D1_INDEXES = Object.freeze({
   ],
 });
 
-function loadSqlOnlyTriggers() {
-  const manifest = JSON.parse(readFileSync(new URL("../db/sql-only-schema.json", import.meta.url), "utf8"));
-  const triggers = manifest?.triggers;
-  const valid =
-    Array.isArray(triggers) &&
-    triggers.every((trigger) =>
-      ["name", "table", "definition"].every((key) => typeof trigger?.[key] === "string" && trigger[key] !== ""),
-    );
-  if (!valid) {
-    throw new Error("db/sql-only-schema.json must list triggers as { name, table, definition } strings.");
-  }
-  return triggers.map(({ name, table, definition }) => Object.freeze({ name, table, definition }));
-}
-
-export const REQUIRED_D1_TRIGGERS = Object.freeze(loadSqlOnlyTriggers());
+export const REQUIRED_D1_TRIGGERS = Object.freeze(
+  readSqlOnlySchema().triggers.map(({ name, table, definition }) => Object.freeze({ name, table, definition })),
+);
 
 export {
   buildSchemaQuery,

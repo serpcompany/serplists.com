@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import { normalizeSqlFormatting } from "../check-production-d1-schema-lib.mjs";
 import { execTool } from "../lib/run-tool.mjs";
+import { readSqlOnlySchema } from "../lib/sql-only-schema.mjs";
+import { parseWranglerResultSets } from "../lib/wrangler-json.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const database = "serp-checklists-db";
@@ -35,7 +37,7 @@ function wranglerJson(persistPath, statement) {
     ],
     { capture: true },
   );
-  return JSON.parse(output)[0]?.results ?? [];
+  return parseWranglerResultSets(output)[0]?.results ?? [];
 }
 
 const D1_MAX_COMPOUND_SELECT_TERMS = 5;
@@ -64,7 +66,7 @@ function wranglerUnion(persistPath, statements) {
     ],
     { capture: true },
   );
-  return JSON.parse(output).flatMap(({ results }) => results ?? []);
+  return parseWranglerResultSets(output).flatMap(({ results }) => results ?? []);
 }
 
 function normalizeComparableSql(value) {
@@ -279,7 +281,7 @@ async function main() {
     const generated = await loadCatalog(generatedPersist);
     compareCatalogs(authoritative, generated);
 
-    const manifest = JSON.parse(readFileSync(path.join(repoRoot, "db/sql-only-schema.json"), "utf8"));
+    const manifest = readSqlOnlySchema();
     assert.deepEqual(authoritative.triggers, manifest.triggers, "SQL-only trigger manifest differs from migration replay");
     assert.equal(generated.triggers.length, 0, "Drizzle baseline unexpectedly generated triggers");
     verifyNegativeControls(authoritative, generated);

@@ -53,7 +53,7 @@ const buildTemplateSourceDetails = (
 };
 
 const parseTemplateJson = (source: string) => {
-  const parsed = JSON.parse(source);
+  const parsed: unknown = JSON.parse(source);
   return normalizePortableTemplate(portableChecklistTemplateSchema.parse(parsed));
 };
 

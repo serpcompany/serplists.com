@@ -17,6 +17,7 @@ import {
   splitSchemaQueryResults,
 } from "./check-production-d1-schema-lib.mjs";
 import { execTool } from "./lib/run-tool.mjs";
+import { parseWranglerResultSets } from "./lib/wrangler-json.mjs";
 
 function readArg(name) {
   const prefix = `${name}=`;
@@ -58,7 +59,7 @@ function runWranglerSchemaQuery() {
     },
   );
 
-  return JSON.parse(stdout);
+  return parseWranglerResultSets(stdout);
 }
 
 try {

@@ -1,4 +1,5 @@
 import { loadLocalEnv, resolveLiveSecretKey, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
+import { readStripeReply, stripeListOf, stripePortalConfigurationSchema } from "./_stripe-objects.mjs";
 
 const env = loadLocalEnv();
 const mode = process.argv.includes("--test") ? "test" : "live";
@@ -14,7 +15,7 @@ if (!secretKey || !secretKey.startsWith(`sk_${mode}_`)) {
   );
 }
 
-async function stripeRequest(path, options = {}) {
+async function stripeRequest(path, schema, options = {}) {
   const response = await fetch(`https://api.stripe.com${path}`, {
     ...options,
     headers: {
@@ -22,14 +23,13 @@ async function stripeRequest(path, options = {}) {
       ...(options.body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
     },
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(`Stripe API error (${response.status}): ${data.error?.message ?? "Unknown error"}`);
-  }
-  return data;
+  return readStripeReply(response, schema);
 }
 
-const configurations = await stripeRequest("/v1/billing_portal/configurations?active=true&limit=100");
+const configurations = await stripeRequest(
+  "/v1/billing_portal/configurations?active=true&limit=100",
+  stripeListOf(stripePortalConfigurationSchema),
+);
 let configuration = configurations.data.find(
   (candidate) =>
     candidate.metadata?.app === "serp-checklists" &&
@@ -59,7 +59,7 @@ if (!configuration) {
     form.append("features[subscription_cancel][cancellation_reason][options][]", reason);
   }
 
-  configuration = await stripeRequest("/v1/billing_portal/configurations", {
+  configuration = await stripeRequest("/v1/billing_portal/configurations", stripePortalConfigurationSchema, {
     method: "POST",
     body: form,
   });

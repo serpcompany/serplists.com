@@ -1,4 +1,5 @@
 import { describePriceMismatch, PRO_CURRENCY, PRO_MONTHLY_CENTS } from "./_price.mjs";
+import { stripeListOf, stripePriceSchema } from "./_stripe-objects.mjs";
 
 export { PRO_MONTHLY_CENTS };
 
@@ -32,6 +33,7 @@ export async function ensurePrice({ request, productId, lookupKey, currency, uni
   const lookupResp = await request({
     method: "GET",
     path: `/v1/prices?lookup_keys[]=${encodeURIComponent(lookupKey)}&limit=1`,
+    schema: stripeListOf(stripePriceSchema),
   });
 
   const existing = lookupResp?.data?.[0];
@@ -58,5 +60,6 @@ export async function ensurePrice({ request, productId, lookupKey, currency, uni
       "metadata[app]": "serp-checklists",
       "metadata[tier]": "pro",
     },
+    schema: stripePriceSchema,
   });
 }

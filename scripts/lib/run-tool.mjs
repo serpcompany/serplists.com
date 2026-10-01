@@ -2,6 +2,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -14,6 +15,8 @@ export const TOOL_PACKAGES = {
   wrangler: "wrangler",
 };
 
+const toolManifestSchema = z.object({ bin: z.union([z.string(), z.record(z.string())]).optional() });
+
 export function resolveToolBin(tool, { repoRoot = REPO_ROOT } = {}) {
   const packageName = Object.hasOwn(TOOL_PACKAGES, tool) ? TOOL_PACKAGES[tool] : null;
   if (!packageName) {
@@ -21,13 +24,14 @@ export function resolveToolBin(tool, { repoRoot = REPO_ROOT } = {}) {
   }
 
   const packageDir = path.join(repoRoot, "node_modules", ...packageName.split("/"));
-  let manifest;
+  let manifestText;
   try {
-    manifest = JSON.parse(readFileSync(path.join(packageDir, "package.json"), "utf8"));
+    manifestText = readFileSync(path.join(packageDir, "package.json"), "utf8");
   } catch (error) {
     throw new Error(`${packageName} is not installed. Run "pnpm install" first.`, { cause: error });
   }
 
+  const manifest = toolManifestSchema.parse(JSON.parse(manifestText));
   const bin = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.[tool];
   if (typeof bin !== "string") {
     throw new Error(`${packageName} has no "${tool}" bin entry.`);

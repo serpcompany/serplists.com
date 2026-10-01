@@ -1,5 +1,6 @@
 import { loadLocalEnv, resolveLiveSecretKey, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
 import { bootstrapUsage, describePrice, ensurePrice } from "./_bootstrap-lib.mjs";
+import { stripeListOf, stripeProductSchema } from "./_stripe-objects.mjs";
 
 function usage(exitCode) {
   console.log(bootstrapUsage());
@@ -56,7 +57,7 @@ function getKeys(env, liveEnv, mode) {
   return { testKey, liveKey: injectedLiveKey };
 }
 
-async function stripeRequest({ secretKey, method, path, form, dryRun }) {
+async function stripeRequest({ secretKey, method, path, form, schema, dryRun }) {
   if (dryRun) {
     return { dryRun: true, method, path, form };
   }
@@ -74,7 +75,7 @@ async function stripeRequest({ secretKey, method, path, form, dryRun }) {
   if (!resp.ok) {
     throw new Error(`Stripe API error (${resp.status}) ${path}: ${text}`);
   }
-  return JSON.parse(text);
+  return schema.parse(JSON.parse(text));
 }
 
 async function searchProProduct({ secretKey, dryRun }) {
@@ -84,6 +85,7 @@ async function searchProProduct({ secretKey, dryRun }) {
       secretKey,
       method: "GET",
       path: `/v1/products/search?query=${encodeURIComponent(query)}&limit=1`,
+      schema: stripeListOf(stripeProductSchema),
       dryRun,
     });
     const existing = search?.data?.[0];
@@ -101,6 +103,7 @@ async function ensureProProduct({ secretKey, dryRun }) {
     secretKey,
     method: "GET",
     path: "/v1/products?limit=100&active=true",
+    schema: stripeListOf(stripeProductSchema),
     dryRun,
   });
 
@@ -117,6 +120,7 @@ async function ensureProProduct({ secretKey, dryRun }) {
       "metadata[app]": "serp-checklists",
       "metadata[tier]": "pro",
     },
+    schema: stripeProductSchema,
     dryRun,
   });
 }
@@ -124,7 +128,7 @@ async function ensureProProduct({ secretKey, dryRun }) {
 async function bootstrapOne({ secretKey, label, currency, monthly, yearly, dryRun }) {
   const product = await ensureProProduct({ secretKey, dryRun });
   const productId = product?.id ?? "(dry-run)";
-  const request = ({ method, path, form }) => stripeRequest({ secretKey, method, path, form, dryRun });
+  const request = ({ method, path, form, schema }) => stripeRequest({ secretKey, method, path, form, schema, dryRun });
 
   const monthlyPrice = await ensurePrice({
     request,

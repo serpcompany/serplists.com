@@ -1,9 +1,12 @@
+import type { z } from "zod";
+
 export const PRO_MONTHLY_CENTS: number;
 
 export type StripeRequest = (options: {
   method: "GET" | "POST";
   path: string;
   form?: Record<string, string>;
+  schema: z.ZodTypeAny;
 }) => Promise<unknown>;
 
 export interface PriceSummary {

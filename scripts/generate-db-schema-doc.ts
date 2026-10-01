@@ -4,6 +4,7 @@ import { is, SQL } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../db/schema/index";
 import { matchesGeneratedText } from "./lib/line-endings.mjs";
+import { readSqlOnlySchema } from "./lib/sql-only-schema.mjs";
 
 const outputPath = path.join(process.cwd(), "docs/generated/db-schema.md");
 const sqlOnlyPath = path.join(process.cwd(), "db/sql-only-schema.json");
@@ -69,8 +70,8 @@ for (const table of tables) {
   }
 }
 
-const sqlOnly = JSON.parse(await readFile(sqlOnlyPath, "utf8")) as { triggers?: { name: string; table: string }[] };
-if (sqlOnly.triggers?.length) {
+const sqlOnly = readSqlOnlySchema(sqlOnlyPath);
+if (sqlOnly.triggers.length > 0) {
   lines.push("", "## SQL-only triggers", "", "Defined in migrations and recorded in `db/sql-only-schema.json` (Drizzle cannot represent them):", "");
   for (const trigger of [...sqlOnly.triggers].sort((a, b) => a.name.localeCompare(b.name))) {
     lines.push(`- \`${trigger.name}\` on \`${trigger.table}\``);

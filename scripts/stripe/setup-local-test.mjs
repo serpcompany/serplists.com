@@ -1,6 +1,7 @@
 import { parseEnvFile } from "../lib/env-file.mjs";
 import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT, updateEnvFile } from "./_env.mjs";
 import { describePriceMismatch, PRO_CURRENCY, PRO_MONTHLY_CENTS } from "./_price.mjs";
+import { readStripeReply, stripeListOf, stripePortalConfigurationSchema, stripePriceSchema } from "./_stripe-objects.mjs";
 
 const localEnv = parseEnvFile(".dev.vars");
 const env = loadLocalEnv();
@@ -19,18 +20,17 @@ if (!testKey) {
   throw new Error(`Missing Stripe test secret key. ${TEST_SECRET_KEY_HINT}`);
 }
 
-async function stripeGet(path) {
+async function stripeGet(path, schema) {
   const response = await fetch(`https://api.stripe.com${path}`, {
     headers: { Authorization: `Bearer ${testKey}` },
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(`Stripe API error (${response.status}): ${data.error?.message ?? "Unknown error"}`);
-  }
-  return data;
+  return readStripeReply(response, schema);
 }
 
-const prices = await stripeGet("/v1/prices?lookup_keys[]=serp-checklists_pro_monthly&active=true&limit=1");
+const prices = await stripeGet(
+  "/v1/prices?lookup_keys[]=serp-checklists_pro_monthly&active=true&limit=1",
+  stripeListOf(stripePriceSchema),
+);
 const price = prices.data[0];
 if (!price?.id) {
   throw new Error("Expected an active $9 USD monthly test price. Run the Stripe bootstrap first.");
@@ -47,7 +47,10 @@ if (priceMismatch) {
   );
 }
 
-const configurations = await stripeGet("/v1/billing_portal/configurations?active=true&limit=100");
+const configurations = await stripeGet(
+  "/v1/billing_portal/configurations?active=true&limit=100",
+  stripeListOf(stripePortalConfigurationSchema),
+);
 const portal = configurations.data.find(
   (candidate) =>
     candidate.metadata?.app === "serp-checklists" &&

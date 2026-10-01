@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
+import { z } from "zod";
 import { directoriesAFreshCheckoutLacks } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -78,7 +79,10 @@ const files = [
   ...walkMarkdown("docs"),
   ...(existsSync(path.join(repoRoot, SKILLS_DIR)) ? walkMarkdown(SKILLS_DIR) : []),
 ];
-const packageScripts = new Set(Object.keys(JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")).scripts ?? {}));
+const packageManifestSchema = z.object({ scripts: z.record(z.string()).default({}) });
+const packageScripts = new Set(
+  Object.keys(packageManifestSchema.parse(JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"))).scripts),
+);
 const errors = [];
 const linkGraph = new Map();
 let linksChecked = 0;

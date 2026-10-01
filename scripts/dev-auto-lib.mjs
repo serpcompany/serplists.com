@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import { z } from "zod";
 import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings.mjs";
 import { readProcessInfo } from "./lib/process-info.mjs";
 import { buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
@@ -18,24 +19,17 @@ export const START_TIME_TOLERANCE_MS = 5_000;
 export const DEV_FALLBACK_AUTH_SECRET = "local-dev-better-auth-secret-32-chars";
 const DEV_LAUNCHER_SCRIPT = /dev-auto\.mjs/;
 
-function normalizePid(value) {
-  return Number.isInteger(value) && value > 0 ? value : null;
-}
-
-function normalizeStartedAt(value) {
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
+const pidSchema = z.number().int().positive();
+const startedAtSchema = z.number().finite().positive();
+const devSessionSchema = z.object({
+  port: z.number().int().positive(),
+  pid: pidSchema.nullable().catch(null),
+  startedAt: startedAtSchema.nullable().catch(null),
+});
 
 function normalizeDevSession(value) {
-  if (!value || !Number.isInteger(value.port) || value.port <= 0) {
-    return null;
-  }
-
-  return {
-    port: value.port,
-    pid: normalizePid(value.pid),
-    startedAt: normalizeStartedAt(value.startedAt),
-  };
+  const session = devSessionSchema.safeParse(value);
+  return session.success ? session.data : null;
 }
 
 export function buildCorsAllowedOrigins(existingValue, origin) {
@@ -145,7 +139,7 @@ export function isProcessAlive(pid, kill = (target, signal) => process.kill(targ
 }
 
 export async function isOwnedDevProcess(pid, startedAt, { isAlive = isProcessAlive, readInfo = readProcessInfo } = {}) {
-  if (normalizePid(pid) == null || normalizeStartedAt(startedAt) == null || !isAlive(pid)) {
+  if (!pidSchema.safeParse(pid).success || !startedAtSchema.safeParse(startedAt).success || !isAlive(pid)) {
     return false;
   }
 
@@ -164,8 +158,7 @@ export function readDevSession(sessionPath = DEV_SESSION_PATH) {
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(sessionPath, "utf8"));
-    return normalizeDevSession(parsed);
+    return normalizeDevSession(JSON.parse(readFileSync(sessionPath, "utf8")));
   } catch {
     return null;
   }
