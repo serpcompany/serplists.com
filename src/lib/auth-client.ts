@@ -10,12 +10,13 @@ const API_BASE_URL = resolveApiBaseUrl({
   pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
 });
 
+const PLACEHOLDER_ORIGIN_FOR_SERVER_RENDER = "http://localhost";
+
+const pageOrigin = (): string =>
+  typeof window === "undefined" ? PLACEHOLDER_ORIGIN_FOR_SERVER_RENDER : window.location.origin;
+
 export const authClient = createAuthClient({
-  // The server renders client components too, where there is no page origin; the client
-  // only sends requests from the browser.
-  baseURL: resolveApiServerOrigin(API_BASE_URL, () =>
-    typeof window === "undefined" ? "http://localhost" : window.location.origin,
-  ),
+  baseURL: resolveApiServerOrigin(API_BASE_URL, pageOrigin),
   plugins: [usernameClient()],
   fetchOptions: {
     credentials: "include",

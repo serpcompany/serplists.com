@@ -146,3 +146,10 @@ server's "Refresh before ..." text no longer applies.
 only while a first load is in flight, `error` when it failed with nothing loaded, `empty` or
 `ready` once a list has loaded, and `idle` for a disabled query or a cancelled first load. A
 failed background refresh keeps the loaded list (`hasListRefreshError` then says so).
+
+Billing status reads the same way (`resolveBillingStatus` in `src/lib/billing.ts`). A plan is
+`known` only once the server has answered, and stays known when a later refresh fails; a
+failed or pending read is never taken as Free, so no upgrade prompt or checkout appears until
+the server has said the plan is Free; and a disabled query (signed out) is `idle`, not
+loading. A failed read is retried twice after a network failure or a `5xx`, never after a
+`4xx` such as a `401` or a removed Organization's `404` (`shouldRetryBillingStatus`).

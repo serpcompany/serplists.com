@@ -3,10 +3,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { getBillingStatusQueryKey, type BillingStatus } from "@/lib/billing";
 
-/**
- * Fetches Personal billing status whichever context is selected, and refreshes its
- * cache entry. Checkout is Personal-only, so its result must be read from Personal.
- */
 export const fetchPersonalBillingStatus = (queryClient: QueryClient, userId: string): Promise<BillingStatus> =>
   queryClient.fetchQuery({
     queryKey: getBillingStatusQueryKey(userId, null),
@@ -16,10 +12,6 @@ export const fetchPersonalBillingStatus = (queryClient: QueryClient, userId: str
 
 const sleepFor = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * After Checkout, the buyer can return before Stripe's webhook activates Pro. Polls
- * the status until the plan is Pro, or reports "pending" after the last attempt.
- */
 export async function waitForPersonalPro(
   fetchStatus: () => Promise<BillingStatus | undefined>,
   options: {

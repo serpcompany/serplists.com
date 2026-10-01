@@ -13,13 +13,8 @@ import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
 import { currentLocationPath } from "@/lib/navigation/replaceCurrentUrl";
 import { buildLoginPath } from "@/lib/routes";
 
-/** Opens another page of the app, like useAppRouter().push. */
 export type NavigateTo = (href: string) => unknown;
 
-/**
- * Opens the login page, which brings the user back to this page (with its query and hash)
- * after sign-in. Call it while the user is still on the page (see usePageVisit).
- */
 export const navigateToLoginWithReturnPath = (navigate: NavigateTo): void => {
   navigate(withReturnPath(buildLoginPath(), currentLocationPath()));
 };
@@ -36,21 +31,12 @@ const openBillingPortal = async (reason: string): Promise<boolean> => {
   }
 };
 
-// Checkout asks Stripe, so it can find an open subscription, or a plan support manages,
-// that the cached billing status does not show yet. The server has stored that plan by now.
-const revealsStoredPlan = (error: unknown): boolean =>
+const revealsPlanNewerThanCache = (error: unknown): boolean =>
   isOpenSubscriptionConflictError(error)
   || (isApiError(error) && error.code === "plan_managed_by_support");
 
 const storedPlanListeners = new Set<() => void>();
 
-/**
- * Reloads every cached billing status (Personal and each Organization) when a checkout
- * started here finds that the plan already changed on the server. Pages that gate a Pro
- * feature on the cached plan (Import and Export, template Copy and Export) then stop
- * asking for checkout on every click. The app registers its QueryClient once; returns
- * the function that stops it.
- */
 export const refreshBillingStatusOnCheckoutConflict = (
   queryClient: Pick<QueryClient, "invalidateQueries">
 ): (() => void) => {
@@ -69,13 +55,11 @@ const requestBillingCheckout = async (): Promise<boolean> => {
     window.location.href = url;
     return true;
   } catch (error) {
-    // Once per request: a second click joins this one (pendingCheckout).
-    if (revealsStoredPlan(error)) {
+    if (revealsPlanNewerThanCache(error)) {
       storedPlanListeners.forEach((listener) => listener());
     }
     const failure = getAccessFailure(error, "Failed to start checkout");
     if (failure.kind === "subscription_needs_attention") {
-      // The existing subscription is fixed in the Customer Portal, not with a second one.
       return openBillingPortal(failure.message);
     }
     toast.error(failure.message);
@@ -83,8 +67,6 @@ const requestBillingCheckout = async (): Promise<boolean> => {
   }
 };
 
-// Several buttons and access failures can start checkout. A second start while one is
-// pending (a double click) joins it instead of sending a second checkout request.
 let pendingCheckout: Promise<boolean> | null = null;
 
 export const startBillingCheckout = async (billingEnabled: boolean): Promise<boolean> => {
@@ -104,12 +86,6 @@ export const startBillingCheckout = async (billingEnabled: boolean): Promise<boo
 export const ORGANIZATION_UPGRADE_MESSAGE =
   "This Organization needs a paid plan before using this feature.";
 
-/**
- * Handles a 403 upgrade_required/limit_reached in the ownership context that
- * produced it. Organization limits come from the Organization's plan, so a Personal
- * Pro checkout can never lift them: in an Organization this only explains the limit.
- * Resolves true when a checkout redirect has started.
- */
 export const handleUpgradeRequiredForContext = async (options: {
   billingEnabled: boolean;
   isTeamWorkspace: boolean;
@@ -127,10 +103,7 @@ export const handleAccessFailure = async (
   options: {
     fallbackMessage: string;
     billingEnabled?: boolean;
-    // Opens the login page on a 401; without it a 401 is only shown.
     navigate?: NavigateTo;
-    // The page visit that sent the request (see usePageVisit). Once the user has left
-    // that page, the failure is only shown: no sign-in or checkout redirect.
     isCurrent?: () => boolean;
   }
 ): Promise<void> => {
