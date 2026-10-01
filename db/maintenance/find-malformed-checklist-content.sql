@@ -1,16 +1,3 @@
--- Read-only. Lists stored checklist content that saves now reject
--- (src/lib/schemas/storedSections.ts): a list that is not an array, text that is not text,
--- a flag that is not true/false, a content block with an unknown or missing type, or a list
--- entry that is not an object. Rows written before the check can hold these.
---
--- The app and API make such content safe when they read or copy it, and saving the Run or
--- Template through the app rewrites it in the checked shape, so this is for review. Any
--- repair write against staging or production goes to a human first (AGENTS.md).
---
--- It scans every templates and checklist_runs row (D1 bills rows scanned), so run it
--- deliberately:
---   npx wrangler d1 execute serp-checklists-db --remote --file=./db/maintenance/find-malformed-checklist-content.sql
-
 WITH content AS (
   SELECT 'templates' AS source, id, items FROM templates
   UNION ALL

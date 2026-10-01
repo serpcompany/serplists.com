@@ -1,6 +1,3 @@
--- Schema snapshot for reference and local inspection.
--- `db/migrations/*.sql` remains the source of truth for schema changes.
-
 CREATE TABLE sitemap_revisions (
   kind TEXT PRIMARY KEY CHECK (kind IN ('profiles', 'templates', 'categories')),
   revised_at TEXT NOT NULL
@@ -29,7 +26,6 @@ CREATE TABLE sitemap_shard_revisions (
   PRIMARY KEY (kind, page)
 );
 
--- Users table
 CREATE TABLE users (
   id TEXT PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
@@ -51,7 +47,6 @@ CREATE TABLE users (
 CREATE INDEX idx_users_email ON users(email);
 CREATE UNIQUE INDEX idx_users_username ON users(username);
 
--- Better Auth tables
 CREATE TABLE account (
   id TEXT PRIMARY KEY,
   account_id TEXT NOT NULL,
@@ -96,26 +91,25 @@ CREATE TABLE verification (
 
 CREATE INDEX verification_identifier_idx ON verification(identifier);
 
--- Templates table
 CREATE TABLE templates (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
-  items TEXT NOT NULL, -- JSON array of sections/items
+  items TEXT NOT NULL,
   version INTEGER NOT NULL DEFAULT 1,
   content_version INTEGER NOT NULL DEFAULT 1,
   type TEXT NOT NULL DEFAULT 'checklist',
   seo_title TEXT,
   seo_description TEXT,
-  rules TEXT, -- JSON array of template rules
+  rules TEXT,
   owner_type TEXT NOT NULL DEFAULT 'user',
   team_id TEXT,
   created_by_user_id TEXT,
   updated_by_user_id TEXT,
   is_public INTEGER DEFAULT 0,
   category TEXT,
-  tags TEXT, -- JSON array of tags
+  tags TEXT,
   slug TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT,
@@ -128,14 +122,13 @@ CREATE INDEX idx_templates_public_created_at ON templates(is_public, created_at)
 CREATE INDEX idx_templates_owner ON templates(owner_type, user_id, team_id);
 CREATE INDEX idx_templates_team_id ON templates(team_id);
 
--- Checklist runs/instances
 CREATE TABLE checklist_runs (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   team_id TEXT,
   template_id TEXT,
   title TEXT NOT NULL,
-  items TEXT NOT NULL, -- JSON array with completion status
+  items TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'in_progress',
   started_at TEXT NOT NULL,
   completed_at TEXT,
@@ -162,7 +155,6 @@ CREATE INDEX idx_checklist_runs_user_id ON checklist_runs(user_id);
 CREATE INDEX idx_checklist_runs_template_owner ON checklist_runs(template_id, team_id, user_id);
 CREATE INDEX idx_checklist_runs_team_id ON checklist_runs(team_id);
 
--- Template likes
 CREATE TABLE template_likes (
   user_id TEXT NOT NULL,
   template_id TEXT NOT NULL,
@@ -172,13 +164,12 @@ CREATE TABLE template_likes (
   FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
 );
 
--- Analytics/Usage tracking
 CREATE TABLE usage_analytics (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
-  action TEXT NOT NULL, -- template_created, checklist_started, checklist_completed
+  action TEXT NOT NULL,
   resource_id TEXT,
-  metadata TEXT, -- JSON for additional data
+  metadata TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -186,7 +177,6 @@ CREATE TABLE usage_analytics (
 CREATE INDEX idx_usage_analytics_user_id ON usage_analytics(user_id);
 CREATE INDEX idx_usage_analytics_action ON usage_analytics(action);
 
--- Stripe billing tables
 CREATE TABLE stripe_customers (
   user_id TEXT PRIMARY KEY,
   stripe_customer_id TEXT NOT NULL UNIQUE,
@@ -221,7 +211,6 @@ CREATE TABLE stripe_webhook_events (
   error TEXT
 );
 
--- Manual entitlements overrides
 CREATE TABLE entitlement_overrides (
   user_id TEXT PRIMARY KEY,
   plan TEXT NOT NULL,
@@ -231,7 +220,6 @@ CREATE TABLE entitlement_overrides (
   updated_at TEXT
 );
 
--- Team/workspace foundations
 CREATE TABLE teams (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -300,7 +288,6 @@ CREATE TABLE team_entitlement_overrides (
   FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
 );
 
--- Immutable application history
 CREATE TABLE audit_events (
   id TEXT PRIMARY KEY,
   actor_user_id TEXT,

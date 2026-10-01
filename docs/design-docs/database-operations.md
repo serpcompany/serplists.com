@@ -162,8 +162,10 @@ baseline.
   The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing
-  (`tests/integration/setup-local-seed.test.ts`). If seedLocalTestData gains a later
-  insert, move the completion marker to it. When a seed change renames a slug that an
+  (`tests/integration/setup-local-seed.test.ts`). seedLocalTestData runs without a
+  transaction, so if it gains a later insert, move the completion marker to it:
+  `tests/unit/db/seeds/local.test.ts` fails until the marker is the last row it inserts.
+  When a seed change renames a slug that an
   existing local database still holds, add a local-only stage that fixes it in place
   (like `repair-test-slugs`, which gives test Templates seeded with official slugs
   their `sample-` slugs): setup never reruns seed-test on existing data, and
@@ -185,7 +187,9 @@ baseline.
   are safe. Any other conflict (another Template with an official slug, or another
   User with the `serp` email or username) fails with a UNIQUE constraint error
   instead of silently dropping the row. Test-seed Templates use `sample-` slugs so
-  they never collide with official ones.
+  they never collide with official ones. The `serp` User it writes has a random password
+  hash whose password nobody holds, so no one can sign in as it on staging or production;
+  locally, `seed-official-login` gives it the dev password.
 - The `items` JSON in that file sits inside SQL string literals, and SQLite does
   not process backslash escapes there. Write a line break as the JSON escape `\n`
   (one backslash), never `\\n`, which stores a literal backslash and `n`.
@@ -217,10 +221,18 @@ baseline.
 
 Saves check section content against `src/lib/schemas/storedSections.ts`, but rows
 written before that check can still hold malformed content. The app and API make it
-safe when they read or copy it. To review what is stored,
+safe when they read or copy it, and saving the Run or Template through the app rewrites
+it in the checked shape. To review what is stored,
 `db/maintenance/find-malformed-checklist-content.sql` lists each malformed path in
-`templates.items` and `checklist_runs.items`. It is read-only but scans both tables,
-and any repair write against staging or production goes to a human first.
+`templates.items` and `checklist_runs.items`: a list that is not an array, text that is
+not text, a flag that is not true or false, a content block with an unknown or missing
+type, or a list entry that is not an object. It is read-only but scans every row of both
+tables (D1 bills rows scanned), so run it deliberately, and any repair write against
+staging or production goes to a human first:
+
+```bash
+npx wrangler d1 execute serp-checklists-db --remote --file=./db/maintenance/find-malformed-checklist-content.sql
+```
 
 ## Release checklists
 

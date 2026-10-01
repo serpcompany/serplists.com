@@ -78,26 +78,16 @@ function ownedTestUserIds(db: LocalDb) {
     .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
 }
 
-// The fixture Organizations plus any Organization a test user created in the app.
-function ownedTestTeamIds(db: LocalDb) {
+function fixtureAndTestUserCreatedTeamIds(db: LocalDb) {
   return db
     .select({ id: teams.id })
     .from(teams)
     .where(or(inArray(teams.id, TEST_TEAM_IDS), inArray(teams.created_by_user_id, ownedTestUserIds(db))));
 }
 
-/**
- * Deletes the test Users and everything they own or created, in one D1 batch:
- * if any statement fails, nothing is deleted. The subqueries run per statement,
- * so Organizations are deleted after every statement that looks them up, and
- * Users last. teams.created_by_user_id, team_invites.invited_by_user_id and
- * template_versions.changed_by_user_id are ON DELETE RESTRICT, so rows a test
- * User created in Organizations that survive (invites, Template history) are
- * deleted too.
- */
 export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
   const testUserIds = ownedTestUserIds(db);
-  const testTeamIds = ownedTestTeamIds(db);
+  const testTeamIds = fixtureAndTestUserCreatedTeamIds(db);
 
   await db.batch([
     db
@@ -662,9 +652,6 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       category: json(["Operations", "SEO"]),
       tags: json(["team", "launch", "qa"]),
       slug: "shared-growth-launch-checklist",
-      // Matches its newest template_versions row (version 2) below. A save writes history
-      // row version + 1, so a lower version makes every save collide and return 409.
-      // content_version stays 1: the seeded Run was started from that content.
       version: 2,
       created_at: at(-3 * DAY),
       updated_at: at(-DAY),
@@ -1065,21 +1052,12 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
 }
 
 export type LocalSeedStatus = {
-  /** seed-test finished: the test Users exist and the row it writes last is there. */
   testData: boolean;
-  /** db/seeds/official-templates.sql ran (one INSERT for all official Templates). */
   officialTemplates: boolean;
-  /** seed-official-login ran: the SERP persona can sign in. */
   officialLogin: boolean;
-  /** A test Template still holds the slug an older seed gave it (LEGACY_TEST_TEMPLATE_SLUGS). */
   legacyTestSlugs: boolean;
 };
 
-/**
- * The slugs seed-test gave these test Templates before they got a `sample-` prefix. They
- * are official Templates' slugs (db/seeds/official-templates.sql), so a database seeded
- * then is missing those official Templates, and seeding them fails on the slug index.
- */
 export const LEGACY_TEST_TEMPLATE_SLUGS: Readonly<Record<string, string>> = {
   "template-1": "technical-seo-audit-checklist",
   "template-2": "keyword-research-mapping-checklist",
@@ -1092,18 +1070,10 @@ const legacyTestSlugMatch = or(
   ),
 );
 
-// seedLocalTestData inserts audit events last and this one last among them, and it
-// runs without a transaction, so a seed cut short (an error, Ctrl+C) has no marker.
 const LOCAL_SEED_COMPLETE_AUDIT_ID = TEST_AUDIT_IDS[TEST_AUDIT_IDS.length - 1];
 const OFFICIAL_SEED_TEMPLATE_ID = "serp-template-technical-seo-audit";
 const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
 
-/**
- * Which local seed stages have completed. `pnpm run setup` reads this after migrating
- * and seeds only what is missing, so a failed or interrupted seed is finished on the
- * next run and data already there is never reset. A database without the tables
- * (never migrated) reads as not seeded.
- */
 export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
   try {
     const [[testUsers], [marker], [officialTemplate], [officialLogin], [legacySlugs]] = await Promise.all([
@@ -1133,12 +1103,6 @@ export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus>
   }
 }
 
-/**
- * Gives each test Template that still holds its old slug (LEGACY_TEST_TEMPLATE_SLUGS) the
- * `sample-` slug seed-test gives it today, so the official Templates can be seeded without
- * reseeding test data. A test Template whose slug was changed, any other Template, and a
- * Template whose `sample-` slug is taken are left as they are. Safe to re-run.
- */
 export async function repairLegacyTestTemplateSlugs(db: LocalDb): Promise<void> {
   for (const [id, legacySlug] of Object.entries(LEGACY_TEST_TEMPLATE_SLUGS)) {
     const sampleSlug = `sample-${legacySlug}`;

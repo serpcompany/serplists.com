@@ -343,3 +343,28 @@ describe("setup on a database seeded before the sample- test slugs", () => {
     );
   });
 });
+
+describe("readLocalSeedStatus", () => {
+  it("finds seed-test unfinished until the last row it inserts is there, since it runs without a transaction and a seed cut short must be finished by the next setup", async () => {
+    const local = migratedLocalD1DrivenAsTheSeedScriptsDriveIt();
+    local.exec("CREATE TABLE inserted_rows (seq INTEGER PRIMARY KEY, source TEXT NOT NULL, row_key INTEGER NOT NULL)");
+    const seededTables = local.ids(
+      "SELECT name AS id FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'inserted_rows'",
+    );
+    for (const table of seededTables) {
+      local.exec(
+        `CREATE TRIGGER "record_${table}_insert" AFTER INSERT ON "${table}" ` +
+          `BEGIN INSERT INTO inserted_rows (source, row_key) VALUES ('${table}', NEW.rowid); END;`,
+      );
+    }
+
+    await seedLocalTestData(local.db);
+    expect((await readLocalSeedStatus(local.db)).testData).toBe(true);
+
+    const [lastInserted] = local.ids("SELECT source || ' ' || row_key AS id FROM inserted_rows ORDER BY seq DESC LIMIT 1");
+    const [table, rowKey] = lastInserted.split(" ");
+    local.exec(`DELETE FROM "${table}" WHERE rowid = ${Number(rowKey)}`);
+
+    expect((await readLocalSeedStatus(local.db)).testData).toBe(false);
+  });
+});
