@@ -5,9 +5,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { lintSingleTemplateSource, lintTemplatePair, lintYamlTemplateBundle } from '@/../scripts/lib/templateLint';
 
-// A Windows clone with core.autocrlf=true checks the example templates out with CRLF.
-// The linter must compare them with the LF canonical output by content, not bytes.
-
 const examplesRoot = path.join(process.cwd(), 'docs/product-specs/portable-templates/examples');
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
 
@@ -31,7 +28,7 @@ const lintBundle = (dir: string) =>
     previewHtmlPath: path.join(dir, 'preview.html'),
   });
 
-describe('templateLint on CRLF files', () => {
+describe('templateLint on the CRLF files a Windows clone with core.autocrlf checks out', () => {
   beforeAll(() => {
     tempRoot = mkdtempSync(path.join(tmpdir(), 'serplists-template-eol-'));
   });
@@ -40,7 +37,7 @@ describe('templateLint on CRLF files', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it.each(['minimal', 'full'])('accepts a CRLF checkout of the %s example', async (example) => {
+  it.each(['minimal', 'full'])('accepts a CRLF checkout of the %s example, comparing it with the LF output by content', async (example) => {
     const dir = copyAsCrlf(example);
 
     expect(await lintBundle(dir)).toEqual([]);

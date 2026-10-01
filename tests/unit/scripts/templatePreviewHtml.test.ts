@@ -13,7 +13,7 @@ describe('templatePreviewHtml', () => {
     expect(html).toContain('Launch Checklist');
   });
 
-  it('links an embed to its URL or iframe src in the html preview, and shows other code as text', () => {
+  it('links an embed to its URL or iframe src in the html preview, as the app does, and shows other code as text', () => {
     const embedTemplate = normalizePortableTemplate({
       title: 'Embeds',
       sections: [{

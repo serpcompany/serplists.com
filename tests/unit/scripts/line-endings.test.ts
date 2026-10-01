@@ -7,10 +7,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { matchesGeneratedText, normalizeEol } from '../../../scripts/lib/line-endings.mjs';
 import { buildToolInvocation } from '../../../scripts/lib/run-tool.mjs';
 
-// Git for Windows defaults to core.autocrlf=true. Without .gitattributes a Windows
-// clone checks the generated artifacts out with CRLF, and every byte-for-byte
-// --check against freshly generated LF output reported them as stale.
-
 const repoRoot = process.cwd();
 const toCrlf = (text: string) => text.replace(/\r?\n/g, '\r\n');
 const git = (args: string[]) => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' });
@@ -80,9 +76,7 @@ describe('generated artifact checks on a CRLF checkout', () => {
     for (const root of tempRoots) rmSync(root, { recursive: true, force: true });
   });
 
-  // Copies the listed repo files into a temp working directory with CRLF endings and
-  // runs `tsx <script> --check` there (both scripts resolve their files from the cwd).
-  const runCheck = (script: string, files: string[], edit: (file: string, text: string) => string = (_, text) => text) => {
+  const runCheckOnACrlfCopy = (script: string, files: string[], edit: (file: string, text: string) => string = (_, text) => text) => {
     const cwd = mkdtempSync(path.join(tmpdir(), 'serplists-eol-'));
     tempRoots.push(cwd);
     for (const file of files) {
@@ -106,9 +100,9 @@ describe('generated artifact checks on a CRLF checkout', () => {
 
   it('accepts a CRLF copy of docs/generated/db-schema.md and still flags drift', () => {
     const files = ['docs/generated/db-schema.md', 'db/sql-only-schema.json'];
-    expect(runCheck('scripts/generate-db-schema-doc.ts', files)).toEqual({ ok: true, output: '' });
+    expect(runCheckOnACrlfCopy('scripts/generate-db-schema-doc.ts', files)).toEqual({ ok: true, output: '' });
 
-    const drifted = runCheck('scripts/generate-db-schema-doc.ts', files, (file, text) =>
+    const drifted = runCheckOnACrlfCopy('scripts/generate-db-schema-doc.ts', files, (file, text) =>
       file.endsWith('.md') ? text.replace('| `id` |', '| `identifier` |') : text,
     );
     expect(drifted.ok).toBe(false);
@@ -117,9 +111,9 @@ describe('generated artifact checks on a CRLF checkout', () => {
 
   it('accepts a CRLF copy of the portable template JSON Schema and still flags drift', () => {
     const files = ['docs/generated/portable-template-pack.schema.json'];
-    expect(runCheck('scripts/generate-portable-template-json-schema.ts', files)).toEqual({ ok: true, output: '' });
+    expect(runCheckOnACrlfCopy('scripts/generate-portable-template-json-schema.ts', files)).toEqual({ ok: true, output: '' });
 
-    const drifted = runCheck('scripts/generate-portable-template-json-schema.ts', files, (_, text) =>
+    const drifted = runCheckOnACrlfCopy('scripts/generate-portable-template-json-schema.ts', files, (_, text) =>
       text.replace('"title"', '"heading"'),
     );
     expect(drifted.ok).toBe(false);

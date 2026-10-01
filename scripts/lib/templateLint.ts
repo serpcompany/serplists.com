@@ -33,10 +33,7 @@ type TemplateSourceDetails = {
   canonicalPreviewHtml: string;
 };
 
-// Sources are compared with LF canonical output, so read them with LF line endings:
-// a CRLF checkout (Windows, core.autocrlf=true) is not drift, and no carriage return
-// leaks into titles parsed from Markdown or YAML.
-const readSource = async (filePath: string) => normalizeEol(await readFile(filePath, "utf8"));
+const readSourceWithLfEndings = async (filePath: string) => normalizeEol(await readFile(filePath, "utf8"));
 
 const normalizeJson = (template: PortableChecklistTemplate) => `${JSON.stringify(normalizePortableTemplate(template), null, 2)}\n`;
 
@@ -76,8 +73,6 @@ export const parseSingleTemplateSource = (source: string, extension: SupportedTe
   return buildTemplateSourceDetails(extension, parseTemplateJson(source));
 };
 
-// The generated Markdown must import back as the same template. Text blocks hold
-// Markdown, so a fence or heading inside one must not break the format.
 const checkMarkdownRoundTrip = (details: TemplateSourceDetails, filePath: string): TemplateLintIssue[] => {
   const issue = (message: string): TemplateLintIssue[] => [{ filePath, code: "markdown-roundtrip", message }];
 
@@ -158,7 +153,7 @@ export const lintSingleTemplateSource = async (filePath: string): Promise<Templa
   }
 
   try {
-    const source = await readSource(filePath);
+    const source = await readSourceWithLfEndings(filePath);
     const details = parseSingleTemplateSource(source, extension);
     const issues = [
       ...validateTemplateRules(details.normalizedTemplate, filePath),
@@ -196,8 +191,8 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
 
   try {
     const [jsonSource, markdownSource] = await Promise.all([
-      readSource(jsonPath),
-      readSource(markdownPath),
+      readSourceWithLfEndings(jsonPath),
+      readSourceWithLfEndings(markdownPath),
     ]);
 
     const jsonDetails = parseSingleTemplateSource(jsonSource, ".json");
@@ -253,14 +248,14 @@ export const lintYamlTemplateBundle = async (
   const issues: TemplateLintIssue[] = [];
 
   try {
-    const yamlSource = await readSource(yamlPath);
+    const yamlSource = await readSourceWithLfEndings(yamlPath);
     const yamlDetails = parseSingleTemplateSource(yamlSource, path.extname(yamlPath).toLowerCase() as SupportedTemplateSourceExtension);
 
     issues.push(...validateTemplateRules(yamlDetails.normalizedTemplate, yamlPath));
     issues.push(...checkMarkdownRoundTrip(yamlDetails, paths.markdownPath ?? yamlPath));
 
     if (paths.jsonPath) {
-      const jsonSource = await readSource(paths.jsonPath);
+      const jsonSource = await readSourceWithLfEndings(paths.jsonPath);
       if (jsonSource !== yamlDetails.canonicalJson) {
         issues.push({
           filePath: paths.jsonPath,
@@ -271,7 +266,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.readmePath) {
-      const readmeSource = await readSource(paths.readmePath);
+      const readmeSource = await readSourceWithLfEndings(paths.readmePath);
       if (readmeSource !== yamlDetails.canonicalReadme) {
         issues.push({
           filePath: paths.readmePath,
@@ -282,7 +277,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.previewHtmlPath) {
-      const previewSource = await readSource(paths.previewHtmlPath);
+      const previewSource = await readSourceWithLfEndings(paths.previewHtmlPath);
       if (previewSource !== yamlDetails.canonicalPreviewHtml) {
         issues.push({
           filePath: paths.previewHtmlPath,
@@ -293,7 +288,7 @@ export const lintYamlTemplateBundle = async (
     }
 
     if (paths.markdownPath) {
-      const markdownSource = await readSource(paths.markdownPath);
+      const markdownSource = await readSourceWithLfEndings(paths.markdownPath);
       if (markdownSource !== yamlDetails.canonicalMarkdown) {
         issues.push({
           filePath: paths.markdownPath,

@@ -372,6 +372,8 @@ Generated outputs from `template.yaml` serve different purposes:
 
 `README.md` is for readability and documentation, not perfect UI fidelity.
 `preview.html` is the preview intended to approximate app content cards without depending on the app runtime.
+As in the app, an embed links to its URL or to the `src` of pasted iframe code, and any
+other code shows as text.
 
 ### Rules
 - Portable template packs can include an optional `rules` array on each template.

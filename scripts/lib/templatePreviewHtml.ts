@@ -35,7 +35,6 @@ const renderPreviewCard = (content: NonNullable<PortableChecklistTemplate["secti
     return `<div class="content-block card file-card"><div class="card-label">File</div><div class="file-name">${escapeHtml(content.fileName || content.value)}</div><div class="card-meta"><a href="${escapeHtml(content.value)}">Open file</a>${content.fileSize ? ` <span>· ${escapeHtml(formatBytes(content.fileSize) || "")}</span>` : ""}</div></div>`;
   }
 
-  // Like the app: a link to the URL or to pasted iframe code's src, else the code as text.
   const embedLink = getEmbedLinkUrl(content.value);
   const embedBody = embedLink
     ? `<a href="${escapeHtml(embedLink)}">${escapeHtml(embedLink)}</a>`
