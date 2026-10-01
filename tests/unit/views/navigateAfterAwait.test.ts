@@ -33,8 +33,7 @@ const collect = <T extends ts.Node>(root: ts.Node, test: (node: ts.Node) => node
   return found;
 };
 
-// A plain function's name, or `router.<method>` for the app router (useAppRouter).
-const calleeName = (call: ts.CallExpression): string => {
+const functionOrAppRouterMethodName = (call: ts.CallExpression): string => {
   if (ts.isIdentifier(call.expression)) return call.expression.text;
   const callee = call.expression;
   return ts.isPropertyAccessExpression(callee) &&
@@ -45,10 +44,9 @@ const calleeName = (call: ts.CallExpression): string => {
 };
 
 const isCallTo = (names: Set<string>) => (node: ts.Node): node is ts.CallExpression =>
-  ts.isCallExpression(node) && names.has(calleeName(node));
+  ts.isCallExpression(node) && names.has(functionOrAppRouterMethodName(node));
 
-// Every `const <name> = async ...` function in a file, by name.
-const asyncHandlers = (source: ts.SourceFile): Map<string, ts.ConciseBody> => {
+const asyncConstFunctionsByName = (source: ts.SourceFile): Map<string, ts.ConciseBody> => {
   const handlers = new Map<string, ts.ConciseBody>();
   for (const declaration of collect(source, ts.isVariableDeclaration)) {
     const fn = declaration.initializer;
@@ -64,9 +62,7 @@ const asyncHandlers = (source: ts.SourceFile): Map<string, ts.ConciseBody> => {
   return handlers;
 };
 
-// Calls that move the user: a navigate, sign-in or checkout, or a failure reporter
-// that can do either.
-const MOVES = new Set([
+const CALLS_THAT_MOVE_THE_USER = new Set([
   'goToLogin',
   'handleAccessFailure',
   'handleBackupFailure',
@@ -83,8 +79,7 @@ const MOVES = new Set([
   'startUpgrade',
 ]);
 
-// Helpers that are given the visit and call their callbacks only while it is current.
-const VISIT_WRAPPERS = new Set([
+const HELPERS_THAT_CALL_BACK_ONLY_WHILE_THE_VISIT_IS_CURRENT = new Set([
   'finishDashboardTemplateRun',
   'followTemplateActionResult',
   'reportDashboardTemplateRunFailure',
@@ -98,110 +93,102 @@ const returnsEarly = (statement: ts.Statement): boolean =>
   ts.isReturnStatement(statement) ||
   (ts.isBlock(statement) && statement.statements.some(ts.isReturnStatement));
 
-// Names bound to `await saveTemplateForVisit(...)`, which is null once the visit ended.
-const visitResultNames = (body: ts.Node): string[] =>
+const namesOfSaveResultsThatAreNullOnceTheVisitEnded = (body: ts.Node): string[] =>
   collect(body, ts.isVariableDeclaration)
     .filter(
       (declaration) =>
         declaration.initializer &&
         ts.isAwaitExpression(declaration.initializer) &&
         ts.isCallExpression(declaration.initializer.expression) &&
-        calleeName(declaration.initializer.expression) === 'saveTemplateForVisit',
+        functionOrAppRouterMethodName(declaration.initializer.expression) === 'saveTemplateForVisit',
     )
     .map((declaration) => declaration.name.getText());
 
-// A move is gated when the visit reaches its callee, when it is a callback given to a
-// visit wrapper, when it sits in an `if (visit.isCurrent())` branch, or when an earlier
-// statement returns once the visit has ended.
-const isGated = (call: ts.CallExpression, body: ts.Node): boolean => {
-  if (call.arguments.some((argument) => /\bvisit\b/.test(argument.getText()))) {
-    return true;
-  }
+const passesTheVisitToItsCallee = (call: ts.CallExpression) =>
+  call.arguments.some((argument) => /\bvisit\b/.test(argument.getText()));
 
-  const results = visitResultNames(body);
-  const leftCondition = (text: string) =>
-    NOT_CURRENT.test(text) || results.some((name) => text.includes(`!${name}`));
+const isCallbackOfAVisitHelper = (node: ts.Node, child: ts.Node) =>
+  ts.isCallExpression(node) &&
+  HELPERS_THAT_CALL_BACK_ONLY_WHILE_THE_VISIT_IS_CURRENT.has(functionOrAppRouterMethodName(node)) &&
+  node.arguments.some((argument) => argument === child);
+
+const isInABranchTakenOnlyWhileTheVisitIsCurrent = (node: ts.Node, child: ts.Node) => {
+  if (!ts.isIfStatement(node)) return false;
+  const condition = node.expression.getText();
+  return (
+    (child === node.thenStatement && IS_CURRENT.test(condition) && !NOT_CURRENT.test(condition)) ||
+    (child === node.elseStatement && NOT_CURRENT.test(condition))
+  );
+};
+
+const followsAReturnOnceTheVisitEnded = (
+  node: ts.Node,
+  child: ts.Node,
+  testsThatTheVisitEnded: (condition: string) => boolean,
+) => {
+  if (!ts.isBlock(node)) return false;
+  const earlier = node.statements.slice(0, node.statements.indexOf(child as ts.Statement));
+  return earlier.some(
+    (statement) =>
+      ts.isIfStatement(statement) &&
+      returnsEarly(statement.thenStatement) &&
+      testsThatTheVisitEnded(statement.expression.getText()),
+  );
+};
+
+const isGated = (call: ts.CallExpression, body: ts.Node): boolean => {
+  if (passesTheVisitToItsCallee(call)) return true;
+
+  const saveResults = namesOfSaveResultsThatAreNullOnceTheVisitEnded(body);
+  const testsThatTheVisitEnded = (condition: string) =>
+    NOT_CURRENT.test(condition) || saveResults.some((name) => condition.includes(`!${name}`));
 
   let child: ts.Node = call;
   for (let node = call.parent; node && child !== body; child = node, node = node.parent) {
     if (
-      ts.isCallExpression(node) &&
-      VISIT_WRAPPERS.has(calleeName(node)) &&
-      node.arguments.some((argument) => argument === child)
+      isCallbackOfAVisitHelper(node, child) ||
+      isInABranchTakenOnlyWhileTheVisitIsCurrent(node, child) ||
+      followsAReturnOnceTheVisitEnded(node, child, testsThatTheVisitEnded)
     ) {
       return true;
-    }
-    if (ts.isIfStatement(node)) {
-      const condition = node.expression.getText();
-      if (child === node.thenStatement && IS_CURRENT.test(condition) && !NOT_CURRENT.test(condition)) {
-        return true;
-      }
-      if (child === node.elseStatement && NOT_CURRENT.test(condition)) {
-        return true;
-      }
-    }
-    if (ts.isBlock(node)) {
-      const earlier = node.statements.slice(0, node.statements.indexOf(child as ts.Statement));
-      if (
-        earlier.some(
-          (statement) =>
-            ts.isIfStatement(statement) &&
-            returnsEarly(statement.thenStatement) &&
-            leftCondition(statement.expression.getText()),
-        )
-      ) {
-        return true;
-      }
     }
   }
   return false;
 };
 
-// The moves after the handler's first await that no page visit gates.
 const ungatedMovesAfterAwait = (body: ts.Node): ts.CallExpression[] => {
   const awaits = collect(body, ts.isAwaitExpression);
   if (awaits.length === 0) return [];
   const firstAwaitEnd = Math.min(...awaits.map((expression) => expression.getEnd()));
-  return collect(body, isCallTo(MOVES)).filter(
+  return collect(body, isCallTo(CALLS_THAT_MOVE_THE_USER)).filter(
     (call) => call.getStart() >= firstAwaitEnd && !isGated(call, body),
   );
 };
 
-// These handlers await a request and then move the user (to a new run or template,
-// back to a list, to sign-in or checkout). The router still runs a navigation from a
-// page the user already left, so each one starts a page visit before the request and
-// acts on the result only while that visit is current (see usePageVisit).
-const HANDLERS: Array<[string, string[]]> = [
+const HANDLERS_THAT_MOVE_THE_USER_AFTER_A_REQUEST: Array<[string, string[]]> = [
   ['src/views/TemplateEditor.tsx', ['handleSave']],
   [
     'src/views/TemplateDetail.tsx',
     ['handleStartRun', 'handleShare', 'handleCloneTemplate', 'handleDelete', 'handleTogglePublic'],
   ],
   ['src/views/PublicTemplate.tsx', ['handleStartRun', 'handleSaveTemplate']],
-  // The model opens a new run; the page reports a failure (sign-in or checkout).
   ['src/features/dashboard-templates/useDashboardTemplatesModel.ts', ['createRunFromTemplate']],
   ['src/views/Templates.tsx', ['handleRunConfirm']],
   ['src/components/TemplateBackup.tsx', ['exportAll', 'handleConfirmImport']],
   ['src/views/ChecklistRun.tsx', ['handleCompleteRun']],
 ];
 
-// Handlers that move the user after an await without a page visit, on purpose.
 const UNGATED_ON_PURPOSE: Record<string, string> = {
-  // The account flows end on their next step (the console, email verification, sign-in).
   'src/components/DevLoginBar.tsx:handleQuickLogin': 'development sign-in',
   'src/views/Register.tsx:handleSubmit': 'the account exists; show its next step',
   'src/views/ResetPassword.tsx:handleSubmit': 'the password changed; sign in with it',
 };
 
-// Helpers that navigate to sign-in or start a checkout redirect.
-const REDIRECT_HELPER =
+const SIGN_IN_OR_CHECKOUT_REDIRECT_HELPERS =
   /\b(?:handleUpgradeRequiredForContext|navigateToLoginWithReturnPath|startBillingCheckout|handleAccessFailure|reportDashboardTemplateRunFailure)\b/;
 
-// Files that use those helpers only on a direct click, never after an await.
-const DIRECT_CLICK_ONLY: Record<string, string> = {
-  // Defines the helpers.
+const FILES_USING_REDIRECT_HELPERS_ONLY_ON_A_DIRECT_CLICK: Record<string, string> = {
   'src/lib/access-flow.ts': 'defines them',
-  // The editor's Upgrade and Sign in buttons; its save goes through saveTemplateForVisit.
   'src/features/template-editor/useTemplateEditorAccess.ts': 'notice buttons',
 };
 
@@ -209,14 +196,14 @@ const ungatedHandlers = (): Map<string, string[]> => {
   const found = new Map<string, string[]>();
   for (const file of listSourceFiles('src')) {
     const source = parseSource(file);
-    for (const [name, body] of asyncHandlers(source)) {
+    for (const [name, body] of asyncConstFunctionsByName(source)) {
       const moves = ungatedMovesAfterAwait(body);
       if (moves.length > 0) {
         found.set(
           `${file}:${name}`,
           moves.map((call) => {
             const { line } = source.getLineAndCharacterOfPosition(call.getStart());
-            return `${calleeName(call)}() at line ${line + 1}`;
+            return `${functionOrAppRouterMethodName(call)}() at line ${line + 1}`;
           }),
         );
       }
@@ -226,9 +213,9 @@ const ungatedHandlers = (): Map<string, string[]> => {
 };
 
 describe('navigation after a request', () => {
-  it.each(HANDLERS)('%s starts a page visit before each request', (path, names) => {
+  it.each(HANDLERS_THAT_MOVE_THE_USER_AFTER_A_REQUEST)('%s starts a page visit before each request', (path, names) => {
     const source = parseSource(path);
-    const handlers = asyncHandlers(source);
+    const handlers = asyncConstFunctionsByName(source);
 
     expect(source.getFullText()).toMatch(/\busePageVisit\(/);
     for (const name of names) {
@@ -242,9 +229,7 @@ describe('navigation after a request', () => {
     }
   });
 
-  // Found by scanning src/, so a new handler (or a gate removed from an old one) cannot
-  // be missed: every navigate, sign-in or checkout after an await waits for the visit.
-  it('moves the user after an await only while the page visit is current', () => {
+  it('moves the user after an await only while the page visit is current, in every async handler a scan of src/ finds', () => {
     const ungated = Object.fromEntries(
       [...ungatedHandlers()].filter(([handler]) => !(handler in UNGATED_ON_PURPOSE)),
     );
@@ -260,9 +245,9 @@ describe('navigation after a request', () => {
 
   it('every page that can redirect to sign-in or checkout tracks the page visit', () => {
     const unguarded = listSourceFiles('src').filter((file) => {
-      if (file in DIRECT_CLICK_ONLY) return false;
+      if (file in FILES_USING_REDIRECT_HELPERS_ONLY_ON_A_DIRECT_CLICK) return false;
       const source = readSource(file);
-      return REDIRECT_HELPER.test(source) && !/\busePageVisit\(/.test(source);
+      return SIGN_IN_OR_CHECKOUT_REDIRECT_HELPERS.test(source) && !/\busePageVisit\(/.test(source);
     });
 
     expect(unguarded).toEqual([]);
