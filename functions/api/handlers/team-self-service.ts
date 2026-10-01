@@ -8,9 +8,6 @@ import { json, jsonError } from "../utils/response";
 import { activeTeamManagerExists, normalizeTeamRole, type TeamMembership } from "../utils/team-access";
 import { buildInviteRevocation, selectPendingInvitesFromInviter } from "../utils/team-invite-revocation";
 
-// Routes an invitee or member calls for their own membership: preview or
-// decline an invite link before joining, and leave an Organization.
-
 type Db = ReturnType<typeof createDb>;
 
 export async function getCurrentUserEmail(env: Env, userId: string): Promise<string | null> {
@@ -30,7 +27,6 @@ function isExpired(expiresAt: string): boolean {
 }
 
 const inviteNotFound = () => jsonError("Invite not found", 404);
-// The body never names the invited address, so holding a link does not reveal it.
 export const inviteEmailMismatch = () =>
   jsonError("Invite is for a different email address", 403, { code: "invite_email_mismatch" });
 const inviteExpired = () => jsonError("Invite expired", 410, { code: "invite_expired" });
@@ -40,11 +36,6 @@ function noStore(response: Response): Response {
   return response;
 }
 
-/**
- * GET /api/teams/invites/:token. Read-only: it never writes, so opening an
- * invite link cannot join anyone. It names the Organization only to the
- * invited account, so a leaked link reveals nothing to other accounts.
- */
 export async function previewTeamInvite({
   db,
   env,
@@ -130,8 +121,6 @@ export async function previewTeamInvite({
     );
   }
 
-  // Accepting needs the inviter to still manage the Organization, so an invite
-  // whose inviter left or lost access is shown as gone, as accept treats it.
   if (!invite.inviterCanManage) {
     return noStore(inviteNotFound());
   }
@@ -143,7 +132,6 @@ export async function previewTeamInvite({
   return noStore(json({ status: "pending", ...preview }));
 }
 
-/** POST /api/teams/invites/:token/decline: the invited account revokes its own pending invite. */
 export async function declineTeamInvite({
   db,
   env,
@@ -212,7 +200,6 @@ export async function declineTeamInvite({
     ),
   ]);
 
-  // Accepted (in another tab, say) or revoked between the read and the write.
   if (batchWriteMissed(results[0])) {
     return inviteNotFound();
   }
@@ -220,13 +207,6 @@ export async function declineTeamInvite({
   return json({ success: true });
 }
 
-/**
- * POST /api/teams/:teamId/leave: an active non-owner member removes their own
- * membership. The row is deleted rather than disabled so a manager cannot
- * silently re-activate someone who left; rejoining takes a new invite. The
- * pending invites they created are revoked, since an invite carries its
- * inviter's authority and rejoining must not bring them back.
- */
 export async function leaveTeam({
   db,
   memberId,
@@ -280,17 +260,12 @@ export async function leaveTeam({
         guard: stillLeavable(),
       })),
   );
-  // A deleted row leaves nothing to check afterwards, so the audit insert and
-  // the invite revokes run first with the delete's own condition. A batch is one
-  // transaction, so every statement sees the same row: nothing is recorded or
-  // revoked unless the delete lands.
   const results = await db.batch([
     insertAuditEventWhere(db, auditEvent, stillLeavable()),
     ...inviteRevocations.flat(),
     db.delete(team_members).where(leavableMembership()),
   ]);
 
-  // Ownership moved to this member, or they left in another tab, after the read.
   if (batchWriteMissed(results[results.length - 1])) {
     return jsonError("Your membership changed. Reload the page and try again.", 409, {
       code: "membership_changed",

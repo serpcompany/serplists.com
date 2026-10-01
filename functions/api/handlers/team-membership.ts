@@ -1,7 +1,3 @@
-// Organization owner transfer and member updates (PUT /api/teams/:teamId/owner and
-// PUT /api/teams/:teamId/members/:memberId). Each write re-checks its preconditions in
-// SQL, so a concurrent transfer, disable, or role change cannot leave an Organization
-// without exactly one active owner; the route returns 409 when its write lost the race.
 import { and, eq, exists, inArray, isNull, ne, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
@@ -98,9 +94,6 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
     createdAt: now,
   });
 
-  // Demote first: the partial unique index allows at most one active owner per statement.
-  // The promotion runs only if this request's demotion happened, and the billing owner and
-  // audit event only if this request's promotion happened (`updated_at = now` marks both).
   const target = alias(team_members, "target_member");
   const previousOwner = alias(team_members, "previous_owner");
   const activeOwner = alias(team_members, "active_owner");
@@ -176,7 +169,6 @@ export async function transferTeamOwnership(context: TeamRouteContext, body: unk
   ]);
 
   if (batchWriteMissed(promoteResult)) {
-    // A repeated request for a transfer that already happened is not a conflict.
     const [currentOwner] = await db
       .select({ id: team_members.id })
       .from(team_members)
@@ -258,8 +250,6 @@ export async function updateTeamMember(
     createdAt: now,
   });
 
-  // Re-check in SQL what the SELECT above checked: the row is still not the owner (a
-  // transfer may have promoted it) and the actor still manages this Organization.
   const actor = alias(team_members, "actor_member");
   const updated = alias(team_members, "updated_member");
   const actorManagesTeam = exists(
@@ -283,12 +273,8 @@ export async function updateTeamMember(
     ),
   );
 
-  // A status change settles access, so revoke pending invites for the member's email: an
-  // invite made while they were disabled must not re-enable them after a later disable.
   const statusChanged = typeof parsed.data.status !== "undefined" && parsed.data.status !== targetMember.status;
   const staleInvites = statusChanged ? await selectPendingInvitesForUser(db, teamId, targetMember.user_id, now) : [];
-  // A manager who is disabled or drops below admin can no longer grant access, so the
-  // invites they created are revoked too. Re-enabling or re-promoting does not restore them.
   const nextStatus = parsed.data.status ?? targetMember.status;
   const nextRole = normalizeTeamRole(parsed.data.role ?? targetMember.role);
   const inviterLosesAccess = targetMember.status === "active"

@@ -1533,7 +1533,7 @@ describe("Teams handler", () => {
     expect(data.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  it("renames an Organization whose stored slug predates the slug bounds", async () => {
+  it("renames an Organization whose stored slug predates the slug bounds, checking the slug only when the settings form changes it", async () => {
     const storedSlug = `${"a".repeat(120)}-abcd1234`;
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([

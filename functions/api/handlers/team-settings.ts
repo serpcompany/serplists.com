@@ -9,8 +9,6 @@ import { json, jsonError } from "../utils/response";
 import { findHiddenShareLinkActors, HIDDEN_ACTOR } from "../utils/share-link-actors";
 import type { TeamRouteContext } from "./team-membership";
 
-// Settings resends the stored slug, which can predate today's slug rules, so the slug is
-// checked against teamSlugSchema only when it changes.
 const updateTeamBodySchema = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
@@ -70,8 +68,8 @@ export async function updateTeamSettings(
   }
 
   const membershipSummary = { id: membership.id, role, status: membership.status };
-  if (Object.keys(updates).length === 1) {
-    // Saving the current values (for example, after trimming) changes nothing to write or audit.
+  const changesNothing = updates.name === undefined && updates.slug === undefined;
+  if (changesNothing) {
     return json({ success: true, team: { ...team, membership: membershipSummary } });
   }
 
@@ -92,7 +90,6 @@ export async function updateTeamSettings(
       db.insert(audit_events).values(auditEvent),
     ]);
   } catch (error) {
-    // Another Organization can save the same slug between the check above and this write.
     if (updates.slug && isTeamSlugUniqueViolation(error)) {
       return teamSlugInUseError();
     }

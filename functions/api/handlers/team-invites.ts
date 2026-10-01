@@ -13,7 +13,6 @@ import { json, jsonError } from "../utils/response";
 type Db = ReturnType<typeof createDb>;
 
 const inviteTeamMemberBodySchema = z.object({
-  // Stored lowercase so invite lookups can use plain equality on the email index.
   email: z.string().trim().toLowerCase().email().max(320),
   role: z.enum(["admin", "editor", "runner", "viewer"]).default("viewer"),
 });
@@ -53,7 +52,6 @@ export async function listTeamInvites({ db, teamId }: { db: Db; teamId: string }
         isNull(team_invites.accepted_at),
         isNull(team_invites.revoked_at),
         gt(team_invites.expires_at, now),
-        // Like accept: an invite whose inviter no longer manages the Organization is gone.
         activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
       ),
     )
@@ -106,7 +104,6 @@ export async function createTeamInvite(
         isNull(team_invites.accepted_at),
         isNull(team_invites.revoked_at),
         gt(team_invites.expires_at, now),
-        // An invite that can no longer be accepted must not block a new one.
         activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
       ),
     )
@@ -206,8 +203,6 @@ export async function revokeTeamInvite(
     return jsonError("Invite not found", 404);
   }
 
-  // The invite can be accepted or revoked by someone else before this batch runs; the
-  // revoke and its audit event then do nothing, and the response says what happened.
   const [revoke, revokeAudit] = await buildInviteRevocation({
     db,
     invite: { ...invite, id: inviteId },

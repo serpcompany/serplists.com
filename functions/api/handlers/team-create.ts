@@ -1,7 +1,3 @@
-// Organization creation (POST /api/teams). The slug is checked with a SELECT and written
-// in a later batch, so another request can take it in between. idx_teams_slug_unique then
-// fails the batch, which D1 rolls back as a whole: a slug derived from the name is retried
-// with a new suffix, and a slug the caller asked for is refused with 409.
 import { z } from "zod";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "../utils/audit";
@@ -37,8 +33,6 @@ export async function createTeam(
 
   const now = new Date().toISOString();
   const teamId = crypto.randomUUID();
-  // A slug the caller typed is used as given or refused, like PUT; only a slug derived
-  // from the name gets a suffix when taken.
   const requestedSlug = parsed.data.slug;
   if (requestedSlug && (await isTeamSlugTaken(db, requestedSlug))) {
     return teamSlugInUseError();
@@ -69,7 +63,6 @@ export async function createTeam(
       updated_at: now,
       archived_at: null,
     };
-    // Rebuilt on every attempt so the audit row records the slug that was written.
     const auditEvent = await buildAuditEventValues({
       actorUserId: userId,
       subject: { type: "team", id: teamId },
@@ -92,7 +85,6 @@ export async function createTeam(
       if (attempt >= MAX_CREATE_ATTEMPTS) {
         return jsonError("Could not reserve an Organization slug. Try again.", 409, { code: "team_slug_exists" });
       }
-      // The failed batch wrote nothing, so the same ids are reused with a new random suffix.
       slug = suffixTeamSlug(base, crypto.randomUUID().slice(0, 8));
       continue;
     }

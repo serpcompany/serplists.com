@@ -21,14 +21,11 @@ function pendingInviteWhere(db: ReturnType<typeof createDb>, invite: TeamInvite,
 
   return and(
     eq(team_invites.id, invite.id),
-    // The invite as read: a new link made meanwhile (a new token, maybe a new role) leaves
-    // it unaccepted, so neither the old link nor the old role is ever applied.
     eq(team_invites.token_hash, invite.token_hash),
     eq(team_invites.role, invite.role),
     isNull(team_invites.accepted_at),
     isNull(team_invites.revoked_at),
     gt(team_invites.expires_at, now),
-    // An inviter disabled or demoted after the checks below leaves the invite unaccepted.
     activeTeamManagerExists(db, invite.team_id, invite.invited_by_user_id),
   );
 }
@@ -107,8 +104,6 @@ export async function acceptTeamInviteRecord({
     return jsonError("Invite not found", 404);
   }
 
-  // An invite carries its inviter's authority: once they no longer manage the Organization,
-  // it is treated like a revoked invite.
   const inviterMembership = await getActiveTeamMembership(env, invite.team_id, invite.invited_by_user_id);
   if (!inviterMembership || !canManageTeam(normalizeTeamRole(inviterMembership.role))) {
     return jsonError("Invite not found", 404);
@@ -120,9 +115,6 @@ export async function acceptTeamInviteRecord({
 
   const now = new Date().toISOString();
 
-  // An active member has nothing to accept. Applying the invite's role would override the
-  // role an admin last chose, and consuming it would report a role that never applied, so
-  // refuse it and revoke it; it can only be left over from a race or older data.
   if (existingMembership?.status === "active") {
     const [revoke, revokeAudit] = await buildInviteRevocation({
       db,
@@ -158,7 +150,6 @@ export async function acceptTeamInviteRecord({
   });
 
   if (existingMembership) {
-    // A disabled member rejoins with the invite's role.
     await db.batch([
       db.update(team_invites).set(inviteUpdates).where(pendingInviteWhere(db, pendingInvite, now)),
       db.update(team_members).set({
@@ -278,7 +269,6 @@ export async function listIncomingTeamInvites({ db, env, userId }: { db: Db; env
         isNotNull(teams.id),
         isNull(teams.archived_at),
         activeTeamManagerExists(db, team_invites.team_id, team_invites.invited_by_user_id),
-        // Nothing to accept in an Organization the user is already an active member of.
         not(activeTeamMemberExists(db, team_invites.team_id, userId)),
       ),
     )
