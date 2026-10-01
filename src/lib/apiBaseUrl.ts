@@ -1,6 +1,5 @@
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '::1', '[::1]', '0.0.0.0']);
 
-/** localhost, *.localhost, 127.0.0.0/8, ::1, and 0.0.0.0. */
 export const isLoopbackHostname = (hostname: string): boolean => {
   const host = hostname.toLowerCase().replace(/\.$/, '');
   return (
@@ -18,13 +17,6 @@ export const isLoopbackUrl = (value: string): boolean => {
   }
 };
 
-/**
- * The API base URL for this bundle: the same-origin `/api`, where the Next.js app serves the
- * API in development and in every deployment, unless NEXT_PUBLIC_API_URL names another API. A
- * loopback NEXT_PUBLIC_API_URL is honored only when the page itself is served from a loopback
- * host, so a bundle built on a developer machine never sends a deployed site's traffic to the
- * visitor's own localhost.
- */
 export const resolveApiBaseUrl = ({
   configuredUrl,
   pageHostname,
@@ -39,6 +31,5 @@ export const resolveApiBaseUrl = ({
   return configuredUrl;
 };
 
-/** The origin Better Auth talks to: the API's own origin, or the page's for `/api`. */
 export const resolveApiServerOrigin = (apiBaseUrl: string, getPageOrigin: () => string): string =>
   /^https?:\/\//i.test(apiBaseUrl) ? new URL(apiBaseUrl).origin : getPageOrigin();

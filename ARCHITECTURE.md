@@ -4,7 +4,8 @@ SERP Lists is a Next.js app (`src/`) that runs on Cloudflare Workers through Ope
 The same Worker serves the pages and the API (`functions/api/`, run by the route handler
 `src/app/api/[[...route]]/route.ts`), backed by D1 (SQL) and R2 (files). This page is the
 top-level map. Request flow, routes, and the data model are in the
-[system overview](docs/design-docs/system-overview.md); product terms are defined in
+[system overview](docs/design-docs/system-overview.md); how the app calls the API and caches
+what it reads is in [client data](docs/design-docs/client-data.md); product terms are defined in
 [PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md); the current tables are in
 [generated/db-schema.md](docs/generated/db-schema.md).
 

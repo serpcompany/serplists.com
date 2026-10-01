@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveApiBaseUrl, resolveApiServerOrigin } from '@/lib/apiBaseUrl';
+import { isLoopbackHostname, resolveApiBaseUrl, resolveApiServerOrigin } from '@/lib/apiBaseUrl';
 
 // The app serves the API on its own origin (/api), in development and in every deployment.
 // NEXT_PUBLIC_API_URL can name another API; a loopback one only counts on a loopback page, so
@@ -27,5 +27,18 @@ describe('resolveApiServerOrigin', () => {
       'http://localhost:9788',
     );
     expect(resolveApiServerOrigin('/api', () => 'https://serplists.com')).toBe('https://serplists.com');
+  });
+});
+
+describe('isLoopbackHostname', () => {
+  it.each(['localhost', 'LOCALHOST.', 'app.localhost', '127.0.0.1', '127.8.9.10', '::1', '[::1]', '0.0.0.0'])(
+    'treats %s as this machine',
+    (hostname) => {
+      expect(isLoopbackHostname(hostname)).toBe(true);
+    },
+  );
+
+  it.each(['serplists.com', 'localhost.example.com', '128.0.0.1', '10.0.0.1'])('treats %s as another host', (hostname) => {
+    expect(isLoopbackHostname(hostname)).toBe(false);
   });
 });

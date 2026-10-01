@@ -8,6 +8,9 @@ export type ChecklistRunHistoryResponse = {
   events: TemplateHistoryEvent[];
 };
 
+const isPositiveWholeNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value > 0;
+
 export const runsApi = {
   async getChecklists(params?: { teamId?: string }) {
     const search = new URLSearchParams();
@@ -27,11 +30,9 @@ export const runsApi = {
     return apiRequest(`/checklists/${encodeURIComponent(id)}`);
   },
 
-  // Asks for the events the Changelog shows (HISTORY_DISPLAY_LIMIT) unless a caller passes
-  // another positive whole number; the API's own default is 50.
   async getChecklistHistory(id: string, params?: { limit?: number }): Promise<ChecklistRunHistoryResponse> {
     const limit = params?.limit;
-    const count = typeof limit === 'number' && Number.isInteger(limit) && limit > 0 ? limit : HISTORY_DISPLAY_LIMIT;
+    const count = isPositiveWholeNumber(limit) ? limit : HISTORY_DISPLAY_LIMIT;
     return apiRequest(`/checklists/${encodeURIComponent(id)}/history?limit=${count}`);
   },
 
@@ -56,7 +57,6 @@ export const runsApi = {
     });
   },
 
-  /** Stops sharing a run: its share link stops working and the run becomes private. */
   async revokeChecklistRunShare(runId: string): Promise<{ id: string; isPublic: false }> {
     return apiRequest(`/checklists/run/${encodeURIComponent(runId)}/share`, {
       method: 'DELETE',

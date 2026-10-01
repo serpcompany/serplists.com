@@ -160,6 +160,9 @@ let it ask, so the user is asked once.
 
 ## Data and state
 
+How the API client reports errors, and how cached data is keyed and refreshed after a
+write: [client data](design-docs/client-data.md).
+
 - `src/lib/api/request.ts` handles the base URL, JSON, and structured errors, and sends the
   Better Auth session cookie with `credentials: 'include'`. It never stores tokens.
   Responses are not yet parsed with Zod (TD-2 in the

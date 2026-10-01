@@ -26,8 +26,6 @@ export const accountApi = {
     return apiRequest('/agent-keys');
   },
 
-  // The MCP endpoint the server accepts for this deployment, which can differ from the
-  // page's own origin (see getAgentMcpEndpoint, the fallback until this loads).
   async getAgentMcpConnection(): Promise<AgentMcpConnection> {
     return agentMcpConnectionSchema.parse(await apiRequest('/agent-keys/connection'));
   },

@@ -17,7 +17,7 @@ export type TemplateHistoryVersion = {
   action: string;
   contentHash?: string | null;
   createdAt: string;
-  metadata?: unknown; // the metadata of the audit event its write recorded, as on events
+  metadata?: unknown;
   actor: TemplateHistoryActor;
 };
 
@@ -30,8 +30,6 @@ export type TemplateHistoryEvent = {
   actor: TemplateHistoryActor;
 };
 
-// PUT /api/templates/:id. Only a checklist-structure change bumps content_version and
-// reconciles active private runs; version advances for any stored change, visibility included.
 export type TemplateUpdateResponse = {
   success: boolean;
   slug?: string;
@@ -142,8 +140,6 @@ export const templatesApi = {
     });
   },
 
-  // Exports the active context's own templates. The page adds public templates from the
-  // catalog it already loaded (src/lib/templates/portableExport.ts).
   async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null }) {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);

@@ -95,6 +95,8 @@ export type TeamDetail = {
   membership: { id: string; role: TeamRole; status: TeamMemberStatus };
 };
 
+const ORGANIZATION_SETTINGS_ACTIVITY_SHOWN = 10;
+
 export const teamsApi = {
   async getTeams(): Promise<TeamSummary[]> {
     return apiRequest('/teams');
@@ -126,8 +128,7 @@ export const teamsApi = {
     return apiRequest(`/teams/${encodeURIComponent(teamId)}/invites`);
   },
 
-  // Organization settings shows this many recent events; request no more than that.
-  async getTeamActivity(teamId: string, limit = 10): Promise<TeamActivityEvent[]> {
+  async getTeamActivity(teamId: string, limit = ORGANIZATION_SETTINGS_ACTIVITY_SHOWN): Promise<TeamActivityEvent[]> {
     const search = new URLSearchParams({ limit: String(limit) });
     return apiRequest(`/teams/${encodeURIComponent(teamId)}/activity?${search.toString()}`);
   },
@@ -147,7 +148,6 @@ export const teamsApi = {
     return createdTeamInviteSchema.parse(invite);
   },
 
-  /** Replaces a pending invite's link; the previous link stops working. */
   async reissueTeamInviteLink(
     teamId: string,
     inviteId: string,

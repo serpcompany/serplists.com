@@ -46,8 +46,6 @@ export const getApiErrorMessage = (error: unknown, fallbackMessage: string): str
   return error instanceof Error && error.message ? error.message : fallbackMessage;
 };
 
-// A settled "does not exist" answer: the API returns 404 for a missing, deleted or private
-// resource. Anything else (network failure, 5xx, rate limit) may be transient.
 export const isNotFoundError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 404;
 };
@@ -58,33 +56,26 @@ export const isAuthRequiredError = (error: unknown): error is ApiError => {
 
 export type LimitContext = "personal" | "organization";
 
-// `details` of a 403 limit_reached response. `context` names whose limit was hit: a Personal
-// Pro plan never lifts an Organization's limit, so only a Personal limit may lead to checkout.
 const limitReachedDetailsSchema = z.object({
   context: z.enum(["personal", "organization"]),
 });
 
-/** The context of a limit_reached error, or null when the response did not name a valid one. */
 export const getLimitContext = (error: ApiError): LimitContext | null => {
   const parsed = limitReachedDetailsSchema.safeParse(error.details);
   return parsed.success ? parsed.data.context : null;
 };
+
+const isPersonalLimitReached = (error: ApiError): boolean =>
+  error.code === "limit_reached" && getLimitContext(error) !== "organization";
 
 export const isUpgradeRequiredError = (error: unknown): error is ApiError => {
   if (!isApiError(error) || error.status !== 403) {
     return false;
   }
 
-  if (error.code === "upgrade_required") {
-    return true;
-  }
-
-  // An Organization limit is not something a Personal Pro checkout can fix, so it is a plain
-  // error carrying the server's message. A missing context keeps the old Personal behavior.
-  return error.code === "limit_reached" && getLimitContext(error) !== "organization";
+  return error.code === "upgrade_required" || isPersonalLimitReached(error);
 };
 
-// A template or run changed after the editor loaded it.
 export const isEditConflictError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 409 && error.code === "edit_conflict";
 };
@@ -93,25 +84,16 @@ export const isBillingUnavailableError = (error: unknown): error is ApiError => 
   return isApiError(error) && error.code === "billing_unavailable";
 };
 
-/** Checkout refused because an open subscription must be fixed in the Customer Portal. */
 export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
 };
 
-/**
- * Checkout refused because the user already has a subscription. Checkout also asks
- * Stripe, so it can find one the displayed billing status does not show yet.
- */
 export const isOpenSubscriptionConflictError = (error: unknown): error is ApiError => {
   return isApiError(error)
     && error.status === 409
     && (error.code === "already_subscribed" || error.code === "subscription_needs_attention");
 };
 
-/**
- * The Customer Portal refused because Stripe no longer has the billing account. The
- * API replaced it, so refetched billing status offers Upgrade instead of the portal.
- */
 export const isBillingCustomerMissingError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 409 && error.code === "billing_customer_missing";
 };
