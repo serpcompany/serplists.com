@@ -42,8 +42,6 @@ export const AvatarUpload = ({
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
     const file = input.files?.[0];
-    // A file input fires no change event when the same file is picked again, so it is
-    // cleared at once (the File is already held) and every attempt below can be retried.
     input.value = "";
     if (!file || !user) return;
 
@@ -52,7 +50,6 @@ export const AvatarUpload = ({
       return;
     }
 
-    // Validate file size (the API enforces the same limit)
     if (file.size > UPLOAD_MAX_BYTES.avatars) {
       toast.error(`File size must be less than ${formatUploadLimit(UPLOAD_MAX_BYTES.avatars)}`);
       return;
@@ -62,16 +59,13 @@ export const AvatarUpload = ({
 
     try {
       const upload = await uploadAvatar(file);
-      // authClient resolves with { error } on HTTP failures (429, 5xx) rather than throwing.
       const result = await authClient.updateUser({ image: upload.url });
       if (result?.error) {
-        // The account still uses the current avatar: keep it, and drop the new file.
         await deleteUploadedAsset(upload.url);
         toast.error(result.error.message || "Failed to update avatar. Please try again.");
         return;
       }
 
-      // Only now does nothing use the old file.
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
       }
@@ -79,8 +73,6 @@ export const AvatarUpload = ({
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {
-      // A thrown update (network failure) may still have been applied, so no file is
-      // deleted here: never the current avatar, and not the new upload either.
       console.error('Error uploading avatar:', error);
       toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {

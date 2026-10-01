@@ -1,16 +1,12 @@
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
 
 export type ChangelogEntry = {
-  // Who made the change.
   actor: string;
   key: string;
   label: string;
-  // When, as the page formats it.
   time: string;
 };
 
-// History rows, newest first: what changed and who changed it, with the time on the right
-// (under them on phones).
 export function ChangelogRows({ entries }: { entries: ChangelogEntry[] }) {
   return (
     <ItemGroup className="gap-0 divide-y">
@@ -38,8 +34,6 @@ type ChangelogListProps = {
   loadingLabel: string;
 };
 
-// A record's history with its loading, error and empty lines: template detail's and the run
-// page's Changelog.
 export function ChangelogList({
   emptyLabel,
   entries,

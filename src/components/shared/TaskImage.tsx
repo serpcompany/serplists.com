@@ -9,8 +9,6 @@ interface TaskImageViewProps {
   src: string | null;
 }
 
-// onError only reports the failure. Setting src from the handler would start a new
-// load, and a fallback that fails too would then reload forever.
 export const TaskImageView: React.FC<TaskImageViewProps> = ({ alt, onFail, src }) => {
   if (!src) {
     return (

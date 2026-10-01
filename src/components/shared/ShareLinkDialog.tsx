@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/input-group';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
-// A Run's share link: what anyone who has it may do (functions/api/handlers/checklists-shared.ts).
 export const RUN_SHARE_LINK_DESCRIPTION =
   'Anyone with this link can open this Run without signing in, tick its tasks, add notes and complete it.';
 
@@ -28,9 +27,6 @@ type ShareLinkFieldProps = {
   url: string;
 };
 
-// Shows a created share link with a Copy button in the field (a shadcn InputGroup). The copy
-// runs straight from the click, which Safari requires, and the link stays visible if the
-// browser refuses the copy.
 export function ShareLinkField({ copiedMessage, url }: ShareLinkFieldProps) {
   const inputId = useId();
 

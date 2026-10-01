@@ -10,15 +10,11 @@ import { getEmbedLinkUrl } from '@/lib/utils/embedLink';
 import { hasCurrentFileInfo } from '@/lib/utils/mediaSource';
 import { safeUrl } from '@/lib/utils/safeUrl';
 
-// A file's name, unless it was left over from an upload the value no longer points to.
 const fileLabel = (content: ChecklistItemContent): string | undefined =>
   hasCurrentFileInfo(content) ? content.fileName : undefined;
 
 type LooseRecord = Record<string, unknown>;
 
-// Callers pass content already made safe by normalizeSections; this keeps one malformed
-// block from breaking the page if one slips through. Indexes are kept, since Sub-task
-// toggles address blocks and Sub-tasks by position.
 const toRenderableContent = (content: unknown): ChecklistItemContent => {
   const record: LooseRecord = typeof content === 'object' && content !== null ? (content as LooseRecord) : {};
   return {
@@ -38,8 +34,6 @@ interface ContentRendererProps {
   contents: ChecklistItemContent[];
   disabled?: boolean;
   onSubItemToggle?: (contentIndex: number, subItemIndex: number, isCompleted: boolean) => void;
-  // The "Sub-tasks" heading's level: one below the task's own heading, or below the section
-  // the task is listed in when the task has none.
   subtaskHeadingAs?: 'h3' | 'h4';
 }
 

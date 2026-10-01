@@ -1,9 +1,10 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import type { ChecklistItemContent } from '@/types/checklist';
+import { findElement } from '../../support/elementTree';
 
 describe('ContentRenderer accessibility', () => {
   it('renders malformed stored content without throwing', () => {
@@ -15,6 +16,21 @@ describe('ContentRenderer accessibility', () => {
     ] as unknown as ChecklistItemContent[];
 
     expect(() => renderToStaticMarkup(<ContentRenderer contents={contents} />)).not.toThrow();
+  });
+
+  it('reports a Sub-task toggle by the stored positions of its block and Sub-task, malformed blocks before it included, since saves address them by position', () => {
+    const onSubItemToggle = vi.fn();
+    const contents = [
+      null,
+      { type: 'text', value: {} },
+      { id: 'steps', type: 'subItems', value: '', subItems: [{ id: 'first', title: 'First' }, { id: 'second', title: 'Second' }] },
+    ] as unknown as ChecklistItemContent[];
+
+    const rendered = ContentRenderer({ contents, onSubItemToggle });
+    const second = findElement(rendered, (element) => element.props['aria-label'] === 'Second');
+    (second?.props.onCheckedChange as () => void)();
+
+    expect(onSubItemToggle).toHaveBeenCalledWith(2, 1, true);
   });
 
   const renderText = (value: string) =>

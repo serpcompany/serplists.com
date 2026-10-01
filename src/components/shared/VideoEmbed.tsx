@@ -24,20 +24,15 @@ const OpenVideoLink: React.FC<{ url: string }> = ({ url }) => (
   </div>
 );
 
-// HTMLMediaElement.HAVE_NOTHING: the player has not loaded anything of the video yet.
-const HAVE_NOTHING = 0;
+const READY_STATE_HAVE_NOTHING = 0;
 
 interface NativeVideoViewProps {
   className?: string;
-  // The player could not load this URL.
   failed: boolean;
   onFail: () => void;
   url: string;
 }
 
-// A URL the player cannot load (a video page such as Vimeo or Loom, a missing file)
-// becomes a link to it. An error after the video loaded (a dropped connection while it
-// plays) keeps the player. onError only reports the failure, as TaskImage's does.
 export const NativeVideoView: React.FC<NativeVideoViewProps> = ({
   className = DEFAULT_CLASS_NAME,
   failed,
@@ -46,8 +41,6 @@ export const NativeVideoView: React.FC<NativeVideoViewProps> = ({
 }) => {
   if (failed) return <OpenVideoLink url={url} />;
 
-  // The URL goes on the player itself and keys it: a player reads a <source> child only
-  // once, so a new URL there (the next task's video, a URL being typed) would never load.
   return (
     <video
       key={url}
@@ -55,7 +48,7 @@ export const NativeVideoView: React.FC<NativeVideoViewProps> = ({
       className={className}
       controls
       onError={(event) => {
-        if (event.currentTarget.readyState === HAVE_NOTHING) onFail();
+        if (event.currentTarget.readyState === READY_STATE_HAVE_NOTHING) onFail();
       }}
       preload="metadata"
     >
@@ -69,7 +62,6 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
   title = "Embedded video",
   className = DEFAULT_CLASS_NAME
 }) => {
-  // The URL whose native player failed; a new URL gets a player again.
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const source = getVideoEmbedSource(url);
   
@@ -97,7 +89,6 @@ export const VideoEmbed: React.FC<VideoEmbedProps> = ({
   }
 
   if (source?.kind === 'link') {
-    // Embed code from an origin the Content-Security-Policy does not frame.
     return <OpenVideoLink url={source.url} />;
   }
 

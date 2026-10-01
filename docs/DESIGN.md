@@ -28,7 +28,8 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   around inline code and the bullets on task lists. Those rules sit outside any `@layer`,
   so they win over the typography plugin's own. Single newlines stay line breaks
   (`whitespace-pre-line`); `src/lib/utils/markdownWhitespace.ts` removes the newlines
-  between blocks that would otherwise show as blank lines.
+  between blocks that would otherwise show as blank lines. A long word or URL wraps
+  (`wrap-break-word`) instead of widening the page.
 - **Themes:** light (default) and dark, stored under `serplists-theme` and applied
   as the `dark` class on `<html>` (`src/lib/theme.ts`). A change in one tab applies to
   the page in every open tab. Components follow the theme with `subscribeToThemeChanges`,

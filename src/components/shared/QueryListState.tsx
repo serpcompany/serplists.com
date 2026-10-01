@@ -11,7 +11,6 @@ type QueryErrorNoticeProps = {
   onRetry: () => void;
 };
 
-// A request that failed, as a destructive shadcn Alert with Retry.
 export function QueryErrorNotice({ className, message, onRetry }: QueryErrorNoticeProps) {
   return (
     <Alert className={className} variant="destructive">
@@ -27,7 +26,6 @@ export function QueryErrorNotice({ className, message, onRetry }: QueryErrorNoti
 }
 
 type QueryListStateProps = {
-  // The rendered list, shown only once the query has loaded a non-empty list.
   children: ReactNode;
   empty: ReactNode;
   loadErrorLabel: string;
@@ -37,8 +35,6 @@ type QueryListStateProps = {
   onRetry: () => void;
 };
 
-// Renders a query-backed list: loading, a load error with Retry, the empty state only
-// for a loaded empty list, or the list. A failed refresh keeps the last loaded list.
 export function QueryListState({
   children,
   empty,
