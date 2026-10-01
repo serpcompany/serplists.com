@@ -10,6 +10,7 @@ import {
 import {
   buildUpdateTemplateBody,
   computeDatasetKey,
+  d1QueryRecordIn,
   evaluateScenarioResults,
   formatStatus,
   readSnapshotMeta,
@@ -19,17 +20,11 @@ import {
   scenarios,
 } from '../../../scripts/d1-profile-lib';
 
-// `d1:profile -- --reuse` used to replay the workload on the data the previous run had
-// already changed: the template update appended a second "s-profiled" section (400
-// "Duplicate section id"), john's Free-plan start run hit the 3-run limit (403), and
-// the script recorded those error paths as cheaper requests and exited 0.
-
 const syntheticSections = [
   { id: 's1', title: 'Section', items: [{ id: 'i1', title: 'Task one' }, { id: 'i2', title: 'Task two' }] },
 ];
 
-// What the PUT handler does with the body: keep stored ids, then reject duplicates.
-function applyTemplateUpdate(stored: unknown[], nonce: string) {
+function applyAsThePutHandlerDoes(stored: unknown[], nonce: string) {
   const body = buildUpdateTemplateBody({ sections: stored, version: 1 }, nonce);
   const next = assignMissingStableTemplateIdentities(body.sections, stored);
   return { next, error: validateStableTemplateIdentities(next) };
@@ -37,14 +32,14 @@ function applyTemplateUpdate(stored: unknown[], nonce: string) {
 
 describe('buildUpdateTemplateBody', () => {
   it('builds a valid update on every reuse, with a stable section count', () => {
-    const first = applyTemplateUpdate(syntheticSections, 'a1');
+    const first = applyAsThePutHandlerDoes(syntheticSections, 'a1');
     expect(first.error).toBeNull();
 
-    const second = applyTemplateUpdate(first.next, 'b2');
+    const second = applyAsThePutHandlerDoes(first.next, 'b2');
     expect(second.error).toBeNull();
     expect(second.next).toHaveLength(first.next.length);
 
-    const third = applyTemplateUpdate(second.next, 'c3');
+    const third = applyAsThePutHandlerDoes(second.next, 'c3');
     expect(third.error).toBeNull();
     expect(third.next.map((section) => section.id)).toEqual(['s1', 's-profiled-c3']);
   });
@@ -66,15 +61,14 @@ describe('buildUpdateTemplateBody', () => {
 });
 
 describe('scenario status check', () => {
-  it('gives every scenario an expected status', () => {
+  it('expects 200 from every scenario but the unpublished sitemap pages, profiled for the cost of their 404 guard', () => {
     for (const scenario of scenarios()) {
-      // Unpublished sitemap shard pages are profiled on purpose: their cost is the 404 guard.
       const expected = scenario.name.includes('(unpublished page)') ? 404 : 200;
       expect(scenario.expectedStatus, scenario.name).toBe(expected);
     }
   });
 
-  it('fails the profile when a scenario measures an error path', () => {
+  it('fails the profile when a scenario measures an error path, rather than report a cost drop', () => {
     const update = { name: 'update template (reconciles runs)', expectedStatus: 200 };
     const freeRun = { name: 'start run (Free plan, counts active runs)', expectedStatus: 200 };
     const catalog = { name: 'public catalog', expectedStatus: 200 };
@@ -93,6 +87,22 @@ describe('scenario status check', () => {
     expect(formatStatus({ scenario: update, status: 400 })).toBe('INVALID (expected 200, got 400)');
     expect(formatStatus({ scenario: catalog, status: 200 })).toBe('200');
     expect(evaluateScenarioResults([{ scenario: catalog, status: 200 }])).toEqual({ failures: [], exitCode: 0 });
+  });
+});
+
+describe('d1QueryRecordIn', () => {
+  const record = { sql: 'select 1', rowsRead: 3, rowsWritten: 0, rowsReturned: 1, durationMs: 2 };
+
+  it('reads a d1_query record from a server output line, whatever the line starts with', () => {
+    const line = `[wrangler:info] ${JSON.stringify({ level: 'info', message: 'd1_query', requestId: 'r1', ...record })}`;
+    expect(d1QueryRecordIn(line)).toEqual({ level: 'info', message: 'd1_query', requestId: 'r1', ...record });
+  });
+
+  it('skips other log lines, lines that are not JSON and records without their row counts', () => {
+    expect(d1QueryRecordIn(JSON.stringify({ level: 'info', message: 'api_request', status: 200 }))).toBeNull();
+    expect(d1QueryRecordIn('GET /api/health 200 OK')).toBeNull();
+    expect(d1QueryRecordIn('{"level":"info","message":"d1_query"')).toBeNull();
+    expect(d1QueryRecordIn(JSON.stringify({ level: 'info', message: 'd1_query', sql: 'select 1' }))).toBeNull();
   });
 });
 

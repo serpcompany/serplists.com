@@ -1,6 +1,3 @@
-// The testable parts of scripts/d1-profile.ts: the scripted workload, the request
-// bodies it builds, the status check, and the --reuse snapshot plan and file copies.
-// Kept apart so unit tests can import them without starting a profile run.
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -8,7 +5,6 @@ import { z } from "zod";
 
 export type Actor = "anon" | "admin" | "john";
 
-/** One request in the workload. A response with any other status fails the profile. */
 export type Scenario = {
   name: string;
   actor: Actor;
@@ -18,11 +14,11 @@ export type Scenario = {
   expectedStatus: number;
 };
 
-export const personalTemplate = "synthetic-template-50"; // owned by user-1, public, 301 versions
-export const organizationTemplate = "synthetic-template-40"; // owned by team-seed-growth, private
-export const publicTemplateSlug = "synthetic-template-5"; // public, user-owned (synthetic ids equal slugs)
-export const publicTemplateOwner = "synth_6"; // synthetic-user-6, the owner of synthetic-template-5
-export const adminRun = "synthetic-run-40"; // owned by user-1
+export const personalTemplate = "synthetic-template-50";
+export const organizationTemplate = "synthetic-template-40";
+export const publicTemplateSlug = "synthetic-template-5";
+export const publicTemplateOwner = "synth_6";
+export const adminRun = "synthetic-run-40";
 export const shareToken = "synthetic-share-50";
 
 export const UPDATE_TEMPLATE = "UPDATE_TEMPLATE";
@@ -35,9 +31,6 @@ export function scenarios(): Scenario[] {
     get("public catalog (GET /api/templates)", "anon", "/api/templates"),
     get("public catalog (repeat)", "anon", "/api/templates"),
     get("public template by slug", "anon", `/api/templates/slug/${publicTemplateSlug}`),
-    // Public pages look up what their <head> says while rendering on the server
-    // (src/server/pageMeta), for every visitor; a repeat is an edge-cache hit.
-    // Pages in their canonical form (with the slash): the other form is only a redirect.
     get("public template page", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}/`),
     get("public template page (repeat)", "anon", `/profile/${publicTemplateOwner}/${publicTemplateSlug}/`),
     get("public profile page", "anon", "/profile/synth_2/"),
@@ -54,7 +47,6 @@ export function scenarios(): Scenario[] {
     get("sitemap categories shard", "anon", "/sitemaps/categories/1.xml"),
     get("sitemap index (repeat)", "anon", "/sitemap.xml"),
     get("sitemap templates shard (repeat)", "anon", "/sitemaps/templates/1.xml"),
-    // Pages the index never published are refused with a one-row check, not a full scan.
     { name: "sitemap templates shard (unpublished page)", actor: "anon", path: "/sitemaps/templates/999.xml", expectedStatus: 404 },
     { name: "sitemap categories shard (unpublished page)", actor: "anon", path: "/sitemaps/categories/999.xml", expectedStatus: 404 },
     get("session lookup", "admin", "/api/auth/get-session"),
@@ -93,20 +85,41 @@ export function scenarios(): Scenario[] {
     get("member Organization templates", "john", "/api/templates?teamId=team-seed-growth"),
     get("member dashboard runs", "john", "/api/checklists"),
     {
-      // john@test.com is on the Free plan (3 active runs); the restored dataset gives him none.
       name: "start run (Free plan, counts active runs)", actor: "john", method: "POST", path: "/api/checklists", expectedStatus: 200,
       body: { template_id: publicTemplateSlug, title: "Profiled Free run", sections: [{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task one" }] }] },
     },
   ];
 }
 
-// ---------------------------------------------------------------- request bodies
 export const currentResourceSchema = z.object({
   sections: z.array(z.unknown()).optional(),
   version: z.number().optional(),
   revision: z.number().optional(),
 });
 export type CurrentResource = z.infer<typeof currentResourceSchema>;
+
+const d1QueryLineSchema = z
+  .object({
+    message: z.literal("d1_query"),
+    sql: z.string(),
+    rowsRead: z.number(),
+    rowsWritten: z.number(),
+    rowsReturned: z.number(),
+    durationMs: z.number(),
+  })
+  .passthrough();
+export type QueryRecord = z.infer<typeof d1QueryLineSchema>;
+
+export function d1QueryRecordIn(serverOutputLine: string): QueryRecord | null {
+  const start = serverOutputLine.indexOf("{\"level\"");
+  if (start < 0) return null;
+  try {
+    const parsed = d1QueryLineSchema.safeParse(JSON.parse(serverOutputLine.slice(start)));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 const PROFILED_SECTION_PREFIX = "s-profiled";
 const sectionIdSchema = z.object({ id: z.string() });
@@ -116,12 +129,6 @@ const isProfiledSection = (section: unknown) => {
   return parsed.success && parsed.data.id.startsWith(PROFILED_SECTION_PREFIX);
 };
 
-/**
- * PUT body for the template update scenarios: the current sections with any section a
- * previous profile run added removed, plus one new section. The template keeps the same
- * size run after run, the ids never repeat, and reconciliation still sees an add and
- * (after the first run) a retire.
- */
 export function buildUpdateTemplateBody(current: CurrentResource, nonce: string) {
   const kept = (current.sections ?? []).filter((section) => !isProfiledSection(section));
   return {
@@ -137,7 +144,6 @@ export function buildUpdateRunBody(current: CurrentResource) {
   return { progress: 75, expected_revision: current.revision };
 }
 
-// ---------------------------------------------------------------- status check
 export type ScenarioOutcome = { scenario: Pick<Scenario, "name" | "expectedStatus">; status: number; responseBody?: string };
 export type StatusFailure = { name: string; expected: number; actual: number; responseBody: string };
 
@@ -145,11 +151,6 @@ export function formatStatus({ scenario, status }: ScenarioOutcome): string {
   return status === scenario.expectedStatus ? String(status) : `INVALID (expected ${scenario.expectedStatus}, got ${status})`;
 }
 
-/**
- * Scenarios whose status differs from the expected one. Their rows measure an error
- * path (a 400 validation failure, a 403 plan limit), so the profile must fail rather
- * than report a cost drop.
- */
 export function evaluateScenarioResults(results: ScenarioOutcome[]): { failures: StatusFailure[]; exitCode: 0 | 1 } {
   const failures = results
     .filter(({ scenario, status }) => status !== scenario.expectedStatus)
@@ -162,20 +163,15 @@ export function evaluateScenarioResults(results: ScenarioOutcome[]): { failures:
   return { failures, exitCode: failures.length > 0 ? 1 : 0 };
 }
 
-// ---------------------------------------------------------------- --reuse plan
 export const snapshotMetaSchema = z.object({ scale: z.number(), datasetKey: z.string() });
 export type SnapshotMeta = z.infer<typeof snapshotMetaSchema>;
 
-/** Hash of everything the dataset is built from, so a stale snapshot is rebuilt. */
 export function computeDatasetKey(parts: string[]): string {
   const hash = createHash("sha256");
   for (const part of parts) hash.update(part).update("\0");
   return hash.digest("hex");
 }
 
-// A snapshot is <snapshotPath>/state (a copy of the persist dir, SQLite -wal/-shm files
-// included) plus <snapshotPath>/meta.json, which is written last so an interrupted
-// copy is never restored.
 export function readSnapshotMeta(snapshotPath: string): SnapshotMeta | null {
   const metaPath = path.join(snapshotPath, "meta.json");
   if (!existsSync(metaPath) || !existsSync(path.join(snapshotPath, "state"))) return null;
@@ -204,10 +200,6 @@ export function restoreSnapshot({ snapshotPath, statePath }: { snapshotPath: str
 
 export type DatasetPlan = { action: "rebuild" | "restore"; reason: string };
 
-/**
- * --reuse restores the pristine snapshot taken right after the last build, so every
- * run replays the workload on the same data. Without a matching snapshot it rebuilds.
- */
 export function resolveDatasetPlan({ reuse, snapshot, scale, datasetKey }: {
   reuse: boolean;
   snapshot: SnapshotMeta | null;

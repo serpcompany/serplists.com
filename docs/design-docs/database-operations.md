@@ -41,9 +41,10 @@ binding with `--preview`; do not change them to use the database name directly.
 After changing either contract, run `pnpm run check:db:drizzle-parity` (CI runs it
 too). It replays every migration into a temporary local database, generates the
 Drizzle baseline into a second one, and compares their catalogs. It never touches
-staging or production. It reads each catalog in `UNION ALL` queries of at most five
-SELECTs: D1 refuses a compound SELECT with more terms ("too many terms in compound
-SELECT"). Trigger definitions are compared, and recorded in `db/sql-only-schema.json`,
+staging or production. D1 refuses a compound SELECT of more than five terms ("too many
+terms in compound SELECT"), so the check reads each catalog in `UNION ALL` queries of at
+most five SELECTs, and `d1:profile` counts its tables with one scalar subquery each.
+Trigger definitions are compared, and recorded in `db/sql-only-schema.json`,
 with quotes, backticks and runs of whitespace dropped, so a formatting change is not
 drift; the remote schema check below normalizes them the same way.
 

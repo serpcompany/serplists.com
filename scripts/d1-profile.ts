@@ -1,15 +1,3 @@
-// Profiles D1 cost (rows read and written) per API request on a large synthetic dataset.
-//   pnpm run d1:profile                # default volume (about 150k rows)
-//   pnpm run d1:profile -- --scale 3   # 3x the volume
-//   pnpm run d1:profile -- --reuse     # restore the last dataset instead of rebuilding
-// Builds the app with OpenNext (the build bundles the API, so it always runs: an older build
-// would measure older queries), builds an isolated local D1 in .wrangler/d1-profile-state,
-// serves the build with `opennextjs-cloudflare preview` and D1_PROFILE=true, replays a
-// scripted workload, and writes tmp/d1-profile/report.md.
-// Local D1 reports rows_read/rows_written with production semantics (rows scanned).
-// After a build the dataset is copied to .wrangler/d1-profile-pristine; --reuse copies
-// it back, so every run replays the workload's writes on the same data. A request that
-// returns anything but its expected status is marked INVALID and fails the command.
 import type { ChildProcess } from "node:child_process";
 import { createWriteStream, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -23,8 +11,10 @@ import {
   buildUpdateTemplateBody,
   computeDatasetKey,
   currentResourceSchema,
+  d1QueryRecordIn,
   evaluateScenarioResults,
   formatStatus,
+  type QueryRecord,
   readSnapshotMeta,
   resolveDatasetPlan,
   restoreSnapshot,
@@ -44,8 +34,6 @@ const scaleArg = process.argv.indexOf("--scale");
 const scale = scaleArg >= 0 ? Number(process.argv[scaleArg + 1]) : 1;
 const reuse = process.argv.includes("--reuse");
 
-type QueryRecord = { sql: string; rowsRead: number; rowsWritten: number; rowsReturned: number; durationMs: number };
-
 const freePort = () =>
   new Promise<number>((resolve, reject) => {
     const server = createServer();
@@ -60,7 +48,6 @@ function run(tool: ToolName, args: string[]) {
   execTool(tool, args, { cwd: repoRoot, stdio: "inherit", env: { ...process.env, CI: "1" } });
 }
 
-// ---------------------------------------------------------------- dataset
 const syntheticSql = buildSyntheticSql(datasetCounts(scale));
 
 function buildDatabase() {
@@ -73,17 +60,21 @@ function buildDatabase() {
   run("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
 }
 
-// Everything the dataset is built from; a snapshot built from anything else is rebuilt.
-function datasetKey() {
+function hashOfEverythingTheDatasetIsBuiltFrom() {
   const migrationsDir = path.join(repoRoot, "db", "migrations");
   const migrations = readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort()
     .map((file) => `${file}\n${readFileSync(path.join(migrationsDir, file), "utf8")}`);
   return computeDatasetKey([...migrations, readFileSync(path.join(repoRoot, "db", "seeds", "local.ts"), "utf8"), syntheticSql]);
 }
 
-// ---------------------------------------------------------------- server + capture
-// `opennextjs-cloudflare preview` hands these to `wrangler dev` through a shell, so every
-// value here is plain (no spaces or shell characters). --var overrides .dev.vars.
+async function answersHealthCheck(origin: string) {
+  try {
+    return (await fetch(`${origin}/api/health`)).ok;
+  } catch {
+    return false;
+  }
+}
+
 async function startServer(port: number, onRecord: (record: QueryRecord) => void) {
   const origin = `http://localhost:${port}`;
   const child = spawnTool("opennextjs-cloudflare", [
@@ -100,24 +91,14 @@ async function startServer(port: number, onRecord: (record: QueryRecord) => void
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
     for (const line of lines) {
-      const start = line.indexOf("{\"level\"");
-      if (start < 0) continue;
-      try {
-        const entry = JSON.parse(line.slice(start));
-        if (entry.message === "d1_query") onRecord(entry as QueryRecord);
-      } catch {
-        // Not a JSON log line.
-      }
+      const record = d1QueryRecordIn(line);
+      if (record) onRecord(record);
     }
   };
   child.stdout?.on("data", consume);
   child.stderr?.on("data", consume);
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    try {
-      if ((await fetch(`${origin}/api/health`)).ok) return { child, base: origin };
-    } catch {
-      // Not up yet.
-    }
+    if (await answersHealthCheck(origin)) return { child, origin };
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error("API did not start");
@@ -127,8 +108,8 @@ function stop(child: ChildProcess) {
   killProcessTree(child, "SIGTERM");
 }
 
-async function signIn(base: string, origin: string, email: string): Promise<string> {
-  const response = await fetch(`${base}/api/auth/sign-in/email`, {
+async function signIn(origin: string, email: string): Promise<string> {
+  const response = await fetch(`${origin}/api/auth/sign-in/email`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: origin },
     body: JSON.stringify({ email, password: "password123" }),
@@ -139,7 +120,6 @@ async function signIn(base: string, origin: string, email: string): Promise<stri
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
 
-// ---------------------------------------------------------------- report
 const shortSql = (sql: string) => sql.replace(/\s+/g, " ").replace(/"/g, "").replace(/^select (.{0,60}?)[^()]*? from /i, "select $1… from ").slice(0, 220);
 
 async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
@@ -160,8 +140,6 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
         plans.set(sql, `(plan unavailable: ${error instanceof Error ? error.message : String(error)})`);
       }
     }
-    // One scalar subquery per table: D1 refuses a UNION ALL of six SELECTs ("too many terms
-    // in compound SELECT").
     const countedTables = ["templates", "checklist_runs", "users", "audit_events", "template_versions", "team_invites"];
     const tableCounts = await platform.env.DB.prepare(
       `SELECT ${countedTables.map((table) => `(SELECT COUNT(*) FROM ${table}) AS ${table}`).join(", ")}`,
@@ -176,7 +154,7 @@ async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
 async function main() {
   run("opennextjs-cloudflare", ["build"]);
   mkdirSync(outDir, { recursive: true });
-  const key = datasetKey();
+  const key = hashOfEverythingTheDatasetIsBuiltFrom();
   const statePath = path.join(repoRoot, persistPath);
   const plan = resolveDatasetPlan({ reuse, snapshot: reuse ? readSnapshotMeta(snapshotPath) : null, scale, datasetKey: key });
   console.log(`d1:profile: ${plan.reason}…`);
@@ -184,24 +162,22 @@ async function main() {
     restoreSnapshot({ snapshotPath, statePath });
   } else {
     buildDatabase();
-    // Before the API server starts, so nothing holds the SQLite files open.
     saveSnapshot({ statePath, snapshotPath, meta: { scale, datasetKey: key } });
   }
 
-  let current: QueryRecord[] = [];
-  const { child, base } = await startServer(await freePort(), (record) => current.push(record));
-  // Requests come from the app's own origin, as the pages' do.
-  const origin = base;
+  let recording: QueryRecord[] = [];
+  const recordFromNowOn = (): QueryRecord[] => (recording = []);
+  const { child, origin } = await startServer(await freePort(), (record) => recording.push(record));
   const results: { scenario: Scenario; status: number; responseBody?: string; queries: QueryRecord[] }[] = [];
   const nonce = Date.now().toString(36);
   try {
-    const cookies = { anon: "", admin: await signIn(base, origin, "admin@test.com"), john: await signIn(base, origin, "john@test.com") };
+    const cookies = { anon: "", admin: await signIn(origin, "admin@test.com"), john: await signIn(origin, "john@test.com") };
     for (const scenario of scenarios()) {
       await settle();
       let body = scenario.body;
       if (body === UPDATE_TEMPLATE || body === UPDATE_RUN) {
-        current = []; // Keep the setup fetch out of the previous scenario's queries.
-        const setup = await fetch(`${base}${scenario.path}`, { headers: { Cookie: cookies.admin, Origin: origin } });
+        recordFromNowOn();
+        const setup = await fetch(`${origin}${scenario.path}`, { headers: { Cookie: cookies.admin, Origin: origin } });
         if (!setup.ok) {
           throw new Error(`Setup GET ${scenario.path} for "${scenario.name}" returned ${setup.status}: ${(await setup.text()).slice(0, 500)}`);
         }
@@ -209,17 +185,17 @@ async function main() {
         body = body === UPDATE_TEMPLATE ? buildUpdateTemplateBody(currentValue, nonce) : buildUpdateRunBody(currentValue);
         await settle();
       }
-      current = [];
-      const response = await fetch(`${base}${scenario.path}`, {
+      const queries = recordFromNowOn();
+      const response = await fetch(`${origin}${scenario.path}`, {
         method: scenario.method ?? "GET",
         headers: { Cookie: cookies[scenario.actor], Origin: origin, "Content-Type": "application/json" },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       const responseText = await response.text();
       await settle();
-      const outcome = { scenario, status: response.status, queries: current };
+      const outcome = { scenario, status: response.status, queries };
       results.push(response.status === scenario.expectedStatus ? outcome : { ...outcome, responseBody: responseText.slice(0, 500) });
-      const read = current.reduce((sum, q) => sum + q.rowsRead, 0);
+      const read = queries.reduce((sum, q) => sum + q.rowsRead, 0);
       console.log(`${formatStatus(outcome).padEnd(4)} ${String(read).padStart(8)} rows read  ${scenario.name}`);
     }
   } finally {

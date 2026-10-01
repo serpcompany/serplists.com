@@ -1,6 +1,3 @@
-// The synthetic dataset scripts/d1-profile.ts profiles against, built on top of the
-// migrations and the local seed. Kept apart so unit tests can build it at a small scale.
-
 export type DatasetCounts = {
   users: number;
   teams: number;
@@ -29,10 +26,6 @@ const numbers = (limit: number) => `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL S
 const items = `'[{"id":"s1","title":"Section","items":[{"id":"i1","title":"Task one"},{"id":"i2","title":"Task two"}]}]'`;
 const categories = `CASE i % 6 WHEN 0 THEN '["Marketing"]' WHEN 1 THEN '["SEO"]' WHEN 2 THEN '["Operations"]' WHEN 3 THEN '["Travel"]' WHEN 4 THEN '["Home"]' ELSE '["Events"]' END`;
 
-// Every 20th template belongs to the seeded Organization and every 50th to admin@test.com
-// (user-1), so the signed-in scenarios see realistic volumes of their own data. The profiled
-// Personal template and admin run also get 300 versions and 300 run updates, so history
-// reads are measured on a heavily edited template and run.
 export function buildSyntheticSql(counts: DatasetCounts): string {
   const syntheticUser = (expr: string) => `'synthetic-user-' || ((${expr}) % ${counts.users} + 1)`;
   return `
@@ -91,8 +84,6 @@ SELECT 'synthetic-audit-' || i, ${syntheticUser("i")},
   'template', 'synthetic-template-' || (i % ${counts.templates} + 1), 'template.updated',
   datetime('now', '-' || (i % 200) || ' days') FROM n;
 
--- Historical invites (expired, some revoked) for other emails: the incoming-invites lookup
--- must find a user's invites through the email index instead of scanning these.
 ${numbers(counts.invites)}
 INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, revoked_at, created_at, updated_at)
 SELECT 'synthetic-invite-' || i, 'synthetic-team-' || (i % ${counts.teams} + 1), 'invitee' || i || '@example.test', 'viewer',
@@ -110,8 +101,6 @@ INSERT INTO template_versions (id, template_id, version, changed_by_user_id, sub
 SELECT 'synthetic-hot-version-' || i, 'synthetic-template-50', i + 1, 'user-1', 'user', 'user-1', '{}',
   datetime('now', '-' || i || ' minutes') FROM n;
 
--- A save writes history at version + 1, so a template's version must reach its newest
--- history row, or the profiled template updates collide with it and answer 409.
 UPDATE templates SET version = (SELECT MAX(v.version) FROM template_versions v WHERE v.template_id = templates.id)
 WHERE id LIKE 'synthetic-template-%'
   AND version < (SELECT MAX(v.version) FROM template_versions v WHERE v.template_id = templates.id);

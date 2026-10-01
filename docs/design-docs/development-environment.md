@@ -232,7 +232,8 @@ a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values
 the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
 `npx` or `pnpm` as a command. `opennextjs-cloudflare preview` itself hands its extra
 arguments to `wrangler dev` through a shell without quoting them, so the smoke runner
-passes it only plain values (`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`).
+(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`) and `d1:profile` pass it only plain
+values, with no spaces or shell characters.
 
 ## Line endings
 

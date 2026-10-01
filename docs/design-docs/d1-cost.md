@@ -24,19 +24,34 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
   which keep duplicate column names that `.all()` merges; a write runs once, its rows
   converted from that one `.all()`.
 - **Per endpoint, at scale:** `pnpm run d1:profile` builds the app with OpenNext and an
-  isolated local D1 with about 150k synthetic rows (20k templates, 40k runs, 40k audit
-  events, 5k invites), serves the build with `opennextjs-cloudflare preview`, replays
-  anonymous (public pages included), Personal, and Organization requests, and writes
-  `tmp/d1-profile/report.md` with rows read and written per request and per
-  statement, efficiency (rows returned / rows read), and `EXPLAIN QUERY PLAN`. Use
-  `-- --scale N` for more volume and `-- --reuse` to skip rebuilding: each build is
-  copied to `.wrangler/d1-profile-pristine`, and `--reuse` restores that copy, so the
-  workload's writes (new Runs, the template updates, john's Free-plan run count) never
-  carry over into the next run. It rebuilds when the snapshot is missing or was built
-  at another scale or from other migrations, seed or synthetic data. Every request
-  declares its expected status (`scripts/d1-profile-lib.ts`); a request that returns
-  anything else measured an error path, so the report marks it `INVALID` and the
-  command exits 1. Local D1 reports rows read with production semantics.
+  isolated local D1 (`.wrangler/d1-profile-state`) with about 150k synthetic rows (20k
+  templates, 40k runs, 40k audit events, 5k invites), serves the build with
+  `opennextjs-cloudflare preview` and `D1_PROFILE=true`, replays anonymous (public pages
+  included), Personal, and Organization requests, and writes `tmp/d1-profile/report.md`
+  with rows read and written per request and per statement, efficiency (rows returned /
+  rows read), and `EXPLAIN QUERY PLAN`. Local D1 reports rows read with production
+  semantics.
+  - **The workload** (`scripts/d1-profile-lib.ts`) requests each public page twice, in its
+    canonical form: the first visit measures the lookups its server render makes for its
+    `<head>`, the repeat an edge-cache hit. It also asks for sitemap pages the index never
+    published, to measure the 404 guard. Every request declares its expected status; one
+    that returns anything else measured an error path, so the report marks it `INVALID`
+    and the command exits 1.
+  - **The dataset** (`scripts/d1-profile-dataset.ts`) gives every 20th template to the
+    seeded Organization and every 50th to `admin@test.com`, so the signed-in requests read
+    realistic volumes of their own data, and gives the profiled template and run 300
+    history entries each, so history reads are measured on a heavily edited one. Its
+    invites are expired or revoked invites for other emails, which the incoming-invites
+    lookup must skip through the email index.
+  - **Reuse:** `-- --scale N` adds volume, and `-- --reuse` reuses the dataset instead of
+    rebuilding it. The app is built every time: the build bundles the API, so an older
+    build would measure older queries. Each new dataset is copied to
+    `.wrangler/d1-profile-pristine` before the server opens its SQLite files, with the
+    copy's `meta.json` written last, so an interrupted copy is never restored. `--reuse`
+    restores that copy, so the workload's writes (new Runs, the template updates, john's
+    Free-plan run count) never carry over into the next run. It rebuilds when the snapshot
+    is missing or was built at another scale or from other migrations, seed or synthetic
+    data.
 - **Production:** `pnpm exec wrangler d1 insights serp-checklists-db --sort-by reads
   --time-period 31d --limit 25` (Cloudflare login required; analytics only).
 
