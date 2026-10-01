@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, comments, architecture, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus local D1 fixture tests, the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -106,6 +106,28 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     `WORKFLOWS_AWAITING_A_PERSON`: agents may not edit CI workflows, so a person has to clean
     them. The test fails once a listed workflow has no comments left, so the list only
     shrinks.
+- **Duplicated code.** `pnpm run duplicates:check` (part of `check:repo`) runs jscpd over
+  `tests/` with the settings in `.jscpd.json`: jscpd's defaults of 50 tokens and 5 lines, a
+  threshold of 0, and exit code 1, so any clone fails. The threshold alone would not do: jscpd
+  compares it with a percentage rounded to two decimals, and a small clone in a large folder
+  rounds to 0%. A clone is fixed by moving the code into a shared helper (the
+  [testing conventions](#testing-conventions) say where they live), never by a higher token
+  count or an ignore.
+  - jscpd reads every file whatever its size (`maxLines` and `maxSize` are far above any
+    file) and skips only what git ignores, build output, `db/migrations` and the files in
+    `GENERATED_FILES`. It has no tokenizer for XML Schema, so the two sitemaps.org schemas in
+    `tests/fixtures/` go unread, and a file under 5 lines cannot hold a clone.
+  - The script names the folders (`jscpd tests`) because jscpd turns a `path` in
+    `.jscpd.json` into an absolute path and globs it, and on Windows its backslashes make that
+    glob match nothing: the check would pass having read no file.
+  - `tests/unit/config/duplicate-check.test.ts` fails if the threshold, exit code, token or
+    line count loosens, if `check:repo` stops running the check or the script gains a flag,
+    if `.jscpd.json` gains a setting or an ignore beyond those, and if jscpd skips a file in
+    the checked folders for any reason but a missing tokenizer or fewer than 5 lines.
+  - `src/`, `functions/`, `scripts/` and `db/` join once their clones are fixed
+    ([harness hardening plan](exec-plans/active/harness-hardening.md)). `db/migrations` stays
+    out for good: applied migrations are append-only history, and a migration that rebuilds a
+    table restates all of it.
 
 ## Deploy pipeline
 
@@ -303,6 +325,42 @@ Common failures:
 ## Testing conventions
 
 - Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
+- **Look for shared setup before writing any.** A mock, fixture or browser step that a second
+  test needs lives in one of three folders, and `pnpm run duplicates:check` fails on a second
+  copy of 5 lines and 50 tokens:
+  - `tests/fixtures/`: data and fake objects with the types the code under test receives:
+    handler rows (`handlerRows.ts`), Templates and runs (`dashboardTemplate.ts`,
+    `launchChecklistTemplate.ts`, `runExecutionFixtures.ts`, `runStartFixtures.ts`),
+    workspaces and plans (`workspaces.ts`, `plans.ts`), Run Keys (`agentKeys.ts`), the template
+    detail page's API client (`templateDetailApiClient.ts`), the template editor's hooks
+    (`templateEditorHooks.ts`), storage (`memoryStorage.ts`), JSON files (`jsonFile.ts`), the
+    fake DOM (`fakeDom.ts`) and query clients (`queryClient.ts`).
+  - `tests/support/`: modules that mock what the code under test imports, imported before it
+    (see the API handler tests below), and harnesses that run it:
+    - API handlers: `apiHandlerMocks.ts` and the modules for each area
+      (`templatesHandler.ts`, `checklistsHandler.ts`, `teamsHandler.ts`, `agentMcpHandler.ts`,
+      `portableTemplatesHandler.ts`), `mockedSession.ts`, `apiEnv.ts`, `apiRouter.ts`, and
+      `sqlite-d1.ts` for SQL.
+    - Next.js and the server: `mockedNextNavigation.ts`, `mockedServerContext.ts`,
+      `builtRoutes.ts` and `sitemapRoutes.ts`.
+    - The app's contexts and hooks: `appShellInPlace.tsx` (the auth, Templates and workspace
+      contexts around a page), `mockedPersonalWorkspace.ts`, `mockedWorkspaceRoles.ts`,
+      `mockedTemplateLibrary.ts`, `mockedDashboardTemplatesModel.ts`, `mockedR2Uploads.ts` and
+      `uploadMocks.ts`.
+    - Components called without a DOM: `reactHookStubs.ts`, `reactHooksKeptBetweenRenders.ts`,
+      `reactHookFormMock.ts`, `hookStateSlots.ts` and `elementTree.ts`.
+    - Components on the fake DOM: `aFakeDomForEachTest()` in `fakeDomRoots.ts` installs the
+      globals for a file and unmounts each test's roots; `overlaysInPlace.tsx`,
+      `confirmDialogInPlace.ts` and `queryClientsPerTest.ts`; and the providers and pages
+      ready to mount (`authProviderHarness.tsx`, `templatesProviderHarness.tsx`,
+      `checklistRunPage.tsx`, `templateDetailPage.tsx`, `publicTemplatePage.tsx`,
+      `categoryPage.tsx`, `teamInvitePage.ts`).
+    - Scripts and workflows: `workflowGuards.ts`, `throwawayGitRepository.ts` and
+      `e2eSourceFiles.ts`.
+  - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
+    template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
+    (`billing.ts`), API calls (`api-requests.ts`), a mocked API (`mocked-api.ts`) and
+    navigation (`navigation.ts`).
 - **Tests that make their own git repositories.** The unit test setup (`tests/setup.ts`)
   clears git's repository variables (`GIT_DIR` and the like) before any test runs.
   - Inside a git hook git sets them: the pre-push hook runs `pnpm run verify`, and in a linked
