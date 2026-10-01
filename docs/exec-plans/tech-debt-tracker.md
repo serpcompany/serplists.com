@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-43.**
+then you raise it. **Next ID: TD-45.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -42,3 +42,5 @@ then you raise it. **Next ID: TD-43.**
 | TD-40 | Tests | Some browser specs open a page by a non-canonical path, without its trailing slash, so the page loads only after a redirect: `template-detail-loading` and `workspace-teams-error` (`PUBLIC_TEMPLATE_PATH`), and `smoke`'s "login link renders from ..." cases. | Check each: if the redirect isn't what the test is about, open the canonical path. Small. | None |
 | TD-41 | Duplication | Counting a Template's items is written about seven times: `src/features/profile/profileSummary.ts`, `src/features/dashboard-templates/useDashboardTemplatesModel.ts`, `src/features/template-detail/templateDetailMappers.ts`, `src/views/Index.tsx`, `src/components/checklist-library/discovery-utils.ts`, and inline in `TemplateCard.tsx` and `TemplateListItem.tsx`. | Export one `countTemplateItems` from `src/lib/templates` and use it everywhere. Small. | None |
 | TD-42 | Duplication | `persistAcceptedWorkspace` (`src/features/teams/acceptTeamInvite.ts`) writes `serplists.activeWorkspaceId` through its own copy of the key, and `TeamSettingsSection.tsx` calls it just before `selectWorkspace`, which writes the same value. | Remove the function, its call and the copied key, so WorkspaceContext is the only writer. Small. | None |
+| TD-43 | Client data | `SESSION_RECHECK_INTERVAL_MS` (`src/contexts/sessionSync.ts`) and the Organizations list's `staleTime` (`src/contexts/WorkspaceContext.tsx`) must stay equal (60s, as authentication.md explains) but are two separate literals. | Share one constant. Small. | None |
+| TD-44 | Tests | `assertWorkspaceReady` (`src/contexts/workspaceSelection.ts`) accepts an `undefined` status only so mocked contexts in tests can leave it out. | Make the status required and give the mocks one. Small. | None |
