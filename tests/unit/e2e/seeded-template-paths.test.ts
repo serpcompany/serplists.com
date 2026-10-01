@@ -1,5 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { drizzle } from 'drizzle-orm/d1';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -8,8 +7,8 @@ import { seedLocalTestData } from '../../../db/seeds/local';
 import type { LocalDb } from '../../../scripts/data/local-d1';
 import { SqliteD1 } from '../../support/sqlite-d1';
 import { repoTemplates, resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
+import { e2eSourceFiles } from '../../support/e2eSourceFiles';
 
-const E2E_DIR = path.join('tests', 'e2e');
 const DELIBERATELY_MISSING_PREFIX = 'no-such-';
 const SLUG = '[A-Za-z0-9_-]+';
 const LITERAL_SEGMENT_END = '(?![A-Za-z0-9_$-])';
@@ -31,13 +30,6 @@ function templateReferences(file: string, source: string): Reference[] {
     ];
     return references.filter((reference) => !isDeliberatelyMissing(reference));
   });
-}
-
-function e2eSourceFiles() {
-  return readdirSync(E2E_DIR, { recursive: true, encoding: 'utf8' })
-    .filter((name) => name.endsWith('.ts'))
-    .map((name) => path.join(E2E_DIR, name).split(path.sep).join('/'))
-    .sort();
 }
 
 const ownerAndSlug = (owner: string, slug: string) => `${owner.toLowerCase()}/${slug}`;

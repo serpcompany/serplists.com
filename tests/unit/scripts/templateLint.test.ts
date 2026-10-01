@@ -9,6 +9,21 @@ vi.mock('node:fs/promises', () => ({
   readFile: readFileMock,
 }));
 
+const CANONICAL_LAUNCH_CHECKLIST_JSON = JSON.stringify({
+  title: 'Launch Checklist',
+  sections: [
+    {
+      title: 'Preparation',
+      items: [
+        {
+          title: 'Review content',
+          contents: [{ type: 'text', value: 'Canonical body' }],
+        },
+      ],
+    },
+  ],
+}, null, 2);
+
 describe('templateLint', () => {
   beforeEach(() => {
     readFileMock.mockReset();
@@ -39,20 +54,7 @@ describe('templateLint', () => {
 
   it('flags drift between sibling json and markdown templates', async () => {
     readFileMock
-      .mockResolvedValueOnce(JSON.stringify({
-        title: 'Launch Checklist',
-        sections: [
-          {
-            title: 'Preparation',
-            items: [
-              {
-                title: 'Review content',
-                contents: [{ type: 'text', value: 'Canonical body' }],
-              },
-            ],
-          },
-        ],
-      }, null, 2))
+      .mockResolvedValueOnce(CANONICAL_LAUNCH_CHECKLIST_JSON)
       .mockResolvedValueOnce([
         '---',
         'title: Launch Checklist',
@@ -85,20 +87,7 @@ describe('templateLint', () => {
         '          - type: text',
         '            value: Canonical body',
       ].join('\n'))
-      .mockResolvedValueOnce(JSON.stringify({
-        title: 'Launch Checklist',
-        sections: [
-          {
-            title: 'Preparation',
-            items: [
-              {
-                title: 'Review content',
-                contents: [{ type: 'text', value: 'Canonical body' }],
-              },
-            ],
-          },
-        ],
-      }, null, 2) + '\n')
+      .mockResolvedValueOnce(CANONICAL_LAUNCH_CHECKLIST_JSON + '\n')
       .mockResolvedValueOnce('# wrong readme\n')
       .mockResolvedValueOnce('<html>wrong html</html>');
 

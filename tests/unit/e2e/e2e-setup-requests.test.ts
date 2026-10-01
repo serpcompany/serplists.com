@@ -1,9 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { e2eSourceFiles } from '../../support/e2eSourceFiles';
 
-const E2E_DIR = path.join('tests', 'e2e');
 const PAGE_FETCH_HELPER = { file: 'tests/e2e/support/api-requests.ts', name: 'fetchFromThePageUnderTest' };
 const GLOBAL_OBJECTS = new Set(['window', 'globalThis', 'self']);
 const EVALUATE_METHODS = new Set(['evaluate', 'evaluateHandle']);
@@ -50,13 +49,6 @@ function findInPageFetches(file: string, text: string): InPageFetch[] {
   };
   visit(source);
   return found;
-}
-
-function e2eSourceFiles() {
-  return readdirSync(E2E_DIR, { recursive: true, encoding: 'utf8' })
-    .filter((name) => name.endsWith('.ts'))
-    .map((name) => path.join(E2E_DIR, name).split(path.sep).join('/'))
-    .sort();
 }
 
 describe('API calls in the browser tests', () => {
