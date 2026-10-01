@@ -31,6 +31,10 @@ describe('parseDbTimestamp', () => {
     );
   });
 
+  it('reads an ISO timestamp with a T and no zone as UTC, as D1 stores times', () => {
+    expect(parseDbTimestamp('2025-12-26T09:18:30')?.toISOString()).toBe('2025-12-26T09:18:30.000Z');
+  });
+
   it('keeps ISO values with a zone as they are', () => {
     expect(parseDbTimestamp('2025-12-26T09:18:30.000Z')?.toISOString()).toBe(
       '2025-12-26T09:18:30.000Z',

@@ -381,7 +381,9 @@ write: [client data](design-docs/client-data.md).
   `formatMonthYear`, `formatLocalDate` or `formatLocalDateTime`, all in
   `src/lib/utils/dbTimestamp.ts`, not `new Date(value)`. Columns that default to D1's
   `CURRENT_TIMESTAMP` (such as `users.created_at`) hold UTC as `YYYY-MM-DD HH:MM:SS`,
-  which Safari cannot parse and other browsers read as local time. The formatters
+  which Safari cannot parse and other browsers read as local time. An ISO value with a
+  `T` and no zone is UTC too, and the recent-first sorts
+  (`src/lib/templates/templateRecency.ts`) read times through the same parser. The formatters
   return nothing (`''` or `null`) for a value they cannot read; render nothing then,
   never "Invalid Date".
 - A button that sends the browser to another site (Stripe Checkout or the Customer

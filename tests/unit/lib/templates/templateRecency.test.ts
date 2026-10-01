@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   compareTemplatesByRecent,
@@ -49,6 +49,22 @@ describe('getTemplateRecencyTime', () => {
     expect(getTemplateRecencyTime(fixture('s', '2026-09-10 12:30:00', ''))).toBe(
       Date.parse('2026-09-10T12:30:00.000Z'),
     );
+  });
+
+  describe('in a time zone far from UTC', () => {
+    const zoneBefore = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'Asia/Tokyo';
+    });
+    afterEach(() => {
+      process.env.TZ = zoneBefore;
+    });
+
+    it('reads an ISO timestamp with a T and no zone as UTC, as D1 stores times, not as local time', () => {
+      expect(getTemplateRecencyTime(fixture('t', '2026-09-10T12:30:00', ''))).toBe(
+        Date.parse('2026-09-10T12:30:00.000Z'),
+      );
+    });
   });
 });
 
