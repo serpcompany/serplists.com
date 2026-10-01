@@ -24,6 +24,7 @@ const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTem
 
 const freeOrganizationBilling: TemplateDetailBillingState = {
   billingEnabled: true,
+  isError: false,
   isLoading: false,
   isPro: false,
 };

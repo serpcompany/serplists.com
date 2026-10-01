@@ -33,9 +33,7 @@ const buildInput = (overrides: Partial<Parameters<typeof persistTemplateSave>[1]
   ...overrides,
 });
 
-const buildDependencies = (
-  overrides: Partial<Parameters<typeof persistTemplateSave>[0]> = {},
-) => ({
+const buildDependencies = <Overrides extends Partial<Parameters<typeof persistTemplateSave>[0]>>(overrides: Overrides) => ({
   createTemplate: vi.fn().mockResolvedValue({ id: "template-1" }),
   updateTemplate: vi.fn().mockResolvedValue({ version: 2, slug: "template-title" }),
   applyDefaults: vi.fn((title: string, sections: ChecklistSection[]) => ({
@@ -204,7 +202,7 @@ describe("persistTemplateSave", () => {
   });
 
   it("refuses to update without a loaded version instead of skipping the conflict check", async () => {
-    const dependencies = buildDependencies();
+    const dependencies = buildDependencies({});
 
     const result = await persistTemplateSave(
       dependencies,
@@ -218,7 +216,7 @@ describe("persistTemplateSave", () => {
 
   it("does not resend a stored slug the user did not change, which can predate today's limits and would fail validation or move the URL", async () => {
     const storedSlug = `${"a".repeat(160)}-1a2b3c4d`;
-    const dependencies = buildDependencies();
+    const dependencies = buildDependencies({});
 
     await persistTemplateSave(
       dependencies,
@@ -231,7 +229,7 @@ describe("persistTemplateSave", () => {
   });
 
   it("sends a slug the user changed", async () => {
-    const dependencies = buildDependencies();
+    const dependencies = buildDependencies({});
 
     await persistTemplateSave(
       dependencies,

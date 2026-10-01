@@ -10,6 +10,8 @@ import {
 } from '@/features/run-execution/runExecutionActions';
 import type { ChecklistRun } from '@/types/checklist';
 
+import { runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
+
 const titleOverThePutLimit = `Quarterly launch readiness ${'x'.repeat(150)}`;
 
 const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({
@@ -40,13 +42,7 @@ function setupUpdateRunRecordingItsPutBodies() {
     bodies.push(buildRunUpdatePayload(run, options));
     return { ...run, revision: (run.revision ?? 1) + 1 };
   });
-  const apiClient = {
-    createChecklistRunShare: vi.fn(),
-    getChecklistById: vi.fn(),
-    getSharedChecklist: vi.fn(),
-    updateSharedChecklist: vi.fn(),
-  };
-  return { bodies, dependencies: { apiClient, updateRun } };
+  return { bodies, dependencies: { apiClient: runExecutionApiClient(), updateRun } };
 }
 
 describe('private run saves, which leave out an unchanged title, since a run started from a Template with a long title can hold one over the PUT limit', () => {

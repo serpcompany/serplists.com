@@ -28,7 +28,9 @@ const sections = (done: Record<string, boolean>, notes: Record<string, string> =
   },
 ];
 
-const buildRun = (revision: number, done: Record<string, boolean> = {}, notes: Record<string, string> = {}): ChecklistRun => ({
+type SavedRun = ChecklistRun & { revision: number };
+
+const buildRun = (revision: number, done: Record<string, boolean> = {}, notes: Record<string, string> = {}): SavedRun => ({
   id: 'run-1',
   templateId: 'template-1',
   title: 'Launch',
@@ -41,7 +43,7 @@ const buildRun = (revision: number, done: Record<string, boolean> = {}, notes: R
   revision,
 });
 
-const createServerRefusingStaleRevisions = (initial: ChecklistRun) => {
+const createServerRefusingStaleRevisions = (initial: SavedRun) => {
   let stored = initial;
   const sent: ChecklistRun[] = [];
   const accept = (run: ChecklistRun) => {
@@ -63,11 +65,13 @@ const createServerRefusingStaleRevisions = (initial: ChecklistRun) => {
       createChecklistRunShare: vi.fn(),
       getChecklistById: vi.fn(async () => record()),
       getSharedChecklist: vi.fn(async () => record()),
+      revokeChecklistRunShare: vi.fn(),
       updateSharedChecklist: vi.fn(async (_token: string, body: { expected_revision: number; sections: ChecklistSection[]; status: string }) => {
         const saved = accept({ ...stored, revision: body.expected_revision, sections: body.sections, status: body.status as ChecklistRun['status'] });
         return { revision: saved.revision };
       }),
     },
+    record,
     saveFromAnotherSession: (change: (run: ChecklistRun) => ChecklistRun) => {
       stored = { ...change(stored), revision: stored.revision + 1 };
     },
@@ -165,7 +169,7 @@ describe('a run page whose run was saved by another session', () => {
     server.saveFromAnotherSession((run) => run);
     server.apiClient.getChecklistById.mockImplementation(async () => {
       server.saveFromAnotherSession((run) => run);
-      return { id: 'run-1', sections: server.stored().sections, revision: server.stored().revision - 1, status: 'in_progress' };
+      return { ...server.record(), revision: server.stored().revision - 1 };
     });
 
     const result = await saver(saves.toggleItem('item-2', true), context);
@@ -279,7 +283,7 @@ describe('run actions keep what the retry needs', () => {
 });
 
 describe('toggles queued while an earlier save is in flight', () => {
-  const runWhereTask2HasSubTasksAAndB = (done: Record<string, boolean>): ChecklistRun => ({
+  const runWhereTask2HasSubTasksAAndB = (done: Record<string, boolean>): SavedRun => ({
     ...buildRun(1),
     sections: [
       {

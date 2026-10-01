@@ -33,7 +33,7 @@ function captureModel(
   saveTemplate: NonNullable<Parameters<typeof useTemplateEditorModel>[1]>['saveTemplate'],
 ): EditorModel {
   let captured: EditorModel | undefined;
-  function Harness(): JSX.Element {
+  function Harness(): React.JSX.Element {
     captured = useTemplateEditorModel({ id }, { saveTemplate });
     return <span />;
   }

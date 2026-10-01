@@ -18,7 +18,7 @@ vi.mock('@/hooks/useTemplateSave', () => ({
   }),
 }));
 
-function ModelHarness({ id }: { id?: string }): JSX.Element {
+function ModelHarness({ id }: { id?: string }): React.JSX.Element {
   const model = useTemplateEditorModel({ id });
 
   return (

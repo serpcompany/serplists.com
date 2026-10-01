@@ -170,6 +170,7 @@ describe('getTemplateDetailPermissions', () => {
         canEditTemplates: true,
         isCloning: false,
         isTeamWorkspace: false,
+        isWorkspaceLoading: false,
         template: asSentToANonMember,
       }),
     ).toEqual({ disabled: false, label: 'Upgrade to copy template', visible: true });

@@ -3,18 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiError } from '@/lib/api-errors';
 import { loadRunExecutionData } from '@/features/run-execution/runExecutionLoad';
 
-import { buildRun } from '../../../fixtures/runExecutionFixtures';
+import { buildRun, runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
 
 describe('run execution model loading', () => {
   it('loads a private run from cache before hitting the API', async () => {
     const cachedRun = buildRun();
-    const apiClient = {
-      createChecklistRunShare: vi.fn(),
-      getChecklistById: vi.fn(),
-      getSharedChecklist: vi.fn(),
-      updateChecklist: vi.fn(),
-      updateSharedChecklist: vi.fn(),
-    };
+    const apiClient = runExecutionApiClient();
 
     const result = await loadRunExecutionData(
       {
@@ -35,8 +29,7 @@ describe('run execution model loading', () => {
 
   it('loads a shared run by share token and normalizes legacy items', async () => {
     const apiClient = {
-      createChecklistRunShare: vi.fn(),
-      getChecklistById: vi.fn(),
+      ...runExecutionApiClient(),
       getSharedChecklist: vi.fn().mockResolvedValue({
         id: 'shared-run',
         template_id: 'template-1',
@@ -50,8 +43,6 @@ describe('run execution model loading', () => {
         user_id: 'user-2',
         is_public: true,
       }),
-      updateChecklist: vi.fn(),
-      updateSharedChecklist: vi.fn(),
     };
 
     const result = await loadRunExecutionData(
@@ -94,11 +85,8 @@ describe('run execution model loading', () => {
 
   it('returns an error result instead of not_found for transient load failures', async () => {
     const apiClient = {
-      createChecklistRunShare: vi.fn(),
+      ...runExecutionApiClient(),
       getChecklistById: vi.fn().mockRejectedValue(new Error('Network down')),
-      getSharedChecklist: vi.fn(),
-      updateChecklist: vi.fn(),
-      updateSharedChecklist: vi.fn(),
     };
 
     const result = await loadRunExecutionData(
@@ -117,13 +105,8 @@ describe('run execution model loading', () => {
 
   it('keeps 404 responses as not_found results', async () => {
     const apiClient = {
-      createChecklistRunShare: vi.fn(),
-      getChecklistById: vi
-        .fn()
-        .mockRejectedValue(createApiError(404, { error: 'Run missing' })),
-      getSharedChecklist: vi.fn(),
-      updateChecklist: vi.fn(),
-      updateSharedChecklist: vi.fn(),
+      ...runExecutionApiClient(),
+      getChecklistById: vi.fn().mockRejectedValue(createApiError(404, { error: 'Run missing' })),
     };
 
     const result = await loadRunExecutionData(

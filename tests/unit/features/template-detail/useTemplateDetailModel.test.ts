@@ -206,6 +206,7 @@ describe('loadTemplateDetailData', () => {
       }),
       clonePublicTemplate: vi.fn(),
       updateTemplate: vi.fn(),
+      getBillingStatus: vi.fn(),
     };
 
     const result = await loadTemplateDetailData(
@@ -254,6 +255,7 @@ describe('loadTemplateDetailData', () => {
       getProfileById: vi.fn(),
       clonePublicTemplate: vi.fn(),
       updateTemplate: vi.fn(),
+      getBillingStatus: vi.fn(),
     };
 
     const result = await loadTemplateDetailData(
@@ -288,6 +290,7 @@ describe('loadTemplateDetailData', () => {
       getProfileById: vi.fn(),
       clonePublicTemplate: vi.fn(),
       updateTemplate: vi.fn(),
+      getBillingStatus: vi.fn(),
     };
 
     const result = await loadTemplateDetailData(
@@ -319,6 +322,7 @@ describe('loadTemplateDetailData', () => {
       getProfileById: vi.fn(),
       clonePublicTemplate: vi.fn(),
       updateTemplate: vi.fn(),
+      getBillingStatus: vi.fn(),
     };
 
     const result = await loadTemplateDetailData(
@@ -340,6 +344,7 @@ describe('loadTemplateDetailData', () => {
     getProfileById: vi.fn(),
     clonePublicTemplate: vi.fn(),
     updateTemplate: vi.fn(),
+    getBillingStatus: vi.fn(),
   });
   const loadPublic = (identifier: string, error: unknown) =>
     loadTemplateDetailData(

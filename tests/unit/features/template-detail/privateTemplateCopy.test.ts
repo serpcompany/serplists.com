@@ -25,6 +25,7 @@ const buildPrivateOrganizationTemplateOfAnotherMember = (overrides: Partial<Chec
 
 const proBilling: TemplateDetailBillingState = {
   billingEnabled: true,
+  isError: false,
   isLoading: false,
   isPro: true,
 };
@@ -115,6 +116,7 @@ describe('getCopyTemplateButton on a private template', () => {
             canEditTemplates: true,
             isCloning: false,
             isTeamWorkspace,
+            isWorkspaceLoading: false,
             template: buildPrivateOrganizationTemplateOfAnotherMember(),
           }).visible,
         ).toBe(false);
