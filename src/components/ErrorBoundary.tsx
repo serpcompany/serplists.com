@@ -19,7 +19,7 @@ interface State {
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
+  public override state: State = {
     hasError: false
   };
 
@@ -29,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     console.error('Error details:', {
       message: error.message,
@@ -38,11 +38,11 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  public componentDidMount() {
+  public override componentDidMount() {
     this.syncHistoryListener();
   }
 
-  public componentDidUpdate(prevProps: Props, prevState: State) {
+  public override componentDidUpdate(prevProps: Props, prevState: State) {
     const errorWasShowing = prevState.hasError && this.state.hasError;
     if (errorWasShowing && !Object.is(prevProps.resetKey, this.props.resetKey)) {
       this.handleReset();
@@ -51,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.syncHistoryListener();
   }
 
-  public componentWillUnmount() {
+  public override componentWillUnmount() {
     if (this.listeningToHistory) {
       window.removeEventListener('popstate', this.handleReset);
       this.listeningToHistory = false;
@@ -81,7 +81,7 @@ export class ErrorBoundary extends Component<Props, State> {
     window.history.back();
   };
 
-  public render() {
+  public override render() {
     if (this.state.hasError) {
       const { fallback } = this.props;
       if (typeof fallback === 'function') {

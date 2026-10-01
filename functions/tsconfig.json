@@ -12,7 +12,8 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "strict": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true
   },
   "include": ["./**/*.ts", "../db/**/*.ts"]
 }

@@ -88,16 +88,16 @@ const createStorage = (): Storage => {
 };
 
 export class ReadonlyURLSearchParams extends URLSearchParams {
-  append(): never {
+  override append(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  delete(): never {
+  override delete(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  set(): never {
+  override set(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
-  sort(): never {
+  override sort(): never {
     throw new Error('Method unavailable on `ReadonlyURLSearchParams`.');
   }
 }
