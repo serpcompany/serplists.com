@@ -4,8 +4,6 @@ import type { Env } from "./types";
 import { resolveAuthSecret } from "./utils/auth-secret";
 import { describeFrontendUrlProblem, describeOriginListProblem } from "./utils/origin-list";
 
-// A malformed origin fails every request with 500 "Server configuration error"
-// instead of being dropped from the CORS and trusted-origin allowlists.
 const refineWith = (describe: (value: string) => string | null) => (value: string, ctx: z.RefinementCtx) => {
   const problem = describe(value);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
@@ -52,7 +50,6 @@ export const getApiEnv = (env: Env) => {
     emptyStringAsUndefined: true,
   });
 
-  // Fail fast if neither the current nor legacy auth secret is usable.
   resolveAuthSecret({
     BETTER_AUTH_SECRET: parsedEnv.BETTER_AUTH_SECRET,
     JWT_SECRET: parsedEnv.JWT_SECRET,

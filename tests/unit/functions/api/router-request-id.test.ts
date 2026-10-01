@@ -43,7 +43,7 @@ describe('API router request id propagation', { timeout: 30_000 }, () => {
     expect(data.requestId).not.toBe('client-provided-request-id');
   });
 
-  it('drops a client X-Forwarded-Host so no handler builds URLs from it', async () => {
+  it('drops a client X-Forwarded-Host so no handler builds URLs from it, but keeps X-Forwarded-For for local rate limits', async () => {
     vi.doMock('../../../../functions/api/handlers/templates', () => ({
       handleTemplates: vi.fn((request: Request) =>
         Response.json({

@@ -320,7 +320,7 @@ describe('Uploads Handler size and type limits', () => {
 describe('Uploads Handler storage', () => {
   // formData() already holds the file; copying it into an ArrayBuffer would hold
   // a 50MB upload twice, close to the isolate's 128MB memory limit.
-  it('streams the parsed file to R2 without copying it into a second buffer', async () => {
+  it('streams the parsed file to R2 without a second copy, which would hold a 50MB upload twice near the isolate\'s 128MB memory limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     const env = uploadEnv();
     const file = new File([new Uint8Array(1024)], 'clip.mp4', { type: 'video/mp4' });

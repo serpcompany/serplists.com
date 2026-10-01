@@ -9,8 +9,6 @@ const EXPIRES_AT_MESSAGE =
   "expiresAt must be a whole number of Unix seconds in the future and at most 5 years away, " +
   "or null (or omitted) for no expiry";
 
-// An invalid expiresAt must never become "no expiry": that would grant a
-// permanent plan. The upper bound also rejects millisecond timestamps.
 const overrideBodySchema = z
   .object({
     userId: z.string().trim().min(1, "userId must be a non-empty string").optional(),
@@ -38,8 +36,6 @@ const overrideBodySchema = z
 const sha256 = async (value: string): Promise<Uint8Array> =>
   new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
 
-// Compares SHA-256 digests of both values in full, so the time a check takes says nothing
-// about how much of a guess matched or how long the secret is.
 async function hasValidAdminSecret(request: Request, env: Env): Promise<boolean> {
   if (!env.ENTITLEMENTS_ADMIN_SECRET) return false;
   const provided = request.headers.get("X-Admin-Secret");
@@ -58,8 +54,6 @@ async function findUserIdById(db: Db, userId: string): Promise<string | null> {
   return user?.id ?? null;
 }
 
-// Better Auth stores emails lowercased; an exact match also finds an older
-// mixed-case row. Both forms use the users.email index.
 async function findUserIdByEmail(db: Db, email: string): Promise<string | null> {
   const { users } = schema;
   const candidates = Array.from(new Set([email, email.toLowerCase()]));
@@ -71,7 +65,7 @@ async function findUserIdByEmail(db: Db, email: string): Promise<string | null> 
   return (rows.find((row) => row.email === email) ?? rows[0])?.id ?? null;
 }
 
-async function handleOverride(request: Request, env: Env): Promise<Response> {
+async function upsertOverride(request: Request, env: Env): Promise<Response> {
   let body: unknown;
   try {
     body = await request.json();
@@ -123,15 +117,23 @@ async function handleOverride(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function deleteOverride(env: Env, url: URL): Promise<Response> {
+  const userId = url.searchParams.get("userId");
+  if (!userId) return jsonError("userId required", 400);
+
+  const db = createDb(env);
+  const { entitlement_overrides } = schema;
+  await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
+  return json({ success: true });
+}
+
 const OVERRIDE_METHODS = "POST, DELETE";
 
 export async function handleAdmin(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const pathParts = url.pathname.split("/").filter(Boolean); // ["api", "admin", ...]
-  const adminSubpath = pathParts.slice(2); // after /api/admin
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  const adminSubpath = pathParts.slice(2);
 
-  // The route and method are matched before the secret is read, so a request the endpoint
-  // does not serve (a GET, an unknown path) answers the same for a right and a wrong secret.
   const isOverrideRoute = pathParts[1] === "admin"
     && adminSubpath.length === 2
     && adminSubpath[0] === "entitlements"
@@ -149,17 +151,5 @@ export async function handleAdmin(request: Request, env: Env): Promise<Response>
     return jsonError("Unauthorized", 401);
   }
 
-  // POST /api/admin/entitlements/override
-  if (request.method === "POST") {
-    return handleOverride(request, env);
-  }
-
-  // DELETE /api/admin/entitlements/override?userId=...
-  const userId = url.searchParams.get("userId");
-  if (!userId) return jsonError("userId required", 400);
-
-  const db = createDb(env);
-  const { entitlement_overrides } = schema;
-  await db.delete(entitlement_overrides).where(eq(entitlement_overrides.user_id, userId));
-  return json({ success: true });
+  return request.method === "POST" ? upsertOverride(request, env) : deleteOverride(env, url);
 }

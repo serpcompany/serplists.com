@@ -31,21 +31,58 @@ function isLocalRequest(url: URL): boolean {
   return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
 }
 
-function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: boolean): boolean {
-  if (path === 'auth/sign-up/email') {
-    // Sign-up creates the account before it sends the verification email, so
-    // refuse it up front when that email cannot be sent.
-    return emailVerificationRequired;
-  }
+const TEST_EMAIL_CHECKED_AUTH_PATHS = new Set([
+  'auth/register',
+  'auth/login',
+  'auth/sign-up/email',
+  'auth/sign-in/email',
+]);
 
+function requiresConfiguredAuthEmail(path: string, emailVerificationRequired: boolean): boolean {
+  const signUpSendsVerificationEmail = path === 'auth/sign-up/email' && emailVerificationRequired;
   return (
+    signUpSendsVerificationEmail ||
     path === 'auth/request-password-reset' ||
     path === 'auth/send-verification-email'
   );
 }
 
-// The API router. The Next.js route handler src/app/api/[[...route]]/route.ts hands it every
-// /api/* request, whatever the method (HEAD and OPTIONS included), with the Worker's bindings.
+async function blockedTestEmailResponse(request: Request, logPath: string): Promise<Response | null> {
+  let body: unknown;
+  try {
+    body = await request.clone().json();
+  } catch {
+    return authJsonError('Invalid JSON', 400);
+  }
+  const email =
+    typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
+      ? body.email
+      : '';
+  const blockedDomain = email ? blockedTestEmailDomain(email) : null;
+  if (!blockedDomain) return null;
+  log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path: logPath });
+  return authJsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403, { code: 'test_account_blocked' });
+}
+
+async function handleAuthPost(request: Request, env: Env, path: string, logPath: string): Promise<Response> {
+  if (isProductionAuthPolicy(env) && TEST_EMAIL_CHECKED_AUTH_PATHS.has(path)) {
+    const blocked = await blockedTestEmailResponse(request, logPath);
+    if (blocked) return blocked;
+  }
+
+  const emailPolicy = getAuthEmailPolicy(env);
+  if (
+    requiresConfiguredAuthEmail(path, emailPolicy.emailVerificationRequired) &&
+    !emailPolicy.emailAuthAvailable
+  ) {
+    return authJsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
+      code: 'auth_email_unavailable',
+    });
+  }
+
+  return createBetterAuth(env, request).handler(request);
+}
+
 const api = {
   fetch(request: Request, env: Env): Promise<Response> {
     return dispatch({ request, env });
@@ -70,25 +107,18 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
   const requestId = crypto.randomUUID();
   const requestHeaders = new Headers(context.request.headers);
   requestHeaders.set('X-Request-Id', requestId);
-  // A client can send X-Forwarded-Host; nothing may build URLs from it (Better
-  // Auth's baseURL is pinned in better-auth.ts). X-Forwarded-For stays for
-  // getClientIp in local dev.
   requestHeaders.delete('X-Forwarded-Host');
   const request = new Request(context.request, { headers: requestHeaders });
   const url = new URL(request.url);
   const path = url.pathname.replace('/api/', '');
-  // Some paths carry a secret token: log this copy, route on the raw path.
   const logPath = sanitizeLogPath(path);
   const startMs = Date.now();
-  // Only for the in-memory rate limits: a client IP is personal data, never logged.
-  const ip = getClientIp(request);
-  // Better Auth's client shows `message`, so auth errors the router sends itself carry one.
+  const rateLimitIp = getClientIp(request);
   const isAuthPath = path.startsWith('auth');
   const errorResponse = (message: string, status: number) =>
     isAuthPath ? authJsonError(message, status) : jsonError(message, status);
 
   const finalize = (handlerResponse: Response) => {
-    // HEAD gets the status and headers without a body, whatever the handler built.
     const resp =
       request.method === 'HEAD' && handlerResponse.body ? new Response(null, handlerResponse) : handlerResponse;
     resp.headers.set('X-Request-Id', requestId);
@@ -129,8 +159,8 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       return finalize(response);
     }
 
-    if (ip) {
-      const limitParams = { method: request.method, path, ip, isLocal: isLocalRequest(url) };
+    if (rateLimitIp) {
+      const limitParams = { method: request.method, path, ip: rateLimitIp, isLocal: isLocalRequest(url) };
       const authLimit = checkAuthRateLimit(limitParams);
       const routeLimit = authLimit ? null : checkRouteRateLimit(limitParams);
       const limit = authLimit ?? routeLimit?.result;
@@ -152,7 +182,6 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
       if (rejection) return finalize(rejection);
     }
 
-    // Handle specific auth routes
     if (path === 'health') {
       response = new Response(JSON.stringify({ status: 'ok' }), {
         headers: { 'Content-Type': 'application/json' }
@@ -165,47 +194,7 @@ async function handleRequest(context: { request: Request; env: Env }): Promise<R
         }
       );
     } else if (path.startsWith('auth') && request.method === 'POST') {
-      // From wrangler.toml, never the hostname: staging.serplists.com is a preview.
-      if (
-        isProductionAuthPolicy(env) &&
-        (path === 'auth/register' ||
-          path === 'auth/login' ||
-          path === 'auth/sign-up/email' ||
-          path === 'auth/sign-in/email')
-      ) {
-        // A fast first check; Better Auth's database hooks enforce the same
-        // block for every sign-up and sign-in path (see better-auth.ts).
-        let body: unknown;
-        try {
-          body = await request.clone().json();
-        } catch {
-          return finalize(authJsonError('Invalid JSON', 400));
-        }
-        const email =
-          typeof body === 'object' && body !== null && 'email' in body && typeof body.email === 'string'
-            ? body.email
-            : '';
-        const blockedDomain = email ? blockedTestEmailDomain(email) : null;
-        if (blockedDomain) {
-          log('warn', 'blocked_test_user_auth', { domain: blockedDomain, path: logPath });
-          response = authJsonError(TEST_ACCOUNTS_DISABLED_MESSAGE, 403, { code: 'test_account_blocked' });
-          return finalize(response);
-        }
-      }
-
-      const emailPolicy = getAuthEmailPolicy(env);
-      if (
-        requiresConfiguredAuthEmail(path, emailPolicy.emailVerificationRequired) &&
-        !emailPolicy.emailAuthAvailable
-      ) {
-        response = authJsonError('Auth email is temporarily unavailable. Please contact support.', 503, {
-          code: 'auth_email_unavailable',
-        });
-        return finalize(response);
-      }
-
-      const auth = createBetterAuth(env, request);
-      response = await auth.handler(request);
+      response = await handleAuthPost(request, env, path, logPath);
     } else if (path.startsWith('auth')) {
       const auth = createBetterAuth(env, request);
       response = await auth.handler(request);

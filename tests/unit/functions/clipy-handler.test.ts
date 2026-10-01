@@ -334,7 +334,7 @@ describe('Clipy draft categories and tags', () => {
     return (await response.json()).draft as { categories: string[]; tags: string[] };
   }
 
-  it('never classifies from the transcript', async () => {
+  it('never classifies from the transcript, whose narration ("moving on to", "pack it up") filed walkthroughs under unrelated categories', async () => {
     const draft = await generateDraft({
       transcript: '[0:12] Now moving on to the Issues tab. [0:20] Pack it up, the next task is the QR code. '
         + 'Wedding photos later, then camping luggage, relocation, a morning routine, and a home inspection process.',

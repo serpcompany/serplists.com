@@ -158,8 +158,9 @@ Do not use git history for user-generated Template or Organization history. Git 
 ## File Uploads
 
 - `POST /api/uploads` writes to R2 with a per-user key prefix.
-- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived cache headers,
-  single byte ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
+- `GET /api/uploads/file?key=...` and `HEAD /api/uploads/file?key=...` serve objects with long-lived,
+  `immutable` cache headers (a key holds a UUID, so its object never changes), single byte
+  ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
   `functions/api/utils/r2-file-response.ts`, always with `X-Content-Type-Options: nosniff`.
   Uploaded videos need ranges: Safari will not play one without them, and no browser can
   seek past what it has buffered.

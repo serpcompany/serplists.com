@@ -359,7 +359,8 @@ billing, keep it disabled by default:
 Only `POST` and `DELETE` on `/api/admin/entitlements/override` read the secret: any
 other method there gets `405` (with `Allow: POST, DELETE`) and any other path under
 `/api/admin` gets `404`, whatever the header holds, so no other request can test a
-guess. The secret is compared as SHA-256 digests, in full.
+guess. The secret is compared as SHA-256 digests, in full, so the time a check takes
+reveals neither how much of a guess matched nor how long the secret is.
 
 The body is parsed strictly and an invalid one gets `400` with nothing written:
 

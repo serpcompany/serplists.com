@@ -107,16 +107,10 @@ function buildSeoDescription(tldr: string, stepCount: number): string {
   );
 }
 
-// Draft categories and tags come from the recording's title and summary only. The
-// transcript and key points narrate steps ("now moving on to...", "pack it up"), so
-// matching them filed ordinary walkthroughs under unrelated categories. Rules are
-// phrases, not common verbs, for the same reason.
 const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'GitHub', pattern: /\bgithub\b/i },
   {
     label: 'Issue Tracking',
-    // Bare "issue", "bug" and "ticket" are everyday words ("issue a refund", "bug spray",
-    // "concert tickets"), so they count only in software phrases.
     pattern: /\b(issue[- ]track(er|ers|ing)|bug[- ]track(er|ers|ing)|bug reports?|bug fix(es|ing)?|bug triage|triag(e|ing) (bugs|issues|tickets)|(github|gitlab) (issues?|bugs?|tickets?)|(issues?|bugs?|tickets?) (in|on) (github|gitlab)|jira|support tickets?|help ?desk tickets?|ticketing (system|tool)s?)\b/i,
   },
   { label: 'Software Development', pattern: /\b(source code|code review|coding|developer|developers|software development|git|repository|repositories|pull request)\b/i },
@@ -125,13 +119,10 @@ const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'Productivity', pattern: /\b(productivity|time management|daily routine|habits)\b/i },
 ];
 
-// Every label must be one of PREDEFINED_CATEGORIES in src/utils/categories.ts.
 const CATEGORY_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'wedding', pattern: /\bwedding\b/i },
   {
     label: 'moving',
-    // "moving in/out" and "move in/out" are also plain verbs ("items move in and out of
-    // the queue"), so they count only as the noun "move-in"/"move-out" or before a noun.
     pattern: /\b(moving (house|home|day|checklist)|move-(in|out)|(move|moving) (in|out) (day|date|checklist|inspection|cleaning)|house move|relocation checklist|relocating to a new (city|country|state|home|house))\b/i,
   },
   { label: 'camping', pattern: /\b(camping|campsite|campground)\b/i },
@@ -174,9 +165,6 @@ export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: stri
     return null;
   }
 
-  // Accept every Clipy link the app renders (www host, /embed/, SERP Lists' ?ref=, #t=).
-  // Only the id is used: the fetch and the draft's watch URL are rebuilt from it, so the
-  // link's query and hash never leave this function.
   const id = clipyVideoId(parsed);
   if (!id || !CLIPY_ID_PATTERN.test(id)) return null;
 
