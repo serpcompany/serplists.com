@@ -329,8 +329,9 @@ Common failures:
     next component's props. A hook test calls the hook the same way, inside a plain function
     component. `tests/support/hookStateSlots.ts` keeps state, refs and effects between calls
     by call order, as React keeps them between renders (`hooksKeptBetweenRenders` replaces
-    every hook at once): `renderKeepingState` renders again, an effect runs during the call
-    when its dependencies change, and `unmountEffects()` runs the cleanups.
+    `useState`, `useRef`, `useEffect`, `useMemo`, `useCallback` and `useSyncExternalStore`
+    at once): `renderKeepingState` renders again, an effect runs during the call when its
+    dependencies change, and `unmountEffects()` runs the cleanups.
     `createFormControlMountedLikeUseForm` (`tests/support/editorFormControl.ts`) gives the
     template editor a real react-hook-form control.
   - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
