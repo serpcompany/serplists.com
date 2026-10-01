@@ -1,19 +1,13 @@
 import { sha256Hex } from './crypto';
 import { normalizeSectionsPayload, parseJsonArray } from './payloads';
 
-// Keeps audit rows small. D1 rejects rows over 2,000,000 bytes and the audit insert shares a
-// batch with the write it records, so an oversized audit row would roll back that write.
-//   - Snapshots (before/after) never carry run or template content (`items`,
-//     `retired_items`) or share tokens: the rows themselves and template_versions hold them.
-//   - A diff's `items` becomes a summary of task ids that changed; notes text is never kept.
-//   - Every JSON column is capped, measured in UTF-8 bytes; anything larger becomes a marker.
-
 type JsonRecord = Record<string, unknown>;
 
 const MAX_AUDIT_COLUMN_BYTES = 64 * 1024;
 export const MAX_AUDIT_USER_AGENT_LENGTH = 512;
 const MAX_LISTED_IDS = 50;
 const REDACTED = '[redacted]';
+const RUN_STATE_FIELDS = new Set(['isCompleted', 'completed', 'notes']);
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,14 +18,19 @@ function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
-/** A before/after snapshot without content blobs or share tokens. */
 export function compactAuditSnapshot<T>(value: T): T | JsonRecord {
   if (!isRecord(value)) return value;
   const { items: _items, retired_items: _retired, share_token: _shareToken, ...rest } = value;
   return rest;
 }
 
-type TaskState = { key: string; completed: boolean; notes: unknown; subItems: Map<string, boolean>; shape: string };
+type TaskState = {
+  key: string;
+  completed: boolean;
+  notes: unknown;
+  subItems: Map<string, boolean>;
+  shapeWithoutRunState: string;
+};
 
 function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskState> } | null {
   const parsed = parseJsonArray(raw);
@@ -52,15 +51,12 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
         const subKey = typeof subItem.id === 'string' && subItem.id ? subItem.id : String(subIndex + 1);
         subItems.set(subKey, subItem.isCompleted === true || subItem.completed === true);
       });
-      // Everything a guest or runner cannot change, to tell template edits from progress.
-      const shape = JSON.stringify(item, (name, entry) =>
-        name === 'isCompleted' || name === 'completed' || name === 'notes' ? undefined : entry);
       tasks.set(key, {
         key,
         completed: item.isCompleted === true || item.completed === true,
         notes: item.notes,
         subItems,
-        shape,
+        shapeWithoutRunState: JSON.stringify(item, (name, entry) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
       });
     });
   });
@@ -89,7 +85,7 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecor
       if (was !== undefined && was !== completed) (completed ? lists.completed : lists.reopened).push(`${task.key}/${subKey}`);
     }
     if ((task.notes ?? '') !== (before.notes ?? '')) lists.notesChanged.push(task.key);
-    if (task.shape !== before.shape) lists.edited.push(task.key);
+    if (task.shapeWithoutRunState !== before.shapeWithoutRunState) lists.edited.push(task.key);
   }
   for (const key of previous.tasks.keys()) {
     if (!next.tasks.has(key)) lists.removed.push(key);
@@ -105,7 +101,6 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecor
   return summary;
 }
 
-/** A diff with task content replaced by the ids that changed, compared with `before.items`. */
 export function compactAuditDiff<T>(diff: T, before: unknown): T | JsonRecord {
   if (!isRecord(diff)) return diff;
   const next: JsonRecord = { ...diff };
@@ -120,7 +115,6 @@ export function compactAuditDiff<T>(diff: T, before: unknown): T | JsonRecord {
   return next;
 }
 
-/** Replaces a serialized column over the byte cap with a small, valid JSON marker. */
 export async function capAuditColumn(json: string | null): Promise<string | null> {
   if (json === null) return null;
   const size = utf8Bytes(json);

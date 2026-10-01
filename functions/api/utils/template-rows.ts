@@ -62,7 +62,6 @@ export function parseTemplateRow<T extends Record<string, unknown>>(template: T)
     if (normalized.error) {
       log('warn', 'template_items_parse_failed', { templateId: template.id });
     } else {
-      // Entries stored without ids get the ones a save would store, so the editor resends them.
       sections = withStableTemplateIdentities(normalized.sections);
     }
   }
@@ -80,9 +79,7 @@ export function parseTemplateRow<T extends Record<string, unknown>>(template: T)
     }
   }
 
-  // The raw items column is sent only as parsed `sections`; resending it would double every
-  // template list and detail response (clients read `sections`).
-  const { items: _items, ...columns } = template;
+  const { items: _rawItemsColumn, ...columns } = template;
   return {
     ...columns,
     sections,

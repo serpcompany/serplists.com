@@ -25,7 +25,6 @@ export type AuditEventInput = {
   actorUserId: string | null;
   subject: AuditSubject;
   resource: AuditResource;
-  // Add a new action to src/lib/schemas/auditActions.ts, then label it in src/lib/auditLabels.ts.
   action: AuditAction;
   before?: JsonValue;
   after?: JsonValue;
@@ -73,8 +72,6 @@ async function getRequestAuditMetadata(request?: Request): Promise<{
   };
 }
 
-// Audit rows are compacted and size-capped (see audit-compaction.ts) so recording a write can
-// never make that write fail: callers may pass whole rows and raw updates.
 export async function buildAuditEventValues(input: AuditEventInput): Promise<typeof schema.audit_events.$inferInsert> {
   const requestMetadata = await getRequestAuditMetadata(input.request);
 
@@ -116,17 +113,12 @@ export async function buildTemplateVersionValues(
   };
 }
 
-/**
- * Inserts `auditEvent` only when `condition` holds. Batch it just before the write it records,
- * guarded by that write's own WHERE clause, so a write that misses records nothing.
- */
 export function insertAuditEventWhen(
   db: ReturnType<typeof createDb>,
   auditEvent: typeof schema.audit_events.$inferInsert,
   condition: SQL,
 ) {
   const values = auditEvent as Record<string, unknown>;
-  // Insert-select lists every column in table order, the order Drizzle's insert names them.
   const columns = Object.keys(getTableColumns(schema.audit_events)).map((key) => sql`${values[key] ?? null}`);
   return db.insert(schema.audit_events).select(sql`select ${sql.join(columns, sql`, `)} where ${condition}`);
 }

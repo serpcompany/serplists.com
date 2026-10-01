@@ -28,7 +28,6 @@ export async function canViewTemplate(env: Env, template: Record<string, unknown
   return template.user_id === userId;
 }
 
-// The owner of a Personal template, or a member of the Organization that owns it.
 export async function canViewPrivateTemplate(env: Env, template: Record<string, unknown>, userId: string): Promise<boolean> {
   if (template.owner_type === 'team' && typeof template.team_id === 'string' && template.team_id) {
     const membership = await getActiveTeamMembership(env, template.team_id, userId);
@@ -38,8 +37,6 @@ export async function canViewPrivateTemplate(env: Env, template: Record<string, 
   return template.user_id === userId;
 }
 
-// The whole row for its owner or an Organization member. Anyone else who may view it (a
-// public template) gets only PUBLIC_TEMPLATE_FIELDS; null means not found for this viewer.
 export async function serializeTemplateForViewer(env: Env, row: Record<string, unknown>, userId: string | null) {
   if (typeof row.deleted_at === 'string' && row.deleted_at) return null;
   if (userId && (await canViewPrivateTemplate(env, row, userId))) return parseTemplateRow(row);

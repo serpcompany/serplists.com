@@ -24,7 +24,6 @@ const templateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).optional(),
 });
 
-// Limits come from src/lib/schemas/templateFields.ts, which the template editor also uses.
 const limits = TEMPLATE_FIELD_LIMITS;
 
 export const templateSlugSchema = z
@@ -53,11 +52,6 @@ export const templatePayloadSchema = z.object({
   expected_version: z.number().int().positive().optional(),
 });
 
-// Saves resend every stored field, and stored values can predate these bounds (imports,
-// clones, legacy slugs such as those migrations 0002 and 0005 backfilled). So PUT checks
-// only types on the wire; the handler validates the fields that actually change against
-// templatePayloadSchema once it has read the row, and normalizes a changed slug instead
-// of rejecting it (resolveRequestedSlug).
 const looseStringList = z.union([z.array(z.string().trim()), z.string().trim()]).optional();
 export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
   title: z.string().trim().optional(),
@@ -71,12 +65,10 @@ export const templateUpdatePayloadSchema = templatePayloadSchema.extend({
   slug: z.string().trim().optional(),
 });
 
-// Import files are free-form; each template's fields must fit the same bounds as a save.
 export const templateImportFieldsSchema = templatePayloadSchema
   .pick({ title: true, description: true, seoTitle: true, seoDescription: true, categories: true, tags: true, rules: true })
   .required({ title: true });
 
-/** An error message that names the field: "description: String must contain at most 5000 character(s)". */
 export function formatPayloadIssue(error: z.ZodError, fallback: string): string {
   const issue = error.issues[0];
   if (!issue) return fallback;
@@ -96,8 +88,6 @@ export const checklistPayloadSchema = z.object({
   expected_revision: z.number().int().positive().optional(),
 });
 
-// A payload validation error that says which field failed, e.g.
-// "seoDescription: String must contain at most 320 character(s)", plus the field for clients.
 export function describePayloadError(
   error: z.ZodError,
   fallback: string,
@@ -134,11 +124,6 @@ export function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
-/**
- * normalizeSectionsPayload for writes: also checks every section, task, content block and
- * Sub-task against storedSectionsSchema, so stored content never breaks a reader. The
- * error names the first bad path.
- */
 export function parseSectionsPayload(input: unknown): { sections: unknown[]; error?: string } {
   const normalized = normalizeSectionsPayload(input);
   if (normalized.error) return normalized;

@@ -9,10 +9,6 @@ import { parsePortableTemplate } from '../../../src/lib/schemas/portableTemplate
 import { buildPortablePackManifest, type PortableSkippedTemplate } from '../../../src/lib/schemas/portableTemplatePack';
 import { toPortableSections } from '../../../src/lib/schemas/portableSections';
 
-// Portable packs are written and read through the same normalizer as the client, so an
-// export always passes the importer's schema (docs/product-specs/portable-templates.md).
-
-// A parsed templates row; the portable schema validates each field.
 export type PortableExportSource = {
   id: unknown;
   title: unknown;
@@ -28,7 +24,6 @@ export type PortableExportSource = {
   slug: unknown;
 };
 
-/** Builds GET /api/templates/backup's portable pack. Templates that cannot be made valid are reported in the manifest. */
 export function buildPortableTemplatePack(templates: PortableExportSource[], exportedBy: string | undefined) {
   const exported: PortableChecklistTemplate[] = [];
   const skippedTemplates: PortableSkippedTemplate[] = [];
@@ -41,7 +36,6 @@ export function buildPortableTemplatePack(templates: PortableExportSource[], exp
       seoTitle: template.seoTitle || '',
       seoDescription: template.seoDescription || '',
       rules: template.rules,
-      // Only portable keys: no run state such as isCompleted or notes.
       sections: toPortableSections(template.sections),
       categories: template.categories,
       tags: template.tags,
@@ -68,10 +62,6 @@ export function buildPortableTemplatePack(templates: PortableExportSource[], exp
 
 export type PortableImportFailure = { index: number; title: string; reason: string; code: 'invalid_sections' };
 
-/**
- * Parses a POSTed portable pack. Envelope problems reject the file; each template is
- * normalized and validated on its own, so an invalid one becomes a per-template failure.
- */
 export function parsePortableTemplatePackImport(body: unknown):
   | { response: Response }
   | { templates: PortableChecklistTemplate[]; sourceIndexes: number[]; failures: PortableImportFailure[] } {

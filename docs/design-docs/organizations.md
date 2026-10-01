@@ -19,7 +19,7 @@ User-facing language follows the [product glossary](../PRODUCT_SENSE.md) and the
   request naming another Organization gets `409 organization_mismatch` with the owning
   Organization's id for its members, and `404` for everyone else. Public Templates and a
   User's own Personal Templates run and copy into the active context.
-- Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits. An Organization Run started from a member's Personal Template can be revalidated only by that member, and a private Organization Template never supplies content to a Personal Run (`functions/api/utils/template-access.ts`).
+- Personal data stays Personal. Organization Membership does not upgrade or expose a User's Personal Templates, Runs, or limits. An Organization Run started from a member's Personal Template can be revalidated only by that member, and a private Organization Template never supplies content to a Personal Run (`functions/api/utils/template-access.ts`). Run creation, revalidation and a run's staleness flag share that rule for which Template may supply a run's content: never an archived one, always a public one, an Organization Template only for runs of that same Organization, and a Personal Template only for its owner's runs (Personal or Organization). Membership and role are checked separately, against the run.
 - Organization entitlements apply only while that Organization context is active. A Free User in a paid Organization can use its paid capabilities, but their Personal context remains Free unless they upgrade their own plan.
 
 ## Roles

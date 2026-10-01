@@ -92,7 +92,13 @@ reconciles and reopens a completed private run. A template update that changes
 content (anything but visibility) without `expected_version` gets `409 edit_conflict`,
 and `PUT /api/templates/:id` returns the new `version` and `content_version`, and the
 `slug` the template has after the save (the requested one, suffixed if it was taken,
-or the one it kept when none was requested). The
+or the one it kept when none was requested). Saves resend every stored field, and stored
+values can predate today's bounds (imports, clones, slugs that migrations 0002 and 0005
+backfilled), so `PUT` checks only types on the wire and holds the fields that actually
+change to the bounds once it has read the row. A blank slug, or the stored one echoed
+back, keeps the stored slug even when today's rule rejects it, so unrelated saves never
+fail or rewrite shared URLs; a new slug is normalized rather than refused, and one with
+no Latin letters or digits to keep (`Список`) is a `400`. The
 template editor loads the template by id (`GET /api/templates/:id`) when it opens and
 sends the version it loaded, then the version each save returns, never the content or
 version in the cached template lists.
@@ -142,6 +148,7 @@ JSON fields:
 - User entitlements come from manual overrides, Stripe subscriptions, or the Free fallback (`functions/api/utils/entitlements.ts`). The local Pro personas get Pro from seeded override rows (`db/seeds/local.ts`), never from their email: anyone can register those addresses on a deployed environment.
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
+- The Template limit is enforced the same way: create, clone and restore count first for a clear error, then repeat the count inside the insert (`templateCapacityAvailableSql` in `functions/api/utils/template-writes.ts`).
 - A count followed by a separate insert lets concurrent requests all pass a limit, so enforce the active Run limit inside the insert itself with the guarded statements in `functions/api/utils/active-run-limit.ts` (web run create and restore and MCP `start_run` do); a pre-check count only gives an early, friendly error.
 - Every write that adds an `in_progress` run to a context counts against the limit of the run's owner context, not the actor's: create, restore, and reopening a completed run through revalidate, `PUT` status, the share link or MCP `set_run_status`. Reopens check it only before the write (TD-17).
 
@@ -181,7 +188,7 @@ Do not use git history for user-generated Template or Organization history. Git 
 
 ## Public And Private Data
 
-- `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15). Template list and detail responses carry the checklist as parsed `sections` only; the raw `items` column is not sent.
+- `GET /api/templates?scope=public` returns the public catalog, identical for every visitor and edge-cached for 5 minutes. `?scope=personal` returns the signed-in User's Personal Templates, and `?teamId=...` the authorized Organization's. With no parameter it returns public Templates plus the User's Personal Templates, for clients loaded before scopes existed (TD-15). Template list and detail responses carry the checklist as parsed `sections` only; the raw `items` column is not sent, since sending both would double every response.
 - Public template responses carry only the allowlisted fields in `functions/api/utils/template-public.ts`. That covers the catalog, Public Profile lists, the public rows of the unscoped list, and slug or id reads by anyone other than the owner or a member of the owning Organization. They leave out `team_id`, `created_by_user_id`, `updated_by_user_id`, `deleted_at` and `content_version`, so they never reveal which Organization owns a Template or which members edited it. The creator stays attributed through `user_id` and the owner fields, and `owner_type` marks an Organization Template. Owners and Organization members still get the whole row.
 - Public template detail routes are available through `/profile/:username/:templateSlug/`.
 - Public profiles are available through `/api/profiles/by-username` and `/api/profiles/by-id`, for Users who have a username only.

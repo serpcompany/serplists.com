@@ -15,16 +15,10 @@ import {
   type TemplateVersionValues,
 } from './template-writes';
 
-// Writing new templates, and choosing their slugs. A slug is picked by reading first, so a
-// concurrent write can claim it before this request's batch runs; the unique index
-// (idx_templates_slug_unique) then rejects the batch, which D1 rolls back as a whole.
-
 type Db = ReturnType<typeof createDb>;
 
-/** New templates try this many slugs before giving up with 409 slug_taken. */
 export const TEMPLATE_SLUG_ATTEMPTS = 3;
 
-/** True when the error (or one it wraps) is the unique index on templates.slug. */
 export function isTemplateSlugUniqueViolation(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current && depth < 5; depth += 1) {
@@ -35,14 +29,12 @@ export function isTemplateSlugUniqueViolation(error: unknown): boolean {
   return false;
 }
 
-/** The slug a title asks for, before any suffix: 'template' when nothing usable is left. */
 export function templateSlugBase(title: string): string {
   return truncateSlug(generateSlug(title || 'template'), TEMPLATE_SLUG_MAX) || 'template';
 }
 
 const randomSlugSuffix = () => crypto.randomUUID().slice(0, 8);
 
-// Bundled starter slugs count as taken: the D1 unique index cannot see them.
 async function isTemplateSlugTaken(db: Db, slug: string, exceptTemplateId?: string): Promise<boolean> {
   if (isReservedTemplateSlug(slug)) return true;
   const { templates } = schema;
@@ -54,7 +46,6 @@ async function isTemplateSlugTaken(db: Db, slug: string, exceptTemplateId?: stri
   return Boolean(row);
 }
 
-/** A slug for a new template: the clean one if free, else a deterministic, then a random suffix. */
 export async function generateUniqueSlug(env: Env, title: string, templateId: string): Promise<string> {
   const db = createDb(env);
   const base = templateSlugBase(title);
@@ -63,14 +54,9 @@ export async function generateUniqueSlug(env: Env, title: string, templateId: st
   const suffixed = withSlugSuffix(base, templateId.slice(0, 8), TEMPLATE_SLUG_MAX);
   if (!(await isTemplateSlugTaken(db, suffixed))) return suffixed;
 
-  // Extremely unlikely collision; the insert retries if this one is taken too.
   return withSlugSuffix(base, randomSlugSuffix(), TEMPLATE_SLUG_MAX);
 }
 
-/**
- * A free slug for an existing template whose requested slug is taken by another one: the
- * id suffix, then a random one, each checked. Null when both are taken.
- */
 export async function findFreeSuffixedSlug(db: Db, slug: string, templateId: string): Promise<string | null> {
   for (const suffix of [templateId.slice(0, 8), randomSlugSuffix()]) {
     const candidate = withSlugSuffix(slug, suffix, TEMPLATE_SLUG_MAX);
@@ -79,7 +65,6 @@ export async function findFreeSuffixedSlug(db: Db, slug: string, templateId: str
   return null;
 }
 
-/** A new template could not get a free slug in TEMPLATE_SLUG_ATTEMPTS tries. */
 export function templateSlugTakenResponse(): Response {
   return jsonError('Could not reserve a URL for this template. Try again.', 409, { code: 'slug_taken' });
 }
@@ -90,17 +75,8 @@ export type NewTemplateRows = {
   audit: AuditEventValues;
 };
 
-/** The slug a new template was written with, or why nothing was written. */
 export type NewTemplateInsertResult = { slug: string } | { failed: 'slug_taken' | 'limit_reached' };
 
-/**
- * Inserts a new template with its first version and audit event. When a concurrent write
- * claimed the slug, the rows are rebuilt with a random suffix (the version snapshot and the
- * audit event carry the slug too) and the batch retried. With `capacity`, each attempt
- * inserts only while the context is below its template limit (see template-writes.ts).
- * Returns the slug written, or `slug_taken` when every attempt collided, or `limit_reached`
- * when the limit stopped the insert. Other errors are thrown unchanged.
- */
 export async function insertTemplateWithUniqueSlug(
   db: Db,
   params: {
@@ -124,7 +100,6 @@ export async function insertTemplateWithUniqueSlug(
   return { failed: 'slug_taken' };
 }
 
-/** The create or copy response for a new template: its id and slug, or the 403 or 409 that stopped it. */
 export async function newTemplateResponse(
   env: Env,
   templateId: string,
