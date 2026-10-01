@@ -8,6 +8,8 @@ import {
 import { createApiError } from '@/lib/api-errors';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
+import { APP_QUERY_STALE_TIME, createQueryClientWithAppDefaults } from '../../../support/appQueryClient';
+
 const serverRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'template-1',
   title: 'Camping Checklist',
@@ -27,18 +29,12 @@ const buildApiClient = (getTemplateById = vi.fn()) => ({
   getProfileById: vi.fn(),
   getTemplateById,
   getTemplateBySlug: vi.fn(),
-  // A detail page has no business with any list endpoint.
   getTemplates: vi.fn(),
   updateTemplate: vi.fn(),
 });
 
-// The app's defaults (src/App.tsx), so the test sees the same caching as the page.
-const buildQueryClient = () =>
-  new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 60 * 1000 } } });
-
 const unsubscribers: Array<() => void> = [];
 
-// An observer is what an open page holds: it fetches on subscribe and refetches on invalidation.
 const openPage = (queryClient: QueryClient, apiClient: ReturnType<typeof buildApiClient>, identifier = 'template-1') => {
   const observer = new QueryObserver(
     queryClient,
@@ -65,7 +61,7 @@ describe('template detail query', () => {
   it('loads the template with one request by id and no list request', async () => {
     const apiClient = buildApiClient(vi.fn().mockResolvedValue(serverRow()));
 
-    const result = await settled(openPage(buildQueryClient(), apiClient));
+    const result = await settled(openPage(createQueryClientWithAppDefaults(), apiClient));
 
     expect(result.data?.title).toBe('Camping Checklist');
     expect(result.data?.version).toBe(3);
@@ -74,8 +70,8 @@ describe('template detail query', () => {
     expect(apiClient.getTemplates).not.toHaveBeenCalled();
   });
 
-  it('refetches the open template when templates are invalidated, so later writes send the new version', async () => {
-    const queryClient = buildQueryClient();
+  it('refetches the open template when a template mutation invalidates templates, so later writes send the new version', async () => {
+    const queryClient = createQueryClientWithAppDefaults();
     const apiClient = buildApiClient(
       vi
         .fn()
@@ -85,7 +81,6 @@ describe('template detail query', () => {
     const observer = openPage(queryClient, apiClient);
     await settled(observer);
 
-    // Every template mutation (edit, visibility, Share, copy, archive, context switch) does this.
     await queryClient.invalidateQueries({ queryKey: ['templates'] });
     const result = await settled(observer);
 
@@ -96,15 +91,15 @@ describe('template detail query', () => {
   });
 
   it('does not fetch again when the tab regains focus after the template went stale', async () => {
-    const queryClient = buildQueryClient();
+    const queryClient = createQueryClientWithAppDefaults();
     queryClient.mount();
     const apiClient = buildApiClient(vi.fn().mockResolvedValue(serverRow()));
     const observer = openPage(queryClient, apiClient);
     const loaded = await settled(observer);
 
-    // The user comes back to the tab two minutes later (past the one-minute staleTime).
+    const loadedPastTheStaleTime = Date.now() - 2 * APP_QUERY_STALE_TIME;
     queryClient.setQueryData(getTemplateDetailQueryKey('template-1', 'user-1'), loaded.data, {
-      updatedAt: Date.now() - 2 * 60 * 1000,
+      updatedAt: loadedPastTheStaleTime,
     });
     try {
       focusManager.setFocused(false);
@@ -123,7 +118,7 @@ describe('template detail query', () => {
     const libraryTemplate = repoTemplates[0];
     const apiClient = buildApiClient();
 
-    const result = await settled(openPage(buildQueryClient(), apiClient, libraryTemplate?.id));
+    const result = await settled(openPage(createQueryClientWithAppDefaults(), apiClient, libraryTemplate?.id));
 
     expect(result.data).toEqual(libraryTemplate);
     expect(apiClient.getTemplateById).not.toHaveBeenCalled();
@@ -135,7 +130,7 @@ describe('template detail query', () => {
     );
 
     const result = await settled(
-      openPage(buildQueryClient(), apiClient, '4f7c1a52-9b1e-4c1d-8a61-2f8e5b3c9d10'),
+      openPage(createQueryClientWithAppDefaults(), apiClient, '4f7c1a52-9b1e-4c1d-8a61-2f8e5b3c9d10'),
     );
 
     expect(result.data).toBeNull();
@@ -143,7 +138,7 @@ describe('template detail query', () => {
   });
 
   it('fails with a retryable message, and a failed refresh keeps the template on screen', async () => {
-    const queryClient = buildQueryClient();
+    const queryClient = createQueryClientWithAppDefaults();
     const apiClient = buildApiClient(
       vi
         .fn()

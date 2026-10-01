@@ -10,6 +10,8 @@ import {
 } from '@/features/template-detail/useTemplateDetailRecord';
 import type { ChecklistTemplate } from '@/types/checklist';
 
+import { createQueryClientWithAppDefaults } from '../../../support/appQueryClient';
+
 const template: ChecklistTemplate = {
   id: 'template-1',
   title: 'Camping Checklist',
@@ -23,8 +25,7 @@ const template: ChecklistTemplate = {
 
 const key = getTemplateDetailQueryKey('template-1', 'user-1');
 
-// Renders once on the server: no effect or fetch runs, so the record reflects the cache.
-const renderRecord = (queryClient: QueryClient) => {
+const renderOnceFromTheCache = (queryClient: QueryClient) => {
   let record: TemplateDetailRecord | undefined;
   const Probe = () => {
     record = useTemplateDetailRecord({
@@ -48,7 +49,7 @@ describe('private template detail record', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(key, template);
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.template).toEqual(template);
     expect(record.loading).toBe(false);
@@ -56,14 +57,12 @@ describe('private template detail record', () => {
     expect(record.loadError).toBeNull();
   });
 
-  // A background refetch (an invalidation, or the reload after an edit conflict) must not
-  // swap the page for its spinner, which would unmount open dialogs.
-  it('keeps showing the loaded template while it refetches in the background', () => {
+  it('keeps showing the loaded template, without the spinner that would unmount open dialogs, while it refetches in the background', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(key, template);
     queryClient.getQueryCache().find({ queryKey: key })?.setState({ fetchStatus: 'fetching' });
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.template).toEqual(template);
     expect(record.loading).toBe(false);
@@ -73,32 +72,29 @@ describe('private template detail record', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(['templates', 'user-1', 'personal'], [template]);
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.template).toBeNull();
     expect(record.loading).toBe(true);
   });
 
-  it('reports a template the server says is gone as not found', () => {
-    // A fresh answer (the app keeps answers fresh for 60s), so nothing refetches it.
-    const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } });
+  it('reports a template the server says is gone as not found while that answer is fresh', () => {
+    const queryClient = createQueryClientWithAppDefaults();
     queryClient.setQueryData(key, null);
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.notFound).toBe(true);
     expect(record.loading).toBe(false);
     expect(record.template).toBeNull();
   });
 
-  // A cached "gone" answer (the template was archived, then restored elsewhere) is being
-  // checked again: wait for the answer instead of saying it does not exist.
-  it('shows loading, not not found, while a cached gone answer is refetched', () => {
+  it('shows loading, not not found, while a cached gone answer is refetched, since the template may have been restored elsewhere', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(key, null);
     queryClient.getQueryCache().find({ queryKey: key })?.setState({ fetchStatus: 'fetching' });
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.loading).toBe(true);
     expect(record.notFound).toBe(false);
@@ -112,7 +108,7 @@ describe('private template detail record', () => {
       status: 'error',
     });
 
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     expect(record.loadError).toBe('HTTP 503');
     expect(record.notFound).toBe(false);
@@ -122,7 +118,7 @@ describe('private template detail record', () => {
   it('applies an accepted change to the cached template only when it is still that template', () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(key, template);
-    const record = renderRecord(queryClient);
+    const record = renderOnceFromTheCache(queryClient);
 
     record.updateTemplate((current) =>
       current?.id === 'template-1' ? { ...current, isPublic: true } : current,

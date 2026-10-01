@@ -73,7 +73,7 @@ describe('private template detail load failures', () => {
     expect(apiClient.getTemplateBySlug).not.toHaveBeenCalled();
   });
 
-  it('falls back to the slug lookup only after a 404 for another identifier', async () => {
+  it('falls back to the slug lookup only after a 404 for another identifier, and keeps the id that the page links Edit to', async () => {
     const apiClient = buildApiClient({
       getTemplateById: vi.fn().mockRejectedValue(createApiError(404, { error: 'Template not found' })),
       getTemplateBySlug: vi.fn().mockResolvedValue(serverRow()),
@@ -84,7 +84,6 @@ describe('private template detail load failures', () => {
     expect(apiClient.getTemplateBySlug).toHaveBeenCalledWith('camping-checklist');
     expect(result.kind).toBe('ok');
     expect(result.kind === 'ok' ? result.template.title : null).toBe('Camping Checklist');
-    // The page links Edit to this id; the editor cannot load a slug.
     expect(result.kind === 'ok' ? result.template.id : null).toBe(TEMPLATE_UUID);
   });
 
@@ -160,9 +159,7 @@ describe('public template detail load failures', () => {
   });
 });
 
-// Templates saved before UUID slugs were refused can have a slug that looks like an id, and
-// their public URL (Share, sitemap, canonical) is built from it.
-describe('public template with a UUID-shaped slug', () => {
+describe('public template with a UUID-shaped slug, which templates saved before such slugs were refused can have', () => {
   const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 
   it('loads it by slug after the id lookup finds nothing', async () => {

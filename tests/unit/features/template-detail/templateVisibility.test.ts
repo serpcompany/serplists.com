@@ -27,8 +27,7 @@ const buildApiClient = (updateTemplate = vi.fn().mockResolvedValue({ success: tr
   updateTemplate,
 });
 
-// Applies the updater the action hands to setTemplate, as React would.
-const applyUpdate = (
+const applyTheUpdaterAsReactWould = (
   onTemplateChange: ReturnType<typeof vi.fn>,
   current: ChecklistTemplate | null,
 ) => {
@@ -39,7 +38,7 @@ const applyUpdate = (
 };
 
 describe('setTemplateVisibility', () => {
-  it('changes only visibility, so the loaded version stays valid for the next write', async () => {
+  it('sends only the visibility flag with the loaded version, and applies the new visibility', async () => {
     const apiClient = buildApiClient();
     const onTemplateChange = vi.fn();
     const invalidateTemplates = vi.fn();
@@ -55,12 +54,11 @@ describe('setTemplateVisibility', () => {
     });
 
     expect(result).toEqual({ kind: 'ok' });
-    // Visibility alone does not create a template version on the server.
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
       expected_version: 3,
       is_public: false,
     });
-    expect(applyUpdate(onTemplateChange, template)).toEqual({ ...template, isPublic: false });
+    expect(applyTheUpdaterAsReactWould(onTemplateChange, template)).toEqual({ ...template, isPublic: false });
     expect(invalidateTemplates).toHaveBeenCalledTimes(1);
   });
 
@@ -76,7 +74,7 @@ describe('setTemplateVisibility', () => {
     });
 
     const other = buildTemplate({ id: 'template-2', isPublic: true });
-    expect(applyUpdate(onTemplateChange, other)).toBe(other);
+    expect(applyTheUpdaterAsReactWould(onTemplateChange, other)).toBe(other);
   });
 
   it('keeps the shown visibility when the server refuses the change', async () => {
@@ -102,9 +100,7 @@ describe('setTemplateVisibility', () => {
     expect(invalidateTemplates).not.toHaveBeenCalled();
   });
 
-  // A save no longer reloads every Template list, so the page keeps the version the PUT
-  // answer returned and the next switch sends a current expected_version.
-  it('keeps the version and slug the server stored', async () => {
+  it('keeps the version and slug the server stored, so the next switch sends a current expected_version without a list reload', async () => {
     const onTemplateChange = vi.fn();
     const template = buildTemplate();
 
@@ -116,7 +112,7 @@ describe('setTemplateVisibility', () => {
       template,
     });
 
-    expect(applyUpdate(onTemplateChange, template)).toEqual({
+    expect(applyTheUpdaterAsReactWould(onTemplateChange, template)).toEqual({
       ...template,
       isPublic: false,
       version: 4,
@@ -124,9 +120,7 @@ describe('setTemplateVisibility', () => {
     });
   });
 
-  // After a 409 the loaded copy is stale: every retry would send the same version and fail
-  // the same way, so the page reloads the stored template before the switch re-enables.
-  it('reloads the stored template after an edit conflict and says so', async () => {
+  it('reloads the stored template after an edit conflict and says so, since a retry from the stale copy would fail the same way', async () => {
     const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
     const onTemplateChange = vi.fn();
 

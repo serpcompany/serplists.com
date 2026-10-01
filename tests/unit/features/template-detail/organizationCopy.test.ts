@@ -22,7 +22,6 @@ const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTem
   ...overrides,
 });
 
-// Every Organization without an override reports the free plan.
 const freeOrganizationBilling: TemplateDetailBillingState = {
   billingEnabled: true,
   isLoading: false,
@@ -206,9 +205,7 @@ describe('getCopyTemplateButton', () => {
     ).toEqual({ disabled: false, label: 'Copy to My Templates', visible: true });
   });
 
-  // The context shows Personal until a stored Organization is confirmed, so neither the
-  // Personal plan's label nor a click may apply yet.
-  it('waits for the active context before offering a Personal copy', () => {
+  it('waits for the active context, which shows Personal until a stored Organization is confirmed, before offering a Personal copy', () => {
     for (const billingState of [
       freeOrganizationBilling,
       { ...freeOrganizationBilling, isPro: true },

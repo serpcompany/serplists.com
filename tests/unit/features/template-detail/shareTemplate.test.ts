@@ -160,7 +160,7 @@ describe('shareTemplateToPublic', () => {
     );
   });
 
-  it('asks the server to confirm a template the loaded copy shows as public', async () => {
+  it('asks the server to confirm a template the loaded copy shows as public, which stores nothing when it is still public', async () => {
     const apiClient = buildApiClient({ username: 'alice' });
     apiClient.updateTemplate.mockResolvedValue({ version: 3, slug: 'camping-checklist' });
 
@@ -179,7 +179,6 @@ describe('shareTemplateToPublic', () => {
       kind: 'ok',
       shareUrl: `${ORIGIN}/profile/alice/camping-checklist/`,
     });
-    // The server's no-change path stores nothing and answers with the current version.
     expect(apiClient.updateTemplate).toHaveBeenCalledTimes(1);
     expect(apiClient.updateTemplate).toHaveBeenCalledWith('template-1', {
       is_public: true,
@@ -328,7 +327,7 @@ describe('shareTemplateToPublic', () => {
     expect(onShare).toHaveBeenCalledWith(expect.objectContaining({ isPublic: true, version: 3 }));
   });
 
-  it('shares library templates without a username', async () => {
+  it('shares library templates without a username or a request, since they are not stored rows', async () => {
     const apiClient = buildApiClient();
 
     const result = await shareTemplateToPublic({
@@ -350,7 +349,6 @@ describe('shareTemplateToPublic', () => {
       kind: 'ok',
       shareUrl: `${ORIGIN}/profile/serp/camping-checklist/`,
     });
-    // Library templates are not stored rows, so there is nothing to confirm.
     expect(apiClient.updateTemplate).not.toHaveBeenCalled();
   });
 

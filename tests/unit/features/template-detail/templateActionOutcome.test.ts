@@ -26,10 +26,7 @@ beforeEach(() => {
   toastMocks.success.mockClear();
 });
 
-// Start Run, Copy/Save and Share on the template pages await a request and then move
-// the user: to the new run or template, to sign-in, or to checkout. A user who left
-// the page meanwhile was pulled back to that destination.
-describe('followTemplateActionResult', () => {
+describe('followTemplateActionResult, which moves the user to a run, a template, sign-in or checkout only while they are still on the template page', () => {
   it.each<[string, TemplateDetailActionResult]>([
     ['a created run', { kind: 'ok', runId: 'run-1' }],
     ['a copied template', { kind: 'ok', templateId: 'template-9' }],
@@ -83,9 +80,7 @@ describe('followTemplateActionResult', () => {
   });
 });
 
-// While a stored Organization is unconfirmed the context shows Personal (no teamId), so
-// a copy must wait: it would land in Personal, or send a Free user to Personal checkout.
-describe('saveTemplateToAccount before the active context is known', () => {
+describe('saveTemplateToAccount before the active context is known, which reads as Personal until then, so a copy would land in Personal or start Personal checkout', () => {
   const publicTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
     categories: [],
     createdAt: '2026-01-01T00:00:00.000Z',

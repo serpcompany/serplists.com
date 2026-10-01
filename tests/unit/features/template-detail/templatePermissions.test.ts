@@ -105,9 +105,7 @@ describe('getTemplateDetailPermissions', () => {
     ).toEqual(none);
   });
 
-  it('gives the Creator nothing on a public Organization template sent without its Organization', () => {
-    // The API sends team_id only to active members, so this is a Creator who left, was
-    // removed or was disabled, or an Organization that was archived.
+  it('gives the Creator nothing on a public Organization template sent without its Organization, as the API sends it once they are no longer an active member', () => {
     const formerOrganizationTemplate = {
       id: 'template-t',
       isPublic: true,
@@ -143,8 +141,7 @@ describe('getTemplateDetailPermissions', () => {
   });
 
   it("offers the Creator of a public Organization template the API's public copy, not owner controls", () => {
-    // The shape GET /api/templates/:id sends a viewer who is not an active member.
-    const row = {
+    const storedRow = {
       created_at: '2026-01-01T00:00:00Z',
       id: 'template-t',
       is_public: true,
@@ -157,13 +154,13 @@ describe('getTemplateDetailPermissions', () => {
       user_id: 'alice',
       version: 3,
     };
-    const template = mapApiTemplateToChecklistTemplate(toPublicTemplate(row), 'audit');
+    const asSentToANonMember = mapApiTemplateToChecklistTemplate(toPublicTemplate(storedRow), 'audit');
 
     expect(
       getTemplateDetailPermissions({
         activeTeamId: undefined,
         canEditTemplates: true,
-        template,
+        template: asSentToANonMember,
         userId: 'alice',
       }),
     ).toEqual({ canDuplicate: false, canEdit: false, canShare: false, canViewHistory: false });
@@ -173,7 +170,7 @@ describe('getTemplateDetailPermissions', () => {
         canEditTemplates: true,
         isCloning: false,
         isTeamWorkspace: false,
-        template,
+        template: asSentToANonMember,
       }),
     ).toEqual({ disabled: false, label: 'Upgrade to copy template', visible: true });
   });

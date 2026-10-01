@@ -332,10 +332,14 @@ Common failures:
     template editor a real react-hook-form control.
   - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
     (`installFakeDomGlobals`, `createFakeContainer`) and drive it with `act()`, `click()` and
-    `dispatch()`, when the test needs effects, focus or clicks. React DOM loaded without a
-    DOM listens for the old IE input events, so a test types into a field by calling the
-    `onChange` in the props React keeps on the node (`__reactProps$...`). React DOM sets an
-    input's `type` and `value` as properties, so read them from the node, not its attributes.
+    `dispatch()`, when the test needs effects, focus or clicks. A hook that needs React's own
+    effects or TanStack Query runs the same way, in a probe component that renders nothing.
+    React DOM loaded without a DOM listens for the old IE input events, so a test types into a
+    field by calling the `onChange` in the props React keeps on the node (`__reactProps$...`).
+    React DOM sets an input's `type` and `value` as properties, so read them from the node,
+    not its attributes. After unmounting a tree that used TanStack Query, wait one timer tick
+    before `afterAll` restores the globals: Query hands React its batched notifications on a
+    timer, and React fails on one that runs after the fake window is gone.
 
   Base UI's overlays render nothing until they open, and their portals render nothing without
   a DOM, so component tests replace dialogs, alert dialogs, menus and select popups with the

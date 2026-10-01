@@ -12,19 +12,18 @@ import type {
 
 const at = (minute: number) => `2026-07-03T12:${String(minute).padStart(2, '0')}:00.000Z`;
 
-// The API gives a version the metadata of the audit event its write recorded.
 const version = (
   id: string,
   versionNumber: number,
   action: string,
   minute: number,
-  metadata?: unknown,
+  metadataOfItsAuditEvent?: unknown,
 ): TemplateHistoryVersion => ({
   action,
   actor: { name: 'Alice' },
   createdAt: at(minute),
   id,
-  metadata,
+  metadata: metadataOfItsAuditEvent,
   version: versionNumber,
 });
 
@@ -100,8 +99,7 @@ describe('buildTemplateHistoryTimeline', () => {
     expect(timeline.map((entry) => entry.label)).toEqual(['Updated template']);
   });
 
-  // The API versions a visibility change too; its version reads as the change it made.
-  it('labels the version a visibility change wrote by that change', () => {
+  it('labels the version that a visibility change wrote, as the API versions those too, by that change', () => {
     const timeline = buildTemplateHistoryTimeline(
       history(
         [version('v3', 3, 'template.updated', 3, { visibility: 'public' }), version('v2', 2, 'template.updated', 2)],
@@ -171,8 +169,7 @@ describe('buildTemplateHistoryTimeline', () => {
     expect(timeline.map((entry) => entry.label)).toEqual(['Imported template', 'Created template']);
   });
 
-  // An action this app version has no label for reads as words, never a dotted id.
-  it('is empty for no history and tolerates unreadable metadata and unknown actions', () => {
+  it('is empty for no history, tolerates unreadable metadata, and reads an action it has no label for as words, never a dotted id', () => {
     expect(buildTemplateHistoryTimeline(null)).toEqual([]);
     expect(
       buildTemplateHistoryTimeline(

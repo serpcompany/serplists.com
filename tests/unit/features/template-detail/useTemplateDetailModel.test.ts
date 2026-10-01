@@ -334,8 +334,6 @@ describe('loadTemplateDetailData', () => {
     expect(loadedTemplate(result)?.userId).toBe('user-b');
   });
 
-  // Only a settled 404 may render the noindex "Template not found" state. A failure that can
-  // be transient must not tell crawlers that a real public template is gone.
   const failingLookup = (error: unknown) => ({
     getTemplateById: vi.fn().mockRejectedValue(error),
     getTemplateBySlug: vi.fn().mockRejectedValue(error),
@@ -349,7 +347,7 @@ describe('loadTemplateDetailData', () => {
       { apiClient: failingLookup(error) },
     );
 
-  it('treats a 404 from the API as a settled not-found', async () => {
+  it('treats a 404 from the API as a settled not-found, the only answer that renders the noindex Template not found state', async () => {
     const missing = createApiError(404, { error: 'Template not found' });
 
     expect(await loadPublic('camping-checklist', missing)).toEqual({ kind: 'not_found' });
@@ -358,7 +356,7 @@ describe('loadTemplateDetailData', () => {
     });
   });
 
-  it('reports server, rate-limit and network failures as a load error, not a missing template', async () => {
+  it('reports server, rate-limit and network failures as a load error, not a missing template, so crawlers never read a real public template as gone', async () => {
     for (const error of [
       createApiError(500, { error: 'Internal error' }),
       createApiError(503),
@@ -549,8 +547,7 @@ describe('template detail actions', () => {
     expect(result).toEqual({ kind: 'upgrade_required' });
   });
 
-  // Free Personal allows one template, so Duplicate is a plan gate like Start Run.
-  it('maps a plan limit on Duplicate to upgrade_required', async () => {
+  it('maps a plan limit on Duplicate to upgrade_required, as for Start Run, since free Personal allows one template', async () => {
     const createTemplate = vi.fn().mockRejectedValue(
       createApiError(403, {
         code: 'limit_reached',
@@ -580,8 +577,7 @@ describe('template detail actions', () => {
     );
   });
 
-  // Opened from Organization A, a private template of Organization B is copied into B.
-  it("duplicates another Organization's private template into that Organization", async () => {
+  it('duplicates a private template of Organization B opened from Organization A into B, and a public one into A', async () => {
     const createTemplate = vi.fn().mockResolvedValue(buildTemplate({ id: 'copy-2' }));
 
     await duplicateOwnedTemplate({
@@ -666,9 +662,7 @@ describe('template detail actions', () => {
   });
 });
 
-describe('resolveShareOwnerTemplate', () => {
-  // Cached template lists carry the owner's username from when they were
-  // fetched; after a rename, Share must not build a link with the old one.
+describe("resolveShareOwnerTemplate, since cached template lists keep the owner's username from before a rename", () => {
   const renamedOwner = { userId: 'user-1', username: 'alicejones' };
 
   it("uses the signed-in owner's current username over a cached one", async () => {

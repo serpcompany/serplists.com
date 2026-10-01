@@ -168,7 +168,6 @@ describe('template detail export', () => {
     );
   });
 
-  // The pack would be empty: say which template was left out and why, and download nothing.
   it('reports a template the export had to leave out instead of downloading an empty pack', () => {
     const download = vi.fn();
 
@@ -216,13 +215,10 @@ describe('template detail export', () => {
     expect(result).toEqual({ kind: 'ok', assetWarnings: 1 });
   });
 
-  // A template the portable format can't hold (imported with an empty section) is left out
-  // of the pack, which would then hold nothing. The user gets an error naming the reason,
-  // and no file.
   it.each([
     ['has no sections', { sections: [] }, 'Template has no sections with tasks'],
     ['has a section with no tasks', { sections: [{ id: 'section-1', title: 'Prep', items: [] }] }, 'Template has no sections with tasks'],
-  ])('downloads nothing and names the reason when the template %s', (_label, overrides, reason) => {
+  ])('downloads nothing and names the reason when an imported template %s, which the portable format cannot hold', (_label, overrides, reason) => {
     const download = vi.fn();
 
     const result = exportTemplateFile({
@@ -239,9 +235,7 @@ describe('template detail export', () => {
     expect(message).toContain(reason);
   });
 
-  // A lenient import can store a numeric content-block id. Export turns it into text, so
-  // the template is exported instead of being left out of an empty pack.
-  it('exports a template whose content block id is a number', () => {
+  it('exports a template whose content block id is a number, as a lenient import can store, with the id as text', () => {
     const download = vi.fn();
 
     const result = exportTemplateFile({

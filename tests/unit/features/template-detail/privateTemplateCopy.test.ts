@@ -9,8 +9,7 @@ import {
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
 
-// A private Organization Template, viewed by a member who did not create it.
-const buildPrivateTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
+const buildPrivateOrganizationTemplateOfAnotherMember = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
   id: 'template-1',
   title: 'Launch Checklist',
   sections: [],
@@ -55,7 +54,7 @@ describe('copying a private template', () => {
       createTemplate,
       isAuthenticated: true,
       teamId,
-      template: buildPrivateTemplate(),
+      template: buildPrivateOrganizationTemplateOfAnotherMember(),
       userId: 'member-1',
     });
 
@@ -73,7 +72,7 @@ describe('copying a private template', () => {
       billingState: proBilling,
       createTemplate,
       isAuthenticated: true,
-      template: buildPrivateTemplate({ isPublic: true }),
+      template: buildPrivateOrganizationTemplateOfAnotherMember({ isPublic: true }),
       userId: 'member-1',
     });
     const libraryResult = await saveTemplateToAccount({
@@ -81,7 +80,7 @@ describe('copying a private template', () => {
       billingState: proBilling,
       createTemplate,
       isAuthenticated: true,
-      template: buildPrivateTemplate({
+      template: buildPrivateOrganizationTemplateOfAnotherMember({
         id: 'repo:camping',
         isPublic: false,
         teamId: undefined,
@@ -97,10 +96,10 @@ describe('copying a private template', () => {
 
 describe('canCopyTemplate', () => {
   it('allows public and library templates only', () => {
-    expect(canCopyTemplate(buildPrivateTemplate())).toBe(false);
-    expect(canCopyTemplate(buildPrivateTemplate({ isPublic: true }))).toBe(true);
+    expect(canCopyTemplate(buildPrivateOrganizationTemplateOfAnotherMember())).toBe(false);
+    expect(canCopyTemplate(buildPrivateOrganizationTemplateOfAnotherMember({ isPublic: true }))).toBe(true);
     expect(
-      canCopyTemplate(buildPrivateTemplate({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID })),
+      canCopyTemplate(buildPrivateOrganizationTemplateOfAnotherMember({ id: 'repo:camping', userId: REPO_TEMPLATE_USER_ID })),
     ).toBe(true);
     expect(canCopyTemplate(null)).toBe(false);
   });
@@ -116,7 +115,7 @@ describe('getCopyTemplateButton on a private template', () => {
             canEditTemplates: true,
             isCloning: false,
             isTeamWorkspace,
-            template: buildPrivateTemplate(),
+            template: buildPrivateOrganizationTemplateOfAnotherMember(),
           }).visible,
         ).toBe(false);
       }

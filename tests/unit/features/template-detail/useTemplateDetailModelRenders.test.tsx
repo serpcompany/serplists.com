@@ -5,8 +5,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { createApiError } from '@/lib/api-errors';
 
-// Drives the real template detail model (its template query and its effects) through the
-// re-renders the app causes. Only the API is faked.
+import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { createQueryClientWithAppDefaults } from '../../../support/appQueryClient';
+import { deferred } from '../../../support/deferred';
 
 const apiMock = vi.hoisted(() => ({
   getBillingStatus: vi.fn(),
@@ -27,31 +28,11 @@ import {
 
 type Model = ReturnType<typeof useTemplateDetailModel>;
 
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits (it reads the focused element), to run
-// effects and query subscriptions.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void;
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals();
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 const serverRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'template-1',
@@ -66,8 +47,7 @@ const serverRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// New callbacks on every call, as TemplatesProvider hands out when it re-renders.
-const privateOptions = (): UseTemplateDetailModelOptions => ({
+const privateOptionsWithNewCallbacks = (): UseTemplateDetailModelOptions => ({
   canEditTemplates: true,
   createRun: vi.fn(),
   createTemplate: vi.fn(),
@@ -95,18 +75,17 @@ const publicOptions = (userId: string | undefined): UseTemplateDetailModelOption
 
 let root: Root | undefined;
 let queryClient: QueryClient;
-// Every model the page rendered with, in order.
-let renders: Model[];
+let renderedModels: Model[];
 
-const latest = () => renders[renders.length - 1];
+const latest = () => renderedModels[renderedModels.length - 1];
 
 const Probe = ({ options }: { options: UseTemplateDetailModelOptions }) => {
-  renders.push(useTemplateDetailModel(options));
+  renderedModels.push(useTemplateDetailModel(options));
   return null;
 };
 
 const render = async (options: UseTemplateDetailModelOptions) => {
-  root ??= createRoot(fakeContainer as never);
+  root ??= createRoot(createFakeContainer() as never);
   await act(async () => {
     root?.render(
       <QueryClientProvider client={queryClient}>
@@ -116,26 +95,18 @@ const render = async (options: UseTemplateDetailModelOptions) => {
   });
 };
 
-// Lets pending requests answer and React apply what they changed.
-const settle = () => act(async () => {
+const letPendingRequestsAnswer = () => act(async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
-// Whether the page swapped to its full-page spinner at any render from `from` on.
-const showedSpinnerSince = (from: number) => renders.slice(from).some((model) => model.loading);
+const showedTheFullPageSpinnerSince = (renderIndex: number) =>
+  renderedModels.slice(renderIndex).some((model) => model.loading);
 
-// A request that answers only when the test says so, so the page renders while it runs.
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
+const deliverPendingQueryNotifications = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 60 * 1000 } } });
-  renders = [];
+  queryClient = createQueryClientWithAppDefaults();
+  renderedModels = [];
   Object.values(apiMock).forEach((mock) => mock.mockReset());
   apiMock.getBillingStatus.mockResolvedValue({ billingEnabled: false, plan: 'free' });
   apiMock.getTemplateHistory.mockResolvedValue({ templateId: 'template-1', events: [], versions: [] });
@@ -147,54 +118,49 @@ afterEach(async () => {
   });
   root = undefined;
   queryClient.clear();
-  // TanStack Query hands React its batched notifications on a timer. Let a pending one run
-  // while the fake window is still there: after afterAll removes it, React fails on it.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await deliverPendingQueryNotifications();
 });
 
-// H36: the page reloaded its template, and showed its spinner (unmounting the Start Run
-// dialog), whenever an unrelated re-render handed it new callbacks or list identities.
-describe('template detail page across re-renders', () => {
+describe('template detail page across re-renders, which must not reload it or swap in the spinner that unmounts the Start Run dialog', () => {
   it('loads a private template once while the page re-renders with new callbacks', async () => {
     apiMock.getTemplateById.mockResolvedValue(serverRow());
-    await render(privateOptions());
-    await settle();
+    await render(privateOptionsWithNewCallbacks());
+    await letPendingRequestsAnswer();
     expect(latest().template?.version).toBe(3);
-    const loadedAt = renders.length;
+    const loadedAt = renderedModels.length;
 
     for (let count = 0; count < 5; count += 1) {
-      await render(privateOptions());
-      await settle();
+      await render(privateOptionsWithNewCallbacks());
+      await letPendingRequestsAnswer();
     }
 
     expect(apiMock.getTemplateById).toHaveBeenCalledTimes(1);
     expect(apiMock.getTemplates).not.toHaveBeenCalled();
-    expect(renders.length).toBeGreaterThan(loadedAt);
-    expect(showedSpinnerSince(loadedAt)).toBe(false);
+    expect(renderedModels.length).toBeGreaterThan(loadedAt);
+    expect(showedTheFullPageSpinnerSince(loadedAt)).toBe(false);
   });
 
-  it('keeps the template on screen while a template change elsewhere refreshes it', async () => {
+  it('keeps the template on screen while a save, copy or archive anywhere in the app refreshes it', async () => {
     const refresh = deferred<ReturnType<typeof serverRow>>();
     apiMock.getTemplateById.mockResolvedValueOnce(serverRow()).mockReturnValueOnce(refresh.promise);
-    await render(privateOptions());
-    await settle();
-    const loadedAt = renders.length;
+    await render(privateOptionsWithNewCallbacks());
+    await letPendingRequestsAnswer();
+    const loadedAt = renderedModels.length;
 
-    // A save, copy or archive anywhere in the app invalidates ['templates'].
     await act(async () => {
       void queryClient.invalidateQueries({ queryKey: ['templates'] });
     });
-    await render(privateOptions());
+    await render(privateOptionsWithNewCallbacks());
 
-    expect(renders.length).toBeGreaterThan(loadedAt);
+    expect(renderedModels.length).toBeGreaterThan(loadedAt);
     expect(latest()).toMatchObject({ loading: false, template: { version: 3 } });
 
     await act(async () => refresh.resolve(serverRow({ version: 4 })));
-    await settle();
+    await letPendingRequestsAnswer();
 
     expect(apiMock.getTemplateById).toHaveBeenCalledTimes(2);
     expect(latest().template?.version).toBe(4);
-    expect(showedSpinnerSince(loadedAt)).toBe(false);
+    expect(showedTheFullPageSpinnerSince(loadedAt)).toBe(false);
   });
 
   it("loads a public template once while the viewer's session resolves", async () => {
@@ -202,60 +168,56 @@ describe('template detail page across re-renders', () => {
 
     await render(publicOptions(undefined));
     await render(publicOptions('user-1'));
-    await settle();
-    const loadedAt = renders.length;
+    await letPendingRequestsAnswer();
+    const loadedAt = renderedModels.length;
     for (let count = 0; count < 3; count += 1) {
       await render(publicOptions('user-1'));
-      await settle();
+      await letPendingRequestsAnswer();
     }
 
     expect(apiMock.getTemplateBySlug).toHaveBeenCalledTimes(1);
     expect(latest().template?.id).toBe('template-1');
-    expect(showedSpinnerSince(loadedAt)).toBe(false);
+    expect(showedTheFullPageSpinnerSince(loadedAt)).toBe(false);
   });
 
   it('loads again, with the loading state, for a different template', async () => {
     apiMock.getTemplateById.mockImplementation(async (id: string) => serverRow({ id }));
-    await render(privateOptions());
-    await settle();
-    const loadedAt = renders.length;
+    await render(privateOptionsWithNewCallbacks());
+    await letPendingRequestsAnswer();
+    const loadedAt = renderedModels.length;
 
-    await render({ ...privateOptions(), identifier: 'template-2' });
+    await render({ ...privateOptionsWithNewCallbacks(), identifier: 'template-2' });
     expect(latest().loading).toBe(true);
-    await settle();
+    await letPendingRequestsAnswer();
 
     expect(apiMock.getTemplateById).toHaveBeenCalledTimes(2);
     expect(latest().template?.id).toBe('template-2');
-    expect(showedSpinnerSince(loadedAt)).toBe(true);
+    expect(showedTheFullPageSpinnerSince(loadedAt)).toBe(true);
   });
 });
 
-// H223: after a 409 the page kept its stale copy, so every retry of the visibility switch
-// sent the same version and failed the same way until the page was reloaded.
-describe('template detail visibility switch after an edit conflict', () => {
-  // The server's copy: a PUT must send the version it holds (expected_version).
-  let stored: ReturnType<typeof serverRow>;
+describe('template detail visibility switch after an edit conflict, whose stale copy would fail every retry the same way', () => {
+  let serverCopy: ReturnType<typeof serverRow>;
 
   beforeEach(() => {
-    stored = serverRow({ version: 3 });
-    apiMock.getTemplateById.mockImplementation(async () => ({ ...stored }));
+    serverCopy = serverRow({ version: 3 });
+    apiMock.getTemplateById.mockImplementation(async () => ({ ...serverCopy }));
     apiMock.updateTemplate.mockImplementation(
       async (_id: string, body: { expected_version: number; is_public: boolean }) => {
-        if (body.expected_version !== stored.version) {
+        if (body.expected_version !== serverCopy.version) {
           throw createApiError(409, { code: 'edit_conflict', error: 'Template changed since it was loaded' });
         }
-        stored = { ...stored, is_public: body.is_public };
-        return { success: true, id: stored.id, version: stored.version, slug: stored.slug };
+        serverCopy = { ...serverCopy, is_public: body.is_public };
+        return { success: true, id: serverCopy.id, version: serverCopy.version, slug: serverCopy.slug };
       },
     );
   });
 
-  it('reloads the stored template in place, so the retry succeeds', async () => {
-    await render(privateOptions());
-    await settle();
-    // Another member saves the template.
-    stored = { ...stored, title: 'Launch Checklist v4', version: 4 };
-    const loadedAt = renders.length;
+  it('reloads the template another member saved in place, showing the old copy without a spinner meanwhile, so the retry succeeds', async () => {
+    await render(privateOptionsWithNewCallbacks());
+    await letPendingRequestsAnswer();
+    serverCopy = { ...serverCopy, title: 'Launch Checklist v4', version: 4 };
+    const loadedAt = renderedModels.length;
     const reload = deferred<ReturnType<typeof serverRow>>();
     apiMock.getTemplateById.mockReturnValueOnce(reload.promise);
 
@@ -264,19 +226,18 @@ describe('template detail visibility switch after an edit conflict', () => {
       conflict = latest().setVisibility(true);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    // The reload is in flight: the page keeps what it shows, with no spinner.
     expect(apiMock.getTemplateById).toHaveBeenCalledTimes(2);
     expect(latest()).toMatchObject({ loading: false, template: { version: 3 } });
 
-    await act(async () => reload.resolve({ ...stored }));
+    await act(async () => reload.resolve({ ...serverCopy }));
     await expect(conflict).resolves.toEqual({
       kind: 'error',
       message: 'This template changed elsewhere. It was reloaded; try again.',
     });
-    await settle();
+    await letPendingRequestsAnswer();
 
     expect(latest().template).toMatchObject({ title: 'Launch Checklist v4', version: 4, isPublic: false });
-    expect(showedSpinnerSince(loadedAt)).toBe(false);
+    expect(showedTheFullPageSpinnerSince(loadedAt)).toBe(false);
 
     await act(async () => {
       await expect(latest().setVisibility(true)).resolves.toEqual({ kind: 'ok' });
