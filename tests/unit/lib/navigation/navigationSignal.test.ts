@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { reportNavigation, subscribeToNavigations } from '@/lib/navigation/navigationSignal';
 
-// Next.js has no location key: a link to the page that is already open changes nothing a hook
-// can read. The app's Link and useAppRouter report each navigation they start here, and
-// browser Back/Forward report through popstate, so a page visit (usePageVisit) ends on them.
-
 const unsubscribes: Array<() => void> = [];
 const subscribe = (listener: () => void) => {
   const unsubscribe = subscribeToNavigations(listener);
@@ -22,7 +18,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('navigation signal', () => {
+describe('navigation signal, which ends a page visit on every navigation since Next.js has no location key', () => {
   it('tells every listener about a navigation the app starts', () => {
     const first = vi.fn();
     const second = vi.fn();

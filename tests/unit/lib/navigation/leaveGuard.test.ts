@@ -58,8 +58,7 @@ describe('leave guard', () => {
     expect(confirmDialog).not.toHaveBeenCalled();
   });
 
-  // Sign out: once signed out the editor unmounts, so the question must come first.
-  it('runs an action that leaves the page only after the user confirms', async () => {
+  it('runs an action that unmounts the page, such as Sign out, only after the user confirms', async () => {
     const signOut = vi.fn().mockResolvedValue(true);
     register({ message: 'Unsaved template', shouldConfirm: () => true, onLeaveConfirmed: vi.fn() });
 
@@ -70,9 +69,7 @@ describe('leave guard', () => {
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 
-  // Sign out waits for the server, which can refuse (a 429 or a 5xx) and keep the user
-  // on the page: the page must then ask again, not let the next exit through silently.
-  it('asks before an exit that can fail, and asks again after it failed', async () => {
+  it('asks before an exit the server can refuse, such as Sign out, and asks again after it failed instead of letting the next exit through', async () => {
     let leaveAllowed = false;
     register({
       message: 'Unsaved template',
@@ -116,9 +113,7 @@ describe('leave guard', () => {
   });
 });
 
-// A background sign-out unmounts the page without a question, so the page keeps its work
-// where it can offer it back after sign-in.
-describe('keeping work before the session ends', () => {
+describe('keeping work before the session ends in the background, which unmounts the page without asking', () => {
   it('asks only the pages with unsaved work to keep it, without asking the user', () => {
     const keepDirty = vi.fn(() => true);
     const keepClean = vi.fn(() => true);

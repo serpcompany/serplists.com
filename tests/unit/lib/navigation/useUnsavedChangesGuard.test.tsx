@@ -12,12 +12,6 @@ import { navigation, RoutedPages } from '../../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
-// A page with unsaved work asks before it is lost, whichever way the user leaves: a link or
-// code that opens another page (the app's Link and useAppRouter), browser Back/Forward (a copy
-// of the page's history entry), Sign out (the leave-guard registry) and a reload or tab close
-// (beforeunload). The page runs under Next.js navigation (tests/support/nextNavigation.tsx),
-// mounted with React DOM; each route renders its own page, as the App Router does.
-
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 
 const probe: {
@@ -57,15 +51,12 @@ afterEach(() => {
   root = null;
 });
 
-// A reload or tab close, as the browser announces it to the page.
-const beforeUnloadListeners = () => ({
-  fire: () => {
-    const event = new Event('beforeunload', { cancelable: true });
-    Object.defineProperty(event, 'returnValue', { value: 'unset', writable: true });
-    navigation.window.dispatchEvent(event);
-    return event as BeforeUnloadEvent;
-  },
-});
+const announceReloadOrTabClose = () => {
+  const event = new Event('beforeunload', { cancelable: true });
+  Object.defineProperty(event, 'returnValue', { value: 'unset', writable: true });
+  navigation.window.dispatchEvent(event);
+  return event as BeforeUnloadEvent;
+};
 
 async function mountGuard({ dirty = true, keepWork }: { dirty?: boolean; keepWork?: () => boolean } = {}) {
   navigation.reset('/runs/r1', { before: ['/runs'], routes: ['/', '/runs', '/runs/[id]'] });
@@ -89,8 +80,7 @@ const clickLink = (label: string) =>
     click(container, findByText(container, 'A', label));
   });
 
-// Browser Back: the traversal lands on a later task, and so does what the page does then.
-const goBack = () =>
+const pressBrowserBackAndLetThePageAnswer = () =>
   act(async () => {
     navigation.window.history.back();
     await navigation.settle();
@@ -98,7 +88,7 @@ const goBack = () =>
   });
 
 describe('useUnsavedChangesGuard', () => {
-  it('asks before a link or Back leaves the page, and stays when the user cancels', async () => {
+  it('asks before a link or Back leaves the page, stays when the user cancels, and asks again on the next Back', async () => {
     await mountGuard();
     navigation.window.confirm.mockReturnValue(false);
 
@@ -106,13 +96,12 @@ describe('useUnsavedChangesGuard', () => {
     expect(navigation.window.confirm).toHaveBeenCalledWith(MESSAGE);
     expect(navigation.url()).toBe('/runs/r1');
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
     expect(navigation.window.confirm).toHaveBeenCalledTimes(2);
     expect(navigation.url()).toBe('/runs/r1');
     expect(container.textContent).toContain('Next run');
 
-    // Still guarded: a second Back asks again.
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
     expect(navigation.window.confirm).toHaveBeenCalledTimes(3);
     expect(navigation.url()).toBe('/runs/r1');
 
@@ -126,7 +115,7 @@ describe('useUnsavedChangesGuard', () => {
   it('leaves in one Back once the user confirms', async () => {
     await mountGuard();
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
 
     expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
     expect(navigation.url()).toBe('/runs');
@@ -155,9 +144,7 @@ describe('useUnsavedChangesGuard', () => {
     expect(navigation.window.confirm).not.toHaveBeenCalled();
   });
 
-  // Completing a run saves every note and navigates straight away, before the page has
-  // rendered without its drafts: the page decides after that render, so it goes without asking.
-  it('lets a navigation through without asking when the work was saved just before it', async () => {
+  it('lets a navigation through without asking when the work was saved in the same step, as completing a run does, since the page decides after rendering', async () => {
     await mountGuard();
 
     await act(async () => {
@@ -234,18 +221,17 @@ describe('useUnsavedChangesGuard', () => {
 
   it('warns before a reload or tab close only while work is unsaved', async () => {
     await mountGuard();
-    const unload = beforeUnloadListeners();
 
-    const warned = unload.fire();
+    const warned = announceReloadOrTabClose();
     expect(warned.defaultPrevented).toBe(true);
     expect(warned.returnValue).toBe('');
 
     probe.guard?.allowLeave();
-    expect(unload.fire().defaultPrevented).toBe(false);
+    expect(announceReloadOrTabClose().defaultPrevented).toBe(false);
 
     probe.guard?.guardLeave();
     await act(async () => probe.setDirty?.(false));
-    expect(unload.fire().defaultPrevented).toBe(false);
+    expect(announceReloadOrTabClose().defaultPrevented).toBe(false);
   });
 
   it('keeps the work when the session ends in the background, and stops guarding once unmounted', async () => {
@@ -260,13 +246,11 @@ describe('useUnsavedChangesGuard', () => {
     const confirmDialog = vi.fn(() => false);
     expect(confirmLeave(confirmDialog)).toBe(true);
     expect(confirmDialog).not.toHaveBeenCalled();
-    expect(beforeUnloadListeners().fire().defaultPrevented).toBe(false);
+    expect(announceReloadOrTabClose().defaultPrevented).toBe(false);
   });
 });
 
-// Back is guarded by a copy of the page's history entry. It is added once, and Back or a
-// navigation away takes it out of the way, so the history reads as it would without a guard.
-describe('useUnsavedChangesGuard history entry', () => {
+describe('the copy of the history entry that guards Back, which Back or leaving takes out of the way', () => {
   it('adds one entry however often the work is saved and edited again', async () => {
     await mountGuard();
     expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/runs/r1']);
@@ -278,10 +262,7 @@ describe('useUnsavedChangesGuard history entry', () => {
     expect(navigation.entries()).toEqual(['/runs', '/runs/r1', '/runs/r1']);
   });
 
-  // Moving to a #fragment (a same-page link, or checkout answering with one) adds an entry
-  // above the copy and fires popstate. It stays on the page: it neither asks nor goes back,
-  // and neither does Back from it onto the copy. Back past the copy still asks.
-  it('lets the page move to a #fragment and back without asking', async () => {
+  it('lets the page move to a #fragment, as a same-page link or checkout does, and Back onto the copy without asking, and asks on Back past the copy', async () => {
     await mountGuard();
     navigation.window.confirm.mockReturnValue(false);
 
@@ -293,12 +274,12 @@ describe('useUnsavedChangesGuard history entry', () => {
     expect(navigation.window.confirm).not.toHaveBeenCalled();
     expect(navigation.url()).toBe('/runs/r1#notes');
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
     expect(navigation.window.confirm).not.toHaveBeenCalled();
     expect(navigation.url()).toBe('/runs/r1');
     expect(navigation.index()).toBe(2);
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
     expect(navigation.window.confirm).toHaveBeenCalledTimes(1);
     expect(navigation.url()).toBe('/runs/r1');
     expect(container.textContent).toContain('Next run');
@@ -308,7 +289,7 @@ describe('useUnsavedChangesGuard history entry', () => {
     await mountGuard();
     await act(async () => probe.setDirty?.(false));
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
 
     expect(navigation.window.confirm).not.toHaveBeenCalled();
     expect(navigation.url()).toBe('/runs');
@@ -339,7 +320,7 @@ describe('useUnsavedChangesGuard history entry', () => {
     await mountGuard({ dirty: false });
     expect(navigation.entries()).toEqual(['/runs', '/runs/r1']);
 
-    await goBack();
+    await pressBrowserBackAndLetThePageAnswer();
 
     expect(navigation.url()).toBe('/runs');
     expect(navigation.window.confirm).not.toHaveBeenCalled();

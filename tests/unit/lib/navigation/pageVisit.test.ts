@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createPageVisitTracker } from '@/lib/navigation/pageVisit';
 
-// React Router still runs a navigate() captured by a page the user already left, so a
-// request that finishes late pulled them back to that page's destination. A visit
-// started with an action is current only while the page is shown at the same location.
-describe('createPageVisitTracker', () => {
+describe('createPageVisitTracker, whose visit is current only while the page is shown at the location it began on', () => {
   const shownPage = () => {
     const tracker = createPageVisitTracker();
     tracker.enter();
@@ -28,9 +25,7 @@ describe('createPageVisitTracker', () => {
     expect(visit.isCurrent()).toBe(false);
   });
 
-  it('is not current after the location changes on the same page', () => {
-    // /dashboard/runs/A to /dashboard/runs/B keeps the same page mounted: the effect
-    // leaves and enters again for the new location.
+  it('is not current after the location changes on the same mounted page, which leaves and enters again', () => {
     const tracker = shownPage();
     const visit = tracker.begin();
 
@@ -38,7 +33,15 @@ describe('createPageVisitTracker', () => {
     tracker.enter();
 
     expect(visit.isCurrent()).toBe(false);
-    // An action started at the new location is current there.
+  });
+
+  it('makes an action started at the new location of the same page current there', () => {
+    const tracker = shownPage();
+    tracker.begin();
+
+    tracker.leave();
+    tracker.enter();
+
     expect(tracker.begin().isCurrent()).toBe(true);
   });
 
