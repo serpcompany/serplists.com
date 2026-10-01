@@ -2,11 +2,15 @@ import { vi } from 'vitest';
 
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
+import type { useTemplateLibrary } from '@/hooks/useTemplateLibrary';
 
-export const mockUseTemplateLibrary = vi.fn();
+type TemplateLibrary = ReturnType<typeof useTemplateLibrary>;
+type TemplateLibraryArgs = Parameters<typeof useTemplateLibrary>;
+
+export const mockUseTemplateLibrary = vi.fn<(...args: TemplateLibraryArgs) => Partial<TemplateLibrary>>();
 
 vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
+  useTemplateLibrary: (...args: TemplateLibraryArgs) => mockUseTemplateLibrary(...args),
 }));
 
 export const baseTemplate: ChecklistTemplate = {
@@ -37,7 +41,7 @@ export const movingTemplate: ChecklistTemplate = {
   ownerProfile: { username: 'alice' },
 };
 
-export const libraryState = (overrides: Record<string, unknown>) => ({
+export const libraryState = (overrides: Partial<TemplateLibrary>): Partial<TemplateLibrary> => ({
   templates: [bundledTemplate],
   loading: false,
   catalogError: false,

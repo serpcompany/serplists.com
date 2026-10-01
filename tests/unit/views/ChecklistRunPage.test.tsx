@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { taskAt } from '../../support/elements';
+import { sectionAt, taskAt } from '../../support/elements';
 
 import {
   baseRun,
@@ -23,7 +23,7 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
           {
             id: 'audit-1',
             action: 'checklist_run.created',
-            actor: { name: 'Jane Runner' },
+            actor: { username: null, email: null, name: 'Jane Runner', userId: null },
             metadata: {
               source: 'mcp',
               personalRunKeyName: 'Codex SOP Runner',
@@ -40,7 +40,7 @@ const renderPrivateRunWithAnAgentInItsChangelog = () => {
     run: baseRun,
     selectedData: {
       item: taskAt(baseRun, 0, 0),
-      section: baseRun.sections[0],
+      section: sectionAt(baseRun, 0),
     },
     selectedItemId: 'item-1',
   }));
@@ -103,7 +103,7 @@ describe('ChecklistRunPage layout', () => {
       run: { ...baseRun, title: 'Project Setup Checklist' },
       selectedData: {
         item: taskAt(baseRun, 0, 0),
-        section: baseRun.sections[0],
+        section: sectionAt(baseRun, 0),
       },
       selectedItemId: 'item-1',
     }));

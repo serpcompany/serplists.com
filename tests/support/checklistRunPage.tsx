@@ -7,11 +7,15 @@ import './mockedWorkspaceRoles';
 import { countRunExecutionItems } from '@/features/run-execution/runExecutionMappers';
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
+import type { useRunExecutionModel } from '@/features/run-execution/useRunExecutionModel';
 
-export const mockUseRunExecutionModel = vi.fn();
+type RunExecutionModel = ReturnType<typeof useRunExecutionModel>;
+type RunExecutionModelArgs = Parameters<typeof useRunExecutionModel>;
+
+export const mockUseRunExecutionModel = vi.fn<(...args: RunExecutionModelArgs) => Partial<RunExecutionModel>>();
 
 vi.mock('@/features/run-execution/useRunExecutionModel', () => ({
-  useRunExecutionModel: (...args: unknown[]) => mockUseRunExecutionModel(...args),
+  useRunExecutionModel: (...args: RunExecutionModelArgs) => mockUseRunExecutionModel(...args),
 }));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -68,7 +72,7 @@ export const baseRun: ChecklistRun = {
   templateVersion: 1,
 };
 
-export const runPageModel = (overrides: Record<string, unknown>) => ({
+export const runPageModel = (overrides: Partial<RunExecutionModel>): Partial<RunExecutionModel> => ({
   createShare: vi.fn(),
   history: { data: null, isError: false, isLoading: false },
   isSharedRun: false,
