@@ -13,6 +13,7 @@ const read = (file) => readFileSync(path.join(repoRoot, file), "utf8");
 const DAY = 24 * 60 * 60;
 const now = Math.floor(Date.now() / 1000);
 const MAX_LINES = 500;
+const NEAR_LIMIT_LINES = 450;
 const STALE_PLAN_DAYS = 30;
 
 function lastCommitTime(file) {
@@ -52,17 +53,16 @@ sections.push(
     : staleDocs.map(({ doc, changed }) => `- \`${doc}\`: ${changed.slice(0, 5).map((ref) => `\`${ref}\``).join(", ")}${changed.length > 5 ? `, +${changed.length - 5} more` : ""}`).join("\n"),
 );
 
-// 4. Oversized files
-const oversized = walk("src", (file) => /\.(ts|tsx)$/.test(file))
+const nearLimit = walk("src", (file) => /\.(ts|tsx)$/.test(file))
   .concat(walk("functions", (file) => file.endsWith(".ts")))
-  .filter((file) => !file.startsWith("src/components/ui/") && !file.endsWith(".d.ts"))
+  .filter((file) => !file.endsWith(".d.ts"))
   .map((file) => ({ file, lines: read(file).split("\n").length }))
-  .filter(({ lines }) => lines > MAX_LINES)
+  .filter(({ lines }) => lines >= NEAR_LIMIT_LINES)
   .sort((a, b) => b.lines - a.lines);
 sections.push(
-  "## Oversized files",
-  `${oversized.length} files exceed ${MAX_LINES} lines. Split one; then lower its cap in \`eslint.config.js\`.`,
-  oversized.map(({ file, lines }) => `- \`${file}\`: ${lines}`).join("\n"),
+  "## Files near the size limit",
+  `${nearLimit.length} files have ${NEAR_LIMIT_LINES} lines or more. ESLint \`max-lines\` stops every source file at ${MAX_LINES}, with no exceptions: split one of these by responsibility before a change has to.`,
+  nearLimit.length === 0 ? "None." : nearLimit.map(({ file, lines }) => `- \`${file}\`: ${lines}`).join("\n"),
 );
 
 // 5. Plans, tech debt, quality score
@@ -96,7 +96,7 @@ sections.push(
   "## This week's checklist",
   [
     "- [ ] Fix any docs-check failures and re-verify the docs listed above against the code.",
-    "- [ ] Pay down one tech debt item or oversized file in a small PR.",
+    "- [ ] Pay down one tech debt item, or split one file near the size limit, in a small PR.",
     "- [ ] Update or close stale active plans; move finished plans to `docs/exec-plans/completed/`.",
     "- [ ] Re-grade `docs/QUALITY_SCORE.md` if the code in a domain changed materially.",
     "- [ ] If a new failure pattern appeared in recent PRs, add it to `docs/design-docs/core-beliefs.md` and, where possible, a lint or check.",

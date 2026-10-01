@@ -1,6 +1,6 @@
 # Quality Score
 
-- **Last graded:** 2026-09-27
+- **Last graded:** 2026-09-30
 
 Grades show where the next hour of cleanup pays off most. Re-grade a row when its
 code changes materially; the weekly [maintenance report](design-docs/agent-workflow.md#weekly-maintenance)
@@ -14,13 +14,13 @@ changes are risky or slow. D = needs attention before building on it.
 | Domain | Tests | Boundaries | Structure | Docs | Biggest gap |
 | --- | --- | --- | --- | --- | --- |
 | Identity and sessions | B | B | B | A | Session checks read D1 (no Better Auth cookie cache), so re-checks must stay throttled |
-| Personal and Organization ownership | B | B | C | B | Legacy team/workspace naming in code identifiers (TD-5); `teams.ts` is about 1,050 lines |
-| Templates | A | B | D | A | `templates.ts` handler is about 1,600 lines (TD-8) |
-| Runs | B | C | C | B | `checklists.ts` is about 1,200 lines; `ChecklistRun.tsx` is near its cap |
+| Personal and Organization ownership | B | B | B | B | Legacy team/workspace naming in code identifiers (TD-5) |
+| Templates | A | B | B | A | `TemplatesContext.tsx` and `TemplateDetail.tsx` are close to the 500-line limit |
+| Runs | B | C | B | B | Completed runs are frozen only in the web app (TD-21); reopening checks the active-run limit outside the write (TD-17) |
 | Billing and entitlements | B | B | B | A | Only 3 e2e specs exercise paid flows |
-| Agent access (Run Keys, MCP) | B | B | C | D | No module doc for Run Keys and MCP; `agentMcp.ts` is about 600 lines |
+| Agent access (Run Keys, MCP) | B | B | B | D | No module doc for Run Keys and MCP |
 | Public discovery and SEO | B | B | B | B | Sitemap `lastmod` depends on full git history in CI (now configured) |
-| Imports and uploads | B | C | C | B | Clipy input parsed by hand; `TemplateBackup.tsx` is about 640 lines |
+| Imports and uploads | B | C | C | B | Clipy input parsed by hand; `clipy.ts` is close to the 500-line limit |
 
 ## Layers and cross-cutting concerns
 

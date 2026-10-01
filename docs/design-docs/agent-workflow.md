@@ -118,8 +118,8 @@ small steps every week instead of in occasional big cleanups.
 `.github/workflows/maintenance.yml` runs every Monday at 14:00 UTC (or on demand from
 the Actions tab; scheduled workflows run from the default branch). Both of its jobs
 start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
-referenced code changed since they were edited, stale design docs and plans, oversized
-files, and open tech debt.
+referenced code changed since they were edited, stale design docs and plans, files near
+the size limit, and open tech debt.
 
 - **Doc gardening (automatic):** Claude re-checks up to 8 flagged docs against the
   code, fixes what is no longer true, updates "Last verified" dates, runs
@@ -146,7 +146,8 @@ Work the issue in small PRs, one item each:
    date in [the design-docs index](index.md).
 2. **Debt:** close one row of the
    [tech debt tracker](../exec-plans/tech-debt-tracker.md).
-3. **Size:** split one oversized file and lower its cap in `eslint.config.js`.
+3. **Size:** split one file the report lists as near the 500-line limit, by
+   responsibility.
 4. **Plans:** update stale active plans or move finished ones to `completed/`.
 5. **Scores:** re-grade [QUALITY_SCORE.md](../QUALITY_SCORE.md) rows whose code changed.
 6. **Harness:** if recent PRs repeated a mistake, add it to

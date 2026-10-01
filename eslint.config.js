@@ -8,10 +8,6 @@ import tseslint from "typescript-eslint";
 // See docs/design-docs/core-beliefs.md for the reasoning behind each rule.
 
 const MAX_LINES = 500;
-// Legacy files already over MAX_LINES, capped at roughly their current size.
-// Lower a cap when a file shrinks; never raise one. Split the file instead.
-const LEGACY_MAX_LINES = {
-};
 
 const TOAST_MESSAGE =
   "The app's providers (src/app/providers.tsx) mount only the sonner Toaster, so toasts from any other toast store are never shown. " +
@@ -142,15 +138,10 @@ export default tseslint.config(
   },
   {
     files: ["src/**/*.{ts,tsx}", "functions/**/*.ts"],
-    ignores: ["src/components/ui/**", "**/*.test.{ts,tsx}"],
     rules: {
       "max-lines": ["error", { max: MAX_LINES }],
     },
   },
-  ...Object.entries(LEGACY_MAX_LINES).map(([file, max]) => ({
-    files: [file],
-    rules: { "max-lines": ["error", { max }] },
-  })),
   {
     files: ["src/**/*.{ts,tsx}"],
     ignores: NAVIGATION_MODULES,
