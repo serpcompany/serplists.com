@@ -17,7 +17,6 @@ const queryToSearch = (query: HrefQuery): string => {
   return search ? `?${search}` : '';
 };
 
-/** A Link's href as the string the router takes. */
 export const hrefToString = (href: Href): string => {
   if (typeof href === 'string') return href;
   const pathname = href.pathname ?? '';
@@ -26,10 +25,6 @@ export const hrefToString = (href: Href): string => {
   return `${pathname}${search}${hash}`;
 };
 
-/**
- * True when following `href` from `currentPathname` opens another page. A change of search or
- * hash keeps the page mounted, so it never counts as leaving (unsaved work is not at risk).
- */
 export const leavesPage = (href: Href, currentPathname: string | null): boolean => {
   const base = typeof window === 'undefined' ? 'http://localhost' : window.location.href;
   const target = new URL(hrefToString(href) || '.', base);

@@ -3,29 +3,19 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
-import { leavePage, type LeaveMethod } from './leaveGuard';
+import { leavePage, type LeaveMethod, type NavigatedRightAway } from './leaveGuard';
 import { leavesPage } from './leavesPage';
 import { reportNavigation } from './navigationSignal';
 
 type NavigateOptions = { scroll?: boolean };
 
 export type AppRouter = {
-  /**
-   * Opens `href`; returns false when a page with unsaved work took the navigation over (it
-   * opens `href` itself if its work turns out saved or the user confirms).
-   */
-  push: (href: string, options?: NavigateOptions) => boolean;
-  /** Like push, replacing the current history entry. */
-  replace: (href: string, options?: NavigateOptions) => boolean;
+  push: (href: string, options?: NavigateOptions) => NavigatedRightAway;
+  replace: (href: string, options?: NavigateOptions) => NavigatedRightAway;
   back: () => void;
   refresh: () => void;
 };
 
-/**
- * Next.js's router for code that navigates on its own (after a save, a sign-out, or a
- * workspace switch). Like a Link, it hands a page holding unsaved work (useUnsavedChangesGuard)
- * every navigation to another page; browser Back/Forward are guarded by the page itself.
- */
 export function useAppRouter(): AppRouter {
   const router = useRouter();
   const pathname = usePathname();

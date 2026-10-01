@@ -46,7 +46,10 @@ In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigate
 first (below). A page that drops one-shot query parameters once it has read them (a reset
 token, the login notices, `?billing=`) or keeps its filters in the URL (the library) rewrites
 the current entry with `replaceCurrentUrl` (`src/lib/navigation/replaceCurrentUrl.ts`), the
-History API that Next.js follows: the page keeps its state and nothing is fetched. Return
+History API that Next.js follows: the page keeps its state and nothing is fetched. The
+`state` it is given stays with that entry across a reload and Back/Forward and never enters
+the URL (the login page keeps a handed-over email address there); it is passed as a copy,
+because Next.js adds its own router state to the object it receives. Return
 paths travel only in the `next` query parameter (`withReturnPath` and `getReturnPath` in
 `src/lib/auth/returnPath.ts`, which sanitizes them), never in history state.
 
@@ -123,9 +126,21 @@ the run page (unsaved task notes) use it. A page's own back buttons just navigat
 let it ask, so the user is asked once.
 
 - The app's `Link` and `useAppRouter` ask before opening another page: sidebar, header,
-  account menu, in-page links and buttons. They ask only when the pathname changes.
-- Browser Back/Forward: the guard pushes a same-URL history entry above the page's own,
-  so Back lands on it first (the page stays) and the page asks there before going on.
+  account menu, in-page links and buttons. They ask only when the pathname changes. They
+  hand the navigation to the page (`leavePage`), which decides once it has rendered its
+  latest state (`requestLeave`), so a page that saved its work and navigated in the same
+  step leaves without a question. A page that stays mounted for another record (the run
+  page opening another run) is guarded again from its new pathname.
+- Browser Back/Forward: the first time the page holds unsaved work, the guard pushes a
+  copy of its history entry above the page's own, so Back lands on the page's own entry
+  (the URL does not change, and the page stays) and the page asks there before going
+  on. The copy stays until Back passes it or the page is left, so saving and editing
+  again never stacks entries and Back after a save leaves in one step. A navigation away
+  replaces the copy, so Back from the next page finds the page once. The copy repeats
+  the entry's state, which holds Next.js's router state, so going back renders the same
+  page, and adds a marker with a token unique across page loads, since a reload keeps the
+  entries an earlier copy left. The marker tells Back onto the copy (from a `#fragment`
+  the page moved to, still on the page) apart from Back past it.
 - Actions that leave the page without a navigation it can block first, such as Sign
   out (which unmounts the page), go through `src/lib/navigation/leaveGuard.ts`; the
   page registers with `registerLeaveGuard`. Sign out uses `leaveAfterConfirmed`: it
@@ -154,7 +169,8 @@ let it ask, so the user is asked once.
   before leaving with a message that says a file is still uploading.
 - A navigation the page starts after it has nothing left to lose (a create that
   saved, completing a run, which saves every note, or a checkout or sign-in redirect
-  after the draft was kept) is allowed without asking. Back from checkout can restore
+  after the draft was kept) is allowed without asking (the guard's `allowLeave`, which
+  `guardLeave` undoes when a redirect does not happen). Back from checkout can restore
   the page from the back/forward cache with that exit still allowed, so the guard
   re-arms on that restore: edits made after coming back are not in the kept draft.
 - An action on the page that replaces the whole form asks the same way. Generating a
@@ -285,9 +301,11 @@ write: [client data](design-docs/client-data.md).
   a navigation from a page the user has left. Call `beginVisit()` from
   `usePageVisit` (`src/hooks/usePageVisit.ts`) when the action starts and check
   `visit.isCurrent()` after the request; it is false once the page unmounts or the
-  user navigates (Back, a link, even to the same page, another id on the same page).
+  user navigates (Back, a link, even to the same page, another id on the same page),
+  and stays false if they come back to the same location later.
   Next.js has no location key, so the app's `Link` and `useAppRouter` report each
-  navigation they start (`src/lib/navigation/navigationSignal.ts`). The template editor
+  navigation they start (`src/lib/navigation/navigationSignal.ts`), and browser Back and
+  Forward count through `popstate`. The template editor
   passes `{ endOn: "pathname" }`: the sidebar's New Template link on the new-template
   page keeps the editor mounted at the same path, and a create in flight must still
   finish and leave for My Templates. The request's own

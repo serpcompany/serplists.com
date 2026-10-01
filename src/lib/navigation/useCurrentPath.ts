@@ -13,14 +13,8 @@ const subscribeToHash = (onChange: () => void) => {
 };
 
 const readHash = () => window.location.hash;
-// The server never sees the hash, so it renders without one and the browser adds it.
 const readServerHash = () => '';
 
-/**
- * The current page as an in-app path (pathname, query and hash), for a link that brings the
- * user back here, such as sign-in's `next`. Reads the query with useSearchParams, so a
- * statically rendered page needs a Suspense boundary around its caller.
- */
 export function useCurrentPath(): string {
   const pathname = usePathname();
   const search = useSearchParams().toString();
