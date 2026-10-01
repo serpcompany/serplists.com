@@ -2,8 +2,9 @@
 
 How search engines and link previews find the public pages: the XML sitemaps
 (`functions/sitemap/`) and the lookups behind the public pages' server-rendered metadata
-(`functions/seo/`). The route handlers in `src/app/sitemap.xml` and `src/app/sitemaps` only
-hand these modules the request, the Worker's bindings and `waitUntil`. Page titles,
+(`src/server/pageMeta/` and `functions/seo/`). The route handlers in `src/app/sitemap.xml`
+and `src/app/sitemaps` only hand these modules the request, the Worker's bindings and
+`waitUntil` (`getSitemapContext` in `src/server/sitemapContext.ts`). Page titles,
 robots rules and environments are in [FRONTEND.md](../FRONTEND.md#page-titles-and-meta-tags),
 and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries).
 
@@ -114,11 +115,25 @@ proposes the migration that fixes it.
 ## Lookups for page metadata
 
 The public pages render their `<head>` on the server
-([FRONTEND.md](../FRONTEND.md#production-and-other-environments)), so these lookups run on
-every visit, by people and crawlers alike:
+([FRONTEND.md](../FRONTEND.md#production-and-other-environments)), so these lookups
+(`src/server/pageMeta/`, called from each route's `generateMetadata`) run on every visit, by
+people and crawlers alike. A template or profile lookup answers one of three ways: found;
+not found, a settled answer, so the page gets `noindex, nofollow` and no canonical URL (the
+address is not a page); or unavailable, when the lookup failed, which may be brief, so the
+page keeps the site's defaults and stays indexable
+([FRONTEND.md](../FRONTEND.md#missing-pages)).
 
-- **Template page** (`/profile/<user>/<identifier>/`, `loadPublicTemplate` in
-  `functions/seo/public-template-lookup.ts`): one indexed row (`idx_templates_slug_unique`,
+The data-center cache keys start with the request's origin (`getRequestOrigin` in
+`src/server/cloudflare.ts`): staging and production share the `serplists.com` zone and its
+cache, so neither reads the other's entries. Reading the request's headers also makes the
+page render on each request.
+
+- **Template page** (`/profile/<user>/<identifier>/`, `loadTemplatePageSeo` in
+  `src/server/pageMeta/templatePage.ts`): a bundled library template first, since the API
+  cannot serve one and it wins on a slug clash; otherwise a public template whose owner has
+  this username in any letter case. The canonical URL uses the stored username and the slug
+  (the id when there is none), as the sitemap does. The D1 read (`loadPublicTemplate` in
+  `functions/seo/public-template-lookup.ts`) is one indexed row (`idx_templates_slug_unique`,
   or the primary key for an id), under the visibility rule `GET /api/templates/slug/:slug`
   applies for a visitor: public and not archived. Like the page, it reads a UUID as a
   template id first and then as a slug, since a slug saved before the API refused UUID
@@ -130,8 +145,31 @@ every visit, by people and crawlers alike:
   record's shape (`/__page-meta/v2/templates/`), so a deploy that changes the shape never
   reads the previous one. A template made private can keep its tags for those 5 minutes;
   the page itself loads it from the API and shows it as not found.
-- **Share page** (`loadSharedRunTitle` in `functions/seo/shared-run-lookup.ts`): the run's
+- **Profile page** (`/profile/<user>/`, `loadProfilePageSeo` in
+  `src/server/pageMeta/profilePage.ts`): the name and summary the page shows, from the same
+  two requests the page makes (`loadUserProfile`), sent to the API router in the same Worker
+  (`fetchApiJson` in `src/server/api.ts`) as a visitor with no session: the same handlers,
+  visibility rules and edge caches, without a network hop. A found profile's tags are cached
+  for 5 minutes, so a busy profile reads D1 once per 5 minutes per data center, and a new
+  name or public template can take that long to reach them; the page itself always loads
+  the profile from the API. The canonical URL uses the stored username, the one the page
+  moves other letter cases to.
+- **Category page** (`/categories/<slug>/`, `loadCategoryPageSeo` in
+  `src/server/pageMeta/categoryPage.ts`): the category pages count the public catalog in
+  the browser, so the server counts the same list with the library's own functions: the
+  bundled library merged with the catalog (`GET /api/templates?scope=public`, which the API
+  serves from the edge cache), the public templates with a public URL, and the predefined
+  categories plus every template category. A row the library cannot read is skipped, as in
+  the library. The small summary is cached for 5 minutes, so the catalog is parsed once per
+  5 minutes per data center for every category page. A category the server cannot name
+  (one only database templates use while the catalog cannot be read, or one that does not
+  exist) keeps the site's defaults, and the page decides in the browser; a registry
+  category no public template uses yet is `noindex, follow`.
+- **Share page** (`loadSharedRunPageSeo` in `src/server/pageMeta/sharedRunPage.ts`, reading
+  `loadSharedRunTitle` in `functions/seo/shared-run-lookup.ts`): the run's
   title, under the rule of `GET /api/checklists/shared/:token` (an active share, where
   holding the link is the only credential), in one read on
-  `idx_checklist_runs_share_token`. It is never cached, so a revoked link stops naming the
-  run at once.
+  `idx_checklist_runs_share_token`, and always `noindex, nofollow`. It is never cached, so a
+  revoked link stops naming the run at once. A link that is not an active share, or a
+  failed lookup, keeps the site's defaults, still noindex through the `X-Robots-Tag` that
+  `next.config.ts` sends for share pages.

@@ -15,9 +15,6 @@ import type { PageSeo } from '@/lib/seo/pageMetadata';
 
 import { getRequestOrigin, getWorkerEnv } from '../cloudflare';
 
-// found: the page's tags. not_found: a settled answer, so the page is kept out of search.
-// unavailable: the lookup failed, which may be brief, so the page keeps the site's defaults
-// and stays indexable.
 export type TemplatePageSeo =
   | { kind: 'found'; seo: PageSeo }
   | { kind: 'not_found'; seo: PageSeo }
@@ -50,24 +47,16 @@ const toFoundSeo = (template: TemplatePageSource): TemplatePageSeo => {
   };
 };
 
-/**
- * What /profile/<username>/<identifier> says in its <head>, found the way the page finds its
- * template (src/features/template-detail/loadTemplateDetail.ts): a bundled library template
- * first, then a public template in D1 whose owner has this username (any letter case), by id
- * or slug. The canonical URL uses the stored username and the slug, as the sitemap does.
- */
 export const loadTemplatePageSeo = cache(
   async (username: string, identifier: string): Promise<TemplatePageSeo> => {
     const owner = username.trim().toLowerCase();
     const id = identifier.trim();
-    // No canonical URL: the address is not a page.
     const notFound: TemplatePageSeo = {
       kind: 'not_found',
       seo: { ...TEMPLATE_NOT_FOUND_PAGE_TEXT, robots: 'noindex, nofollow' },
     };
     if (!owner || !id) return notFound;
 
-    // Library templates ship in the bundle (the API cannot serve them) and win on a slug clash.
     const libraryTemplate = findPublicTemplateByIdentifier(repoTemplates, id);
     if (libraryTemplate && resolvePublicTemplateOwnerSlug(libraryTemplate)?.toLowerCase() === owner) {
       return toFoundSeo({

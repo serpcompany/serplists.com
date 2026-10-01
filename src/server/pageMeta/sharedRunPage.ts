@@ -9,11 +9,6 @@ import type { PageSeo } from '@/lib/seo/pageMetadata';
 
 import { getWorkerEnv } from '../cloudflare';
 
-/**
- * What /share/<token> says in its <head>: the run's title, as the page shows it, and never
- * indexed. Null when the link is not an active share or the lookup failed; the page then
- * keeps the site's defaults (still noindex: next.config.ts sends X-Robots-Tag for /share).
- */
 export const loadSharedRunPageSeo = cache(async (shareToken: string): Promise<PageSeo | null> => {
   try {
     const title = await loadSharedRunTitle(await getWorkerEnv(), shareToken);

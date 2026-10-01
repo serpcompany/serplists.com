@@ -477,7 +477,8 @@ the page says otherwise. The route also renders the same text as JSON-LD (`JsonL
 
 A site is not production unless `SITE_ENV=production` marks it (`isProductionSite` in
 `src/lib/seo/siteOrigin.ts`, the SERP environment configuration standard); nothing is inferred
-from the host. The value is read where it is used: at build time for the static pages, the
+from the host. The value is read where it is used, never at module load, when a Worker's vars
+are not set yet: at build time for the static pages, the
 `next.config.ts` headers and redirects and `public/_headers`, and from the Worker's vars for
 what renders on request, so each environment sets it in both (`wrangler.toml`,
 [RELIABILITY.md](RELIABILITY.md#environments-and-hosts)). Anything but production (staging, a
@@ -495,7 +496,8 @@ both sides, and `scripts/check-site-standards.mjs` checks a running site.
 
 - Static pages export `metadata` (`/templates/`, `/categories/`, the 404 page).
 - Dynamic public pages look their subject up in `generateMetadata`, the way the page itself
-  finds it (`src/server/pageMeta/`):
+  finds it (`src/server/pageMeta/`, described in
+  [SEO and sitemaps](design-docs/seo-and-sitemaps.md#lookups-for-page-metadata)):
   - a template page (`/profile/<user>/<slug>/`): a bundled library template, or one D1 row
     (`functions/seo/public-template-lookup.ts`), cached in the data center for 5 minutes;
   - a profile: the profile and its public templates through the API router in the same
