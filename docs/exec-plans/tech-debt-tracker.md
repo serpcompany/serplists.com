@@ -5,14 +5,14 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-33.**
+then you raise it. **Next ID: TD-36.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
 | ID | Area | Debt | Next step | Ratchet |
 | --- | --- | --- | --- | --- |
 | TD-1 | Types | `tests/` is not type-checked (about 460 errors under `strict`). | Add a tsconfig for `tests/` to the `tsc -b` references and fix one directory at a time. | None |
-| TD-2 | Boundaries | The API client (`apiRequest` in `src/lib/api/request.ts`) returns `response.json()` as the declared type without parsing, so client code trusts guessed shapes. | Let the request helper take an optional Zod schema; convert template and run endpoints first. | None |
+| TD-2 | Boundaries | The API client (`apiRequest` in `src/lib/api/request.ts`) returns `response.json()` as the declared type without parsing, so client code trusts guessed shapes. `getAuthStatus` in `src/lib/auth-client.ts` casts its response the same way. | Let the request helper take an optional Zod schema; convert template and run endpoints first. | None |
 | TD-5 | Vocabulary | Code identifiers, tables, and routes still use `team`/`team_id`/`workspace` for Organization ([ADR 0001](../design-docs/personal-and-organization-contexts.md)). | Rename in separately scoped, migration-safe changes. | None |
 | TD-11 | Tests | All e2e specs share one database and one set of seeded users, so they interfere when run in parallel (publishing specs move sitemap `lastmod` values). The browser tests also share one local workerd process, which renders every page and link prefetch, so parallel browsers push navigations past the 5-second expect timeout. Every browser test runs on one Playwright worker (`playwright.config.ts`); the full suite takes over an hour locally. | Give each spec its own users and data (or per-worker D1 state), and one preview per worker, so the suite can run in parallel. | `test:e2e:full` in CI on promotions |
 | TD-12 | Tooling | No code formatter. Deferred on purpose: a repo-wide reformat would bury real changes in review. | Add Prettier in its own PR, format once, and list that commit in `.git-blame-ignore-revs`. | None |
@@ -32,3 +32,6 @@ then you raise it. **Next ID: TD-33.**
 | TD-30 | Duplication | Three helpers do the same guarded insert: `insertAuditEventWhere` (`functions/api/utils/guarded-writes.ts`), `insertAuditEventWhen` (`audit.ts`) and `insertRowWhere` (`guarded-insert.ts`). The first lists `audit_events` columns by hand, so it breaks silently when the table gains one. `batchWriteMissed` (`guarded-writes.ts`) and `batchUpdateMissed` (`checklist-runs.ts`) are the same miss check. | Use `insertRowWhere` and one miss check everywhere; update the importers. Small to medium. | None |
 | TD-31 | Duplication | The slug and username unique-violation checks walk an error's cause chain in three copies (`functions/api/utils/username-conflict.ts` and the template slug inserts). | One shared matcher for a D1 unique violation on a named column. Small. | None |
 | TD-32 | Duplication | `isProSubscriptionStatus` (`functions/api/utils/entitlements.ts`) repeats `isPaidSubscriptionStatus` (`stripe-subscriptions.ts`). | Use one function. Small. | None |
+| TD-33 | Client data | `src/features/template-detail/templateDetailQuery.ts` builds the template detail query key, but `src/lib/queryCache.ts` matches it by position. If either changes its layout, archive and restore stop updating the cache, with no error. | Build the key in `queryCache.ts`'s `queryKeys` and extend the test that keys are spelled out in one place. Small. | None |
+| TD-34 | Hosts | Two `isLoopbackHostname` functions with different rules: `src/lib/apiBaseUrl.ts` accepts `*.localhost`, `127.0.0.0/8` and `0.0.0.0`; `src/lib/utils/loopbackHostname.ts` matches exact names only. | Decide which hosts count as local, then keep one function; unifying them changes behavior. Small. | None |
+| TD-35 | Uploads | The 50MB limit has two formatters that disagree: `formatUploadLimit` (`src/lib/schemas/uploadLimits.ts`) rounds and `formatAssetSizeLimit` (`templateAssetLimits.ts`) floors. | Keep one formatter. Small. | None |
