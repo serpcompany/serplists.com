@@ -12,6 +12,7 @@ import {
 } from "./scripts/eslint-rules/code-conventions.mjs";
 import { navigateWhileVisitIsCurrent } from "./scripts/eslint-rules/navigate-while-visit-is-current.mjs";
 import { noComments } from "./scripts/eslint-rules/no-comments.mjs";
+import { noExternalDataCasts } from "./scripts/eslint-rules/no-external-data-casts.mjs";
 import { noSourceTextReads } from "./scripts/eslint-rules/no-source-text-reads.mjs";
 import { restrictedCode } from "./scripts/eslint-rules/restricted-code.mjs";
 
@@ -21,12 +22,20 @@ const SERPLISTS_RULES = {
   rules: {
     "navigate-while-visit-is-current": navigateWhileVisitIsCurrent,
     "no-comments": noComments,
+    "no-external-data-casts": noExternalDataCasts,
     "no-source-text-reads": noSourceTextReads,
     "restricted-code": restrictedCode,
   },
 };
 
 const TEST_FILES = ["**/*.test.{ts,tsx,js,mjs}", "**/*.spec.{ts,tsx,js,mjs}", "tests/**/*.{ts,tsx,js,mjs}"];
+
+const APP_API_SCRIPT_AND_DATABASE_CODE = [
+  "src/**/*.{ts,tsx}",
+  "functions/**/*.ts",
+  "scripts/**/*.{js,mjs,cjs,ts,mts}",
+  "db/**/*.ts",
+];
 const SKIPPED_TEST_MESSAGE =
   "Tests are never skipped, left as todo or fixme, or run only under a condition: a test that does not run hides " +
   "behavior that stopped working. Make it pass and run it in a suite (pnpm run test:run, test:local-d1, or the " +
@@ -247,6 +256,10 @@ export default tseslint.config(
   {
     files: ["scripts/**/*.{js,mjs,cjs,ts,mts}"],
     rules: { "serplists/restricted-code": ["error", SCRIPT_CONVENTIONS] },
+  },
+  {
+    files: APP_API_SCRIPT_AND_DATABASE_CODE,
+    rules: { "serplists/no-external-data-casts": "error" },
   },
   {
     files: ["tests/e2e/**/*.{ts,mjs,js}"],
