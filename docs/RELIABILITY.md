@@ -124,7 +124,12 @@ explicitly per environment, never inferred from the host.
 ## Observability
 
 - API logs are JSON lines from `log()` in `functions/api/utils/logger.ts`. Every
-  request gets a `requestId`, returned as the `X-Request-Id` header. ESLint rejects
+  request gets a `requestId`, returned as the `X-Request-Id` header.
+  - The router handles each request inside a context
+    (`functions/api/utils/request-context.ts`, `AsyncLocalStorage` under `nodejs_compat`).
+  - `log()` adds that id to every line written while the request is handled, D1 profiling
+    lines included, so `pnpm run logs:query request <id>` finds all of them.
+  - ESLint rejects
   direct `console.*` in `functions/`. Log ids, never emails, tokens, or client IP
   addresses (the router keeps the IP in memory for rate limits only). As a backstop,
   `log()` writes any field named `ip`, `email`, `password`, `token`,
