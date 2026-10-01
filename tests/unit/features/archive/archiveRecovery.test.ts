@@ -29,7 +29,7 @@ const setup = (overrides: { restoreTemplate?: () => Promise<unknown>; restoreRun
   const queryClient = newClient();
   const dependencies = {
     queryClient,
-    pending: new Set<string>(),
+    restoringIds: new Set<string>(),
     restoreTemplate: vi.fn(overrides.restoreTemplate ?? (async () => ({ success: true }))),
     restoreRun: vi.fn(overrides.restoreRun ?? (async () => ({ success: true }))),
     userId: 'user-1',
@@ -39,7 +39,7 @@ const setup = (overrides: { restoreTemplate?: () => Promise<unknown>; restoreRun
 };
 
 describe('parseArchiveItems', () => {
-  it('maps archived rows and skips rows without an id', () => {
+  it('maps archived rows and skips a row without an id, which cannot be restored, instead of failing the whole list', () => {
     expect(
       parseArchiveItems(
         [
@@ -74,7 +74,7 @@ describe('restoreArchiveItem', () => {
     await expect(first).resolves.toBe(true);
     await expect(second).resolves.toBe(false);
     expect(dependencies.restoreRun).toHaveBeenCalledTimes(1);
-    expect(dependencies.pending.size).toBe(0);
+    expect(dependencies.restoringIds.size).toBe(0);
   });
 
   it('marks the archive and the lists the item returns to as stale', async () => {
@@ -99,7 +99,7 @@ describe('restoreArchiveItem', () => {
     });
 
     await expect(restoreArchiveItem(dependencies, { id: 'run-1', kind: 'run' })).rejects.toThrow('Active run limit reached');
-    expect(dependencies.pending.has('run-1')).toBe(false);
+    expect(dependencies.restoringIds.has('run-1')).toBe(false);
   });
 });
 
@@ -128,7 +128,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
     expect(isInvalidated(queryClient, ['templates', 'user-1', 'personal'])).toBe(true);
     expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(true);
     expect(queryClient.getQueryState(getTemplateDetailQueryKey('template-1', 'user-1'))).toBeUndefined();
-    expect(dependencies.pending.size).toBe(0);
+    expect(dependencies.restoringIds.size).toBe(0);
   });
 
   it('refreshes the archived runs and the run lists when a run was already restored', async () => {
@@ -141,7 +141,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
     expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(true);
     expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(true);
     expect(isInvalidated(queryClient, queryKeys.archivedTemplates('user-1', 'personal'))).toBe(false);
-    expect(dependencies.pending.size).toBe(0);
+    expect(dependencies.restoringIds.size).toBe(0);
   });
 
   it('refreshes the archive when the item is gone (404)', async () => {
@@ -167,7 +167,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
 
       expect(isInvalidated(queryClient, queryKeys.archivedRuns('user-1', 'personal'))).toBe(false);
       expect(isInvalidated(queryClient, ['runs', 'user-1', 'personal'])).toBe(false);
-      expect(dependencies.pending.size).toBe(0);
+      expect(dependencies.restoringIds.size).toBe(0);
     }
   });
 
@@ -177,7 +177,7 @@ describe('restoreArchiveItem when another tab, a teammate or a concurrent reques
     vi.spyOn(queryClient, 'invalidateQueries').mockRejectedValue(new Error('refresh failed'));
 
     await expect(restoreArchiveItem(dependencies, { id: 'template-1', kind: 'template' })).rejects.toBe(error);
-    expect(dependencies.pending.size).toBe(0);
+    expect(dependencies.restoringIds.size).toBe(0);
   });
 });
 

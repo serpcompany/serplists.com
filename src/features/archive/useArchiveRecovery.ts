@@ -16,9 +16,6 @@ import {
   type ArchiveItem,
 } from './archiveRecovery';
 
-// Archived Templates and Runs for the active context. The archive lists read every archived
-// row for the owner, so only the archive page loads them. Every member may see them, but
-// Restore follows the member's role (canRestoreArchiveItem).
 export function useArchiveRecovery() {
   const { user } = useAuth();
   const userId = user?.id;
@@ -44,21 +41,19 @@ export function useArchiveRecovery() {
     staleTime: 60 * 1000,
   });
 
-  // The ref blocks a second request for the same item before React re-renders; the state
-  // disables that item's Restore button.
-  const pendingRef = useRef(new Set<string>());
+  const restoringIdsRef = useRef(new Set<string>());
   const [restoringIds, setRestoringIds] = useState<ReadonlySet<string>>(() => new Set());
 
   const restore = useCallback(
     async (item: ArchiveItem) => {
       const allowed = item.kind === 'template' ? canRestoreTemplates : canRestoreRuns;
-      if (pendingRef.current.has(item.id) || !allowed) return;
+      if (restoringIdsRef.current.has(item.id) || !allowed) return;
       setRestoringIds((ids) => new Set(ids).add(item.id));
       try {
         const restored = await restoreArchiveItem(
           {
             queryClient,
-            pending: pendingRef.current,
+            restoringIds: restoringIdsRef.current,
             restoreTemplate: (id) => api.restoreTemplate(id),
             restoreRun: (id) => api.restoreChecklist(id),
             userId,
@@ -87,7 +82,6 @@ export function useArchiveRecovery() {
     archivedRuns: runsQuery.data ?? [],
     templatesState: getArchiveListState(templatesQuery),
     runsState: getArchiveListState(runsQuery),
-    // Shown only for a list whose state is 'error'.
     templatesError: templatesQuery.error,
     runsError: runsQuery.error,
     refetchTemplates: () => void templatesQuery.refetch(),

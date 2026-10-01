@@ -230,7 +230,10 @@ page, so a page's sticky parts stick to the window.
   twice (a save, an export) goes through `createSingleFlight`
   (`src/lib/utils/singleFlight.ts`; `useSingleFlight` for a button), which sets its guard
   synchronously, before React can re-render the button as disabled, and clears it however
-  the action ends.
+  the action ends. A list whose rows can each run the action at the same time (Restore on
+  the archive page, Revalidate on the runs list) keeps the ids in flight in a ref, checked
+  and set before the request for the same reason, and the same ids in state to disable
+  each row's button (`useArchiveRecovery`, `useRunRevalidation`).
 - Write a count with its noun through `formatCount` or `pluralize`
   (`src/lib/utils/pluralize.ts`): "1 template", "2 templates", "0 tasks", never
   "1 templates".

@@ -115,6 +115,10 @@ mark them stale, so they load when a page next shows them.
   them (`markArchivedTemplateStale`). The detail page can still be open while the delete
   settles, and a refetch (or removing a query a page observes, which fetches it again) would
   cache the `404` as "not found" for the next visit, even after a restore.
+- **Restoring** a Template or Run (`restoreArchiveItem` in
+  `src/features/archive/archiveRecovery.ts`) refreshes the Template and Run lists it returns
+  to and the archive list it left, keyed by the user and context the restore started in, so a
+  context switch while it runs still refreshes the right archive.
 - **Sharing a run**, from the runs list or the run page, marks it public in every cached runs
   list (Personal and each Organization) as soon as the API returns, before the link is
   copied, then reloads the lists (`markRunShared`). A shared run cannot be revalidated, so its
