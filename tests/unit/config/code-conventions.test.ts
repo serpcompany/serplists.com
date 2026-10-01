@@ -1,9 +1,10 @@
 import { ESLint } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
 import { queryKeys } from '@/lib/queryKeys';
 import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions.mjs';
+import type { apiJson, apiRequest, fetchFromThePageUnderTest } from '../../e2e/support/api-requests';
 
 const eslint = new ESLint({ cwd: process.cwd() });
 
@@ -146,6 +147,12 @@ describe('code conventions in scripts/ and the browser and integration tests', (
 
 describe('code conventions in the browser tests (serplists/restricted-code with BROWSER_TEST_CONVENTIONS)', () => {
   it.each(BROWSER_TEST_CASES)('$name', (sample) => expectCase(sample, 'serplists/restricted-code'));
+
+  it('names request helpers that tests/e2e/support/api-requests.ts exports', () => {
+    expectTypeOf<typeof apiRequest>().toBeFunction();
+    expectTypeOf<typeof apiJson>().toBeFunction();
+    expectTypeOf<typeof fetchFromThePageUnderTest>().toBeFunction();
+  });
 });
 
 describe('toasts on src/ (no-restricted-imports)', () => {
