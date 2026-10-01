@@ -20,7 +20,7 @@ describe('acceptTeamInviteForWorkspace', () => {
     vi.unstubAllGlobals();
   });
 
-  it('accepts the invite and refreshes Organizations without switching the active context', async () => {
+  it('accepts the invite and refreshes Organizations without switching the active context, which stays a separate choice', async () => {
     const setItem = vi.fn();
     vi.stubGlobal('window', { localStorage: { setItem } });
     const calls: string[] = [];
@@ -45,7 +45,6 @@ describe('acceptTeamInviteForWorkspace', () => {
     ).resolves.toEqual(acceptedInvite());
 
     expect(calls).toEqual(['accept:invite-token', 'remember:team-1', 'refresh']);
-    // Switching to the Organization is a separate, explicit choice.
     expect(setItem).not.toHaveBeenCalled();
   });
 

@@ -11,10 +11,6 @@ import {
 } from '@/features/teams/teamInviteLinks';
 import { ApiError } from '@/lib/api-errors';
 
-// A lost invite link cannot be shown again (only its hash is stored), so when
-// a pending invite already exists the manager is offered a new link for it
-// instead of a dead-end 'Invite already pending' error.
-
 function createdInvite(overrides: Record<string, unknown> = {}) {
   return {
     id: 'invite-1',
@@ -78,7 +74,7 @@ describe('createInviteLink', () => {
     });
   });
 
-  it('offers a new link for the pending invite instead of failing', async () => {
+  it('offers a new link for the pending invite instead of failing, since a lost link cannot be shown again', async () => {
     const createInvite = vi.fn().mockRejectedValue(pendingConflict());
 
     await expect(
@@ -149,9 +145,8 @@ describe('visibleInviteLink', () => {
     ...overrides,
   });
 
-  it('shows a link only under the Organization it belongs to', () => {
+  it('shows a link only under the Organization it belongs to, so one that lands after a switch is not shown under the new one', () => {
     expect(visibleInviteLink(link, 'team-1')).toBe(link);
-    // A response that arrives after switching Organization is not shown under the new one.
     expect(visibleInviteLink(link, 'team-2')).toBeNull();
     expect(visibleInviteLink(null, 'team-1')).toBeNull();
   });
@@ -160,8 +155,7 @@ describe('visibleInviteLink', () => {
     expect(visibleInviteLink(link, 'team-1', pending(['invite-1', 'invite-2']))).toBe(link);
   });
 
-  it('hides a dead link once the pending list no longer has its invite', () => {
-    // Revoked (here or in another tab), accepted, or expired: copying it would hand out a dead link.
+  it('hides the link once the pending list no longer has its invite, revoked, accepted or expired, so a dead link cannot be copied', () => {
     expect(visibleInviteLink(link, 'team-1', pending(['invite-2']))).toBeNull();
   });
 
@@ -203,9 +197,8 @@ describe('isInviteGoneError', () => {
 });
 
 describe('inviteEmailAfterLink', () => {
-  it('clears the field that still holds the email the link was created for', () => {
+  it('clears the field that still holds the email the link was created for, compared trimmed and lowercase as the API stores it', () => {
     expect(inviteEmailAfterLink('bob@exmaple.com', 'bob@exmaple.com')).toBe('');
-    // The API stores the email trimmed and lowercase.
     expect(inviteEmailAfterLink(' Bob@Exmaple.com ', 'bob@exmaple.com')).toBe('');
   });
 

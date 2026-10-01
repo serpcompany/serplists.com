@@ -36,9 +36,7 @@ describe('getTeamSettingsUpdate', () => {
   });
 });
 
-// The active workspace is rebuilt whenever the Organizations list changes, so the form merges
-// the saved values instead of replacing what the user typed.
-describe('syncTeamSettingsForm', () => {
+describe('syncTeamSettingsForm merges the saved values into what the user typed, since the Organizations list rebuilds the active context on every change', () => {
   const baseline = { name: 'Acme', slug: 'acme' };
 
   it('keeps a changed name and lets a clean slug follow the server', () => {

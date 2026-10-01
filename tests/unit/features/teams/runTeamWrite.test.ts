@@ -2,9 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { runTeamWrite } from '@/features/teams/runTeamWrite';
 
-// A committed Organization change must not be reported as failed because the
-// refresh that follows it failed.
-
 const handlers = () => ({
   onSaved: vi.fn(),
   onRefreshFailed: vi.fn(),
@@ -12,7 +9,7 @@ const handlers = () => ({
 });
 
 describe('runTeamWrite', () => {
-  it('reports a committed write as saved when refreshing the Organization list fails', async () => {
+  it('reports a committed write as saved when refreshing the Organization list fails, and still runs the other refreshes', async () => {
     const calls = handlers();
     const reloadMembers = vi.fn().mockResolvedValue(undefined);
     const refreshTeams = vi.fn().mockRejectedValue(new Error('Failed to fetch'));
@@ -29,7 +26,6 @@ describe('runTeamWrite', () => {
     expect(calls.onSaved).toHaveBeenCalledWith({ success: true });
     expect(calls.onWriteFailed).not.toHaveBeenCalled();
     expect(calls.onRefreshFailed).toHaveBeenCalledTimes(1);
-    // One failed refresh does not skip the others.
     expect(reloadMembers).toHaveBeenCalledTimes(1);
     expect(reloadActivity).toHaveBeenCalledTimes(1);
   });
