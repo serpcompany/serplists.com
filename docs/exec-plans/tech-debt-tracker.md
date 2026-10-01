@@ -5,13 +5,12 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-50.**
+then you raise it. **Next ID: TD-53.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
 | ID | Area | Debt | Next step | Ratchet |
 | --- | --- | --- | --- | --- |
-| TD-1 | Types | `tests/` is not type-checked (about 460 errors under `strict`). | Add a tsconfig for `tests/` to the `tsc -b` references and fix one directory at a time. | None |
 | TD-2 | Boundaries | The API client (`apiRequest` in `src/lib/api/request.ts`) returns `response.json()` as the declared type without parsing, so client code trusts guessed shapes. `getAuthStatus` in `src/lib/auth-client.ts` casts its response the same way. | Let the request helper take an optional Zod schema; convert template and run endpoints first. | None |
 | TD-5 | Vocabulary | Code identifiers, tables, and routes still use `team`/`team_id`/`workspace` for Organization ([ADR 0001](../design-docs/personal-and-organization-contexts.md)). | Rename in separately scoped, migration-safe changes. | None |
 | TD-11 | Tests | All e2e specs share one database and one set of seeded users, so they interfere when run in parallel (publishing specs move sitemap `lastmod` values). The browser tests also share one local workerd process, which renders every page and link prefetch, so parallel browsers push navigations past the 5-second expect timeout. Every browser test runs on one Playwright worker (`playwright.config.ts`); the full suite takes over an hour locally. | Give each spec its own users and data (or per-worker D1 state), and one preview per worker, so the suite can run in parallel. | `test:e2e:full` in CI on promotions |
@@ -49,3 +48,6 @@ then you raise it. **Next ID: TD-50.**
 | TD-47 | Tests | `tests/unit/db/officialTemplatesSeed.test.ts` and `tests/unit/db/seeds/official-templates.test.ts` both check the official seed's line breaks. | Keep one check. Small. | None |
 | TD-48 | Duplication | The `.env` file parser is written three times: `parseEnvFile` in `scripts/check-env.mjs`, `scripts/dev-auto-lib.mjs` and `scripts/stripe/_env.mjs`. | Export one from `scripts/lib/` and import it in all three. Small. | None |
 | TD-49 | Tests | `tests/integration/local-d1-handler-env.ts` repeats the `.local-d1-env-disabled` literal that `NO_DEV_VARS_OR_DOTENV_FILES` names. | Import the constant. Small. | None |
+| TD-50 | Tests | 42 response reads in tests still cast instead of parsing with `readJson()`: `agent-mcp-handler.test.ts` (31), `agent-mcp-lists`, `agent-mcp-result-bounds`, `teams-sqlite.test.ts`, `templateHistoryTimeline.contract.test.ts` (needs TD-2's history schema), and 11 `response.json()` reads in browser specs, typed `any`. | Read them with `readJson()` and a schema. Medium. | None |
+| TD-51 | Dependencies | Two `postcss` versions (8.5.6 at the root, 8.5.23 under `@tailwindcss/postcss`) have types that don't match, so `tests/unit/styles/tailwindTypography.test.ts` narrows the plugin at runtime. | Dedupe `postcss`, then drop the runtime check. Small. | None |
+| TD-52 | Dependencies | `@types/node` 22.17 lacks `node:sqlite`'s `setReturnArrays()`, so `tests/support/sqliteRowArrays.ts` declares it. | Bump `@types/node` to 22.20 or newer and delete the declaration. Small. | None |
