@@ -3,6 +3,7 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import globals from "globals";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import { noComments } from "./scripts/eslint-rules/no-comments.mjs";
 
 // Rule messages are written as instructions: they are read by coding agents.
 // See docs/design-docs/core-beliefs.md for the reasoning behind each rule.
@@ -172,6 +173,12 @@ export default tseslint.config(
     rules: {
       "max-lines": ["error", { max: MAX_LINES }],
     },
+  },
+  {
+    files: ["src/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}", "functions/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
+    linterOptions: { noInlineConfig: true },
+    plugins: { serplists: { rules: { "no-comments": noComments } } },
+    rules: { "serplists/no-comments": "error" },
   },
   {
     files: ["src/**/*.{ts,tsx}"],
