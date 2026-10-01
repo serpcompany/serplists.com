@@ -2,14 +2,10 @@ import type { UseFormReturn } from "react-hook-form";
 
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-// react-hook-form's getValues() is a shallow copy: typing into a task changes the
-// nested objects in place. A save must work from a deep copy taken at click time.
 export const cloneTemplateEditorFormValues = (
   values: TemplateEditorFormValues,
 ): TemplateEditorFormValues => structuredClone(values);
 
-// Structural equality for form values (plain JSON-like data). A missing key and an
-// undefined value count as equal, since the form sets optional fields either way.
 export const templateEditorValuesEqual = (left: unknown, right: unknown): boolean => {
   if (Object.is(left, right)) {
     return true;
@@ -42,18 +38,11 @@ export const templateEditorValuesEqual = (left: unknown, right: unknown): boolea
 };
 
 export type PostSaveFormState = {
-  // The new baseline: what the server stored.
   defaults: TemplateEditorFormValues;
-  // What the form shows: the saved values, with any field edited during the save kept.
   values: TemplateEditorFormValues;
   keptEdits: boolean;
 };
 
-// `submitted` is the click-time copy that was sent, `current` the form now, and `saved`
-// the normalized values the server stored. A field that still equals what was sent
-// takes the saved value (trimmed, final slug); a field edited during the save keeps
-// the edit. Compare against what was sent, not `saved`, or normalization alone would
-// look like an edit.
 export const resolvePostSaveFormState = ({
   submitted,
   current,
@@ -87,9 +76,6 @@ type TemplateEditorForm = Pick<
   "getValues" | "reset"
 >;
 
-// After a successful save, makes the saved values the form's baseline without
-// discarding edits typed while the save was in flight. With edits, the form stays
-// dirty, so the unsaved-changes guards still warn about them.
 export const rebaseTemplateEditorFormAfterSave = (
   form: TemplateEditorForm,
   { submitted, saved }: { submitted: TemplateEditorFormValues; saved: TemplateEditorFormValues },
@@ -102,7 +88,6 @@ export const rebaseTemplateEditorFormAfterSave = (
 
   form.reset(state.defaults);
   if (state.keptEdits) {
-    // keepDefaultValues makes react-hook-form recompute isDirty against `saved`.
     form.reset(state.values, { keepDefaultValues: true });
   }
 

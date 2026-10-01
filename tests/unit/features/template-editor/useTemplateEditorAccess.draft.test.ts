@@ -136,6 +136,14 @@ describe("useTemplateEditorAccess with an offered kept draft, which work on a di
     expect(readTemplateDraft(owner, storage)).toBeNull();
   });
 
+  it("keeps a restored draft stored until it saves, since the plan can still read Free for a moment after checkout and a refused save needs it again", () => {
+    saveTemplateDraft(owner, draftA, storage);
+
+    editorOnceItReadTheKeptDraft().restoreDraft();
+
+    expect(readTemplateDraft(owner, storage)?.values).toEqual(draftA);
+  });
+
   it("clears the draft when the restored create finishes after the editor closed", () => {
     saveTemplateDraft(owner, draftA, storage);
     const access = editorOnceItReadTheKeptDraft();

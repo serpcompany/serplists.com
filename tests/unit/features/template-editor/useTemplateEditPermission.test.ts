@@ -35,6 +35,10 @@ describe("useTemplateEditPermission", () => {
     expect(rendered({ isCreate: false, loading: true, ownership: undefined })).toBe("checking");
   });
 
+  it("leaves a template whose owner is unknown after a failed load to the save, since the page shows the load error instead of the form", () => {
+    expect(rendered({ isCreate: false, loading: false, ownership: undefined })).toBe("editable");
+  });
+
   it("keeps an open form open when a later teams refetch shows a lower role, since closing it would drop unsaved edits without a prompt", () => {
     fake.workspace.teams = [{ id: "team-1", role: "editor" }];
     expect(rendered({ isCreate: false, loading: false, ownership: organizationTemplate })).toBe("editable");

@@ -1,22 +1,12 @@
 import { z } from "zod";
 
-import { getSessionStorage } from "@/lib/browserStorage";
+import { getSessionStorage, succeedsWithoutThrowing } from "@/lib/browserStorage";
 import { TEMPLATE_EDITOR_TYPES } from "@/lib/forms/templateEditorDetailsForm";
 import {
   templateEditorFormSchema,
   type TemplateEditorFormValues,
 } from "@/lib/forms/templateEditorForm";
 
-// A new template the API would not save yet (plan limit, ended session), kept while
-// the user upgrades or signs in so the new-template editor can restore it afterwards.
-// Edits to an existing template are kept the same way when the session ends before
-// they are saved (a sign-out in another tab, an expired session), with the version
-// they were made on, so a save made since then ends in a conflict, not an overwrite.
-// - sessionStorage, not localStorage: it survives the same-tab Stripe and login
-//   redirects but ends with the tab, so a shared device does not keep it.
-// - The key names the user and the Personal or Organization context, so a draft never
-//   opens in another account or context.
-// - Storage can be blocked or full; every access is guarded and reports failure.
 const DRAFT_KEY_PREFIX = "serplists:template-draft";
 const EDIT_DRAFT_KEY_PREFIX = "serplists:template-edit-draft";
 const DRAFT_FORMAT = 1;
@@ -28,11 +18,9 @@ export type TemplateDraftListStorage = Pick<Storage, "getItem" | "key" | "length
 export type StoredTemplateDraft = {
   savedAt: string;
   values: TemplateEditorFormValues;
-  // Edits to an existing template: the version they were made on.
   baseVersion?: number;
 };
 
-// Structure only: field limits are checked again when the restored draft is saved.
 const storedDraftSchema = z.object({
   format: z.literal(DRAFT_FORMAT),
   savedAt: z.string(),
@@ -105,14 +93,9 @@ const readDraft = <T>(
 };
 
 const removeDraft = (key: string, storage: TemplateDraftStorage | null): void => {
-  try {
-    storage?.removeItem(key);
-  } catch {
-    // Storage is blocked; there is nothing else to clear.
-  }
+  succeedsWithoutThrowing(() => storage?.removeItem(key));
 };
 
-// True when the draft was stored.
 export const saveTemplateDraft = (
   owner: TemplateDraftOwner,
   values: TemplateEditorFormValues,
@@ -127,9 +110,6 @@ export const readTemplateDraft = (
   return draft ? { savedAt: draft.savedAt, values: draft.values } : null;
 };
 
-// This user's new-template drafts in every context, newest first. A confirmed sign-out
-// returns the tab to Personal, so after sign-in a draft kept in an Organization is only
-// found this way. The key prefix names the user, so no other account's drafts match.
 export const listTemplateDraftContexts = (
   userId: string,
   storage: TemplateDraftListStorage | null = getSessionStorage() ?? null,
@@ -164,7 +144,6 @@ export const clearTemplateDraft = (
   storage: TemplateDraftStorage | null = getSessionDraftStorage(),
 ): void => removeDraft(getTemplateDraftKey(owner), storage);
 
-// True when the edits were stored.
 export const saveTemplateEditDraft = (
   owner: TemplateEditDraftOwner,
   draft: { values: TemplateEditorFormValues; baseVersion?: number },
@@ -191,12 +170,6 @@ export const clearTemplateEditDraft = (
   storage: TemplateDraftStorage | null = getSessionDraftStorage(),
 ): void => removeDraft(getTemplateEditDraftKey(owner), storage);
 
-// A new template's save has finished, whether or not the editor is still open (the
-// user can leave while it saves). A saved template clears its draft: restoring it
-// would create a duplicate. A save refused for a reason the user fixes elsewhere
-// (upgrade, sign in) keeps the values it sent. Any other failure leaves storage alone.
-// The editor calls this only for a draft its form holds: a kept draft it offered and
-// the user did not restore or discard belongs to another template, and stays.
 export const settleTemplateDraftAfterSave = (
   owner: TemplateDraftOwner,
   outcome: { saved: boolean; keepDraft: boolean; values: TemplateEditorFormValues },

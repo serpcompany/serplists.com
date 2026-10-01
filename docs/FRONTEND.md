@@ -121,8 +121,8 @@ and agents (MCP) call them directly and do not follow redirects.
 
 A page that holds unsaved edits must ask before they are lost, whichever way the user
 leaves. `src/lib/navigation/useUnsavedChangesGuard.ts` covers every way out (the
-first three points below); the template editor (`useTemplateEditorLeaveGuard`) and
-the run page (unsaved task notes) use it. A page's own back buttons just navigate and
+first three points below); [the template editor](design-docs/template-editor.md#the-leave-guard-in-the-editor)
+(`useTemplateEditorLeaveGuard`) and the run page (unsaved task notes) use it. A page's own back buttons just navigate and
 let it ask, so the user is asked once.
 
 - The app's `Link` and `useAppRouter` ask before opening another page: sidebar, header,
@@ -354,6 +354,9 @@ write: [client data](design-docs/client-data.md).
   scans `src/` for pending flags next to a checkout or portal call.
 
 ## Template editor forms
+
+How the editor's models load, save, keep drafts and decide who may edit:
+[template editor](design-docs/template-editor.md).
 
 - `src/lib/forms/templateEditorDetailsForm.ts` owns the top-level details contract;
   `src/lib/forms/templateEditorForm.ts` owns the combined editor contract, editor

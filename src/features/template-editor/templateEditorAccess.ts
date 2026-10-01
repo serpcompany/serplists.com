@@ -1,12 +1,9 @@
 import { type AccessFailure, BILLING_UNAVAILABLE_MESSAGE } from "@/lib/api-errors";
 import type { ChecklistTemplate } from "@/types/checklist";
 
-// What the template editor shows when the plan or the session stands between the user
-// and a saved template, and the way forward it offers.
 export type TemplateEditorAccessNotice = {
   title: string;
   message: string;
-  // checkout: Personal Pro checkout. sign_in: the login page, returning here.
   action: "checkout" | "sign_in" | null;
 };
 
@@ -24,7 +21,6 @@ const upgradeNotice = (
   message: string,
   context: AccessContext,
 ): TemplateEditorAccessNotice => {
-  // A Personal Pro checkout cannot lift an Organization's limits.
   if (context.isOrganization) {
     return {
       title: "Organization plan limit",
@@ -44,8 +40,6 @@ const upgradeNotice = (
   return { title: "Upgrade to Pro to save this template", message, action: "checkout" };
 };
 
-// Plan gates and an ended session get a notice with an action; other failures stay in
-// the editor's error list.
 export const resolveTemplateSaveFailureNotice = (
   failure: AccessFailure | undefined,
   context: AccessContext,
@@ -66,8 +60,6 @@ export const resolveTemplateSaveFailureNotice = (
   }
 };
 
-// The templates the API counts against the active context's limit: the Personal list
-// holds public catalog templates too, so filter to the user's own.
 export const countContextTemplates = (
   templates: ChecklistTemplate[],
   owner: { userId: string; teamId?: string | null },
@@ -78,8 +70,6 @@ export const countContextTemplates = (
       : template.userId === owner.userId && !template.teamId,
   ).length;
 
-// Unknown (billing or the list still loading, or failed) never counts as reached: the
-// API check stays authoritative and the save still handles its 403.
 export const isTemplateLimitReached = (params: {
   maxTemplates?: number | null;
   ownedCount?: number;
@@ -88,25 +78,17 @@ export const isTemplateLimitReached = (params: {
   typeof params.ownedCount === "number" &&
   params.ownedCount >= params.maxTemplates;
 
-// The limit pre-check needs the context's template count, which only the workspace list
-// has. Load that list only on the new-template editor and only when the plan has a template
-// limit: an editor of an existing template, or a plan without a limit, never reads a list.
 export const shouldLoadTemplateCountForLimit = (params: {
   isCreate: boolean;
   maxTemplates?: number | null;
 }): boolean => params.isCreate && typeof params.maxTemplates === "number";
 
-// Shown on the new-template editor before the user writes a template the plan cannot save.
 export const resolveTemplateLimitNotice = (
   limitReached: boolean,
   context: AccessContext,
 ): TemplateEditorAccessNotice | null =>
   limitReached ? upgradeNotice(TEMPLATE_LIMIT_MESSAGE, context) : null;
 
-// A new template's draft kept in another context: a confirmed sign-out returns the tab to
-// Personal, so a draft kept in an Organization is not the active context's after sign-in.
-// Offered (newest first) only for a context the user can still create templates in, and
-// only once the Organization list is known: the tab may still be moving into one.
 export const findOtherContextDraft = <T extends { teamId: string | null }>(
   drafts: T[],
   params: {
