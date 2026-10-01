@@ -17,9 +17,9 @@ migrations, backups, and R2 storage are in
 
 | Where | What runs |
 | --- | --- |
-| Pre-commit hook | Secret scan and ESLint on staged files |
+| Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, architecture, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, comments, architecture, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus local D1 fixture tests, the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -56,31 +56,49 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     reads the description to decide when to load the skill), or the skills table in the
     [agent workflow](design-docs/agent-workflow.md#agent-tooling) does not list it;
   - `AGENTS.md` grows past 120 lines: it stays a map.
-- **Comments** are not allowed: a name, a test named for the behavior, or the doc that owns
-  the area holds what one would say. Phase 3 of the
-  [harness hardening plan](exec-plans/active/harness-hardening.md) removes the rest and then
-  enforces both checks everywhere; until then ESLint applies the rule only to the folders
-  already clean.
+- **Comments** are not allowed in any file: a name, a test named for the behavior, or the
+  doc that owns the area holds what one would say. Two checks enforce it, and a test keeps
+  them complete.
   - ESLint's `serplists/no-comments` rule (`scripts/eslint-rules/no-comments.mjs`) reports
-    every comment in TypeScript and JavaScript but a shebang: JSDoc, comments inside JSX, and
-    directives (`eslint-disable`, `@ts-expect-error`, `/// <reference>`, `/* global */`). The
-    config sets `noInlineConfig`, so an `eslint-disable` comment cannot hide one.
-  - `node scripts/check-no-comments.mjs [files]` checks the other formats in every file git
-    tracks or would track (or the files named), reading each by its own rules for strings,
-    so a `#` in a URL or a `--` in a quoted name is not a comment. YAML goes through the
-    `yaml` package's parser; in GitHub workflows and actions and the Lefthook config, its
-    `run:` blocks are read as code too: `bash` and `sh` steps by a shell scanner (a `#` starts
-    a comment only at the start of a word, outside quotes, substitutions, heredocs and
-    `${{ }}` expressions), `node` steps as JavaScript, and steps in other shells not at all.
-    TOML comments count outside basic, literal and multi-line strings, and SQL's `--` and
-    `/* */` outside strings and quoted names (`"name"`, backticks, `[name]`). CSS goes through
-    PostCSS's tokenizer (strings and `url()` hold no comments), JSON and JSONC through
-    TypeScript's scanner. In a patch, only the lines it adds are read, in the language of the
-    file it patches, and reported at their line in the patch. Markdown is not checked.
-  - Files a generator writes are skipped: `GENERATED_FILES` in
-    `scripts/check-no-comments-lib.mjs` (the lockfile, the portable template JSON Schema, the
-    bundled sitemap catalog and the example templates' `template.json`), and ESLint ignores
+    every comment in every TypeScript and JavaScript file but a shebang: JSDoc, comments
+    inside JSX, and directives (`eslint-disable`, `@ts-expect-error`, `/// <reference>`,
+    `/* global */`). The config sets `noInlineConfig`, so an `eslint-disable` comment cannot
+    hide one.
+  - `pnpm run comments:check` (`scripts/check-no-comments.mjs`, part of `check:repo`) checks
+    every other format in every file git tracks or would track, and the pre-commit hook runs
+    it on the staged files of those formats (`node scripts/check-no-comments.mjs <files>`
+    checks the files named). It reads each format by its own rules for strings, so a `#` in
+    a URL or a `--` in a quoted name is not a comment:
+    - YAML through the `yaml` package's parser. In GitHub workflows and actions and the
+      Lefthook config, `run:` blocks are read as code too: `bash` and `sh` steps by a shell
+      scanner (a `#` starts a comment only at the start of a word, outside quotes,
+      substitutions, heredocs and `${{ }}` expressions), `node` steps as JavaScript, and steps
+      in other shells not at all.
+    - TOML outside basic, literal and multi-line strings; SQL's `--` and `/* */` outside
+      strings and quoted names (`"name"`, backticks, `[name]`); CSS through PostCSS's
+      tokenizer (strings and `url()` hold no comments); JSON and JSONC through TypeScript's
+      scanner; XML (`.xml`, `.xsd`, `.svg`) outside CDATA and processing instructions.
+    - Dotenv files (`.dev.vars*`, `.env*`): `#` lines, and a `#` after a value, which dotenv
+      drops from an unquoted value. `.gitignore`: lines that start with `#`. `.gitattributes`:
+      lines whose first character after any spaces is `#`. `.npmrc`: `#` and `;` lines, and an
+      unescaped `#` or `;` that ends an unquoted value, as npm reads it.
+    - In a patch, only the lines it adds, in the language of the file it patches, reported at
+      their line in the patch.
+  - `tests/unit/scripts/comment-check-coverage.test.ts` fails on any file in the repository no
+    check covers. Each must be TypeScript or JavaScript that ESLint holds to the rule, a format
+    `comments:check` reads, a file a generator writes (`GENERATED_FILES` in
+    `scripts/check-no-comments-lib.mjs`: the lockfile, `cloudflare-env.d.ts`, the portable
+    template JSON Schema, the bundled sitemap catalog, and the example templates'
+    `template.json` and `preview.html`), Markdown, or a format without comment syntax
+    (`FORMATS_WITHOUT_COMMENTS`: plain text, `.gitkeep`, images, fonts and archives). So a new
+    format fails it until the check reads it or one of those lists names it. The test also
+    fails if `check:repo` or the pre-commit hook stops running `comments:check`, or if the
+    hook's glob misses a file the check reads. ESLint ignores the generated
     `cloudflare-env.d.ts` and `next-env.d.ts`.
+  - Until a person removes their comments, `comments:check` skips the workflows in
+    `WORKFLOWS_AWAITING_A_PERSON`: agents may not edit CI workflows, so a person has to clean
+    them. The test fails once a listed workflow has no comments left, so the list only
+    shrinks.
 
 ## Deploy pipeline
 
