@@ -455,7 +455,8 @@ Common failures:
     finds a component's element with its props typed.
   - A JavaScript module a test imports gets a declaration file beside it
     (`scripts/lib/run-tool.d.mts`). Without one, TypeScript infers its types from the code,
-    and a parameter that defaults to `null` then accepts only `null`.
+    and a parameter that defaults to `null` then accepts only `null`. `tests/tsconfig.json`
+    turns `allowJs` off, so `pnpm run typecheck` fails on an import that has none.
   - A test of what a JavaScript caller may pass but the declared types rule out is a
     `.test.mjs` file (`tests/unit/scripts/run-tool-from-javascript.test.mjs`).
   - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars

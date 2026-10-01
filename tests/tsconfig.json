@@ -5,7 +5,8 @@
     "noImplicitOverride": false,
     "noFallthroughCasesInSwitch": false,
     "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "allowJs": false
   },
   "include": [
     "../next-env.d.ts",

@@ -1,3 +1,4 @@
+import type { ProcessInfo } from "./lib/process-info.mjs";
 import type { Invocation } from "./lib/run-tool.mjs";
 
 export type DevSession = { port: number; pid: number | null; startedAt: number | null };
@@ -6,7 +7,6 @@ export type DevServerConfig = {
   origin: string;
   bindings: { FRONTEND_URL: string; CORS_ALLOWED_ORIGINS: string; BETTER_AUTH_SECRET: string };
 };
-export type ProcessInfo = { startedAt: number; commandLine: string | null };
 type Env = Record<string, string | undefined>;
 type OwnershipCheck = (pid: number | null, startedAt: number | null) => Promise<boolean>;
 
