@@ -18,33 +18,29 @@ const mockUseTemplateDetailModel = vi.fn();
 const {
   contextCreateTemplate,
   contextUpdateTemplate,
-  menuItemProps,
-  mockUseTemplateLists,
-  switchProps,
-  visitState,
+  moreMenuItemProps,
+  recordListsThePageAsksFor,
+  visibilitySwitchProps,
+  userStillOnThePage,
   workspaceState,
 } = vi.hoisted(() => ({
   contextCreateTemplate: vi.fn(),
   contextUpdateTemplate: vi.fn(),
-  menuItemProps: [] as Array<Record<string, unknown>>,
-  mockUseTemplateLists: vi.fn(),
-  switchProps: [] as Array<Record<string, unknown>>,
-  // Whether the user is still on the page (usePageVisit); read when a handler checks.
-  visitState: { current: false },
+  moreMenuItemProps: [] as Array<Record<string, unknown>>,
+  recordListsThePageAsksFor: vi.fn(),
+  visibilitySwitchProps: [] as Array<Record<string, unknown>>,
+  userStillOnThePage: { current: false },
   workspaceState: {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
     isTeamWorkspace: false,
     isWorkspaceLoading: false,
     roles: {} as Record<string, 'viewer' | 'runner' | 'editor'>,
-    // The teams request failed with no list, as WorkspaceProvider reports it.
     teamsUnavailable: false,
     workspaceStatus: 'ready' as 'ready' | 'loading' | 'error',
   },
 }));
 
-// The real model derives permissions from the options the page passes, and duplicates
-// through the page's createTemplate; so does this mock.
 vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
   const { getTemplateDetailPermissions } = await import(
     '@/features/template-detail/templatePermissions'
@@ -53,12 +49,12 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
     '@/features/template-detail/templateActionOutcome'
   );
   return {
-    useTemplateDetailModel: (options: {
+    useTemplateDetailModel: function useModelWithTheRealPermissionsAndDuplicate(options: {
       canEditTemplates: boolean;
       createTemplate: Parameters<typeof duplicateOwnedTemplate>[0]['createTemplate'];
       teamId?: string;
       userId?: string;
-    }) => {
+    }) {
       const model = mockUseTemplateDetailModel(options);
       return {
         duplicateTemplate: () =>
@@ -98,9 +94,8 @@ vi.mock('@/contexts/TemplatesContext', () => {
     getTemplate: vi.fn(),
     updateTemplate: contextUpdateTemplate,
   });
-  // Records the lists a page asks for; a detail page must not load any.
   const useTemplateLists = (options?: Record<string, unknown>) => {
-    mockUseTemplateLists(options);
+    recordListsThePageAsksFor(options);
     return useTemplates();
   };
   return { useTemplates, useTemplateLists };
@@ -108,17 +103,13 @@ vi.mock('@/contexts/TemplatesContext', () => {
 
 vi.mock('@/contexts/WorkspaceContext', async () => {
   const { getResourcePermissions } = await import('@/lib/organizationPermissions');
+  const roleSetByATestOrImpliedByTheActiveContext = (id: string) =>
+    workspaceState.roles[id] ??
+    (id === workspaceState.activeTeamId ? (workspaceState.canEditTemplates ? 'editor' : 'runner') : undefined);
   return {
     useWorkspace: () => ({
       ...workspaceState,
-      // A role set by a test, else the one the active context's canEditTemplates implies.
-      getPermissions: (teamId?: string) =>
-        getResourcePermissions(teamId, (id) =>
-          workspaceState.roles[id] ??
-          (id === workspaceState.activeTeamId
-            ? workspaceState.canEditTemplates ? 'editor' : 'runner'
-            : undefined),
-        ),
+      getPermissions: (teamId?: string) => getResourcePermissions(teamId, roleSetByATestOrImpliedByTheActiveContext),
       isRoleUnavailable: (teamId?: string) =>
         Boolean(teamId) && workspaceState.teamsUnavailable && !(teamId! in workspaceState.roles),
       retryWorkspace: vi.fn(),
@@ -126,12 +117,11 @@ vi.mock('@/contexts/WorkspaceContext', async () => {
   };
 });
 
-// Captures the visibility switch's props so a test can flip it.
 vi.mock('@/components/ui/switch', async () => {
   const { createElement } = await import('react');
   return {
     Switch: (props: Record<string, unknown>) => {
-      switchProps.push(props);
+      visibilitySwitchProps.push(props);
       return createElement('button', {
         'aria-checked': String(props.checked),
         disabled: props.disabled,
@@ -142,7 +132,6 @@ vi.mock('@/components/ui/switch', async () => {
   };
 });
 
-// Renders the More menu open and captures each item's props so a test can pick one.
 vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/components/ui/dropdown-menu')>();
   const { createElement } = await import('react');
@@ -151,16 +140,15 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => {
     DropdownMenuContent: ({ children }: { children?: React.ReactNode }) =>
       createElement('div', { role: 'menu' }, children),
     DropdownMenuItem: (props: Record<string, unknown>) => {
-      menuItemProps.push(props);
+      moreMenuItemProps.push(props);
       return createElement('div', { role: 'menuitem' }, props.children as React.ReactNode);
     },
     DropdownMenuSeparator: () => createElement('hr'),
   };
 });
 
-// Static rendering runs no effects, so the real hook reports every visit as ended.
 vi.mock('@/hooks/usePageVisit', () => ({
-  usePageVisit: () => () => ({ isCurrent: () => visitState.current }),
+  usePageVisit: () => () => ({ isCurrent: () => userStillOnThePage.current }),
 }));
 
 vi.mock('sonner', () => ({
@@ -193,10 +181,10 @@ const baseModel = () => ({
 beforeEach(() => {
   contextCreateTemplate.mockReset();
   contextUpdateTemplate.mockReset();
-  menuItemProps.length = 0;
+  moreMenuItemProps.length = 0;
   mockUseTemplateDetailModel.mockReset();
-  switchProps.length = 0;
-  visitState.current = false;
+  visibilitySwitchProps.length = 0;
+  userStillOnThePage.current = false;
   vi.mocked(navigateToLoginWithReturnPath).mockClear();
   workspaceState.activeTeamId = undefined;
   workspaceState.canEditTemplates = true;
@@ -206,6 +194,10 @@ beforeEach(() => {
   workspaceState.teamsUnavailable = false;
   workspaceState.workspaceStatus = 'ready';
 });
+
+const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
+const STORED_AT_8_30_PM_UTC_ON_JULY_5 = '2026-07-05 20:30:00';
+const withNarrowNoBreakSpacesAsSpaces = (text: string) => text.replace(/\u202f/g, ' ');
 
 const hasShareButton = (html: string) => /Share<\/button>/.test(html);
 const hasEditLink = (html: string) => html.includes('href="/dashboard/templates/tpl-1/edit/"');
@@ -257,8 +249,7 @@ describe('TemplateDetail Organization permissions', () => {
     );
   });
 
-  it('gives the Creator of a public Organization template they left the public copy, not owner controls', () => {
-    // The API leaves team_id out for anyone who is not an active member of the Organization.
+  it('gives the Creator of a public Organization template they left the public copy, not owner controls, since the API names no team_id to a non-member', () => {
     workspaceState.activeTeamId = undefined;
     workspaceState.isTeamWorkspace = false;
     mockUseTemplateDetailModel.mockReturnValue({
@@ -326,8 +317,6 @@ describe('TemplateDetail copy into an Organization', () => {
 });
 
 describe('TemplateDetail copy before the active context is known', () => {
-  // A stored Organization not yet confirmed shows as Personal: a copy made now would land
-  // in Personal, or send a Free user to Personal checkout.
   it.each([true, false])('keeps the copy disabled, whatever the Personal plan (Pro: %s)', (isPro) => {
     workspaceState.isWorkspaceLoading = true;
     workspaceState.workspaceStatus = 'loading';
@@ -348,8 +337,7 @@ describe('TemplateDetail copy before the active context is known', () => {
   });
 });
 
-describe('TemplateDetail copy of a private Organization template', () => {
-  // The API only clones public templates, so a copy button here could only fail.
+describe('TemplateDetail copy of a private Organization template, which the API cannot clone', () => {
   const privateOrganizationTemplate = (isPublic = false) => ({
     ...buildV0DemoPrivateTemplate(),
     isPublic,
@@ -357,8 +345,7 @@ describe('TemplateDetail copy of a private Organization template', () => {
     userId: 'someone-else',
   });
 
-  it('offers no copy to a member viewing it from Personal', () => {
-    // A runner there: Start Run follows the role in the template's own Organization.
+  it("offers no copy to a member viewing it from Personal, while Start Run follows their runner role in the template's Organization", () => {
     workspaceState.roles = { 'team-1': 'runner' };
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
@@ -410,8 +397,6 @@ describe('TemplateDetail copy of a private Organization template', () => {
   });
 });
 
-// Start Run on a private Organization template follows the role there. Opened from Personal
-// while the teams request failed, that role is unknown: say so instead of hiding Start Run.
 describe('TemplateDetail after the teams request failed', () => {
   const privateOrganizationTemplate = () => ({
     ...buildV0DemoPrivateTemplate(),
@@ -451,7 +436,7 @@ describe('TemplateDetail Duplicate', () => {
     });
 
     renderTemplateDetail();
-    const duplicate = menuItemProps.find((props) =>
+    const duplicate = moreMenuItemProps.find((props) =>
       [props.children].flat(Infinity).includes('Duplicate'),
     );
     await (duplicate?.onClick as () => Promise<void>)();
@@ -485,7 +470,7 @@ describe('TemplateDetail export after a failed plan check', () => {
     });
 
     const html = renderTemplateDetail();
-    const exportItem = menuItemProps.find((props) =>
+    const exportItem = moreMenuItemProps.find((props) =>
       [props.children].flat(Infinity).includes('Export JSON'),
     );
     await (exportItem?.onClick as () => Promise<void>)();
@@ -506,7 +491,7 @@ describe('TemplateDetail export of a template the portable format cannot hold', 
     });
 
     renderTemplateDetail();
-    const exportItem = menuItemProps.find((props) =>
+    const exportItem = moreMenuItemProps.find((props) =>
       [props.children].flat(Infinity).includes('Export JSON'),
     );
     await (exportItem?.onClick as () => Promise<void>)();
@@ -519,8 +504,6 @@ describe('TemplateDetail export of a template the portable format cannot hold', 
 });
 
 describe('TemplateDetail opened by slug', () => {
-  // The page resolves a slug through the API, but the editor loads by id only. The legacy
-  // /console/templates/:id path redirects to this page (next.config.ts).
   const renderAt = (location: string) => {
     navigation.reset(location, { routes: ['/dashboard/templates/[id]'] });
     return renderToStaticMarkup(
@@ -528,7 +511,7 @@ describe('TemplateDetail opened by slug', () => {
     );
   };
 
-  it('links Edit on a page opened by slug to the loaded template id', () => {
+  it('links Edit on a page opened by slug to the loaded template id, since the editor loads by id only', () => {
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
     const html = renderAt('/dashboard/templates/product-launch-checklist/');
@@ -562,16 +545,14 @@ describe('TemplateDetail visibility', () => {
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
 
     renderTemplateDetail();
-    const onCheckedChange = switchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    const onCheckedChange = visibilitySwitchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
     await onCheckedChange(false);
 
     expect(setVisibility).toHaveBeenCalledWith(false);
     expect(contextUpdateTemplate).not.toHaveBeenCalled();
   });
 
-  // Flips the switch, lets the test act while the request is in flight, then answers
-  // that the session has expired.
-  const flipWithExpiredSession = async (whileSaving: () => void) => {
+  const flipTheSwitchThenAnswerThatTheSessionExpired = async (whileSaving: () => void) => {
     let answer: (result: { kind: 'login_required' }) => void = () => {};
     const setVisibility = vi.fn(
       () => new Promise((resolve) => { answer = resolve; }),
@@ -579,7 +560,7 @@ describe('TemplateDetail visibility', () => {
     mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), setVisibility });
 
     renderTemplateDetail();
-    const onCheckedChange = switchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
+    const onCheckedChange = visibilitySwitchProps.at(-1)?.onCheckedChange as (value: boolean) => Promise<void>;
     const flipped = onCheckedChange(true);
     whileSaving();
     answer({ kind: 'login_required' });
@@ -588,20 +569,18 @@ describe('TemplateDetail visibility', () => {
   };
 
   it('sends an expired session to sign-in while the user is still on the page', async () => {
-    visitState.current = true;
+    userStillOnThePage.current = true;
 
-    await flipWithExpiredSession(() => {});
+    await flipTheSwitchThenAnswerThatTheSessionExpired(() => {});
 
     expect(navigateToLoginWithReturnPath).toHaveBeenCalledTimes(1);
   });
 
-  // A late 401 pulled a user who had pressed Back (or followed a link) to sign-in
-  // with a return path to this template.
-  it('does not go to sign-in once the user has left the page', async () => {
-    visitState.current = true;
+  it('does not pull a user who has left the page back to sign-in when a late answer says the session expired', async () => {
+    userStillOnThePage.current = true;
 
-    await flipWithExpiredSession(() => {
-      visitState.current = false;
+    await flipTheSwitchThenAnswerThatTheSessionExpired(() => {
+      userStillOnThePage.current = false;
     });
 
     expect(navigateToLoginWithReturnPath).not.toHaveBeenCalled();
@@ -643,10 +622,9 @@ describe('TemplateDetail load failures', () => {
 });
 
 describe('TemplateDetail dates', () => {
-  // Node reads a bare 'YYYY-MM-DD HH:MM:SS' as local time; a zone far from UTC exposes that.
   const originalTz = process.env.TZ;
   beforeEach(() => {
-    process.env.TZ = 'Asia/Tokyo';
+    process.env.TZ = ZONE_FAR_FROM_UTC;
   });
   afterEach(() => {
     process.env.TZ = originalTz;
@@ -664,7 +642,7 @@ describe('TemplateDetail dates', () => {
             {
               action: 'template.created',
               actor: { name: 'John Example' },
-              createdAt: '2026-07-05 20:30:00',
+              createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5,
               id: 'version-1',
               version: 1,
             },
@@ -675,15 +653,13 @@ describe('TemplateDetail dates', () => {
       },
       template: {
         ...buildV0DemoPrivateTemplate(),
-        createdAt: '2026-07-05 20:30:00',
+        createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5,
         updatedAt: 'not a timestamp',
       },
     });
 
-    // Some ICU versions put a narrow no-break space before AM/PM.
-    const html = renderTemplateDetail().replace(/\u202f/g, ' ');
+    const html = withNarrowNoBreakSpacesAsSpaces(renderTemplateDetail());
 
-    // 20:30 UTC on July 5 is 05:30 on July 6 in Tokyo.
     expect(html).toContain('7/6/2026');
     expect(html).toContain('Jul 6, 2026, 5:30 AM');
     expect(html).not.toContain('7/5/2026');
@@ -803,8 +779,7 @@ describe('TemplateDetail Changelog', () => {
 });
 
 describe('TemplateDetail stats', () => {
-  // A row shaped like GET /api/templates/:id, mapped the way the model maps it.
-  const apiTemplate = () =>
+  const templateMappedFromAnApiRow = () =>
     mapApiTemplateToChecklistTemplate(
       {
         created_at: '2026-07-03T12:00:00.000Z',
@@ -828,7 +803,7 @@ describe('TemplateDetail stats', () => {
     );
 
   it('shows only metrics the loaded template really has, never placeholder zeros', () => {
-    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: apiTemplate() });
+    mockUseTemplateDetailModel.mockReturnValue({ ...baseModel(), template: templateMappedFromAnApiRow() });
 
     const html = renderTemplateDetail();
     const labels = statLabels(html);
@@ -843,13 +818,12 @@ describe('TemplateDetail stats', () => {
 
 describe('TemplateDetail page', () => {
   it('loads only its own template, never the workspace list or the catalog', () => {
-    mockUseTemplateLists.mockClear();
+    recordListsThePageAsksFor.mockClear();
     mockUseTemplateDetailModel.mockReturnValue(baseModel());
 
     renderTemplateDetail();
 
-    // useTemplateLists() with no options fetches the whole workspace list with full content.
-    for (const [listOptions] of mockUseTemplateLists.mock.calls) {
+    for (const [listOptions] of recordListsThePageAsksFor.mock.calls) {
       expect(listOptions).toEqual(expect.objectContaining({ workspace: false }));
       expect(listOptions).not.toEqual(expect.objectContaining({ catalog: true }));
     }

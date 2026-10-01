@@ -6,17 +6,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import PublicTemplate from '@/views/PublicTemplate';
 
 import {
+  findPublicTemplateByIdentifier,
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
-import {
-  buildConsoleTemplatePath,
-  resolvePublicTemplateOwnerSlug,
-  SITE_ORIGIN,
-} from '@/lib/routes';
+import { buildConsoleTemplatePath, SITE_ORIGIN } from '@/lib/routes';
 import { CANONICAL_ORIGIN } from '../../../functions/sitemap/shared';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { deferred } from '../../support/deferred';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -30,6 +28,7 @@ const {
   mockToastSuccess,
   mockUseTemplateDetailModel,
   mockViewProps,
+  staleCatalogCopy,
   workspaceState,
 } = vi.hoisted(() => ({
   authState: {
@@ -42,6 +41,17 @@ const {
   mockToastSuccess: vi.fn(),
   mockUseTemplateDetailModel: vi.fn(),
   mockViewProps: vi.fn(),
+  staleCatalogCopy: {
+    id: 'clipy-template-1',
+    slug: 'reviewed-clipy-checklist',
+    title: 'Stale catalog title',
+    isPublic: true,
+    sections: [],
+    userId: 'user-1',
+    ownerProfile: { username: 'alice' },
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  },
   workspaceState: {
     activeTeamId: undefined as string | undefined,
     canEditTemplates: true,
@@ -54,12 +64,7 @@ const {
   },
 }));
 
-// A static render runs no effects, so the page never counts as shown and every late
-// result would be ignored. These tests act as a user who is still on the page; leaving
-// it is covered by tests/unit/lib/navigation/pageVisit.test.ts.
-vi.mock('@/hooks/usePageVisit', () => ({
-  usePageVisit: () => () => ({ isCurrent: () => true }),
-}));
+vi.mock('@/hooks/usePageVisit', async () => (await import('../../support/pageVisitMock')).pageVisitOfAUserStillOnThePage);
 
 vi.mock('@/features/template-detail/useTemplateDetailModel', () => ({
   useTemplateDetailModel: (...args: unknown[]) => mockUseTemplateDetailModel(...args),
@@ -77,20 +82,7 @@ vi.mock('@/contexts/TemplatesContext', () => ({
   useTemplates: () => ({
     createRun: vi.fn(),
     createTemplate: vi.fn(),
-    // An old catalog copy: the page must not show it in place of the server's.
-    templates: [
-      {
-        id: 'clipy-template-1',
-        slug: 'reviewed-clipy-checklist',
-        title: 'Stale catalog title',
-        isPublic: true,
-        sections: [],
-        userId: 'user-1',
-        ownerProfile: { username: 'alice' },
-        createdAt: '2026-09-01T00:00:00.000Z',
-        updatedAt: '2026-09-01T00:00:00.000Z',
-      },
-    ],
+    templates: [staleCatalogCopy],
   }),
 }));
 
@@ -121,8 +113,6 @@ vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
   };
 });
 
-// The Start a Run dialog (tested in tests/unit/components/RunNameDialog.test.tsx): these tests
-// read what the page gives it and call its confirm as the dialog would.
 vi.mock('@/components/ui/run-name-dialog', () => ({
   RunNameDialog: (props: Record<string, unknown>) => {
     mockDialogProps(props);
@@ -192,24 +182,9 @@ const mockTemplates: ChecklistTemplate[] = [
 ];
 
 const resolveTemplateForRoute = (username: string, templateSlug: string) =>
-  mockTemplates.find((template) => {
-    if (!template.isPublic) {
-      return false;
-    }
+  findPublicTemplateByIdentifier(mockTemplates, templateSlug, username);
 
-    const ownerSlug = resolvePublicTemplateOwnerSlug(template);
-
-    if (!ownerSlug || ownerSlug.toLowerCase() !== username.toLowerCase()) {
-      return false;
-    }
-
-    return (
-      template.slug === templateSlug ||
-      (!template.slug && template.id === templateSlug)
-    );
-  });
-
-describe('PublicTemplate route lookup', () => {
+describe('PublicTemplate route lookup in the bundled library (findPublicTemplateByIdentifier)', () => {
   it('matches a public template when both owner slug and template slug match', () => {
     expect(resolveTemplateForRoute('alice', 'camping-checklist')?.id).toBe(
       'template-1',
@@ -295,17 +270,13 @@ const CLEAN_VISIT: RouteVisit = {
   origin: 'https://serplists.com',
 };
 
-// Sign-in and checkout read the page's own URL, as in the browser.
 let restoreWindow: () => void = () => {};
 beforeAll(() => {
   restoreWindow = navigation.installWindow();
 });
 afterAll(() => restoreWindow());
 
-// The page's title, description, canonical URL and robots come from the server
-// (tests/unit/server/pageMeta/templatePage.test.ts); the page adds a noindex tag only when
-// it learns in the browser that the template is gone.
-const robotsIn = (html: string) => html.match(/<meta name="robots" content="([^"]*)"/)?.[1];
+const robotsTagThePageAdds = (html: string) => html.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 
 function renderPublishedRoute(
   template: ChecklistTemplate,
@@ -345,13 +316,13 @@ describe('PublicTemplate rendered route', () => {
   });
 
   it('adds no robots rule of its own to a template that loaded, on any host', () => {
-    expect(robotsIn(renderPublishedRoute(publishedClipyTemplate).html)).toBeUndefined();
+    expect(robotsTagThePageAdds(renderPublishedRoute(publishedClipyTemplate).html)).toBeUndefined();
     const staging = renderPublishedRoute(publishedClipyTemplate, {}, {
       path: '/profile/Alice/reviewed-clipy-checklist',
       origin: 'https://staging.serplists.com',
       search: '?ref=x',
     });
-    expect(robotsIn(staging.html)).toBeUndefined();
+    expect(robotsTagThePageAdds(staging.html)).toBeUndefined();
   });
 });
 
@@ -579,8 +550,7 @@ describe('PublicTemplate ownership context', () => {
     }
   });
 
-  // The public shell has no WorkspaceGate, so the page offers the gate's way out itself.
-  it('offers Retry and Continue in Personal when the Organizations failed to load', () => {
+  it('offers Retry and Continue in Personal itself when the Organizations failed to load, since the public shell has no Organization gate', () => {
     workspaceState.activeTeamId = undefined;
     workspaceState.isTeamWorkspace = false;
     workspaceState.isWorkspaceLoading = true;
@@ -609,16 +579,6 @@ describe('PublicTemplate ownership context', () => {
     expect(lastViewProps().workspaceError).toBeNull();
   });
 });
-
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, reject, resolve };
-};
 
 describe('PublicTemplate Start Run', () => {
   beforeEach(() => {
@@ -762,7 +722,7 @@ describe('PublicTemplate load failures', () => {
       template: null,
     });
 
-    expect(robotsIn(html)).toBe('noindex, nofollow');
+    expect(robotsTagThePageAdds(html)).toBe('noindex, nofollow');
   });
 
   it('keeps a template that failed to load indexable, since the failure may be temporary', () => {
@@ -772,7 +732,7 @@ describe('PublicTemplate load failures', () => {
       template: null,
     });
 
-    expect(robotsIn(html)).toBeUndefined();
+    expect(robotsTagThePageAdds(html)).toBeUndefined();
     expect(html).not.toContain('noindex');
   });
 
@@ -783,8 +743,6 @@ describe('PublicTemplate load failures', () => {
   });
 });
 
-// Start Run asks for the Run's name in the Start a Run dialog that My Templates and template
-// detail use; a visitor who is not signed in signs in first, as before.
 describe('PublicTemplate Start a Run dialog', () => {
   beforeEach(() => {
     mockUseTemplateDetailModel.mockReset();
@@ -861,9 +819,7 @@ describe('PublicTemplate Start a Run dialog', () => {
   });
 });
 
-// The canonical URL comes from the server (tests/unit/server/pageMeta/templatePage.test.ts),
-// which names the production site, as the sitemap does.
-describe('PublicTemplate canonical URL', () => {
+describe('PublicTemplate canonical URL, which the server names on the production site', () => {
   it('shares its origin with the sitemap', () => {
     expect(SITE_ORIGIN).toBe(CANONICAL_ORIGIN);
   });

@@ -18,11 +18,6 @@ import { navigation, RoutedPages } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Duplicate creates a Template (POST /api/templates has no idempotency). The actions menu
-// closes on the first click and a slow request shows nothing, so the user can choose
-// Duplicate again. Drives the real page; only the page model, the contexts, toasts and the
-// Radix menu and switch are faked, so the menu renders in place.
-
 const { createTemplate, template } = vi.hoisted(() => ({
   createTemplate: vi.fn(),
   template: { current: null as unknown },
@@ -102,7 +97,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 vi.mock('@/components/ui/switch', () => ({
   Switch: ({ checked }: { checked?: boolean }) => <button type="button" role="switch" aria-checked={Boolean(checked)} />,
 }));
-vi.mock('@/hooks/usePageVisit', () => ({ usePageVisit: () => () => ({ isCurrent: () => true }) }));
+vi.mock('@/hooks/usePageVisit', async () => (await import('../../support/pageVisitMock')).pageVisitOfAUserStillOnThePage);
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/access-flow', () => ({
   handleUpgradeRequiredForContext: vi.fn(),
@@ -135,8 +130,7 @@ async function renderTemplateDetail() {
   return container;
 }
 
-// The Duplicate item, whatever it reads while a copy is being made.
-const duplicateItem = (container: FakeNode) => {
+const duplicateOrDuplicatingItem = (container: FakeNode) => {
   const [item] = findAll(
     container,
     (node) =>
@@ -148,24 +142,23 @@ const duplicateItem = (container: FakeNode) => {
   return item as FakeElement;
 };
 
-describe('TemplateDetail Duplicate while a copy is being made', () => {
-  it('creates one copy when Duplicate is chosen again, and shows the copy is running', async () => {
+describe('TemplateDetail Duplicate while a copy is being made, which a repeated POST /api/templates would make twice', () => {
+  it('creates one copy however often Duplicate is chosen meanwhile, even twice before the page re-renders, and shows the copy is running', async () => {
     let finish: (value: { id: string }) => void = () => {};
     createTemplate.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     const container = await renderTemplateDetail();
 
-    // Two choices before the page re-renders: only a synchronous guard can stop the second.
     await act(async () => {
-      click(container, duplicateItem(container));
-      click(container, duplicateItem(container));
+      click(container, duplicateOrDuplicatingItem(container));
+      click(container, duplicateOrDuplicatingItem(container));
     });
 
     expect(createTemplate).toHaveBeenCalledTimes(1);
-    expect(duplicateItem(container).textContent).toBe('Duplicating...');
-    expect(duplicateItem(container).getAttribute('aria-disabled')).toBe('true');
+    expect(duplicateOrDuplicatingItem(container).textContent).toBe('Duplicating...');
+    expect(duplicateOrDuplicatingItem(container).getAttribute('aria-disabled')).toBe('true');
 
     await act(async () => {
-      click(container, duplicateItem(container));
+      click(container, duplicateOrDuplicatingItem(container));
     });
     expect(createTemplate).toHaveBeenCalledTimes(1);
 
@@ -181,13 +174,13 @@ describe('TemplateDetail Duplicate while a copy is being made', () => {
     const container = await renderTemplateDetail();
 
     await act(async () => {
-      click(container, duplicateItem(container));
+      click(container, duplicateOrDuplicatingItem(container));
     });
-    expect(duplicateItem(container).textContent).toBe('Duplicate');
-    expect(duplicateItem(container).getAttribute('aria-disabled')).toBeNull();
+    expect(duplicateOrDuplicatingItem(container).textContent).toBe('Duplicate');
+    expect(duplicateOrDuplicatingItem(container).getAttribute('aria-disabled')).toBeNull();
 
     await act(async () => {
-      click(container, duplicateItem(container));
+      click(container, duplicateOrDuplicatingItem(container));
     });
     expect(createTemplate).toHaveBeenCalledTimes(2);
   });

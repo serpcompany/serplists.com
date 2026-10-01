@@ -249,7 +249,11 @@ the page that started it ([FRONTEND.md](../FRONTEND.md#data-and-state)).
   ([error types](client-data.md#error-types)).
 - **Duplicate** (`duplicateOwnedTemplate`) creates the copy where
   `resolveTemplateDestinationTeamId` sends it (a private template of another Organization stays in
-  that Organization), and counts against that context's template limit.
+  that Organization), and counts against that context's template limit. `POST /api/templates` has
+  no idempotency, and the actions menu closes on the first click while a slow copy shows nothing,
+  so the page ignores Duplicate and Copy until the copy in flight settles (`cloneInFlight`, a ref
+  set before the request, since a second click can arrive before the page re-renders). The item
+  reads "Duplicating..." meanwhile, and a failed copy can be tried again.
 - **Share** (`shareTemplateToPublic`) builds the public URL before it changes anything, so a
   template that cannot be shared (its Creator has no username) is never made public. The URL uses
   the Creator's current username (`resolveShareOwnerTemplate`): the signed-in Creator's own, which
