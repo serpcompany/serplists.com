@@ -487,6 +487,9 @@ Common failures:
 - A test that reads values from the deployed configuration (the CORS allowlists, the auth
   policy) takes them from `wrangler.toml` with `varFromWranglerToml()` from
   `tests/support/wranglerToml.ts`, so a change to that file is tested too.
+- Unit tests run in UTC: `vitest.config.ts` sets `TZ` before Vitest starts its workers, which
+  inherit it, so a date renders the same on every machine and in CI
+  (`tests/unit/config/test-environment.test.ts`).
 - Unit tests run in Vitest's node environment, with no DOM, jsdom or testing-library, so a
   component test takes one of three routes:
   - Render the component to HTML with `renderToStaticMarkup` and read the markup.
@@ -572,7 +575,9 @@ Common failures:
     served: `nextServerRedirect()` as `next dev` and `next start` do, and `workerRedirect()`
     through OpenNext's routing in the Worker, for which the test mocks
     `@opennextjs/aws/adapters/config/index.js` with `openNextBuildConfig()`. A request's
-    `Host` comes from its URL. `headersFor()` gives the headers a response gets.
+    `Host` comes from its URL. `headersFor()` gives the headers a response gets. OpenNext
+    publishes `@opennextjs/aws` unbundled, with extensionless imports meant for its own
+    bundler, so `vitest.config.ts` inlines it (`server.deps.inline`) for Vite to resolve.
   - `nextServerContext.ts` is what `src/server` reads from Next.js and OpenNext: mock
     `@opennextjs/cloudflare` with `cloudflareMock`, `next/headers` with `headersMock` and
     `server-only` with an empty module, then set `serverContext.env` and the host.

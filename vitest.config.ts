@@ -1,8 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-// Date rendering depends on the local timezone. Pin it so tests pass the same way on every
-// machine and in CI. Workers inherit this environment.
 process.env.TZ = 'UTC';
 
 export default defineConfig({
@@ -12,8 +10,6 @@ export default defineConfig({
     setupFiles: './tests/setup.ts',
     server: {
       deps: {
-        // tests/support/nextRouting.ts runs OpenNext's routing, which is published unbundled
-        // (extensionless imports) for OpenNext's own bundler: let Vite resolve it.
         inline: ['@opennextjs/aws'],
       },
     },
@@ -43,7 +39,6 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // Compiled by the Next.js build; tests load a stand-in (tests/support/nextFontGoogle.ts).
       'next/font/google': path.resolve(__dirname, './tests/support/nextFontGoogle.ts'),
       '@': path.resolve(__dirname, './src'),
       '@functions': path.resolve(__dirname, './functions'),
