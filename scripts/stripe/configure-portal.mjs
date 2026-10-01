@@ -1,12 +1,10 @@
-import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
+import { loadLocalEnv, resolveLiveSecretKey, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
 
 const env = loadLocalEnv();
 const mode = process.argv.includes("--test") ? "test" : "live";
 const secretKey = mode === "test"
   ? resolveTestSecretKey(env)
-  : process.env.STRIPE_LIVE_SECRET_KEY ??
-    process.env.STRIPE_SECRET_KEY_LIVE ??
-    (process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? process.env.STRIPE_SECRET_KEY : undefined);
+  : resolveLiveSecretKey(process.env);
 
 if (!secretKey || !secretKey.startsWith(`sk_${mode}_`)) {
   throw new Error(

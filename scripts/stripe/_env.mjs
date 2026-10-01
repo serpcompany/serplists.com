@@ -37,6 +37,16 @@ export function resolveTestSecretKey(env) {
   return key?.startsWith("sk_test_") ? key : undefined;
 }
 
+export function resolveLiveSecretKey(env) {
+  return env.STRIPE_LIVE_SECRET_KEY ??
+    env.STRIPE_SECRET_KEY_LIVE ??
+    (stripeSecretKeyIsLive(env) ? env.STRIPE_SECRET_KEY : undefined);
+}
+
+export function stripeSecretKeyIsLive(env) {
+  return env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ?? false;
+}
+
 export function updateEnvFile(path, updates) {
   const contents = existsSync(path) ? readFileSync(path, "utf8") : "";
   const remaining = new Map(Object.entries(updates));

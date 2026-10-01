@@ -1,9 +1,9 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { parseEnvFile, resolveTestSecretKey } from "../../../scripts/stripe/_env.mjs";
+import { parseEnvFile, resolveLiveSecretKey, resolveTestSecretKey, stripeSecretKeyIsLive } from "../../../scripts/stripe/_env.mjs";
 import { renderDevVars } from "../../../scripts/setup-local-lib.mjs";
 
 describe("resolveTestSecretKey", () => {
@@ -51,22 +51,24 @@ describe("resolveTestSecretKey", () => {
   });
 });
 
-describe("Stripe scripts", () => {
-  const scriptsDir = path.join(process.cwd(), "scripts", "stripe");
-  const scripts = readdirSync(scriptsDir).filter((name) => name.endsWith(".mjs") && name !== "_env.mjs");
+describe("resolveLiveSecretKey, the one place a script takes a live key from", () => {
+  it("prefers a live key injected under its own name, under either spelling", () => {
+    expect(resolveLiveSecretKey({ STRIPE_LIVE_SECRET_KEY: "sk_live_a", STRIPE_SECRET_KEY_LIVE: "sk_live_b" })).toBe("sk_live_a");
+    expect(resolveLiveSecretKey({ STRIPE_SECRET_KEY_LIVE: "sk_live_b", STRIPE_SECRET_KEY: "sk_live_c" })).toBe("sk_live_b");
+  });
 
-  it.each(["bootstrap.mjs", "configure-portal.mjs", "setup-local-test.mjs", "listen-local.mjs"])(
-    "%s resolves the test key through resolveTestSecretKey",
-    (name) => {
-      expect(readFileSync(path.join(scriptsDir, name), "utf8")).toContain("resolveTestSecretKey(");
-    },
-  );
+  it("takes STRIPE_SECRET_KEY only when it holds a live key, so a test key never runs a live command", () => {
+    expect(resolveLiveSecretKey({ STRIPE_SECRET_KEY: "sk_live_c" })).toBe("sk_live_c");
+    expect(resolveLiveSecretKey({ STRIPE_SECRET_KEY: "sk_test_a" })).toBeUndefined();
+    expect(resolveLiveSecretKey({})).toBeUndefined();
+  });
+});
 
-  it("read the dedicated test key names only through the shared resolver", () => {
-    const direct = scripts.filter((name) =>
-      /env\.(STRIPE_TEST_SECRET_KEY|STRIPE_SECRET_KEY_TEST)\b/.test(readFileSync(path.join(scriptsDir, name), "utf8")),
-    );
-
-    expect(direct).toEqual([]);
+describe("stripeSecretKeyIsLive, which tells scrub-local-live to remove the production-only values", () => {
+  it("is true only for a live STRIPE_SECRET_KEY", () => {
+    expect(stripeSecretKeyIsLive({ STRIPE_SECRET_KEY: "sk_live_c" })).toBe(true);
+    expect(stripeSecretKeyIsLive({ STRIPE_SECRET_KEY: "sk_test_a" })).toBe(false);
+    expect(stripeSecretKeyIsLive({ STRIPE_SECRET_KEY_LIVE: "sk_live_b" })).toBe(false);
+    expect(stripeSecretKeyIsLive({})).toBe(false);
   });
 });

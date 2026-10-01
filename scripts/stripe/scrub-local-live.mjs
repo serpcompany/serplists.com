@@ -1,4 +1,4 @@
-import { parseEnvFile, removeEnvKeys } from "./_env.mjs";
+import { parseEnvFile, removeEnvKeys, stripeSecretKeyIsLive } from "./_env.mjs";
 
 const path = ".dev.vars";
 const env = parseEnvFile(path);
@@ -6,7 +6,7 @@ const keys = new Set(
   Object.keys(env).filter((key) => key.endsWith("_LIVE")),
 );
 
-if (env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) {
+if (stripeSecretKeyIsLive(env)) {
   for (const key of [
     "STRIPE_SECRET_KEY",
     "STRIPE_PRO_PRICE_ID",

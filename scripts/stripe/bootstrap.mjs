@@ -1,4 +1,4 @@
-import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
+import { loadLocalEnv, resolveLiveSecretKey, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
 import { bootstrapUsage, describePrice, ensurePrice } from "./_bootstrap-lib.mjs";
 
 function usage(exitCode) {
@@ -36,9 +36,7 @@ function requireNumber(name, value) {
 
 function getKeys(env, liveEnv, mode) {
   const testKey = resolveTestSecretKey(env);
-  const injectedLiveKey = liveEnv.STRIPE_LIVE_SECRET_KEY ??
-    liveEnv.STRIPE_SECRET_KEY_LIVE ??
-    (liveEnv.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? liveEnv.STRIPE_SECRET_KEY : undefined);
+  const injectedLiveKey = resolveLiveSecretKey(liveEnv);
 
   if (mode === "test") {
     if (!testKey) throw new Error(`Missing Stripe test secret key. ${TEST_SECRET_KEY_HINT}`);
