@@ -1,11 +1,5 @@
-import type { ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
+import type { ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
 
-// Turns parsed templates into the ones an import sends: fresh ids, the chosen visibility,
-// and no run state. Re-exported from ./templateBackup.ts.
-
-/**
- * Generate unique IDs for imported templates to avoid conflicts
- */
 export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemplate[] => {
   return templates.map(template => {
     const newTemplate: ChecklistTemplate = {
@@ -26,10 +20,8 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
           }))
         }))
       })),
-      // Update timestamps
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      // Clear slug to regenerate
       slug: ""
     };
     
@@ -39,19 +31,12 @@ export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemp
 
 export type ImportVisibility = NonNullable<TemplateImportOptions["visibility"]>;
 
-/** How the import form names each visibility choice. */
 export const IMPORT_VISIBILITY_LABELS: Record<ImportVisibility, string> = {
   preserve: "Preserve visibility from file",
   public: "Force public",
   private: "Force private",
 };
 
-/**
- * Whether an imported template ends up public under the chosen visibility override.
- * The import preview and the import payload both use this, and the server applies
- * the same rule (functions/api/handlers/templates.ts), so they cannot disagree.
- * A template with no visibility flag is private unless the override says otherwise.
- */
 export const resolveImportIsPublic = (
   isPublic: boolean | undefined,
   visibility: ImportVisibility = "preserve",
@@ -62,11 +47,24 @@ export const countImportPublicTemplates = (
   visibility: ImportVisibility = "preserve",
 ): number => templates.filter((template) => resolveImportIsPublic(template.isPublic, visibility)).length;
 
-/**
- * Prepare templates for import (clean and validate)
- */
+const withCompletionCleared = (sections: ChecklistSection[]): ChecklistSection[] =>
+  sections.map(section => ({
+    ...section,
+    items: section.items.map(item => ({
+      ...item,
+      isCompleted: false,
+      contents: item.contents?.map(content => ({
+        ...content,
+        subItems: content.subItems?.map(subItem => ({
+          ...subItem,
+          isCompleted: false
+        }))
+      }))
+    }))
+  }));
+
 export const prepareTemplatesForImport = (
-  templates: ChecklistTemplate[], 
+  templates: ChecklistTemplate[],
   userId: string,
   options: TemplateImportOptions = {}
 ): ChecklistTemplate[] => {
@@ -76,20 +74,6 @@ export const prepareTemplatesForImport = (
     ...template,
     userId,
     isPublic: resolveImportIsPublic(template.isPublic, options.visibility),
-    // Reset completion states for fresh imports
-    sections: template.sections.map(section => ({
-      ...section,
-      items: section.items.map(item => ({
-        ...item,
-        isCompleted: false,
-        contents: item.contents?.map(content => ({
-          ...content,
-          subItems: content.subItems?.map(subItem => ({
-            ...subItem,
-            isCompleted: false
-          }))
-        }))
-      }))
-    }))
+    sections: withCompletionCleared(template.sections),
   }));
 };

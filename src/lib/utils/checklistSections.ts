@@ -2,8 +2,6 @@ import { toProgressPercent } from "@/lib/progress";
 import { sanitizeStoredItem } from "@/lib/schemas/storedSections";
 import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
 
-// The label an untitled section gets: the template editor's outline shows it, a save
-// stores it, and pages show it for sections saved blank before saves defaulted them.
 export function sectionFallbackTitle(sectionIndex: number): string {
   return `Section ${sectionIndex + 1}`;
 }
@@ -18,7 +16,6 @@ export function getSectionDisplayTitle(
   return displayTitle(section.title) || sectionFallbackTitle(sectionIndex);
 }
 
-// Saves drop blank sub-tasks; older templates and runs can still hold them.
 export function getSubItemDisplayTitle(
   subItem: Pick<ChecklistSubItem, "title">,
   subItemIndex: number,
@@ -38,9 +35,6 @@ type JsonRecord = Record<string, unknown>;
 export const isJsonRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// A task or sub-task written as text becomes one with that title. Anything else that is not an
-// object (null, a number, an array, blank text) is skipped: spreading it would store its
-// characters as keys ({"0":"M","1":"i",...}) on a task with no title.
 const toTitledRecord = (value: unknown): JsonRecord | null => {
   if (typeof value === "string") {
     const title = value.trim();
@@ -67,12 +61,6 @@ const normalizeContent = (content: JsonRecord): JsonRecord => {
   };
 };
 
-// Stored and imported checklist JSON is untrusted: runs and templates saved before the API
-// checked content, or edited by hand, can hold any shape. After text tasks and Sub-tasks
-// become titled ones, sanitizeStoredItem (shared with the API) makes every task safe to
-// render, count and save back, so one malformed task never breaks a page or the Runs list.
-// Fallback ids use each entry's position in the stored array, so skipping an entry that is
-// not an object never changes the ids of the entries around it.
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
@@ -109,8 +97,6 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
   });
 }
 
-// A run's tasks are its top-level items; sub-tasks are the rows of their Sub-tasks blocks.
-// They are counted apart, so a label that says "tasks" never includes sub-tasks.
 export type RunTaskCounts = {
   subTasksCompleted: number;
   subTasksTotal: number;
@@ -139,8 +125,6 @@ export function countRunTasks(sections: ChecklistSection[]): RunTaskCounts {
   return counts;
 }
 
-// Overall progress weights every task and sub-task the same, like the API's
-// calculateRunProgress (functions/api/utils/template-reconciliation.ts), which stores it.
 export function calculateSectionsProgress(sections: ChecklistSection[]): number {
   const counts = countRunTasks(sections);
   const total = counts.tasksTotal + counts.subTasksTotal;

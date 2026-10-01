@@ -1,10 +1,5 @@
 import { isJsonRecord } from "@/lib/utils/checklistSections";
 
-// Lenient JSON imports (plain template arrays and backups) may write a task or sub-task as
-// its title in text; normalizeSections turns that into a titled task. Any other entry that is
-// not an object (null, a number, an array, blank text) is refused here with a message that
-// says where it is, instead of being imported as a blank task or silently dropped.
-
 const quoted = (value: unknown): string | null =>
   typeof value === "string" && value.trim() ? `"${value.trim()}"` : null;
 

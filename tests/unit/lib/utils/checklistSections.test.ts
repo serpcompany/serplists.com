@@ -39,7 +39,7 @@ describe('section and sub-task display titles', () => {
 describe('normalizeSections with entries that are not objects', () => {
   const numericKeys = (value: object) => Object.keys(value).filter((key) => /^\d+$/.test(key));
 
-  it('turns text tasks into titled tasks and skips entries that are not tasks', () => {
+  it('turns text tasks into titled tasks and skips entries that are not tasks, instead of spreading their characters into keys', () => {
     const [section] = normalizeSections([
       { id: 's1', title: 'Shop', items: ['Milk', '  ', null, 5, ['x'], true, ' Eggs ', { id: 'i-3', title: 'Bread' }] },
     ]);
@@ -80,7 +80,7 @@ describe('normalizeSections with entries that are not objects', () => {
     for (const subItem of subItems) expect(numericKeys(subItem)).toEqual([]);
   });
 
-  it('skips sections that are not objects and keeps the other sections unchanged', () => {
+  it('skips sections that are not objects without changing the position-based ids of the others', () => {
     const sections = normalizeSections([
       null,
       'Loose',

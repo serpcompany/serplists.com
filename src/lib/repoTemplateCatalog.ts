@@ -71,7 +71,7 @@ export const normalizeRepoTemplateSources = (
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
     const { templates } = parseTemplatesFromData(sourceData, {
-      fallbackTimestamp: resolveRepoPackTimestamp(sourceData),
+      timestampForUndatedTemplates: resolveRepoPackTimestamp(sourceData),
     });
 
     templates.forEach((template, index) => {

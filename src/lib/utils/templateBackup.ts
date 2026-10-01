@@ -32,8 +32,6 @@ export type TemplateImportWarning = {
   message: string;
 };
 
-// Backup built from in-app templates. Their content ids are optional, so this is not
-// guaranteed to satisfy the stricter `TemplateBackup` schema used when validating uploads.
 export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
   templates: ChecklistTemplate[];
 };
@@ -44,8 +42,7 @@ export type TemplateImportResult = {
 };
 
 export type ParseTemplatesOptions = {
-  /** Date for templates the source does not date. Defaults to the parse time. */
-  fallbackTimestamp?: string;
+  timestampForUndatedTemplates?: string;
 };
 
 const generateTempId = (prefix: string) => {
@@ -77,27 +74,28 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
-// Categories repeat nothing that shares a slug ('SEO', 'seo'), so a template counts once
-// toward each category page.
 const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
 
-// A flat list of tasks (the legacy `items` form) goes into one "Checklist" section.
-const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
-  const parsed = parseJsonArray(input);
-  if (!parsed) return null;
-  if (parsed.length === 0) return [];
-  const sections = isSectionsShape(parsed) ? parsed : [{ id: "1", title: "Checklist", items: parsed }];
-  const invalidEntry = findInvalidImportSectionEntry(sections);
-  if (invalidEntry) {
-    throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
-  }
-  // A linked file named without uploadType keeps its name in the editor and in runs.
-  return normalizeSections(sections).map((section) => ({
+const sectionHoldingLegacyItems = (items: unknown[]) => ({ id: "1", title: "Checklist", items });
+
+const withImportedLinkSources = (sections: ChecklistSection[]): ChecklistSection[] =>
+  sections.map((section) => ({
     ...section,
     items: section.items.map((item) =>
       item.contents ? { ...item, contents: item.contents.map(withImportedLinkSource) } : item,
     ),
   }));
+
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
+  const parsed = parseJsonArray(input);
+  if (!parsed) return null;
+  if (parsed.length === 0) return [];
+  const sections = isSectionsShape(parsed) ? parsed : [sectionHoldingLegacyItems(parsed)];
+  const invalidEntry = findInvalidImportSectionEntry(sections);
+  if (invalidEntry) {
+    throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
+  }
+  return withImportedLinkSources(normalizeSections(sections));
 };
 
 const normalizeImportTemplate = (
@@ -203,9 +201,6 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
-/**
- * Export templates as JSON backup file
- */
 export const exportTemplatesToJSON = (
   templates: ChecklistTemplate[], 
   exportedBy?: string
@@ -243,7 +238,6 @@ export const exportPortableTemplatesToJSON = (
     visibility: template.isPublic ? "public" : "private",
     categories: normalizeCategoryList(template.categories),
     tags: normalizeStringList(template.tags),
-    // Only portable keys: no run state such as isCompleted.
     sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
     rules: template.rules,
   }));
@@ -269,9 +263,6 @@ export const exportPortableTemplatesToJSON = (
   };
 };
 
-/**
- * Download backup as JSON file
- */
 export const downloadBackupFile = (
   backup: TemplateBackupExport | PortableTemplatePack,
   filename?: string
@@ -293,9 +284,6 @@ export const downloadBackupFile = (
   URL.revokeObjectURL(url);
 };
 
-/**
- * Parse and validate imported JSON backup
- */
 export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -323,8 +311,6 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
-// Each template in a portable pack is normalized and validated on its own: invalid ones are
-// skipped with a preview warning, and the file fails only when none of them is valid.
 const parsePortablePackTemplates = (
   templates: unknown[],
   now: string,
@@ -344,9 +330,9 @@ const parsePortablePackTemplates = (
 
 export const parseTemplatesFromData = (
   data: unknown,
-  { fallbackTimestamp }: ParseTemplatesOptions = {},
+  { timestampForUndatedTemplates }: ParseTemplatesOptions = {},
 ): TemplateImportResult => {
-  const now = fallbackTimestamp ?? new Date().toISOString();
+  const now = timestampForUndatedTemplates ?? new Date().toISOString();
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
@@ -383,9 +369,6 @@ export const parseTemplatesFromData = (
   }
 };
 
-/**
- * Parse templates from various JSON formats (backup or simple array)
- */
 export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
   const jsonString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -432,7 +415,6 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
     }
-    // Markdown and YAML parsers throw raw ZodErrors, whose message is a JSON dump.
     if (error instanceof ZodError) {
       throw new Error(`Template validation failed: ${formatValidationError(error)}`);
     }
@@ -440,7 +422,6 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
   }
 };
 
-// Preparing parsed templates for the import request lives in ./templateImportPrep.ts.
 export {
   countImportPublicTemplates,
   generateUniqueIds,
