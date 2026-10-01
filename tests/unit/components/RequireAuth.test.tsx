@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,9 +8,6 @@ import RequireAuth from '@/components/RequireAuth';
 import type { SessionStatus } from '@/contexts/authSession';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const authState = vi.hoisted(() => ({ sessionStatus: 'loading' as SessionStatus }));
 

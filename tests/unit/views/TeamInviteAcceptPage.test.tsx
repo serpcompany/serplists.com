@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,9 +7,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { teamInvitePreviewQueryKey } from '@/features/teams/useTeamInviteLink';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const authState = vi.hoisted(() => ({
   isAuthenticated: true,

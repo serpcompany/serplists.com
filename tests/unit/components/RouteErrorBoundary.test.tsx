@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useSearchParams } from 'next/navigation';
@@ -14,9 +15,6 @@ import {
   installFakeDomGlobals,
 } from '../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 let authUser: { id: string } | null = null;
 

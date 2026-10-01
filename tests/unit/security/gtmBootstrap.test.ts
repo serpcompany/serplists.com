@@ -1,7 +1,8 @@
+import '../../support/mockedNextNavigation';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { isValidElement, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import RootLayout from '@/app/layout';
 import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
@@ -47,9 +48,6 @@ function runBootstrap(pathname: string, search: string): BootstrapResult {
 
   return { insertedSources, dataLayer: window.dataLayer as unknown[] | undefined };
 }
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const tagManagerInTheRootLayoutTree = (siteEnv: string | undefined) =>
   withSiteEnv(siteEnv, () => {

@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,8 +11,6 @@ import NotFound from '@/views/NotFound';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/components/Layout', () => ({

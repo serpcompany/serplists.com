@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
@@ -11,9 +12,6 @@ import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
 import { deferred } from '../../support/deferred';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 type AuthState = {
   isAuthenticated: boolean;

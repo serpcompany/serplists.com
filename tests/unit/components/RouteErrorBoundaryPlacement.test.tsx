@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,8 +9,6 @@ import NotFoundPage from '@/app/not-found';
 import SharePage from '@/app/share/[shareToken]/page';
 import { navigation } from '../../support/nextNavigation';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/components/RouteErrorBoundary', () => ({

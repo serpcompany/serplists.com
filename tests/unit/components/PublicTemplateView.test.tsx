@@ -1,13 +1,11 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 type ViewProps = React.ComponentProps<typeof PublicTemplateView>;
 

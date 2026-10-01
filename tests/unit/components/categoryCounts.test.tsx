@@ -1,6 +1,7 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import {
@@ -12,9 +13,6 @@ import { normalizeTemplateEditorDetailsForSave } from '@/lib/forms/templateEdito
 import { parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const template = (id: string, categories: string[]): ChecklistTemplate => ({
   categories,

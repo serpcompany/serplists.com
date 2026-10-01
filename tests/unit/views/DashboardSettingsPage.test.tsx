@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -5,9 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import DashboardSettings from '@/views/DashboardSettings';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const refreshProfile = vi.fn();
 const updateUser = vi.fn();

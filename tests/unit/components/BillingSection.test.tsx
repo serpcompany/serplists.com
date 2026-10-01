@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,9 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { BillingSection } from '@/components/account/BillingSection';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const workspaceMock = vi.hoisted(() => ({
   value: {

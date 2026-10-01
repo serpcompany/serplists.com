@@ -1,6 +1,7 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { RunProgressPanel } from '@/components/run-execution/RunProgressSidebar';
 import { TaskExecutionPanel } from '@/components/run-execution/TaskExecutionPanel';
@@ -9,9 +10,6 @@ import { PublicTemplateContent } from '@/components/template/PublicTemplateConte
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const sectionsWithLegacyBlankTitles: ChecklistSection[] = [
   { id: 'section-a', title: 'Prep', items: [{ id: 'item-1', title: 'Pack' }] },

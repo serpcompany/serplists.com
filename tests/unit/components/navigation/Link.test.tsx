@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import React, { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,9 +9,6 @@ import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { click, createFakeContainer, dispatch, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 

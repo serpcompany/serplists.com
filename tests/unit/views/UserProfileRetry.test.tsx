@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
@@ -11,8 +12,6 @@ import { settle } from '../../support/queryHookProbe';
 
 const { loadUserProfile } = vi.hoisted(() => ({ loadUserProfile: vi.fn() }));
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('@/features/profile/loadUserProfile', () => ({ loadUserProfile }));
 
 import UserProfile from '@/views/UserProfile';

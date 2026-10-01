@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -5,9 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import Templates from '@/views/Templates';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseDashboardTemplatesModel = vi.fn();
 

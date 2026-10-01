@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import { FileText } from 'lucide-react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,9 +11,6 @@ import { buildPublicCategoryPath } from '@/lib/routes';
 import CategoryDetail from '@/views/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const mockUseTemplateLibrary = vi.fn();
 

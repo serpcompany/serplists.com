@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -16,9 +17,6 @@ import {
   openDashboardTemplate,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
 import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const authState = vi.hoisted(() => ({
   logout: vi.fn(),

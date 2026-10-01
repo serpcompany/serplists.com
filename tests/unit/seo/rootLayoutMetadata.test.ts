@@ -1,5 +1,6 @@
+import '../../support/mockedNextNavigation';
 import type { Metadata } from 'next';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { metadata as categoriesMetadata } from '@/app/(site)/categories/page';
 import { metadata as templatesMetadata } from '@/app/(site)/templates/page';
@@ -7,9 +8,6 @@ import { metadata as rootMetadata } from '@/app/layout';
 import { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const images = (value: unknown) => (Array.isArray(value) ? value : value ? [value] : []);
 

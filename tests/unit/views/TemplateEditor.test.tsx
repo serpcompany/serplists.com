@@ -1,9 +1,8 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 
 import { renderPageAt } from '../../support/nextNavigation';
 
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TemplateEditor from '@/views/TemplateEditor';

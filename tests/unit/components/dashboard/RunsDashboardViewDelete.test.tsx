@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,9 +18,6 @@ import {
   type FakeNode,
 } from '../../../fixtures/fakeDom';
 import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock('@/components/ui/alert-dialog', async () => (await import('../../../support/overlaysInPlace')).alertDialogInPlace);

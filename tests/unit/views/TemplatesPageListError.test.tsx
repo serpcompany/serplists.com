@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -25,9 +26,6 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 import { TemplatesProvider } from '@/contexts/TemplatesContext';
 import Templates from '@/views/Templates';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const template = (overrides: Partial<ChecklistTemplate>): ChecklistTemplate => ({
   id: 'template-1',

@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
@@ -6,9 +7,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { Providers } from '@/app/providers';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const registered = vi.hoisted(() => ({ clients: [] as unknown[] }));
 

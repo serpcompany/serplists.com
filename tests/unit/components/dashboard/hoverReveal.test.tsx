@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -11,9 +12,6 @@ import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 

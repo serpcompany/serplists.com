@@ -650,11 +650,11 @@ Common failures:
   app imports from Next.js:
   - `nextNavigation.tsx` replaces `next/navigation` and `next/link` with an in-memory
     browser (`inMemoryBrowser.ts`), so the app's `Link`, `useAppRouter` and leave guard run
-    for real:
+    for real. `mockedNextNavigation.ts` mocks both modules with it and exports `navigation`;
+    import it first, before anything that loads the app:
 
     ```ts
-    vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-    vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+    import { navigation } from '../../support/mockedNextNavigation';
     ```
 
     `navigation.reset(url, options)` starts each test (after any `vi.resetAllMocks()`) from

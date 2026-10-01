@@ -1,13 +1,11 @@
+import '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { PublicMobileMenu } from '@/components/layout/PublicMobileNav';
 import { publicHeaderItems } from '@/components/layout/publicSiteLinks';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const groupOfLinksNamedByMenuLabel = (html: string, menuLabel: string) => {
   const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${menuLabel}</p>`))?.[1];

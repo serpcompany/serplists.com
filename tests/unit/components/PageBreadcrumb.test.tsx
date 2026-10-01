@@ -1,11 +1,9 @@
+import '../../support/mockedNextNavigation';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
 import { navigation } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 beforeEach(() => {
   navigation.reset('/categories/outdoor/');

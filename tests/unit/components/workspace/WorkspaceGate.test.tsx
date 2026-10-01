@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,9 +21,6 @@ import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
 import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 const renderGate = () =>
   renderToStaticMarkup(

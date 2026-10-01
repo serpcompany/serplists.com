@@ -1,3 +1,4 @@
+import '../../support/mockedNextNavigation';
 import React, { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,9 +15,6 @@ import {
   type FakeNode,
 } from '../../fixtures/fakeDom';
 import { navigation, RoutedPages } from '../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
 const { createTemplate, template } = vi.hoisted(() => ({
   createTemplate: vi.fn(),

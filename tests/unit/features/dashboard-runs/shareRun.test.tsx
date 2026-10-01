@@ -1,3 +1,4 @@
+import '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient } from '@tanstack/react-query';
@@ -11,9 +12,6 @@ import { markRunShared } from '@/lib/queryCache';
 import { createShareLinkAndCopy } from '@/lib/shareLink';
 import type { ChecklistRun } from '@/types/checklist';
 import { navigation } from '../../../support/nextNavigation';
-
-vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
-vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
