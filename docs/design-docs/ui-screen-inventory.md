@@ -1517,7 +1517,8 @@ existing content, invent nothing):
   - Toolbar, each field with its label (stacked on phones): "Search" ("Search runs...");
     "Status" ("All Runs", "In Progress", "Completed").
   - Rows: a status icon tile; the title (a link to `/dashboard/runs/<id>/`); meta ("From
-    <template>" as a link, "Started <date>", "Completed <date>"); a progress bar with "x/y"; a
+    <template>" as a link, "Started <date>", "Completed <date>"); a progress bar (the Run's
+    progress, Sub-tasks included) with "x/y" (tasks only, as on the Run page); a
     status badge ("Completed" or "In Progress"); a "Needs revalidation" or "Shared snapshot is
     out of date" badge (outline, with a warning icon) or "Shared"; actions (under the row on
     phones; on hover, focus or touch from `xl`): "Revalidate", "Stop sharing to update",

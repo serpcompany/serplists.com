@@ -120,8 +120,8 @@ page, so a page's sticky parts stick to the window.
 
 | Block | File | What it is |
 | --- | --- | --- |
-| `DashboardContentShell` | `src/components/dashboard/DashboardContentShell.tsx` | The page: the page width (`PageContainer`, `content` or `narrow`) with its parts stacked |
-| `DashboardPageHeader` | same | The page's `h1`, a muted description and badges (`meta`), with the actions on the right (under the text on phones) |
+| `DashboardContentShell` | `src/components/dashboard/DashboardContentShell.tsx` | The page: the page width (`PageContainer`, `content`, or `narrow` for a form) with its parts stacked |
+| `DashboardPageHeader` | same | The page's `h1` (or `titleEditor`, a labelled field in its place while the title is renamed), a muted description and badges (`meta`), with the actions on the right (under the text on phones) |
 | `DashboardPageBody` | same | The content under the header and the filters (the layout `Toolbar`) |
 | `DashboardEmptyState` | same | The shadcn `Empty` with a heading: an empty list, a load error, a missing record (an `h1` when it is the whole page) |
 | `DashboardLoadingState` | same | The shadcn `Spinner` over what is loading |
@@ -202,8 +202,9 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
   Unit tests fail on any hover-only class string in the template editor and the
   dashboard. A hover-only duplicate of an action that is reachable elsewhere leaves
   the tab order instead (`tabIndex={-1}` inside an `aria-hidden` wrapper), like the
-  Start Run overlay in `src/components/dashboard/TemplateCard.tsx` (which touch screens
-  never show: `[@media(hover:none)]:hidden`) and the View Template overlay in
+  Start Run overlay in `src/components/dashboard/TemplateCard.tsx` (which touch screens,
+  where a tap can leave `:hover` stuck, never show: `[@media(hover:none)]:hidden`; there the
+  card's actions menu starts a run) and the View Template overlay in
   `src/components/checklist-library/TemplateCard.tsx`
   (`tests/unit/components/focusVisibility.ts` finds focusable elements hidden this way).
 - Anything that reorders by drag also reorders from the keyboard and by touch. The

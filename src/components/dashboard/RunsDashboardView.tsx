@@ -44,25 +44,19 @@ import { Link } from '@/components/navigation/Link';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
-  // The public catalog and the active workspace's own list; see buildRunTemplateLookup.
   templates?: RunSourceTemplate[];
   workspaceTemplates?: RunSourceTemplate[];
-  // The viewer's permissions on a run: its Organization role, or full for Personal runs.
   getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
-  // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
-  // Reloads the runs list before a refused share shows its error (a run archived elsewhere).
   onShareFailed?: (error: unknown) => Promise<void>;
-  /** Turns the run's share link off; the run becomes private and can be revalidated. */
   onStopSharingRun?: (runId: string) => Promise<void>;
   loading?: boolean;
   loadError?: unknown;
   onRetryLoad?: () => void;
 }
 
-// The status filter's options; the Select shows the chosen one's label.
 const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
   all: 'All Runs',
   in_progress: 'In Progress',
@@ -88,7 +82,6 @@ export function RunsDashboardView({
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
   const fieldId = useId();
-  // Each run stays busy until its own Revalidate finishes.
   const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
   const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
     useRunsDashboardSharing({ runs, onRunShared, onShareFailed, onStopSharingRun });
@@ -119,7 +112,6 @@ export function RunsDashboardView({
       toast.error(
         error instanceof Error ? error.message : 'Failed to delete run.',
       );
-      // Deleted elsewhere: the list reloaded without it, so a retry could only fail again.
       if (isStaleRecordError(error)) setRunToDelete(null);
     } finally {
       setIsDeletingRun(false);
@@ -218,8 +210,6 @@ export function RunsDashboardView({
         )}
       </DashboardPageBody>
 
-      {/* Users see a delete. The API archives the run (ending its share link), and
-          /dashboard/archive can restore it, so the dialog does not say it is permanent. */}
       <ConfirmDialog
         confirmLabel="Delete"
         description="Are you sure you want to delete this run?"

@@ -13,19 +13,12 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
-// The console's page blocks (docs/DESIGN.md): a console page is a DashboardContentShell
-// holding a DashboardPageHeader, an optional Toolbar (src/components/layout/Toolbar.tsx) and
-// the page's content. The
-// window scrolls, never a box inside the page, so sticky parts of a page stick to the window.
-
 interface DashboardContentShellProps {
   children: ReactNode;
   className?: string;
-  // The page width (page-shell.styles.ts): `content` by default, `narrow` for forms.
   width?: PageContainerWidth;
 }
 
-// The page: the site's page width, with the header, toolbar and content stacked.
 export function DashboardContentShell({
   children,
   className,
@@ -46,15 +39,11 @@ export function DashboardContentShell({
 interface DashboardPageHeaderProps {
   actions?: ReactNode;
   description?: ReactNode;
-  // Badges under the description, such as a status.
   meta?: ReactNode;
   title: ReactNode;
-  // Takes the title's place while it is renamed: a labelled field.
   titleEditor?: ReactNode;
 }
 
-// The page's title (its h1), a muted description and badges, with the page's actions on the
-// right (under the text on phones).
 export function DashboardPageHeader({
   actions,
   description,
@@ -88,7 +77,6 @@ interface DashboardPageBodyProps {
   className?: string;
 }
 
-// The page's content under its header and toolbar.
 export function DashboardPageBody({ children, className }: DashboardPageBodyProps) {
   return (
     <div
@@ -105,12 +93,9 @@ interface DashboardEmptyStateProps {
   description: ReactNode;
   icon?: ReactNode;
   title: ReactNode;
-  // The title's heading level: h1 when the state is the whole page (a record that failed to
-  // load or does not exist), h3 inside a card that has its own title.
   titleAs?: 'h1' | 'h2' | 'h3';
 }
 
-// An empty, error or not-found state in place of a list or a page (the shadcn Empty).
 export function DashboardEmptyState({
   action,
   description,
@@ -132,7 +117,6 @@ export function DashboardEmptyState({
   );
 }
 
-// A page or panel that is loading: the shadcn Spinner, with what is loading under it.
 export function DashboardLoadingState({ label }: { label?: string }) {
   return (
     <div

@@ -18,7 +18,6 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
 
-// Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 type TemplateListItemProps = {
   canEdit?: boolean;
   onDelete?: (id: string) => void;
@@ -26,8 +25,6 @@ type TemplateListItemProps = {
   template: ChecklistTemplate;
 };
 
-// A Template in My Templates' list view: a bordered row (the shadcn Item) with its type icon,
-// title (a link to Template detail), description, counts and visibility, and its actions.
 export function TemplateListItem({
   canEdit = true,
   onDelete,
@@ -66,7 +63,6 @@ export function TemplateListItem({
         </p>
       </ItemContent>
       {hasActions ? (
-        // Hidden until hover only on devices that can hover: touch screens always show them.
         <ItemActions className="basis-full justify-end md:basis-auto md:transition-opacity md:[@media(hover:hover)]:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
           {onStartRun ? (
             <Button onClick={() => onStartRun(template.id)} size="sm" type="button" variant="outline">

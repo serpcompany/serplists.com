@@ -28,7 +28,6 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import { Link } from '@/components/navigation/Link';
 
-// Actions follow the member role: omit a handler, or pass canEdit={false}, to hide one.
 interface TemplateCardProps {
   template: ChecklistTemplate;
   canEdit?: boolean;
@@ -37,8 +36,6 @@ interface TemplateCardProps {
   onStartRun?: (id: string) => void;
 }
 
-// A Template on My Templates' grid: a MediaCard whose title opens Template detail, with its
-// categories, counts and visibility, an actions menu, and a Start Run shortcut on hover.
 export function TemplateCard({
   template,
   canEdit = true,
@@ -67,7 +64,6 @@ export function TemplateCard({
               render={
                 <Button
                   aria-label={actionsLabel}
-                  // The only way to these actions on a touch screen or from the keyboard.
                   className={cn('data-popup-open:opacity-100', HOVER_REVEAL_CLASS)}
                   size="icon"
                   variant="secondary"
@@ -125,9 +121,6 @@ export function TemplateCard({
       href={buildConsoleTemplatePath(template.id)}
       icon={<TypeIcon />}
       mediaOverlay={
-        // A pointer shortcut only: keyboard, screen reader and touch users start runs from the
-        // actions menu, so this hidden copy never takes focus, and touch screens, where a tap
-        // can leave :hover stuck, never show it over the card.
         onStartRun ? (
           <div
             aria-hidden="true"

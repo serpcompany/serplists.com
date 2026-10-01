@@ -11,12 +11,9 @@ interface ListLoadErrorStateProps {
   error: unknown;
   listName: 'templates' | 'runs' | 'archived templates' | 'archived runs';
   onRetry: () => void;
-  // The title's heading level: h3 inside a card that has its own title.
   titleAs?: 'h2' | 'h3';
 }
 
-// Shown in place of an empty list when the list failed to load, so a failed request never
-// reads as "you have nothing here".
 export function ListLoadErrorState({ error, listName, onRetry, titleAs }: ListLoadErrorStateProps) {
   const signedOut = isAuthRequiredError(error);
 

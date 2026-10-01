@@ -45,15 +45,11 @@ type RunListItemProps = {
   onDelete: () => void;
   onRevalidate?: () => void;
   onShare: () => void;
-  // Turns the run's share link off; absent when the page cannot.
   onStopSharing?: () => void;
   run: ChecklistRun;
-  // The Template the run came from, when the viewer can open it.
   template?: RunSourceTemplate | null;
 };
 
-// A Run on My Runs: a bordered row (the shadcn Item) with its status icon, title (a link to the
-// Run), source Template and dates, progress, status badges and its actions.
 export function RunListItem({
   actions,
   isRevalidating,
@@ -66,7 +62,6 @@ export function RunListItem({
   template,
 }: RunListItemProps) {
   const isCompleted = run.status === 'completed';
-  // Tasks only, as on the run page; the bar shows the run's overall progress.
   const { tasksCompleted, tasksTotal } = countRunTasks(run.sections);
   const runPath = buildConsoleRunPath(run.id);
 
@@ -120,7 +115,6 @@ export function RunListItem({
       </ItemContent>
 
       <ItemActions
-        // Hidden until hover only on devices that can hover: touch screens always show them.
         className="basis-full flex-wrap justify-end transition-opacity xl:basis-auto xl:[@media(hover:hover)]:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
         data-run-actions="true"
       >

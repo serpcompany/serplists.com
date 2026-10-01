@@ -28,7 +28,6 @@ function formatArchiveDate(dateString: string): string {
 }
 
 type ArchiveListProps = {
-  // False when the member's role cannot restore this kind: the items stay listed.
   canRestore: boolean;
   emptyLabel: string;
   error: unknown;
@@ -42,7 +41,6 @@ type ArchiveListProps = {
   title: string;
 };
 
-// One kind of archived item: a Card with the list's title and count, and a row per item.
 function ArchiveList({
   canRestore,
   emptyLabel,
@@ -112,8 +110,6 @@ function ArchiveList({
   );
 }
 
-// The Archive page's content: its header, with the number of archived items once both lists
-// have loaded, and the archived Templates and Runs of the active context.
 export function ArchiveRecoverySection() {
   const {
     archivedTemplates,
@@ -131,7 +127,6 @@ export function ArchiveRecoverySection() {
   } = useArchiveRecovery();
   const archiveCount = archivedTemplates.length + archivedRuns.length;
   const listStates = [templatesState, runsState];
-  // The total counts only once both lists loaded; a failed list shows its own error.
   const badge = listStates.includes('loading')
     ? 'Loading'
     : listStates.includes('error')
