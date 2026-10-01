@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildConsoleSettingsPath } from "@/lib/routes";
-import { emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
@@ -22,7 +22,7 @@ function sentForm(): URLSearchParams {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, "user-1", "cus_1");
   sessionMocks.getSessionUserId.mockResolvedValue("user-1");
   fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

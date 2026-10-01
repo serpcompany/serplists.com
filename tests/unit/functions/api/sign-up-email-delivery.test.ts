@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { answeringPwnedPasswordRangesAsNotFound } from '../../../fixtures/pwnedPasswords';
 import { postToBetterAuth } from '../../../support/betterAuth';
 
@@ -7,7 +7,7 @@ const EMAIL = 'new-user@example.com';
 const START = Date.parse('2026-01-01T00:00:00Z');
 
 describe('sign-up when the verification email cannot be sent, through the app\'s Better Auth on the migrated tables with only the email provider faked', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let env: any;
   let emailProvider: ReturnType<typeof vi.fn>;
   let logged: string[];
@@ -17,9 +17,9 @@ describe('sign-up when the verification email cannot be sent, through the app\'s
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(START);
-    database = createMigratedD1();
+    database = new SqliteD1();
     env = {
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
       RESEND_API_KEY: 're_test_123',

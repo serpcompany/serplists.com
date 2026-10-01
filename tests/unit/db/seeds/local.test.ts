@@ -15,7 +15,7 @@ import {
 import * as schema from "../../../../db/schema/index";
 import type { LocalDb } from "../../../../scripts/data/local-d1";
 import { planSeedSteps } from "../../../../scripts/lib/local-d1-seed.mjs";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const officialSeedSql = readFileSync(path.join("db", "seeds", "official-templates.sql"), "utf8");
 
@@ -23,7 +23,7 @@ type TemplateRow = { id: string; user_id: string; slug: string | null };
 type Method = "run" | "all" | "values" | "get";
 
 function migratedLocalD1DrivenAsTheSeedScriptsDriveIt() {
-  const sqlite = createMigratedD1().sqlite;
+  const sqlite = new SqliteD1().sqlite;
 
   const execute = (sql: string, params: unknown[], method: Method) => {
     const statement = sqlite.prepare(sql);

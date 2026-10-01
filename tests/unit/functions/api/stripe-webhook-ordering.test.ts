@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleStripe } from "@functions/api/handlers/stripe";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { seedBillingUser } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, seedBillingUser } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 
 const WEBHOOK_SECRET = "whsec_ordering_test";
@@ -78,7 +78,7 @@ async function plan(): Promise<string> {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
   stripeState = null;
   stripeGetStatus = 200;

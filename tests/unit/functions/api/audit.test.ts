@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 const drizzleThatOnlyBuildsSql = createDb({ DB: {} } as never);
 
@@ -12,7 +12,7 @@ type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 type SqlParam = string | number | null;
 
 function migratedDatabase(): DatabaseSync {
-  const { sqlite: db } = createMigratedD1();
+  const { sqlite: db } = new SqliteD1();
   db.exec(`
     INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');

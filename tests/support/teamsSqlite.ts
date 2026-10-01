@@ -1,5 +1,5 @@
 import { expect, vi } from "vitest";
-import { MigratedSqliteD1 } from "./sqlite-d1";
+import { SqliteD1 } from "./sqlite-d1";
 import { apiEnv } from "./apiEnv";
 
 const sessionMocks = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ vi.mock("@functions/api/utils/session", () => ({
 import { handleTeams } from "@functions/api/handlers/teams";
 
 export const createdAt = "2026-01-01T00:00:00.000Z";
-export let d1: MigratedSqliteD1;
+export let d1: SqliteD1;
 
 function env() {
   return apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
@@ -83,7 +83,7 @@ function activeOwners() {
 }
 
 export function openTheSeededOrganization(): void {
-  d1 = new MigratedSqliteD1();
+  d1 = new SqliteD1();
   seedOrganization();
 }
 

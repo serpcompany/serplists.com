@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { varFromWranglerToml } from '../../../support/wranglerToml';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
@@ -8,12 +8,12 @@ const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-
 const PASSWORD = 'a-strong-unbreached-passphrase-81';
 
 describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED and never the request host', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let breachedPasswordAndEmailProviderCalls: ReturnType<typeof vi.fn>;
 
   const previewEnv = () =>
     ({
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.preview.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
       CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.preview.vars', 'CORS_ALLOWED_ORIGINS'),
@@ -21,7 +21,7 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
 
   const productionEnv = (overrides: Record<string, unknown> = {}) =>
     ({
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
       CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.production.vars', 'CORS_ALLOWED_ORIGINS'),
@@ -42,7 +42,7 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
   const userCount = () => (database.sqlite.prepare('SELECT count(*) AS count FROM users').get() as { count: number }).count;
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     breachedPasswordAndEmailProviderCalls = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordAndEmailProviderCalls);
     for (const level of ['info', 'warn', 'error'] as const) {

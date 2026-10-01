@@ -11,10 +11,10 @@ import {
 } from '../../../functions/sitemap/shared';
 import type { Env } from '../../../functions/api/types';
 import { templates, users } from '../../../db/schema/index';
-import { createSqliteD1, type SqliteD1 } from './api/support/sqlite-d1';
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 function categoryDatabase(): SqliteD1 {
-  return createSqliteD1([`
+  return new SqliteD1({ schemaSql: [`
     CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT);
     CREATE TABLE templates (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL, owner_type TEXT NOT NULL, team_id TEXT,
@@ -22,7 +22,7 @@ function categoryDatabase(): SqliteD1 {
     );
     CREATE TABLE sitemap_owner_revisions (user_id TEXT PRIMARY KEY, revised_at TEXT NOT NULL);
     CREATE TABLE sitemap_category_revisions (category TEXT PRIMARY KEY, revised_at TEXT NOT NULL);
-  `]);
+  `] });
 }
 
 function addPublicTemplate(
@@ -109,7 +109,7 @@ describe('public URL rules for the sitemaps', () => {
   const slugs = ['plan', 'plan-2', 'Plan', '-plan', 'plan-', 'pl--an', 'a'.repeat(160), 'a'.repeat(161), ' trimmed ', 'café', 'x', ''];
 
   it("applies the same username and slug rules in SQL as in code, so a shard page's LIMIT counts only rows it lists", async () => {
-    const db = createSqliteD1(['CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE templates (id TEXT PRIMARY KEY, slug TEXT);']);
+    const db = new SqliteD1({ schemaSql: ['CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE templates (id TEXT PRIMARY KEY, slug TEXT);'] });
     usernames.forEach((username, index) => db.sqlite.prepare('INSERT INTO users (id, username) VALUES (?, ?)').run(`user-${index}`, username));
     slugs.forEach((slug, index) => db.sqlite.prepare('INSERT INTO templates (id, slug) VALUES (?, ?)').run(`template-${index}`, slug));
     const queries = createDb({ DB: db.binding } as unknown as Env);

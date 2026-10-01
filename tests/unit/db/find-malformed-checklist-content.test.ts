@@ -4,12 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import { findStoredSectionsIssue } from '@/lib/schemas/storedSections';
 import { malformedSectionsStoredBeforeValidation } from '../../fixtures/malformedSections';
-import { createMigratedD1 } from '../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 const query = readFileSync(new URL('../../../db/maintenance/find-malformed-checklist-content.sql', import.meta.url), 'utf8');
 
 function migratedDatabase(): DatabaseSync {
-  const db = createMigratedD1().sqlite;
+  const db = new SqliteD1().sqlite;
   db.exec(`INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');`);
   return db;

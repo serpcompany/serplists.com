@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  PRO_PRICE_ID,
+  billingSchemaSql,
   postToBilling,
+  PRO_PRICE_ID,
   seedBillingUser,
   storeSubscriptionRow,
   stripeBillingEnv,
   stripeSubscription as stripeSubscriptionFor,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
@@ -73,7 +74,7 @@ function storedSubscriptionStatuses(): string[] {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID, "cus_1");
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   subscriptionListStripeReturns = { data: [], has_more: false };

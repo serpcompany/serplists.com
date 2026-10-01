@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jsonObject, readJson } from "../../../support/readJson";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
@@ -12,7 +12,7 @@ const RUN_ITEMS = JSON.stringify([{ id: "s1", title: "Public", items: [{ id: "i1
 const TEMPLATE_ITEMS = JSON.stringify([{ id: "s1", title: "Private", items: [{ id: "i1", title: "Confidential step" }] }]);
 
 describe("revalidate refusals on the migrated tables, which tell a gone run from a source the caller may no longer use", () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   const exec = (query: string, ...params: Array<string | number | null>) =>
     database.sqlite.prepare(query).run(...params);
@@ -43,7 +43,7 @@ describe("revalidate refusals on the migrated tables, which tell a gone run from
         method: "POST",
         body: JSON.stringify({ expected_revision: 1 }),
       }),
-      { DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" } as never,
+      { DB: database.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" } as never,
     );
     return { status: response.status, body: await readJson(response, jsonObject) };
   };
@@ -52,7 +52,7 @@ describe("revalidate refusals on the migrated tables, which tell a gone run from
     (database.sqlite.prepare("SELECT items FROM checklist_runs WHERE id = ?").get(runId) as { items: string }).items;
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     for (const id of ["user-a", "user-b"]) {
       exec("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)", id, `${id}@example.test`, id, NOW);
     }

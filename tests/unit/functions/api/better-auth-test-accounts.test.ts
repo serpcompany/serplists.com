@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE } from '@functions/api/utils/test-email-block';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
 import { betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const PASSWORD = 'original-password-1';
 
 describe('test accounts under the production auth policy, which Better Auth enforces on the ways in the router does not check', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let localEnv: any;
   let productionEnv: any;
 
@@ -27,9 +27,9 @@ describe('test accounts under the production auth policy, which Better Auth enfo
   }
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     localEnv = {
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
     };

@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { createDb } from '@functions/api/db';
 import { selectPublicProfileTemplates } from '@functions/api/handlers/template-reads';
 import { selectAuditEventHistory, selectTemplateVersionHistory } from '@functions/api/utils/history-queries';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
-const migratedDatabase = (): DatabaseSync => createMigratedD1().sqlite;
+const migratedDatabase = (): DatabaseSync => new SqliteD1().sqlite;
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 

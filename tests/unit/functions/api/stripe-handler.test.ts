@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { handleStripe } from "@functions/api/handlers/stripe";
-import { seedBillingUser } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, seedBillingUser } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 
@@ -94,7 +94,7 @@ function checkoutCompletedEvent(id: string) {
 
 describe("Stripe webhook handler", () => {
   beforeEach(() => {
-    d1 = createSqliteD1(billingSchemaSql());
+    d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
     seedBillingUser(d1, "user-123");
     vi.stubGlobal(
       "fetch",

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { billingSchemaSql, PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const USER_ID = "user-1";
 
@@ -27,7 +27,7 @@ function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) 
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
 });
 

@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  billingSchemaSql,
   postToBilling,
   seedBillingUser,
   storeSubscriptionRow,
   stripeBillingEnv,
   stripeSubscription,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
@@ -155,7 +156,7 @@ function advanceMinutes(minutes: number) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-09-28T10:00:00.000Z"));
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID, CUSTOMER_ID);
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   sessions = [];

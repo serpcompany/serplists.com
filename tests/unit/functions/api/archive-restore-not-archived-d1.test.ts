@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jsonObject, readJson } from "../../../support/readJson";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
@@ -12,8 +12,8 @@ const NOW = "2026-09-28T00:00:00.000Z";
 const ITEMS = JSON.stringify([{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }]);
 
 describe("restore of an item that is not archived, on the migrated tables", () => {
-  let database: ReturnType<typeof createMigratedD1>;
-  const env = () => ({ DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
+  let database: SqliteD1;
+  const env = () => ({ DB: database.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
 
   const exec = (query: string, ...params: Array<string | number | null>) =>
     database.sqlite.prepare(query).run(...params);
@@ -27,7 +27,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
     (database.sqlite.prepare("SELECT count(*) AS value FROM audit_events WHERE action = ?").get(action) as { value: number }).value;
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
     exec("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'user-1@example.test', 'User', 1, ?)", NOW);
     exec(

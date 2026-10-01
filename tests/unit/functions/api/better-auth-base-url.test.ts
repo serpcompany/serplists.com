@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBetterAuth } from '@functions/api/better-auth';
 import apiWorker from '@functions/api/[[route]]';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'victim@example.com';
@@ -9,7 +9,7 @@ const FORGED_HOST = 'evil.example';
 const FORGED_HEADERS = { 'X-Forwarded-Host': FORGED_HOST, 'X-Forwarded-Proto': 'https' };
 
 describe('Better Auth base URL, from the host the request reached and never the forwarded headers a client can send', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let env: any;
   let sentEmails: string[];
 
@@ -37,9 +37,9 @@ describe('Better Auth base URL, from the host the request reached and never the 
 
   beforeEach(() => {
     clearTheBaseUrlsBetterAuthWouldReadFromNodesProcessEnv();
-    database = createMigratedD1();
+    database = new SqliteD1();
     env = {
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
       RESEND_API_KEY: 're_test_123',

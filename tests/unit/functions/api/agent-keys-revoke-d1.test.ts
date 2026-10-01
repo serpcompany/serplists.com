@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 import { apiEnv } from "../../../support/apiEnv";
 import { jsonObject, readJson } from "../../../support/readJson";
 
@@ -11,7 +11,7 @@ import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 const ORIGINAL_REVOKED_AT = "2026-09-19T02:00:00.000Z";
 
 describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   const addUser = (id: string) =>
     database.sqlite
@@ -33,13 +33,13 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
   const revoke = async (id: string) => {
     const response = await handleAgentKeys(
       new Request(`http://localhost/api/agent-keys/${id}`, { method: "DELETE" }),
-      apiEnv({ DB: database.d1 }),
+      apiEnv({ DB: database.binding }),
     );
     return { status: response.status, body: await readJson(response, jsonObject) };
   };
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
     sessionMocks.getSessionUserId.mockResolvedValue("user-1");
     addUser("user-1");
     addUser("user-2");

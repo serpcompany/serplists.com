@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAdmin } from '@functions/api/handlers/admin';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const ADMIN_SECRET = 'admin-secret-for-tests';
 const DAY = 24 * 60 * 60;
 
 describe('POST /api/admin/entitlements/override on the migrated tables, with their real primary key and upsert', () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let env: any;
   const nowSeconds = () => Math.floor(Date.now() / 1000);
 
@@ -37,8 +37,8 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
   }
 
   beforeEach(() => {
-    database = createMigratedD1();
-    env = { DB: database.d1, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET };
+    database = new SqliteD1();
+    env = { DB: database.binding, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET };
     addUser('user-1', 'jane@example.com');
     addUser('user-2', 'other@example.com');
   });

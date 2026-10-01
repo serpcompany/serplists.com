@@ -9,7 +9,7 @@ import { PUBLIC_CATEGORY_REGISTRY } from '../../../src/data/publicCategories';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
 import { GET as categoriesShardGet } from '@/app/sitemaps/categories/[page]/route';
 import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
-import { createSqliteD1, type SqliteD1 } from './api/support/sqlite-d1';
+import { SqliteD1 } from '../../support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
@@ -58,7 +58,7 @@ function expectIndexMatchesShard(result: Awaited<ReturnType<typeof buildBoth>>) 
 
 describe('categories sitemap index and shard on SQLite with the real triggers, where the index hashes exactly the shard it serves', () => {
   beforeEach(() => {
-    d1 = createSqliteD1();
+    d1 = new SqliteD1({ schemaSql: [] });
     db = d1.sqlite;
     db.exec(`
       CREATE TABLE users (

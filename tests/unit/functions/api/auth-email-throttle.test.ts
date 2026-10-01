@@ -5,7 +5,7 @@ import {
   shouldSendAuthEmail,
   type AuthEmailKind,
 } from '@functions/api/utils/auth-email-throttle';
-import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 import { answeringPwnedPasswordRangesAsNotFound } from '../../../fixtures/pwnedPasswords';
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth } from '../../../support/betterAuth';
 
@@ -15,7 +15,7 @@ const SECOND = 1000;
 type SentEmail = { to: string; subject: string };
 
 describe('auth email throttle, through the real Better Auth configuration on the migrated tables', { timeout: 30_000 }, () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
   let env: any;
   let sent: SentEmail[];
 
@@ -53,9 +53,9 @@ describe('auth email throttle, through the real Better Auth configuration on the
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
     at(0);
-    database = createMigratedD1();
+    database = new SqliteD1();
     env = {
-      DB: database.d1,
+      DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
       RESEND_API_KEY: 're_test_123',
@@ -162,10 +162,10 @@ describe('auth email throttle, through the real Better Auth configuration on the
 });
 
 describe('claimAuthEmailSend', () => {
-  let database: ReturnType<typeof createMigratedD1>;
+  let database: SqliteD1;
 
   beforeEach(() => {
-    database = createMigratedD1();
+    database = new SqliteD1();
   });
 
   afterEach(() => {
@@ -174,7 +174,7 @@ describe('claimAuthEmailSend', () => {
   });
 
   const claim = (userId: string, now: number, kind: AuthEmailKind = 'password-reset') =>
-    claimAuthEmailSend(createDb({ DB: database.d1 } as any), { kind, userId, now });
+    claimAuthEmailSend(createDb({ DB: database.binding } as any), { kind, userId, now });
 
   it('lets exactly one of two concurrent requests claim a send', async () => {
     const results = await Promise.all([claim('user-1', START), claim('user-1', START)]);

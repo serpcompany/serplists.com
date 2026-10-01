@@ -338,7 +338,7 @@ Common failures:
 - Fixtures and mocks have the types of what the code under test receives, with no casts:
   - `apiEnv(vars)` (`tests/support/apiEnv.ts`) is a complete `Env`. Its `DB` and
     `R2_UPLOADS` throw, naming the binding, when the code under test uses them; pass the one
-    it needs (a `MigratedSqliteD1` binding, a fake bucket) in `vars`.
+    it needs (a `SqliteD1` binding, a fake bucket) in `vars`.
   - A fixture sets every field its type requires, even one the code under test ignores. A
     mock gets the parameters it is called with (`vi.fn((options: BetterAuthOptions) => ...)`),
     so `mock.calls` is typed, and a stand-in for a client has every method of the client's
@@ -539,19 +539,26 @@ Common failures:
   everything it imports after. A value made with `vi.hoisted()` there is exported with a
   separate `export { ... }`, since Vitest refuses `export const x = vi.hoisted(...)`.
 
-- To test SQL guards or races, run the real handler against `MigratedSqliteD1` from
-  `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that
-  implements the D1 calls Drizzle makes, whose batches are transactions as on D1. Pass its
-  `binding` as `env.DB`. `beforeNextBatch()` commits a competing write just before the
-  handler's next `db.batch()`, `queries` records every statement, and `queryPlan()` returns
-  `EXPLAIN QUERY PLAN` for one. See `tests/unit/functions/api/teams-sqlite.invites.test.ts`, whose
-  seeded Organization comes from `tests/support/teamsSqlite.ts`.
-  `createMigratedD1()` (`tests/fixtures/sqliteD1.ts`) has the same tables behind only the
-  calls Drizzle and Better Auth's Drizzle adapter make: it records nothing, and its batches
-  are not transactions. TD-46 merges the SQLite stand-ins. Their `raw()` reads rows as
-  arrays, which Drizzle maps by column position, through `allRowsAsArrays()`
-  (`tests/support/sqliteRowArrays.ts`): it declares node:sqlite's `setReturnArrays()`, which
-  Node 22.16 has and `@types/node` 22.17 lacks, and parses the rows with Zod.
+- To run a real handler, Drizzle query or Better Auth's Drizzle adapter on SQL, use `SqliteD1`
+  from `tests/support/sqlite-d1.ts`, the one stand-in for D1: a node:sqlite database behind the
+  D1 calls Drizzle makes, with foreign keys enforced and every batch a transaction, as on D1
+  (`tests/unit/db/sqlite-d1-stand-in.test.ts`). `new SqliteD1()` applies every migration;
+  `new SqliteD1({ schemaSql })` applies only the statements a test gives it, for a test that
+  needs a few tables (billing, the sitemap queries). Pass its `binding` as `env.DB`.
+  - `beforeNextBatch()` commits a competing write just before the handler's next
+    `db.batch()`, to test SQL guards and races. See
+    `tests/unit/functions/api/teams-sqlite.invites.test.ts`, whose seeded Organization comes
+    from `tests/support/teamsSqlite.ts`.
+  - `queries` records every statement, and `queryPlan()` returns `EXPLAIN QUERY PLAN` for one.
+  - `setStatementHook()` runs before each statement with its SQL and parameters: throwing
+    there fails that statement as a D1 outage would (`D1_ERROR: Network connection lost`),
+    and `null` removes it.
+  - `rows()` and `run()` read and write directly, `sqlite` is the node:sqlite database, and
+    `readMigration()` reads one migration's SQL.
+  - Its `raw()` reads rows as arrays, which Drizzle maps by column position, through
+    `allRowsAsArrays()` (`tests/support/sqliteRowArrays.ts`): it declares node:sqlite's
+    `setReturnArrays()`, which Node 22.16 has and `@types/node` 22.17 lacks, and parses the
+    rows with Zod.
 - `pnpm run test:local-d1` runs the API on real local D1 through wrangler's
   `getPlatformProxy`, with no dev server. `startLocalD1()`
   (`tests/integration/local-d1-handler-env.ts`) applies every migration to a throwaway
@@ -560,15 +567,10 @@ Common failures:
   from the repository root and open a proxy on a database a test built itself. Each file
   starts its own D1 and takes about 20 seconds, so run a changed one alone:
   `pnpm exec vitest run <file> --testTimeout=20000 --maxWorkers=1`.
-- A test that needs only a few tables (billing, the sitemap queries) builds them with
-  `createSqliteD1(setupSql)` from `tests/unit/functions/api/support/sqlite-d1.ts`: node:sqlite
-  with just that SQL applied, behind the D1 calls Drizzle makes, whose batches are
-  transactions as on D1. `billingSchemaSql()` there creates the users, Stripe and
-  entitlement override tables. `setStatementHook()` runs before each statement with its SQL
-  and parameters: throwing there fails that statement as a D1 outage would
-  (`D1_ERROR: Network connection lost`), and `null` removes it.
-- Billing tests on SQLite send checkout and portal requests with `postToBilling()` and seed
-  users, customers and subscriptions with the helpers in `tests/support/billingCheckout.ts`.
+- Billing tests on SQLite build their tables with `billingSchemaSql()` (the users, Stripe and
+  entitlement override tables), send checkout and portal requests with `postToBilling()` and
+  seed users, customers and subscriptions with the helpers in
+  `tests/support/billingCheckout.ts`.
   Webhook tests send `signedWebhookRequest()` from
   `tests/unit/functions/api/support/stripe-webhook.ts`, which signs the event, so the
   handler's own signature check runs.

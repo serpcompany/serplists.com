@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  billingSchemaSql,
   emptyStripeList,
   postToBilling,
   seedBillingUser,
@@ -8,7 +9,7 @@ import {
   stripeErrorResponse,
   stripeSubscription as stripeSubscriptionFor,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
@@ -93,7 +94,7 @@ const subscriptionReads = () =>
   calls().filter((call) => call.method === "GET" && call.url.startsWith("https://api.stripe.com/v1/subscriptions/"));
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID, "cus_stale");
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   staleCustomerListAnswer = "missing";

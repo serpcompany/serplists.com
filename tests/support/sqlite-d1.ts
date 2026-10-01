@@ -12,59 +12,73 @@ type CompetingWrite = () => void | Promise<void>;
 
 export type RecordedQuery = { sql: string; params: unknown[] };
 
-export type D1Result = {
+export type StatementHook = (sql: string, params: unknown[]) => void;
+
+export type SqliteD1Result = {
   success: true;
   results: Row[];
   meta: { changes: number; rows_read: number; rows_written: number };
 };
 
+export type SqliteD1Options = {
+  schemaSql?: string[];
+};
+
+export function readMigration(name: string): string {
+  return readFileSync(path.join(migrationsDir, name), "utf8");
+}
+
+export function everyMigrationSql(): string[] {
+  return readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map(readMigration);
+}
+
 function toSqliteValue(value: unknown): SQLInputValue {
-  if (typeof value === "undefined") return null;
+  if (value === undefined || value === null) return null;
   if (typeof value === "boolean") return value ? 1 : 0;
-  return value as SQLInputValue;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") return value;
+  if (value instanceof Uint8Array) return value;
+  throw new TypeError(`D1 cannot bind a value of type ${typeof value}`);
 }
 
 class SqliteD1Statement {
   constructor(
-    private readonly harness: MigratedSqliteD1,
+    private readonly database: SqliteD1,
     readonly sql: string,
     readonly params: unknown[] = [],
   ) {}
 
   bind(...params: unknown[]) {
-    return new SqliteD1Statement(this.harness, this.sql, params);
+    return new SqliteD1Statement(this.database, this.sql, params);
   }
 
   async all() {
-    return this.harness.execute(this, false);
+    return this.database.execute(this, false);
   }
 
   async run() {
-    return this.harness.execute(this, false);
+    return this.database.execute(this, false);
   }
 
   async raw() {
-    return this.harness.execute(this, true).results;
+    return this.database.execute(this, true).results;
   }
 
   async first(column?: string) {
-    const [row] = this.harness.execute(this, false).results;
+    const [row] = this.database.execute(this, false).results;
     if (!row) return null;
     return column ? row[column] : row;
   }
 }
 
-export class MigratedSqliteD1 {
+export class SqliteD1 {
   readonly sqlite = new DatabaseSync(":memory:");
   readonly queries: RecordedQuery[] = [];
   private readonly competingWritesBeforeNextBatch: CompetingWrite[] = [];
+  private beforeStatement: StatementHook | null = null;
 
-  constructor() {
+  constructor({ schemaSql = everyMigrationSql() }: SqliteD1Options = {}) {
     this.sqlite.exec("PRAGMA foreign_keys = ON");
-    const migrations = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-    for (const name of migrations) {
-      this.sqlite.exec(readFileSync(path.join(migrationsDir, name), "utf8"));
-    }
+    for (const sql of schemaSql) this.sqlite.exec(sql);
   }
 
   get binding(): D1Database {
@@ -75,7 +89,7 @@ export class MigratedSqliteD1 {
     return new SqliteD1Statement(this, sql);
   }
 
-  async batch(statements: SqliteD1Statement[]): Promise<D1Result[]> {
+  async batch(statements: SqliteD1Statement[]): Promise<SqliteD1Result[]> {
     const competingWrite = this.competingWritesBeforeNextBatch.shift();
     if (competingWrite) await competingWrite();
 
@@ -90,8 +104,17 @@ export class MigratedSqliteD1 {
     }
   }
 
+  async exec(sql: string) {
+    this.sqlite.exec(sql);
+    return { count: 0, duration: 0 };
+  }
+
   beforeNextBatch(competingWrite: CompetingWrite) {
     this.competingWritesBeforeNextBatch.push(competingWrite);
+  }
+
+  setStatementHook(hook: StatementHook | null) {
+    this.beforeStatement = hook;
   }
 
   run(sql: string, ...params: unknown[]) {
@@ -107,9 +130,14 @@ export class MigratedSqliteD1 {
       .map(({ detail }) => detail);
   }
 
+  close() {
+    this.sqlite.close();
+  }
+
   execute(statement: SqliteD1Statement, arrays: true): { results: unknown[][] };
-  execute(statement: SqliteD1Statement, arrays: false): D1Result;
-  execute(statement: SqliteD1Statement, arrays: boolean): D1Result | { results: unknown[][] } {
+  execute(statement: SqliteD1Statement, arrays: false): SqliteD1Result;
+  execute(statement: SqliteD1Statement, arrays: boolean): SqliteD1Result | { results: unknown[][] } {
+    this.beforeStatement?.(statement.sql, statement.params);
     this.queries.push({ sql: statement.sql, params: statement.params });
     const prepared = this.sqlite.prepare(statement.sql);
     const values = statement.params.map(toSqliteValue);
@@ -117,9 +145,7 @@ export class MigratedSqliteD1 {
     const rows = prepared.all(...values);
 
     const isRead = /^\s*select\b/i.test(statement.sql);
-    const changes = isRead
-      ? 0
-      : Number((this.sqlite.prepare("select changes() as changes").get() as { changes: number }).changes);
+    const changes = isRead ? 0 : Number(this.sqlite.prepare("select changes() as changes").get()?.["changes"]);
     return {
       success: true,
       results: rows.map((row) => ({ ...row })),

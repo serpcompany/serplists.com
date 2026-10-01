@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
@@ -16,7 +16,7 @@ import { costliestJsonText } from "../../../support/jsonText";
 
 type JsonRecord = Record<string, unknown>;
 
-let d1: MigratedSqliteD1;
+let d1: SqliteD1;
 let requestId = 0;
 
 async function call(name: string, args: JsonRecord = {}): Promise<{ result: JsonRecord; error?: JsonRecord }> {
@@ -73,7 +73,7 @@ describe("MCP list tools on the migrated tables", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new MigratedSqliteD1();
+    d1 = new SqliteD1();
     seedUsers();
   });
 

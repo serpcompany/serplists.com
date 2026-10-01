@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  billingSchemaSql,
   emptyStripeList,
   postToBilling,
   seedBillingUser,
   stripeBillingEnv,
   stripeErrorResponse,
 } from "../../../support/billingCheckout";
-import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { SqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
@@ -88,7 +89,7 @@ function storedCustomers(): string[] {
 }
 
 beforeEach(() => {
-  d1 = createSqliteD1(billingSchemaSql());
+  d1 = new SqliteD1({ schemaSql: billingSchemaSql() });
   seedBillingUser(d1, USER_ID);
   sessionMocks.getSessionUserId.mockResolvedValue(USER_ID);
   runWhileStripeCreatesTheCustomer = null;

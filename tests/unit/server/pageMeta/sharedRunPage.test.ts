@@ -4,13 +4,13 @@ import { generateMetadata } from '@/app/share/[shareToken]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { loadSharedRunPageSeo } from '@/server/pageMeta/sharedRunPage';
 import { unreachableD1, serverContext } from '../../../support/nextServerContext';
-import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
 vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
 
-let d1: MigratedSqliteD1;
+let d1: SqliteD1;
 
 const addRun = ({ title = 'Launch prep', shared = true, deleted = false } = {}) =>
   d1.run(
@@ -24,7 +24,7 @@ const addRun = ({ title = 'Launch prep', shared = true, deleted = false } = {}) 
 const params = (shareToken: string) => ({ params: Promise.resolve({ shareToken }) });
 
 beforeEach(() => {
-  d1 = new MigratedSqliteD1();
+  d1 = new SqliteD1();
   d1.run(
     `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
      VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,

@@ -1,11 +1,23 @@
-import type { DatabaseSync } from "node:sqlite";
 import { handleBilling } from "@functions/api/handlers/billing";
+import { readMigration, type SqliteD1 } from "./sqlite-d1";
 
-type BillingDatabase = { binding: D1Database; sqlite: DatabaseSync };
+type BillingDatabase = Pick<SqliteD1, "binding" | "sqlite">;
 type BillingAnswer = { status: number; body: Record<string, unknown> };
 
 export const PRO_PRICE_ID = "price_pro";
 const STORED_AT = "2026-01-01T00:00:00.000Z";
+
+export function billingSchemaSql(): string[] {
+  return [
+    "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL)",
+    readMigration("0009_stripe_billing.sql"),
+    readMigration("0010_entitlement_overrides.sql"),
+    `CREATE TABLE team_entitlement_overrides (
+      team_id TEXT PRIMARY KEY, plan TEXT NOT NULL, expires_at INTEGER, note TEXT,
+      created_at TEXT NOT NULL, updated_at TEXT
+    )`,
+  ];
+}
 
 export function stripeBillingEnv(database: BillingDatabase, extraVars: Record<string, string> = {}) {
   return {
