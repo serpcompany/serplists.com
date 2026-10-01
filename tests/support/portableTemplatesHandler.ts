@@ -1,13 +1,8 @@
-import { vi } from 'vitest';
-import { dbMocks } from './templatesApiMocks';
 import { z } from 'zod';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
-import { chainSelectsUpdatesAndDeletes } from './drizzleChainMocks';
+import { mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from './apiHandlerMocks';
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { mockEnv } from './templatesApiMocks';
 
-export { dbMocks, mockEnv } from './templatesApiMocks';
+export { dbMocks, mockEnv } from './apiHandlerMocks';
 
 const exportedTemplate = z
   .object({
@@ -19,22 +14,8 @@ export const packBody = z.object({ templates: z.array(exportedTemplate), manifes
 export const importBody = z.object({ imported: z.number() }).passthrough();
 
 export function resetPortableTemplatesHandlerMocks() {
-  vi.clearAllMocks();
-  chainSelectsUpdatesAndDeletes(dbMocks);
-  dbMocks.selectChain.orderBy.mockResolvedValue([]);
-  dbMocks.selectChain.limit.mockResolvedValue([]);
-  dbMocks.insertChain.values.mockResolvedValue(undefined);
-  dbMocks.db.batch.mockResolvedValue([]);
-
-  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  vi.mocked(getEntitlementsForUser).mockResolvedValue({
-    plan: 'pro',
-    limits: { maxTemplates: null, maxActiveRuns: null },
-  });
-  vi.mocked(getEntitlementsForContext).mockResolvedValue({
-    plan: 'team',
-    limits: { maxTemplates: null, maxActiveRuns: null },
-  });
+  resetToASignedOutVisitorOnTheFreePlan();
+  signInWithPlans('user-123', PRO_PLAN, TEAM_PLAN);
 }
 
 export const importPack = (templates: unknown[]) =>

@@ -1,32 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 import bundledCatalog from '../../../../functions/sitemap/bundled-catalog.generated.json';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
 import { handleTemplates } from '@functions/api/handlers/templates';
-import {
-  type Entitlements,
-  getEntitlementsForContext,
-  getEntitlementsForUser,
-} from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
-import { apiEnv } from '../../../support/apiEnv';
 import { readJson } from '../../../support/readJson';
 
 const slugBody = z.object({ slug: z.string() }).passthrough();
@@ -34,8 +12,6 @@ const slugBody = z.object({ slug: z.string() }).passthrough();
 const bundledSlugs = bundledCatalog.templates.map((template) => template.slug);
 const titleFor = (slug: string) => slug.split('-').map((word) => word.toUpperCase()).join(' ');
 const sections = [{ id: 'section-1', title: 'Checklist', items: [] }];
-
-const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const post = (path: string, body: unknown) =>
   handleTemplates(
@@ -71,19 +47,8 @@ const put = (slug: string, fields: Record<string, unknown> = {}) =>
   );
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  dbMocks.selectChain.limit.mockReset();
-  chainSelectsUpdatesAndDeletes(dbMocks);
-  dbMocks.selectChain.orderBy.mockResolvedValue([]);
-  dbMocks.selectChain.limit.mockResolvedValue([]);
-  dbMocks.insertChain.values.mockResolvedValue(undefined);
-  dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-  dbMocks.db.batch.mockResolvedValue([]);
-
-  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  const unlimited: Entitlements = { plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } };
-  vi.mocked(getEntitlementsForUser).mockResolvedValue(unlimited);
-  vi.mocked(getEntitlementsForContext).mockResolvedValue(unlimited);
+  resetToASignedOutVisitorOnTheFreePlan();
+  signInWithPlans('user-123', PRO_PLAN);
 });
 
 describe('bundled starter slugs are reserved against an empty D1, since bundled starters are not D1 rows', () => {

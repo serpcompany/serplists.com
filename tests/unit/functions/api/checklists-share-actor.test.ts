@@ -1,39 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn((_fields?: unknown) => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
+import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetToASignedOutVisitorOnTheFreePlan } from '../../../support/apiHandlerMocks';
 
 const guardedInserts = vi.hoisted(() => [] as Array<Record<string, unknown>>);
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
 
 vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
@@ -49,7 +17,6 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const items = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }]);
 
 function sharedRun(overrides: Record<string, unknown> = {}) {
@@ -80,7 +47,7 @@ async function guestTicksTask(sessionUserId: string | null) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/token-1', {
     method: 'PUT',
     body: JSON.stringify({ sections, expected_revision: 2 }),
-  }), env);
+  }), mockEnv);
   expect(response.status).toBe(200);
   const audits = [...dbMocks.insertChain.values.mock.calls.map(([values]) => values), ...guardedInserts]
     .filter((values) => values.action === 'checklist_run.shared_updated');
@@ -105,7 +72,7 @@ function shareEvent(actorUserId: string | null, extra: Record<string, unknown> =
 
 async function history(sessionUserId: string) {
   vi.mocked(getSessionUserId).mockResolvedValue(sessionUserId);
-  const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/history'), env);
+  const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/history'), mockEnv);
   const text = await response.text();
   expect(response.status).toBe(200);
   return { text, events: (JSON.parse(text) as { events: Array<{ id: string; actor: Record<string, unknown> }> }).events };
@@ -115,19 +82,11 @@ const hidden = { userId: null, email: null, name: null, username: null };
 
 describe('share-link edits by signed-in visitors', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    resetToASignedOutVisitorOnTheFreePlan();
     guardedInserts.length = 0;
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.orderBy.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockReturnValue({});
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   it('record no actor for a signed-in outsider on a Personal run', async () => {
@@ -171,14 +130,8 @@ describe('share-link edits by signed-in visitors', () => {
 
 describe('run history of share-link edits', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.orderBy.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    resetToASignedOutVisitorOnTheFreePlan();
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
   });
 
   it('hides an outsider recorded on a Personal run by older rows', async () => {

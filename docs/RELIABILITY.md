@@ -510,21 +510,30 @@ Common failures:
 - Handler tests assert the public contract, not incidental query order. Request
   the legacy template backup explicitly with `?format=backup`; the default export
   is portable.
-- API handler unit tests mock `drizzle-orm/d1` at the adapter boundary with
-  `vi.hoisted` chains and keep real schema and query expressions. `drizzleChainMocks()`
+- API handler unit tests mock `drizzle-orm/d1` at the adapter boundary with chains of
+  `vi.fn()` and keep real schema and query expressions. `drizzleChainMocks()`
   (`tests/support/drizzleChainMocks.ts`) builds the select, insert, update and delete chains
   (an insert's `select` is the `INSERT ... SELECT` of a guarded write) and a `db` that
-  returns them. Each `beforeEach()` calls `chainSelectsUpdatesAndDeletes(dbMocks)`, so
-  `from`, `leftJoin`, `where` and `set` chain again whatever an earlier test made them
-  return, and then sets what each read resolves to. Call `vi.clearAllMocks()` there too. It
-  keeps the values a test queued with `mockResolvedValueOnce()`, so also `mockReset()` the
-  calls a test queues rows on: a test that stops early (an early `400`) would leave its rows
-  to the next one.
+  returns them, and `chainSelectsUpdatesAndDeletes(dbMocks)` makes `from`, `leftJoin`,
+  `where` and `set` chain again whatever an earlier test made them return. Never build a
+  chain of your own: import the mocks from the support module that fits, as the first import
+  after Vitest's:
+  - `tests/support/mockedDrizzleD1.ts` mocks only `drizzle-orm/d1` and exports `dbMocks`, for
+    a test of code that reads its own session or entitlements (the entitlements module, Run
+    Keys, profiles).
+  - `tests/support/apiHandlerMocks.ts` adds the session and entitlements mocks, `mockEnv`,
+    the `FREE_PLAN`, `PRO_PLAN` and `TEAM_PLAN` entitlements, and the resets each
+    `beforeEach()` starts from: `resetToASignedOutVisitorOnTheFreePlan()`, then
+    `signInWithPlans(userId, personalPlan, organizationPlan)`, or both at once with every
+    guarded write applied (`resetToASignedInUser()`).
+  - `templatesHandler.ts` and `checklistsHandler.ts` add the guarded-insert mock below and
+    the response schemas; `agentMcpHandler.ts` and `teamsHandler.ts` hold the MCP and teams
+    mocks and fixtures.
 
-  ```ts
-  const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
-  vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-  ```
+  The resets clear every mock, and also `mockReset()` the calls a test queues rows and batch
+  results on (`limit`, `orderBy`, `batch`): `vi.clearAllMocks()` keeps the values a test
+  queued with `mockResolvedValueOnce()`, so a test that stops early (an early `400`) would
+  leave its rows to the next one.
 
   A test that inspects the rows guarded inserts write (audit events, a new run) mocks
   `@functions/api/utils/guarded-insert` with `guardedInsertsThroughThePlainInsertMock()`
@@ -532,12 +541,12 @@ Common failures:
   themselves are tested in `audit-guards.test.ts` and the local D1 tests
   (`pnpm run test:local-d1`).
 
-  The files a handler's tests are split into share these mocks through one support module
-  that calls `vi.mock()` itself (`tests/support/templatesHandler.ts`, `agentMcpHandler.ts`,
-  `checklistsHandler.ts`, `teamsHandler.ts`): Vitest hoists the calls to the top of that
-  module, so a test file that imports it before the code under test gets the mocks in
-  everything it imports after. A value made with `vi.hoisted()` there is exported with a
-  separate `export { ... }`, since Vitest refuses `export const x = vi.hoisted(...)`.
+  A support module that calls `vi.mock()` itself works because Vitest hoists the calls to
+  the top of that module, so a test file that imports it before the code under test gets the
+  mocks in everything it imports after. A value made with `vi.hoisted()` there is exported
+  with a separate `export { ... }`, since Vitest refuses `export const x = vi.hoisted(...)`,
+  and a value imported from another module is re-exported with `export { x } from`, since
+  Vitest's rewrite of the imports leaves a plain `export { x }` naming nothing.
 
 - To run a real handler, Drizzle query or Better Auth's Drizzle adapter on SQL, use `SqliteD1`
   from `tests/support/sqlite-d1.ts`, the one stand-in for D1: a node:sqlite database behind the

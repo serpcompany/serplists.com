@@ -1,57 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
+
+import { schema } from '@functions/api/db';
+import { handleChecklists } from '@functions/api/handlers/checklists';
+import { handleTemplates } from '@functions/api/handlers/templates';
+import { updateTemplateForUser } from '@functions/api/handlers/template-update';
+import { getSessionUserId } from '@functions/api/utils/session';
 
 type Statement =
   | { kind: 'update'; table: unknown; values: Record<string, unknown>; where: SQL }
   | { kind: 'insert'; table: unknown; values: Record<string, unknown> }
   | { kind: 'insert-select'; table: unknown; query: SQL };
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const db = {
-    select: vi.fn((_fields?: unknown) => selectChain),
-    insert: vi.fn((table: unknown) => ({
-      values: (values: Record<string, unknown>) => ({ kind: 'insert', table, values }),
-      select: (query: unknown) => ({ kind: 'insert-select', table, query }),
-    })),
-    update: vi.fn((table: unknown) => ({
-      set: (values: Record<string, unknown>) => ({ where: (where: unknown) => ({ kind: 'update', table, values, where }) }),
-    })),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-import { schema } from '@functions/api/db';
-import { handleChecklists } from '@functions/api/handlers/checklists';
-import { handleTemplates } from '@functions/api/handlers/templates';
-import { updateTemplateForUser } from '@functions/api/handlers/template-update';
-import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
-
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const dialect = new SQLiteSyncDialect();
 const render = (value: SQL) => dialect.sqlToQuery(value).sql;
 const items = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }]);
@@ -98,8 +61,27 @@ async function send(handler: typeof handleChecklists, path: string, method: stri
   const response = await handler(new Request(`http://localhost/api/${path}`, {
     method,
     body: body === undefined ? undefined : JSON.stringify(body),
-  }), env);
+  }), mockEnv);
   return { status: response.status, body: await readJson(response, jsonObject) };
+}
+
+function recordTheStatementsEachWriteBuilds() {
+  dbMocks.insertChain.values.mockImplementation((values: Record<string, unknown>) => ({
+    kind: 'insert',
+    table: dbMocks.db.insert.mock.lastCall?.[0],
+    values,
+  }));
+  dbMocks.insertChain.select.mockImplementation((query: unknown) => ({
+    kind: 'insert-select',
+    table: dbMocks.db.insert.mock.lastCall?.[0],
+    query,
+  }));
+  dbMocks.updateChain.where.mockImplementation((where: unknown) => ({
+    kind: 'update',
+    table: dbMocks.db.update.mock.lastCall?.[0],
+    values: dbMocks.updateChain.set.mock.lastCall?.[0],
+    where,
+  }));
 }
 
 function batchStatements(): Statement[] {
@@ -121,17 +103,9 @@ function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: strin
 
 describe('audit rows are written only when the guarded write lands', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.orderBy.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
+    resetToASignedInUser('user-123', PRO_PLAN);
+    recordTheStatementsEachWriteBuilds();
     dbMocks.db.batch.mockResolvedValue(missed());
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
   });
 
   it('run PUT: a lost revision race returns 409', async () => {
@@ -218,7 +192,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     const response = await updateTemplateForUser(
       new Request('http://localhost/api/mcp', { method: 'POST' }),
-      env,
+      mockEnv,
       'user-123',
       'template-1',
       { expected_version: 3, title: 'Renamed by an agent' },

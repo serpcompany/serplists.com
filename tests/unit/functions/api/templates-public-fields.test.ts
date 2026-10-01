@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { dbMocks } from '../../../support/mockedDrizzleD1';
 import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
 
 vi.mock('@functions/api/utils/session', () => ({
   getSessionUserId: vi.fn(),

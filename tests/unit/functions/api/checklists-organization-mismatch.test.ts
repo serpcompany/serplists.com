@@ -1,49 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
+import { dbMocks, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import {
-  type Entitlements,
-  getEntitlementsForContext,
-  getEntitlementsForUser,
-} from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
-import { apiEnv } from '../../../support/apiEnv';
 import { apiErrorBody, readJson } from '../../../support/readJson';
-
-const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const privateTeamBTemplate = {
   id: 'template-b',
@@ -64,22 +23,8 @@ const post = (url: string, body: unknown) =>
 
 describe('runs from a private template of another Organization, whose content never lands in the requested one', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([]);
-
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const team: Entitlements = { plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } };
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(team);
-    vi.mocked(getEntitlementsForContext).mockResolvedValue(team);
+    resetToASignedOutVisitorOnTheFreePlan();
+    signInWithPlans('user-123', TEAM_PLAN);
   });
 
   it.each(routesThatStartARunFromATemplate)('%s tells a member of the owning Organization where the template belongs', async (_name, url, body) => {

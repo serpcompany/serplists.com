@@ -1,44 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = { from: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
-  const insertChain = { values: vi.fn(), select: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-  return { db, insertChain, selectChain, updateChain };
-});
-
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-vi.mock("@functions/api/utils/entitlements", () => ({ getEntitlementsForUser: vi.fn() }));
-
-vi.mock("@functions/api/utils/audit", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@functions/api/utils/audit")>();
-  return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
-});
+import { dbMocks, env, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { templateView } from "@functions/api/handlers/agentMcpTemplatePages";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
-import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpRequest, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { mcpRequest } from "../../../support/agentMcp";
 import { readTemplateInFull } from "../../../support/templatePages";
 
 type JsonRecord = Record<string, unknown>;
-
-const env = { DB: {} } as never;
 
 let requestId = 0;
 async function send(method: string, params?: JsonRecord): Promise<{ raw: string; body: JsonRecord }> {
@@ -94,21 +65,9 @@ function everySelectReads(row: JsonRecord) {
 
 describe("personal run MCP template tools over the endpoint, with D1 mocked", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.db.batch.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    resetAgentMcpHandlerMocks();
     dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockReturnValue({ kind: "insert" });
-    dbMocks.insertChain.select.mockReturnValue({ kind: "conditional-insert" });
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(runKeyWithEveryPermission);
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } } as never);
   });
 
   it("advertises get_template's paging arguments and update_template's operations", async () => {

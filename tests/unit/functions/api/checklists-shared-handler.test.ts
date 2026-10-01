@@ -1,45 +1,9 @@
 import { assert, describe, it, expect, beforeEach, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
+import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, PRO_PLAN, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
-import { apiEnv } from '../../../support/apiEnv';
 import { jsonObject, readJson } from '../../../support/readJson';
 
 const storedSections = [
@@ -115,17 +79,13 @@ async function putShared(body: unknown) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run', {
     method: 'PUT',
     body: JSON.stringify(body),
-  }), apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' }));
+  }), mockEnv);
   return { response, data: await readJson(response, jsonObject) };
 }
 
 function storedUpdate(): Record<string, unknown> {
   expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
   return dbMocks.updateChain.set.mock.calls[0][0];
-}
-
-function dropLookupsALastTestLeftQueued() {
-  dbMocks.selectChain.limit.mockReset();
 }
 
 function stripGuestState(value: unknown): unknown {
@@ -140,16 +100,8 @@ function stripGuestState(value: unknown): unknown {
 
 describe('shared run updates, which take only completion and notes from a guest onto the stored structure', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dropLookupsALastTestLeftQueued();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue(null);
+    resetChecklistsHandlerMocks();
+    dbMocks.db.batch.mockResolvedValue(EVERY_GUARDED_WRITE_APPLIED);
   });
 
   it('keeps the stored tasks when a guest sends an empty sections list', async () => {
@@ -234,7 +186,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   });
 
   it('keeps completed_at and the completer when a guest reopens the run', async () => {
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxActiveRuns: null } } as never);
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
       status: 'completed',
       completed_at: '2026-02-01T00:00:00.000Z',

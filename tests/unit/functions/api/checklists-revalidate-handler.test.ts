@@ -1,49 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser, TEAM_PLAN } from '../../../support/checklistsHandler';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn((_fields?: unknown) => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
-
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { getSessionUserId } from '@functions/api/utils/session';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const membership = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' };
 
 function run(overrides: Record<string, unknown> = {}) {
@@ -80,7 +42,7 @@ async function revalidate() {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
     method: 'POST',
     body: JSON.stringify({ expected_revision: 2 }),
-  }), env);
+  }), mockEnv);
   return { response, data: await readJson(response, jsonObject) };
 }
 
@@ -92,20 +54,7 @@ function expectNothingWritten() {
 
 describe('run revalidation source access, under the same source rule as run creation', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
-    vi.mocked(getEntitlementsForContext).mockResolvedValue({ plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } });
+    resetToASignedInUser('user-123', PRO_PLAN, TEAM_PLAN);
   });
 
   it('refuses another user\'s private Personal template for a Personal run', async () => {
@@ -183,15 +132,11 @@ describe('run revalidation source access, under the same source rule as run crea
 
 describe('run staleness only counts sources the caller may use', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    resetToASignedInUser('user-123', PRO_PLAN, TEAM_PLAN);
   });
 
   it('checks visibility and archive state in the current_template_version subquery', async () => {
-    await handleChecklists(new Request('http://localhost/api/checklists', { method: 'GET' }), env);
+    await handleChecklists(new Request('http://localhost/api/checklists', { method: 'GET' }), mockEnv);
 
     const fields = dbMocks.db.select.mock.calls[0][0] as { current_template_version: SQL };
     const query = new SQLiteSyncDialect().sqlToQuery(fields.current_template_version);

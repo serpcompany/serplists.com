@@ -1,18 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn() }));
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from '@/lib/schemas/contentLimits';
 
@@ -41,8 +31,6 @@ const runWithNotesFillingItTo = (bytes: number, templateBytes: number, task: Tas
   return withNotes('n'.repeat(bytes - contentSaveBytes(withNotes(''))));
 };
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as never;
-
 const expectTooLarge = async (response: Response) => {
   expect(response.status).toBe(413);
   expect(await response.json()).toEqual(expect.objectContaining({ code: 'content_too_large' }));
@@ -50,17 +38,8 @@ const expectTooLarge = async (response: Response) => {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  chainSelectsUpdatesAndDeletes(dbMocks);
-  dbMocks.selectChain.orderBy.mockResolvedValue([]);
-  dbMocks.selectChain.limit.mockResolvedValue([]);
-  dbMocks.insertChain.values.mockResolvedValue(undefined);
-  dbMocks.insertChain.select.mockReturnValue({ kind: 'conditional-insert' });
-  dbMocks.db.batch.mockResolvedValue([]);
-  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  const pro = { plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } };
-  vi.mocked(getEntitlementsForUser).mockResolvedValue(pro as never);
-  vi.mocked(getEntitlementsForContext).mockResolvedValue(pro as never);
+  resetToASignedOutVisitorOnTheFreePlan();
+  signInWithPlans('user-123', PRO_PLAN);
 });
 
 describe('Template content limit', () => {
@@ -85,11 +64,11 @@ describe('Template content limit', () => {
   const post = (sections: unknown) => handleTemplates(new Request('http://localhost/api/templates', {
     method: 'POST',
     body: JSON.stringify({ title: 'Guide', sections }),
-  }), env);
+  }), mockEnv);
   const put = (sections: unknown) => handleTemplates(new Request('http://localhost/api/templates/template-1', {
     method: 'PUT',
     body: JSON.stringify({ sections, expected_version: 1 }),
-  }), env);
+  }), mockEnv);
 
   it('creates a template at the limit and refuses one over it', async () => {
     await expectTooLarge(await post(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 1)));
@@ -123,7 +102,7 @@ describe('Template content limit', () => {
     await expectTooLarge(await handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
       body: JSON.stringify({ visibility: 'private' }),
-    }), env));
+    }), mockEnv));
   });
 
   it('leaves out of reconciliation a run the change would take past the run limit, which goes stale while the save and other runs go through', async () => {
@@ -166,7 +145,7 @@ describe('Run content limit', () => {
   const putRun = (sections: unknown) => handleChecklists(new Request('http://localhost/api/checklists/run-1', {
     method: 'PUT',
     body: JSON.stringify({ sections, status: 'in_progress', expected_revision: 2 }),
-  }), env);
+  }), mockEnv);
 
   it('refuses to start a run from a template too large for the run to be saved', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{
@@ -183,7 +162,7 @@ describe('Run content limit', () => {
     await expectTooLarge(await handleChecklists(new Request('http://localhost/api/checklists', {
       method: 'POST',
       body: JSON.stringify({ template_id: 'template-1' }),
-    }), env));
+    }), mockEnv));
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
 
@@ -220,7 +199,7 @@ describe('Run content limit', () => {
     await expectTooLarge(await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
       method: 'POST',
       body: JSON.stringify({ expected_revision: 2 }),
-    }), env));
+    }), mockEnv));
   });
 
   it('refuses a share-link save whose notes take the run past the limit', async () => {
@@ -234,6 +213,6 @@ describe('Run content limit', () => {
         sections: [{ id: 'section-1', items: [{ id: 'item-1', notes: 'n'.repeat(100) }] }],
         expected_revision: 2,
       }),
-    }), env));
+    }), mockEnv));
   });
 });

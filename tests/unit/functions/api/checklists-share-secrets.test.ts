@@ -1,50 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { z } from 'zod';
 import { readJson } from '../../../support/readJson';
 import { getTableColumns } from 'drizzle-orm';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn((_fields?: unknown) => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-
-  return { selectChain, insertChain, updateChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
-  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { checklistRunSelectFor, serializeChecklistRun } from '@functions/api/utils/checklist-runs';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const SECRET = 'secret-share-token';
 const SHARE_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
 const viewer = { id: 'member-1', team_id: 'team-1', user_id: 'viewer-1', role: 'viewer', status: 'active' };
@@ -71,7 +35,7 @@ function sharedTeamRun(overrides: Record<string, unknown> = {}) {
 }
 
 async function get(path: string) {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists${path}`), env);
+  const response = await handleChecklists(new Request(`http://localhost/api/checklists${path}`), mockEnv);
   const text = await response.text();
   return { response, text, data: JSON.parse(text) as unknown };
 }
@@ -93,17 +57,7 @@ function expectSelectOmitsShareColumns() {
 
 describe('run reads never return share tokens, which let anyone holding one edit the run', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.orderBy.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockResolvedValue([]);
-    dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
+    resetChecklistsHandlerMocks();
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
     vi.mocked(getSessionUserId).mockResolvedValue('viewer-1');
   });
@@ -195,7 +149,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const response = await handleChecklists(new Request('http://localhost/api/checklists/run/run-1/share', {
       method: 'POST',
       body: '{}',
-    }), env);
+    }), mockEnv);
     const data = await readJson(response, z.object({ shareToken: z.string(), sharePath: z.string() }).passthrough());
 
     expect(response.status).toBe(200);

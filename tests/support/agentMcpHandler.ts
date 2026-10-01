@@ -3,26 +3,8 @@ import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { runKeyWithEveryPermission } from "./agentMcp";
 import { apiEnv } from "./apiEnv";
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn(), select: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
-  const db = {
-    select: vi.fn(() => selectChain),
-    insert: vi.fn(() => insertChain),
-    update: vi.fn(() => updateChain),
-    batch: vi.fn(),
-  };
-  return { db, insertChain, selectChain, updateChain };
-});
-
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
+import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
+import { dbMocks } from "./mockedDrizzleD1";
 
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
@@ -38,7 +20,7 @@ vi.mock("@functions/api/utils/audit", async (importOriginal) => {
   return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
 });
 
-export { dbMocks };
+export { dbMocks } from "./mockedDrizzleD1";
 
 export const env = apiEnv();
 
@@ -151,14 +133,11 @@ function dropRowsAndBatchResultsALastTestLeftQueued() {
 export function resetAgentMcpHandlerMocks() {
   vi.clearAllMocks();
   dropRowsAndBatchResultsALastTestLeftQueued();
-  dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-  dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+  chainSelectsUpdatesAndDeletes(dbMocks);
   dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
   dbMocks.selectChain.limit.mockResolvedValue([]);
   dbMocks.insertChain.values.mockReturnValue({ kind: "insert" });
   dbMocks.insertChain.select.mockReturnValue({ kind: "conditional-insert" });
-  dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-  dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
   dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
   vi.mocked(authenticatePersonalRunKey).mockResolvedValue(runKeyWithEveryPermission);
   vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();

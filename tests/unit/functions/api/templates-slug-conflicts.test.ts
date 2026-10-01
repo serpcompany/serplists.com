@@ -1,20 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
-import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
-
-const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
-
-vi.mock('drizzle-orm/d1', () => ({ drizzle: vi.fn(() => dbMocks.db) }));
-vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn() }));
-vi.mock('@functions/api/utils/entitlements', () => ({
-  getEntitlementsForUser: vi.fn(),
-  getEntitlementsForContext: vi.fn(),
-}));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getSessionUserId } from '@functions/api/utils/session';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
-import { apiEnv } from '../../../support/apiEnv';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const slugBody = z.object({ slug: z.string() }).passthrough();
@@ -37,10 +25,9 @@ const publicSource = {
   slug: 'weekly-review-source',
   version: 1,
 };
-const env = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const post = (path: string, body: unknown) =>
-  handleTemplates(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }), env);
+  handleTemplates(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }), mockEnv);
 
 const insertedRowsOfEachBatchAttempt = () => {
   const inserted = dbMocks.insertChain.values.mock.calls.map(([values]) => values);
@@ -56,17 +43,9 @@ function expectAttemptCarries(attempt: Array<Record<string, string>>, slug: stri
 
 describe('template slugs claimed between the check and the write, which the unique slug index then refuses', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    chainSelectsUpdatesAndDeletes(dbMocks);
-    dbMocks.selectChain.orderBy.mockResolvedValue([]);
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.limit.mockResolvedValue([]);
+    resetToASignedOutVisitorOnTheFreePlan();
     dbMocks.insertChain.values.mockReturnValue({ kind: 'insert' });
-    dbMocks.db.batch.mockReset();
-    dbMocks.db.batch.mockResolvedValue([]);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
-    vi.mocked(getEntitlementsForContext).mockResolvedValue({ plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } });
+    signInWithPlans('user-123', PRO_PLAN, TEAM_PLAN);
   });
 
   describe.each([
@@ -136,7 +115,7 @@ describe('template slugs claimed between the check and the write, which the uniq
   describe('changing a template slug', () => {
     const stored = { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, title: 'Guide', items: '[]', slug: 'my-guide', version: 1, content_version: 1, is_public: false };
     const put = (body: unknown) =>
-      handleTemplates(new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }), env);
+      handleTemplates(new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }), mockEnv);
 
     it('checks the suffixed slug too, and picks another when both are taken', async () => {
       const templateHoldingGuide = [{ id: 'template-2' }];

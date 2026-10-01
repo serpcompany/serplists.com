@@ -1,30 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    leftJoin: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const db = { select: vi.fn(() => selectChain) };
-  return { selectChain, db };
-});
-
-vi.mock('drizzle-orm/d1', () => ({
-  drizzle: vi.fn(() => dbMocks.db),
-}));
-
-vi.mock('@functions/api/utils/session', () => ({
-  getSessionUserId: vi.fn(),
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
+import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
 
 import { buildTemplateHistoryTimeline } from '@/features/template-detail/templateHistoryTimeline';
 import type { TemplateHistoryResponse } from '@/lib/api';
 import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getSessionUserId } from '@functions/api/utils/session';
 
 const at = (minute: number) => `2026-07-03T12:0${minute}:00.000Z`;
 const actor = { actor_email: 'owner@example.com', actor_name: 'Owner', actor_username: 'owner' };
@@ -50,7 +30,7 @@ const loadHistory = async (versions: unknown[], events: unknown[]): Promise<Temp
     .mockResolvedValue([]);
   const response = await handleTemplates(
     new Request(`http://localhost/api/templates/template-1/history?limit=${HISTORY_DISPLAY_LIMIT}`, { method: 'GET' }),
-    { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as never,
+    mockEnv,
   );
   expect(response.status).toBe(200);
   return (await response.json()) as TemplateHistoryResponse;
@@ -58,13 +38,8 @@ const loadHistory = async (versions: unknown[], events: unknown[]): Promise<Temp
 
 describe("GET /api/templates/:id/history fed straight into the Changelog builder keeps the events the Changelog needs", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.leftJoin.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    resetToASignedInUser('user-1', PRO_PLAN);
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
-    vi.mocked(getSessionUserId).mockResolvedValue('user-1');
   });
 
   it('shows Share, archive and restore next to the versions, reading both lists up to the Changelog limit', async () => {

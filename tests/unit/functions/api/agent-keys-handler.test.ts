@@ -1,26 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-
-const dbMocks = vi.hoisted(() => {
-  const selectChain = {
-    from: vi.fn(),
-    where: vi.fn(),
-    orderBy: vi.fn(),
-    limit: vi.fn(),
-  };
-  const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn(), returning: vi.fn() };
-  return {
-    db: {
-      select: vi.fn(() => selectChain),
-      insert: vi.fn(() => insertChain),
-      update: vi.fn(() => updateChain),
-    },
-    selectChain,
-    insertChain,
-    updateChain,
-  };
-});
+import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
+import { dbMocks } from "../../../support/mockedDrizzleD1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const keyMocks = vi.hoisted(() => ({
@@ -29,7 +10,6 @@ const keyMocks = vi.hoisted(() => ({
   MAX_ACTIVE_PERSONAL_RUN_KEYS: 10,
 }));
 
-vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
 vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
@@ -54,14 +34,11 @@ describe("Personal run key management handler", () => {
       keyHash: "hash-only-stored",
       keyPrefix: "slrk_raw-secr",
     });
-    dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
-    dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
+    chainSelectsUpdatesAndDeletes(dbMocks);
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
     keyMocks.insertPersonalRunKeyWithinCap.mockResolvedValue(true);
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
-    dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.returning.mockResolvedValue([]);
   });
 
