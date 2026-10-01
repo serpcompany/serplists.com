@@ -14,6 +14,7 @@ import {
   type TemplatePack,
 } from './lib/sitemapLastmod';
 import { matchesGeneratedText } from './lib/line-endings.mjs';
+import { withoutGitRepositoryOverrides } from './lib/git-env.mjs';
 
 type StaticPage = {
   path: string;
@@ -77,7 +78,7 @@ const previousCatalog = await readPreviousCatalogIfAny();
 
 const git = async (args: string[]): Promise<string | null> => {
   try {
-    const { stdout } = await execFileAsync('git', args, { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 });
+    const { stdout } = await execFileAsync('git', args, { cwd: repoRoot, env: withoutGitRepositoryOverrides(), maxBuffer: 64 * 1024 * 1024 });
     return stdout;
   } catch {
     return null;

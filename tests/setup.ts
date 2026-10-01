@@ -1,3 +1,7 @@
+import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env.mjs';
+
+forgetGitRepositoryOverrides();
+
 const localStorageThatKeepsNothing = {
   getItem: () => null,
   setItem: () => {},
