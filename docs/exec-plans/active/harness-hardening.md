@@ -38,7 +38,7 @@ allow no code comments: code is structured, named and documented so that it need
 
 ## Phases
 
-1. [ ] No exceptions: split the 8 oversized files, fix the suppressions, dependency
+1. [x] No exceptions: split the 8 oversized files, fix the suppressions, dependency
    violations, directives and skipped tests, delete the exception mechanisms, and add a
    check that they stay gone.
 2. [x] Comment enforcement tooling: the ESLint rule and the check for other file types,
@@ -148,14 +148,28 @@ Scheduling:
 ## Progress
 
 - 2026-09-30: gap analysis; phases 1 and 2 started.
-- 2026-09-30: phase 1 in progress.
-  - The dependency baseline and the suppressions file are deleted (d8c57803, 9516e451).
-  - The two lint directives are gone (bbb7815c), and the dependency violations are fixed
-    (94d6b0a6).
-  - The skipped API integration tests run through the router on local D1 (6e97803b). They
-    found a sign-up bug, fixed in 091c6cb1.
-  - The oversized files are being split (25ef1577, d7a86614, e7e83ddd, f879002b, 15d22f4f,
-    54cbb9b8, df24fe48).
+- 2026-09-30: phase 1 done. No exception mechanism is left, and a test fails if one comes back.
+  - Directives: the template editor's two `eslint-disable` lines went with its duplicate save
+    helpers, now imported from its model (bbb7815c).
+  - Dependency baseline: the five screens call the API through features (94d6b0a6). The
+    baseline file, `--ignore-known` and `deps:baseline` are gone (d8c57803).
+  - Skipped tests: 23 of the 28 run through the router on a real local D1 in
+    `pnpm run test:local-d1` (6e97803b), rewritten for the Better Auth routes that replaced
+    register, login and profile. The other 5 were already covered: unauthenticated template
+    create and run list (the handler tests), the CORS preflight and health check
+    (`api.workerless.test.ts`), and an unknown route (`router-method-exports.test.ts`).
+    Porting them found that a sign-up without a password answered 500; it answers 400 now
+    (091c6cb1). They also showed that Node's fetch cancels a request's body when a clone of
+    it is garbage collected, which made the router's body count flaky in Node; the test sends
+    Content-Length, as clients do, and the hazard is TD-27 (fc4e6bdc).
+  - Suppressions: the file and the pre-commit flag that let unpruned suppressions pass are
+    gone (9516e451).
+  - File size: the 8 capped files and the sidebar primitive are split by responsibility
+    (25ef1577, d7a86614, e7e83ddd, f879002b, 15d22f4f, 54cbb9b8, df24fe48, eac27491,
+    ba69768b). Every source file in `src/` and `functions/` is held to 500 lines,
+    `src/components/ui/` and tests beside the code included (91cb6e0a).
+  - Guards: `tests/unit/config/no-exceptions.test.ts` and ESLint rules on test files
+    (8ecb8a20), described in the [core beliefs](../../design-docs/core-beliefs.md#no-exceptions).
 - 2026-09-30: phase 2 done. The no-comments ESLint rule (18e4dcd2) and the check for YAML,
   TOML, SQL, CSS, JSON and patches (64516b84) have 34 tests. The sizing is above.
 - 2026-09-30: phase 5 started in the sandbox repository.
@@ -183,3 +197,19 @@ Scheduling:
   flags cover tests too.
 - 2026-09-30: `caniuse-lite` has been a direct dependency since the first commit, with no
   recorded reason. Phase 4 removes it unless the build needs it, and records why if it does.
+- 2026-09-30: the skipped API tests targeted the JWT endpoints Better Auth replaced, so their
+  behaviors were ported to today's routes rather than revived as written.
+- 2026-09-30: `max-lines` also covers `src/components/ui/` and tests next to the code. The
+  shadcn primitives are code the repository owns and changes. Rejected: an exception for
+  `src/components/ui/`.
+- 2026-09-30: the README and preview renderers moved from `src/lib/templates` to
+  `scripts/lib`. Only the template scripts use them, so in `src/` the reachability rule
+  reported them as dead code.
+- 2026-09-30: `src/lib/api.ts` stays the client's one entry (`api` and its types) and joins
+  endpoint groups in `src/lib/api/`, so no caller or test mock changed. The transport rules
+  in `.dependency-cruiser.cjs` cover the folder too.
+- 2026-09-30: ESLint refuses `.only` only when it is called, so ESLint's `RuleTester` can
+  still be wired to Vitest (`RuleTester.itOnly = it.only`).
+- 2026-09-30: `max-lines` still checks only `src/` and `functions/`: 25 files in `tests/`, one
+  in `scripts/` and one in `db/` are over 500 lines. Extending it is a new verification, left
+  for phase 4.
