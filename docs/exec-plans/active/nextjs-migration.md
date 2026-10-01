@@ -100,7 +100,10 @@ runs on Workers Paid.
 
 Each of these needs the user's approval, or happens with the domain move:
 
-- **Deploy workflow** (phase 4): build each environment with its own `SITE_ENV`
+- **Staging deploys** (done 2026-10-01): `.github/workflows/deploy-staging.yml` deploys the
+  staging Worker to `https://serp-checklists-preview.serpcompany.workers.dev` after CI passes on a
+  push to `staging` ([RELIABILITY.md](../../RELIABILITY.md#deploy-pipeline)).
+- **Production deploy workflow** (phase 4): build each environment with its own `SITE_ENV`
   (`SITE_ENV=staging` for `--env preview`, `SITE_ENV=production` for `--env production`), then
   run `node scripts/check-site-standards.mjs <workers.dev URL> <staging|production>` against
   the deployment (it sends the smoke-test header), and against the canonical host after the
@@ -128,6 +131,10 @@ Each of these needs the user's approval, or happens with the domain move:
 - **The `MCP rate limit` WAF rule** (zone `serplists.com`, [SECURITY.md](../../SECURITY.md#rate-limits))
   matches requests by host and path, so it should keep applying once `serplists.com` points at
   the Worker; confirm it after the domain move.
+- **Staging's domain:** staging lives on its `workers.dev` address for now. When
+  `staging.serplists.com` moves to the Worker, point `STAGING_ORIGIN`
+  (`src/lib/seo/siteOrigin.ts`), `scripts/check-site-standards.mjs` and staging's
+  `CORS_ALLOWED_ORIGINS` back at it.
 - **Domains:** custom-domain `routes` for `serplists.com`, `staging.serplists.com` and
   `www.serplists.com` (www reaches the Worker, and so its redirect, only through a route),
   the move from the Pages project, and `wrangler.jsonc` with the `preview` environment renamed

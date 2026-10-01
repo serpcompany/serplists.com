@@ -46,16 +46,18 @@ allow no code comments: code is structured, named and documented so that it need
    check that they stay gone.
 2. [x] Comment enforcement tooling: the ESLint rule and the check for other file types,
    with tests; size the new verifications in report mode.
-3. [ ] Remove every comment, area by area, moving what each one knew into the doc that owns
+3. [x] Remove every comment, area by area, moving what each one knew into the doc that owns
    the area, a name, or a test; then enable the comment checks.
 4. [ ] New verifications: a tests tsconfig, then `max-lines` on every authored file, naming
    conventions, boundary validation, duplicates, dead code, stricter types and rows-read
    budgets; audit the rule overrides; fix what each finds, then enforce it.
-5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback, each tried in
-   the sandbox repository first.
+5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback. They were proven in
+   the sandbox repository, but not adopted: Claude Code's safety check refused to add
+   workflows that run Claude with write access to the repository.
 6. [x] Observability: the log query tool and its skill. Follow-up: `d1_query` lines carry
    their request id, so a request's timeline and the route table show rows read.
-7. [ ] Docs, `pnpm run verify`, and the full browser suite.
+7. [x] Docs, `pnpm run verify`, and the full browser suite (2026-10-01: verify, 68 local-D1
+   tests, and 270 browser tests on a fresh production build).
 
 ## Sizing (2026-09-30)
 
@@ -145,6 +147,11 @@ Scheduling:
 - **`db/migrations`** is left out of the duplicate check.
   - Applied migrations are append-only history and cannot be edited to share code.
   - A migration that rebuilds a table has to restate the whole table.
+- **Two CI workflows keep their comments:** `.github/workflows/claude-code-review.yml` and
+  `maintenance.yml`, listed in `WORKFLOWS_AWAITING_A_PERSON`.
+  - Claude Code's safety check refused an agent's edit to them, so a person has to remove the
+    comments.
+  - A test fails once either file is clean, so the list can only shrink.
 - **knip's ignore lists:**
   - `@secretlint/secretlint-rule-preset-recommend`, which secretlint loads by name from
     `.secretlintrc.json`.
@@ -212,6 +219,16 @@ Scheduling:
     TD-30 to TD-47.
   - Left: `scripts/`, the views, contexts, server and SEO tests, the root config, `db/`,
     the other formats, and the files that wait for the phase 5 port.
+- 2026-10-01: phase 3 done.
+  - Every file is comment-free except the two workflows above.
+  - ESLint's no-comments rule covers every JS and TS file, with `noInlineConfig`.
+  - `comments:check` covers YAML, TOML, SQL, CSS, JSON, XML, patches and the dotfiles, and
+    runs in `check:repo` and the Lefthook pre-commit hook.
+  - A coverage test fails on any tracked format neither check reads.
+- 2026-10-01: staging deploys to its Worker (`deploy-staging.yml`) on a push to `staging` that
+  passes CI, replacing the disconnected Pages deploy. Staging lives on
+  `https://serp-checklists-preview.serpcompany.workers.dev` until its domain moves.
+- 2026-10-01: phase 4 and the other leftovers are tracked in a GitHub issue for the next PR.
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
