@@ -43,16 +43,20 @@ async function addATaskFromAnotherTab(page: Page, templateId: string) {
   });
 }
 
+async function openANewTemplateWithTwoTasksAndASecondSection(page: Page) {
+  await loginAsAdmin(page);
+  await page.goto('/dashboard/templates/new/');
+
+  await page.getByRole('button', { name: /add task to section 1/i }).click();
+  await page.getByLabel('Task Title').fill('First task');
+  await page.getByRole('button', { name: /^Add task$/ }).click();
+  await page.getByLabel('Task Title').fill('Second task');
+  await page.getByRole('button', { name: 'Add section' }).click();
+}
+
 test.describe("template editor regressions", () => {
   test('reorders sections and tasks with the visible drag handles', async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto('/dashboard/templates/new/');
-
-    await page.getByRole('button', { name: /add task to section 1/i }).click();
-    await page.getByLabel('Task Title').fill('First task');
-    await page.getByRole('button', { name: /^Add task$/ }).click();
-    await page.getByLabel('Task Title').fill('Second task');
-    await page.getByRole('button', { name: 'Add section' }).click();
+    await openANewTemplateWithTwoTasksAndASecondSection(page);
     await page.getByPlaceholder('Enter section title...').fill('Second section');
 
     await dragAndDropBefore(
@@ -72,14 +76,7 @@ test.describe("template editor regressions", () => {
   });
 
   test('shows outline actions on keyboard focus, and reorders with the arrow keys keeping focus on the moved handle', async ({ page }) => {
-    await loginAsAdmin(page);
-    await page.goto('/dashboard/templates/new/');
-
-    await page.getByRole('button', { name: /add task to section 1/i }).click();
-    await page.getByLabel('Task Title').fill('First task');
-    await page.getByRole('button', { name: /^Add task$/ }).click();
-    await page.getByLabel('Task Title').fill('Second task');
-    await page.getByRole('button', { name: 'Add section' }).click();
+    await openANewTemplateWithTwoTasksAndASecondSection(page);
     await page.getByLabel('Section Title').fill('Second section');
 
     await page.getByRole('button', { name: 'Section 1', exact: true }).focus();

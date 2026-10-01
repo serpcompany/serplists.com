@@ -97,6 +97,12 @@ async function revokeTheKeyIn(page: Page, keyRow: Locator) {
   await expect(keyRow.getByText('Revoked')).toBeVisible();
 }
 
+async function readTheNewRunKeySecret(page: Page) {
+  const secretInput = page.getByLabel('New Run Key secret');
+  await expect(secretInput).toBeVisible();
+  return secretInput.inputValue();
+}
+
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
   await loginAsAdmin(page);
 
@@ -106,9 +112,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   await page.getByLabel('Key name').fill(keyName);
   await page.getByRole('button', { name: 'Create Run Key' }).click();
 
-  const secretInput = page.getByLabel('New Run Key secret');
-  await expect(secretInput).toBeVisible();
-  const secret = await secretInput.inputValue();
+  const secret = await readTheNewRunKeySecret(page);
   expect(secret.startsWith('slrk_')).toBe(true);
   expect(secret.length).toBeGreaterThan(40);
   await page.getByRole('button', { name: 'I have saved this key' }).click();
@@ -263,9 +267,7 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   await expect(writeRuns).not.toBeChecked();
 
   await page.getByRole('button', { name: 'Create Run Key' }).click();
-  const secretInput = page.getByLabel('New Run Key secret');
-  await expect(secretInput).toBeVisible();
-  const secret = await secretInput.inputValue();
+  const secret = await readTheNewRunKeySecret(page);
   await page.getByRole('button', { name: 'I have saved this key' }).click();
 
   const keyRow = page.getByRole('listitem').filter({ hasText: keyName });

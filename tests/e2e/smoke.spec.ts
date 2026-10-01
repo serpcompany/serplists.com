@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { API_BASE_URL, APP_URL } from "./support/stack";
+import { routeTheApi } from "./support/mocked-api";
 
 const WINDOWS_PATH_WITH_BACKSLASH_N = "Save the list to C:\\new_folder";
 
@@ -60,11 +61,7 @@ const seededSampleTemplateResponse = {
 };
 
 async function mockApiBackedPublicTemplate(page: Page) {
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === "/api/auth/get-session" && request.method() === "GET") {
       await route.fulfill({
         contentType: "application/json",
@@ -178,11 +175,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   const description =
     `First URL instruction line\nSecond URL instruction line\n${WINDOWS_PATH_WITH_BACKSLASH_N}\nThird URL instruction line`;
 
-  await page.route("**/api/**", async (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    const path = url.pathname;
-
+  await routeTheApi(page, async ({ route, request, path }) => {
     if (path === "/api/auth/get-session" && request.method() === "GET") {
       await route.fulfill({
         contentType: "application/json",

@@ -7,8 +7,8 @@ import {
   deleteTemplate,
   findTemplateByTitle,
   getTemplateSections,
-  registerAccount,
-  saveAndReturnToTemplates,
+  saveAndFindTheSavedTemplate,
+  startANewTemplate,
   uniqueSuffix,
 } from "./support/template-editor";
 
@@ -37,10 +37,7 @@ test.describe("template editor regressions", () => {
     const categoryName = "camping";
     let createdTemplateId: string | null = null;
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await startANewTemplate(page, templateTitle);
     await page.getByPlaceholder("Add tag...").fill(tagName);
     await page.getByPlaceholder("Add tag...").press("Enter");
     await expect(page.getByText(tagName, { exact: true })).toBeVisible();
@@ -50,13 +47,9 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByText(categoryName, { exact: true }).first()).toBeVisible();
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const savedTemplate = await saveAndFindTheSavedTemplate(page, templateTitle);
     createdTemplateId =
       savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
-
-    expect(savedTemplate).toBeTruthy();
     expect(savedTemplate?.tags).toContain(tagName);
     expect(savedTemplate?.categories).toContain(categoryName);
 
@@ -73,10 +66,7 @@ test.describe("template editor regressions", () => {
     const seoSlug = `qa-seo-${stamp}`;
     let createdTemplateId: string | null = null;
 
-    await registerAccount(page);
-    await page.goto("/dashboard/templates/new/");
-
-    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await startANewTemplate(page, templateTitle);
     await page.getByRole("button", { name: /search & seo/i }).click();
     await page.getByPlaceholder("Title for search results...").fill(seoTitle);
     await page.getByPlaceholder("my-template-slug").fill(seoSlug);
@@ -84,13 +74,9 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Description shown in search results...")
       .fill(seoDescription);
 
-    await saveAndReturnToTemplates(page);
-
-    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const savedTemplate = await saveAndFindTheSavedTemplate(page, templateTitle);
     createdTemplateId =
       savedTemplate && typeof savedTemplate.id === "string" ? savedTemplate.id : null;
-
-    expect(savedTemplate).toBeTruthy();
     expect(savedTemplate?.slug).toBe(seoSlug);
     expect(savedTemplate?.seoTitle).toBe(seoTitle);
     expect(savedTemplate?.seoDescription).toBe(seoDescription);

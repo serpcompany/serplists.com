@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
@@ -27,6 +27,14 @@ async function createSharedRun(page: Page, run: { title: string; sections: unkno
     body: {},
   });
   return { runId, shareToken };
+}
+
+async function aGuestWhoseLinkWorks(browser: Browser, shareToken: string) {
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
+  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  return { guestContext, guest, sharedUrl };
 }
 
 test('a share-link guest can tick tasks but cannot rewrite or wipe the run', async ({ browser, page }) => {
@@ -120,10 +128,7 @@ test('stopping a share from the runs list turns the guest link off', async ({ br
     sections: [{ id: 'stop', title: 'Section', items: [{ id: 'stop-a', title: 'Task A' }] }],
   });
 
-  const guestContext = await browser.newContext();
-  const guest = await guestContext.newPage();
-  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
-  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  const { guestContext, guest, sharedUrl } = await aGuestWhoseLinkWorks(browser, shareToken);
 
   await page.goto('/dashboard/runs/');
   const row = page.locator('div.group', { hasText: title });
@@ -150,10 +155,7 @@ test('stopping a share from the run page turns the guest link off, and the page 
     sections: [{ id: 'page', title: 'Section', items: [{ id: 'page-a', title: 'Task A' }] }],
   });
 
-  const guestContext = await browser.newContext();
-  const guest = await guestContext.newPage();
-  const sharedUrl = `${API_BASE_URL}/checklists/shared/${shareToken}`;
-  expect((await guest.request.get(sharedUrl)).status()).toBe(200);
+  const { guestContext, guest, sharedUrl } = await aGuestWhoseLinkWorks(browser, shareToken);
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByText('Shared', { exact: true })).toBeVisible();

@@ -36,3 +36,13 @@ export async function countCheckoutsSentTo(page: Page, url: string) {
   });
   return checkout;
 }
+
+export async function reportTheProPlan(page: Page) {
+  await page.route('**/api/billing/status**', (route) =>
+    route.fulfill({
+      body: JSON.stringify({ billingEnabled: true, plan: 'pro' }),
+      contentType: 'application/json',
+      status: 200,
+    }),
+  );
+}

@@ -126,10 +126,14 @@ export async function confirmTheTemplateDelete(page: Page, templateId: string, d
   expect((await deleted).status()).toBe(200);
 }
 
-export async function startANewTemplateWithATask(page: Page, templateTitle: string) {
+export async function startANewTemplate(page: Page, templateTitle: string) {
   await registerAccount(page);
   await page.goto("/dashboard/templates/new/");
   await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+}
+
+export async function startANewTemplateWithATask(page: Page, templateTitle: string) {
+  await startANewTemplate(page, templateTitle);
   await page.getByRole("button", { name: /add task to section 1/i }).click();
 }
 
@@ -138,10 +142,15 @@ export async function addABlock(page: Page, kind: string) {
   await page.getByRole("menuitem", { name: kind, exact: true }).click();
 }
 
-export async function saveAndReadTheSavedSections(page: Page, templateTitle: string) {
+export async function saveAndFindTheSavedTemplate(page: Page, templateTitle: string) {
   await saveAndReturnToTemplates(page);
   const savedTemplate = await findTemplateByTitle(page, templateTitle);
   expect(savedTemplate).toBeTruthy();
+  return savedTemplate;
+}
+
+export async function saveAndReadTheSavedSections(page: Page, templateTitle: string) {
+  const savedTemplate = await saveAndFindTheSavedTemplate(page, templateTitle);
   return { savedTemplate, sections: getTemplateSections(savedTemplate ?? {}) };
 }
 

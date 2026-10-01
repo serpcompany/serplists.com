@@ -1,4 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function followTheLogInLink(page: Page) {
+  await page.getByRole("link", { name: /^log in$/i }).click();
+
+  await expect(page).toHaveURL(/\/login\/$/);
+  await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
+}
 
 test("@smoke login page renders", async ({ page }) => {
   const maximumDepthErrors: string[] = [];
@@ -19,12 +26,7 @@ test("@smoke login page renders", async ({ page }) => {
 
 test("@smoke login link renders the login page without refresh", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("link", { name: /^log in$/i }).click();
-
-  await expect(page).toHaveURL(/\/login\/$/);
-  await expect(
-    page.getByRole("heading", { name: /welcome back/i })
-  ).toBeVisible();
+  await followTheLogInLink(page);
 });
 
 test("@smoke protected routes render login after redirect without refresh, with the page they came from in ?next=", async ({
@@ -48,12 +50,7 @@ test("@smoke protected routes render login after redirect without refresh, with 
     page,
   }) => {
     await page.goto(startPath);
-    await page.getByRole("link", { name: /^log in$/i }).click();
-
-    await expect(page).toHaveURL(/\/login\/$/);
-    await expect(
-      page.getByRole("heading", { name: /welcome back/i })
-    ).toBeVisible();
+    await followTheLogInLink(page);
   });
 });
 

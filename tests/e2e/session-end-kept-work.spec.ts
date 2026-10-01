@@ -20,6 +20,12 @@ async function signOutInAnotherTab(page: Page) {
   await page.bringToFront();
 }
 
+async function signOutInAnotherTabAndSignInAgainAt(page: Page, backAt: RegExp) {
+  await signOutInAnotherTab(page);
+  await signInAgainAfterTheSessionEnded(page);
+  await expect(page).toHaveURL(backAt, { timeout: 30_000 });
+}
+
 async function startSigningOutThenCancelAtThePrompt(page: Page) {
   page.once('dialog', (dialog) => void dialog.dismiss());
   await page.getByRole('button', { name: 'Account menu' }).click();
@@ -41,10 +47,7 @@ test('edits to an existing template are offered back after another tab signs out
   await expect(titleField).toHaveValue(title);
   await titleField.fill(`${title} (edited)`);
 
-  await signOutInAnotherTab(page);
-  await signInAgainAfterTheSessionEnded(page);
-
-  await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${created.id}/edit`), { timeout: 30_000 });
+  await signOutInAnotherTabAndSignInAgainAt(page, new RegExp(`/dashboard/templates/${created.id}/edit`));
   await expect(titleField).toHaveValue(title);
   await expect(page.getByText('Unsaved template draft')).toBeVisible();
   await page.getByRole('button', { name: 'Restore draft' }).click();
@@ -83,10 +86,7 @@ test('restored edits to a template saved elsewhere meanwhile get the edit confli
     expected_version: loaded.version,
   });
 
-  await signOutInAnotherTab(page);
-  await signInAgainAfterTheSessionEnded(page);
-
-  await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${created.id}/edit`), { timeout: 30_000 });
+  await signOutInAnotherTabAndSignInAgainAt(page, new RegExp(`/dashboard/templates/${created.id}/edit`));
   await expect(titleField).toHaveValue(`${title} (saved elsewhere)`);
   await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(titleField).toHaveValue(`${title} (draft)`);
@@ -122,10 +122,7 @@ test('unsaved task notes survive a cancelled sign-out and are offered back after
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await expect(notes).toHaveValue('Deployed build 42');
 
-  await signOutInAnotherTab(page);
-  await signInAgainAfterTheSessionEnded(page);
-
-  await expect(page).toHaveURL(new RegExp(`/dashboard/runs/${created.id}`), { timeout: 30_000 });
+  await signOutInAnotherTabAndSignInAgainAt(page, new RegExp(`/dashboard/runs/${created.id}`));
   await expect(notes).toHaveValue('Deployed build 42');
   await page.getByRole('button', { name: 'Save notes' }).click();
   await expect(page.getByText('Saved to this run')).toBeVisible();

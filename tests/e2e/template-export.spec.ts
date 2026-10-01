@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { reportTheProPlan } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
 
 const exportedPack = JSON.stringify({
@@ -10,13 +11,7 @@ const exportedPack = JSON.stringify({
 
 test('a double click on Export Portable Pack runs one export and downloads one file', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.route('**/api/billing/status**', (route) =>
-    route.fulfill({
-      body: JSON.stringify({ billingEnabled: true, plan: 'pro' }),
-      contentType: 'application/json',
-      status: 200,
-    }),
-  );
+  await reportTheProPlan(page);
 
   let exportRequests = 0;
   let releaseExport!: () => void;
