@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
@@ -7,7 +7,6 @@ import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import CategoryDetailRoute from '@/views/CategoryDetailRoute';
 import { createFakeContainer } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 type PageRender = { param: string | undefined; slugAtMount: string | undefined };
 

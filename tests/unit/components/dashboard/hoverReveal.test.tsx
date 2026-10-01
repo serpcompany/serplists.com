@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation } from '../../../support/mockedNextNavigation';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -11,7 +11,6 @@ import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../../support/nextNavigation';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 

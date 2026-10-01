@@ -1,11 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { LoadUserProfileResult } from '@/features/profile/loadUserProfile';
 import { UserProfileContent } from '@/views/UserProfile';
-import { navigation } from '../../support/nextNavigation';
 
 const renderProfile = (result: LoadUserProfileResult | null) => {
   navigation.reset('/profile/alice', { params: { username: 'alice' } });

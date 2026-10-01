@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -18,7 +18,6 @@ vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => ({
 }));
 
 import { AccountMenu } from '@/components/layout/AccountMenu';
-import { navigation } from '../../support/nextNavigation';
 
 const renderMenu = () => {
   navigation.reset('/templates/');

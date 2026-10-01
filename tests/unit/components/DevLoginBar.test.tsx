@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,7 +7,6 @@ import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
 import { createFakeContainer } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({

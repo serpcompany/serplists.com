@@ -1,11 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { PublicMobileMenu } from '@/components/layout/PublicMobileNav';
 import { publicHeaderItems } from '@/components/layout/publicSiteLinks';
-import { navigation } from '../../support/nextNavigation';
 
 const groupOfLinksNamedByMenuLabel = (html: string, menuLabel: string) => {
   const labelId = html.match(new RegExp(`<p id="([^"]+)"[^>]*>${menuLabel}</p>`))?.[1];

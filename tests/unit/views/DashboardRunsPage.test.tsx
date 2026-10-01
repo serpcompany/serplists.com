@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,7 +9,6 @@ import { createRunSharingActions, createRunsDashboardShareUrl } from '@/features
 import { createApiError } from '@/lib/api-errors';
 import { queryKeys } from '@/lib/queryCache';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
 
 const mockUseAuth = vi.fn();
 const mockUseTemplates = vi.fn();

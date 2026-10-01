@@ -1,11 +1,10 @@
-import '../../../support/mockedNextNavigation';
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../../support/nextNavigation';
 import { findAll, findHiddenFocusables, parseMarkup, type MarkupNode } from '../focusVisibility';
 
 const template: ChecklistTemplate = {

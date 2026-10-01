@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -20,7 +20,6 @@ import {
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
-import { navigation, RoutedPages } from '../../support/nextNavigation';
 
 const mockUseTemplateLibrary = vi.fn();
 

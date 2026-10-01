@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,7 +7,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { handOffLoginEmail, VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import Login from '@/views/Login';
 import { createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 const authState = vi.hoisted(() => ({ isAuthenticated: false }));
 

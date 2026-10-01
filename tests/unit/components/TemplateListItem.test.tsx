@@ -1,11 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
 
 const template: ChecklistTemplate = {
   id: 'template-1',

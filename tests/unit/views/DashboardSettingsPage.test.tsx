@@ -1,11 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import DashboardSettings from '@/views/DashboardSettings';
-import { navigation } from '../../support/nextNavigation';
 
 const refreshProfile = vi.fn();
 const updateUser = vi.fn();

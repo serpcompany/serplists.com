@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import React, { act, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useSearchParams } from 'next/navigation';
@@ -14,7 +14,6 @@ import {
   findByText,
   installFakeDomGlobals,
 } from '../../fixtures/fakeDom';
-import { navigation, RoutedPages } from '../../support/nextNavigation';
 
 let authUser: { id: string } | null = null;
 

@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { BillingSection } from '@/components/account/BillingSection';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
-import { navigation } from '../../support/nextNavigation';
 
 const workspaceMock = vi.hoisted(() => ({
   value: {

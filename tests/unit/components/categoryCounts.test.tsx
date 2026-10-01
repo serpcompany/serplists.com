@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -12,7 +12,6 @@ import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { normalizeTemplateEditorDetailsForSave } from '@/lib/forms/templateEditorDetailsForm';
 import { parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
 
 const template = (id: string, categories: string[]): ChecklistTemplate => ({
   categories,

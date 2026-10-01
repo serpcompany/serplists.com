@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react', async (importOriginal) => ({
@@ -12,7 +12,6 @@ import { Sheet } from '@/components/ui/sheet';
 
 import { findElement } from '../../support/elementTree';
 import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
-import { navigation } from '../../support/nextNavigation';
 
 const renderSheet = () => {
   const sheet = findElement(renderUntilNoStateIsSetDuringRender(() => PublicMobileNav()), (element) => element.type === Sheet);

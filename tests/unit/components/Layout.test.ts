@@ -1,11 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { existsSync, readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { Layout } from '@/components/Layout';
-import { navigation } from '../../support/nextNavigation';
 
 const logout = vi.fn().mockResolvedValue({ ok: true });
 

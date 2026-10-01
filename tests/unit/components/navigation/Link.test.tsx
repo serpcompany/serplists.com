@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../../support/mockedNextNavigation';
 import React, { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,6 @@ import { subscribeToNavigations } from '@/lib/navigation/navigationSignal';
 import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { click, createFakeContainer, dispatch, findByText, installFakeDomGlobals, type FakeElement } from '../../../fixtures/fakeDom';
-import { navigation, RoutedPages } from '../../../support/nextNavigation';
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 

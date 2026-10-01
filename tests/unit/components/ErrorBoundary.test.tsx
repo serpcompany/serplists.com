@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { RouteErrorFallback } from '@/components/RouteErrorBoundary';
 import { click, createFakeContainer, FakeElement, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 let authUser: { id: string } | null = null;
 

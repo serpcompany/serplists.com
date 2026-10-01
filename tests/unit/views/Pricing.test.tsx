@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider, type UseQueryOptions } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -7,7 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { PLAN_UNKNOWN_MESSAGE, shouldRetryBillingStatus } from '@/lib/billing';
 import Pricing from '@/views/Pricing';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
-import { navigation } from '../../support/nextNavigation';
 
 const queryOptionsSeen = vi.fn();
 

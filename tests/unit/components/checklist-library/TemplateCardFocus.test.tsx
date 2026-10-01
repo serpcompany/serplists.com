@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,6 @@ import {
   selfAndAncestors,
   textOf,
 } from '../focusVisibility';
-import { navigation } from '../../../support/nextNavigation';
 
 const template: ChecklistTemplate = {
   id: 'website-launch',

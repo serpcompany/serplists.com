@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../../support/mockedNextNavigation';
 import React, { act, useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,6 @@ import { confirmLeave, keepGuardedWork, leaveAfterConfirmed } from '@/lib/naviga
 import { useAppRouter, type AppRouter } from '@/lib/navigation/useAppRouter';
 import { useUnsavedChangesGuard } from '@/lib/navigation/useUnsavedChangesGuard';
 import { click, createFakeContainer, findByText, type FakeElement } from '../../../fixtures/fakeDom';
-import { navigation, RoutedPages } from '../../../support/nextNavigation';
 
 const MESSAGE = 'You have unsaved work. Leave without saving?';
 

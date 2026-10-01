@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
@@ -10,7 +10,6 @@ import TeamInviteAccept from '@/views/TeamInviteAccept';
 import { click, createFakeContainer, findByText, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
 import { deferred } from '../../support/deferred';
-import { navigation, RoutedPages } from '../../support/nextNavigation';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 
 type AuthState = {

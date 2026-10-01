@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -9,7 +9,6 @@ import NotFoundPage, { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import NotFound from '@/views/NotFound';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
-import { navigation } from '../../support/nextNavigation';
 
 vi.mock('server-only', () => ({}));
 

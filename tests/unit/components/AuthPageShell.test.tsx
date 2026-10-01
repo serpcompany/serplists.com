@@ -1,10 +1,9 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { AuthPageShell } from '@/components/auth/AuthPageShell';
-import { navigation } from '../../support/nextNavigation';
 
 describe('AuthPageShell', () => {
   it('keeps auth compact and frames the next steps like a product workflow', () => {

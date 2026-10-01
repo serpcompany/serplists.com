@@ -1,10 +1,9 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { SiteNavigationMenu } from '@/components/layout/SiteNavigationMenu';
-import { navigation } from '../../support/nextNavigation';
 
 const renderAt = (pathname: string) => {
   navigation.reset(pathname);

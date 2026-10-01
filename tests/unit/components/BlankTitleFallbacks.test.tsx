@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -9,7 +9,6 @@ import { ContentRenderer } from '@/components/shared/ContentRenderer';
 import { PublicTemplateContent } from '@/components/template/PublicTemplateContent';
 import { PublicTemplateView } from '@/components/template/PublicTemplateView';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
-import { navigation } from '../../support/nextNavigation';
 
 const sectionsWithLegacyBlankTitles: ChecklistSection[] = [
   { id: 'section-a', title: 'Prep', items: [{ id: 'item-1', title: 'Pack' }] },

@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,6 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher';
-import { navigation } from '../../../support/nextNavigation';
 
 const renderGate = () =>
   renderToStaticMarkup(

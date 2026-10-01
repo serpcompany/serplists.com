@@ -1,8 +1,6 @@
-import '../../support/mockedNextNavigation';
+import { renderPageAt } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { renderPageAt } from '../../support/nextNavigation';
 
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';

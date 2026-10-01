@@ -1,12 +1,10 @@
-import '../../support/mockedNextNavigation';
+import { navigation, renderPageAt } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
-
-import { navigation, renderPageAt } from '../../support/nextNavigation';
 
 const mockUseRunExecutionModel = vi.fn();
 vi.mock('@/features/run-execution/useRunExecutionModel', () => ({

@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,6 @@ import type { LoadUserProfileResult } from '@/features/profile/loadUserProfile';
 
 import { click, createFakeContainer, findByText, installFakeDomGlobals, type FakeElement } from '../../fixtures/fakeDom';
 import { deferred } from '../../support/deferred';
-import { navigation } from '../../support/nextNavigation';
 import { settle } from '../../support/queryHookProbe';
 
 const { loadUserProfile } = vi.hoisted(() => ({ loadUserProfile: vi.fn() }));

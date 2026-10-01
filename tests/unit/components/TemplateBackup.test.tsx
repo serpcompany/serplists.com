@@ -1,10 +1,9 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplateBackup } from '@/components/TemplateBackup';
-import { navigation } from '../../support/nextNavigation';
 
 type BillingQueryResult = {
   data?: { billingEnabled?: boolean; plan: 'free' | 'pro' | 'team' };

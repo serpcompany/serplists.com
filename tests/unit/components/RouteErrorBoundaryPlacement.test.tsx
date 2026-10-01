@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,6 @@ import AppLayout from '@/app/(app)/layout';
 import SiteLayout from '@/app/(site)/layout';
 import NotFoundPage from '@/app/not-found';
 import SharePage from '@/app/share/[shareToken]/page';
-import { navigation } from '../../support/nextNavigation';
 
 vi.mock('server-only', () => ({}));
 

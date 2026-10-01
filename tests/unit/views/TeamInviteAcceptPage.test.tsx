@@ -1,4 +1,4 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { teamInvitePreviewQueryKey } from '@/features/teams/useTeamInviteLink';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
-import { navigation } from '../../support/nextNavigation';
 
 const authState = vi.hoisted(() => ({
   isAuthenticated: true,

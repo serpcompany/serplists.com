@@ -1,7 +1,5 @@
-import '../../support/mockedNextNavigation';
+import { renderPageAt } from '../../support/mockedNextNavigation';
 import React from 'react';
-
-import { renderPageAt } from '../../support/nextNavigation';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

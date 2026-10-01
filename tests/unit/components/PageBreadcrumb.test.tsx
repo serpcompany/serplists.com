@@ -1,9 +1,8 @@
-import '../../support/mockedNextNavigation';
+import { navigation } from '../../support/mockedNextNavigation';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { PageBreadcrumb } from '@/components/layout/PageBreadcrumb';
-import { navigation } from '../../support/nextNavigation';
 
 beforeEach(() => {
   navigation.reset('/categories/outdoor/');

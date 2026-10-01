@@ -1,4 +1,4 @@
-import '../../../support/mockedNextNavigation';
+import { navigation } from '../../../support/mockedNextNavigation';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi, afterEach } from 'vitest';
@@ -16,7 +16,6 @@ import {
   openDashboardPublicLibrary,
   openDashboardTemplate,
 } from '@/features/dashboard-templates/useDashboardTemplatesModel';
-import { navigation } from '../../../support/nextNavigation';
 
 const authState = vi.hoisted(() => ({
   logout: vi.fn(),
