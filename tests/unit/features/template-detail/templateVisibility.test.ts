@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { applyTemplateSaveResult } from '@/features/template-detail/templateDetailApi';
 import { setTemplateVisibility } from '@/features/template-detail/templateVisibility';
+import type { TemplateUpdater } from '@/features/template-detail/useTemplateDetailRecord';
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -23,20 +24,21 @@ const buildTemplate = (overrides: Partial<ChecklistTemplate> = {}): ChecklistTem
 const buildApiClient = (updateTemplate = vi.fn().mockResolvedValue({ success: true })) =>
   templateDetailApiClient({ updateTemplate });
 
+const recordTemplateUpdates = () => vi.fn<(update: TemplateUpdater) => void>();
+
 const applyTheUpdaterAsReactWould = (
-  onTemplateChange: ReturnType<typeof vi.fn>,
+  onTemplateChange: ReturnType<typeof recordTemplateUpdates>,
   current: ChecklistTemplate | null,
 ) => {
-  const updater = onTemplateChange.mock.calls[0]?.[0] as (
-    value: ChecklistTemplate | null,
-  ) => ChecklistTemplate | null;
+  const updater = onTemplateChange.mock.calls[0]?.[0];
+  assert.exists(updater);
   return updater(current);
 };
 
 describe('setTemplateVisibility', () => {
   it('sends only the visibility flag with the loaded version, and applies the new visibility', async () => {
     const apiClient = buildApiClient();
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
     const invalidateTemplates = vi.fn();
     const template = buildTemplate();
 
@@ -59,7 +61,7 @@ describe('setTemplateVisibility', () => {
   });
 
   it('leaves another template alone if the page moved on during the request', async () => {
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
 
     await setTemplateVisibility({
       apiClient: buildApiClient(),
@@ -79,7 +81,7 @@ describe('setTemplateVisibility', () => {
         createApiError(409, { code: 'edit_conflict', error: 'Template changed' }),
       ),
     );
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
     const invalidateTemplates = vi.fn();
 
     const result = await setTemplateVisibility({
@@ -97,7 +99,7 @@ describe('setTemplateVisibility', () => {
   });
 
   it('keeps the version and slug the server stored, so the next switch sends a current expected_version without a list reload', async () => {
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
     const template = buildTemplate();
 
     await setTemplateVisibility({
@@ -118,7 +120,7 @@ describe('setTemplateVisibility', () => {
 
   it('reloads the stored template after an edit conflict and says so, since a retry from the stale copy would fail the same way', async () => {
     const reloadAfterConflict = vi.fn().mockResolvedValue(undefined);
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
 
     const result = await setTemplateVisibility({
       apiClient: buildApiClient(
@@ -156,7 +158,7 @@ describe('setTemplateVisibility', () => {
   });
 
   it('keeps the new visibility when refreshing the lists fails', async () => {
-    const onTemplateChange = vi.fn();
+    const onTemplateChange = recordTemplateUpdates();
 
     const result = await setTemplateVisibility({
       apiClient: buildApiClient(),
