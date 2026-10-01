@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
@@ -23,7 +24,7 @@ describe('malformed Template content', () => {
       }],
     }];
 
-    const [item] = sectionsOf(reconcileRunSections(previous, template, []))[0].items;
+    const item = firstOf(firstOf(sectionsOf(reconcileRunSections(previous, template, []))).items);
 
     expect(item.contents).toEqual([
       { type: 'subItems', value: '', subItems: [] },
@@ -58,7 +59,7 @@ describe('retired run work', () => {
       removed.retired,
     );
 
-    expect(sectionsOf(restored)[0].items[0]).toEqual(expect.objectContaining({
+    expect(taskIn(sectionsOf(restored), 0, 0)).toEqual(expect.objectContaining({
       id: 'item-dns',
       isCompleted: true,
       notes: 'TTL lowered to 300',
@@ -91,12 +92,12 @@ describe('retired run work', () => {
 
     const result = reconcileRunSections(section([withSubTask]), template, previousRetired);
 
-    expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([
+    expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
       { id: 'sub-short', title: 'Short', isCompleted: true },
       { id: 'sub-long', title: 'Long', isCompleted: true },
     ]);
-    expect(sectionsOf(result)[0].items[0].isCompleted).toBe(true);
-    expect(sectionsOf(result)[1].items[0]).toEqual(expect.objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
+    expect(taskIn(sectionsOf(result), 0, 0).isCompleted).toBe(true);
+    expect(taskIn(sectionsOf(result), 1, 0)).toEqual(expect.objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
     expect(result.retired).toEqual([]);
   });
 
@@ -104,7 +105,7 @@ describe('retired run work', () => {
     const stale = { kind: 'item', sectionId: 'section-1', item: { ...dns, notes: 'Stale' } };
     const result = reconcileRunSections(section([dns]), section([{ id: 'item-dns', title: 'Check DNS' }]), [stale]);
 
-    expect(sectionsOf(result)[0].items[0].notes).toBe('TTL lowered to 300');
+    expect(taskIn(sectionsOf(result), 0, 0).notes).toBe('TTL lowered to 300');
     expect(result.retired).toEqual([stale]);
   });
 
@@ -119,8 +120,8 @@ describe('retired run work', () => {
       'not an entry',
     ]);
 
-    expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ id: 'item-dns', isCompleted: false }));
-    expect(sectionsOf(result)[0].items[0]).not.toHaveProperty('notes');
+    expect(taskIn(sectionsOf(result), 0, 0)).toEqual(expect.objectContaining({ id: 'item-dns', isCompleted: false }));
+    expect(taskIn(sectionsOf(result), 0, 0)).not.toHaveProperty('notes');
     expect(result.retired.slice(0, unreadable.length)).toEqual(unreadable);
   });
 });

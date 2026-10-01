@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
@@ -125,7 +126,7 @@ describe('Templates Handlers', () => {
     const eventColumns = (dbMocks.db.select.mock.calls[3] as unknown[])[0] as Record<string, unknown>;
     expect(eventColumns).toHaveProperty('metadata_json');
     expect(eventColumns).not.toHaveProperty('diff_json');
-    const versionOrder = columnNamesIn(dbMocks.selectChain.orderBy.mock.calls[0][0]);
+    const versionOrder = columnNamesIn(firstOf(dbMocks.selectChain.orderBy.mock.calls)[0]);
     expect(versionOrder).toContain('version');
     expect(versionOrder).not.toContain('created_at');
   });

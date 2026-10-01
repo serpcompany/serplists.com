@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../../support/elements";
 import {
   dbMocks,
   env,
@@ -23,7 +24,7 @@ describe("personal run MCP handler", () => {
 
     async function recordedAudit() {
       expect(buildAuditEventValues).toHaveBeenCalledOnce();
-      return vi.mocked(buildAuditEventValues).mock.results[0].value as ReturnType<typeof buildAuditEventValues>;
+      return firstOf(vi.mocked(buildAuditEventValues).mock.results).value as ReturnType<typeof buildAuditEventValues>;
     }
 
     function expectCompact(payload: string | null | undefined) {
@@ -87,7 +88,7 @@ describe("personal run MCP handler", () => {
         status: "completed",
       }), env);
 
-      const updates = dbMocks.updateChain.set.mock.calls[0][0];
+      const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(updates).not.toHaveProperty("items");
       expect(updates).toEqual(expect.objectContaining({ status: "completed", progress: 40, revision: 2 }));
       const diff = JSON.parse((await recordedAudit()).diff_json ?? "{}");

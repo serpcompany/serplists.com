@@ -1,4 +1,5 @@
 import { expect, vi } from "vitest";
+import { elementAt, firstOf } from "./elements";
 import { z } from "zod";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { ToolError } from "@functions/api/handlers/agentMcpTools";
@@ -80,7 +81,9 @@ export const outlineOf = (sections: JsonRecord[]) =>
 
 export function sectionFieldsOfTheFirstTwoPages(pages: JsonRecord[]) {
   expect(pages.length).toBeGreaterThan(3);
-  const [first, second] = pages.map((page) => page.section as JsonRecord);
+  const sections = pages.map((page) => page.section as JsonRecord);
+  const first = firstOf(sections);
+  const second = elementAt(sections, 1);
   expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });
   return { first, second };
 }

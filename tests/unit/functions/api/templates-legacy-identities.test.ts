@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
@@ -142,7 +143,7 @@ const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistT
   applyDefaults: applyTemplateSaveDefaults,
 }, input);
 
-async function saveAndRebaseAsTheEditorDoes(state: { loaded: TemplateEditorLoadResult; version?: number }, values: TemplateEditorFormValues) {
+async function saveAndRebaseAsTheEditorDoes(state: { loaded: TemplateEditorLoadResult; version?: number | undefined }, values: TemplateEditorFormValues) {
   const result = await saveTemplateEditorData({
     id: 'template-1',
     expectedVersion: state.version,
@@ -203,17 +204,19 @@ describe('saving a Template stored without ids the API accepts, which the editor
     const idsTheSecondSaveFoundAgain = storedIds(store.template.items);
     expect(idsTheSecondSaveFoundAgain).toEqual(idsAfterFirst);
     expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
-    const [section] = JSON.parse(String(store.run.items)) as Row[];
-    const [crawl, review, report] = section.items as Row[];
+    const section = firstOf(JSON.parse(String(store.run.items)) as Row[]);
+    const tasks = section.items as Row[];
+    const [, review, report] = tasks;
+    const crawl = firstOf(tasks);
     expect(crawl).toMatchObject({ isCompleted: true, notes: 'Crawled with the new rules' });
-    expect(((crawl.contents as Row[])[0].subItems as Row[]).map((subItem) => subItem.isCompleted)).toEqual([true, true]);
+    expect((firstOf(crawl.contents as Row[]).subItems as Row[]).map((subItem) => subItem.isCompleted)).toEqual([true, true]);
     expect(review).toMatchObject({ title: 'Review on-page SEO issues', isCompleted: false });
     expect(report).toMatchObject({ title: 'Write and send the report', isCompleted: true });
     expect(store.run.progress).toBe(Math.round((4 / 7) * 100));
   });
 
   it('stores nothing when the second save changes nothing', async () => {
-    const store = createStore(cases[0][1]);
+    const store = createStore(firstOf(cases)[1]);
     serveFromAndWriteBatchesTo(store);
     const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
 
@@ -226,7 +229,7 @@ describe('saving a Template stored without ids the API accepts, which the editor
   });
 
   it('gives a copy of a public Template stored without ids the ids its editor and runs use', async () => {
-    const { template } = createStore(cases[0][1]);
+    const { template } = createStore(firstOf(cases)[1]);
     dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...template, user_id: 'other-user', is_public: true }]).mockResolvedValueOnce([]);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
@@ -272,7 +275,7 @@ describe('saving a Template whose content blocks have no ids', () => {
   beforeEach(signInWithNoResponsesYet);
 
   it('keeps content_version and the run when a save changes only the description', async () => {
-    const { template, run } = createStore(cases[0][1]);
+    const { template, run } = createStore(firstOf(cases)[1]);
     const store: Store = {
       template: { ...template, items: JSON.stringify(sectionsWithContentBlocksWithoutIds()) },
       run: { ...run, items: JSON.stringify(sectionsWithContentBlocksWithoutIds(true)) },

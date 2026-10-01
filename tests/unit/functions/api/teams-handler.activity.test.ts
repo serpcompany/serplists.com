@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 import { z } from "zod";
 import { dbMocks, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
@@ -80,9 +81,9 @@ describe("Teams handler", () => {
     const data = JSON.parse(text) as Array<{ actor: Record<string, unknown> }>;
 
     expect(response.status).toBe(200);
-    expect(data[0].actor).toEqual({ userId: null, email: null, name: null, username: null });
+    expect(firstOf(data).actor).toEqual({ userId: null, email: null, name: null, username: null });
     expect(text).not.toContain("outsider-1@example.com");
-    expect(data[1].actor).toEqual(expect.objectContaining({ userId: "user-2", email: "user-2@example.com" }));
+    expect(elementAt(data, 1).actor).toEqual(expect.objectContaining({ userId: "user-2", email: "user-2@example.com" }));
   });
 
   it("hides a former member only on their share-link events, not on their other activity", async () => {
@@ -115,9 +116,9 @@ describe("Teams handler", () => {
     const data = await readJson(response, activityBody);
 
     expect(response.status).toBe(200);
-    expect(data[0].actor).toEqual({ userId: null, email: null, name: null, username: null });
-    expect(data[1].actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
-    expect(data[2].actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
+    expect(firstOf(data).actor).toEqual({ userId: null, email: null, name: null, username: null });
+    expect(elementAt(data, 1).actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
+    expect(elementAt(data, 2).actor).toEqual(expect.objectContaining({ userId: "former-1", name: "Name former-1" }));
   });
 
   it("rejects team activity listing for non-admin team members", async () => {

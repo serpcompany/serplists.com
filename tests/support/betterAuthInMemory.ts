@@ -1,7 +1,11 @@
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { vi } from 'vitest';
 
-const inMemoryAuth = vi.hoisted(() => ({ tables: {} as Record<string, any[]> }));
+type AuthTables = { users: any[]; session: any[]; account: any[]; verification: any[] };
+
+const inMemoryAuth = vi.hoisted((): { tables: AuthTables } => ({
+  tables: { users: [], session: [], account: [], verification: [] },
+}));
 
 vi.mock('better-auth/adapters/drizzle', () => ({
   drizzleAdapter: () => memoryAdapter(inMemoryAuth.tables),

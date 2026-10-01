@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import {
   createdBody,
   dbMocks,
@@ -18,7 +19,7 @@ import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const postTemplate = (body: Record<string, unknown>) => handleTemplates(apiRequest('templates', 'POST', body), mockEnv);
 
-const insertedTemplate = () => dbMocks.insertChain.values.mock.calls[0][0];
+const insertedTemplate = () => firstOf(dbMocks.insertChain.values.mock.calls)[0];
 
 async function expectCreated(response: Response) {
   const data = await readJson(response, createdBody);
@@ -50,7 +51,7 @@ describe('Templates Handlers', () => {
 
     const inserted = insertedTemplate();
     const storedItems = JSON.parse(inserted.items);
-    const personalLimitPredicate = dbMocks.selectChain.where.mock.calls[0][0];
+    const personalLimitPredicate = firstOf(dbMocks.selectChain.where.mock.calls)[0];
     const personalLimitColumns = columnNamesIn(personalLimitPredicate);
     expect(Array.isArray(storedItems)).toBe(true);
     expect(storedItems[0].items).toHaveLength(1);

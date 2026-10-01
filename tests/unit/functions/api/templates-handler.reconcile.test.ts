@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf, onlyElement } from '../../../support/elements';
 import { z } from 'zod';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
@@ -130,7 +131,7 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(3);
-    const runUpdate = dbMocks.updateChain.set.mock.calls[1][0];
+    const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
     const reconciledItems = JSON.parse(runUpdate.items);
     expect(reconciledItems[0].items).toEqual([
       expect.objectContaining({
@@ -146,7 +147,7 @@ describe('Templates Handlers', () => {
       template_version: 2,
       revision: 5,
     }));
-    const secondRunUpdate = dbMocks.updateChain.set.mock.calls[2][0];
+    const secondRunUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 2)[0];
     expect(secondRunUpdate).toEqual(expect.objectContaining({
       progress: 0,
       template_version: 2,
@@ -196,7 +197,7 @@ describe('Templates Handlers', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const runUpdate = dbMocks.updateChain.set.mock.calls[1][0];
+    const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
     expect(JSON.parse(runUpdate.items)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
     expect(JSON.parse(runUpdate.retired_items)).toEqual([]);
     expect(runUpdate.progress).toBe(33);
@@ -252,7 +253,7 @@ describe('Templates Handlers', () => {
       expect(response.status).toBe(200);
       expect(data).toEqual(expect.objectContaining({ success: true, structureChanged: false, reconciledRuns: 0, content_version: 2, version: 4 }));
       expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
-      const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
+      const templateUpdate = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(templateUpdate).toEqual(expect.objectContaining({ title: 'Launch plan v2', description: 'Ship it well', is_public: true, version: 4 }));
       expect(templateUpdate).not.toHaveProperty('content_version');
       expect(templateUpdate).not.toHaveProperty('items');
@@ -267,11 +268,11 @@ describe('Templates Handlers', () => {
 
       expect(response.status).toBe(200);
       expect(data).toEqual(expect.objectContaining({ version: 4, content_version: 2, structureChanged: false, reconciledRuns: 0 }));
-      const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
+      const templateUpdate = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true, version: 4 }));
       expect(templateUpdate).not.toHaveProperty('content_version');
       expect(versionInserts()).toHaveLength(1);
-      expect(versionInserts()[0][0]).toEqual(expect.objectContaining({ version: 4 }));
+      expect(firstOf(versionInserts())[0]).toEqual(expect.objectContaining({ version: 4 }));
       expect(dbMocks.selectChain.orderBy).not.toHaveBeenCalled();
     });
 
@@ -319,10 +320,10 @@ describe('Templates Handlers', () => {
 
       expect(response.status).toBe(200);
       expect(data).toEqual(expect.objectContaining({ structureChanged: true, reconciledRuns: 1, content_version: 3, version: 4 }));
-      expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ content_version: 3, version: 4 }));
-      expect(JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].items)[0].items.map((item: { id: string }) => item.id))
+      expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(expect.objectContaining({ content_version: 3, version: 4 }));
+      expect(JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)[0].items.map((item: { id: string }) => item.id))
         .toEqual(['item-2', 'item-1']);
-      expect(dbMocks.updateChain.set.mock.calls[1][0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
+      expect(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
     });
     it('records a reconciled event on each run whose work changed, naming what it retired but never its notes, on the run update\'s own condition', async () => {
       const withoutPublish = storedSectionsAsTheEditorResendsThem.map((section) => ({
@@ -347,7 +348,7 @@ describe('Templates Handlers', () => {
       const dialect = new SQLiteSyncDialect();
       const guardedInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => dialect.sqlToQuery(query as SQL));
       expect(guardedInserts).toHaveLength(1);
-      const { sql: insertSql, params } = guardedInserts[0];
+      const { sql: insertSql, params } = onlyElement(guardedInserts);
       expect(params).toEqual(expect.arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
       const metadata = JSON.parse(params.find((param) => typeof param === 'string' && param.includes('"retired"')) as string);
       expect(metadata).toEqual(expect.objectContaining({
@@ -360,11 +361,11 @@ describe('Templates Handlers', () => {
       expect(JSON.stringify(params)).not.toContain('vault X');
       expect(insertSql).toMatch(/where exists \(select 1 from "checklist_runs" where .*"checklist_runs"\."revision" = \?/);
       expect(params).toContain(4);
-      const statements = dbMocks.db.batch.mock.calls[0][0];
+      const statements = firstOf(dbMocks.db.batch.mock.calls)[0];
       expect(statements).toHaveLength(6);
       expect(statements[3]).toEqual({ kind: 'conditional-insert' });
       expect(statements[4]).toBe(dbMocks.updateChain);
-      expect(JSON.parse(dbMocks.updateChain.set.mock.calls[1][0].retired_items)).toEqual([
+      expect(JSON.parse(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0].retired_items)).toEqual([
         expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),
       ]);
     });

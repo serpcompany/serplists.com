@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
 import "../../../support/checkoutWithoutARateLimit";
 import {
@@ -39,7 +40,7 @@ const missingCustomer = (id: string) =>
     message: `No such customer: '${id}'`,
   });
 
-type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey?: string };
+type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey: string | undefined };
 
 function calls(): Call[] {
   return fetchMock.mock.calls.map(([url, init]) => {
@@ -147,8 +148,8 @@ describe("checkout with a Stripe customer that no longer exists", () => {
     expect(result.status).toBe(200);
     expect(result.body.url).toBe("https://checkout.stripe.test/cs_1");
     expect(customerCreates()).toHaveLength(1);
-    expect(customerCreates()[0].form.get("metadata[userId]")).toBe(USER_ID);
-    expect(customerCreates()[0].idempotencyKey).toContain("cus_stale");
+    expect(firstOf(customerCreates()).form.get("metadata[userId]")).toBe(USER_ID);
+    expect(firstOf(customerCreates()).idempotencyKey).toContain("cus_stale");
     expect(storedCustomer()).toBe("cus_new");
     expect(sessionCalls().map((call) => call.form.get("customer"))).toEqual(["cus_new"]);
   });
@@ -160,8 +161,9 @@ describe("checkout with a Stripe customer that no longer exists", () => {
 
     expect(result.status).toBe(200);
     expect(storedCustomer()).toBe("cus_new");
-    const [first, retry] = sessionCalls();
     expect(sessionCalls()).toHaveLength(2);
+    const first = firstOf(sessionCalls());
+    const retry = elementAt(sessionCalls(), 1);
     expect(first.form.get("customer")).toBe("cus_stale");
     expect(retry.form.get("customer")).toBe("cus_new");
     expect(retry.idempotencyKey).not.toBe(first.idempotencyKey);

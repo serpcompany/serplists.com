@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
 
@@ -34,8 +35,14 @@ const insertedRowsOfEachBatchAttempt = () => {
   return Array.from({ length: inserted.length / 3 }, (_, index) => inserted.slice(index * 3, index * 3 + 3));
 };
 
-function expectAttemptCarries(attempt: Array<Record<string, string>>, slug: string) {
-  const [template, version, audit] = attempt;
+const rowsOfOneAttempt = z.tuple([
+  z.object({ slug: z.string() }).passthrough(),
+  z.object({ snapshot_json: z.string() }).passthrough(),
+  z.object({ after_json: z.string() }).passthrough(),
+]);
+
+function expectAttemptCarries(attempt: unknown, slug: string) {
+  const [template, version, audit] = rowsOfOneAttempt.parse(attempt);
   expect(template.slug).toBe(slug);
   expect(JSON.parse(version.snapshot_json).slug).toBe(slug);
   expect(JSON.parse(audit.after_json).slug).toBe(slug);
@@ -64,10 +71,12 @@ describe('template slugs claimed between the check and the write, which the uniq
       expect(response.status).toBe(200);
       expect(data.slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
       expect(dbMocks.db.batch).toHaveBeenCalledTimes(2);
-      const [first, second] = insertedRowsOfEachBatchAttempt();
+      const attempts = insertedRowsOfEachBatchAttempt();
+      const first = firstOf(attempts);
+      const second = elementAt(attempts, 1);
       expectAttemptCarries(first, 'weekly-review');
       expectAttemptCarries(second, data.slug);
-      expect(second[0].id).toBe(first[0].id);
+      expect(firstOf(second).id).toBe(firstOf(first).id);
     });
 
     it('answers 409 slug_taken, not a 500, when every attempt collides', async () => {
@@ -97,8 +106,8 @@ describe('template slugs claimed between the check and the write, which the uniq
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
-    expect(data.successes[0].slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
-    expectAttemptCarries(insertedRowsOfEachBatchAttempt()[1], data.successes[0].slug);
+    expect(firstOf(data.successes).slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
+    expectAttemptCarries(elementAt(insertedRowsOfEachBatchAttempt(), 1), firstOf(data.successes).slug);
   });
 
   it('reports a readable import failure when every slug attempt collides', async () => {
@@ -130,7 +139,7 @@ describe('template slugs claimed between the check and the write, which the uniq
 
       expect(response.status).toBe(200);
       expect(data.slug).toMatch(/^guide-[0-9a-f]{8}$/);
-      expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(data.slug);
+      expect(firstOf(dbMocks.updateChain.set.mock.calls)[0].slug).toBe(data.slug);
     });
 
     it('answers 409 slug_taken when every candidate is taken', async () => {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { elementAt } from '../../../support/elements';
 import { aFreshIp, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 
 function buildEnv() {
@@ -100,7 +101,7 @@ describe('API router auth rate limits on a deployed host', { timeout: FRESH_ROUT
     ];
 
     for (let index = 0; index < 30; index += 1) {
-      const [method, path] = strictRoutes[index % strictRoutes.length];
+      const [method, path] = elementAt(strictRoutes, index % strictRoutes.length);
       const response = await send(ip, method, path);
       expect(response.status, `${method} ${path}`).not.toBe(429);
     }

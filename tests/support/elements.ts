@@ -32,3 +32,21 @@ export function capturedGroup(match: RegExpMatchArray | RegExpExecArray | null, 
   }
   return captured;
 }
+
+export const sectionAt = <S>(holder: { readonly sections: readonly S[] }, index: number): S =>
+  elementAt(holder.sections, index);
+
+export const taskAt = <T>(
+  holder: { readonly sections: readonly { readonly items: readonly T[] }[] },
+  section: number,
+  task: number,
+): T => elementAt(elementAt(holder.sections, section).items, task);
+
+export const taskIn = <T>(sections: readonly { readonly items: readonly T[] }[], section: number, task: number): T =>
+  elementAt(elementAt(sections, section).items, task);
+
+export const contentAt = <C>(task: { readonly contents?: readonly C[] | undefined }, index: number): C =>
+  elementAt(task.contents ?? [], index);
+
+export const subTaskAt = <S>(content: { readonly subItems?: readonly S[] | undefined }, index: number): S =>
+  elementAt(content.subItems ?? [], index);

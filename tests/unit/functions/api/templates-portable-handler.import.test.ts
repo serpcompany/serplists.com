@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { firstOf, taskAt } from '../../../support/elements';
 import {
   dbMocks,
   expectTheOrganizationOwnsIt,
@@ -53,8 +54,8 @@ describe('portable template import/export API', () => {
     ]);
 
     expect(dbMocks.db.batch).toHaveBeenCalled();
-    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toHaveLength(3);
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.is_public).toBe(true);
     expect(inserted.seo_title).toBe('Imported SEO Title');
     expect(inserted.seo_description).toBe('Imported SEO Description');
@@ -73,8 +74,8 @@ describe('portable template import/export API', () => {
     expect(data.imported).toBe(1);
 
     expect(dbMocks.db.batch).toHaveBeenCalled();
-    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
-    expectTheOrganizationOwnsIt(dbMocks.insertChain.values.mock.calls[0][0]);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toHaveLength(3);
+    expectTheOrganizationOwnsIt(firstOf(dbMocks.insertChain.values.mock.calls)[0]);
   });
 
   it('rejects unsupported portable schema versions', async () => {
@@ -210,12 +211,12 @@ describe('portable template import/export API', () => {
       expect(pack.templates).toHaveLength(1);
       expect(pack.manifest.totalTemplates).toBe(1);
       expect(pack.manifest.skippedTemplates).toEqual([expect.objectContaining({ title: 'Corrupt' })]);
-      const [template] = pack.templates;
+      const template = firstOf(pack.templates);
       expect(template.type).toBe('checklist');
       expect(template.sections.map((section) => [section.id, section.title]))
         .toEqual([['s-1', 'Section 1'], ['s-2', 'Section 2']]);
-      expect(template.sections[0].items[1].title).toBe('Task 2');
-      expect(template.sections[0].items[0].contents).toEqual([
+      expect(taskAt(template, 0, 1).title).toBe('Task 2');
+      expect(taskAt(template, 0, 0).contents).toEqual([
         { id: 'c-1', type: 'text', value: '' },
         { id: 'c-4', type: 'subItems', value: '', subItems: [{ id: 'sub-1', title: 'Short' }] },
       ]);
@@ -240,7 +241,7 @@ describe('portable template import/export API', () => {
       expect(summary.imported).toBe(1);
       expect(summary.successes).toEqual([expect.objectContaining({ index: 1, title: 'Old export' })]);
       expect(summary.failed).toEqual([expect.objectContaining({ index: 0, title: 'No tasks', code: 'invalid_sections' })]);
-      const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+      const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
       expect(JSON.parse(inserted.items)[0]).toEqual(expect.objectContaining({ title: 'Section 1' }));
     });
   });

@@ -1,4 +1,5 @@
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+import { valueAt } from "../../../support/elements";
 import {
   dbMocks,
   env,
@@ -47,7 +48,7 @@ describe("personal run MCP handler", () => {
     const updateRun = body.result.tools.find((tool) => tool.name === "update_run");
     assert.exists(updateRun);
     expect(updateRun.inputSchema.required).toEqual(["runId", "expectedRevision", "operation"]);
-    expect(updateRun.inputSchema.properties.operation.enum).toEqual([
+    expect(valueAt(updateRun.inputSchema.properties, "operation").enum).toEqual([
       "set_task_completed",
       "set_subtask_completed",
       "set_task_notes",
@@ -128,7 +129,7 @@ describe("personal run MCP handler", () => {
     it("keeps the advertised update_run schema in step with its validator", async () => {
       const updateRun = await updateRunTool();
       const operations = updateRunArgs.options.map((option) => option.shape.operation.value);
-      expect(updateRun.inputSchema.properties.operation.enum).toEqual(operations);
+      expect(valueAt(updateRun.inputSchema.properties, "operation").enum).toEqual(operations);
       for (const option of updateRunArgs.options) {
         for (const key of Object.keys(option.shape)) expect(updateRun.inputSchema.properties).toHaveProperty(key);
       }

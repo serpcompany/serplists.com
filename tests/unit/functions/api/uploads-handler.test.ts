@@ -178,7 +178,7 @@ describe('Uploads Handler size and type limits', () => {
       vi.mocked(getSessionUserId).mockResolvedValue('user-123');
       const env = uploadEnv();
       class FileReportingOneByteOverTheLimit extends File {
-        get size() {
+        override get size() {
           return limit + 1;
         }
       }

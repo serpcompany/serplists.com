@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { firstOf, taskAt } from '../../../support/elements';
 import {
   dbMocks,
   expectTheOrganizationPlanChecked,
@@ -10,12 +11,12 @@ import {
 } from '../../../support/portableTemplatesHandler';
 import Ajv from 'ajv';
 
-import { buildPortableTemplatePackJsonSchema } from '@/lib/schemas/portableTemplateJsonSchema';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { activeMember, templateRowToExport } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
+import { portableTemplatePackJsonSchema } from '../../../support/portableTemplateChecks';
 import { readJson } from '../../../support/readJson';
 
 async function exportPackOf(rows: Record<string, unknown>[], path = 'templates/backup') {
@@ -29,7 +30,7 @@ async function exportPackOf(rows: Record<string, unknown>[], path = 'templates/b
 }
 
 function expectValidAgainstThePortableJsonSchema(data: unknown) {
-  const validate = new Ajv({ strict: false }).compile(buildPortableTemplatePackJsonSchema());
+  const validate = new Ajv({ strict: false }).compile(portableTemplatePackJsonSchema());
   expect(validate(data), JSON.stringify(validate.errors)).toBe(true);
 }
 
@@ -58,10 +59,10 @@ describe('portable template import/export API', () => {
 
     expect(data.kind).toBe('serplists-template-pack');
     expect(data.schemaVersion).toBe('2.0.0');
-    expect(data.templates[0].visibility).toBe('public');
-    expect(data.templates[0].seoTitle).toBe('SEO Title');
-    expect(data.templates[0].seoDescription).toBe('SEO Description');
-    expect(data.templates[0].rules).toHaveLength(1);
+    expect(firstOf(data.templates).visibility).toBe('public');
+    expect(firstOf(data.templates).seoTitle).toBe('SEO Title');
+    expect(firstOf(data.templates).seoDescription).toBe('SEO Description');
+    expect(firstOf(data.templates).rules).toHaveLength(1);
     expect(data.manifest.includesRules).toBe(true);
   });
 
@@ -82,7 +83,7 @@ describe('portable template import/export API', () => {
 
     expectTheOrganizationPlanChecked();
     expect(data.kind).toBe('serplists-template-pack');
-    expect(data.templates[0].title).toBe('Team Template');
+    expect(firstOf(data.templates).title).toBe('Team Template');
   });
 
   describe('an export asked to include public templates, which the page adds from the edge-cached catalog', () => {
@@ -133,8 +134,8 @@ describe('portable template import/export API', () => {
       }),
     ]);
 
-    expect(JSON.stringify(data.templates[0].sections)).not.toMatch(/"(isCompleted|completed|notes)"/);
-    expect(data.templates[0].sections[0].items[0]).toEqual({
+    expect(JSON.stringify(firstOf(data.templates).sections)).not.toMatch(/"(isCompleted|completed|notes)"/);
+    expect(taskAt(firstOf(data.templates), 0, 0)).toEqual({
       id: 'i-1',
       title: 'Item',
       contents: [
@@ -177,7 +178,7 @@ describe('portable template import/export API', () => {
 
     expect(data.manifest.skippedTemplates).toBeUndefined();
     expect(data.templates).toHaveLength(1);
-    expect(data.templates[0].sections[0].items[0].contents).toEqual([
+    expect(taskAt(firstOf(data.templates), 0, 0).contents).toEqual([
       { id: '1', type: 'file', value: 'https://example.com/a.pdf' },
       { id: 'c-2', type: 'image', value: 'https://example.com/b.png' },
     ]);

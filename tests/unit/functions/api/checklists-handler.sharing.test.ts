@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { getTableColumns } from 'drizzle-orm';
 import { dbMocks, mockEnv, resetChecklistsHandlerMocks, runBody, successBody } from '../../../support/checklistsHandler';
 import { schema } from '@functions/api/db';
@@ -175,12 +176,12 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
     expect(data.revision).toBe(4);
-    const update = dbMocks.updateChain.set.mock.calls[0][0];
+    const update = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(JSON.parse(update.items)).toEqual([
       { id: '1', title: 'Checklist', items: [{ id: 'item-1', title: 'Item 1', isCompleted: true }] },
     ]);
     expect(update).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
-    const batchStatements = dbMocks.db.batch.mock.calls[0][0];
+    const batchStatements = firstOf(dbMocks.db.batch.mock.calls)[0];
     expect(batchStatements).toHaveLength(2);
     const [, runUpdateAfterTheGuardedAudit] = batchStatements;
     expect(runUpdateAfterTheGuardedAudit).toBe(dbMocks.updateChain);

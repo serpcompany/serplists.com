@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
+import { firstOf, valueAt } from '../../../support/elements';
 
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
@@ -64,7 +65,7 @@ describe('insertAuditEventWhen', () => {
     expect(events(db)).toEqual([
       expect.objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
-    expect(JSON.parse(events(db)[0].metadata_json).retired[0].id).toBe('item-dns');
+    expect(JSON.parse(valueAt(firstOf(events(db)), 'metadata_json')).retired[0].id).toBe('item-dns');
   });
 
   it('records nothing when the guarded write misses because someone saved the run after it was read', async () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
 
 import {
   omitUnchangedTemplateColumns,
@@ -39,15 +40,15 @@ describe('templateStructureChanged', () => {
   });
 
   it.each([
-    ['an item title is renamed', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items[1].title = 'Ship'; }],
-    ['items are reordered', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items.reverse(); }],
+    ['an item title is renamed', (sections: typeof storedSectionsAsTheEditorResendsThem) => { taskIn(sections, 0, 1).title = 'Ship'; }],
+    ['items are reordered', (sections: typeof storedSectionsAsTheEditorResendsThem) => { firstOf(sections).items.reverse(); }],
     ['an item is added', (sections: typeof storedSectionsAsTheEditorResendsThem) => {
-      sections[0].items.push({ id: 'item-3', title: 'Announce' } as (typeof storedSectionsAsTheEditorResendsThem)[0]['items'][1]);
+      firstOf(sections).items.push({ id: 'item-3', title: 'Announce' } as (typeof storedSectionsAsTheEditorResendsThem)[0]['items'][1]);
     }],
     ['a sub-item is added under contents', (sections: typeof storedSectionsAsTheEditorResendsThem) => {
-      sections[0].items[0].contents[0].subItems.push({ title: 'Long', id: 'sub-2', isCompleted: false });
+      firstOf(taskIn(sections, 0, 0).contents).subItems.push({ title: 'Long', id: 'sub-2', isCompleted: false });
     }],
-    ['a description changes', (sections: typeof storedSectionsAsTheEditorResendsThem) => { sections[0].items[0].description = 'Draft and edit'; }],
+    ['a description changes', (sections: typeof storedSectionsAsTheEditorResendsThem) => { taskIn(sections, 0, 0).description = 'Draft and edit'; }],
   ])('reports a change when %s', (_label, mutate) => {
     const incoming = clone(storedSectionsAsTheEditorResendsThem);
     mutate(incoming);
@@ -103,18 +104,18 @@ describe('templateStructureChanged after an editor round trip of content blocks 
     items: Array<{ contents: Array<Record<string, unknown> & { subItems?: Array<Record<string, unknown>> }> }>;
   }>;
   it.each([
-    ['a block value changes', (sections: EditorSections) => { sections[0].items[0].contents[0].value = 'Open robots.txt'; }],
-    ['blocks are reordered', (sections: EditorSections) => { sections[0].items[0].contents.reverse(); }],
+    ['a block value changes', (sections: EditorSections) => { firstOf(taskIn(sections, 0, 0).contents).value = 'Open robots.txt'; }],
+    ['blocks are reordered', (sections: EditorSections) => { taskIn(sections, 0, 0).contents.reverse(); }],
     ['a block is added', (sections: EditorSections) => {
-      sections[0].items[1].contents.push({ id: 'content-new', type: 'text', value: 'More' });
+      taskIn(sections, 0, 1).contents.push({ id: 'content-new', type: 'text', value: 'More' });
     }],
-    ['a block is removed', (sections: EditorSections) => { sections[0].items[0].contents.splice(2, 1); }],
-    ['a block type changes', (sections: EditorSections) => { sections[0].items[0].contents[2].type = 'text'; }],
+    ['a block is removed', (sections: EditorSections) => { taskIn(sections, 0, 0).contents.splice(2, 1); }],
+    ['a block type changes', (sections: EditorSections) => { elementAt(taskIn(sections, 0, 0).contents, 2).type = 'text'; }],
     ['a Sub-task id changes', (sections: EditorSections) => {
-      sections[0].items[0].contents[1].subItems![0].id = 'st-9';
+      subTaskAt(elementAt(taskIn(sections, 0, 0).contents, 1), 0).id = 'st-9';
     }],
     ['a Sub-task title changes', (sections: EditorSections) => {
-      sections[0].items[0].contents[1].subItems![1].title = 'Sitemap directive';
+      subTaskAt(elementAt(taskIn(sections, 0, 0).contents, 1), 1).title = 'Sitemap directive';
     }],
   ])('still reports a change when %s', (_label, mutate) => {
     const incoming = editorSaveWithoutTouchingTheOutline(seedSections) as EditorSections;

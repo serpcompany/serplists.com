@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { createdBody, dbMocks, mockEnv, PRO_PLAN, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -53,7 +54,7 @@ describe('Templates Handlers', () => {
       expect(response.status).toBe(200);
       expect(data.id).toBeDefined();
       expect(vi.mocked(getEntitlementsForUser)).not.toHaveBeenCalled();
-      expect(dbMocks.insertChain.values.mock.calls[0][0]).toEqual(expect.objectContaining({ owner_type: 'team', team_id: 'team-1' }));
+      expect(firstOf(dbMocks.insertChain.values.mock.calls)[0]).toEqual(expect.objectContaining({ owner_type: 'team', team_id: 'team-1' }));
     });
 
     it('stops a copy into a Free Organization at its template limit', async () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { jsonObject, readJson } from '../../../support/readJson';
 
@@ -49,7 +50,7 @@ async function put(body: Record<string, unknown>) {
 
 function savedUpdates(): Record<string, unknown> {
   expect(dbMocks.updateChain.set).toHaveBeenCalledOnce();
-  return dbMocks.updateChain.set.mock.calls[0][0];
+  return firstOf(dbMocks.updateChain.set.mock.calls)[0];
 }
 
 function auditDiff(): Record<string, unknown> {
@@ -175,7 +176,7 @@ describe('run completion stamps on POST /api/checklists', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, unknown>;
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0] as Record<string, unknown>;
     expect(inserted.status).toBe('completed');
     expect(inserted.completed_by_user_id).toBe('member-b');
     expect(typeof inserted.completed_at).toBe('string');

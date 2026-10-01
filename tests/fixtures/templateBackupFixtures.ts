@@ -1,6 +1,11 @@
-import type { ChecklistTemplate } from '@/lib/schemas/checklistSchema';
+import type { ChecklistTemplate as StoredChecklistTemplate } from '@/lib/schemas/checklistSchema';
+import type { ChecklistTemplate } from '@/types/checklist';
 
-export const createMockTemplate = (overrides = {}): ChecklistTemplate => ({
+type TemplateTheAppAndABackupBothHold = ChecklistTemplate & StoredChecklistTemplate;
+
+export const createMockTemplate = (
+  overrides: Partial<TemplateTheAppAndABackupBothHold> = {},
+): TemplateTheAppAndABackupBothHold => ({
   id: 'template-1',
   title: 'Test Template',
   description: 'Test description',

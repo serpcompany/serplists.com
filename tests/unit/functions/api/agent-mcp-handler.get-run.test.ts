@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { firstOf, taskIn } from "../../../support/elements";
 import { z } from "zod";
 import {
   dbMocks,
@@ -56,7 +57,7 @@ describe("personal run MCP handler", () => {
       ]),
     });
 
-    const taskContents = z.object({ contents: z.array(jsonObject).length(2) }).passthrough();
+    const taskContents = z.object({ contents: z.tuple([jsonObject, jsonObject]) }).passthrough();
     const tasksOf = z.object({ items: z.array(jsonObject).min(1) }).passthrough();
     const runWithRetiredWork = z.object({
       run: z.object({
@@ -78,7 +79,7 @@ describe("personal run MCP handler", () => {
       const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
       const { sections, retiredItems } = runWithRetiredWork.parse(body.result.structuredContent).run;
 
-      expectOnlySubTasks(sections[0].items[0]);
+      expectOnlySubTasks(taskIn(sections, 0, 0));
       expectOnlySubTasks(retiredItems[0].item);
       expectOnlySubTasks(retiredItems[1].section.items[0]);
     });
@@ -96,7 +97,7 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expectOnlySubTasks(body.result.structuredContent.task);
-      const stored = JSON.parse(dbMocks.updateChain.set.mock.calls[0][0].items);
+      const stored = JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items);
       expect(stored[0].items[0].subItems).toEqual([expect.objectContaining({ id: "sub-8" })]);
     });
   });
@@ -139,7 +140,7 @@ describe("personal run MCP handler", () => {
 
       const section = await getRun(runWithARetiredSectionOverTheBound, { retired: true, sectionId: "section-1" });
       expect(section.structuredContent).toEqual({ run: { id: "run-1", revision: 1 }, retiredItems: [retiredTask, retiredSubtask] });
-      expect(section.content[0].text).toMatch(/^Loaded 2 retired entries\./);
+      expect(firstOf(section.content).text).toMatch(/^Loaded 2 retired entries\./);
 
       const task = await getRun(runWithARetiredSectionOverTheBound, { retired: true, taskId: "task-1" });
       expect(task.structuredContent.retiredItems).toEqual([retiredSubtask]);

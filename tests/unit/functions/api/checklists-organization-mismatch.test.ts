@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -60,6 +61,6 @@ describe('runs from a private template of another Organization, whose content ne
     const response = await post('http://localhost/api/checklists', { template_id: 'template-b', teamId: 'team-b' });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.insertChain.values.mock.calls[0][0].team_id).toBe('team-b');
+    expect(firstOf(dbMocks.insertChain.values.mock.calls)[0].team_id).toBe('team-b');
   });
 });

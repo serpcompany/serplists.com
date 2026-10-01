@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
@@ -25,7 +26,7 @@ async function signedUpCookie() {
 }
 
 function storedUser() {
-  return inMemoryAuth.tables.users[0];
+  return firstOf(inMemoryAuth.tables.users);
 }
 
 const uploadUrl = (base: string) => `${base}/api/uploads/file?key=${encodeURIComponent('avatars/u1/a.png')}`;

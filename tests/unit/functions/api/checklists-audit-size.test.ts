@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { apiRequest } from '../../../support/apiRequest';
@@ -44,7 +46,7 @@ const send = (path: string, method: string, body: unknown) =>
   handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
 
 function expectCompactAudit(toggledId: string) {
-  const audit = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, unknown>;
+  const audit = firstOf(dbMocks.insertChain.values.mock.calls)[0] as Record<string, unknown>;
   const total = Object.values(audit).reduce<number>(
     (sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8),
     0,
@@ -101,7 +103,10 @@ describe('run audit rows stay small, since an oversized one would fail every sav
     const response = await send('run-1/revalidate', 'POST', { expected_revision: 2 });
 
     expect(response.status).toBe(200);
-    const audit = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, string>;
+    const audit = z
+      .object({ before_json: z.string(), after_json: z.string(), diff_json: z.string() })
+      .passthrough()
+      .parse(firstOf(dbMocks.insertChain.values.mock.calls)[0]);
     expect(encoder.encode(audit.before_json + audit.after_json + audit.diff_json).byteLength).toBeLessThan(ROW_BUDGET_BYTES);
     expect(JSON.parse(audit.diff_json).retired_items).toEqual({ count: 0 });
   });

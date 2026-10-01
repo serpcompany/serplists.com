@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../../support/elements";
 import { z } from "zod";
 import {
   dbMocks,
@@ -24,7 +25,7 @@ describe("personal run MCP handler", () => {
 
   it("lists never-edited templates by when they were created, not after every edited one", async () => {
     await handleAgentMcp(mcpToolCall("list_templates"), env);
-    const orderBy = dbMocks.selectChain.orderBy.mock.calls[0].map((part: unknown) =>
+    const orderBy = firstOf(dbMocks.selectChain.orderBy.mock.calls).map((part: unknown) =>
       new SQLiteSyncDialect().sqlToQuery(part as SQL));
 
     const realSqlite = new DatabaseSync(":memory:");
@@ -80,7 +81,7 @@ describe("personal run MCP handler", () => {
 
     expect(templates.map((template) => template.id)).toEqual(["owned"]);
     expect(templates[0]).not.toHaveProperty("sections");
-    expect(body.result.content[0].text).toContain('"id":"owned"');
+    expect(firstOf(body.result.content).text).toContain('"id":"owned"');
     expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
   });
 

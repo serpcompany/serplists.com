@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { withStableItemsColumn, withStableTemplateIdentities } from '@functions/api/utils/template-identities';
 import { templateStructureChanged } from '@functions/api/utils/template-changes';
@@ -62,7 +63,7 @@ describe('withStableTemplateIdentities', () => {
     const stable = withStableTemplateIdentities(storedSectionsWithNumericBlankOrMissingIds);
 
     expect((stable[0] as Row).title).toBe('Plan');
-    expect(((stable[0] as Row).items as Row[])[0].contents).toEqual([
+    expect(firstOf((stable[0] as Row).items as Row[]).contents).toEqual([
       { type: 'text', value: 'Notes' },
       { type: 'subItems', value: '', subItems: [{ id: 'legacy-subitem-1-1-1', title: 'In a block' }, { id: 'legacy-subitem-1-1-2', title: 'No id' }] },
     ]);

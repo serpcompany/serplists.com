@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 import { drizzle } from 'drizzle-orm/d1';
 import { schema } from '@functions/api/db';
 import { insertTemplateWithHistoryFallback, isMissingRulesColumnError } from '@functions/api/utils/template-writes';
@@ -60,7 +61,7 @@ describe('insertTemplateWithHistoryFallback without the rules column', () => {
 
     expect(inserted).toBe(true);
     expect(batches).toHaveLength(2);
-    const [templateInsert] = batches[1];
+    const templateInsert = firstOf(elementAt(batches, 1));
     expect(templateInsert.sql).toMatch(/^insert into "templates" \(/);
     expect(templateInsert.sql).not.toContain('"rules"');
     expect(templateInsert.sql).toMatch(/where \(select count\(\*\) from "templates" where .*\) < \?$/);
@@ -73,9 +74,9 @@ describe('insertTemplateWithHistoryFallback without the rules column', () => {
     expect(await insertTemplateWithHistoryFallback(db, values, versionValues, auditValues)).toBe(true);
 
     expect(batches).toHaveLength(2);
-    expect(batches[1][0].sql).toMatch(/^insert into "templates" \(/);
-    expect(batches[1][0].sql).not.toContain('"rules"');
-    expect(batches[1][0].params).toEqual(expect.arrayContaining(['template-1', 'user-1', 'Template']));
+    expect(firstOf(elementAt(batches, 1)).sql).toMatch(/^insert into "templates" \(/);
+    expect(firstOf(elementAt(batches, 1)).sql).not.toContain('"rules"');
+    expect(firstOf(elementAt(batches, 1)).params).toEqual(expect.arrayContaining(['template-1', 'user-1', 'Template']));
   });
 
   it('writes rules on the first attempt when the column exists', async () => {
@@ -86,7 +87,7 @@ describe('insertTemplateWithHistoryFallback without the rules column', () => {
     await insertTemplateWithHistoryFallback(db as never, values, versionValues, auditValues);
 
     expect(batch).toHaveBeenCalledTimes(1);
-    expect(batch.mock.calls[0][0][0].toSQL().sql).toContain('"rules"');
+    expect(firstOf(firstOf(batch.mock.calls)[0]).toSQL().sql).toContain('"rules"');
   });
 });
 

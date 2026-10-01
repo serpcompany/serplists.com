@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 import { z } from 'zod';
 
@@ -137,7 +138,7 @@ describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes',
   it('still signs in an existing account whose stored password is longer than 72 bytes', async () => {
     await signUp(PASSWORD);
     const legacyPassword = `${ascii(80)}-set-before-the-limit`;
-    inMemoryAuth.tables.account[0].password = await bcrypt.hash(legacyPassword, 4);
+    firstOf(inMemoryAuth.tables.account).password = await bcrypt.hash(legacyPassword, 4);
 
     expect((await signIn(legacyPassword)).status).toBe(200);
   });

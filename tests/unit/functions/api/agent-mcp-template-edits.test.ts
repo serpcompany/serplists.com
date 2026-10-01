@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt, firstOf, sectionAt } from "../../../support/elements";
 
 import { applyTemplateOperation } from "@functions/api/handlers/agentMcpTemplateEdits";
 import { templateOperationArgs } from "@functions/api/handlers/agentMcpTemplateTools";
@@ -44,19 +45,21 @@ describe("update_template operations", () => {
       sectionId: "s1",
       section: { id: "s1", items: [{ id: "t2", title: "Kept task" }, { title: "New task", contents: [{ type: "subItems", subItems: [{ title: "New check" }] }] }] },
     });
-    const [kept, added] = replaced.sections[0].items as JsonRecord[];
+    const replacedTasks = sectionAt(replaced, 0).items as JsonRecord[];
+    const kept = firstOf(replacedTasks);
+    const added = elementAt(replacedTasks, 1);
     expect(replaced.sections[0]).toMatchObject({ id: "s1", title: "Prepare", ...KEY_THE_APP_DOES_NOT_KNOW });
     expect(kept).toEqual({ id: "t2", title: "Kept task" });
     expect(added.id).toMatch(ITEM_ID);
-    expect(((added.contents as JsonRecord[])[0].subItems as JsonRecord[])[0].id).toMatch(SUBITEM_ID);
+    expect(firstOf(firstOf(added.contents as JsonRecord[]).subItems as JsonRecord[]).id).toMatch(SUBITEM_ID);
     expect(outline(replaced.sections).slice(1)).toEqual(outline(sectionsAsRead()).slice(1));
   });
 
   it("insert_section adds a section before another or at the end, with ids for what lacks one", () => {
     const atEnd = applyParsed({ operation: "insert_section", section: { title: "Retro", items: [{ title: "Notes" }] } });
-    const added = atEnd.sections[3];
+    const added = elementAt(atEnd.sections, 3);
     expect(added.id).toMatch(SECTION_ID);
-    expect((added.items as JsonRecord[])[0].id).toMatch(ITEM_ID);
+    expect(firstOf(added.items as JsonRecord[]).id).toMatch(ITEM_ID);
     expect(atEnd.sectionId).toBe(added.id);
 
     const before = applyParsed({
@@ -81,13 +84,13 @@ describe("update_template operations", () => {
     expect(removed.sections.map(({ id }) => id)).toEqual(["s1", "s3"]);
     expect(removed).not.toHaveProperty("sectionId");
 
-    const last = toolErrorOf(() => applyParsed({ operation: "remove_section", sectionId: "s1" }, [sectionsAsRead()[0]]));
+    const last = toolErrorOf(() => applyParsed({ operation: "remove_section", sectionId: "s1" }, [firstOf(sectionsAsRead())]));
     expect(last).toMatchObject({ code: "invalid_template", message: "A template needs at least one section" });
   });
 
   it("replace_task changes the fields it is given and keeps the rest, notes and ids included", () => {
     const retitled = applyParsed({ operation: "replace_task", taskId: "t5", task: { title: "Smoke test" } });
-    expect((retitled.sections[2].items as JsonRecord[])[1]).toEqual(task("t5", { notes: "kept", title: "Smoke test" }));
+    expect((sectionAt(retitled, 2).items as JsonRecord[])[1]).toEqual(task("t5", { notes: "kept", title: "Smoke test" }));
     expect(retitled.taskId).toBe("t5");
 
     const recontented = applyParsed({
@@ -95,20 +98,20 @@ describe("update_template operations", () => {
       taskId: "t1",
       task: { id: "t1", contents: [{ type: "subItems", subItems: [{ id: "t1-sub", title: "Check" }, { title: "Double-check" }] }] },
     });
-    const subItems = ((recontented.sections[0].items as JsonRecord[])[0].contents as JsonRecord[])[0].subItems as JsonRecord[];
+    const subItems = firstOf(firstOf(sectionAt(recontented, 0).items as JsonRecord[]).contents as JsonRecord[]).subItems as JsonRecord[];
     expect(subItems[0]).toEqual({ id: "t1-sub", title: "Check" });
-    expect(subItems[1].id).toMatch(SUBITEM_ID);
-    expect((recontented.sections[0].items as JsonRecord[])[0]).toMatchObject({ title: "Task t1", description: "About t1" });
+    expect(elementAt(subItems, 1).id).toMatch(SUBITEM_ID);
+    expect((sectionAt(recontented, 0).items as JsonRecord[])[0]).toMatchObject({ title: "Task t1", description: "About t1" });
   });
 
   it("insert_task adds a task before another or at the end of a section", () => {
     const atEnd = applyParsed({ operation: "insert_task", sectionId: "s2", task: { title: "Announce" } });
-    expect(outline(atEnd.sections)[1][1]).toEqual(["t3", atEnd.taskId]);
+    expect(elementAt(outline(atEnd.sections), 1)[1]).toEqual(["t3", atEnd.taskId]);
     expect(atEnd.taskId).toMatch(ITEM_ID);
 
     const before = applyParsed({ operation: "insert_task", beforeTaskId: "t5", task: { id: "t9", title: "Warm up" } });
-    expect(outline(before.sections)[2][1]).toEqual(["t4", "t9", "t5"]);
-    expect(applyParsed({ operation: "insert_task", sectionId: "s3", beforeTaskId: "t4", task: { title: "First" } }).sections[2].items)
+    expect(elementAt(outline(before.sections), 2)[1]).toEqual(["t4", "t9", "t5"]);
+    expect(sectionAt(applyParsed({ operation: "insert_task", sectionId: "s3", beforeTaskId: "t4", task: { title: "First" } }), 2).items)
       .toHaveLength(3);
 
     const elsewhere = toolErrorOf(() => applyParsed({ operation: "insert_task", sectionId: "s1", beforeTaskId: "t4", task: { title: "Lost" } }));
@@ -118,10 +121,10 @@ describe("update_template operations", () => {
   it("move_task moves a task within or across sections, keeping its id and content", () => {
     const across = applyParsed({ operation: "move_task", taskId: "t1", beforeTaskId: "t5" });
     expect(outline(across.sections)).toEqual([["s1", ["t2"]], ["s2", ["t3"]], ["s3", ["t4", "t1", "t5"]]]);
-    expect((across.sections[2].items as JsonRecord[])[1]).toEqual(task("t1"));
+    expect((sectionAt(across, 2).items as JsonRecord[])[1]).toEqual(task("t1"));
 
     const toEnd = applyParsed({ operation: "move_task", taskId: "t4", sectionId: "s3" });
-    expect(outline(toEnd.sections)[2][1]).toEqual(["t5", "t4"]);
+    expect(elementAt(outline(toEnd.sections), 2)[1]).toEqual(["t5", "t4"]);
     expect(outline(applyParsed({ operation: "move_task", taskId: "t4", beforeTaskId: "t4" }).sections)).toEqual(outline(sectionsAsRead()));
 
     const emptied = toolErrorOf(() => applyParsed({ operation: "move_task", taskId: "t3", sectionId: "s1" }));

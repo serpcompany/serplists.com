@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
 import { apiRequest } from '../../../support/apiRequest';
@@ -47,7 +48,7 @@ describe('limit-guarded writes that lose the race to another request answer 403 
     const response = await handleChecklists(apiRequest('checklists', 'POST', { title: 'Run', sections }), mockEnv);
 
     await expectThePersonalLimitReached(response, { limit: 3, current: 3, resource: 'active_runs' });
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
 
@@ -77,7 +78,7 @@ describe('limit-guarded writes that lose the race to another request answer 403 
 
     const data = await expectThePersonalLimitReached(response, { limit: 1, current: 1, resource: 'templates' });
     expect(data).not.toHaveProperty('id');
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
   });
 
   it('MCP start_run answers limit_reached', async () => {

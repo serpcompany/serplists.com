@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { firstOf, sectionAt, taskAt } from '../../support/elements';
 import { z } from 'zod';
 
 import {
@@ -181,7 +182,7 @@ describe('Clipy template generation', () => {
         sections: [{ id: 'clipy_8fptqlnappr6_steps', title: 'Steps' }],
       },
     });
-    expect(payload.draft.sections[0].items[0].contents[0]).toMatchObject({
+    expect(taskAt(payload.draft, 0, 0).contents[0]).toMatchObject({
       type: 'video',
       value: 'https://clipy.online/video/8fptqlnappr6?ref=m4d8e9p&utm_source=serplists.com',
     });
@@ -201,7 +202,7 @@ describe('Clipy template generation', () => {
     context.transcript.plaintext = `Start ${'detailed transcript '.repeat(900)} Finish`;
     const response = await generateFrom(context);
     const payload = await readJson(response, clipyDraftBody);
-    const sourceText = payload.draft.sections[0].items[0].contents.find(
+    const sourceText = taskAt(payload.draft, 0, 0).contents.find(
       (content: { type: string }) => content.type === 'text',
     )?.value;
 
@@ -231,7 +232,7 @@ describe('Clipy template generation', () => {
     const payload = await readJson(response, clipyDraftBody);
 
     expect(
-      payload.draft.sections[0].items
+      sectionAt(payload.draft, 0).items
         .slice(1)
         .flatMap((item: { contents: Array<{ type: string; value: string }> }) => item.contents)
         .filter((content: { type: string }) => content.type === 'image')
@@ -270,9 +271,9 @@ describe('Clipy link parsing', () => {
 
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0][0]).toBe(`https://clipy.online/video/${id}.json`);
+    expect(firstOf(fetchMock.mock.calls)[0]).toBe(`https://clipy.online/video/${id}.json`);
     const payload = await readJson(response, clipyDraftBody);
-    expect(payload.draft.sections[0].items[0].contents[0].value).toBe(referredWatchUrl);
+    expect(firstOf(taskAt(payload.draft, 0, 0).contents).value).toBe(referredWatchUrl);
   });
 
   it.each([

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf, taskIn } from "../../../support/elements";
 import { dbMocks, env, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
@@ -109,7 +110,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
       responses.push(raw);
       const result = resultOf(body);
       expect(result.isError).toBeUndefined();
-      const summaryForClientsThatShowText = result.content[0].text.split("\n\n")[0];
+      const summaryForClientsThatShowText = firstOf(result.content).text.split("\n\n")[0];
       expect(summaryForClientsThatShowText).toMatch(/^(Template "Release SOP" is too large|Loaded section "Section \d+"\.)/);
       return result.structuredContent;
     }, "template-1");
@@ -175,8 +176,8 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
       expect(result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       const saved = JSON.parse(String(savedTemplate()?.items)) as JsonRecord[];
-      const inserted = (saved[0].items as JsonRecord[])[1];
-      expect((saved[0].items as JsonRecord[]).map(({ id }) => id)).toEqual(["t1", inserted.id, "t2"]);
+      const inserted = elementAt(firstOf(saved).items as JsonRecord[], 1);
+      expect((firstOf(saved).items as JsonRecord[]).map(({ id }) => id)).toEqual(["t1", inserted.id, "t2"]);
       expect(inserted).toMatchObject({ id: expect.stringMatching(/^item_/), title: "Freeze merges" });
       expect(saved[1]).toEqual(sections()[1]);
       expect(savedTemplate()).toMatchObject({ version: 5, content_version: 4 });
@@ -185,7 +186,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
         .find((values) => values.action === "template.updated");
       expect(audit?.metadata).toEqual({ source: "mcp", operation: "insert_task", personalRunKeyId: "key-1", personalRunKeyName: "Codex" });
       expect(result.structuredContent).toMatchObject({ template: { id: "template-1", version: 5 } });
-      expect(result.content[0].text).toMatch(/^Updated template "Release SOP"\./);
+      expect(firstOf(result.content).text).toMatch(/^Updated template "Release SOP"\./);
     });
 
     it("refuses a stale version, a public template, and an unknown section before writing", async () => {
@@ -223,7 +224,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
     it("returns a large template's fields and the changed task, within the bound", async () => {
       const before = templateRow(sectionsTooLargeForOneResult());
       const changed = sectionsTooLargeForOneResult();
-      changed[3].items[2] = { ...changed[3].items[2], title: "Rolled back" };
+      elementAt(changed, 3).items[2] = { ...taskIn(changed, 3, 2), title: "Rolled back" };
       mockWrite(before, templateRow(changed, { version: 5 }));
 
       const { raw, body } = await rpc("update_template", {
@@ -239,7 +240,7 @@ describe("personal run MCP template tools over the endpoint, with D1 mocked", ()
         sectionsOmitted: true,
         sectionId: "s3",
         taskId: "t3-2",
-        task: changed[3].items[2],
+        task: taskIn(changed, 3, 2),
       });
       expect(bytes(JSON.stringify(resultOf(JSON.parse(raw) as JsonRecord).structuredContent))).toBeLessThanOrEqual(MAX_RESULT_BYTES);
     });

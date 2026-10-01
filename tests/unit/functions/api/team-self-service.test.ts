@@ -1,6 +1,7 @@
 import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
 import type { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 
 import { handleTeams } from "@functions/api/handlers/teams";
@@ -58,7 +59,7 @@ function expectNoWrites() {
 function conditionalAuditQuery() {
   expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
-  return new SQLiteAsyncDialect().sqlToQuery(dbMocks.insertChain.select.mock.calls[0][0] as SQL);
+  return new SQLiteAsyncDialect().sqlToQuery(firstOf(dbMocks.insertChain.select.mock.calls)[0] as SQL);
 }
 
 const previewRequest = (token = "invite-token") =>
@@ -217,8 +218,8 @@ describe("Organization invite decline", () => {
     await handleTeams(declineRequest(), mockEnv);
 
     const revokeThenAuditOfItsRow = [dbMocks.updateChain, dbMocks.insertChain];
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual(revokeThenAuditOfItsRow);
-    const revokedAt = dbMocks.updateChain.set.mock.calls[0][0].revoked_at;
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual(revokeThenAuditOfItsRow);
+    const revokedAt = firstOf(dbMocks.updateChain.set.mock.calls)[0].revoked_at;
     const query = conditionalAuditQuery();
     expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_invites"/);
     expect(query.sql).toContain('"team_invites"."id" = ?');
@@ -301,7 +302,7 @@ describe("Leaving an Organization", () => {
     await handleTeams(leaveRequest(), mockEnv);
 
     const auditOnTheDeleteConditionThenDelete = [dbMocks.insertChain, dbMocks.deleteChain];
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual(auditOnTheDeleteConditionThenDelete);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual(auditOnTheDeleteConditionThenDelete);
     const query = conditionalAuditQuery();
     expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_members"/);
     for (const column of ["id", "team_id", "user_id"]) {

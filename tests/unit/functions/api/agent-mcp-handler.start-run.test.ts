@@ -1,6 +1,7 @@
 import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 import {
   callTool,
   dbMocks,
@@ -43,7 +44,7 @@ describe("personal run MCP handler", () => {
       title: "Release SOP",
       revision: 1,
     }));
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.user_id).toBe("user-1");
     expect(inserted.team_id).toBeNull();
     expect(JSON.parse(inserted.items)[0].items[0].isCompleted).toBe(false);
@@ -62,7 +63,7 @@ describe("personal run MCP handler", () => {
     const body = await startRun();
 
     expect(body.result.isError).toBeUndefined();
-    expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(runSections);
+    expect(JSON.parse(firstOf(dbMocks.insertChain.values.mock.calls)[0].items)).toEqual(runSections);
   });
 
   describe("Free plan active run limit", () => {
@@ -99,9 +100,11 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
-      expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: "conditional-insert" }, { kind: "conditional-insert" }]);
+      expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: "conditional-insert" }, { kind: "conditional-insert" }]);
 
-      const [runInsert, auditInsert] = dbMocks.insertChain.select.mock.calls.map(([query]) => renderSql(query));
+      const conditionalInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => renderSql(query));
+      const runInsert = firstOf(conditionalInserts);
+      const auditInsert = elementAt(conditionalInserts, 1);
       expect(runInsert.sql).toMatch(/where \(select count\(\*\) from "checklist_runs" where .*"status" = \? .*\) < \?$/s);
       expect(runInsert.params.at(-1)).toBe(3);
       const startedRunId = mcpRunResult.parse(body.result.structuredContent).run.id;
@@ -118,7 +121,7 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.select).not.toHaveBeenCalled();
-      expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: "insert" }, { kind: "insert" }]);
+      expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([{ kind: "insert" }, { kind: "insert" }]);
     });
   });
 });

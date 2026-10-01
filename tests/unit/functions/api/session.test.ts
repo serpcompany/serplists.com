@@ -2,6 +2,7 @@ import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { APIError } from 'better-auth/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { sessionCookieFrom } from '../../../support/betterAuth';
 
 const BASE_URL = 'http://localhost:8788';
@@ -9,7 +10,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const env = { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 
 function realBetterAuthWithDefaultSessionsOnAnInMemoryDatabase() {
-  const db: Record<string, any[]> = { user: [], session: [], account: [], verification: [] };
+  const db: { user: any[]; session: any[]; account: any[]; verification: any[] } = { user: [], session: [], account: [], verification: [] };
   const auth = betterAuth({
     baseURL: BASE_URL,
     basePath: '/api/auth',
@@ -47,8 +48,8 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
 
     const expiryDueForItsDailyRefresh = new Date(Date.now() + 5 * DAY_MS);
     const twoDaysAfterSignIn = new Date(Date.now() - 2 * DAY_MS);
-    db.session[0].expiresAt = expiryDueForItsDailyRefresh;
-    db.session[0].updatedAt = twoDaysAfterSignIn;
+    firstOf(db.session).expiresAt = expiryDueForItsDailyRefresh;
+    firstOf(db.session).updatedAt = twoDaysAfterSignIn;
 
     const { getSessionUserId } = await loadSessionHelper(auth);
     const userId = await getSessionUserId(
@@ -56,8 +57,8 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
       env,
     );
 
-    expect(userId).toBe(db.user[0].id);
-    expect(new Date(db.session[0].expiresAt).getTime()).toBe(expiryDueForItsDailyRefresh.getTime());
+    expect(userId).toBe(firstOf(db.user).id);
+    expect(new Date(firstOf(db.session).expiresAt).getTime()).toBe(expiryDueForItsDailyRefresh.getTime());
 
     const sessionCheck = await auth.handler(
       new Request(`${BASE_URL}/api/auth/get-session`, { headers: { Cookie: cookie } }),
@@ -67,7 +68,7 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     expect(refreshedCookie).toContain('better-auth.session_token=');
     const maxAge = Number(refreshedCookie.match(/Max-Age=(\d+)/)?.[1]);
     expect(maxAge).toBeGreaterThan(7 * 24 * 60 * 60 - 60);
-    expect(new Date(db.session[0].expiresAt).getTime()).toBeGreaterThan(Date.now() + 6.9 * DAY_MS);
+    expect(new Date(firstOf(db.session).expiresAt).getTime()).toBeGreaterThan(Date.now() + 6.9 * DAY_MS);
   });
 
   it('asks Better Auth for a read-only lookup and returns null when there is no session', async () => {
@@ -100,7 +101,7 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     await expect(getSessionUserId(request, env)).rejects.toBe(lookupError);
 
     expect(errorLines).toHaveLength(1);
-    expect(JSON.parse(errorLines[0])).toMatchObject({
+    expect(JSON.parse(firstOf(errorLines))).toMatchObject({
       level: 'error',
       message: 'session_lookup_failed',
       requestId: 'req-1',
@@ -124,7 +125,7 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     const { getSessionUserId } = await import('../../../../functions/api/utils/session');
 
     await expect(getSessionUserId(new Request(`${BASE_URL}/api/teams`), env)).rejects.toThrow('BETTER_AUTH_SECRET');
-    expect(JSON.parse(errorLines[0])).toMatchObject({ message: 'session_lookup_failed', errorName: 'Error' });
+    expect(JSON.parse(firstOf(errorLines))).toMatchObject({ message: 'session_lookup_failed', errorName: 'Error' });
     vi.restoreAllMocks();
   });
 });

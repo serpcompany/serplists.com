@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
 import { guardedInserts } from '../../../support/recordedGuardedInserts';
 import { personalRunRow } from '../../../fixtures/handlerRows';
@@ -60,8 +61,8 @@ describe('stopping a run share, which makes the run private and ends its old lin
       share_expires_at: null,
       share_used_at: null,
     }));
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('revision');
-    const updateWhere = sqlText(dbMocks.updateChain.where.mock.calls[0][0]);
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty('revision');
+    const updateWhere = sqlText(firstOf(dbMocks.updateChain.where.mock.calls)[0]);
     expect(updateWhere).toContain('"is_public" = ?');
     expect(updateWhere).toContain('"deleted_at" is null');
     expect(updateWhere).toContain('"user_id" = ?');
@@ -73,15 +74,15 @@ describe('stopping a run share, which makes the run private and ends its old lin
     await stopSharing();
 
     expect(guardedInserts).toHaveLength(1);
-    expect(guardedInserts[0].values).toEqual(expect.objectContaining({
+    expect(firstOf(guardedInserts).values).toEqual(expect.objectContaining({
       action: 'checklist_run.share_revoked',
       resource_type: 'checklist_run',
       resource_id: 'run-1',
       actor_user_id: 'user-123',
     }));
-    expect(JSON.stringify(guardedInserts[0].values)).not.toContain('leaked-token');
-    expect(sqlText(guardedInserts[0].condition)).toContain('"is_public" = ?');
-    const [firstStatement] = dbMocks.db.batch.mock.calls[0][0] as unknown[];
+    expect(JSON.stringify(firstOf(guardedInserts).values)).not.toContain('leaked-token');
+    expect(sqlText(firstOf(guardedInserts).condition)).toContain('"is_public" = ?');
+    const [firstStatement] = firstOf(dbMocks.db.batch.mock.calls)[0] as unknown[];
     expect(firstStatement).toEqual({ guardedInsert: 'checklist_run.share_revoked' });
   });
 
@@ -94,7 +95,7 @@ describe('stopping a run share, which makes the run private and ends its old lin
     const { response } = await stopSharing();
 
     expect(response.status).toBe(200);
-    expect(sqlText(dbMocks.updateChain.where.mock.calls[0][0])).toContain('"team_id" = ?');
+    expect(sqlText(firstOf(dbMocks.updateChain.where.mock.calls)[0])).toContain('"team_id" = ?');
   });
 
   it('refuses an Organization viewer', async () => {

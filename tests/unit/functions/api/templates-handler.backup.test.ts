@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, importBody, mockEnv, PRO_PLAN, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
@@ -47,7 +48,7 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.version).toBe('1.0.0');
     expect(Array.isArray(data.templates)).toBe(true);
-    expect(data.templates[0].version).toBe(1);
+    expect(firstOf(data.templates).version).toBe(1);
   });
 
   it('should import templates from backup for pro users', async () => {
@@ -67,7 +68,7 @@ describe('Templates Handlers', () => {
       }),
     ]);
     expect(dbMocks.db.batch).toHaveBeenCalled();
-    expect(dbMocks.db.batch.mock.calls[0][0]).toHaveLength(3);
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toHaveLength(3);
     expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'template.imported',

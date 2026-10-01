@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -42,7 +43,7 @@ describe('password reset through the app\'s Better Auth configuration on an in-m
     expect(attackerSignIn.status).toBe(200);
     const attackerCookie = sessionCookieFrom(attackerSignIn);
 
-    const userId = inMemoryAuth.tables.users[0].id;
+    const userId = firstOf(inMemoryAuth.tables.users).id;
     expect(await userIdFor(victimCookie)).toBe(userId);
     expect(await userIdFor(attackerCookie)).toBe(userId);
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks, slugBody } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -46,7 +47,7 @@ describe('Templates Handlers', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.slug.length).toBeLessThanOrEqual(160);
     expect(inserted.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
@@ -65,7 +66,7 @@ describe('Templates Handlers', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const storedSlug = dbMocks.updateChain.set.mock.calls[0][0].slug;
+    const storedSlug = firstOf(dbMocks.updateChain.set.mock.calls)[0].slug;
     expect(storedSlug.length).toBeLessThanOrEqual(160);
     expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
@@ -86,7 +87,7 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('moving-checklist-1a2b3c4d');
-    expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(data.slug);
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0].slug).toBe(data.slug);
   });
 
   it('keeps and returns the stored slug when a title edit requests none, so shared links keep working', async () => {
@@ -103,7 +104,7 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('existing-template');
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('slug');
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty('slug');
   });
 
   describe('slugs made from titles in any language', () => {
@@ -125,7 +126,7 @@ describe('Templates Handlers', () => {
 
       expect(response.status).toBe(200);
       expect(data.slug).toBe(slug);
-      expect(dbMocks.insertChain.values.mock.calls[0][0]).toEqual(expect.objectContaining({ slug }));
+      expect(firstOf(dbMocks.insertChain.values.mock.calls)[0]).toEqual(expect.objectContaining({ slug }));
     });
 
     it('folds the letters of a custom slug typed with accents', async () => {
@@ -170,7 +171,7 @@ describe('Templates Handlers', () => {
     });
 
     expect(response.status).toBe(200);
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(updates).toEqual(expect.objectContaining({ title: 'Q&A: Launch plan (fixed typo)' }));
     expect(updates).not.toHaveProperty('slug');
   });
@@ -179,7 +180,7 @@ describe('Templates Handlers', () => {
     const response = await putToTheTemplateWithALegacySlug({ is_public: true, slug: 'qanda:-launch-plan-1a2b3c4d' });
 
     expect(response.status).toBe(200);
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(updates).toEqual(expect.objectContaining({ is_public: true }));
     expect(updates).not.toHaveProperty('slug');
   });
@@ -214,7 +215,7 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('qanda:-launch-plan-1a2b3c4d');
-    const whereArg = dbMocks.selectChain.where.mock.calls[0][0];
+    const whereArg = firstOf(dbMocks.selectChain.where.mock.calls)[0];
     expect(paramValuesIn(whereArg)).toContain('qanda:-launch-plan-1a2b3c4d');
   });
 

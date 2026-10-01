@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
 
 import { calculateRunProgress, reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
@@ -19,8 +20,8 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] },
     ], []);
 
-    expect(sectionsOf(result)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
-    expect(sectionsOf(result)[1].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
+    expect(taskIn(sectionsOf(result), 1, 1)).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(taskIn(sectionsOf(result), 1, 0)).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
     expect(result.retired).toEqual([]);
     expect(result.newlyRetired).toEqual([]);
     expect(calculateRunProgress(result.sections)).toBe(calculateRunProgress(previous));
@@ -32,21 +33,21 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [] },
     ], []);
 
-    expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
+    expect(taskIn(sectionsOf(result), 0, 0)).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
     expect(result.retired).toEqual([]);
   });
 
   it('leaves a moved task out of the section it left when that section is removed', () => {
     const result = reconcileRunSections(previous, [{ id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] }], []);
 
-    expect(sectionsOf(result)[0].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(taskIn(sectionsOf(result), 0, 1)).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
     expect(result.newlyRetired).toEqual([{ kind: 'section', section: { id: 'A', title: 'Plan', items: [y] } }]);
   });
 
   it('retires nothing for a removed section whose tasks all moved', () => {
     const result = reconcileRunSections(previous, [{ id: 'B', title: 'Ship', items: [fresh(x), fresh(z), fresh(y)] }], []);
 
-    expect(sectionsOf(result)[0].items.map((item) => [item.id, item.isCompleted])).toEqual([['x', true], ['z', true], ['y', false]]);
+    expect(firstOf(sectionsOf(result)).items.map((item) => [item.id, item.isCompleted])).toEqual([['x', true], ['z', true], ['y', false]]);
     expect(result.retired).toEqual([]);
   });
 
@@ -56,7 +57,7 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] },
     ], []);
     const untickedAndNotedAgainInItsNewSection = structuredClone(sectionsOf(moved));
-    untickedAndNotedAgainInItsNewSection[1].items[1] = { ...untickedAndNotedAgainInItsNewSection[1].items[1], isCompleted: false, notes: 'vendor called back' };
+    elementAt(untickedAndNotedAgainInItsNewSection, 1).items[1] = { ...taskIn(untickedAndNotedAgainInItsNewSection, 1, 1), isCompleted: false, notes: 'vendor called back' };
     const stale = { kind: 'item', sectionId: 'A', item: x };
 
     const back = reconcileRunSections(untickedAndNotedAgainInItsNewSection, [
@@ -64,7 +65,7 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [fresh(z)] },
     ], [stale]);
 
-    expect(sectionsOf(back)[0].items[0]).toEqual(expect.objectContaining({ id: 'x', isCompleted: false, notes: 'vendor called back' }));
+    expect(taskIn(sectionsOf(back), 0, 0)).toEqual(expect.objectContaining({ id: 'x', isCompleted: false, notes: 'vendor called back' }));
     expect(back.newlyRetired).toEqual([]);
   });
 
@@ -84,8 +85,8 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s1)) }] },
       ], []);
 
-      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems).toEqual([{ id: 's1', title: 'Quote', isCompleted: true }]);
-      expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([{ id: 's2', title: 'Invoice', isCompleted: false }]);
+      expect(contentAt(taskIn(sectionsOf(result), 1, 0), 0).subItems).toEqual([{ id: 's1', title: 'Quote', isCompleted: true }]);
+      expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([{ id: 's2', title: 'Invoice', isCompleted: false }]);
       expect(result.retired).toEqual([]);
     });
 
@@ -95,8 +96,8 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s2)) }] },
       ], []);
 
-      expect(sectionsOf(result)[0].items[0].isCompleted).toBe(true);
-      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems?.[0]).toEqual({ id: 's2', title: 'Invoice', isCompleted: false });
+      expect(taskIn(sectionsOf(result), 0, 0).isCompleted).toBe(true);
+      expect(subTaskAt(contentAt(taskIn(sectionsOf(result), 1, 0), 0), 0)).toEqual({ id: 's2', title: 'Invoice', isCompleted: false });
       expect(result.retired).toEqual([]);
     });
 
@@ -106,7 +107,7 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s1)) }] },
       ], []);
 
-      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems?.[0]).toEqual({ id: 's1', title: 'Quote', isCompleted: true });
+      expect(subTaskAt(contentAt(taskIn(sectionsOf(result), 1, 0), 0), 0)).toEqual({ id: 's1', title: 'Quote', isCompleted: true });
       expect(result.newlyRetired).toEqual([{
         kind: 'item',
         sectionId: 'A',
@@ -128,21 +129,21 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: '1', title: 'First' }] },
       ], []);
 
-      expect(sectionsOf(result).map((section) => section.items[0].notes)).toEqual(['a', 'b']);
+      expect(sectionsOf(result).map((section) => firstOf(section.items).notes)).toEqual(['a', 'b']);
       expect(result.retired).toEqual([]);
     });
 
     it('retires the copy of a removed section instead of moving it', () => {
       const result = reconcileRunSections(legacy, [{ id: 'B', title: 'Ship', items: [{ id: '1', title: 'First' }] }], []);
 
-      expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ notes: 'b', isCompleted: false }));
+      expect(taskIn(sectionsOf(result), 0, 0)).toEqual(expect.objectContaining({ notes: 'b', isCompleted: false }));
       expect(result.newlyRetired).toEqual([{ kind: 'section', section: legacy[0] }]);
     });
 
     it('never guesses which copy moved to another section', () => {
       const result = reconcileRunSections(legacy, [{ id: 'C', title: 'Later', items: [{ id: '1', title: 'First' }] }], []);
 
-      expect(sectionsOf(result)[0].items[0]).toEqual({ id: '1', title: 'First', isCompleted: false });
+      expect(taskIn(sectionsOf(result), 0, 0)).toEqual({ id: '1', title: 'First', isCompleted: false });
       expect(result.newlyRetired).toHaveLength(2);
     });
   });

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, expectSuccessUpdating, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -88,7 +89,7 @@ describe('Templates Handlers', () => {
       rules: expect.stringContaining('Updated rule'),
       slug: 'updated-template-slug',
     });
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('content_version');
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty('content_version');
   });
 
   it('rejects a stale template editor version before writing', async () => {

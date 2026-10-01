@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 import { z } from "zod";
 import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
@@ -119,7 +120,7 @@ describe("Teams handler", () => {
     const response = await updateTheTeam({ name: "New Team", slug: storedSlug });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ name: "New Team" }));
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty("slug");
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(expect.objectContaining({ name: "New Team" }));
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty("slug");
   });
 });

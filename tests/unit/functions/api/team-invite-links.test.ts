@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHandlerMocks } from "../../../support/teamsHandler";
 import { z } from "zod";
 
@@ -30,7 +31,7 @@ function newLinkRequest(body?: unknown, inviteId = "invite-1") {
   return new Request(`http://localhost/api/teams/team-1/invites/${inviteId}/link`, {
     method: "POST",
     headers: { Origin: "https://app.serplists.test" },
-    body: typeof body === "undefined" ? undefined : JSON.stringify(body),
+    ...(typeof body === "undefined" ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -39,7 +40,7 @@ async function replaceTheLinkAsAnAdmin() {
     .mockResolvedValueOnce([membership("admin")])
     .mockResolvedValueOnce([pendingInvite()]);
   const response = await handleTeams(newLinkRequest(), mockEnv);
-  return { response, data: await readJson(response, inviteLinkBody), storedChanges: () => dbMocks.updateChain.set.mock.calls[0][0] };
+  return { response, data: await readJson(response, inviteLinkBody), storedChanges: () => firstOf(dbMocks.updateChain.set.mock.calls)[0] };
 }
 
 describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost link since only its token hash is kept", () => {
@@ -84,7 +85,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
   it("repeats the pending checks in the write, scoped to this Organization", async () => {
     await replaceTheLinkAsAnAdmin();
 
-    const whereColumns = columnNamesIn(dbMocks.updateChain.where.mock.calls[0][0]);
+    const whereColumns = columnNamesIn(firstOf(dbMocks.updateChain.where.mock.calls)[0]);
     expect(whereColumns).toEqual(
       expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
@@ -97,7 +98,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
     expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledTimes(1);
-    const auditInput = auditMocks.buildAuditEventValues.mock.calls[0][0];
+    const auditInput = firstOf(auditMocks.buildAuditEventValues.mock.calls)[0];
     expect(auditInput.action).toBe("team_invite.link_reissued");
     const auditText = JSON.stringify(auditInput);
     expect(auditText).not.toContain(data.inviteToken);
@@ -115,8 +116,8 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(200);
     expect(data.role).toBe("editor");
-    expect(dbMocks.updateChain.set.mock.calls[0][0].role).toBe("editor");
-    expect(auditMocks.buildAuditEventValues.mock.calls[0][0]).toEqual(
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0].role).toBe("editor");
+    expect(firstOf(auditMocks.buildAuditEventValues.mock.calls)[0]).toEqual(
       expect.objectContaining({
         before: expect.objectContaining({ role: "viewer" }),
         after: expect.objectContaining({ role: "editor" }),
@@ -152,7 +153,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(404);
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
-    const whereColumns = columnNamesIn(dbMocks.selectChain.where.mock.calls[1][0]);
+    const whereColumns = columnNamesIn(elementAt(dbMocks.selectChain.where.mock.calls, 1)[0]);
     expect(whereColumns).toEqual(
       expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );

@@ -1,4 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { firstOf } from "../../../support/elements";
 import {
   getStripeBillingConfig,
   isMissingStripeCustomer,
@@ -10,6 +11,7 @@ import {
   stripePostForm,
   verifyStripeWebhookSignature,
 } from "@functions/api/utils/stripe";
+import { apiEnv } from "../../../support/apiEnv";
 import { hmacSha256Hex } from "./support/stripe-webhook";
 
 afterEach(() => {
@@ -81,7 +83,7 @@ describe("stripePostForm", () => {
       idempotencyKey: "checkout-user-1-window",
     });
 
-    const [, options] = fetchMock.mock.calls[0];
+    const [, options] = firstOf(fetchMock.mock.calls);
     expect(options.headers["Idempotency-Key"]).toBe("checkout-user-1-window");
     expect(options.body).toBe("mode=subscription");
   });
@@ -104,7 +106,7 @@ describe("stripeGet", () => {
 
     await expect(stripeGet("sk_test_example", "/v1/subscriptions/sub_1")).resolves.toEqual({ id: "sub_1" });
 
-    const [url, options] = fetchMock.mock.calls[0];
+    const [url, options] = firstOf(fetchMock.mock.calls);
     expect(url).toBe("https://api.stripe.com/v1/subscriptions/sub_1");
     expect(options.method).toBe("GET");
     expect(options.headers.Authorization).toBe("Bearer sk_test_example");
@@ -150,13 +152,11 @@ describe("stripeGet", () => {
 
 describe("getStripeBillingConfig", () => {
   const config = (legacy?: string) =>
-    getStripeBillingConfig({
-      DB: {} as D1Database,
-      R2_UPLOADS: {} as R2Bucket,
+    getStripeBillingConfig(apiEnv({
       STRIPE_SECRET_KEY: "sk_test_example",
       STRIPE_PRO_PRICE_ID: "price_new",
-      STRIPE_PRO_LEGACY_PRICE_IDS: legacy,
-    });
+      ...(legacy === undefined ? {} : { STRIPE_PRO_LEGACY_PRICE_IDS: legacy }),
+    }));
 
   it("grants Pro for the checkout price alone when no legacy prices are set", () => {
     expect(config()?.proPriceIds).toEqual(["price_new"]);

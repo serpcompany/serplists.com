@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { firstOf, valueAt } from "../../../support/elements";
 import { z } from "zod";
 import {
   byteLength,
@@ -53,7 +54,7 @@ describe("personal run MCP handler", () => {
       limit: MAX_RESULT_BYTES,
     });
     expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-    expect(body.result.content[0].text).toMatch(/^Run "Release SOP" is too large to return at once, so this is its outline/);
+    expect(firstOf(body.result.content).text).toMatch(/^Run "Release SOP" is too large to return at once, so this is its outline/);
     expect(markPersonalRunKeyUsed).toHaveBeenCalled();
   });
 
@@ -86,7 +87,7 @@ describe("personal run MCP handler", () => {
         sectionsOmitted: true,
       });
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-      expect(body.result.content[0].text).toBe(
+      expect(firstOf(body.result.content).text).toBe(
         `Started run "Release SOP". It is too large for one result; read it with get_run.\n\n${toJson(body.result.structuredContent)}`,
       );
     });
@@ -142,9 +143,9 @@ describe("personal run MCP handler", () => {
       ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: false }],
     ])("allows unchecking with %s on a run already over the content limit, which counts every task as unticked", async (operation, fields) => {
       const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024);
-      const task1 = (sections[0].items as JsonRecord[])[0];
+      const task1 = firstOf(firstOf(sections).items as JsonRecord[]);
       task1.isCompleted = true;
-      for (const subtask of (task1.contents as JsonRecord[])[0].subItems as JsonRecord[]) subtask.isCompleted = true;
+      for (const subtask of firstOf(task1.contents as JsonRecord[]).subItems as JsonRecord[]) subtask.isCompleted = true;
       expect(contentSaveBytes(sections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
         items: JSON.stringify(sections),
@@ -209,7 +210,7 @@ describe("personal run MCP handler", () => {
       for (const name of mutatingTools) {
         vi.mocked(markPersonalRunKeyUsed).mockClear();
         dbMocks.db.batch.mockClear();
-        const body = await toolBody(await calls[name]());
+        const body = await toolBody(await valueAt(calls, name)());
         expect(dbMocks.db.batch, name).toHaveBeenCalledOnce();
         expect(body.result.isError, name).toBeUndefined();
         const { structuredContent } = body.result;
@@ -256,7 +257,7 @@ describe("personal run MCP handler", () => {
         taskId: "task-1",
         taskOmitted: true,
       });
-      expect(body.result.content[0].text)
+      expect(firstOf(body.result.content).text)
         .toMatch(/^Updated run "Release SOP"\. The task is too large for one result; read it with get_run and taskId\./);
     });
 
@@ -277,7 +278,7 @@ describe("personal run MCP handler", () => {
       const nextPage = await read({ cursor: firstPage.structuredContent.nextCursor });
       expect(sectionPage.parse(nextPage.structuredContent).section.firstTask)
         .toBe(sectionPage.parse(firstPage.structuredContent).section.items.length);
-      expect(nextPage.content[0].text).toMatch(/^Loaded tasks \d+-\d+ of the \d+ in a section too large for one result\./);
+      expect(firstOf(nextPage.content).text).toMatch(/^Loaded tasks \d+-\d+ of the \d+ in a section too large for one result\./);
 
       expect((await read({ taskId: "nope" })).structuredContent.error).toBe("task_not_found");
 

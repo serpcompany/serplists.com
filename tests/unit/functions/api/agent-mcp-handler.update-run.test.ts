@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../../support/elements";
 import { z } from "zod";
 import {
   callTool,
@@ -63,7 +64,7 @@ describe("personal run MCP handler", () => {
     });
 
     expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ revision: 4, progress: 100 }));
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     const sections = JSON.parse(updates.items);
     expect(sections[0].items[0].isCompleted).toBe(true);
     expect(sections[0].items[0].contents[0].subItems.every((item: any) => item.isCompleted)).toBe(true);
@@ -92,7 +93,7 @@ describe("personal run MCP handler", () => {
     expect(body.result.structuredContent.error).toBe("edit_conflict");
     expect(dbMocks.updateChain.set).toHaveBeenCalledOnce();
     expect(dbMocks.db.batch).toHaveBeenCalledOnce();
-    expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([
+    expect(firstOf(dbMocks.db.batch.mock.calls)[0]).toEqual([
       { kind: "conditional-insert" },
       dbMocks.updateChain,
     ]);
@@ -108,7 +109,7 @@ describe("personal run MCP handler", () => {
       status: "in_progress",
       progress: 67,
     }));
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(updates).not.toHaveProperty("completed_at");
     expect(updates).not.toHaveProperty("completed_by_user_id");
   });
@@ -119,7 +120,7 @@ describe("personal run MCP handler", () => {
     const body = await setRunStatus("completed");
 
     expect(body.result.isError).toBeUndefined();
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(updates.status).toBe("completed");
     expect(updates).not.toHaveProperty("completed_at");
     expect(updates).not.toHaveProperty("completed_by_user_id");
@@ -131,7 +132,7 @@ describe("personal run MCP handler", () => {
     const body = await setRunStatus("completed");
 
     expect(body.result.isError).toBeUndefined();
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+    const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(updates.completed_by_user_id).toBe("user-1");
     expect(typeof updates.completed_at).toBe("string");
   });
@@ -180,7 +181,7 @@ describe("personal run MCP handler", () => {
       })));
 
       expect(body.result.isError).toBeUndefined();
-      expect(dbMocks.updateChain.set.mock.calls[0][0]).toEqual(expect.objectContaining({ status: "completed" }));
+      expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(expect.objectContaining({ status: "completed" }));
     });
 
     it("completes a run whose every task and Sub-task is done, legacy completed keys included", async () => {
@@ -190,7 +191,7 @@ describe("personal run MCP handler", () => {
       ));
 
       expect(body.result.isError).toBeUndefined();
-      const updates = dbMocks.updateChain.set.mock.calls[0][0];
+      const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(updates).toEqual(expect.objectContaining({ status: "completed", completed_by_user_id: "user-1" }));
     });
   });

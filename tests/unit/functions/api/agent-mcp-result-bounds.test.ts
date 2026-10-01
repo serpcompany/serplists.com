@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf, sectionAt, valueAt } from "../../../support/elements";
 import { callToolWithAFreshRunKey, openAFreshMcpDatabase } from "../../../support/agentMcpOnSqlite";
 import type { SqliteD1 } from "../../../support/sqlite-d1";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
@@ -45,7 +46,7 @@ function maximumTemplateSections(): JsonRecord[] {
     sections.push({ id: `s${index}`, title: `Section ${index}`, items: Array.from({ length: 10 }, (_, t) => task(`s${index}-t${t}`, 500)) });
   }
   expect(sections.length).toBeLessThanOrEqual(CREATE_TEMPLATE_MAX_SECTIONS);
-  const last = ((sections.at(-1)?.items as JsonRecord[])[0].contents as JsonRecord[])[0];
+  const last = firstOf(firstOf(sections.at(-1)?.items as JsonRecord[]).contents as JsonRecord[]);
   const bytesLeft = TEMPLATE_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   last.value = multibyteProse(String(last.value).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
@@ -84,7 +85,7 @@ function liveContentJustUnderTheRunLimit(): JsonRecord[] {
   for (let index = 0; contentSaveBytes(sections) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
     sections.push({ id: `area-${index}`, title: `Area ${index}`, items: Array.from({ length: 12 }, (_, t) => runTask(`area-${index}-${t}`, 500)) });
   }
-  const filler = (sections.at(-1)?.items as JsonRecord[])[0];
+  const filler = firstOf(sections.at(-1)?.items as JsonRecord[]);
   const bytesLeft = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(sections);
   filler.notes = multibyteProse(String(filler.notes).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
   return sections;
@@ -110,7 +111,7 @@ function maximumRun(): { sections: JsonRecord[]; retired: JsonRecord[] } {
 }
 
 function withRoomForTheLongestNotes(run: { sections: JsonRecord[]; retired: JsonRecord[] }) {
-  (run.sections[0].items as JsonRecord[]).splice(0, 2);
+  (sectionAt(run, 0).items as JsonRecord[]).splice(0, 2);
   return run;
 }
 
@@ -160,9 +161,9 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
     const results = [
       await call("update_template", { templateId, expectedVersion: 1, operation: "replace_task", taskId: "big", task: { title: "Bigger" } }),
     ];
-    results.push(await call("update_template", { templateId, expectedVersion: versionOf(results[0]), title: `${costliestJsonText(TEMPLATE_TITLE_MAX - 1)}!` }));
+    results.push(await call("update_template", { templateId, expectedVersion: versionOf(firstOf(results)), title: `${costliestJsonText(TEMPLATE_TITLE_MAX - 1)}!` }));
     const sections = maximumTemplateSections().reverse();
-    results.push(await call("update_template", { templateId, expectedVersion: versionOf(results[1]), sections }));
+    results.push(await call("update_template", { templateId, expectedVersion: versionOf(elementAt(results, 1)), sections }));
     expect(results.map(versionOf)).toEqual([2, 3, 4]);
     return results;
   },
@@ -217,7 +218,7 @@ describe("the largest result of every MCP tool", () => {
   });
 
   it.each(toolDefinitions.map((tool) => tool.name))("keeps every %s result within the bound", async (name) => {
-    const results = await cases[name]();
+    const results = await valueAt(cases, name)();
 
     expect(results.length).toBeGreaterThan(0);
     for (const result of results) expect(resultBytes(result), name).toBeLessThanOrEqual(MAX_RESULT_BYTES);

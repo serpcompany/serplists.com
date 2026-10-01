@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetToASignedOutVisitorOnTheFreePlan } from '../../../support/apiHandlerMocks';
 import { guardedInserts } from '../../../support/recordedGuardedInserts';
 
@@ -129,10 +130,10 @@ describe('run history of share-link edits', () => {
 
     const { text, events } = await history('owner-123');
 
-    expect(events[0].actor).toEqual(hidden);
+    expect(firstOf(events).actor).toEqual(hidden);
     expect(text).not.toContain('visitor-1@example.com');
     expect(text).not.toContain('Name visitor-1');
-    expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'owner-123', email: 'owner-123@example.com' }));
+    expect(elementAt(events, 1).actor).toEqual(expect.objectContaining({ userId: 'owner-123', email: 'owner-123@example.com' }));
   });
 
   it('hides an Organization run\'s share-link actors who are not active members, checking only share-link events', async () => {
@@ -148,10 +149,10 @@ describe('run history of share-link edits', () => {
 
     const { text, events } = await history('viewer-9');
 
-    expect(events[0].actor).toEqual(hidden);
+    expect(firstOf(events).actor).toEqual(hidden);
     expect(text).not.toContain('visitor-1@example.com');
-    expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'member-1' }));
-    expect(events[2].actor).toEqual(expect.objectContaining({ userId: 'former-1' }));
+    expect(elementAt(events, 1).actor).toEqual(expect.objectContaining({ userId: 'member-1' }));
+    expect(elementAt(events, 2).actor).toEqual(expect.objectContaining({ userId: 'former-1' }));
   });
 
   it('hides a former member only on their share-link events, not on their other edits', async () => {
@@ -167,9 +168,9 @@ describe('run history of share-link edits', () => {
 
     const { events } = await history('viewer-9');
 
-    expect(events[0].actor).toEqual(hidden);
-    expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
-    expect(events[2].actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
+    expect(firstOf(events).actor).toEqual(hidden);
+    expect(elementAt(events, 1).actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
+    expect(elementAt(events, 2).actor).toEqual(expect.objectContaining({ userId: 'former-1', email: 'former-1@example.com' }));
   });
 
   it('skips the membership lookup when no share-link event names anyone', async () => {
@@ -180,7 +181,7 @@ describe('run history of share-link edits', () => {
 
     const { events } = await history('viewer-9');
 
-    expect(events[0].actor).toEqual(hidden);
+    expect(firstOf(events).actor).toEqual(hidden);
     expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(3);
   });
 });

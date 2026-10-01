@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import {
   dbMocks,
   expectTheOrganizationPlanChecked,
@@ -30,7 +31,7 @@ async function insertedRunOf(response: Response) {
 
   expect(response.status).toBe(200);
   expect(data.id).toBeDefined();
-  return dbMocks.insertChain.values.mock.calls[0][0];
+  return firstOf(dbMocks.insertChain.values.mock.calls)[0];
 }
 
 async function insertedOrganizationRunOf(response: Response) {
@@ -119,7 +120,7 @@ describe('Checklists Handlers', () => {
     const response = await post({ template_id: 'template-1' });
 
     expect(response.status).toBe(200);
-    const storedItems = JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items);
+    const storedItems = JSON.parse(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
     expect(storedItems).toEqual(runSections);
     const progressTheRunPageShows = calculateSectionsProgress(normalizeSections(storedItems));
     expect(progressTheRunPageShows).toBe(0);

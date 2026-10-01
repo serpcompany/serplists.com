@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -42,7 +43,7 @@ function theRunAndItsTemplate(run: Record<string, unknown>, templateVersion: num
     .mockResolvedValueOnce([personalTemplateRow({ version: templateVersion, is_public: false, items: JSON.stringify(templateSections) })]);
 }
 
-const savedUpdate = () => dbMocks.updateChain.set.mock.calls[0][0];
+const savedUpdate = () => firstOf(dbMocks.updateChain.set.mock.calls)[0];
 
 describe('Checklists Handlers', () => {
   beforeEach(() => {

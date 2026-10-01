@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
@@ -60,7 +61,7 @@ function template(overrides: Record<string, unknown> = {}) {
 async function send(handler: typeof handleChecklists, path: string, method: string, body?: unknown) {
   const response = await handler(new Request(`http://localhost/api/${path}`, {
     method,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   }), mockEnv);
   return { status: response.status, body: await readJson(response, jsonObject) };
 }
@@ -86,7 +87,7 @@ function recordTheStatementsEachWriteBuilds() {
 
 function batchStatements(): Statement[] {
   expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
-  return dbMocks.db.batch.mock.calls[0][0] as Statement[];
+  return firstOf(dbMocks.db.batch.mock.calls)[0] as Statement[];
 }
 
 function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: string[]) {

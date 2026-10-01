@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -26,7 +27,7 @@ const runWithNotesFillingItTo = (bytes: number, templateBytes: number, task: Tas
   const template = sectionsMeasuringExactly(templateBytes);
   const withNotes = (notes: string) => [{
     ...template[0],
-    items: template[0].items.map((item) => ({ ...item, isCompleted: false, ...task, ...(item.id === 'item-1' ? { notes } : {}) })),
+    items: firstOf(template).items.map((item) => ({ ...item, isCompleted: false, ...task, ...(item.id === 'item-1' ? { notes } : {}) })),
   }];
   return withNotes('n'.repeat(bytes - contentSaveBytes(withNotes(''))));
 };
@@ -113,7 +114,7 @@ describe('Template content limit', () => {
       { id: 'run-full', items: JSON.stringify(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES - 100, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
       { id: 'run-small', items: JSON.stringify(runWithNotesFillingItTo(templateBytes + 1000, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
     ]);
-    const grown = [{ ...stored[0], items: [...stored[0].items, { id: 'item-2', title: 'New', description: '', contents: [{ id: 'content-2', type: 'text', value: 'y'.repeat(1000) }] }] }];
+    const grown = [{ ...stored[0], items: [...firstOf(stored).items, { id: 'item-2', title: 'New', description: '', contents: [{ id: 'content-2', type: 'text', value: 'y'.repeat(1000) }] }] }];
 
     const response = await put(grown);
     const data = await response.json();

@@ -17,7 +17,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let runWhileStripeCreatesTheCustomer: (() => void) | null;
 let pathWhereTheFirstCallWaitsForTheSecond: "/v1/customers" | "/v1/checkout/sessions" | null;
 
-type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey?: string };
+type Call = { method: string; url: string; form: URLSearchParams; idempotencyKey: string | undefined };
 
 function createStripeWithItsIdempotencyRules() {
   const keys = new Map<string, { body: string; response?: string }>();

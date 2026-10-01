@@ -1,4 +1,5 @@
 import { assert, beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 import type { z } from "zod";
 import {
   callToolWithAFreshRunKey,
@@ -117,7 +118,7 @@ describe("MCP list tools on the migrated tables", () => {
       const costliest = pages.flatMap((page) => page.templates).find(({ id }) => id === "t-000");
       expect(String(costliest?.title)).toHaveLength(160);
       expect(String(costliest?.description)).toHaveLength(500);
-      expect(pages[0].templates).toEqual(expect.arrayContaining([
+      expect(firstOf(pages).templates).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "checklist", contentVersion: 1, createdAt: expect.any(String) }),
       ]));
     });

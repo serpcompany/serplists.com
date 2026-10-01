@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt, firstOf, sectionAt, taskIn } from "../../../support/elements";
 
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
@@ -129,7 +130,7 @@ describe("get_run results", () => {
       outline: outlineOf(view.sections),
       limit: MAX_RESULT_BYTES,
     });
-    const entry = (outline.outline as JsonRecord[])[3];
+    const entry = elementAt(outline.outline as JsonRecord[], 3);
     expect(String(entry.title).endsWith("…")).toBe(true);
     expect((readRun(view, { sectionId: "long" }).section as JsonRecord).title).toBe(longTitle);
     expect(describeRunRead(outline)).toBe(
@@ -143,7 +144,7 @@ describe("get_run results", () => {
 
     const outlinePages = results.filter((result) => Array.isArray(result.outline));
     expect(outlinePages.length).toBeGreaterThan(1);
-    expect(outlinePages[1].run).toEqual(ref);
+    expect(elementAt(outlinePages, 1).run).toEqual(ref);
     expect(run).toEqual(wholeOf(view));
   });
 
@@ -152,7 +153,7 @@ describe("get_run results", () => {
 
     expect(readRun(view, { sectionId: "s2" })).toEqual({ run: ref, section: view.sections[2] });
     const found = readRun(view, { taskId: "t2-3" });
-    expect(found).toEqual({ run: ref, sectionId: "s2", task: (view.sections[2].items as JsonRecord[])[3] });
+    expect(found).toEqual({ run: ref, sectionId: "s2", task: (sectionAt(view, 2).items as JsonRecord[])[3] });
     expect(describeRunRead(found)).toBe('Loaded task "Task t2-3".');
   });
 
@@ -162,12 +163,12 @@ describe("get_run results", () => {
 
     const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: (first.items as unknown[]).length });
-    expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(view.sections[0].items);
+    expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(sectionAt(view, 0).items);
     for (const page of pages) {
       expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
       expect(page.run).toEqual(ref);
     }
-    expect(describeRunRead(pages[1])).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows: call get_run/);
+    expect(describeRunRead(elementAt(pages, 1))).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows: call get_run/);
   });
 
   it("returns a task whose notes are too large for one result in parts whose text joins into it", () => {
@@ -180,8 +181,8 @@ describe("get_run results", () => {
       expect(page).toMatchObject({ run: ref, sectionId: "s1", part: { of: "task", index: 1 } });
     }
     const text = pages.map((page) => (page.part as JsonRecord).text).join("");
-    expect(JSON.parse(text)).toEqual(asTheClientReceives((view.sections[0].items as JsonRecord[])[1]));
-    expect(describeRunRead(pages[0])).toContain("join its parts' text in order");
+    expect(JSON.parse(text)).toEqual(asTheClientReceives((sectionAt(view, 0).items as JsonRecord[])[1]));
+    expect(describeRunRead(firstOf(pages))).toContain("join its parts' text in order");
   });
 
   it("keeps every result within the bound and reads any run back in full", async () => {
@@ -234,7 +235,7 @@ describe("get_run retired work", () => {
     expect(readRun(view, { retired: true, sectionId: "old" }).retiredItems).toEqual([view.retired[0], view.retired[2]]);
     expect(readRun(view, { retired: true, taskId: "t1" }).retiredItems).toEqual([view.retired[3]]);
     expect(readRun(view, { retired: true, taskId: "dns" }).retiredItems).toEqual([view.retired[1], view.retired[2]]);
-    const oldSection = view.retired[0].section as JsonRecord;
+    const oldSection = firstOf(view.retired).section as JsonRecord;
     const oldSectionNarrowedToItsSecondTask = { kind: "section", section: { ...oldSection, items: [(oldSection.items as JsonRecord[])[1]] } };
     expect(readRun(view, { retired: true, sectionId: "old", taskId: "old-2" }).retiredItems).toEqual([oldSectionNarrowedToItsSecondTask]);
   });
@@ -278,7 +279,7 @@ describe("get_run retired work", () => {
       if (!page.part) expect(page).toMatchObject({ retiredCount: 302, firstRetired: expect.any(Number) });
     }
     expect(pages.some((page) => (page.part as JsonRecord | undefined)?.of === "retiredItem")).toBe(true);
-    expect(describeRunRead(pages[0])).toMatch(/^Loaded retired entries 1-\d+ of the 302, too many for one result\. More follows/);
+    expect(describeRunRead(firstOf(pages))).toMatch(/^Loaded retired entries 1-\d+ of the 302, too many for one result\. More follows/);
     expect(await readRetiredWork((args) => asTheClientReceives(readRun(large, args as RunReadArgs)))).toEqual(asTheClientReceives(large.retired));
 
     const sectionPages = everyPageOf(large, { retired: true, sectionId: "s1" });
@@ -334,7 +335,7 @@ describe("a run at the size limits", () => {
     for (let index = 0; contentSaveBytes(live) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
       live.push(section(`area-${index}`, Array.from({ length: 12 }, (_, t) => notedTask(`area-${index}-${t}`, 700))));
     }
-    const filler = (live.at(-1)?.items as JsonRecord[])[0];
+    const filler = firstOf(live.at(-1)?.items as JsonRecord[]);
     const bytesLeft = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(live);
     filler.notes = multibyteProse(String(filler.notes).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
     return live;
@@ -392,7 +393,7 @@ describe("run write results", () => {
       run: header,
       sectionId: "s1",
       taskId: "t1",
-      task: stored[0].items[0],
+      task: taskIn(stored, 0, 0),
     });
     expect(updatedRunResult(header, stored, { ...notes, taskId: "big" })).toEqual({
       run: header,

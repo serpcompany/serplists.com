@@ -1,5 +1,6 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
 import { runWithRequestId } from '@functions/api/utils/request-context';
 
@@ -19,7 +20,7 @@ describe('log', () => {
 
     log('info', 'api_request', { requestId: 'req-1', status: 200 });
 
-    expect(JSON.parse(lines[0])).toMatchObject({ level: 'info', message: 'api_request', requestId: 'req-1', status: 200 });
+    expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'info', message: 'api_request', requestId: 'req-1', status: 200 });
   });
 
   it('tags every line logged while a request is handled with its id, awaits included, so one query finds them all', async () => {
@@ -40,7 +41,7 @@ describe('log', () => {
 
     runWithRequestId('req-ctx', () => log('info', 'api_request', { requestId: 'req-explicit' }));
 
-    expect(JSON.parse(lines[0]).requestId).toBe('req-explicit');
+    expect(JSON.parse(firstOf(lines)).requestId).toBe('req-explicit');
   });
 
   it('redacts personal data and secrets whatever the key casing', () => {
@@ -56,7 +57,7 @@ describe('log', () => {
       cookie: 'better-auth.session_token=SECRET',
     });
 
-    const line = lines[0];
+    const line = firstOf(lines);
     for (const secret of ['203.0.113.5', 'alice@example.com', 'hunter2hunter2', 'SECRET']) {
       expect(line).not.toContain(secret);
     }
@@ -79,9 +80,9 @@ describe('log', () => {
       expect(line).not.toContain('alice@example.com');
       expect(line).not.toContain('params:');
     }
-    expect(JSON.parse(lines[0]).error).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: overloaded' });
-    expect(JSON.parse(lines[1]).error).toBe('Failed query: select "id" from "users" where lower("email") = ?');
-    expect(JSON.parse(lines[2])).toMatchObject({ userId: 'user-1' });
+    expect(JSON.parse(firstOf(lines)).error).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: overloaded' });
+    expect(JSON.parse(elementAt(lines, 1)).error).toBe('Failed query: select "id" from "users" where lower("email") = ?');
+    expect(JSON.parse(elementAt(lines, 2))).toMatchObject({ userId: 'user-1' });
   });
 
   it('never lets a field overwrite the level, event name or timestamp', () => {
@@ -89,8 +90,8 @@ describe('log', () => {
 
     log('error', 'env_validation_error', { message: 'bad FRONTEND_URL', level: 'info', timestamp: 'x' });
 
-    expect(JSON.parse(lines[0])).toMatchObject({ level: 'error', message: 'env_validation_error' });
-    expect(JSON.parse(lines[0]).timestamp).not.toBe('x');
+    expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'error', message: 'env_validation_error' });
+    expect(JSON.parse(firstOf(lines)).timestamp).not.toBe('x');
   });
 });
 

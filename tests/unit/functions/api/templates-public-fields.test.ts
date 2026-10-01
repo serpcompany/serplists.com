@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { elementAt, firstOf } from '../../../support/elements';
 import { dbMocks } from '../../../support/mockedDrizzleD1';
 import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
@@ -115,9 +116,9 @@ describe('public template responses, which never say who in an Organization crea
     const { status, body } = await get(path, templateRows);
 
     expect(status).toBe(200);
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
     expect(body[0]).toMatchObject({ id: 'template-1', user_id: 'creator-1', owner_type: 'team', version: 4 });
-    expect(body[0].sections).toEqual(sections);
+    expect(firstOf(body).sections).toEqual(sections);
   });
 
   it.each([
@@ -149,7 +150,7 @@ describe('public template responses, which never say who in an Organization crea
 
     const { body } = await get('/api/templates?scope=public', templateRows);
 
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
   });
 
   it('a Public Profile sends only public fields', async () => {
@@ -158,7 +159,7 @@ describe('public template responses, which never say who in an Organization crea
     const { status, body } = await get('/api/templates/public?userId=user-9', templateRows);
 
     expect(status).toBe(200);
-    expectPublicShape(body[0]);
+    expectPublicShape(firstOf(body));
   });
 
   it('the signed-in unscoped list keeps full rows for the user\'s own templates only', async () => {
@@ -168,7 +169,7 @@ describe('public template responses, which never say who in an Organization crea
     const { body } = await get('/api/templates', templateRows);
 
     expect(body[0]).toMatchObject({ id: 'template-2', updated_by_user_id: 'user-9', owner_type: 'user' });
-    expectPublicShape(body[1]);
+    expectPublicShape(elementAt(body, 1));
   });
 
   it('an Organization member reading by slug still gets the full row', async () => {

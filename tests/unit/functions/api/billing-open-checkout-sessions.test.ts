@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { capturedGroup, firstOf } from "../../../support/elements";
 import { sessionMocks } from "../../../support/mockedSession";
 import "../../../support/checkoutWithoutARateLimit";
 import {
@@ -47,7 +48,7 @@ function metadataFrom(form: URLSearchParams): Record<string, string> {
   const metadata: Record<string, string> = {};
   for (const [key, value] of form) {
     const match = /^metadata\[(.+)\]$/.exec(key);
-    if (match) metadata[match[1]] = value;
+    if (match) metadata[capturedGroup(match, 1)] = value;
   }
   return metadata;
 }
@@ -188,9 +189,9 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   it("asks Stripe only for this customer's open sessions", async () => {
     await checkout();
 
-    const [listCall] = fetchMock.mock.calls
+    const listCall = firstOf(fetchMock.mock.calls
       .map(([input]) => new URL(String(input)))
-      .filter((url) => url.pathname === "/v1/checkout/sessions");
+      .filter((url) => url.pathname === "/v1/checkout/sessions"));
     expect(listCall.searchParams.get("customer")).toBe(CUSTOMER_ID);
     expect(listCall.searchParams.get("status")).toBe("open");
   });
@@ -212,7 +213,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 
   it("replaces a matching session that expires within the hour", async () => {
     await checkout();
-    const [nearlyDone] = sessions;
+    const nearlyDone = firstOf(sessions);
     advanceMinutes(24 * 60 - 30);
 
     const result = await checkout();
@@ -226,7 +227,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
   it("keeps the newest matching session and expires every other one", async () => {
     await checkout();
     advanceMinutes(10);
-    const [firstSession] = sessions;
+    const firstSession = firstOf(sessions);
     const newerSessionLeftFromBeforeThisCheck = addSession({ metadata: { ...firstSession.metadata } });
     advanceMinutes(10);
 
@@ -305,7 +306,7 @@ describe("POST /api/billing/checkout with an open Checkout Session", () => {
 describe("POST /api/billing/checkout after a first payment did not go through, which only a retry in its session can pay", () => {
   it("sends the buyer back to the session that holds the incomplete subscription", async () => {
     const first = await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     advanceMinutes(10);
     fetchMock.mockClear();
 
@@ -320,7 +321,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("does the same before the webhook has stored the subscription", async () => {
     const first = await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1", { stored: false });
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1", { stored: false });
     advanceMinutes(10);
 
     const retry = await checkout();
@@ -331,7 +332,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("replaces a session about to expire once expiring it has canceled its subscription", async () => {
     await checkout();
-    const [declined] = sessions;
+    const declined = firstOf(sessions);
     declinePaymentLeavingItsSubscriptionIncomplete(declined, "sub_1");
     advanceMinutes(24 * 60 - 30);
 
@@ -356,7 +357,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("does not reuse the session when another subscription is paid", async () => {
     await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_paid", "active"));
 
     const result = await checkout();
@@ -367,7 +368,7 @@ describe("POST /api/billing/checkout after a first payment did not go through, w
 
   it("keeps sending a failed renewal to the Customer Portal even with a session open", async () => {
     await checkout();
-    declinePaymentLeavingItsSubscriptionIncomplete(sessions[0], "sub_1");
+    declinePaymentLeavingItsSubscriptionIncomplete(firstOf(sessions), "sub_1");
     subscriptionsStripeLists.push(subscriptionOnTheCustomer("sub_old", "past_due"));
 
     const result = await checkout();

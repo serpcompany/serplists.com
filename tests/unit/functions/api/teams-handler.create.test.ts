@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { elementAt, firstOf } from "../../../support/elements";
 import { z } from "zod";
 import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, sessionMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
@@ -45,8 +46,8 @@ describe("Teams handler", () => {
     expect(data.slug).toBe("acme-team");
     expect(data.role).toBe("owner");
 
-    const insertedTeam = dbMocks.insertChain.values.mock.calls[0][0];
-    const insertedMembership = dbMocks.insertChain.values.mock.calls[1][0];
+    const insertedTeam = firstOf(dbMocks.insertChain.values.mock.calls)[0];
+    const insertedMembership = elementAt(dbMocks.insertChain.values.mock.calls, 1)[0];
     expect(insertedTeam.name).toBe("Acme Team");
     expect(insertedTeam.billing_owner_user_id).toBe("user-1");
     expect(insertedMembership.role).toBe("owner");
@@ -86,7 +87,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe("acme");
-    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe("acme");
+    expect(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug).toBe("acme");
   });
 
   it("suffixes a name-derived slug that is taken", async () => {
@@ -97,7 +98,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data.slug).toMatch(/^acme-[0-9a-f]{8}$/);
-    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe(data.slug);
+    expect(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug).toBe(data.slug);
   });
 
   describe("slug races between the check and the write", () => {

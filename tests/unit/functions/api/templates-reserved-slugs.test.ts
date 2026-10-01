@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
 import bundledCatalog from '../../../../functions/sitemap/bundled-catalog.generated.json';
@@ -62,7 +63,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     const response = await post('/api/templates', { title: 'My copy', slug, sections });
 
     expect(response.status).toBe(200);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expectSuffixed(inserted.slug, slug);
     expect((await readJson(response, slugBody)).slug).toBe(inserted.slug);
   });
@@ -71,7 +72,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     const response = await post('/api/templates', { title: titleFor(slug), sections });
 
     expect(response.status).toBe(200);
-    expectSuffixed(dbMocks.insertChain.values.mock.calls[0][0].slug, slug);
+    expectSuffixed(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug, slug);
   });
 
   it.each(bundledSlugs)('suffixes an imported Template titled like %s', async (slug) => {
@@ -83,7 +84,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     });
 
     expect(response.status).toBe(200);
-    expectSuffixed(dbMocks.insertChain.values.mock.calls[0][0].slug, slug);
+    expectSuffixed(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug, slug);
   });
 
   it.each(bundledSlugs)('suffixes a clone of a public Template titled like %s', async (slug) => {
@@ -107,7 +108,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     const response = await post('/api/templates/template-1/clone', { visibility: 'private' });
 
     expect(response.status).toBe(200);
-    expectSuffixed(dbMocks.insertChain.values.mock.calls[0][0].slug, slug);
+    expectSuffixed(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug, slug);
   });
 
   it.each(bundledSlugs)('suffixes a rename to %s', async (slug) => {
@@ -116,17 +117,17 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     const response = await put(slug);
 
     expect(response.status).toBe(200);
-    expectSuffixed(dbMocks.updateChain.set.mock.calls[0][0].slug, slug);
+    expectSuffixed(firstOf(dbMocks.updateChain.set.mock.calls)[0].slug, slug);
   });
 
   it('keeps a slug a Template already holds, which the editor resends with every save, so saving never changes its shared URL', async () => {
-    const [slug] = bundledSlugs;
+    const slug = firstOf(bundledSlugs);
     dbMocks.selectChain.limit.mockResolvedValueOnce([existingTemplate(slug)]);
 
     const response = await put(slug, { title: 'Renamed Template' });
 
     expect(response.status).toBe(200);
-    const stored = dbMocks.updateChain.set.mock.calls[0][0];
+    const stored = firstOf(dbMocks.updateChain.set.mock.calls)[0];
     expect(stored.title).toBe('Renamed Template');
     expect(stored).not.toHaveProperty('slug');
   });
@@ -135,7 +136,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     const response = await post('/api/templates', { title: 'Camping checklist for families', sections });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe('camping-checklist-for-families');
+    expect(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug).toBe('camping-checklist-for-families');
   });
 });
 
@@ -151,7 +152,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     const response = await post('/api/templates', { title: 'My checklist', slug: uuid, sections });
 
     expect(response.status).toBe(200);
-    const inserted = dbMocks.insertChain.values.mock.calls[0][0];
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expectNotUuid(inserted.slug);
     expect((await readJson(response, slugBody)).slug).toBe(inserted.slug);
   });
@@ -160,7 +161,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     const response = await post('/api/templates', { title, sections });
 
     expect(response.status).toBe(200);
-    expectNotUuid(dbMocks.insertChain.values.mock.calls[0][0].slug);
+    expectNotUuid(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug);
   });
 
   it('suffixes an imported Template titled with a UUID', async () => {
@@ -172,7 +173,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     });
 
     expect(response.status).toBe(200);
-    expectNotUuid(dbMocks.insertChain.values.mock.calls[0][0].slug);
+    expectNotUuid(firstOf(dbMocks.insertChain.values.mock.calls)[0].slug);
   });
 
   it.each([uuid, uuid.toUpperCase()])('suffixes a rename to %s and returns the slug it stored', async (slug) => {
@@ -181,7 +182,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     const response = await put(slug);
 
     expect(response.status).toBe(200);
-    const stored = dbMocks.updateChain.set.mock.calls[0][0].slug;
+    const stored = firstOf(dbMocks.updateChain.set.mock.calls)[0].slug;
     expectNotUuid(stored);
     expect((await readJson(response, slugBody)).slug).toBe(stored);
   });
@@ -192,6 +193,6 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     const response = await put(uuid, { title: 'Renamed Template' });
 
     expect(response.status).toBe(200);
-    expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('slug');
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty('slug');
   });
 });

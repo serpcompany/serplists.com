@@ -4,9 +4,10 @@ import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Row = Record<string, any>;
-const memory = vi.hoisted(() => ({
-  db: {} as Record<string, Row[]>,
-  claimBetweenCheckAndWrite: null as null | { id: string; username: string },
+type MemoryTables = { users: Row[]; session: Row[]; account: Row[]; verification: Row[] };
+const memory = vi.hoisted((): { db: MemoryTables; claimBetweenCheckAndWrite: null | { id: string; username: string } } => ({
+  db: { users: [], session: [], account: [], verification: [] },
+  claimBetweenCheckAndWrite: null,
 }));
 
 function uniqueUsernameErrorAsDrizzleWrapsD1s(): Error {

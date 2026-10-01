@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks } from '../../../support/mockedDrizzleD1';
 import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
@@ -10,7 +11,7 @@ import { readJson } from '../../../support/readJson';
 
 const profileBody = z.object({ id: z.string(), username: z.string() }).passthrough();
 
-const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(dbMocks.selectChain.where.mock.calls[0][0] as SQL).sql;
+const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(firstOf(dbMocks.selectChain.where.mock.calls)[0] as SQL).sql;
 
 describe('Profiles Handlers', () => {
   let mockEnv: any;

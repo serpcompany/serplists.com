@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 
 import bundledCatalog from '../../../functions/sitemap/bundled-catalog.generated.json';
 import { categorySlug } from '../../../functions/sitemap/shared';
@@ -121,7 +122,7 @@ describe('categories sitemap index and shard on SQLite with the real triggers, w
     const { shard } = await buildBoth();
     const listed = Array.from(
       shard.matchAll(/<loc>https:\/\/serplists\.com\/categories\/([^<]+)\/<\/loc>/g),
-      (match) => match[1],
+      (match) => capturedGroup(match, 1),
     );
     const used = new Set(
       [...bundledCatalog.templates.flatMap((template) => template.categories), 'Outdoor Gear', 'Engineering']

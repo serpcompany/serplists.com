@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
 import {
   calculateRunProgress,
@@ -73,20 +74,20 @@ describe('template run reconciliation', () => {
 
     const result = reconcileRunSections(originalRun, evolvedTemplate, []);
 
-    expect(sectionsOf(result)[0].title).toBe('Launch content');
-    expect(sectionsOf(result)[0].items.map((item) => item.id)).toEqual([
+    expect(firstOf(sectionsOf(result)).title).toBe('Launch content');
+    expect(firstOf(sectionsOf(result)).items.map((item) => item.id)).toEqual([
       'item-media',
       'item-copy',
     ]);
-    expect(sectionsOf(result)[0].items[0].isCompleted).toBe(false);
-    expect(sectionsOf(result)[0].items[1]).toMatchObject({
+    expect(taskIn(sectionsOf(result), 0, 0).isCompleted).toBe(false);
+    expect(taskIn(sectionsOf(result), 0, 1)).toMatchObject({
       id: 'item-copy',
       title: 'Write listing copy',
       description: 'New instructions',
       isCompleted: false,
       notes: 'Approved by Devin',
     });
-    expect(sectionsOf(result)[0].items[1].contents?.[0].subItems).toEqual([
+    expect(contentAt(taskIn(sectionsOf(result), 0, 1), 0).subItems).toEqual([
       { id: 'sub-long', title: 'Full description', isCompleted: false },
       { id: 'sub-tagline', title: 'Tagline', isCompleted: false },
       { id: 'sub-short', title: 'Short copy', isCompleted: true },
@@ -223,17 +224,17 @@ describe('template run reconciliation', () => {
     const result = reconcileRunSections(legacyRun, firstEvolution, []);
 
     expect(sectionsOf(result)[0]).toMatchObject({ id: 'legacy-section-1', title: 'Renamed content section' });
-    expect(sectionsOf(result)[0].items[0]).toMatchObject({
+    expect(taskIn(sectionsOf(result), 0, 0)).toMatchObject({
       id: 'legacy-item-1-1',
       title: 'Renamed copy task',
       isCompleted: false,
       notes: 'Legacy note',
     });
-    expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([
+    expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
       expect.objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
       expect.objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
     ]);
-    expect(sectionsOf(result)[0].items[1]).toMatchObject({
+    expect(taskIn(sectionsOf(result), 0, 1)).toMatchObject({
       id: 'legacy-item-1-2',
       isCompleted: false,
     });
@@ -293,7 +294,7 @@ describe('template run reconciliation', () => {
       { id: 's', title: 'S', items: [{ id: 'task', title: 'Write copy', contents: blocks.map(block) }, { id: 'publish', title: 'Publish' }] },
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
-      sectionsOf(reconcileRunSections(previous, next, []))[0].items[0];
+      taskIn(sectionsOf(reconcileRunSections(previous, next, [])), 0, 0);
     const subTasksBlockRows = (item: Json): Json[] => (item.contents ?? [])
       .filter((content: Json) => content.type === 'subItems')
       .flatMap((content: Json) => content.subItems ?? []);
@@ -301,7 +302,7 @@ describe('template run reconciliation', () => {
     it('reopens a completed task when the template adds a Sub-task to it', () => {
       const previous = run(true, subTasks(['short', true], ['long', true]));
       const result = reconcileRunSections(previous, template(subTasks(['short'], ['long'], ['tagline'])), []);
-      const task: Json = sectionsOf(result)[0].items[0];
+      const task: Json = taskIn(sectionsOf(result), 0, 0);
 
       expect(task.isCompleted).toBe(false);
       expect(subTasksBlockRows(task).map((subItem) => [subItem.id, subItem.isCompleted]))
@@ -329,7 +330,7 @@ describe('template run reconciliation', () => {
       const task = reconciledTask(previous, template(subTasks(['short'])));
 
       expect(task.isCompleted).toBe(true);
-      expect(subTasksBlockRows(task)[0].isCompleted).toBe(true);
+      expect(firstOf(subTasksBlockRows(task)).isCompleted).toBe(true);
     });
 
     it('never leaves a task complete with an unfinished Sub-task', () => {

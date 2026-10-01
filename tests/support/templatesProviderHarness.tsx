@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, vi } from 'vitest';
 
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
-import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
+import type { ChecklistTemplate, TemplateSavePayload, TemplatesContextProps } from '@/types/checklist';
 
 import { PERSONAL_WORKSPACE } from '../fixtures/workspaces';
 
@@ -37,6 +37,25 @@ export const launchChecklist = (overrides: Partial<ChecklistTemplate> = {}): Che
   tags: [],
   version: 3,
   ...overrides,
+});
+
+export const savePayloadOf = ({
+  id, title, sections, isPublic, slug, seoUrl, description, type, seoTitle, seoDescription, rules, categories, tags, version,
+}: ChecklistTemplate): TemplateSavePayload => ({
+  id,
+  title,
+  sections,
+  isPublic,
+  slug,
+  seoUrl,
+  ...(description === undefined ? {} : { description }),
+  ...(type === undefined ? {} : { type }),
+  ...(seoTitle === undefined ? {} : { seoTitle }),
+  ...(seoDescription === undefined ? {} : { seoDescription }),
+  ...(rules === undefined ? {} : { rules }),
+  ...(categories === undefined ? {} : { categories }),
+  ...(tags === undefined ? {} : { tags }),
+  ...(version === undefined ? {} : { version }),
 });
 
 export function aTemplatesProviderForEachTest() {

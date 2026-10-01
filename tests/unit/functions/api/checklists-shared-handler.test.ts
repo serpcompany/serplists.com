@@ -1,4 +1,5 @@
 import { assert, describe, it, expect, beforeEach, vi } from 'vitest';
+import { elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
 import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, PRO_PLAN, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -60,14 +61,14 @@ function sectionsTheSharePageRendered() {
 }
 
 function contentsOfTheFirstTask(sections: typeof storedSections) {
-  const { contents } = sections[0].items[0];
+  const { contents } = taskIn(sections, 0, 0);
   assert.exists(contents);
   return contents;
 }
 
 function sectionsWithEveryTaskAndSubTaskTicked() {
   const sections = sectionsTheSharePageRendered();
-  for (const item of sections[0].items) {
+  for (const item of firstOf(sections).items) {
     item.isCompleted = true;
     for (const content of item.contents ?? []) {
       for (const subItem of content.subItems ?? []) subItem.isCompleted = true;
@@ -86,7 +87,7 @@ async function putShared(body: unknown) {
 
 function storedUpdate(): Record<string, unknown> {
   expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
-  return dbMocks.updateChain.set.mock.calls[0][0];
+  return firstOf(dbMocks.updateChain.set.mock.calls)[0];
 }
 
 const stripGuestState = (value: unknown) => withoutKeys(value, ['isCompleted', 'notes']);
@@ -129,13 +130,13 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('applies only completion from a payload that also rewrites titles, contents, and adds tasks', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    sections[0].title = 'Hacked section';
-    sections[0].items[0].title = 'Log in here';
-    sections[0].items[0].description = 'Visit https://attacker.example';
-    sections[0].items[0].isCompleted = true;
-    contentsOfTheFirstTask(sections)[0].value = '[Log in](https://attacker.example)';
-    (sections[0].items[0].contents as unknown[]).push({ type: 'file', value: 'https://attacker.example/x.exe' });
-    (sections[0].items as unknown[]).push({ id: 'item-99', title: 'Injected', isCompleted: true });
+    firstOf(sections).title = 'Hacked section';
+    taskIn(sections, 0, 0).title = 'Log in here';
+    taskIn(sections, 0, 0).description = 'Visit https://attacker.example';
+    taskIn(sections, 0, 0).isCompleted = true;
+    firstOf(contentsOfTheFirstTask(sections)).value = '[Log in](https://attacker.example)';
+    (taskIn(sections, 0, 0).contents as unknown[]).push({ type: 'file', value: 'https://attacker.example/x.exe' });
+    (firstOf(sections).items as unknown[]).push({ id: 'item-99', title: 'Injected', isCompleted: true });
     (sections as unknown[]).push({ id: 'section-99', title: 'Injected', items: [{ id: 'item-98', title: 'Injected' }] });
 
     const { response } = await putShared({ sections, title: 'Renamed run', expected_revision: 3 });
@@ -245,7 +246,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('refuses to complete a run whose ticked task still has an open Sub-task', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsWithEveryTaskAndSubTaskTicked();
-    contentsOfTheFirstTask(sections)[1].subItems![1].isCompleted = false;
+    subTaskAt(elementAt(contentsOfTheFirstTask(sections), 1), 1).isCompleted = false;
 
     await expectIncompleteAndRefused(sections, 1);
   });
@@ -273,7 +274,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('keeps saving notes on a run completed before the rule, open tasks and all', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ status: 'completed', completed_at: '2026-02-01T00:00:00.000Z' })]);
     const sections = sectionsTheSharePageRendered();
-    (sections[0].items[1] as Record<string, unknown>).notes = 'Shipped anyway';
+    (taskIn(sections, 0, 1) as Record<string, unknown>).notes = 'Shipped anyway';
 
     const { response } = await putShared({ sections, status: 'completed', expected_revision: 3 });
 
@@ -309,7 +310,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('rejects oversized notes', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    (sections[0].items[0] as Record<string, unknown>).notes = 'x'.repeat(5001);
+    (taskIn(sections, 0, 0) as Record<string, unknown>).notes = 'x'.repeat(5001);
 
     const { response } = await putShared({ sections, expected_revision: 3 });
 
@@ -320,9 +321,9 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('saves guest notes and sub-item completion matched by id', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    (sections[0].items[0] as Record<string, unknown>).notes = 'Guest note';
-    contentsOfTheFirstTask(sections)[1].subItems!.reverse();
-    const [sub2AfterTheReverse] = contentsOfTheFirstTask(sections)[1].subItems!;
+    (taskIn(sections, 0, 0) as Record<string, unknown>).notes = 'Guest note';
+    elementAt(contentsOfTheFirstTask(sections), 1).subItems!.reverse();
+    const sub2AfterTheReverse = firstOf(elementAt(contentsOfTheFirstTask(sections), 1).subItems!);
     sub2AfterTheReverse.isCompleted = true;
 
     const { response } = await putShared({ sections, expected_revision: 3 });
@@ -365,11 +366,11 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('records the merged state, not the raw payload, in the audit event', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    sections[0].items[0].title = 'Log in here';
+    taskIn(sections, 0, 0).title = 'Log in here';
 
     await putShared({ sections, expected_revision: 3 });
 
-    const audit = dbMocks.insertChain.values.mock.calls[0][0];
+    const audit = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(audit.action).toBe('checklist_run.shared_updated');
     expect(audit.diff_json).not.toContain('Log in here');
   });

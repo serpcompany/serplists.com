@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf, sectionAt } from '../../../support/elements';
 import { z } from 'zod';
 import { dbMocks, mockEnv, resetTemplatesHandlerMocks, slugBody } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
@@ -35,11 +36,11 @@ describe('Templates Handlers', () => {
     const data = await readJson(response, templateListBody);
 
     expect(response.status).toBe(200);
-    expect(data[0].sections).toHaveLength(1);
-    expect(data[0].sections[0].items).toHaveLength(1);
-    expect(data[0].categories).toEqual(['seo']);
-    expect(data[0].tags).toEqual(['tag-1']);
-    expect(data[0].ownerProfile).toEqual({
+    expect(firstOf(data).sections).toHaveLength(1);
+    expect(sectionAt(firstOf(data), 0).items).toHaveLength(1);
+    expect(firstOf(data).categories).toEqual(['seo']);
+    expect(firstOf(data).tags).toEqual(['tag-1']);
+    expect(firstOf(data).ownerProfile).toEqual({
       username: 'alice',
       full_name: 'Alice Example',
     });
@@ -79,7 +80,7 @@ describe('Templates Handlers', () => {
       const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv);
       expect(response.status).toBe(200);
       const data = await readJson(response, templateOrList);
-      return Array.isArray(data) ? data[0] : data;
+      return Array.isArray(data) ? firstOf(data) : data;
     };
 
     it.each(readRoutes)('%s sends parsed sections without the raw items column', async (_label, path, kind) => {
@@ -110,7 +111,7 @@ describe('Templates Handlers', () => {
     const response = await handleTemplates(apiRequest(path), mockEnv);
 
     expect(response.status).toBe(200);
-    return columnNamesIn(dbMocks.selectChain.where.mock.calls[0][0]);
+    return columnNamesIn(firstOf(dbMocks.selectChain.where.mock.calls)[0]);
   }
 
   it('should scope authenticated template lists to public or personal-owned templates', async () => {
@@ -157,8 +158,8 @@ describe('Templates Handlers', () => {
     const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
-    expect(data[0].id).toBe('template-1');
-    expect(data[0].team_id).toBe('team-1');
+    expect(firstOf(data).id).toBe('template-1');
+    expect(firstOf(data).team_id).toBe('team-1');
   });
 
   it('should return saved SEO metadata in template responses', async () => {

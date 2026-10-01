@@ -1,5 +1,6 @@
 import { createEdgeCache, serverContext, unreachableD1 } from '../../../support/mockedServerContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 
 import { generateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
@@ -177,7 +178,7 @@ describe('template page metadata cache', () => {
 
     expect(again.kind).toBe('found');
     expect(d1.queries.length).toBe(queries);
-    const [[key, stored]] = [...edgeCache.entries];
+    const [key, stored] = firstOf([...edgeCache.entries]);
     expect(key).toBe('https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist');
     expect(stored.headers.get('Cache-Control')).toBe('public, s-maxage=300');
   });

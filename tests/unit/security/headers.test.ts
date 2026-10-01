@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
+import { elementAt } from '../../support/elements';
 
 import { templatePackModules } from '@/data/public-template-packs';
 import { renderStaticHeaders } from '@/lib/http/securityHeaders';
@@ -13,7 +14,7 @@ const productionContentSecurityPolicy = (): Map<string, string[]> => {
   if (!line) throw new Error('public/_headers has no Content-Security-Policy line');
 
   const directives = new Map<string, string[]>();
-  for (const directive of line.split('Content-Security-Policy:')[1].split(';')) {
+  for (const directive of elementAt(line.split('Content-Security-Policy:'), 1).split(';')) {
     const [name, ...sources] = directive.trim().split(/\s+/);
     if (name) directives.set(name, sources);
   }
@@ -104,7 +105,8 @@ describe('deployment security headers', () => {
     for (const link of [...YOUTUBE_VIDEO_LINKS, ...CLIPY_VIDEO_LINKS]) {
       const source = getVideoEmbedSource(link);
       expect({ link, kind: source?.kind }).toEqual({ link, kind: 'iframe' });
-      expect({ link, allowed: frameSources.has(new URL(source!.url).origin) }).toEqual({
+      assert.exists(source);
+      expect({ link, allowed: frameSources.has(new URL(source.url).origin) }).toEqual({
         link,
         allowed: true,
       });

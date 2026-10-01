@@ -1,5 +1,6 @@
 import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
@@ -135,7 +136,7 @@ describe('cached sitemaps', () => {
 
     expect(head.status).toBe(200);
     expect(await head.text()).toBe('');
-    expect(build.mock.calls[0][0].method).toBe('GET');
+    expect(firstOf(build.mock.calls)[0].method).toBe('GET');
     expect(await get.text()).toBe('<urlset/>');
     expect(build).toHaveBeenCalledOnce();
   });
@@ -256,7 +257,7 @@ describe('cached sitemaps', () => {
     revisions = allKinds.map((each) => [each, `2030-01-0${allKinds.indexOf(each) + 1} 00:00:00.000`]);
     const build = builder();
     await serve(build, 'https://serplists.com/sitemaps/templates/1.xml', 'GET', { kind: 'templates', page: '1' });
-    expect([...build.mock.calls[0][1]]).toEqual([['templates', '2030-01-03 00:00:00.000']]);
+    expect([...firstOf(build.mock.calls)[1]]).toEqual([['templates', '2030-01-03 00:00:00.000']]);
   });
 
   it('rejects unsupported methods before reading D1', async () => {

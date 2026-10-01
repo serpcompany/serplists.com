@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { describe, expect, it } from "vitest";
+import { firstOf, onlyElement } from "../../../support/elements";
 import {
   cleanupLocalTestData,
   LEGACY_TEST_TEMPLATE_SLUGS,
@@ -33,7 +34,7 @@ function migratedLocalD1DrivenAsTheSeedScriptsDriveIt() {
       return { rows: [] };
     }
     const rows = statement.all(...values).map((row) => Object.values(row as Record<string, unknown>));
-    return { rows: method === "get" ? rows[0] : rows };
+    return { rows: method === "get" ? firstOf(rows) : rows };
   };
 
   const db = drizzle(
@@ -361,7 +362,7 @@ describe("readLocalSeedStatus", () => {
     await seedLocalTestData(local.db);
     expect((await readLocalSeedStatus(local.db)).testData).toBe(true);
 
-    const [lastInserted] = local.ids("SELECT source || ' ' || row_key AS id FROM inserted_rows ORDER BY seq DESC LIMIT 1");
+    const lastInserted = onlyElement(local.ids("SELECT source || ' ' || row_key AS id FROM inserted_rows ORDER BY seq DESC LIMIT 1"));
     const [table, rowKey] = lastInserted.split(" ");
     local.exec(`DELETE FROM "${table}" WHERE rowid = ${Number(rowKey)}`);
 

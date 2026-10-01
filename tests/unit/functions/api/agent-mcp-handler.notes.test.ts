@@ -1,4 +1,5 @@
 import { assert, beforeEach, describe, expect, it } from "vitest";
+import { firstOf, valueAt } from "../../../support/elements";
 import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH } from "@functions/api/handlers/agentMcpTools";
@@ -29,7 +30,7 @@ describe("personal run MCP handler", () => {
       const updateRun = tools.find((tool) => tool.name === "update_run");
       assert.exists(updateRun);
       expect(updateRun.inputSchema.properties.notes).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
-      for (const text of [updateRun.description, updateRun.inputSchema.properties.notes.description]) {
+      for (const text of [updateRun.description, valueAt(updateRun.inputSchema.properties, "notes").description]) {
         expect(text).toContain("at most 20,000 characters and 30KB (30,720 bytes of UTF-8)");
       }
     });
@@ -51,7 +52,7 @@ describe("personal run MCP handler", () => {
         task: expect.objectContaining({ id: "task-1", notes }),
       });
 
-      const stored = dbMocks.updateChain.set.mock.calls[0][0].items as string;
+      const stored = firstOf(dbMocks.updateChain.set.mock.calls)[0].items as string;
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: stored, revision: 2 })]);
       const read = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", taskId: "task-1" }), env));
       expect(read.result.structuredContent).toEqual({

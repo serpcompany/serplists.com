@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser, TEAM_PLAN } from '../../../support/checklistsHandler';
 import { activeMember, personalRunRow, personalTemplateRow } from '../../../fixtures/handlerRows';
 import { jsonObject, readJson } from '../../../support/readJson';
@@ -130,7 +131,7 @@ describe('run staleness only counts sources the caller may use', () => {
   it('checks visibility and archive state in the current_template_version subquery', async () => {
     await handleChecklists(new Request('http://localhost/api/checklists', { method: 'GET' }), mockEnv);
 
-    const fields = dbMocks.db.select.mock.calls[0][0] as { current_template_version: SQL };
+    const fields = firstOf(dbMocks.db.select.mock.calls)[0] as { current_template_version: SQL };
     const query = new SQLiteSyncDialect().sqlToQuery(fields.current_template_version);
     expect(query.sql).toMatch(/deleted_at" is null/i);
     expect(query.sql).toMatch(/is_public" = 1/i);

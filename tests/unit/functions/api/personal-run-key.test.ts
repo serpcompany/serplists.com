@@ -59,9 +59,8 @@ describe("personal run key utility", () => {
     "Bearer ordinary-token",
     "Bearer slrk_has spaces",
   ])("rejects malformed authorization without querying D1: %s", async (authorization) => {
-    const headers = authorization ? { Authorization: authorization } : undefined;
     const identity = await authenticatePersonalRunKey(
-      new Request("http://localhost/api/mcp", { headers }),
+      new Request("http://localhost/api/mcp", authorization ? { headers: { Authorization: authorization } } : {}),
       mockEnv,
     );
 

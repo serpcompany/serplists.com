@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { firstOf } from '../../../support/elements';
 import { dbMocks, importBody, mockEnv, PRO_PLAN, resetTemplatesHandlerMocks, slugBody } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -145,7 +146,7 @@ describe('Templates Handlers', () => {
       });
 
       expect(response.status).toBe(200);
-      const templateUpdate = dbMocks.updateChain.set.mock.calls[0][0];
+      const templateUpdate = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true }));
       expect(templateUpdate).not.toHaveProperty('slug');
       expect(templateUpdate).not.toHaveProperty('description');

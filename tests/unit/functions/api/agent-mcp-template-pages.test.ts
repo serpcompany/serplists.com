@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { elementAt, firstOf, sectionAt } from "../../../support/elements";
 
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
@@ -92,7 +93,7 @@ describe("get_template results", () => {
       outline: outlineOf(view.sections),
       limit: MAX_RESULT_BYTES,
     });
-    const longTitleEntry = (outline.outline as JsonRecord[])[3];
+    const longTitleEntry = elementAt(outline.outline as JsonRecord[], 3);
     expect(String(longTitleEntry.title).length).toBeLessThanOrEqual(160);
     expect(String(longTitleEntry.title).endsWith("…")).toBe(true);
     expect((readTemplate(view, { sectionId: "long" }).section as JsonRecord).title).toBe(longTitle);
@@ -109,8 +110,8 @@ describe("get_template results", () => {
     expect(outlinePages.length).toBeGreaterThan(1);
     expect(outlinePages.slice(0, -1).every((page) => typeof page.nextCursor === "string")).toBe(true);
     expect(outlinePages.at(-1)).not.toHaveProperty("nextCursor");
-    expect(outlinePages[1].template).toEqual({ id: "template-1", version: 7, contentVersion: 4 });
-    expect(describeTemplateRead(outlinePages[0])).toContain("More follows: call get_template with cursor set to nextCursor.");
+    expect(elementAt(outlinePages, 1).template).toEqual({ id: "template-1", version: 7, contentVersion: 4 });
+    expect(describeTemplateRead(firstOf(outlinePages))).toContain("More follows: call get_template with cursor set to nextCursor.");
     expect(template).toEqual(wholeOf(view));
   });
 
@@ -130,9 +131,9 @@ describe("get_template results", () => {
     const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
     expect(second).not.toHaveProperty("title");
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: (first.items as unknown[]).length });
-    expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(view.sections[0].items);
+    expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(sectionAt(view, 0).items);
     for (const page of pages) expect(resultBytes(page)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-    expect(describeTemplateRead(pages[1])).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows/);
+    expect(describeTemplateRead(elementAt(pages, 1))).toMatch(/^Loaded tasks \d+-\d+ of the 200 in a section too large for one result\. More follows/);
   });
 
   it("returns a task too large for one result in parts whose text joins into it", () => {
@@ -148,11 +149,11 @@ describe("get_template results", () => {
       expect(page).not.toHaveProperty("task");
     }
     const text = pages.map((page) => (page.part as JsonRecord).text).join("");
-    expect(JSON.parse(text)).toEqual(asTheClientReceives((view.sections[0].items as JsonRecord[])[1]));
-    expect(describeTemplateRead(pages[0])).toContain("join its parts' text in order");
+    expect(JSON.parse(text)).toEqual(asTheClientReceives((sectionAt(view, 0).items as JsonRecord[])[1]));
+    expect(describeTemplateRead(firstOf(pages))).toContain("join its parts' text in order");
 
     const small = readTemplate(view, { taskId: "small" });
-    expect(small).toEqual({ template: { id: "template-1", version: 7, contentVersion: 4 }, sectionId: "s1", task: (view.sections[0].items as JsonRecord[])[0] });
+    expect(small).toEqual({ template: { id: "template-1", version: 7, contentVersion: 4 }, sectionId: "s1", task: (sectionAt(view, 0).items as JsonRecord[])[0] });
     expect(describeTemplateRead(small)).toBe('Loaded task "Task small".');
   });
 
@@ -256,7 +257,7 @@ describe("template write results", () => {
       sectionsOmitted: true,
       sectionId: "s1",
       taskId: "t5",
-      task: (big.sections[0].items as JsonRecord[])[5],
+      task: (sectionAt(big, 0).items as JsonRecord[])[5],
     });
     expect(writtenTemplateResult(big, { sectionId: "s2" })).toEqual({
       template: big.header,
@@ -278,7 +279,7 @@ describe("template write results", () => {
       sectionsOmitted: true,
       sectionId: "s1",
       taskId: "t5",
-      task: (legacy.sections[0].items as JsonRecord[])[5],
+      task: (sectionAt(legacy, 0).items as JsonRecord[])[5],
     });
   });
 });

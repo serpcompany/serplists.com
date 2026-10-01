@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { firstOf, sectionAt } from '../../../support/elements';
 import { jsonObject, readJson } from '../../../support/readJson';
 
 import { normalizeSectionsPayload } from '@functions/api/utils/payloads';
@@ -50,7 +51,7 @@ describe('a first section with items: null, which every reader takes as sections
       { id: 's1', title: 'Intro', items: [] },
       { id: 's2', title: 'Steps', items: ['i1'] },
     ]);
-    expect(result.sections[1].items).toEqual([expect.objectContaining({ id: 'i1', isCompleted: true, notes: 'Done' })]);
+    expect(sectionAt(result, 1).items).toEqual([expect.objectContaining({ id: 'i1', isCompleted: true, notes: 'Done' })]);
   });
 
   it.each([
@@ -106,9 +107,9 @@ describe('saving a Template whose first section has items: null', () => {
     const created = await call('POST', '', { title: 'Onboarding', sections: [{ ...sent[0], items: [] }, sent[1]] });
     expect(created.status, JSON.stringify(created.data)).toBe(200);
     const id = String(created.data.id ?? (created.data.template as Json | undefined)?.id);
-    const template = d1.rows<{ version: number; content_version: number }>(
+    const template = firstOf(d1.rows<{ version: number; content_version: number }>(
       'SELECT version, content_version FROM templates WHERE id = ?', id,
-    )[0];
+    ));
     const runItems = JSON.stringify([
       { id: 's1', title: 'Intro', items: [] },
       { id: 's2', title: 'Steps', items: [{ id: 'i1', title: 'Create account', isCompleted: true, notes: 'Done' }] },

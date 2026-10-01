@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { firstOf } from "../../../support/elements";
 import { z } from "zod";
 import { auditMocks, dbMocks, inAMinute, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
@@ -80,7 +81,7 @@ describe("Teams handler", () => {
       inviteUrl: data.inviteUrl,
     });
 
-    const insertedInvite = dbMocks.insertChain.values.mock.calls[0][0];
+    const insertedInvite = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(insertedInvite.token_hash).not.toBe(data.inviteToken);
     expect(insertedInvite.email).toBe("new@example.com");
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
