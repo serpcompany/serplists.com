@@ -64,7 +64,7 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
 
     const result = reconcileRunSections(previous, template, []);
 
-    expect(result.sections[0].items[0].isCompleted).toBe(true);
+    expect(result.sections).toMatchObject([{ items: [{ isCompleted: true }] }]);
     expect(result.newlyRetired).toEqual([]);
   });
 

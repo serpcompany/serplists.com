@@ -2,11 +2,20 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import tailwindcss from '@tailwindcss/postcss';
-import postcss, { type Rule } from 'postcss';
+import postcss, { type AcceptedPlugin, type Rule } from 'postcss';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 const repoRoot = path.resolve(__dirname, '../../..');
 const globalsPath = path.join(repoRoot, 'src/app/globals.css');
+
+const isPostcssPlugin = (value: unknown): value is AcceptedPlugin =>
+  typeof value === 'object' && value !== null && 'postcssPlugin' in value;
+
+const tailwindPostcssPlugin = (): AcceptedPlugin => {
+  const plugin: unknown = tailwindcss({ base: repoRoot });
+  if (!isPostcssPlugin(plugin)) throw new Error('@tailwindcss/postcss gave no PostCSS plugin');
+  return plugin;
+};
 
 let css = '';
 let rules: Array<{ rule: Rule; selector: string }> = [];
@@ -21,7 +30,7 @@ const selectorAfterTailwindNesting = (rule: Rule): string => {
 };
 
 const buildGlobalsCssAsTheNextJsBuildDoes = () =>
-  postcss([tailwindcss({ base: repoRoot })]).process(readFileSync(globalsPath, 'utf8'), { from: globalsPath });
+  postcss([tailwindPostcssPlugin()]).process(readFileSync(globalsPath, 'utf8'), { from: globalsPath });
 
 beforeAll(async () => {
   const result = await buildGlobalsCssAsTheNextJsBuildDoes();

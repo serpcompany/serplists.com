@@ -53,7 +53,7 @@ describe('importing a linked file its author named without the uploadType a hand
       'url',
     ]);
 
-    const editorContents = buildTemplateEditorFormValues(template).sections[0].items[0].contents;
+    const editorContents = buildTemplateEditorFormValues(template).sections[0].items[0].contents ?? [];
     expect(editorContents.map((content) => content.fileName)).toEqual([
       'Setup guide.pdf',
       'Diagram',

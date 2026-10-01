@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { getImageDimensions, optimizeImage, planImageUpload } from '@/lib/imageOptimization';
 
@@ -212,8 +212,8 @@ describe('object URL release, so no uploaded image stays referenced until the ta
 
   const photo = () => new File(['raw-bytes'], 'photo.png', { type: 'image/png' });
 
-  let createObjectURL: ReturnType<typeof vi.spyOn>;
-  let revokeObjectURL: ReturnType<typeof vi.spyOn>;
+  let createObjectURL: MockInstance<typeof URL.createObjectURL>;
+  let revokeObjectURL: MockInstance<typeof URL.revokeObjectURL>;
 
   beforeEach(() => {
     imageOutcome = 'load';

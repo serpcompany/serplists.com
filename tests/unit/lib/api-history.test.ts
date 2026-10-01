@@ -9,7 +9,9 @@ describe('history requests', () => {
   });
 
   it('asks for only the entries the Changelog cards show', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ versions: [], events: [] }), { status: 200 }));
+    const fetchMock = vi.fn(
+      async (_url: RequestInfo | URL) => new Response(JSON.stringify({ versions: [], events: [] }), { status: 200 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     await api.getTemplateHistory('template-1');

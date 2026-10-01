@@ -54,7 +54,7 @@ describe('submitPasswordReset', () => {
 
   it('tells a rate-limited reset to wait', async () => {
     const result = await submitPasswordReset({
-      resetPassword: async () => ({ data: null, error: { error: 'Too many requests', status: 429 } }),
+      resetPassword: async () => ({ data: null, error: { message: 'Too many requests', status: 429 } }),
       signOutLocally: async () => undefined,
       isSignedIn: false,
     });

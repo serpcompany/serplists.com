@@ -4,18 +4,18 @@ import { buildTemplateUpdateRequest, describeTemplateUpdate } from '@/lib/templa
 
 describe('describeTemplateUpdate', () => {
   it('only mentions and refreshes runs when the checklist structure changed', () => {
-    expect(describeTemplateUpdate({ success: true, structureChanged: true, reconciledRuns: 2 })).toEqual({
+    expect(describeTemplateUpdate({ structureChanged: true, reconciledRuns: 2 })).toEqual({
       invalidateRuns: true,
       message: 'Template updated. Checklist changes were reconciled into active private runs.',
     });
-    expect(describeTemplateUpdate({ success: true, structureChanged: true, reconciledRuns: 0 })).toEqual({
+    expect(describeTemplateUpdate({ structureChanged: true, reconciledRuns: 0 })).toEqual({
       invalidateRuns: true,
       message: 'Template updated.',
     });
   });
 
   it('keeps runs untouched for metadata-only and no-op saves', () => {
-    expect(describeTemplateUpdate({ success: true, structureChanged: false, reconciledRuns: 0 })).toEqual({
+    expect(describeTemplateUpdate({ structureChanged: false, reconciledRuns: 0 })).toEqual({
       invalidateRuns: false,
       message: 'Template updated.',
     });
