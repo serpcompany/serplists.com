@@ -26,7 +26,8 @@ migrations, backups, and R2 storage are in
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
-`pnpm exec lefthook install` if they are missing. When a CI failure looks flaky,
+`pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
+files, so they stay fast; the push hook runs the full gate. When a CI failure looks flaky,
 re-run once. If it fails again, treat it as real, and record genuinely flaky tests
 in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 

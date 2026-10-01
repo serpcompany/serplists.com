@@ -1,5 +1,3 @@
-# Installed automatically by `pnpm install` (the `prepare` script).
-# Commit hooks stay fast (staged files only); push runs the full gate CI runs.
 pre-commit:
   parallel: true
   commands:

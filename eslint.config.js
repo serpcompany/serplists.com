@@ -5,9 +5,6 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 import { noComments } from "./scripts/eslint-rules/no-comments.mjs";
 
-// Rule messages are written as instructions: they are read by coding agents.
-// See docs/design-docs/core-beliefs.md for the reasoning behind each rule.
-
 const MAX_LINES = 500;
 
 const TEST_FILES = ["**/*.test.{ts,tsx,js,mjs}", "**/*.spec.{ts,tsx,js,mjs}", "tests/**/*.{ts,tsx,js,mjs}"];
@@ -48,8 +45,6 @@ const TOAST_RESTRICTIONS = {
   paths: [{ name: "@radix-ui/react-toast", message: TOAST_MESSAGE }],
   patterns: [{ group: ["**/use-toast", "**/ui/toast", "**/ui/toaster"], message: TOAST_MESSAGE }],
 };
-// A page with unsaved work is asked before any navigation leaves it (useUnsavedChangesGuard),
-// which only the app's Link and useAppRouter know to do.
 const NAVIGATION_RESTRICTIONS = [
   {
     name: "next/link",
@@ -65,16 +60,19 @@ const NAVIGATION_RESTRICTIONS = [
       "and reports the navigation to page visits (src/lib/navigation).",
   },
 ];
-// The navigation code itself, and RequireAuth, whose redirect of a signed-out visitor must
-// never wait on a page (the session ending already kept the page's work).
 const NAVIGATION_MODULES = [
   "src/components/navigation/Link.tsx",
   "src/lib/navigation/useAppRouter.ts",
   "src/lib/navigation/leavesPage.ts",
   "src/components/RequireAuth.tsx",
 ];
-// User content (uploads and linked images from any host, of any size) is shown as it is;
-// next/image would need an image loader for every host.
+const FILES_THAT_EXPORT_MORE_THAN_COMPONENTS = [
+  "**/components/ui/*.{ts,tsx}",
+  "**/contexts/*.{ts,tsx}",
+  "src/app/**/*.{ts,tsx}",
+  "tests/**/*.{ts,tsx}",
+  "**/*.test.{ts,tsx}",
+];
 const USER_CONTENT_IMAGES = [
   "src/components/shared/TaskImage.tsx",
   "src/components/template/PublicTemplateContent.tsx",
@@ -88,19 +86,12 @@ const STORAGE_MESSAGE =
 const VOCABULARY_MESSAGE =
   "User-visible text must use docs/PRODUCT_SENSE.md terms: 'Organization' (not Team/Workspace) and 'Personal' " +
   "(not 'Personal workspace'). Legacy code identifiers are fine; this rule only checks visible copy.";
-// Capitalized "Team"/"Workspace" are product names; lowercase "team" is ordinary English
-// ("helps teams ship"), but lowercase "workspace" in prose is the retired product term.
 const LEGACY_TERM_CAPITALIZED = "/\\b(Teams?|Workspaces?)\\b/";
-const LEGACY_TERM_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
-// The /templates/ page is the Template Library. Its old names were the sidebar's "Discover",
-// the heading "Discover Templates" and "Browse Templates" buttons; prose such as "browse
-// public templates" is fine.
+const WORKSPACE_IN_PROSE = "/^(?=.*\\s).*\\bworkspaces?\\b/i";
 const LIBRARY_MESSAGE =
   "The /templates/ page is the Template Library (docs/PRODUCT_SENSE.md): label it 'Template Library' and " +
   "its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
 const LIBRARY_OLD_NAME = "/^\\s*Discover\\s*$|\\bDiscover Templates\\b|\\bBrowse (?:Public )?Templates\\b|\\bBrowse templates\\b/";
-// A direct clipboard write can reject (Safari after an awaited request, denied permission,
-// lost focus) and lose what it was copying, so all copies go through one helper.
 const CLIPBOARD_RESTRICTION = {
   selector: "MemberExpression[property.name='clipboard']",
   message:
@@ -124,8 +115,6 @@ export default tseslint.config(
       "cloudflare-env.d.ts",
     ],
   },
-  // Next.js's own rules (React, React Hooks with the React Compiler checks, accessibility,
-  // imports, and @next/next with the Core Web Vitals rules as errors).
   ...nextVitals,
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -149,15 +138,7 @@ export default tseslint.config(
     },
   },
   {
-    // Disable fast refresh warnings for UI components, contexts, Next.js route files (which
-    // export metadata, route segment config, and handlers by convention), and tests.
-    files: [
-      "**/components/ui/*.{ts,tsx}",
-      "**/contexts/*.{ts,tsx}",
-      "src/app/**/*.{ts,tsx}",
-      "tests/**/*.{ts,tsx}",
-      "**/*.test.{ts,tsx}",
-    ],
+    files: FILES_THAT_EXPORT_MORE_THAN_COMPONENTS,
     rules: {
       "react-refresh/only-export-components": "off",
     },
@@ -242,9 +223,9 @@ export default tseslint.config(
         "error",
         { selector: "JSXText[value=/\\b(Teams?|[Ww]orkspaces?)\\b/]", message: VOCABULARY_MESSAGE },
         { selector: `Literal[value=${LEGACY_TERM_CAPITALIZED}]`, message: VOCABULARY_MESSAGE },
-        { selector: `Literal[value=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
+        { selector: `Literal[value=${WORKSPACE_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LEGACY_TERM_CAPITALIZED}]`, message: VOCABULARY_MESSAGE },
-        { selector: `TemplateElement[value.raw=${LEGACY_TERM_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
+        { selector: `TemplateElement[value.raw=${WORKSPACE_IN_PROSE}]`, message: VOCABULARY_MESSAGE },
         { selector: `JSXText[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
         { selector: `Literal[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
@@ -253,7 +234,6 @@ export default tseslint.config(
     },
   },
   {
-    // The rest of src/ (pages, components, and features get CLIPBOARD_RESTRICTION above).
     files: [
       "src/*.{ts,tsx}",
       "src/components/ui/**/*.{ts,tsx}",
@@ -265,7 +245,6 @@ export default tseslint.config(
     },
   },
   {
-    // Relax TypeScript rules for test files
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",

@@ -1,7 +1,3 @@
-// Architecture rules for `pnpm run deps:check`. See ARCHITECTURE.md for the layer map.
-
-// Framework-free modules that both the React app and the API (functions/) may import.
-// Only add a module here after confirming it has no React, DOM, or browser-only imports.
 const SHARED_FROM_SRC = [
   "^src/lib/schemas/",
   "^src/lib/utils/clipyUrl\\.ts$",
@@ -16,12 +12,10 @@ const SHARED_FROM_SRC = [
   "^src/lib/http/urlStandard\\.ts$",
 ];
 
-// The Next.js app's entry points: route files (layouts, pages, route handlers) in src/app.
-// Server-only code lives there and in src/server, the only places that may import functions/.
 const APP_ROUTES = "^src/app/";
 const SERVER_SIDE = "^src/(app|server)/";
+const IMPORTED_ONLY_BY_NEXT_CONFIG = ["^src/lib/http/securityHeaders\\.ts$"];
 
-/** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
     {
@@ -127,8 +121,7 @@ module.exports = {
           APP_ROUTES,
           "^src/components/ui/",
           "^src/hooks/use-mobile\\.tsx$",
-          // Read by next.config.ts, outside src/app.
-          "^src/lib/http/securityHeaders\\.ts$",
+          ...IMPORTED_ONLY_BY_NEXT_CONFIG,
           ...SHARED_FROM_SRC,
         ],
         reachable: false,

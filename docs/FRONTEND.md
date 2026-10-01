@@ -26,6 +26,12 @@ and `src/server` import `functions/`, client code never imports `src/server`, an
 module must be reachable from a route file in `src/app`. Remaining legacy call sites are
 tracked in the [UI decoupling plan](exec-plans/active/ui-decoupling.md).
 
+Some modules export more than components, which ESLint's fast-refresh check
+(`react-refresh/only-export-components`) would warn about: route files export metadata,
+route segment config and handlers, as Next.js expects, `components/ui/` primitives export
+their variants, and contexts their hooks. The check skips them and tests
+(`FILES_THAT_EXPORT_MORE_THAN_COMPONENTS` in `eslint.config.js`).
+
 Canonical private routes live under `/dashboard/*`; the full route list is in
 [system overview](design-docs/system-overview.md#routes). Public pages sit in the `(site)`
 route group and signed-in pages in `(app)`, whose layout checks the session first
@@ -48,7 +54,10 @@ wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/
 
 In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
 `useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work
-first (below). A page that drops one-shot query parameters once it has read them (a reset
+first (below). ESLint refuses `next/link` and `next/navigation`'s `useRouter` anywhere else in
+`src/`, except in the navigation modules themselves and `RequireAuth`: sending a signed-out
+visitor to sign in must never wait on a page, and the session ending has already kept the
+page's work. A page that drops one-shot query parameters once it has read them (a reset
 token, the login notices, `?billing=`) or keeps its filters in the URL (the library, whose
 filters live nowhere else: the page stays mounted when a link or Back/Forward changes the
 URL, so filters kept in state would go stale; `src/components/checklist-library/libraryFilters.ts`) rewrites
@@ -483,6 +492,11 @@ How the editor's models load, save, keep drafts and decide who may edit:
 Render Markdown with `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`), the
 only module that imports `react-markdown`. It disables raw HTML and passes links through
 `safeUrl` (`src/lib/utils/safeUrl.ts`); pass other media URLs through `safeUrl` too.
+
+User images (uploads, and images linked from any host, of any size) render as they are with
+`<img>`, not `next/image`, which would need an image loader for every host. ESLint's
+`@next/next/no-img-element` is off only for the components that show them
+(`USER_CONTENT_IMAGES` in `eslint.config.js`).
 
 ## Page titles and meta tags
 

@@ -242,7 +242,8 @@ changing sharing logic.
 Because each share mints a new token, the UI treats creating the link and copying it
 as separate steps (`src/lib/shareLink.ts`). The created link is always shown in a
 dialog (`ShareLinkDialog`), copying is best effort through `copyTextToClipboard`
-(Safari refuses a clipboard write that follows a network request), and an error is
+(a browser can refuse a clipboard write: Safari after a network request, any browser
+without permission or after the page lost focus), and an error is
 reported only when the API call fails. Reopening the dialog for the same run reuses
 the link instead of minting another token, but only while the page shows the run
 shared. Once the runs list (after a refetch) or the run page (after it reloads the run)

@@ -117,5 +117,5 @@ _Avoid_: Unpublished draft
 
 - Capitalize Personal and Organization when naming an Ownership Context: "Switch to Personal", "Organization settings", "Create Organization".
 - Label a paid Organization's plan "Paid". The stored plan value `team` is a legacy implementation detail.
-- Call `/templates/` the Template Library: "Template Library" where it is a navigation label or a heading, "Browse the Template Library" on buttons. ESLint flags its old names in UI code.
-- Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code.
+- Call `/templates/` the Template Library: "Template Library" where it is a navigation label or a heading, "Browse the Template Library" on buttons. ESLint flags its old names in UI code (Discover, Discover Templates, Browse Templates); prose such as "browse public templates" is fine.
+- Ordinary English "team" (a group of people) is fine in marketing copy, but never use Team or Workspace to mean an Organization or an Ownership Context. ESLint enforces this in UI code: it flags a capitalized Team or Workspace, and "workspace" in prose in any case, the retired term, but not a lowercase "team".
