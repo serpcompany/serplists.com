@@ -43,55 +43,18 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Limit-guarded inserts go through the plain insert mock so tests can inspect the row;
-    // the guard itself is covered in tests/integration/plan-limits-concurrency-local-d1.test.ts.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { columnNamesIn, paramValuesIn } from '../../../support/drizzleSql';
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 
-function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): string[] {
-  if (!value || typeof value !== 'object' || seen.has(value)) {
-    return [];
-  }
-
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  const names = typeof record.name === 'string' ? [record.name] : [];
-  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
-
-  return [
-    ...names,
-    ...chunks.flatMap((chunk) => collectSqlColumnNames(chunk, seen)),
-  ];
-}
-
-function collectSqlParamValues(value: unknown, seen = new Set<unknown>()): unknown[] {
-  if (!value || typeof value !== 'object' || seen.has(value)) {
-    return [];
-  }
-
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  const own = 'encoder' in record && 'value' in record ? [record.value] : [];
-  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
-
-  return [...own, ...chunks.flatMap((chunk) => collectSqlParamValues(chunk, seen))];
-}
-
-// Migrations 0002 and 0005 backfilled slugs from titles without stripping
-// punctuation, so older rows can hold slugs today's slug rule rejects.
-const legacySlugTemplate = () => ({
+const templateWithASlugTheMigrationBackfillsLeftUnstripped = () => ({
   id: 'template-1',
   user_id: 'user-123',
   owner_type: 'user',
@@ -235,7 +198,7 @@ describe('Templates Handlers', () => {
     const request = new Request('http://localhost/api/templates', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
     const predicate = dbMocks.selectChain.where.mock.calls[0][0];
-    const columnNames = collectSqlColumnNames(predicate);
+    const columnNames = columnNamesIn(predicate);
 
     expect(response.status).toBe(200);
     expect(columnNames).toContain('is_public');
@@ -251,7 +214,7 @@ describe('Templates Handlers', () => {
     const request = new Request('http://localhost/api/templates/public?userId=user-123', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
     const predicate = dbMocks.selectChain.where.mock.calls[0][0];
-    const columnNames = collectSqlColumnNames(predicate);
+    const columnNames = columnNamesIn(predicate);
 
     expect(response.status).toBe(200);
     expect(columnNames).toContain('owner_type');
@@ -271,7 +234,7 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(401);
   });
 
-  it('should create templates and store sections JSON', async () => {
+  it('creates templates storing sections JSON, last active at creation so "Most Recent" can sort them', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValue([]);
 
@@ -294,11 +257,10 @@ describe('Templates Handlers', () => {
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     const storedItems = JSON.parse(inserted.items);
     const personalLimitPredicate = dbMocks.selectChain.where.mock.calls[0][0];
-    const personalLimitColumns = collectSqlColumnNames(personalLimitPredicate);
+    const personalLimitColumns = columnNamesIn(personalLimitPredicate);
     expect(Array.isArray(storedItems)).toBe(true);
     expect(storedItems[0].items).toHaveLength(1);
     expect(inserted.version).toBe(1);
-    // A new template's last activity is its creation, so "Most Recent" can sort it.
     expect(inserted.updated_at).toEqual(expect.any(String));
     expect(inserted.updated_at).toBe(inserted.created_at);
     expect(personalLimitColumns).toContain('owner_type');
@@ -403,9 +365,8 @@ describe('Templates Handlers', () => {
     expect(inserted.rules).toContain('required-field');
   });
 
-  it('names the invalid field in template payload errors', async () => {
+  it('names the invalid field in template payload errors, after reading the stored row since bounds apply to changed fields only', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    // Bounds apply to changed fields only, so the stored row is read first.
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, title: 'Plan', items: '[]', version: 1, is_public: false },
     ]);
@@ -423,10 +384,13 @@ describe('Templates Handlers', () => {
 
   it('keeps a suffixed slug within the slug limit when the title slug is taken', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const templatesCounted: never[] = [];
+    const templatesHoldingTheBaseSlug = [{ id: 'other-template' }];
+    const templatesHoldingTheSuffixedSlug: never[] = [];
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([]) // template count
-      .mockResolvedValueOnce([{ id: 'other-template' }]) // base slug taken
-      .mockResolvedValueOnce([]); // suffixed slug free
+      .mockResolvedValueOnce(templatesCounted)
+      .mockResolvedValueOnce(templatesHoldingTheBaseSlug)
+      .mockResolvedValueOnce(templatesHoldingTheSuffixedSlug);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates', {
       method: 'POST',
@@ -458,8 +422,7 @@ describe('Templates Handlers', () => {
     expect(storedSlug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
   });
 
-  // The editor shows the slug the template has after a save; it must not guess.
-  it('returns the suffixed slug it stored when the requested slug is taken', async () => {
+  it('returns the suffixed slug it stored when the requested slug is taken, so the editor shows it without guessing', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([
@@ -728,7 +691,7 @@ describe('Templates Handlers', () => {
     expect(dbMocks.updateChain.set.mock.calls).toHaveLength(3);
 
     const lifecyclePredicate = dbMocks.selectChain.where.mock.calls.at(-1)?.[0];
-    const predicateColumns = collectSqlColumnNames(lifecyclePredicate);
+    const predicateColumns = columnNamesIn(lifecyclePredicate);
     expect(predicateColumns).toContain('status');
     expect(predicateColumns).toContain('is_public');
     expect(predicateColumns).toContain('deleted_at');
@@ -894,8 +857,8 @@ describe('Templates Handlers', () => {
         is_public: false,
       },
     ]);
-    // The guarded audit and version inserts and the update all miss: nothing was written.
-    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+    const auditVersionAndUpdateAllMissed = [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }];
+    dbMocks.db.batch.mockResolvedValueOnce(auditVersionAndUpdateAllMissed);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -945,7 +908,7 @@ describe('Templates Handlers', () => {
     expect(data.rules).toHaveLength(1);
   });
 
-  it('should return template history for active team members', async () => {
+  it('returns template history to active team members, each version with the metadata of its audit event, and the events with them', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.orderBy
       .mockReturnValueOnce(dbMocks.selectChain)
@@ -1032,12 +995,9 @@ describe('Templates Handlers', () => {
         action: 'template.updated',
         version: 2,
         actor: expect.objectContaining({ name: 'Editor Example' }),
-        // The metadata of the audit event the same write recorded, as run history events carry.
         metadata: { visibility: 'public' },
       }),
     );
-    // Events come with the versions: a Share's event labels its version in the Changelog,
-    // and archive and restore record only an event.
     expect(data.events).toEqual([
       expect.objectContaining({ id: 'audit-4', action: 'template.restored', metadata: null }),
       expect.objectContaining({ id: 'audit-3', action: 'template.deleted', metadata: null }),
@@ -1046,15 +1006,14 @@ describe('Templates Handlers', () => {
     for (const event of data.events) {
       expect(event).not.toHaveProperty('diff');
     }
-    // Both lists stop at the requested limit, and the events read leaves out diff_json.
     expect(dbMocks.selectChain.limit).toHaveBeenCalledTimes(4);
-    expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(3, 8);
-    expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(4, 8);
+    const [, , versionsLimit, eventsLimit] = dbMocks.selectChain.limit.mock.calls.map(([limit]) => limit);
+    expect(versionsLimit).toBe(8);
+    expect(eventsLimit).toBe(8);
     const eventColumns = (dbMocks.db.select.mock.calls[3] as unknown[])[0] as Record<string, unknown>;
     expect(eventColumns).toHaveProperty('metadata_json');
     expect(eventColumns).not.toHaveProperty('diff_json');
-    // Ordering by version lets the unique (template_id, version) index stop at LIMIT.
-    const versionOrder = collectSqlColumnNames(dbMocks.selectChain.orderBy.mock.calls[0][0]);
+    const versionOrder = columnNamesIn(dbMocks.selectChain.orderBy.mock.calls[0][0]);
     expect(versionOrder).toContain('version');
     expect(versionOrder).not.toContain('created_at');
   });
@@ -1091,7 +1050,7 @@ describe('Templates Handlers', () => {
     expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(2, 50);
   });
 
-  it('gives each version the metadata of the audit event its write recorded, naming a Run Key', async () => {
+  it('gives each version the metadata of the audit event its write recorded, naming a Run Key, and null to one older than the newest events read', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     const actor = { actor_email: 'owner@example.com', actor_name: 'Owner', actor_username: 'owner' };
     const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
@@ -1122,8 +1081,6 @@ describe('Templates Handlers', () => {
         version(3, 'template.updated', '2026-07-03T12:03:00.000Z'),
         version(2, 'template.updated', '2026-07-03T12:02:00.000Z'),
       ])
-      // The newest two events: version 2's event is older than both, and the Changelog's
-      // newest two entries (the archive and version 3) never show version 2.
       .mockResolvedValueOnce([
         event('audit-4', 'template.deleted', '2026-07-03T12:04:00.000Z', null),
         event('audit-3', 'template.updated', '2026-07-03T12:03:00.000Z', agent),
@@ -1140,7 +1097,6 @@ describe('Templates Handlers', () => {
       [3, agent],
       [2, null],
     ]);
-    // The same metadata the run history's events carry.
     expect(data.events[1]).toEqual(expect.objectContaining({ id: 'audit-3', metadata: agent }));
   });
 
@@ -1660,7 +1616,6 @@ describe('Templates Handlers', () => {
       body: JSON.stringify(body),
     }), mockEnv);
 
-    // A rejected copy leaves its queued reads unused; drop them so they cannot leak into later tests.
     afterEach(() => {
       dbMocks.selectChain.limit.mockReset();
     });
@@ -1731,13 +1686,13 @@ describe('Templates Handlers', () => {
     });
   });
 
-  it('should clone a public template for pro users', async () => {
+  it('clones a public template for Pro users, whose copies no template count limits', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: 'pro',
       limits: { maxTemplates: null, maxActiveRuns: null },
     });
-    // limit() order: source lookup, base slug collision check (Pro has no template count check).
+    const templatesHoldingTheBaseSlug: never[] = [];
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       {
         id: 'template-1',
@@ -1753,7 +1708,7 @@ describe('Templates Handlers', () => {
         updated_at: null,
         version: 1,
       },
-    ]).mockResolvedValueOnce([]);
+    ]).mockResolvedValueOnce(templatesHoldingTheBaseSlug);
 
     const request = new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
@@ -1788,8 +1743,7 @@ describe('Templates Handlers', () => {
         ],
       },
     ];
-    // The editor's copy of storedSections: other key order, injected run state, empty defaults.
-    const editorSections = [
+    const storedSectionsAsTheEditorResendsThem = [
       {
         title: 'Launch',
         id: 'section-1',
@@ -1823,14 +1777,13 @@ describe('Templates Handlers', () => {
       content_version: 2,
       is_public: false,
     };
-    // Everything the editor sends on Save, matching storedTemplate.
-    const editorPayload = {
+    const editorSaveOfTheStoredTemplate = {
       title: 'Launch plan',
       description: 'Ship it',
       type: 'checklist',
       seoTitle: '',
       seoDescription: '',
-      sections: editorSections,
+      sections: storedSectionsAsTheEditorResendsThem,
       categories: [],
       tags: ['launch'],
       is_public: false,
@@ -1849,7 +1802,7 @@ describe('Templates Handlers', () => {
     });
 
     it('saves metadata edits without bumping content_version or rewriting runs', async () => {
-      const response = await put({ ...editorPayload, title: 'Launch plan v2', description: 'Ship it well', is_public: true });
+      const response = await put({ ...editorSaveOfTheStoredTemplate, title: 'Launch plan v2', description: 'Ship it well', is_public: true });
       const data = await response.json();
 
       expect(response.status).toBe(200);
@@ -1883,7 +1836,7 @@ describe('Templates Handlers', () => {
       dbMocks.selectChain.limit.mockResolvedValue([]);
       dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...storedTemplate, is_public: true, version: 4 }]);
 
-      const response = await put({ ...editorPayload, title: 'Launch plan (typo fixed)', is_public: false, expected_version: 3 });
+      const response = await put({ ...editorSaveOfTheStoredTemplate, title: 'Launch plan (typo fixed)', is_public: false, expected_version: 3 });
       const data = await response.json();
 
       expect(response.status).toBe(409);
@@ -1901,7 +1854,7 @@ describe('Templates Handlers', () => {
     });
 
     it('accepts a save with no changes without writing anything', async () => {
-      const response = await put(editorPayload);
+      const response = await put(editorSaveOfTheStoredTemplate);
       const data = await response.json();
 
       expect(response.status).toBe(200);
@@ -1911,13 +1864,13 @@ describe('Templates Handlers', () => {
     });
 
     it('still reconciles active runs when the checklist structure changes', async () => {
-      const reordered = JSON.parse(JSON.stringify(editorSections));
+      const reordered = JSON.parse(JSON.stringify(storedSectionsAsTheEditorResendsThem));
       reordered[0].items.reverse();
       dbMocks.selectChain.orderBy.mockResolvedValueOnce([
         { id: 'run-1', items: JSON.stringify(storedSections), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
       ]);
 
-      const response = await put({ ...editorPayload, sections: reordered });
+      const response = await put({ ...editorSaveOfTheStoredTemplate, sections: reordered });
       const data = await response.json();
 
       expect(response.status).toBe(200);
@@ -1927,23 +1880,22 @@ describe('Templates Handlers', () => {
         .toEqual(['item-2', 'item-1']);
       expect(dbMocks.updateChain.set.mock.calls[1][0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
     });
-    it('records a reconciled event on each run whose work changed, naming what it retired', async () => {
-      const withoutPublish = editorSections.map((section) => ({
+    it('records a reconciled event on each run whose work changed, naming what it retired but never its notes, on the run update\'s own condition', async () => {
+      const withoutPublish = storedSectionsAsTheEditorResendsThem.map((section) => ({
         ...section,
         items: section.items.filter((item) => item.id !== 'item-2'),
       }));
       const annotatedRun = JSON.parse(JSON.stringify(storedSections));
       annotatedRun[0].items[1] = { ...annotatedRun[0].items[1], isCompleted: true, notes: 'Registrar login is in vault X' };
-      // A run that already matches the new structure has nothing to record.
-      const unaffectedRun = reconcileRunSections(storedSections, withoutPublish, []).sections;
+      const runAlreadyMatchingTheNewStructure = reconcileRunSections(storedSections, withoutPublish, []).sections;
       dbMocks.selectChain.orderBy.mockResolvedValueOnce([
         { id: 'run-1', items: JSON.stringify(annotatedRun), retired_items: '[]', status: 'in_progress', is_public: false, revision: 4 },
-        { id: 'run-2', items: JSON.stringify(unaffectedRun), retired_items: '[]', status: 'in_progress', is_public: false, revision: 2 },
+        { id: 'run-2', items: JSON.stringify(runAlreadyMatchingTheNewStructure), retired_items: '[]', status: 'in_progress', is_public: false, revision: 2 },
       ]);
       const changed = { meta: { changes: 1 } };
       dbMocks.db.batch.mockResolvedValueOnce([changed, changed, changed, changed, changed, { meta: { changes: 0 } }]);
 
-      const response = await put({ ...editorPayload, sections: withoutPublish });
+      const response = await put({ ...editorSaveOfTheStoredTemplate, sections: withoutPublish });
       const data = await response.json();
 
       expect(response.status).toBe(200);
@@ -1961,9 +1913,7 @@ describe('Templates Handlers', () => {
         toRevision: 5,
         retired: [{ kind: 'item', id: 'item-2', title: 'Publish' }],
       }));
-      // The event names the retired work; the notes stay in the run's retired_items only.
       expect(JSON.stringify(params)).not.toContain('vault X');
-      // Guarded by the run update's own WHERE clause, so a missed update records nothing.
       expect(insertSql).toMatch(/where exists \(select 1 from "checklist_runs" where .*"checklist_runs"\."revision" = \?/);
       expect(params).toContain(4);
       const statements = dbMocks.db.batch.mock.calls[0][0];
@@ -2163,7 +2113,7 @@ describe('Templates Handlers', () => {
 
   it('saves a template whose stored legacy slug is echoed back unchanged', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -2184,7 +2134,7 @@ describe('Templates Handlers', () => {
 
   it('toggles visibility on a template with a legacy slug', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -2201,7 +2151,7 @@ describe('Templates Handlers', () => {
 
   it('still rejects a changed slug the slug rule cannot keep anything of', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -2218,7 +2168,7 @@ describe('Templates Handlers', () => {
 
   it('rejects a PUT whose only field is the unchanged slug', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([legacySlugTemplate()]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([templateWithASlugTheMigrationBackfillsLeftUnstripped()]);
 
     const request = new Request('http://localhost/api/templates/template-1', {
       method: 'PUT',
@@ -2233,7 +2183,7 @@ describe('Templates Handlers', () => {
 
   it('decodes percent-encoded slugs before looking them up', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { ...legacySlugTemplate(), is_public: 1, owner_username: 'owner' },
+      { ...templateWithASlugTheMigrationBackfillsLeftUnstripped(), is_public: 1, owner_username: 'owner' },
     ]);
 
     const request = new Request(
@@ -2246,7 +2196,7 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.slug).toBe('qanda:-launch-plan-1a2b3c4d');
     const whereArg = dbMocks.selectChain.where.mock.calls[0][0];
-    expect(collectSqlParamValues(whereArg)).toContain('qanda:-launch-plan-1a2b3c4d');
+    expect(paramValuesIn(whereArg)).toContain('qanda:-launch-plan-1a2b3c4d');
   });
 
   it('answers a malformed percent-encoded slug with 404', async () => {

@@ -8,7 +8,6 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
   const insertChain = { values: vi.fn(), select: vi.fn() };
   const updateChain = { set: vi.fn(), where: vi.fn() };
   const db = {
@@ -32,8 +31,6 @@ vi.mock('@functions/api/utils/session', () => ({
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-// The editor sends the version it loaded as expected_version. The PUT answer must say which
-// version (and slug) it stored, so the next save does not need a list reload to learn it.
 const mockEnv = {
   DB: {},
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
@@ -61,7 +58,7 @@ const put = async (body: Record<string, unknown>) => {
   return { status: response.status, data: (await response.json()) as Record<string, unknown> };
 };
 
-describe('PUT /api/templates/:id response', () => {
+describe('PUT /api/templates/:id response, which names the version and slug it stored so the editor\'s next save needs no list reload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -90,8 +87,8 @@ describe('PUT /api/templates/:id response', () => {
   it('returns the unchanged version when the edit does not create one', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([existingTemplate]);
 
-    // A save that stores nothing new (visibility changes do create a version).
-    const { status, data } = await put({ title: 'Existing Template', expected_version: 3 });
+    const saveThatStoresNothingNew = { title: 'Existing Template', expected_version: 3 };
+    const { status, data } = await put(saveThatStoresNothingNew);
 
     expect(status).toBe(200);
     expect(data).toMatchObject({ success: true, version: 3, slug: 'existing-template' });

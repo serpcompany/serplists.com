@@ -75,27 +75,12 @@ vi.mock("@functions/api/utils/audit", () => ({
 }));
 
 import { handleTeams } from "@functions/api/handlers/teams";
+import { columnNamesIn } from "../../../support/drizzleSql";
 
 const mockEnv = {
   DB: {} as D1Database,
   BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
 };
-
-function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): string[] {
-  if (!value || typeof value !== "object" || seen.has(value)) {
-    return [];
-  }
-
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  const names = typeof record.name === "string" ? [record.name] : [];
-  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
-
-  return [
-    ...names,
-    ...chunks.flatMap((chunk) => collectSqlColumnNames(chunk, seen)),
-  ];
-}
 
 describe("Teams handler", () => {
   beforeEach(() => {
@@ -373,7 +358,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data[0]).toEqual(expect.objectContaining({ id: "member-disabled" }));
-    expect(collectSqlColumnNames(memberListPredicate)).not.toContain("status");
+    expect(columnNamesIn(memberListPredicate)).not.toContain("status");
   });
 
   it("limits the team roster to active members for non-admin members", async () => {
@@ -388,7 +373,7 @@ describe("Teams handler", () => {
     const memberListPredicate = dbMocks.selectChain.where.mock.calls[1]?.[0];
 
     expect(response.status).toBe(200);
-    expect(collectSqlColumnNames(memberListPredicate)).toContain("status");
+    expect(columnNamesIn(memberListPredicate)).toContain("status");
   });
 
   it("updates team profile fields for team admins and records audit history", async () => {

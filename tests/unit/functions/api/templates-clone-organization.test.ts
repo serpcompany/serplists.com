@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Pins the contract the template detail page relies on: the API, not the browser, decides
-// whether a public template may be copied into a Free Organization.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -11,7 +8,6 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
   const insertChain = { values: vi.fn(), select: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
@@ -68,7 +64,7 @@ const cloneIntoOrganization = () =>
     { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as never,
   );
 
-describe('POST /api/templates/:id/clone into an Organization', () => {
+describe('POST /api/templates/:id/clone into an Organization, which decides for the template detail page whether a Free Organization may take the copy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
@@ -86,10 +82,10 @@ describe('POST /api/templates/:id/clone into an Organization', () => {
   });
 
   it('copies into a Free Organization that is under its Template limit', async () => {
-    // limit() order: membership, Organization template count, source lookup, slug check.
+    const organizationTemplatesCounted = [{ count: 0 }];
     dbMocks.selectChain.limit
       .mockResolvedValueOnce(membership('editor'))
-      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce(organizationTemplatesCounted)
       .mockResolvedValueOnce(publicSource);
 
     const response = await cloneIntoOrganization();

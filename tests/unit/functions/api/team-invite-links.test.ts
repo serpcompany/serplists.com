@@ -63,6 +63,7 @@ vi.mock("@functions/api/utils/audit", () => ({
 }));
 
 import { handleTeams } from "@functions/api/handlers/teams";
+import { columnNamesIn } from "../../../support/drizzleSql";
 import { sha256Hex } from "@functions/api/utils/crypto";
 
 const mockEnv = {
@@ -92,19 +93,6 @@ function newLinkRequest(body?: unknown, inviteId = "invite-1") {
     headers: { Origin: "https://app.serplists.test" },
     body: typeof body === "undefined" ? undefined : JSON.stringify(body),
   });
-}
-
-function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): string[] {
-  if (!value || typeof value !== "object" || seen.has(value)) {
-    return [];
-  }
-
-  seen.add(value);
-  const record = value as Record<string, unknown>;
-  const names = typeof record.name === "string" ? [record.name] : [];
-  const chunks = Array.isArray(record.queryChunks) ? record.queryChunks : [];
-
-  return [...names, ...chunks.flatMap((chunk) => collectSqlColumnNames(chunk, seen))];
 }
 
 async function replaceTheLinkAsAnAdmin() {
@@ -169,7 +157,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
   it("repeats the pending checks in the write, scoped to this Organization", async () => {
     await replaceTheLinkAsAnAdmin();
 
-    const whereColumns = collectSqlColumnNames(dbMocks.updateChain.where.mock.calls[0][0]);
+    const whereColumns = columnNamesIn(dbMocks.updateChain.where.mock.calls[0][0]);
     expect(whereColumns).toEqual(
       expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
@@ -237,7 +225,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(404);
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
-    const whereColumns = collectSqlColumnNames(dbMocks.selectChain.where.mock.calls[1][0]);
+    const whereColumns = columnNamesIn(dbMocks.selectChain.where.mock.calls[1][0]);
     expect(whereColumns).toEqual(
       expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );

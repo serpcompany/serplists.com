@@ -8,7 +8,6 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
   const insertChain = { values: vi.fn(), select: vi.fn() };
   const db = {
     select: vi.fn(() => selectChain),
@@ -47,11 +46,6 @@ import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import type { TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
 import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
-
-// Rows stored before stable ids existed, or with ids that are not text (a JSON import with
-// numbers, a blank or whitespace id), have no id the API accepts. The editor must resend
-// the ids the API stored, so a second save in the same editor session never renumbers the
-// Template and retires every active run's progress.
 
 type Row = Record<string, unknown>;
 
@@ -122,8 +116,7 @@ function createStore(subItemIds: [[unknown, unknown], [unknown, unknown]]) {
 
 type Store = ReturnType<typeof createStore>;
 
-// A D1 stand-in that reads the stored rows and applies the handler's batched updates to them.
-function useStore(store: Store) {
+function serveFromAndWriteBatchesTo(store: Store) {
   dbMocks.selectChain.limit.mockImplementation(async () => [store.template]);
   dbMocks.selectChain.orderBy.mockImplementation(async () => [store.run]);
   dbMocks.db.update.mockImplementation((table: unknown) => ({
@@ -148,8 +141,7 @@ const apiClient = {
 
 const responses: Array<Record<string, unknown>> = [];
 
-// The editor's save path down to the API call, with the real PUT handler behind it.
-const saveTemplate = (input: SaveTemplateInput) => persistTemplateSave({
+const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistTemplateSave({
   createTemplate: vi.fn(),
   updateTemplate: async (payload) => {
     const response = await handleTemplates(new Request(`http://localhost/api/templates/${payload.id}`, {
@@ -164,15 +156,14 @@ const saveTemplate = (input: SaveTemplateInput) => persistTemplateSave({
   applyDefaults: applyTemplateSaveDefaults,
 }, input);
 
-// Saves the form as the editor does and returns the baseline it rebases the form onto.
-async function saveAs(state: { loaded: TemplateEditorLoadResult; version?: number }, values: TemplateEditorFormValues) {
+async function saveAndRebaseAsTheEditorDoes(state: { loaded: TemplateEditorLoadResult; version?: number }, values: TemplateEditorFormValues) {
   const result = await saveTemplateEditorData({
     id: 'template-1',
     expectedVersion: state.version,
     storedSlug: state.loaded.templateSlug,
     loadedIsPublic: state.loaded.initialValues.isPublic,
     values,
-  }, { saveTemplate });
+  }, { saveTemplate: editorSavePathToTheRealPutHandler });
   expect(result.errors).toEqual([]);
   expect(result.success).toBe(true);
   return {
@@ -197,7 +188,7 @@ const storedIds = (items: unknown): string[] => (JSON.parse(String(items)) as Ro
   ]),
 ]);
 
-describe('saving a Template stored without stable ids', () => {
+describe('saving a Template stored without ids the API accepts, which the editor resends so a second save never renumbers it', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     responses.length = 0;
@@ -211,20 +202,20 @@ describe('saving a Template stored without stable ids', () => {
 
   it.each(cases)('keeps the ids and run progress over two saves in one editor session (%s)', async (_name, subItemIds) => {
     const store = createStore(subItemIds);
-    useStore(store);
+    serveFromAndWriteBatchesTo(store);
     const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
     const opened = { loaded, version: loaded.version };
 
-    const afterFirst = await saveAs(opened, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
+    const afterFirst = await saveAndRebaseAsTheEditorDoes(opened, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
     const idsAfterFirst = storedIds(store.template.items);
     expect(responses[0]).toMatchObject({ structureChanged: true, content_version: 4 });
     expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
 
-    await saveAs(afterFirst, withTaskTitle(afterFirst.loaded.initialValues, 2, 'Write and send the report'));
+    await saveAndRebaseAsTheEditorDoes(afterFirst, withTaskTitle(afterFirst.loaded.initialValues, 2, 'Write and send the report'));
 
     expect(responses[1]).toMatchObject({ structureChanged: true, content_version: 5, reconciledRuns: 1 });
-    // The second save found every section, task and Sub-task by the id the first one stored.
-    expect(storedIds(store.template.items)).toEqual(idsAfterFirst);
+    const idsTheSecondSaveFoundAgain = storedIds(store.template.items);
+    expect(idsTheSecondSaveFoundAgain).toEqual(idsAfterFirst);
     expect(JSON.parse(String(store.run.retired_items))).toEqual([]);
     const [section] = JSON.parse(String(store.run.items)) as Row[];
     const [crawl, review, report] = section.items as Row[];
@@ -232,18 +223,17 @@ describe('saving a Template stored without stable ids', () => {
     expect(((crawl.contents as Row[])[0].subItems as Row[]).map((subItem) => subItem.isCompleted)).toEqual([true, true]);
     expect(review).toMatchObject({ title: 'Review on-page SEO issues', isCompleted: false });
     expect(report).toMatchObject({ title: 'Write and send the report', isCompleted: true });
-    // 4 of 7 tasks and Sub-tasks are done.
-    expect(store.run.progress).toBe(57);
+    expect(store.run.progress).toBe(Math.round((4 / 7) * 100));
   });
 
   it('stores nothing when the second save changes nothing', async () => {
     const store = createStore(cases[0][1]);
-    useStore(store);
+    serveFromAndWriteBatchesTo(store);
     const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
 
-    const afterFirst = await saveAs({ loaded, version: loaded.version }, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
+    const afterFirst = await saveAndRebaseAsTheEditorDoes({ loaded, version: loaded.version }, withTaskTitle(loaded.initialValues, 1, 'Review on-page SEO issues'));
     const itemsAfterFirst = store.template.items;
-    await saveAs(afterFirst, afterFirst.loaded.initialValues);
+    await saveAndRebaseAsTheEditorDoes(afterFirst, afterFirst.loaded.initialValues);
 
     expect(responses[1]).toMatchObject({ structureChanged: false, content_version: 4 });
     expect(store.template.items).toBe(itemsAfterFirst);
@@ -269,11 +259,7 @@ describe('saving a Template stored without stable ids', () => {
   });
 });
 
-// The official seed, starter packs, imports and copies of those store content blocks
-// without ids, and the editor gives each block a new id when it loads. A save that
-// changes only a detail must still not count as a structure change: that would bump
-// content_version, rewrite active runs, and mark completed and shared runs stale.
-const seedSections = (run = false) => [
+const sectionsWithContentBlocksWithoutIds = (run = false) => [
   {
     id: 'sec-1',
     title: 'Audit',
@@ -311,16 +297,16 @@ describe('saving a Template whose content blocks have no ids', () => {
   it('keeps content_version and the run when a save changes only the description', async () => {
     const { template, run } = createStore(cases[0][1]);
     const store = {
-      template: { ...template, items: JSON.stringify(seedSections()) },
-      run: { ...run, items: JSON.stringify(seedSections(true)) },
+      template: { ...template, items: JSON.stringify(sectionsWithContentBlocksWithoutIds()) },
+      run: { ...run, items: JSON.stringify(sectionsWithContentBlocksWithoutIds(true)) },
     };
     const { items: storedItems } = store.template;
     const { items: runItems } = store.run;
-    useStore(store);
+    serveFromAndWriteBatchesTo(store);
     const loaded = await loadTemplateEditorData({ id: 'template-1' }, { apiClient });
     expect(JSON.stringify(loaded.initialValues.sections)).toContain('"id":"content_');
 
-    await saveAs({ loaded, version: loaded.version }, { ...loaded.initialValues, description: 'Fixed a typo' });
+    await saveAndRebaseAsTheEditorDoes({ loaded, version: loaded.version }, { ...loaded.initialValues, description: 'Fixed a typo' });
 
     expect(responses[0]).toMatchObject({ structureChanged: false, content_version: 3 });
     expect(store.template.description).toBe('Fixed a typo');

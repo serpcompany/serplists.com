@@ -202,13 +202,11 @@ describe('portable template import/export API', () => {
     expect(data.templates[0].title).toBe('Team Template');
   });
 
-  describe('an export asked to include public templates', () => {
-    // The page adds public templates from the edge-cached catalog; the export reads only
-    // the active context's own templates, never an OR across every public template.
+  describe('an export asked to include public templates, which the page adds from the edge-cached catalog', () => {
     it.each([
       ['Personal', '/api/templates/backup?includePublic=1'],
       ['Organization', '/api/templates/backup?includePublic=1&teamId=team-1'],
-    ])('reads only the %s templates from D1', async (_label, path) => {
+    ])('reads only the %s templates from D1, never an OR across every public template', async (_label, path) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([
         { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'editor', status: 'active' },
       ]);
@@ -339,8 +337,7 @@ describe('portable template import/export API', () => {
       mockEnv as never,
     );
 
-  // The uploader accepts up to 50MB, so an export holding such an asset must import again.
-  it('imports assets up to the upload limit', async () => {
+  it('imports assets up to the upload limit, so an export holding a 50MB upload imports again', async () => {
     const response = await importPack([packWithAsset(8 * 1024 * 1024), packWithAsset(50 * 1024 * 1024)]);
     const data = await response.json();
 
@@ -360,8 +357,6 @@ describe('portable template import/export API', () => {
     ]);
   });
 
-  // A pack may be up to 2MB, but the editor and a run started from the template resend the
-  // whole content under the 1MB body limit, so one template may not hold more than that.
   it('fails only the template whose content is too large to be saved again', async () => {
     const textHeavy = {
       title: 'Long guide',
@@ -379,9 +374,7 @@ describe('portable template import/export API', () => {
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
   });
 
-  // Stored sections carry run state (isCompleted, notes). The portable export must hold
-  // only portable keys, validate against the published JSON Schema, and import again.
-  it('exports stored templates without run state, valid against the JSON Schema', async () => {
+  it('exports stored templates without the run state their sections carry, valid against the JSON Schema and importable again', async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {
         id: 'template-1',
@@ -442,9 +435,7 @@ describe('portable template import/export API', () => {
     expect((await reimport.json()).imported).toBe(1);
   });
 
-  // A lenient JSON import stores content blocks with a numeric id and null file details.
-  // The export must include the template, cleaned to the portable format, not skip it.
-  it('exports content blocks with a numeric id or null file details instead of skipping the template', async () => {
+  it('exports content blocks with a numeric id or null file details, as a lenient JSON import stores them, in the portable format instead of skipping the template', async () => {
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
       {
         id: 'template-1',

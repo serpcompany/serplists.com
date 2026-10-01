@@ -10,7 +10,6 @@ const dbMocks = vi.hoisted(() => {
     orderBy: vi.fn(),
     limit: vi.fn(),
   };
-  // select: INSERT ... SELECT, which guarded writes (audit rows, versions) use.
   const insertChain = { values: vi.fn(), select: vi.fn() };
   const updateChain = { set: vi.fn(), where: vi.fn() };
   const db = {
@@ -40,8 +39,6 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-// Bundled starter Templates are not D1 rows, so D1 alone never reports their slugs as taken.
-// Every case below runs against an empty D1: the only conflict is the bundled catalog.
 const bundledSlugs = bundledCatalog.templates.map((template) => template.slug);
 const titleFor = (slug: string) => slug.split('-').map((word) => word.toUpperCase()).join(' ');
 const sections = [{ id: 'section-1', title: 'Checklist', items: [] }];
@@ -104,7 +101,7 @@ beforeEach(() => {
   vi.mocked(getEntitlementsForContext).mockResolvedValue(unlimited);
 });
 
-describe('bundled starter slugs are reserved', () => {
+describe('bundled starter slugs are reserved against an empty D1, since bundled starters are not D1 rows', () => {
   it('covers every bundled starter Template the app shows', () => {
     expect(bundledSlugs.length).toBeGreaterThan(0);
     const appSlugs = repoTemplates.map((template) => template.slug?.trim()).filter(Boolean);
@@ -172,11 +169,10 @@ describe('bundled starter slugs are reserved', () => {
     expectSuffixed(dbMocks.updateChain.set.mock.calls[0][0].slug, slug);
   });
 
-  it('keeps a slug a Template already holds, so saving never changes its shared URL', async () => {
+  it('keeps a slug a Template already holds, which the editor resends with every save, so saving never changes its shared URL', async () => {
     const [slug] = bundledSlugs;
     dbMocks.selectChain.limit.mockResolvedValueOnce([existingTemplate(slug)]);
 
-    // The editor sends the stored slug with every save.
     const response = await put(slug, { title: 'Renamed Template' });
 
     expect(response.status).toBe(200);
@@ -193,9 +189,7 @@ describe('bundled starter slugs are reserved', () => {
   });
 });
 
-// Template pages and link previews read a UUID after /profile/<user>/ as a template id, so a
-// Template whose slug is a UUID would get a public URL (Share, sitemap) that never loads.
-describe('UUID-shaped slugs are reserved', () => {
+describe('UUID-shaped slugs are reserved, since template pages and link previews read a UUID in their path as a template id', () => {
   const uuid = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
   const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const expectNotUuid = (stored: unknown) => {

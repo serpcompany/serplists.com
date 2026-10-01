@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Slugs are chosen by reading first; a concurrent write can claim one before this request's
-// batch runs, and the unique index (idx_templates_slug_unique) then rejects the batch.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -52,8 +49,7 @@ const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-mini
 const post = (path: string, body: unknown) =>
   handleTemplates(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }), env);
 
-// The rows each batch attempt inserted: [template, version, audit event].
-const attempts = () => {
+const insertedRowsOfEachBatchAttempt = () => {
   const inserted = dbMocks.insertChain.values.mock.calls.map(([values]) => values);
   return Array.from({ length: inserted.length / 3 }, (_, index) => inserted.slice(index * 3, index * 3 + 3));
 };
@@ -65,7 +61,7 @@ function expectAttemptCarries(attempt: Array<Record<string, string>>, slug: stri
   expect(JSON.parse(audit.after_json).slug).toBe(slug);
 }
 
-describe('template slugs claimed between the check and the write', () => {
+describe('template slugs claimed between the check and the write, which the unique slug index then refuses', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
@@ -100,7 +96,7 @@ describe('template slugs claimed between the check and the write', () => {
       expect(response.status).toBe(200);
       expect(data.slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
       expect(dbMocks.db.batch).toHaveBeenCalledTimes(2);
-      const [first, second] = attempts();
+      const [first, second] = insertedRowsOfEachBatchAttempt();
       expectAttemptCarries(first, 'weekly-review');
       expectAttemptCarries(second, data.slug);
       expect(second[0].id).toBe(first[0].id);
@@ -134,7 +130,7 @@ describe('template slugs claimed between the check and the write', () => {
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
     expect(data.successes[0].slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
-    expectAttemptCarries(attempts()[1], data.successes[0].slug);
+    expectAttemptCarries(insertedRowsOfEachBatchAttempt()[1], data.successes[0].slug);
   });
 
   it('reports a readable import failure when every slug attempt collides', async () => {
@@ -154,10 +150,12 @@ describe('template slugs claimed between the check and the write', () => {
       handleTemplates(new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }), env);
 
     it('checks the suffixed slug too, and picks another when both are taken', async () => {
+      const templateHoldingGuide = [{ id: 'template-2' }];
+      const templateHoldingGuideTemplate = [{ id: 'template-3' }];
       dbMocks.selectChain.limit
         .mockResolvedValueOnce([stored])
-        .mockResolvedValueOnce([{ id: 'template-2' }]) // 'guide'
-        .mockResolvedValueOnce([{ id: 'template-3' }]); // 'guide-template'
+        .mockResolvedValueOnce(templateHoldingGuide)
+        .mockResolvedValueOnce(templateHoldingGuideTemplate);
 
       const response = await put({ slug: 'guide', expected_version: 1 });
       const data = await response.json();
