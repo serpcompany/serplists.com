@@ -9,23 +9,41 @@ import {
   mergePublicTemplateCollections,
 } from "@/lib/repoTemplateCatalog";
 
+const bundledCampingStarter = (): ChecklistTemplate => ({
+  id: "repo:camping-checklist-001",
+  title: "Ultimate Camping Checklist",
+  description: "",
+  sections: [],
+  userId: REPO_TEMPLATE_USER_ID,
+  createdAt: "2026-03-22T00:00:00.000Z",
+  updatedAt: "2026-03-22T00:00:00.000Z",
+  isPublic: true,
+  slug: "ultimate-camping-checklist",
+  categories: [],
+  tags: [],
+  version: 1,
+  ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME, username: REPO_TEMPLATE_OWNER_SLUG },
+});
+
+const userTemplate = (fields: Pick<ChecklistTemplate, "id" | "title"> & Partial<ChecklistTemplate>): ChecklistTemplate => ({
+  description: "",
+  sections: [],
+  userId: "user-1",
+  createdAt: "2026-03-24T00:00:00.000Z",
+  updatedAt: "2026-03-24T00:00:00.000Z",
+  isPublic: false,
+  categories: [],
+  tags: [],
+  version: 1,
+  ...fields,
+});
+
+const userPublicTemplate = () =>
+  userTemplate({ id: "user-template-2", title: "User Public Template", isPublic: true, slug: "user-public-template" });
+
 describe("repo template catalog", () => {
   describe("when a D1 template has a bundled starter's slug", () => {
-    const starter: ChecklistTemplate = {
-      id: "repo:camping-checklist-001",
-      title: "Ultimate Camping Checklist",
-      description: "",
-      sections: [],
-      userId: REPO_TEMPLATE_USER_ID,
-      createdAt: "2026-03-22T00:00:00.000Z",
-      updatedAt: "2026-03-22T00:00:00.000Z",
-      isPublic: true,
-      slug: "ultimate-camping-checklist",
-      categories: [],
-      tags: [],
-      version: 1,
-      ownerProfile: { full_name: REPO_TEMPLATE_OWNER_NAME, username: REPO_TEMPLATE_OWNER_SLUG },
-    };
+    const starter = bundledCampingStarter();
     const d1Template = (id: string, overrides: Partial<ChecklistTemplate> = {}): ChecklistTemplate => ({
       ...starter,
       id,
@@ -74,26 +92,7 @@ describe("repo template catalog", () => {
   });
 
   it("finds public templates by slug or id", () => {
-    const templates = mergePublicTemplateCollections([
-      {
-        id: "repo:camping-checklist-001",
-        title: "Ultimate Camping Checklist",
-        description: "",
-        sections: [],
-        userId: REPO_TEMPLATE_USER_ID,
-        createdAt: "2026-03-22T00:00:00.000Z",
-        updatedAt: "2026-03-22T00:00:00.000Z",
-        isPublic: true,
-        slug: "ultimate-camping-checklist",
-        categories: [],
-        tags: [],
-        version: 1,
-        ownerProfile: {
-          full_name: REPO_TEMPLATE_OWNER_NAME,
-          username: REPO_TEMPLATE_OWNER_SLUG,
-        },
-      },
-    ], []);
+    const templates = mergePublicTemplateCollections([bundledCampingStarter()], []);
 
     expect(findPublicTemplateByIdentifier(templates, "ultimate-camping-checklist")?.id).toBe(
       "repo:camping-checklist-001",
@@ -105,42 +104,8 @@ describe("repo template catalog", () => {
 
   it("keeps user-owned private templates in the account collection", () => {
     const accountTemplates = mergeAccountTemplateCollections(
-      [
-        {
-          id: "repo:camping-checklist-001",
-          title: "Ultimate Camping Checklist",
-          description: "",
-          sections: [],
-          userId: REPO_TEMPLATE_USER_ID,
-          createdAt: "2026-03-22T00:00:00.000Z",
-          updatedAt: "2026-03-22T00:00:00.000Z",
-          isPublic: true,
-          slug: "ultimate-camping-checklist",
-          categories: [],
-          tags: [],
-          version: 1,
-          ownerProfile: {
-            full_name: REPO_TEMPLATE_OWNER_NAME,
-            username: REPO_TEMPLATE_OWNER_SLUG,
-          },
-        },
-      ],
-      [
-        {
-          id: "user-template-1",
-          title: "Private Imported Template",
-          description: "",
-          sections: [],
-          userId: "user-1",
-          createdAt: "2026-03-24T00:00:00.000Z",
-          updatedAt: "2026-03-24T00:00:00.000Z",
-          isPublic: false,
-          slug: "private-imported-template",
-          categories: [],
-          tags: [],
-          version: 1,
-        },
-      ],
+      [bundledCampingStarter()],
+      [userTemplate({ id: "user-template-1", title: "Private Imported Template", slug: "private-imported-template" })],
       "user-1",
     );
 
@@ -152,38 +117,8 @@ describe("repo template catalog", () => {
 
   it("does not duplicate user-owned public templates already present in the public collection", () => {
     const accountTemplates = mergeAccountTemplateCollections(
-      [
-        {
-          id: "user-template-2",
-          title: "User Public Template",
-          description: "",
-          sections: [],
-          userId: "user-1",
-          createdAt: "2026-03-24T00:00:00.000Z",
-          updatedAt: "2026-03-24T00:00:00.000Z",
-          isPublic: true,
-          slug: "user-public-template",
-          categories: [],
-          tags: [],
-          version: 1,
-        },
-      ],
-      [
-        {
-          id: "user-template-2",
-          title: "User Public Template",
-          description: "",
-          sections: [],
-          userId: "user-1",
-          createdAt: "2026-03-24T00:00:00.000Z",
-          updatedAt: "2026-03-24T00:00:00.000Z",
-          isPublic: true,
-          slug: "user-public-template",
-          categories: [],
-          tags: [],
-          version: 1,
-        },
-      ],
+      [userPublicTemplate()],
+      [userPublicTemplate()],
       "user-1",
     );
 

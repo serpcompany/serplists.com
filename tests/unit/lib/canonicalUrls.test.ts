@@ -1,6 +1,7 @@
+import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { buildTeamInvitePath } from '@functions/api/utils/team-invite-delivery';
 import {
@@ -16,13 +17,6 @@ import { VERIFY_EMAIL_LOGIN_PATH } from '@/lib/auth/loginPrefill';
 import { getPostRegisterDestination, getPostSignInDestination, withReturnPath } from '@/lib/auth/returnPath';
 import { canonicalPath } from '@/lib/http/urlStandard';
 import * as routes from '@/lib/routes';
-
-import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/nextRouting';
-
-vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
-  const { openNextBuildConfig } = await import('../../support/nextRouting');
-  return openNextBuildConfig();
-});
 
 const { redirects } = await loadBuiltRoutes('production');
 

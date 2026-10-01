@@ -1,14 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { loadBuiltRoutes, workerRedirect } from '../../support/builtRoutes';
+import { describe, expect, it } from 'vitest';
 
 import { checkSiteStandards, SMOKE_TEST_HEADER } from '../../../scripts/check-site-standards.mjs';
 import { SMOKE_TEST_HEADER as APP_SMOKE_TEST_HEADER } from '@/lib/seo/siteOrigin';
-
-import { loadBuiltRoutes, workerRedirect } from '../../support/nextRouting';
-
-vi.mock('@opennextjs/aws/adapters/config/index.js', async () => {
-  const { openNextBuildConfig } = await import('../../support/nextRouting');
-  return openNextBuildConfig();
-});
 
 type Options = { host?: string; headers?: Record<string, string> };
 

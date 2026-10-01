@@ -52,6 +52,12 @@ const createThemeHarness = () => {
   };
 };
 
+const expectAToggleTo = (harness: ReturnType<typeof createThemeHarness>, theme: 'light' | 'dark') => {
+  expect(toggleDocumentTheme(harness.document, harness.storage)).toBe(theme);
+  expect(harness.isDark()).toBe(theme === 'dark');
+  expect(harness.storage.setItem).toHaveBeenLastCalledWith('serplists-theme', theme);
+};
+
 describe('theme helpers', () => {
   it('defaults to light mode when no explicit theme is stored', () => {
     const harness = createThemeHarness();
@@ -70,30 +76,15 @@ describe('theme helpers', () => {
     expect(getStoredTheme(harness.storage)).toBe('light');
     expect(getDocumentTheme(harness.document)).toBe('dark');
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('light');
-    expect(harness.isDark()).toBe(false);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'light',
-    );
+    expectAToggleTo(harness, 'light');
   });
 
   it('toggles the document dark class and persists the selected theme', () => {
     const harness = createThemeHarness();
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('dark');
-    expect(harness.isDark()).toBe(true);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'dark',
-    );
+    expectAToggleTo(harness, 'dark');
 
-    expect(toggleDocumentTheme(harness.document, harness.storage)).toBe('light');
-    expect(harness.isDark()).toBe(false);
-    expect(harness.storage.setItem).toHaveBeenLastCalledWith(
-      'serplists-theme',
-      'light',
-    );
+    expectAToggleTo(harness, 'light');
   });
 });
 

@@ -31,6 +31,32 @@ const portablePackSource = (exportedAt: string) => ({
   },
 });
 
+const PORTABLE_CHECKLIST_PACK_SOURCE = {
+  "../docs/schema/portable-checklist.json": {
+    default: {
+      kind: "serplists-template-pack",
+      schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+      exportedAt: "2026-03-22T00:00:00.000Z",
+      templates: [
+        {
+          title: "Portable Checklist",
+          type: "checklist",
+          slug: "portable-checklist",
+          visibility: "public",
+          categories: ["ops"],
+          tags: ["portable"],
+          sections: [
+            {
+              title: "Prep",
+              items: [{ title: "Review checklist" }],
+            },
+          ],
+        },
+      ],
+    },
+  },
+};
+
 describe("repo template catalog", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -198,31 +224,7 @@ describe("repo template catalog", () => {
   });
 
   it("accepts portable template pack sources", () => {
-    const templates = normalizeRepoTemplateSources({
-      "../docs/schema/portable-checklist.json": {
-        default: {
-          kind: "serplists-template-pack",
-          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-          exportedAt: "2026-03-22T00:00:00.000Z",
-          templates: [
-            {
-              title: "Portable Checklist",
-              type: "checklist",
-              slug: "portable-checklist",
-              visibility: "public",
-              categories: ["ops"],
-              tags: ["portable"],
-              sections: [
-                {
-                  title: "Prep",
-                  items: [{ title: "Review checklist" }],
-                },
-              ],
-            },
-          ],
-        },
-      },
-    });
+    const templates = normalizeRepoTemplateSources(PORTABLE_CHECKLIST_PACK_SOURCE);
 
     expect(templates).toHaveLength(1);
     expect(templates[0].title).toBe("Portable Checklist");
@@ -232,31 +234,7 @@ describe("repo template catalog", () => {
   });
 
   it("builds a private copy payload from a repo template without its slug, which the server derives from the title and suffixes", () => {
-    const [template] = normalizeRepoTemplateSources({
-      "../docs/schema/portable-checklist.json": {
-        default: {
-          kind: "serplists-template-pack",
-          schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-          exportedAt: "2026-03-22T00:00:00.000Z",
-          templates: [
-            {
-              title: "Portable Checklist",
-              type: "checklist",
-              slug: "portable-checklist",
-              visibility: "public",
-              categories: ["ops"],
-              tags: ["portable"],
-              sections: [
-                {
-                  title: "Prep",
-                  items: [{ title: "Review checklist" }],
-                },
-              ],
-            },
-          ],
-        },
-      },
-    });
+    const [template] = normalizeRepoTemplateSources(PORTABLE_CHECKLIST_PACK_SOURCE);
 
     const payload = buildRepoTemplateCreatePayload(template, undefined);
 

@@ -1,7 +1,9 @@
+import { expectThePortableSeoFieldsAndOneRule } from '../../../support/portableTemplateChecks';
 import { describe, it, expect } from 'vitest';
 import { parseBackupFile, parseTemplatesFromData, parseTemplatesFromJSON } from '@/lib/utils/templateBackup';
 import { TemplateBackup } from '@/lib/schemas/checklistSchema';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
+import { jsonFile, TITLE_REQUIRED_RULE } from '../../../fixtures/jsonFile';
 
 describe('Template Backup Utilities', () => {
   describe('parseBackupFile', () => {
@@ -12,9 +14,7 @@ describe('Template Backup Utilities', () => {
         templates: [createMockTemplate()]
       };
       
-      const file = new File([JSON.stringify(validBackup)], 'backup.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(validBackup, 'backup.json');
       
       const result = await parseBackupFile(file);
       
@@ -35,9 +35,7 @@ describe('Template Backup Utilities', () => {
         templates: 'not an array'
       };
       
-      const file = new File([JSON.stringify(invalidBackup)], 'backup.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(invalidBackup, 'backup.json');
       
       await expect(parseBackupFile(file)).rejects.toThrow('Backup validation failed');
     });
@@ -51,9 +49,7 @@ describe('Template Backup Utilities', () => {
         templates: [createMockTemplate()]
       };
       
-      const file = new File([JSON.stringify(backup)], 'backup.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(backup, 'backup.json');
       
       const result = await parseTemplatesFromJSON(file);
       
@@ -67,9 +63,7 @@ describe('Template Backup Utilities', () => {
         createMockTemplate({ id: 'template-2', title: 'Second Template' })
       ];
       
-      const file = new File([JSON.stringify(templates)], 'templates.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(templates, 'templates.json');
       
       const result = await parseTemplatesFromJSON(file);
       
@@ -88,15 +82,7 @@ describe('Template Backup Utilities', () => {
             seoTitle: 'Portable SEO Title',
             seoDescription: 'Portable SEO Description',
             visibility: 'private',
-            rules: [
-              {
-                id: 'rule-1',
-                type: 'required-field',
-                path: 'sections[].items[].title',
-                value: 'Every item needs a title',
-                severity: 'error',
-              },
-            ],
+            rules: [TITLE_REQUIRED_RULE],
             sections: [
               {
                 title: 'Checklist',
@@ -107,15 +93,11 @@ describe('Template Backup Utilities', () => {
         ],
       };
 
-      const file = new File([JSON.stringify(portablePack)], 'portable.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(portablePack, 'portable.json');
 
       const result = await parseTemplatesFromJSON(file);
 
-      expect(result.templates[0].seoTitle).toBe('Portable SEO Title');
-      expect(result.templates[0].seoDescription).toBe('Portable SEO Description');
-      expect(result.templates[0].rules).toHaveLength(1);
+      expectThePortableSeoFieldsAndOneRule(result.templates[0]);
     });
 
     it('should surface warnings for uploaded assets', async () => {
@@ -144,9 +126,7 @@ describe('Template Backup Utilities', () => {
         })
       ];
 
-      const file = new File([JSON.stringify(templates)], 'templates.json', {
-        type: 'application/json'
-      });
+      const file = jsonFile(templates, 'templates.json');
 
       const result = await parseTemplatesFromJSON(file);
 

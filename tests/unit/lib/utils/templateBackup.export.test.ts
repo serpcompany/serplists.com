@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { exportTemplatesToJSON, parseTemplatesFromJSON, prepareTemplatesForImport } from '@/lib/utils/templateBackup';
 import { createMockTemplate } from '../../../fixtures/templateBackupFixtures';
+import { jsonFile } from '../../../fixtures/jsonFile';
 
 describe('Template Backup Utilities', () => {
   describe('exportTemplatesToJSON', () => {
@@ -72,9 +73,7 @@ describe('Template Backup Utilities', () => {
       ];
       
       const backup = exportTemplatesToJSON(originalTemplates, 'test@example.com');
-      const backupFile = new File([JSON.stringify(backup)], 'backup.json', {
-        type: 'application/json'
-      });
+      const backupFile = jsonFile(backup, 'backup.json');
 
       const importedTemplates = await parseTemplatesFromJSON(backupFile);
       const preparedTemplates = prepareTemplatesForImport(importedTemplates.templates, 'new-user');

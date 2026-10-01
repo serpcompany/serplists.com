@@ -5,6 +5,18 @@ import {
   validatePortableTemplatePack,
 } from '@/lib/schemas/checklistSchema';
 
+const aPackWhoseOnlyTaskHas = (contents: unknown[]) => ({
+  kind: 'serplists-template-pack',
+  schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
+  exportedAt: '2026-03-21T00:00:00.000Z',
+  templates: [
+    {
+      title: 'Broken Template',
+      sections: [{ title: 'Prep', items: [{ title: 'Review top pages', contents }] }],
+    },
+  ],
+});
+
 describe('portableTemplatePackSchema', () => {
   it('validates a portable template pack', () => {
     const data = {
@@ -40,54 +52,14 @@ describe('portableTemplatePackSchema', () => {
   });
 
   it('rejects subItems content without nested sub-items', () => {
-    const data = {
-      kind: 'serplists-template-pack',
-      schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-      exportedAt: '2026-03-21T00:00:00.000Z',
-      templates: [
-        {
-          title: 'Broken Template',
-          sections: [
-            {
-              title: 'Prep',
-              items: [
-                {
-                  title: 'Review top pages',
-                  contents: [{ type: 'subItems', value: '' }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
+    const data = aPackWhoseOnlyTaskHas([{ type: 'subItems', value: '' }]);
 
     const result = portableTemplatePackSchema.safeParse(data);
     expect(result.success).toBe(false);
   });
 
   it('rejects media content without a value', () => {
-    const data = {
-      kind: 'serplists-template-pack',
-      schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
-      exportedAt: '2026-03-21T00:00:00.000Z',
-      templates: [
-        {
-          title: 'Broken Template',
-          sections: [
-            {
-              title: 'Prep',
-              items: [
-                {
-                  title: 'Review top pages',
-                  contents: [{ type: 'image', value: '' }],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
+    const data = aPackWhoseOnlyTaskHas([{ type: 'image', value: '' }]);
 
     expect(() => validatePortableTemplatePack(data)).toThrow();
   });

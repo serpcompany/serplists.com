@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseTemplatesFromFile } from '@/lib/utils/templateBackup';
 import { renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
+import { jsonFile } from '../../../fixtures/jsonFile';
 
 describe('Template Backup Utilities', () => {
   describe('parseTemplatesFromFile', () => {
@@ -76,7 +77,7 @@ describe('Template Backup Utilities', () => {
       };
 
       const result = await parseTemplatesFromFile(
-        new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
+        jsonFile(pack, 'pack.json'),
       );
 
       expect(result.templates[0].sections[0].items.map((item) => item.title)).toEqual(['Weigh', 'Task 2']);
@@ -120,7 +121,7 @@ describe('Template Backup Utilities', () => {
         };
 
         await expectReadableRejection(
-          new File([JSON.stringify(pack)], 'pack.json', { type: 'application/json' }),
+          jsonFile(pack, 'pack.json'),
           /Pack Template: Skipped: Section 1 > Item 1 > id: Expected string, received number/,
         );
       });
