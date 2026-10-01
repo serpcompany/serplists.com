@@ -1,45 +1,23 @@
 import type { JSX } from "react";
-import { useId, useState, type KeyboardEvent } from "react";
-import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { ChevronDown, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   ReorderHandle,
   ReorderHint,
   ReorderMoveButtons,
 } from "@/components/template-editor/ReorderHandle";
+import { dropIndicatorClass, ROW_ACTIONS_REVEAL_CLASS } from "@/components/template-editor/reorder";
 import {
-  dropIndicatorClass,
-  moveArrayEntry,
-  remapIndexAfterMove,
-  ROW_ACTIONS_REVEAL_CLASS,
-} from "@/components/template-editor/reorder";
-import { useOutlineDrag } from "@/components/template-editor/useOutlineDrag";
+  useSectionOutline,
+  type SectionOutlineSelection,
+} from "@/components/template-editor/useSectionOutline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  createTemplateEditorItem,
-  createTemplateEditorSection,
-  type TemplateEditorFormValues,
-} from "@/lib/forms/templateEditorForm";
 import { cn } from "@/lib/utils";
 import { getSectionDisplayTitle } from "@/lib/utils/checklistSections";
 
-type EditingItemState = {
-  itemIndex: number;
-  sectionIndex: number;
-};
-
-interface SectionSidebarProps {
+interface SectionSidebarProps extends SectionOutlineSelection {
   outlineSelectionActive: boolean;
-  selectedSectionIndex: number;
-  selectedItemIndex: number | null;
-  onSelectSection: (sectionIndex: number) => void;
-  onSelectItem: (sectionIndex: number, itemIndex: number) => void;
-  // Called after the user picks or adds a section or task (not after a move or a removal),
-  // so the phone's outline sheet can close on the chosen entry.
-  onEntryPicked?: () => void;
 }
 
 function buildItemFallbackLabel(itemIndex: number): string {
@@ -61,204 +39,39 @@ export function SectionSidebar({
   onSelectItem,
   onEntryPicked,
 }: SectionSidebarProps): JSX.Element {
-  const { control, getValues, setValue } =
-    useFormContext<TemplateEditorFormValues>();
-  const sectionsFieldArray = useFieldArray({
-    control,
-    keyName: "fieldId",
-    name: "sections",
+  const {
+    collapsedSectionIds,
+    editingItem,
+    editingSectionIndex,
+    editingValue,
+    handleAddSection,
+    handleAddTask,
+    handleKeyDown,
+    handlePickItem,
+    handlePickSection,
+    handleRemoveSection,
+    handleRemoveTask,
+    handleStartEditingItem,
+    handleStartEditingSection,
+    moveAnnouncement,
+    moveSection,
+    moveTask,
+    outlineDrag,
+    reorderHintId,
+    saveItem,
+    saveSection,
+    sections,
+    sectionsFieldArray,
+    setEditingValue,
+    setMoveAnnouncement,
+    toggleSection,
+  } = useSectionOutline({
+    selectedSectionIndex,
+    selectedItemIndex,
+    onSelectSection,
+    onSelectItem,
+    onEntryPicked,
   });
-  const sections = useWatch({
-    control,
-    name: "sections",
-  });
-  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(
-    null,
-  );
-  const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
-  const [editingValue, setEditingValue] = useState("");
-  const outlineDrag = useOutlineDrag({ moveSection, moveTask });
-  // Sections the user collapsed, by section id; every other section is expanded. The
-  // outline can mount before the template loads (a reset then replaces every section),
-  // and a Clipy draft or a save resets the form too, so expansion must not be seeded
-  // from the sections present at mount. Keyed by id, a collapsed section stays
-  // collapsed when it moves or the form is reset to the saved values.
-  const [collapsedSectionIds, setCollapsedSectionIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  // Where the last keyboard or button move put an entry, for screen readers.
-  const [moveAnnouncement, setMoveAnnouncement] = useState("");
-  const reorderHintId = useId();
-
-  function toggleSection(sectionId: string): void {
-    setCollapsedSectionIds((current) => {
-      const next = new Set(current);
-      if (next.has(sectionId)) {
-        next.delete(sectionId);
-      } else {
-        next.add(sectionId);
-      }
-      return next;
-    });
-  }
-
-  function expandSection(sectionId: string | undefined): void {
-    if (!sectionId) {
-      return;
-    }
-
-    setCollapsedSectionIds((current) => {
-      if (!current.has(sectionId)) {
-        return current;
-      }
-
-      const next = new Set(current);
-      next.delete(sectionId);
-      return next;
-    });
-  }
-
-  function stopEditing(): void {
-    setEditingSectionIndex(null);
-    setEditingItem(null);
-    setEditingValue("");
-  }
-
-  function handleAddSection(): void {
-    const nextIndex = sectionsFieldArray.fields.length;
-    // A new section has a new id, so it starts expanded.
-    sectionsFieldArray.append(createTemplateEditorSection());
-    onSelectSection(nextIndex);
-    onEntryPicked?.();
-  }
-
-  function handleRemoveSection(sectionIndex: number): void {
-    if (sectionsFieldArray.fields.length <= 1) {
-      toast.error("You must have at least one section");
-      return;
-    }
-
-    sectionsFieldArray.remove(sectionIndex);
-    onSelectSection(Math.max(0, sectionIndex - 1));
-  }
-
-  function handleAddTask(sectionIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
-    setValue(
-      `sections.${sectionIndex}.items`,
-      [...currentItems, createTemplateEditorItem()],
-      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
-    );
-    expandSection(getValues(`sections.${sectionIndex}.id`));
-    onSelectItem(sectionIndex, currentItems.length);
-    onEntryPicked?.();
-  }
-
-  function handleRemoveTask(sectionIndex: number, itemIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
-    setValue(
-      `sections.${sectionIndex}.items`,
-      currentItems.filter((_, index) => index !== itemIndex),
-      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
-    );
-    onSelectSection(sectionIndex);
-  }
-
-  function handlePickSection(sectionIndex: number): void {
-    onSelectSection(sectionIndex);
-    onEntryPicked?.();
-  }
-
-  function handlePickItem(sectionIndex: number, itemIndex: number): void {
-    onSelectItem(sectionIndex, itemIndex);
-    onEntryPicked?.();
-  }
-
-  function handleStartEditingSection(
-    sectionIndex: number,
-    currentTitle: string,
-  ): void {
-    setEditingItem(null);
-    setEditingSectionIndex(sectionIndex);
-    setEditingValue(currentTitle);
-  }
-
-  function handleStartEditingItem(
-    sectionIndex: number,
-    itemIndex: number,
-    currentTitle: string,
-  ): void {
-    setEditingSectionIndex(null);
-    setEditingItem({ sectionIndex, itemIndex });
-    setEditingValue(currentTitle);
-  }
-
-  function saveSection(sectionIndex: number): void {
-    setValue(`sections.${sectionIndex}.title`, editingValue, {
-      shouldDirty: true,
-    });
-    stopEditing();
-  }
-
-  function saveItem(sectionIndex: number, itemIndex: number): void {
-    setValue(`sections.${sectionIndex}.items.${itemIndex}.title`, editingValue, {
-      shouldDirty: true,
-    });
-    stopEditing();
-  }
-
-  function handleKeyDown(
-    event: KeyboardEvent<HTMLInputElement>,
-    params:
-      | { kind: "section"; sectionIndex: number }
-      | { kind: "item"; itemIndex: number; sectionIndex: number },
-  ): void {
-    if (event.key === "Enter") {
-      if (params.kind === "section") {
-        saveSection(params.sectionIndex);
-      } else {
-        saveItem(params.sectionIndex, params.itemIndex);
-      }
-      return;
-    }
-
-    if (event.key === "Escape") {
-      stopEditing();
-    }
-  }
-
-  // Drops, arrow keys and the Move buttons all move through these, so the selection follows
-  // the move.
-  function moveSection(fromIndex: number, toIndex: number): void {
-    sectionsFieldArray.move(fromIndex, toIndex);
-
-    const nextSelectedSection = remapIndexAfterMove(
-      selectedSectionIndex,
-      fromIndex,
-      toIndex,
-    );
-    if (selectedItemIndex === null) {
-      onSelectSection(nextSelectedSection);
-    } else {
-      onSelectItem(nextSelectedSection, selectedItemIndex);
-    }
-  }
-
-  function moveTask(sectionIndex: number, fromIndex: number, toIndex: number): void {
-    const currentItems = getValues(`sections.${sectionIndex}.items`) ?? [];
-    setValue(
-      `sections.${sectionIndex}.items`,
-      moveArrayEntry(currentItems, fromIndex, toIndex),
-      { shouldDirty: true, shouldTouch: true, shouldValidate: true },
-    );
-
-    if (selectedSectionIndex === sectionIndex && selectedItemIndex !== null) {
-      onSelectItem(
-        sectionIndex,
-        remapIndexAfterMove(selectedItemIndex, fromIndex, toIndex),
-      );
-    }
-  }
 
   const { draggedOutlineItem, outlineDropTarget } = outlineDrag;
 
