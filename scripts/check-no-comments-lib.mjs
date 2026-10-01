@@ -49,7 +49,6 @@ export const FORMATS_WITHOUT_COMMENTS = [
   ".woff2",
   ".ttf",
   ".otf",
-  ".pdf",
   ".zip",
 ];
 

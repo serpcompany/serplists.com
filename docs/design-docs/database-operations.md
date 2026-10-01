@@ -66,6 +66,13 @@ change a column's `NOT NULL` or default:
   `0014` and `0015` in one rebuild that keeps every column `0001` to `0015` gave `users`, the
   unused affiliate columns included.
 - Write no `BEGIN` or `COMMIT`: remote D1 rejects transaction statements in a migration.
+- D1 runs each migration in a transaction with foreign keys enforced, where
+  `PRAGMA foreign_keys=OFF` changes nothing, so the one in `0014` to `0016` is not a pattern
+  to copy. `PRAGMA defer_foreign_keys = on` defers the checks to the end of the migration but
+  still runs `ON DELETE CASCADE` ([D1 docs](../references/cloudflare-d1-llms.txt)). Dropping
+  a table that other tables reference deletes its rows first, with those `ON DELETE` actions,
+  so find out what a rebuild's `DROP TABLE` would cascade to before it runs on staging or
+  production.
 
 Why the existing migrations did what they did is in
 [data persistence](data-persistence.md#schema-history).
