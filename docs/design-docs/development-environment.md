@@ -183,12 +183,18 @@ commands and the staging/production model are in
 
 ```bash
 pnpm run verify           # pre-PR gate
+pnpm run typecheck        # tsc for the app, scripts, API and tests
 pnpm run test:run         # unit tests (pnpm run test for watch mode)
 pnpm run test:local-d1    # local D1 fixture integration (20 s per test: each starts a real local D1)
 pnpm run test:smoke       # @smoke browser specs on an isolated stack
 pnpm run test:e2e:full    # every browser spec on the same stack
 pnpm run test:coverage
 ```
+
+Vitest and Playwright run a test without checking its types, so a passing test can still
+fail `pnpm run typecheck`, which checks every test, browser specs included, through
+`tests/tsconfig.json`. To check only the tests, run
+`pnpm exec tsc -p tests/tsconfig.json --noEmit` (about 30 seconds).
 
 The browser tests run the production build: `test:smoke` and `test:e2e:full` build it
 with OpenNext and `SITE_ENV=production`, wipe, migrate and seed their own D1 in

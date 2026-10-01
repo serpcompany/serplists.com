@@ -300,6 +300,45 @@ Common failures:
   `.only` call in Vitest and Playwright files, and a test file excluded from `test:run` must
   be in `test:local-d1` (`tests/unit/config/no-exceptions.test.ts`). A test that cannot pass
   yet is fixed or deleted, never skipped.
+- Tests are type-checked like the app; Vitest and Playwright strip types without checking
+  them. `tests/tsconfig.json` extends the app's `tsconfig.json`, includes every TypeScript
+  file under `tests/` (unit and integration tests, browser specs, support and fixtures) with
+  `next-env.d.ts`, `cloudflare-env.d.ts` and `src/js-yaml.d.ts`, and runs in
+  `pnpm run typecheck`. It holds the tests to `strict`, and for now turns off the stricter
+  flags the app's config enables (`noImplicitOverride`, `noFallthroughCasesInSwitch`,
+  `exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) until the tests meet them
+  ([harness hardening plan](exec-plans/active/harness-hardening.md)).
+  `tests/unit/config/typecheck-coverage.test.ts` fails when `pnpm run typecheck` runs no
+  tsconfig that includes a TypeScript file the repository holds, or skips a tsconfig. A
+  `.tsx` file next to a `.ts` file of the same name is in no include: TypeScript keeps only
+  the `.ts` one, so the test names it.
+- Read a response body with `readJson(response, schema)` from `tests/support/readJson.ts`,
+  which parses it with Zod and returns it typed, so the test checks the shape it reads
+  instead of trusting a cast. A schema names the fields the test reads and ends each object
+  in `.passthrough()`: a plain `z.object()` drops the fields it does not list, and a
+  `toEqual()` on the result would then pass for a body with more. The file also holds
+  `jsonObject`, `jsonObjects`, the API's error body (`apiErrorBody`, from `jsonError()` and
+  `authJsonError()`) and Better Auth's (`betterAuthErrorBody`). A test that only compares the
+  whole body may pass `await response.json()` straight to `expect()`.
+- Fixtures and mocks have the types of what the code under test receives, with no casts:
+  - `apiEnv(vars)` (`tests/support/apiEnv.ts`) is a complete `Env`. Its `DB` and
+    `R2_UPLOADS` throw, naming the binding, when the code under test uses them; pass the one
+    it needs (a `MigratedSqliteD1` binding, a fake bucket) in `vars`.
+  - A fixture sets every field its type requires, even one the code under test ignores. A
+    mock gets the parameters it is called with (`vi.fn((options: BetterAuthOptions) => ...)`),
+    so `mock.calls` is typed, and a stand-in for a client has every method of the client's
+    type (`runExecutionApiClient()` in `tests/fixtures/runExecutionFixtures.ts`).
+  - Narrow a value with Vitest's `assert.exists()`, which fails the test and narrows the
+    type, never with `!`. `findElementOf(tree, Component)` (`tests/support/elementTree.ts`)
+    finds a component's element with its props typed.
+  - A JavaScript module a test imports gets a declaration file beside it
+    (`scripts/lib/run-tool.d.mts`). Without one, TypeScript infers its types from the code,
+    and a parameter that defaults to `null` then accepts only `null`.
+  - A test of what a JavaScript caller may pass but the declared types rule out is a
+    `.test.mjs` file (`tests/unit/scripts/run-tool-from-javascript.test.mjs`).
+  - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars
+    `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
+    complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.
 - Smoke and e2e suites run against the production build on a local worker, or dedicated
   staging, never production. `tests/e2e/run-smoke.mjs` builds the app with OpenNext
   (skip with `--skip-build`), and Playwright's web server
@@ -486,7 +525,10 @@ Common failures:
   `EXPLAIN QUERY PLAN` for one. See `tests/unit/functions/api/teams-sqlite.test.ts`.
   `createMigratedD1()` (`tests/fixtures/sqliteD1.ts`) has the same tables behind only the
   calls Drizzle and Better Auth's Drizzle adapter make: it records nothing, and its batches
-  are not transactions. TD-46 merges the SQLite stand-ins.
+  are not transactions. TD-46 merges the SQLite stand-ins. Their `raw()` reads rows as
+  arrays, which Drizzle maps by column position, through `allRowsAsArrays()`
+  (`tests/support/sqliteRowArrays.ts`): it declares node:sqlite's `setReturnArrays()`, which
+  Node 22.16 has and `@types/node` 22.17 lacks, and parses the rows with Zod.
 - `pnpm run test:local-d1` runs the API on real local D1 through wrangler's
   `getPlatformProxy`, with no dev server. `startLocalD1()`
   (`tests/integration/local-d1-handler-env.ts`) applies every migration to a throwaway
