@@ -14,7 +14,7 @@
     "setup": "node scripts/setup-local.mjs",
     "build": "pnpm run sitemap:generate && pnpm run headers:generate && next build",
     "lint": "eslint .",
-    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json && tsc -p functions/tsconfig.json",
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json && tsc -p functions/tsconfig.json && tsc -p tests/tsconfig.json",
     "typecheck:env": "node scripts/check-env.mjs",
     "verify": "pnpm run typecheck:env && pnpm run lint && pnpm run typecheck && pnpm run check:repo && pnpm run test:run",
     "check:repo": "pnpm run secret:scan && pnpm run docs:check && pnpm run comments:check && pnpm run deps:check && pnpm run schema:portable:check && pnpm run db:schema:check && pnpm run templates:check",
