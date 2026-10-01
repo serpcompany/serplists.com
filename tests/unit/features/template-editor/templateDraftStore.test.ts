@@ -146,8 +146,7 @@ describe("settling the draft after a new template's save", () => {
   });
 });
 
-// Edits to an existing template, kept when the session ended before they were saved.
-describe("existing template drafts", () => {
+describe("existing template drafts, kept when the session ends before the edits are saved", () => {
   const owner = { userId: "u1", templateId: "template-1" };
 
   it("keeps the edits with the version they were made on", () => {
@@ -160,13 +159,12 @@ describe("existing template drafts", () => {
     expect(draft?.baseVersion).toBe(7);
   });
 
-  it("never offers the edits to another user or on another template", () => {
+  it("never offers the edits to another user, on another template, or as a new template's draft", () => {
     const storage = createStorage();
     saveTemplateEditDraft(owner, { values: draftValues, baseVersion: 7 }, storage);
 
     expect(readTemplateEditDraft({ userId: "u2", templateId: "template-1" }, storage)).toBeNull();
     expect(readTemplateEditDraft({ userId: "u1", templateId: "template-2" }, storage)).toBeNull();
-    // Nor as a new template's draft.
     expect(readTemplateDraft({ userId: "u1" }, storage)).toBeNull();
     expect(getTemplateEditDraftKey(owner)).not.toBe(getTemplateDraftKey({ userId: "u1" }));
   });
@@ -191,9 +189,7 @@ describe("existing template drafts", () => {
   });
 });
 
-// A confirmed sign-out returns the tab to Personal, so after sign-in the new-template
-// editor looks for the user's kept drafts in every context, not only the active one.
-describe("listing a user's kept drafts across contexts", () => {
+describe("listing a user's kept drafts across contexts, which the new-template editor checks after a confirmed sign-out returned the tab to Personal", () => {
   it("lists this user's new-template drafts with their context, newest first", () => {
     const storage = createStorage();
     storage.setItem(

@@ -81,7 +81,7 @@ describe('useTemplateEditorModel versions', () => {
 });
 
 describe('useTemplateEditorModel saved values', () => {
-  it('returns the saved values built from what it sent, not from later edits', async () => {
+  it("returns the saved values built from what it sent, not from typing that changes react-hook-form's shallow-copied values in place", async () => {
     let resolveSave: (value: { success: boolean; errors: []; version: number }) => void = () => {};
     const saveTemplate = vi.fn(
       () =>
@@ -102,7 +102,6 @@ describe('useTemplateEditorModel saved values', () => {
     });
 
     const pending = model.save(values);
-    // react-hook-form's getValues() is a shallow copy: typing changes nested objects in place.
     values.sections[0].items[0].description = 'Typed while saving';
     resolveSave({ success: true, errors: [], version: 2 });
     const result = await pending;
@@ -113,13 +112,11 @@ describe('useTemplateEditorModel saved values', () => {
 });
 
 describe('useTemplateEditorModel saved values after defaults', () => {
-  // The real save path: defaults are applied before the API call. The form must be
-  // rebuilt from what was stored, or it keeps an empty section whose placeholder task
-  // gets a new id on the next save, churning every active run.
-  it('returns what was stored, and a second save sends the same task ids', async () => {
+  it('returns what the real save path stored after defaults, so a second save sends the same placeholder task ids instead of churning every active run', async () => {
     vi.useFakeTimers();
     try {
       const sent: TemplateSavePayload[] = [];
+      const versionTheStaticRenderNeverLoads = 1;
       const saveTemplate = (input: SaveTemplateInput) =>
         persistTemplateSave(
           {
@@ -130,8 +127,7 @@ describe('useTemplateEditorModel saved values after defaults', () => {
             },
             applyDefaults: applyTemplateSaveDefaults,
           },
-          // The static render runs no load effect, so the first save has no loaded version.
-          { ...input, expectedVersion: input.expectedVersion ?? 1 },
+          { ...input, expectedVersion: input.expectedVersion ?? versionTheStaticRenderNeverLoads },
         );
       const model = captureModel('template-1', saveTemplate);
       const values = buildTemplateEditorFormValues({
@@ -166,8 +162,7 @@ describe('useTemplateEditorModel saved values after defaults', () => {
 });
 
 describe('useTemplateEditorModel saved slug', () => {
-  // A taken slug is stored with a suffix; the SEO panel must show that, not the request.
-  it('shows the slug the server stored, suffix included', async () => {
+  it('shows the slug the server stored, with the suffix it adds to a taken slug, not the one requested', async () => {
     const saveTemplate = vi.fn().mockResolvedValue({
       success: true,
       errors: [],
@@ -184,9 +179,7 @@ describe('useTemplateEditorModel saved slug', () => {
     expect(result.savedValues?.seoUrl).toBe('moving-checklist-1a2b3c4d');
   });
 
-  // A cleared slug field sends no slug, and the template keeps its slug. (A slug with no
-  // Latin letters or digits, such as '!!!', is refused before saving.)
-  it('shows the slug the template kept when the field was cleared', () => {
+  it('shows the slug the template kept when the field was cleared, since a cleared field sends no slug', () => {
     for (const typed of ['', '   ']) {
       const saved = buildTemplateEditorSavedState(
         buildTemplateEditorFormValues({ title: 'Moving', seoUrl: typed }),

@@ -39,9 +39,7 @@ describe('template editor navigation guards', () => {
     ).toBe(false);
   });
 
-  // A save can still fail (a conflict, a slug rule, a network error, or the unload
-  // aborting it), and the edits exist only in the form until it succeeds.
-  it('never allows leaving unasked while a save is unconfirmed', () => {
+  it('never allows leaving unasked while a save is unconfirmed, since it can still fail and the edits live only in the form until it succeeds', () => {
     expect(
       shouldBlockTemplateEditorNavigation({
         isDirty: true,
@@ -57,8 +55,9 @@ describe('template editor navigation guards', () => {
         loading: true,
       }),
     ).toBe(false);
+  });
 
-    // A save of an unchanged form has nothing to lose.
+  it('lets a clean form go during a save, which has nothing to lose', () => {
     expect(
       shouldBlockTemplateEditorNavigation({
         isDirty: false,
@@ -77,9 +76,7 @@ describe('template editor navigation guards', () => {
     ).toBe(EDITOR_UNSAVED_CHANGES_MESSAGE);
   });
 
-  // Picking a file does not change the form until the upload finishes, so a clean form
-  // must still ask: leaving would drop the file.
-  it('blocks leaving while a file is still uploading, even with no other edits', () => {
+  it('blocks leaving while a file is still uploading, even with no other edits, since the form changes only once the upload finishes', () => {
     expect(
       shouldBlockTemplateEditorNavigation({
         isDirty: false,
@@ -109,8 +106,7 @@ describe('template editor navigation guards', () => {
   });
 });
 
-// Generating from Clipy replaces the whole form, so unsaved work needs a yes first.
-describe('confirmReplaceTemplateDraft', () => {
+describe('confirmReplaceTemplateDraft, before generating from Clipy replaces the whole form', () => {
   it('replaces a clean form without asking', () => {
     const confirmDialog = vi.fn(() => false);
 
@@ -129,9 +125,7 @@ describe('confirmReplaceTemplateDraft', () => {
   });
 });
 
-// Restore draft replaces the whole form too. The answer comes before the draft is taken,
-// so a no keeps the notice (and the kept draft) in place.
-describe('restoreKeptTemplateDraft', () => {
+describe('restoreKeptTemplateDraft, which replaces the whole form too', () => {
   const kept = { title: 'Kept draft A' };
 
   it('restores into a clean form without asking', () => {
@@ -144,7 +138,7 @@ describe('restoreKeptTemplateDraft', () => {
     expect(apply).toHaveBeenCalledWith(kept);
   });
 
-  it('keeps unsaved work, and the draft, when the user says no', () => {
+  it('keeps unsaved work, and the draft with its notice, when the user says no, since it asks before taking the draft', () => {
     const confirmDialog = vi.fn(() => false);
     const takeDraft = vi.fn(() => kept);
     const apply = vi.fn();

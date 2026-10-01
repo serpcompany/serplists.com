@@ -1,4 +1,3 @@
-import { createFormControl } from 'react-hook-form';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,29 +11,29 @@ import {
   type TemplateEditorFormValues,
 } from '@/lib/forms/templateEditorForm';
 
-const loaded = (): TemplateEditorFormValues =>
-  buildTemplateEditorFormValues({
-    title: 'Launch checklist',
-    description: 'Ship it.',
-    seoUrl: 'launch-checklist',
-    sections: [
-      {
-        id: 'section-1',
-        title: 'Prep',
-        items: [
-          { id: 'item-1', title: 'Write notes', description: 'Draft', contents: [] },
-          { id: 'item-2', title: 'Review', description: '', contents: [] },
-        ],
-      },
-    ],
-  });
+import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
 
-// A real react-hook-form control, so reset() and isDirty behave as in the editor.
-function createEditorForm() {
-  const form = createFormControl<TemplateEditorFormValues>({ defaultValues: loaded() });
-  // useForm marks the control mounted in an effect; until then getValues() reads defaults.
-  form.control._state.mount = true;
-  // The editor page reads formState.isDirty, which subscribes the form to it.
+const loadedTemplate = () => ({
+  title: 'Launch checklist',
+  description: 'Ship it.',
+  seoUrl: 'launch-checklist',
+  sections: [
+    {
+      id: 'section-1',
+      title: 'Prep',
+      items: [
+        { id: 'item-1', title: 'Write notes', description: 'Draft', contents: [] },
+        { id: 'item-2', title: 'Review', description: '', contents: [] },
+      ],
+    },
+  ],
+});
+
+const loaded = (): TemplateEditorFormValues => buildTemplateEditorFormValues(loadedTemplate());
+
+type EditorForm = ReturnType<typeof createFormControlMountedLikeUseForm>;
+
+const readIsDirtyAsTheEditorPageDoes = (form: EditorForm) => {
   let dirty = false;
   form.subscribe({
     formState: { isDirty: true },
@@ -42,16 +41,19 @@ function createEditorForm() {
       dirty = Boolean(state.isDirty);
     },
   });
-  const isDirty = () => dirty;
-  return { form, isDirty };
+  return () => dirty;
+};
+
+function createEditorForm() {
+  const form = createFormControlMountedLikeUseForm(loadedTemplate());
+  return { form, isDirty: readIsDirtyAsTheEditorPageDoes(form) };
 }
 
-// What the page does around a save: snapshot at click time, then rebase on success.
-function startSave(form: ReturnType<typeof createEditorForm>['form']) {
+function clickSaveLikeTheEditorPage(form: EditorForm) {
   const submitted = cloneTemplateEditorFormValues(form.getValues());
   return {
     submitted,
-    finish: () =>
+    succeed: () =>
       rebaseTemplateEditorFormAfterSave(form, {
         submitted,
         saved: buildTemplateEditorSavedState(submitted, { storedSlug: 'launch-checklist' })
@@ -65,9 +67,9 @@ describe('template editor post-save form state', () => {
     const { form, isDirty } = createEditorForm();
     form.setValue('title', 'Launch checklist v2', { shouldDirty: true });
 
-    const save = startSave(form);
+    const save = clickSaveLikeTheEditorPage(form);
     form.setValue('title', 'Launch checklist v3', { shouldDirty: true });
-    save.finish();
+    save.succeed();
 
     expect(form.getValues('title')).toBe('Launch checklist v3');
     expect(isDirty()).toBe(true);
@@ -78,11 +80,11 @@ describe('template editor post-save form state', () => {
     const { form, isDirty } = createEditorForm();
     form.setValue('sections.0.items.0.description', 'Sent text', { shouldDirty: true });
 
-    const save = startSave(form);
+    const save = clickSaveLikeTheEditorPage(form);
     form.setValue('sections.0.items.0.description', 'Sent text, then more', {
       shouldDirty: true,
     });
-    save.finish();
+    save.succeed();
 
     expect(form.getValues('sections.0.items.0.description')).toBe('Sent text, then more');
     expect(save.submitted.sections[0]?.items[0]?.description).toBe('Sent text');
@@ -92,14 +94,14 @@ describe('template editor post-save form state', () => {
 
   it('keeps a task added while the save was in flight', () => {
     const { form, isDirty } = createEditorForm();
-    const save = startSave(form);
+    const save = clickSaveLikeTheEditorPage(form);
     const items = form.getValues('sections.0.items');
     form.setValue(
       'sections.0.items',
       [...items, { id: 'item-3', title: 'Added later', description: '', contents: [] }],
       { shouldDirty: true },
     );
-    save.finish();
+    save.succeed();
 
     expect(form.getValues('sections.0.items').map((item) => item.id)).toEqual([
       'item-1',
@@ -113,7 +115,7 @@ describe('template editor post-save form state', () => {
     const { form, isDirty } = createEditorForm();
     form.setValue('title', '  Launch checklist v2  ', { shouldDirty: true });
 
-    startSave(form).finish();
+    clickSaveLikeTheEditorPage(form).succeed();
 
     expect(form.getValues('title')).toBe('Launch checklist v2');
     expect(isDirty()).toBe(false);
@@ -123,9 +125,9 @@ describe('template editor post-save form state', () => {
     const { form, isDirty } = createEditorForm();
     form.setValue('title', '  Launch checklist v2  ', { shouldDirty: true });
 
-    const save = startSave(form);
+    const save = clickSaveLikeTheEditorPage(form);
     form.setValue('description', 'Ship it today.', { shouldDirty: true });
-    save.finish();
+    save.succeed();
 
     expect(form.getValues('title')).toBe('Launch checklist v2');
     expect(form.getValues('description')).toBe('Ship it today.');

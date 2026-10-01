@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: state lives
-// in `cells`, and effects run at once on each render.
 const fake = vi.hoisted(() => ({
-  cells: [] as unknown[],
-  cursor: 0,
   workspace: {
     canEditTemplates: true,
     isWorkspaceLoading: false,
@@ -12,39 +8,25 @@ const fake = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("react", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = initial;
-    const setState = (next: unknown) => {
-      fake.cells[index] = next;
-    };
-    return [fake.cells[index], setState];
-  },
-  useEffect: (effect: () => void) => {
-    effect();
-  },
-}));
+vi.mock("react", async (importOriginal) => {
+  const { useStateKeptBetweenRenders } = await import("../../../support/hookStateSlots");
+  return { ...(await importOriginal<typeof import("react")>()), useState: useStateKeptBetweenRenders };
+});
 vi.mock("@/contexts/CloudflareAuthContext", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }));
 vi.mock("@/contexts/WorkspaceContext", () => ({ useWorkspace: () => fake.workspace }));
 
 import { useTemplateEditPermission } from "@/features/template-editor/useTemplateEditPermission";
+import { forgetKeptState, renderKeepingState } from "../../../support/hookStateSlots";
 
 const organizationTemplate = { userId: "creator-1", teamId: "team-1", ownerType: "team" as const };
-// The editor, reduced to the hook under test.
 function Editor(params: Parameters<typeof useTemplateEditPermission>[0]) {
   return useTemplateEditPermission(params);
 }
 
-// One render of it under the fake React.
-const rendered = (params: Parameters<typeof useTemplateEditPermission>[0]) => {
-  fake.cursor = 0;
-  return Editor(params);
-};
+const rendered = (params: Parameters<typeof useTemplateEditPermission>[0]) => renderKeepingState(() => Editor(params));
 
 beforeEach(() => {
-  fake.cells = [];
+  forgetKeptState();
   fake.workspace = { canEditTemplates: true, isWorkspaceLoading: false, teams: [] };
 });
 
@@ -53,8 +35,7 @@ describe("useTemplateEditPermission", () => {
     expect(rendered({ isCreate: false, loading: true, ownership: undefined })).toBe("checking");
   });
 
-  // Unmounting the form would drop unsaved edits without a prompt.
-  it("keeps an open form open when a later teams refetch shows a lower role", () => {
+  it("keeps an open form open when a later teams refetch shows a lower role, since closing it would drop unsaved edits without a prompt", () => {
     fake.workspace.teams = [{ id: "team-1", role: "editor" }];
     expect(rendered({ isCreate: false, loading: false, ownership: organizationTemplate })).toBe("editable");
 

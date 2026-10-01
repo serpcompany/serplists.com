@@ -11,6 +11,8 @@ import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 import { createPageVisitTracker } from "@/lib/navigation/pageVisit";
 
+import { deferred } from "../../../support/deferred";
+
 const createStorage = (): TemplateDraftStorage => {
   const items = new Map<string, string>();
   return {
@@ -35,19 +37,7 @@ const draftValues = buildTemplateEditorFormValues({
   ],
 });
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
-// A Free user's create was refused, so the draft was kept. After upgrading they restore
-// it, click Save, and leave (answering "Leave anyway?") while it saves. The create then
-// succeeds: the draft must go, or the new-template editor offers it back and a second
-// save creates a duplicate.
-describe("saveTemplateForVisit", () => {
+describe("saveTemplateForVisit, for a restored draft whose create succeeds after the user left, which the editor must never offer back for a duplicate save", () => {
   const owner = { userId: "u1" };
 
   const shownPage = () => {
@@ -63,7 +53,7 @@ describe("saveTemplateForVisit", () => {
       storage,
     );
 
-  it("clears the kept draft when a create succeeds after the user left", async () => {
+  it("clears the kept draft, and gives the left page no result, when a create succeeds after the user left", async () => {
     const storage = createStorage();
     saveTemplateDraft(owner, draftValues, storage);
     const tracker = shownPage();
@@ -77,7 +67,6 @@ describe("saveTemplateForVisit", () => {
     tracker.leave();
     request.resolve({ success: true, errors: [] });
 
-    // Nothing is left for the page to show or navigate to.
     await expect(pending).resolves.toBeNull();
     expect(readTemplateDraft(owner, storage)).toBeNull();
   });

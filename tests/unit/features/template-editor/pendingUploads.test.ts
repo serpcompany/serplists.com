@@ -2,18 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createPendingUploads } from '@/features/template-editor/pendingUploads';
 
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined;
-  let reject: (error: unknown) => void = () => undefined;
-  const promise = new Promise<T>((onResolve, onReject) => {
-    resolve = onResolve;
-    reject = onReject;
-  });
-  return { promise, resolve, reject };
-}
+import { deferred } from '../../../support/deferred';
 
-// Lets the store's settle handlers run.
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const letTheSettleHandlersRun = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('createPendingUploads', () => {
   it('counts every upload until it finishes', async () => {
@@ -26,11 +17,11 @@ describe('createPendingUploads', () => {
     expect(uploads.count()).toBe(2);
 
     first.resolve({ success: true });
-    await flush();
+    await letTheSettleHandlersRun();
     expect(uploads.count()).toBe(1);
 
     second.resolve({ success: false });
-    await flush();
+    await letTheSettleHandlersRun();
     expect(uploads.count()).toBe(0);
   });
 
@@ -40,7 +31,7 @@ describe('createPendingUploads', () => {
 
     uploads.track(upload.promise);
     upload.reject(new Error('Network down'));
-    await flush();
+    await letTheSettleHandlersRun();
 
     expect(uploads.count()).toBe(0);
   });
@@ -54,8 +45,8 @@ describe('createPendingUploads', () => {
     expect(uploads.count()).toBe(1);
 
     upload.resolve(undefined);
-    await flush();
-    await flush();
+    await letTheSettleHandlersRun();
+    await letTheSettleHandlersRun();
     expect(uploads.count()).toBe(0);
   });
 
@@ -68,12 +59,12 @@ describe('createPendingUploads', () => {
     uploads.track(upload.promise);
     expect(listener).toHaveBeenCalledTimes(1);
     upload.resolve(undefined);
-    await flush();
+    await letTheSettleHandlersRun();
     expect(listener).toHaveBeenCalledTimes(2);
 
     unsubscribe();
     uploads.track(Promise.resolve());
-    await flush();
+    await letTheSettleHandlersRun();
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });

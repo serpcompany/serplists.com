@@ -2,39 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: state lives
-// in `cells`, and effects run on each render with the previous render's cleanups run.
 const fake = vi.hoisted(() => ({
-  cells: [] as unknown[],
-  cursor: 0,
-  cleanups: [] as Array<() => void>,
   invalidateQueries: null as null | ((filters: unknown) => Promise<void>),
   startBillingCheckout: null as null | ((billingEnabled: boolean) => Promise<boolean>),
 }));
 
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = initial;
-    const setState = (next: unknown) => {
-      fake.cells[index] =
-        typeof next === "function" ? (next as (value: unknown) => unknown)(fake.cells[index]) : next;
-    };
-    return [fake.cells[index], setState];
-  },
-  useRef: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = { current: initial };
-    return fake.cells[index];
-  },
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
-  useEffect: (effect: () => void | (() => void)) => {
-    const cleanup = effect();
-    if (cleanup) fake.cleanups.push(cleanup);
-  },
+  ...(await import("../../../support/hookStateSlots")).hooksKeptBetweenRenders,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -60,21 +35,23 @@ vi.mock("@/lib/api", () => ({ api: { getBillingStatus: vi.fn() } }));
 vi.mock("@/features/template-editor/templateDraftStore", () => ({
   clearTemplateDraft: vi.fn(),
   getTemplateDraftKey: () => "serplists:template-draft:user-1:personal",
-  // No draft kept in another context (useOtherContextTemplateDraft).
   listTemplateDraftContexts: () => [],
   readTemplateDraft: () => null,
   saveTemplateDraft: () => true,
   settleTemplateDraftAfterSave: vi.fn(),
 }));
-// The checkout request itself: resolving true means the browser is leaving for Stripe.
 vi.mock("@/lib/access-flow", () => ({
   navigateToLoginWithReturnPath: vi.fn(),
   startBillingCheckout: (billingEnabled: boolean) => fake.startBillingCheckout!(billingEnabled),
 }));
 
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { forgetKeptState, renderKeepingState, unmountEffects } from "../../../support/hookStateSlots";
 import { navigation } from "../../../support/nextNavigation";
 import { BILLING_STATUS_QUERY_PREFIX } from "@/lib/billing";
+
+const LEAVING_FOR_STRIPE = true;
+const CHECKOUT_NOT_STARTED = false;
 
 const pageshow = (persisted: boolean) => Object.assign(new Event("pageshow"), { persisted });
 const values = { title: "Second template", description: "", sections: [] } as unknown as TemplateEditorFormValues;
@@ -85,32 +62,24 @@ const options = {
   guardLeave: vi.fn(),
 };
 
-// The editor, reduced to the hook under test.
 function Editor() {
   return useTemplateEditorAccess(options);
 }
 
-// One render of it under the fake React, after the previous render's effects are cleaned up.
-const renderedAccess = () => {
-  for (const cleanup of fake.cleanups.splice(0)) cleanup();
-  fake.cursor = 0;
-  return Editor();
-};
+const renderedAccess = () => renderKeepingState(Editor);
 
 beforeEach(() => {
   navigation.reset("/dashboard/templates/new");
-  fake.cells = [];
-  fake.cursor = 0;
-  fake.cleanups = [];
+  forgetKeptState();
   fake.invalidateQueries = vi.fn(async () => undefined);
-  fake.startBillingCheckout = vi.fn(async () => true);
+  fake.startBillingCheckout = vi.fn(async () => LEAVING_FOR_STRIPE);
   options.allowLeave.mockClear();
   options.guardLeave.mockClear();
   vi.stubGlobal("window", new EventTarget());
 });
 
 afterEach(() => {
-  for (const cleanup of fake.cleanups.splice(0)) cleanup();
+  unmountEffects();
   vi.unstubAllGlobals();
 });
 
@@ -144,7 +113,7 @@ describe("useTemplateEditorAccess after Back from checkout", () => {
   });
 
   it("guards the page again when checkout did not start", async () => {
-    fake.startBillingCheckout = vi.fn(async () => false);
+    fake.startBillingCheckout = vi.fn(async () => CHECKOUT_NOT_STARTED);
 
     await renderedAccess().startUpgrade();
 

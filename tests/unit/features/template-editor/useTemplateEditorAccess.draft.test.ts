@@ -3,43 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SaveTemplateResult } from "@/hooks/useTemplateSave";
 import { buildTemplateEditorFormValues } from "@/lib/forms/templateEditorForm";
 
-// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: state, refs
-// and effects live in `cells`, and an effect runs again only when its dependencies
-// change, as in React. The draft store is the real one, over a stub sessionStorage.
-type EffectCell = { deps?: readonly unknown[]; cleanup?: () => void };
-const fake = vi.hoisted(() => ({
-  cells: [] as unknown[],
-  cursor: 0,
-}));
-
 vi.mock("react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react")>()),
-  useState: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = initial;
-    const setState = (next: unknown) => {
-      fake.cells[index] =
-        typeof next === "function" ? (next as (value: unknown) => unknown)(fake.cells[index]) : next;
-    };
-    return [fake.cells[index], setState];
-  },
-  useRef: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = { current: initial };
-    return fake.cells[index];
-  },
-  useCallback: (callback: unknown) => callback,
-  useMemo: (factory: () => unknown) => factory(),
-  useSyncExternalStore: (_subscribe: unknown, getSnapshot: () => unknown) => getSnapshot(),
-  useEffect: (effect: () => void | (() => void), deps?: readonly unknown[]) => {
-    const index = fake.cursor++;
-    const previous = fake.cells[index] as EffectCell | undefined;
-    const changed =
-      !previous?.deps || !deps || deps.some((dep, at) => !Object.is(dep, previous.deps?.[at]));
-    if (!changed) return;
-    previous?.cleanup?.();
-    fake.cells[index] = { deps, cleanup: effect() ?? undefined } satisfies EffectCell;
-  },
+  ...(await import("../../../support/hookStateSlots")).hooksKeptBetweenRenders,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
@@ -73,11 +39,12 @@ import {
   type TemplateDraftStorage,
 } from "@/features/template-editor/templateDraftStore";
 import { useTemplateEditorAccess } from "@/features/template-editor/useTemplateEditorAccess";
+import { forgetKeptState, renderKeepingState, unmountEffects } from "../../../support/hookStateSlots";
 import { navigation } from "../../../support/nextNavigation";
 
 const owner = { userId: "user-1", teamId: null };
 
-const createStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> => {
+const createStubSessionStorage = (): TemplateDraftStorage & Pick<Storage, "key" | "length"> => {
   const items = new Map<string, string>();
   return {
     get length() {
@@ -120,54 +87,38 @@ const limitReached: SaveTemplateResult = {
   failure: { kind: "upgrade_required", message: "Template limit reached." },
 };
 
-// The editor, reduced to the hook under test.
 function Editor() {
   return useTemplateEditorAccess(options);
 }
 
-// One render of it under the fake React.
-const renderedAccess = () => {
-  fake.cursor = 0;
-  return Editor();
-};
+const renderedAccess = () => renderKeepingState(Editor);
 
-const unmount = () => {
-  for (const cell of fake.cells.splice(0)) {
-    (cell as EffectCell | undefined)?.cleanup?.();
-  }
-};
-
-// The editor as the user first sees it, once it has read the kept draft.
-const openedEditor = () => {
+const editorOnceItReadTheKeptDraft = () => {
   renderedAccess();
   return renderedAccess();
 };
 
-let storage: ReturnType<typeof createStorage>;
+let storage: ReturnType<typeof createStubSessionStorage>;
 
 beforeEach(() => {
   navigation.reset("/dashboard/templates/new");
-  fake.cells = [];
-  fake.cursor = 0;
+  forgetKeptState();
   formValues = formB;
   options.allowLeave.mockClear();
   options.guardLeave.mockClear();
-  storage = createStorage();
+  storage = createStubSessionStorage();
   vi.stubGlobal("window", Object.assign(new EventTarget(), { sessionStorage: storage }));
 });
 
 afterEach(() => {
-  unmount();
+  unmountEffects();
   vi.unstubAllGlobals();
 });
 
-// A new template's draft A was kept (a plan limit or an ended session) and the editor
-// offers it with Restore draft and Discard. Until the user takes one of those, the
-// stored slot is A's: work on a different template must not clear or replace it.
-describe("useTemplateEditorAccess with a kept draft that was offered", () => {
+describe("useTemplateEditorAccess with a kept draft it offered, whose slot work on a different template neither clears nor replaces until the user restores or discards it", () => {
   it("keeps an unrestored draft when a different template is created", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = openedEditor();
+    const access = editorOnceItReadTheKeptDraft();
     expect(access.draft?.values.title).toBe("Launch plan");
 
     access.settleDraft(saved, formB);
@@ -177,7 +128,7 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("clears the draft once the restored draft is created", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const restored = openedEditor().restoreDraft();
+    const restored = editorOnceItReadTheKeptDraft().restoreDraft();
     expect(restored?.values).toEqual(draftA);
 
     renderedAccess().settleDraft(saved, { ...draftA, title: "Launch plan, edited" });
@@ -187,11 +138,10 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("clears the draft when the restored create finishes after the editor closed", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = openedEditor();
+    const access = editorOnceItReadTheKeptDraft();
     access.restoreDraft();
     const settle = renderedAccess().settleDraft;
-    // The editor unmounts while the create saves.
-    unmount();
+    unmountEffects();
 
     settle(saved, draftA);
 
@@ -200,7 +150,7 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("does not replace an unrestored draft when a different template is refused", () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = openedEditor();
+    const access = editorOnceItReadTheKeptDraft();
 
     access.settleDraft(limitReached, formB);
 
@@ -208,11 +158,10 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
     expect(renderedAccess().draft?.values.title).toBe("Launch plan");
   });
 
-  it("does not replace an unrestored draft to keep the form for an upgrade, sign-in or ended session", async () => {
+  it("does not replace an unrestored draft to keep the form for an upgrade, sign-in or ended session, and leaves the leave guard up so leaving still asks", async () => {
     saveTemplateDraft(owner, draftA, storage);
-    const access = openedEditor();
+    const access = editorOnceItReadTheKeptDraft();
 
-    // The leave guard stays up, so leaving with the form's work still asks.
     expect(access.keepDraft()).toBe(false);
     await access.startUpgrade();
     access.signIn();
@@ -223,7 +172,7 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
 
   it("keeps the form's work once the offered draft is discarded", () => {
     saveTemplateDraft(owner, draftA, storage);
-    openedEditor().discardDraft();
+    editorOnceItReadTheKeptDraft().discardDraft();
     expect(readTemplateDraft(owner, storage)).toBeNull();
 
     expect(renderedAccess().keepDraft()).toBe(true);
@@ -232,7 +181,7 @@ describe("useTemplateEditorAccess with a kept draft that was offered", () => {
   });
 
   it("clears a draft this form kept once the template is created", () => {
-    const access = openedEditor();
+    const access = editorOnceItReadTheKeptDraft();
     access.settleDraft(limitReached, formB);
     expect(readTemplateDraft(owner, storage)?.values).toEqual(formB);
 

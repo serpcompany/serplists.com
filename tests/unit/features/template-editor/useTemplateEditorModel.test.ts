@@ -45,8 +45,7 @@ const buildTemplate = (
 });
 
 describe("loadTemplateEditorData", () => {
-  // The lists can hold a copy minutes old; a teammate's newer save must not be missing.
-  it("always loads the template by id, even when the lists hold an older copy", async () => {
+  it("always loads the template by id, even when the lists hold an older copy, so a teammate's newer save is never missing", async () => {
     const getCachedTemplate = vi.fn(() => buildTemplate({ title: "Old title", version: 5 }));
     const apiClient = {
       getTemplateById: vi.fn().mockResolvedValue({
@@ -95,8 +94,7 @@ describe("loadTemplateEditorData", () => {
     expect(result.version).toBeUndefined();
   });
 
-  // The page decides from these whether the viewer may edit (templateEditPermission.ts).
-  it("keeps who owns the loaded template, and nothing for a new one or a failed load", async () => {
+  it("keeps who owns the loaded template, which decides whether the viewer may edit, and nothing for a new one or a failed load", async () => {
     const organizationTemplate = await loadTemplateEditorData(
       { id: "template-3" },
       {
@@ -178,9 +176,7 @@ describe("loadTemplateEditorData", () => {
     );
   });
 
-  // Rows stored before the API checked writes can hold content no page renders. The
-  // display mapper drops it; the form must keep it, or the next save deletes it.
-  it("keeps stored content the display mapper drops", async () => {
+  it("keeps stored content the display mapper drops, which older rows can hold, so the next save does not delete it", async () => {
     const apiClient = {
       getTemplateById: vi.fn().mockResolvedValue({
         id: "template-3",
@@ -256,8 +252,7 @@ describe("loadTemplateEditorData versions", () => {
   });
 });
 
-// The Search & SEO preview puts the public URL under the template's creator.
-describe("loadTemplateEditorData owner", () => {
+describe("loadTemplateEditorData owner, under whom the Search & SEO preview puts the public URL", () => {
   it("keeps the creator's username from the loaded record", async () => {
     const result = await loadTemplateEditorData(
       { id: "template-2" },

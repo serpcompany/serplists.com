@@ -3,9 +3,6 @@ import { describe, expect, it } from "vitest";
 import { resolveTemplateEditPermission } from "@/features/template-editor/templateEditPermission";
 import type { OrganizationRole } from "@/lib/organizationPermissions";
 
-// The editor follows the API's rule (canEditTemplate in functions/api/handlers/templates.ts):
-// an Organization's Template by the viewer's role in that Organization, whichever context is
-// active; a Personal Template by its owner.
 const resolve = (
   overrides: Partial<Parameters<typeof resolveTemplateEditPermission>[0]> = {},
   roles: Record<string, OrganizationRole> = {},
@@ -21,7 +18,7 @@ const resolve = (
 
 const organizationTemplate = { userId: "creator-1", teamId: "team-1", ownerType: "team" as const };
 
-describe("resolveTemplateEditPermission", () => {
+describe("resolveTemplateEditPermission, which follows the API's canEditTemplate: an Organization's Template by the viewer's role there, a Personal one by its owner", () => {
   it("lets the owner edit a Personal Template", () => {
     expect(resolve()).toBe("editable");
   });
@@ -46,15 +43,12 @@ describe("resolveTemplateEditPermission", () => {
     expect(resolve({ template }, { "team-1": "viewer" })).toBe("organization_role");
   });
 
-  // The API sends team_id only to members, so the public copy of an Organization's
-  // Template reaches its former Creator without one.
-  it("refuses an Organization's public Template seen from outside it, even by its Creator", () => {
+  it("refuses an Organization's public Template seen from outside it, even by its Creator, which the API sends to non-members without team_id", () => {
     const template = { userId: "user-1", ownerType: "team" as const };
     expect(resolve({ template })).toBe("not_owner");
   });
 
-  // The API sent team_id, so the viewer is a member; the Organization list is behind.
-  it("leaves the decision to the save when the Organization list does not have the role", () => {
+  it("leaves the decision to the save when the API sent team_id, so the viewer is a member, but the Organization list does not have the role yet", () => {
     expect(resolve({ template: organizationTemplate })).toBe("editable");
   });
 

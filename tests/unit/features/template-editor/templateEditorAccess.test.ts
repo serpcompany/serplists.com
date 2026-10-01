@@ -25,8 +25,7 @@ describe("resolveTemplateSaveFailureNotice", () => {
     ).toEqual(expect.objectContaining({ action: "checkout", message: LIMIT_MESSAGE }));
   });
 
-  // A Personal Pro checkout cannot lift an Organization's limits.
-  it("never offers Personal checkout inside an Organization", () => {
+  it("never offers Personal checkout inside an Organization, whose limits it cannot lift", () => {
     const notice = resolveTemplateSaveFailureNotice(
       { kind: "upgrade_required", message: LIMIT_MESSAGE },
       { isOrganization: true, billingEnabled: true },
@@ -83,7 +82,9 @@ describe("template limit pre-check", () => {
     expect(isTemplateLimitReached({ maxTemplates: 1, ownedCount: 1 })).toBe(true);
     expect(isTemplateLimitReached({ maxTemplates: 1, ownedCount: 0 })).toBe(false);
     expect(isTemplateLimitReached({ maxTemplates: null, ownedCount: 40 })).toBe(false);
-    // Billing or the list still loading never blocks: the API check stays authoritative.
+  });
+
+  it("is never reached while billing or the list is still loading, leaving the API check authoritative", () => {
     expect(isTemplateLimitReached({ maxTemplates: undefined, ownedCount: 1 })).toBe(false);
     expect(isTemplateLimitReached({ maxTemplates: 1, ownedCount: undefined })).toBe(false);
   });
@@ -93,9 +94,7 @@ describe("template limit pre-check", () => {
     expect(resolveTemplateLimitNotice(false, personal)).toBeNull();
   });
 
-  // The editor loads its template by id: the workspace list (every template with its
-  // items) is read only when the new-template editor needs a count for a known limit.
-  it("loads the workspace list only on the new-template editor of a limited plan", () => {
+  it("loads the workspace list, every template with its items, only on the new-template editor of a limited plan", () => {
     expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: 1 })).toBe(true);
     expect(shouldLoadTemplateCountForLimit({ isCreate: false, maxTemplates: 1 })).toBe(false);
     expect(shouldLoadTemplateCountForLimit({ isCreate: true, maxTemplates: null })).toBe(false);
@@ -103,9 +102,7 @@ describe("template limit pre-check", () => {
   });
 });
 
-// After a confirmed sign-out the tab signs back in to Personal, so a draft kept in an
-// Organization is offered from there, with a switch to the Organization it belongs to.
-describe("findOtherContextDraft", () => {
+describe("findOtherContextDraft, for a tab that a confirmed sign-out returned to Personal with a draft kept in an Organization", () => {
   const orgDraft = { teamId: "org-1", savedAt: "2026-09-28T11:00:00.000Z" };
   const personalDraft = { teamId: null, savedAt: "2026-09-28T10:00:00.000Z" };
   const canCreateIn = (teamId: string | null) => teamId === null || teamId === "org-1";
@@ -126,8 +123,7 @@ describe("findOtherContextDraft", () => {
     ).toBeNull();
   });
 
-  // The stored Organization may still resolve: the tab could be about to move into it.
-  it("decides nothing while the Organization list is loading", () => {
+  it("decides nothing while the Organization list is loading, since the tab may be about to move into the stored Organization", () => {
     expect(
       findOtherContextDraft([orgDraft], { activeTeamId: undefined, workspaceReady: false, canCreateIn }),
     ).toBeNull();

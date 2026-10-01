@@ -11,11 +11,6 @@ import { persistTemplateSave, type SaveTemplateInput } from "@/hooks/useTemplate
 import { createApiError } from "@/lib/api-errors";
 import type { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 
-// The editor used to read version and rules from the whole workspace list, and each save
-// waited for that list to reload so the next save had the new version. It now loads the
-// template by id, keeps the version the PUT answer returns, and leaves the rules (which it
-// does not edit) to the server.
-
 const rules = [{ id: "rule-1", type: "required-field", path: "sections[].items[].title", severity: "warning" }];
 const storedTemplate = {
   id: "template-1",

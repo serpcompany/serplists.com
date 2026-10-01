@@ -8,13 +8,7 @@ import {
   shouldApplyTemplateEditorSaveResult,
 } from "@/features/template-editor/useTemplateEditorModel";
 
-// /dashboard/templates/:id/edit and /dashboard/templates/new rendered the same unkeyed
-// <TemplateEditor />, so React kept one instance across them (the legacy
-// /console/templates/:id/edit now redirects to the first, in next.config.ts). A failed save's error and the
-// selection carried over to the blank form, and a save of A that finished after the user
-// clicked "New Template" filled the new form with A (Save then created a copy of A).
-
-describe("template editor route identity", () => {
+describe("template editor route identity, so React never keeps one editor, with its errors, selection and save state, across templates or the new-template form", () => {
   it("gives every template, and the new-template form, its own key", () => {
     expect(templateEditorRouteKey("template-a")).not.toBe(templateEditorRouteKey(undefined));
     expect(templateEditorRouteKey("template-a")).not.toBe(templateEditorRouteKey("template-b"));
