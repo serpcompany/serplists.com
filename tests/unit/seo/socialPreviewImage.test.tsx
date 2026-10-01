@@ -5,11 +5,6 @@ import { describe, expect, it } from 'vitest';
 import { metadata as rootMetadata } from '@/app/layout';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
 
-// Link previews showed no image: index.html and every SEOHead page named /placeholder.svg,
-// a relative URL (invalid for og:image) to an SVG, which Facebook, X, LinkedIn and Slack do
-// not render. The root layout's defaults and every page's own metadata name one absolute
-// 1200x630 PNG.
-
 const pngSize = (file: string) => {
   const bytes = readFileSync(file);
   expect(bytes.subarray(1, 4).toString('ascii'), `${file} is a PNG`).toBe('PNG');
@@ -30,8 +25,7 @@ const firstImage = (images: unknown): ImageEntry => {
   return typeof image === 'string' || image instanceof URL ? { url: image } : (image as ImageEntry);
 };
 
-// Next.js resolves a relative metadata URL against metadataBase.
-const resolveMetadataUrl = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();
+const resolveAgainstMetadataBase = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();
 
 const sourceFiles = (directory: string): string[] =>
   readdirSync(directory).flatMap((entry) => {
@@ -39,13 +33,13 @@ const sourceFiles = (directory: string): string[] =>
     return statSync(file).isDirectory() ? sourceFiles(file) : /\.(tsx?|html)$/.test(entry) ? [file] : [];
   });
 
-describe('link preview image', () => {
+describe('link preview image, one absolute 1200x630 PNG since social sites render neither SVG images nor relative URLs', () => {
   it('is an absolute PNG in the root layout defaults, shipped in public/', () => {
     const image = firstImage(rootMetadata.openGraph?.images);
-    const ogImage = resolveMetadataUrl(image.url);
+    const ogImage = resolveAgainstMetadataBase(image.url);
 
     expectShippedCardImage(ogImage);
-    expect(resolveMetadataUrl(firstImage(rootMetadata.twitter?.images).url)).toBe(ogImage);
+    expect(resolveAgainstMetadataBase(firstImage(rootMetadata.twitter?.images).url)).toBe(ogImage);
     expect(Number(image.width)).toBe(1200);
     expect(Number(image.height)).toBe(630);
   });
@@ -56,7 +50,7 @@ describe('link preview image', () => {
 
     expectShippedCardImage(ogImage);
     expect(String(firstImage(metadata.twitter?.images).url)).toBe(ogImage);
-    expect(ogImage).toBe(resolveMetadataUrl(firstImage(rootMetadata.openGraph?.images).url));
+    expect(ogImage).toBe(resolveAgainstMetadataBase(firstImage(rootMetadata.openGraph?.images).url));
   });
 
   it('never points at the SVG placeholder', () => {

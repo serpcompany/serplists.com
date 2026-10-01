@@ -490,7 +490,9 @@ page with tags of its own builds them with `buildPageMetadata`
 `src/lib/brand.ts`, which never adds the suffix twice), points the canonical URL and
 `og:url` at the page's canonical URL on `https://serplists.com` (`buildCanonicalUrl` in
 `src/lib/seo/siteOrigin.ts`, on every environment), and sets robots to `index, follow` unless
-the page says otherwise. The route also renders the same text as JSON-LD (`JsonLd` and
+the page says otherwise. Next.js merges a page's metadata into the layout's shallowly, so a
+page's `openGraph` or `twitter` replaces the layout's whole object: `buildPageMetadata` names
+the shared image in both again. The route also renders the same text as JSON-LD (`JsonLd` and
 `PageJsonLd` in `src/components/seo/`); a page whose text waits for a lookup gives
 `PageJsonLd` the lookup still in flight, inside `<Suspense>`, so the rest of the page
 streams without waiting for it. A build that is not production also sends

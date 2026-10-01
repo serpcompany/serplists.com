@@ -11,15 +11,9 @@ import { buildPageMetadata } from '@/lib/seo/pageMetadata';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Every page's <head> comes from the Metadata API: the root layout's defaults, with the
-// page's own fields replacing them by name. A page without a title shows the brand (it once
-// kept the previous page's title), and the head never holds two descriptions or two sets of
-// link-preview tags (index.html's static tags once sat next to the page's). Next.js replaces
-// openGraph and twitter as whole objects, so a page that sets them names its image too.
-
 const images = (value: unknown) => (Array.isArray(value) ? value : value ? [value] : []);
 
-describe('root layout metadata', () => {
+describe('root layout metadata, the defaults every page head starts from', () => {
   it('titles a page that sets no title with the brand, and brands the others once', () => {
     expect(rootMetadata.title).toEqual({ default: APP_BRAND_NAME, template: `%s | ${APP_BRAND_NAME}` });
   });
@@ -51,13 +45,16 @@ describe('page metadata', () => {
     ['a page built from its PageSeo', buildPageMetadata({ title: 'Ultimate Camping Checklist', type: 'article' })],
   ];
 
-  it.each(pages)('%s replaces the defaults with a complete set of its own', (_page, metadata) => {
-    expect(metadata.title).toEqual({ absolute: expect.stringMatching(new RegExp(` \\| ${APP_BRAND_NAME}$`)) });
-    expect(typeof metadata.description).toBe('string');
-    expect(images(metadata.openGraph?.images)).toHaveLength(1);
-    expect(images(metadata.twitter?.images)).toHaveLength(1);
-    expect(metadata.openGraph?.title).toBe((metadata.title as { absolute: string }).absolute);
-  });
+  it.each(pages)(
+    '%s replaces the defaults with a complete set of its own, image included, since Next.js replaces openGraph and twitter whole',
+    (_page, metadata) => {
+      expect(metadata.title).toEqual({ absolute: expect.stringMatching(new RegExp(` \\| ${APP_BRAND_NAME}$`)) });
+      expect(typeof metadata.description).toBe('string');
+      expect(images(metadata.openGraph?.images)).toHaveLength(1);
+      expect(images(metadata.twitter?.images)).toHaveLength(1);
+      expect(metadata.openGraph?.title).toBe((metadata.title as { absolute: string }).absolute);
+    },
+  );
 
   it('keeps the 404 page out of search without naming a canonical URL or preview', () => {
     expect(notFoundMetadata.robots).toMatch(/^noindex/);
