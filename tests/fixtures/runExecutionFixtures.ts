@@ -51,3 +51,18 @@ export const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun =>
   revision: 1,
   ...overrides,
 });
+
+export const withEveryTaskAndSubTaskTicked = (run: ChecklistRun): ChecklistRun => ({
+  ...run,
+  sections: run.sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({
+      ...item,
+      isCompleted: true,
+      contents: item.contents?.map((content) => ({
+        ...content,
+        subItems: content.subItems?.map((subItem) => ({ ...subItem, isCompleted: true })),
+      })),
+    })),
+  })),
+});
