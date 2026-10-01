@@ -260,6 +260,20 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the small app tracker fixes are done: TD-33 to TD-39, TD-41 to TD-44,
+  TD-60 and TD-62 (5523d3d8..45f90f31; TD-35's code landed in d457042d).
+  - One `countTemplateItems` serves all ten places that counted tasks, and no number
+    changed.
+  - One upload limit formatter, which floors. No message changed.
+  - One timestamp parser. A zoneless ISO time now sorts as UTC.
+  - Loopback hosts:
+    - `isLoopbackHostname` follows the decided rule.
+    - The Run Key and MCP gates and the `/api/mcp` Host check keep the exact names, as
+      `isCanonicalLoopbackHostname`.
+    - Local API URLs also accept `0.0.0.0`, as `isLocalDevelopmentUrl`.
+  - The query-key convention now covers the template detail key.
+  - `check-preview-d1-binding` parses `wrangler.toml` and reads the `DB` binding.
+  - New tracker rows: TD-65 (an avatar message that needs the owner) and TD-66.
 - 2026-10-01: phase 4, app side of round 2 done: boundary validation
   (01ee5793..8d3ec6d7). TD-2, TD-50 and TD-59 are closed.
   - `serplists/no-external-data-casts` refuses casts of `JSON.parse`, response bodies,
@@ -411,6 +425,13 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: TD-34 and TD-36 decisions.
+  - A host is local when it resolves to this machine: `localhost`, `*.localhost`,
+    `127.0.0.0/8` and `::1`.
+  - The security gates keep their exact list (`localhost`, `127.0.0.1`, `::1`): Run Key and
+    MCP availability when the flag is unset, and the MCP Host check against DNS
+    rebinding. Widening a credential gate gains nothing.
+  - A zoneless ISO timestamp is UTC, as D1 stores times.
 - 2026-10-01: the type-aware lint rules run from `eslint.type-aware.config.js`, the base
   config plus one block, and `pnpm run lint` uses it. The pre-commit hook and the editor
   keep the base config.
