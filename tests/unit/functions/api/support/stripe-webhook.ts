@@ -1,7 +1,4 @@
-// Builds Stripe webhook requests with a valid Stripe-Signature header, so tests run the
-// real signature check instead of mocking it.
-
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
+export async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),

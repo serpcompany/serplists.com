@@ -5,9 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import { DEV_TEST_USERS } from "@/lib/auth/devUsers";
 
-// Seeded persona addresses are ordinary, unverified sign-ups outside local development.
-// API code must never grant them anything by address; seeds grant local access as data.
-
 const functionsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../functions");
 
 function sourceFiles(dir: string): string[] {
@@ -18,8 +15,8 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-describe("API code and seeded persona emails", () => {
-  it("never mentions a seeded persona email", () => {
+describe("API code and seeded persona emails, which anyone can register outside local development", () => {
+  it("never mentions a seeded persona email, so it grants nothing by address", () => {
     const files = sourceFiles(functionsDir);
     expect(files.length).toBeGreaterThan(0);
 

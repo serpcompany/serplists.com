@@ -395,6 +395,13 @@ Common failures:
   `tests/unit/functions/api/teams-sqlite.test.ts`.
 - Billing tests on SQLite send checkout and portal requests with `postToBilling()` and seed
   users, customers and subscriptions with the helpers in `tests/support/billingCheckout.ts`.
+  Their database holds only the users, Stripe and entitlement override tables
+  (`createSqliteD1(billingSchemaSql())` in `tests/unit/functions/api/support/sqlite-d1.ts`),
+  and its batches are transactions, as on D1. `setStatementHook()` runs before each
+  statement with its SQL and parameters: throwing there fails that statement as a D1 outage
+  would (`D1_ERROR: Network connection lost`), and `null` removes it. Webhook tests send
+  `signedWebhookRequest()` from `tests/unit/functions/api/support/stripe-webhook.ts`, which
+  signs the event, so the handler's own signature check runs.
   A file that checks out more than 10 times a minute for one user mocks `checkRateLimit`
   to allow every request: the per-account limit on checkout and portal (tested in
   `billing-handler.test.ts`) would refuse its later tests.

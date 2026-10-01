@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// When the limit check inside a guarded write finds the context full (another request won
-// the race), the handler must answer 403 limit_reached, never success.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = { from: vi.fn(), leftJoin: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
   const insertChain = { values: vi.fn(), select: vi.fn() };
@@ -33,12 +30,13 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { authenticatePersonalRunKey } from '@functions/api/utils/personal-run-key';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { mcpToolCall } from '../../../support/agentMcp';
 
 const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 const lostRace = [{ meta: { changes: 0 } }, { meta: { changes: 0 } }, { meta: { changes: 0 } }];
 const sections = [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'Task' }] }];
 
-describe('limit-guarded writes that lose the race', () => {
+describe('limit-guarded writes that lose the race to another request answer 403 limit_reached, never success', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -57,9 +55,9 @@ describe('limit-guarded writes that lose the race', () => {
   });
 
   it('run create answers 403 and uses only guarded inserts', async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([{ count: 2 }]) // pre-check passes
-      .mockResolvedValueOnce([{ count: 3 }]); // after the lost race
+    const activeRunsAtThePreCheck = [{ count: 2 }];
+    const activeRunsAfterTheLostRace = [{ count: 3 }];
+    dbMocks.selectChain.limit.mockResolvedValueOnce(activeRunsAtThePreCheck).mockResolvedValueOnce(activeRunsAfterTheLostRace);
 
     const response = await handleChecklists(new Request('http://localhost/api/checklists', {
       method: 'POST',
@@ -87,10 +85,13 @@ describe('limit-guarded writes that lose the race', () => {
   });
 
   it('template create answers 403 instead of returning the new id', async () => {
+    const templatesAtThePreCheck = [{ count: 0 }];
+    const templatesWithTheSlug: never[] = [];
+    const templatesAfterTheLostRace = [{ count: 1 }];
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([{ count: 0 }]) // pre-check passes
-      .mockResolvedValueOnce([]) // slug is free
-      .mockResolvedValueOnce([{ count: 1 }]); // after the lost race
+      .mockResolvedValueOnce(templatesAtThePreCheck)
+      .mockResolvedValueOnce(templatesWithTheSlug)
+      .mockResolvedValueOnce(templatesAfterTheLostRace);
 
     const response = await handleTemplates(new Request('http://localhost/api/templates', {
       method: 'POST',
@@ -116,16 +117,7 @@ describe('limit-guarded writes that lose the race', () => {
       .mockResolvedValueOnce([{ count: 2 }])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    const response = await handleAgentMcp(new Request('http://localhost/api/mcp', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer test',
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-        'MCP-Protocol-Version': '2025-06-18',
-      },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'start_run', arguments: { templateId: 'template-1' } } }),
-    }), env);
+    const response = await handleAgentMcp(mcpToolCall('start_run', { templateId: 'template-1' }), env);
     const body = await response.json() as any;
 
     expect(body.result.isError).toBe(true);

@@ -2,12 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Personal and Organization plans are separate: a Personal Pro plan never lifts an
-// Organization's limit, and no Organization plan is sold at checkout. Every limit_reached
-// response therefore names the context whose limit was hit (`details.context`), and only a
-// Personal limit tells the user to upgrade to Pro. Before, an Organization member (even one
-// who already had Pro) was told "Upgrade to Pro", which could not help.
-
 const fake = vi.hoisted(() => ({ rows: new Map<unknown, unknown[]>(), counts: new Map<unknown, number>() }));
 
 vi.mock('drizzle-orm/d1', () => ({
@@ -80,7 +74,7 @@ const cases: Case[] = [
   { name: 'restore a template', context: 'organization', resource: 'templates', handler: handleTemplates, path: '/api/templates/tpl-1/restore', method: 'POST', template: orgTemplate },
 ];
 
-describe('limit_reached names the context whose limit was hit', () => {
+describe('limit_reached names the context whose limit was hit, and offers Pro only for a Personal one, since Personal Pro never lifts an Organization limit', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fake.rows.clear();
@@ -93,8 +87,8 @@ describe('limit_reached names the context whose limit was hit', () => {
   });
 
   it.each(cases)('$name in $context context', async ({ context, resource, handler, path: route, method, body, run, template }) => {
-    // A Pro user in a Free Organization still hits the Organization's limit.
-    vi.mocked(getEntitlementsForUser).mockResolvedValue(context === 'organization' ? pro : free);
+    const personalPlan = context === 'organization' ? pro : free;
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(personalPlan);
     if (run) fake.rows.set(schema.checklist_runs, [run]);
     if (template) fake.rows.set(schema.templates, [template]);
 
@@ -117,9 +111,7 @@ describe('limit_reached names the context whose limit was hit', () => {
 });
 
 describe('copying a public template into Personal on Free', () => {
-  // Copying into Personal needs Pro whatever the count, so Free gets upgrade_required
-  // (never a template limit); Pro has no template limit to reach.
-  it('asks for Pro instead of reporting a template limit', async () => {
+  it('asks for Pro instead of reporting a template limit, since copying into Personal needs Pro whatever the count', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-1');
     vi.mocked(getEntitlementsForUser).mockResolvedValue(free);
 
@@ -136,8 +128,7 @@ describe('copying a public template into Personal on Free', () => {
 });
 
 describe('limit_reached responses have one source', () => {
-  // Handlers that wrote their own limit text drifted apart; they all go through limit-reached.ts.
-  it('is built only in limit-reached.ts', () => {
+  it('is built only in limit-reached.ts, since handlers that wrote their own limit text drifted apart', () => {
     const root = path.resolve(__dirname, '../../../../functions');
     const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
       entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);

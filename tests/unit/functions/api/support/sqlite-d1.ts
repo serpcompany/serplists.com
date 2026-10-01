@@ -1,18 +1,8 @@
 import { readFileSync } from "node:fs";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-// A minimal D1Database backed by an in-memory node:sqlite database. It covers the
-// calls drizzle-orm/d1 makes (prepare/bind/all/raw/run/first/batch), so API code can
-// run against real SQLite in unit tests without wrangler or a dev server. Like D1, a
-// batch is one transaction: if any statement fails, none of the batch is written.
-
 type D1Row = Record<string, unknown>;
 
-/**
- * Runs before every statement with its SQL and bound parameters. Throw from it to
- * simulate a D1 failure (for example "D1_ERROR: Network connection lost"); the
- * statement then does not run.
- */
 export type StatementHook = (sql: string, params: unknown[]) => void;
 
 type Hooks = { beforeStatement: StatementHook | null };
@@ -71,7 +61,6 @@ export type SqliteD1 = {
   binding: D1Database;
   sqlite: DatabaseSync;
   rows: <T = D1Row>(sql: string, ...params: unknown[]) => T[];
-  /** Sets (or clears, with null) the hook that runs before each statement. */
   setStatementHook: (hook: StatementHook | null) => void;
   close: () => void;
 };
@@ -117,7 +106,6 @@ export function readMigration(name: string): string {
   return readFileSync(new URL(`../../../../../db/migrations/${name}`, import.meta.url), "utf8");
 }
 
-/** The users, Stripe billing, and entitlement override tables used by billing code. */
 export function billingSchemaSql(): string[] {
   return [
     "CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT NOT NULL)",

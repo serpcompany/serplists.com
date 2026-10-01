@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
 
-// Resolves plans from stored Stripe subscription rows on real SQLite.
-
 const USER_ID = "user-1";
-const PRO_PRICE_ID = "price_pro";
 
 let d1: SqliteD1;
 
@@ -25,25 +23,19 @@ function insertOverride(plan: string, expiresAt: number | null = null) {
 }
 
 function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) {
-  d1.sqlite.prepare(`
-    INSERT INTO stripe_subscriptions (
-      stripe_subscription_id, user_id, stripe_customer_id, price_id, status, created_at, updated_at
-    ) VALUES (?, ?, 'cus_1', ?, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-  `).run(id, USER_ID, priceId, status);
+  storeSubscriptionRow(d1, { id, userId: USER_ID, customerId: "cus_1", status, priceId });
 }
 
 beforeEach(() => {
   d1 = createSqliteD1(billingSchemaSql());
-  d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(USER_ID, "user-1@example.test");
+  seedBillingUser(d1, USER_ID);
 });
 
 afterEach(() => {
   d1.close();
 });
 
-describe("getEntitlementsForUser from Stripe subscriptions", () => {
-  // Which statuses grant Pro is a product decision (see pricing-and-entitlements.md):
-  // change this table deliberately, never as a side effect.
+describe("getEntitlementsForUser from Stripe subscriptions, granting Pro only for the statuses the pricing spec lists", () => {
   it.each([
     ["active", "pro"],
     ["trialing", "pro"],
@@ -131,9 +123,7 @@ describe("getEntitlementsForUser with a manual override", () => {
   });
 });
 
-describe("getEntitlementsForUser for a seeded persona email", () => {
-  // Local personas get Pro from seeded entitlement_overrides rows, never from their
-  // address: anyone can register admin@test.com on a deployment without verification.
+describe("getEntitlementsForUser for a seeded persona email, which anyone can register on a deployment", () => {
   it.each([
     ["admin@test.com", {}],
     ["JANE@TEST.COM", {}],

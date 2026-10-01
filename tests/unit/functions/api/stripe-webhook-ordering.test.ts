@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleStripe } from "@functions/api/handlers/stripe";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { seedBillingUser } from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
-
-// Applies webhook events to real SQLite in the orders Stripe can deliver them:
-// out of order, and as retries of older failed events after newer ones.
 
 const WEBHOOK_SECRET = "whsec_ordering_test";
 const PRICE_ID = "price_pro";
@@ -62,8 +60,7 @@ async function deliver(
   return handleStripe(request, env(envOverrides));
 }
 
-/** Records an event as a previous delivery that failed, so Stripe's retry is reprocessed. */
-function recordFailedDelivery(eventId: string, type: string, created: number) {
+function recordFailedEarlierDelivery(eventId: string, type: string, created: number) {
   d1.sqlite
     .prepare("INSERT INTO stripe_webhook_events (id, type, created, livemode, processed_at, error) VALUES (?, ?, ?, 0, ?, ?)")
     .run(eventId, type, created, "2026-01-01T00:00:00.000Z", "D1_ERROR: transient");
@@ -82,7 +79,7 @@ async function plan(): Promise<string> {
 
 beforeEach(() => {
   d1 = createSqliteD1(billingSchemaSql());
-  d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(USER_ID, "user-1@example.test");
+  seedBillingUser(d1, USER_ID);
   stripeState = null;
   stripeGetStatus = 200;
   vi.stubGlobal(
@@ -105,7 +102,7 @@ afterEach(() => {
   d1.close();
 });
 
-describe("Stripe webhook subscription ordering", () => {
+describe("Stripe webhook subscription events delivered out of order, or retried after newer ones", () => {
   it("keeps an active subscription when the older created event arrives last", async () => {
     stripeState = { status: "active" };
 
@@ -117,7 +114,7 @@ describe("Stripe webhook subscription ordering", () => {
   });
 
   it("keeps a canceled subscription canceled when an older failed update is retried", async () => {
-    recordFailedDelivery("evt_cancel_at_period_end", "customer.subscription.updated", 200);
+    recordFailedEarlierDelivery("evt_cancel_at_period_end", "customer.subscription.updated", 200);
     stripeState = { status: "canceled", canceled_at: 300 };
 
     expect((await deliver("evt_deleted", "customer.subscription.deleted", 300, {
@@ -138,7 +135,7 @@ describe("Stripe webhook subscription ordering", () => {
   });
 
   it("does not downgrade a recovered subscription when a stale past_due event is retried", async () => {
-    recordFailedDelivery("evt_past_due", "customer.subscription.updated", 400);
+    recordFailedEarlierDelivery("evt_past_due", "customer.subscription.updated", 400);
     stripeState = { status: "active" };
 
     await deliver("evt_recovered", "customer.subscription.updated", 500, { status: "active" });

@@ -19,6 +19,10 @@ vi.mock("drizzle-orm/d1", () => ({
 
 import { getEntitlementsForContext, getEntitlementsForUser } from "@functions/api/utils/entitlements";
 
+function theOverrideLookupFinds(row: Record<string, unknown>) {
+  dbMocks.selectChain.limit.mockResolvedValueOnce([row]);
+}
+
 describe("getEntitlementsForUser", () => {
   beforeEach(() => {
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
@@ -28,10 +32,7 @@ describe("getEntitlementsForUser", () => {
   });
 
   it("returns pro when an override exists", async () => {
-    // First query is override lookup (limit(1))
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" },
-    ]);
+    theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForUser(env, "user-1");
@@ -62,9 +63,7 @@ describe("getEntitlementsForUser", () => {
   });
 
   it("resolves user context through the existing user entitlement path", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" },
-    ]);
+    theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForContext(env, { type: "user", userId: "user-1" });
@@ -74,9 +73,7 @@ describe("getEntitlementsForUser", () => {
   });
 
   it("resolves premium team context from a team override without upgrading the user", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { team_id: "team-1", plan: "team", expires_at: null, created_at: "now" },
-    ]);
+    theOverrideLookupFinds({ team_id: "team-1", plan: "team", expires_at: null, created_at: "now" });
 
     const env: any = { DB: {} };
     const entitlements = await getEntitlementsForContext(env, { type: "team", teamId: "team-1", userId: "user-1" });

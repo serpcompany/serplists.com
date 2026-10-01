@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleStripe } from "@functions/api/handlers/stripe";
+import { seedBillingUser } from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
 
@@ -51,14 +52,35 @@ function storedSubscriptions() {
 
 const D1_OUTAGE = "D1_ERROR: Network connection lost";
 
-/** Fails every write after the first `okWrites`, as a D1 incident that starts mid-delivery would. */
-function failWritesAfter(okWrites: number) {
+function startD1OutageMidDelivery(writesBeforeTheOutage: number) {
   let writes = 0;
   d1.setStatementHook((sql) => {
     if (/^\s*select/i.test(sql)) return;
     writes += 1;
-    if (writes > okWrites) throw new Error(D1_OUTAGE);
+    if (writes > writesBeforeTheOutage) throw new Error(D1_OUTAGE);
   });
+}
+
+function failOnlyTheFirstWrite() {
+  d1.setStatementHook((sql) => {
+    if (/^\s*select/i.test(sql)) return;
+    d1.setStatementHook(null);
+    throw new Error(D1_OUTAGE);
+  });
+}
+
+function failSubscriptionInserts() {
+  d1.setStatementHook((sql) => {
+    if (/^insert into "stripe_subscriptions"/i.test(sql)) throw new Error(D1_OUTAGE);
+  });
+}
+
+function commitAnotherDeliveryOf(eventId: string) {
+  d1.sqlite.prepare(`
+    INSERT INTO stripe_webhook_events (id, type, created, livemode, processed_at, error)
+    VALUES (?, 'customer.subscription.created', 123, 1, '2026-01-01T00:00:00.000Z', NULL)
+    ON CONFLICT (id) DO UPDATE SET error = NULL
+  `).run(eventId);
 }
 
 function checkoutCompletedEvent(id: string) {
@@ -69,7 +91,7 @@ function checkoutCompletedEvent(id: string) {
 describe("Stripe webhook handler", () => {
   beforeEach(() => {
     d1 = createSqliteD1(billingSchemaSql());
-    d1.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run("user-123", "user-123@example.test");
+    seedBillingUser(d1, "user-123");
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response(JSON.stringify(subscriptionObject()), { status: 200 })),
@@ -142,7 +164,7 @@ describe("Stripe webhook handler", () => {
     ]);
   });
 
-  it("returns 500 and records the error so Stripe can retry", async () => {
+  it("returns 500 and records the D1 error, never Drizzle's bound parameters, so Stripe can retry", async () => {
     d1.sqlite.exec("DROP TABLE stripe_customers");
 
     const response = await deliver({
@@ -158,7 +180,6 @@ describe("Stripe webhook handler", () => {
     expect(data.error).toBe("Stripe webhook processing failed");
     const stored = d1.rows<{ error: string }>("SELECT error FROM stripe_webhook_events WHERE id = ?", "evt_retry")[0]
       ?.error;
-    // The D1 error, never Drizzle's bound parameters (customer and user ids, emails).
     expect(stored).toContain("no such table: stripe_customers");
     expect(stored).not.toContain("params:");
     expect(stored).not.toContain("cus_123");
@@ -190,12 +211,12 @@ describe("Stripe webhook handler", () => {
     expect(d1.rows("SELECT user_id FROM stripe_customers")).toEqual([]);
   });
 
-  it("records nothing for an event until its writes commit", async () => {
-    let eventRowsDuringProcessing: unknown[] | null = null;
+  it("records nothing for an event until its writes commit, so a Worker stopped mid-delivery leaves it to Stripe's retry", async () => {
+    let eventRowsMidDelivery: unknown[] | null = null;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        eventRowsDuringProcessing = eventErrors("evt_in_flight");
+        eventRowsMidDelivery = eventErrors("evt_in_flight");
         return new Response(JSON.stringify(subscriptionObject()), { status: 200 });
       }),
     );
@@ -203,13 +224,12 @@ describe("Stripe webhook handler", () => {
     const response = await deliver(subscriptionEvent("evt_in_flight"));
 
     expect(response.status).toBe(200);
-    // A Worker killed at this point leaves no row, so Stripe's retry processes the event.
-    expect(eventRowsDuringProcessing).toEqual([]);
+    expect(eventRowsMidDelivery).toEqual([]);
     expect(eventErrors("evt_in_flight")).toEqual([{ error: null }]);
   });
 
   it("processes a retry when the writes and the error record both failed", async () => {
-    failWritesAfter(1);
+    startD1OutageMidDelivery(1);
     const failed = await deliver(subscriptionEvent("evt_outage"));
     expect(failed.status).toBe(500);
     expect(storedSubscriptions()).toEqual([]);
@@ -224,12 +244,7 @@ describe("Stripe webhook handler", () => {
   });
 
   it("returns 500, not duplicate, when a D1 write fails before anything is recorded", async () => {
-    d1.setStatementHook((sql) => {
-      if (/^\s*select/i.test(sql)) return;
-      // Only the first write fails; the error record afterwards succeeds.
-      d1.setStatementHook(null);
-      throw new Error(D1_OUTAGE);
-    });
+    failOnlyTheFirstWrite();
 
     const response = await deliver(checkoutCompletedEvent("evt_transient"));
     const data = await response.json();
@@ -244,16 +259,14 @@ describe("Stripe webhook handler", () => {
   });
 
   it("returns 500 when a new subscription's write fails, so nothing is lost", async () => {
-    d1.setStatementHook((sql) => {
-      if (/^insert into "stripe_subscriptions"/i.test(sql)) throw new Error(D1_OUTAGE);
-    });
+    failSubscriptionInserts();
 
     const response = await deliver(subscriptionEvent("evt_subscription_write"));
 
     expect(response.status).toBe(500);
     expect(storedSubscriptions()).toEqual([]);
-    // The customer mapping in the same batch is rolled back with it.
-    expect(d1.rows("SELECT user_id FROM stripe_customers")).toEqual([]);
+    const customerMappingRolledBackWithItsBatch = d1.rows("SELECT user_id FROM stripe_customers");
+    expect(customerMappingRolledBackWithItsBatch).toEqual([]);
     expect(eventErrors("evt_subscription_write")[0]?.error).toBeTruthy();
   });
 
@@ -261,16 +274,8 @@ describe("Stripe webhook handler", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
-        // Another delivery of the same event commits while this one reads Stripe...
-        d1.sqlite.prepare(`
-          INSERT INTO stripe_webhook_events (id, type, created, livemode, processed_at, error)
-          VALUES ('evt_concurrent', 'customer.subscription.created', 123, 1, '2026-01-01T00:00:00.000Z', NULL)
-          ON CONFLICT (id) DO UPDATE SET error = NULL
-        `).run();
-        // ...and then this delivery's writes fail.
-        d1.setStatementHook((sql) => {
-          if (/^insert into "stripe_subscriptions"/i.test(sql)) throw new Error(D1_OUTAGE);
-        });
+        commitAnotherDeliveryOf("evt_concurrent");
+        failSubscriptionInserts();
         return new Response(JSON.stringify(subscriptionObject()), { status: 200 });
       }),
     );

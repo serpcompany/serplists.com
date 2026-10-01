@@ -41,6 +41,13 @@
   router checks the email in sign-up and sign-in bodies, and Better Auth's
   `databaseHooks` (`user.create` and `session.create`) enforce it for every other
   path, including username sign-in (`functions/api/utils/test-email-block.ts`).
+- **Seeded persona addresses grant nothing.** Outside local development,
+  `admin@test.com` and the other personas in `src/lib/auth/devUsers.ts` are ordinary
+  sign-ups that anyone can register where email verification is off. API code never
+  grants anything by email address: local seeds give the personas their plans as data
+  (seeded `entitlement_overrides` rows), and
+  `tests/unit/security/no-persona-emails-in-api.test.ts` fails if `functions/` names a
+  persona's address.
 - **Auth requests are CSRF-protected in the router.** Better Auth also parses
   form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
   and a cross-site HTML form needs no CORS preflight and sends no `SameSite=Lax`

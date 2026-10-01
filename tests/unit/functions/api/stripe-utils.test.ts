@@ -9,24 +9,11 @@ import {
   stripePostForm,
   verifyStripeWebhookSignature,
 } from "@functions/api/utils/stripe";
+import { hmacSha256Hex } from "./support/stripe-webhook";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
-
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 describe("verifyStripeWebhookSignature", () => {
   it("rejects missing header", async () => {
