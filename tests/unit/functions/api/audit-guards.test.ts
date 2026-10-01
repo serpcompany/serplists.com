@@ -2,11 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
-// A guarded UPDATE that matches no row (a lost race) is not an error, so a plain audit INSERT
-// in the same batch would still commit and history would show a change that never happened.
-// Every run and template write inserts its audit row first, only while the row is still in
-// the state the UPDATE requires, and reports a miss instead of success.
-
 type Statement =
   | { kind: 'update'; table: unknown; values: Record<string, unknown>; where: SQL }
   | { kind: 'insert'; table: unknown; values: Record<string, unknown> }
@@ -111,8 +106,7 @@ function batchStatements(): Statement[] {
   return dbMocks.db.batch.mock.calls[0][0] as Statement[];
 }
 
-/** The audit row is an INSERT ... SELECT guarded on `table`'s row, placed before its UPDATE. */
-function expectGuardedAudit(table: unknown, guardFragments: string[]) {
+function expectGuardedAuditBeforeItsUpdate(table: unknown, guardFragments: string[]) {
   const statements = batchStatements();
   expect(statements.some((statement) => statement.kind === 'insert' && statement.table === schema.audit_events)).toBe(false);
   const auditIndex = statements.findIndex((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
@@ -146,19 +140,18 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
-    expectGuardedAudit(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('share-link PUT: a lost revision race returns 409', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
-    // Every task done, so a guest may complete it.
-    const done = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }]);
-    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1', items: done })]);
+    const everyTaskDoneSoAGuestMayComplete = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([run({ is_public: true, share_token: 'token-1', items: everyTaskDoneSoAGuestMayComplete })]);
 
     const result = await send(handleChecklists, 'checklists/shared/token-1', 'PUT', { status: 'completed', expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAudit(schema.checklist_runs, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"share_token" = ?', '"is_public" = ?']);
   });
 
   it('revalidate: a lost revision race returns 409', async () => {
@@ -169,7 +162,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1/revalidate', 'POST', { expected_revision: 7 });
 
     expect(result.status).toBe(409);
-    expectGuardedAudit(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"revision" = ?', '"deleted_at" is null']);
   });
 
   it('run archive: a concurrent archive does not report a second success', async () => {
@@ -178,18 +171,17 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run-1', 'DELETE');
 
     expect(result.status).toBe(404);
-    expectGuardedAudit(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
-  it('run restore: a concurrent restore does not report a second success', async () => {
+  it('run restore: a concurrent restore does not report a second success, answering the not_archived the archive page refreshes on', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([run({ deleted_at: '2026-01-01T00:00:00.000Z' })]);
 
     const result = await send(handleChecklists, 'checklists/run-1/restore', 'POST');
 
     expect(result.status).toBe(400);
-    // The page refreshes its archive list on this code.
     expect(result.body.code).toBe('not_archived');
-    expectGuardedAudit(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 
   it('run share: a run archived meanwhile is not shared or audited', async () => {
@@ -198,7 +190,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleChecklists, 'checklists/run/run-1/share', 'POST', {});
 
     expect(result.status).toBe(404);
-    expectGuardedAudit(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.checklist_runs, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
   it('template PUT: a lost version race returns 409 and guards the version row and run updates', async () => {
@@ -212,7 +204,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(result.status).toBe(409);
     expect(result.body.code).toBe('edit_conflict');
-    const statements = expectGuardedAudit(schema.templates, ['"version" = ?', '"deleted_at" is null']);
+    const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
     const versionInsert = statements.find((statement) => statement.table === schema.template_versions);
     expect(versionInsert?.kind).toBe('insert-select');
     expect(render((versionInsert as { query: SQL }).query)).toContain('"audit_events"');
@@ -234,8 +226,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json() as Record<string, unknown>).code).toBe('edit_conflict');
-    // Publishing between the read and the write leaves no matching row, so nothing lands.
-    expectGuardedAudit(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
   });
 
   it('template PUT: an owner edit of a public template does not require it to be private', async () => {
@@ -243,7 +234,7 @@ describe('audit rows are written only when the guarded write lands', () => {
 
     await send(handleTemplates, 'templates/template-1', 'PUT', { expected_version: 3, title: 'Renamed' });
 
-    const statements = expectGuardedAudit(schema.templates, ['"version" = ?', '"deleted_at" is null']);
+    const statements = expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null']);
     const auditInsert = statements.find((statement) => statement.kind === 'insert-select' && statement.table === schema.audit_events);
     expect(render((auditInsert as { query: SQL }).query)).not.toContain('"is_public"');
   });
@@ -254,17 +245,16 @@ describe('audit rows are written only when the guarded write lands', () => {
     const result = await send(handleTemplates, 'templates/template-1', 'DELETE');
 
     expect(result.status).toBe(404);
-    expectGuardedAudit(schema.templates, ['"deleted_at" is null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.templates, ['"deleted_at" is null', '"user_id" = ?']);
   });
 
-  it('template restore: a concurrent restore does not report a second success', async () => {
+  it('template restore: a concurrent restore does not report a second success, answering the not_archived the archive page refreshes on', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([template({ deleted_at: '2026-01-01T00:00:00.000Z' })]);
 
     const result = await send(handleTemplates, 'templates/template-1/restore', 'POST');
 
     expect(result.status).toBe(400);
-    // The page refreshes its archive list on this code.
     expect(result.body.code).toBe('not_archived');
-    expectGuardedAudit(schema.templates, ['"deleted_at" is not null', '"user_id" = ?']);
+    expectGuardedAuditBeforeItsUpdate(schema.templates, ['"deleted_at" is not null', '"user_id" = ?']);
   });
 });

@@ -1,23 +1,18 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
+import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 
-// Runs the SQL Drizzle generates against the real migrations, the way a D1 batch runs it.
-const migrationsDir = new URL('../../../../db/migrations/', import.meta.url);
-const drizzleDb = createDb({ DB: {} } as never);
+const drizzleThatOnlyBuildsSql = createDb({ DB: {} } as never);
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 type SqlParam = string | number | null;
 
 function migratedDatabase(): DatabaseSync {
-  const db = new DatabaseSync(':memory:');
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort()) {
-    db.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-  }
+  const { sqlite: db } = createMigratedD1();
   db.exec(`
     INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
     VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01');
@@ -29,7 +24,7 @@ function migratedDatabase(): DatabaseSync {
   return db;
 }
 
-function run(db: DatabaseSync, query: BuiltQuery): number {
+function runGeneratedSql(db: DatabaseSync, query: BuiltQuery): number {
   const { sql: text, params } = query.toSQL();
   return Number(db.prepare(text).run(...(params as SqlParam[])).changes);
 }
@@ -51,8 +46,8 @@ async function reconcileStatements(expectedRevision: number) {
     createdAt: '2026-02-01T00:00:00.000Z',
   });
   return {
-    auditInsert: insertAuditEventWhen(drizzleDb, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
-    runUpdate: drizzleDb.update(checklist_runs).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
+    auditInsert: insertAuditEventWhen(drizzleThatOnlyBuildsSql, auditEvent, sql`exists (select 1 from ${checklist_runs} where ${whereClause})`),
+    runUpdate: drizzleThatOnlyBuildsSql.update(checklist_runs).set({ revision: expectedRevision + 1, updated_at: '2026-02-01' }).where(whereClause),
   };
 }
 
@@ -64,27 +59,24 @@ describe('insertAuditEventWhen', () => {
     const db = migratedDatabase();
     const { auditInsert, runUpdate } = await reconcileStatements(4);
 
-    expect(run(db, auditInsert)).toBe(1);
-    expect(run(db, runUpdate)).toBe(1);
+    expect(runGeneratedSql(db, auditInsert)).toBe(1);
+    expect(runGeneratedSql(db, runUpdate)).toBe(1);
     expect(events(db)).toEqual([
       expect.objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
     expect(JSON.parse(events(db)[0].metadata_json).retired[0].id).toBe('item-dns');
   });
 
-  it('records nothing when the guarded write misses', async () => {
+  it('records nothing when the guarded write misses because someone saved the run after it was read', async () => {
     const db = migratedDatabase();
-    // Someone saved the run after it was read: its revision moved on.
-    const { auditInsert, runUpdate } = await reconcileStatements(3);
+    const revisionBeforeTheOtherSave = 3;
+    const { auditInsert, runUpdate } = await reconcileStatements(revisionBeforeTheOtherSave);
 
-    expect(run(db, auditInsert)).toBe(0);
-    expect(run(db, runUpdate)).toBe(0);
+    expect(runGeneratedSql(db, auditInsert)).toBe(0);
+    expect(runGeneratedSql(db, runUpdate)).toBe(0);
     expect(events(db)).toEqual([]);
   });
 });
-
-// D1 rejects rows over 2,000,000 bytes, and the audit insert shares a batch with the write it
-// records, so an oversized audit row rolls back the save itself. Audit rows must stay small.
 
 const ROW_BUDGET_BYTES = 300 * 1024;
 const bytes = (value: string | null | undefined) => new TextEncoder().encode(value ?? '').byteLength;
@@ -136,7 +128,7 @@ function input(overrides: Partial<AuditEventInput>): AuditEventInput {
   };
 }
 
-describe('buildAuditEventValues', () => {
+describe('buildAuditEventValues keeps audit rows small, since an oversized one would roll back the save it shares a D1 batch with', () => {
   it('stores a run save of about 900 KB as a compact row that names only the toggled task', async () => {
     const before = JSON.stringify(bigSections(700));
     const after = JSON.stringify(bigSections(700, ['item-42']));
@@ -206,8 +198,10 @@ describe('buildAuditEventValues', () => {
   });
 
   it('truncates any oversized column to a marker, measuring UTF-8 bytes rather than characters', async () => {
-    const multibyte = '漢'.repeat(30_000); // 30,000 characters, 90,000 bytes
-    const values = await buildAuditEventValues(input({ metadata: { note: multibyte } }));
+    const threeByteText = '漢'.repeat(30_000);
+    expect(threeByteText).toHaveLength(30_000);
+    expect(bytes(threeByteText)).toBe(90_000);
+    const values = await buildAuditEventValues(input({ metadata: { note: threeByteText } }));
 
     const marker = JSON.parse(values.metadata_json ?? '{}');
     expect(marker).toEqual({ truncated: true, bytes: expect.any(Number), sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });

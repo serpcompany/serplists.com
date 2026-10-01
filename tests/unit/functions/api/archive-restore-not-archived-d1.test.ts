@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
-// Restoring a Template or Run that another tab, a teammate, or a concurrent request already
-// restored is refused. The refusal carries code not_archived so the archive page can tell it
-// from other 400s, refresh its list, and say the item was already restored. Runs the real
-// handlers and SQL against a migrated SQLite database.
-
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
 
@@ -15,7 +10,7 @@ import { handleTemplates } from "@functions/api/handlers/templates";
 const NOW = "2026-09-28T00:00:00.000Z";
 const ITEMS = JSON.stringify([{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }]);
 
-describe("restore of an item that is not archived", () => {
+describe("restore of an item that is not archived, on the migrated tables", () => {
   let database: ReturnType<typeof createMigratedD1>;
   const env = () => ({ DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" }) as never;
 
