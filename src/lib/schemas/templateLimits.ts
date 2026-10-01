@@ -1,6 +1,3 @@
-// Field limits the API enforces (functions/api/utils/payloads.ts). Every server write path
-// and the app use the same numbers, so a stored row always fits when a client sends it back.
-
 export const TEMPLATE_TITLE_MAX = 160;
 export const TEMPLATE_DESCRIPTION_MAX = 5000;
 export const TEMPLATE_SEO_TITLE_MAX = 160;

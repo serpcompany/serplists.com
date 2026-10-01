@@ -172,7 +172,7 @@ export const TemplateBasicInfo = ({
             <Input
               id={ids.tags}
               value={tagInput}
-              maxLength={TEMPLATE_FIELD_LIMITS.listItemLength}
+              maxLength={TEMPLATE_FIELD_LIMITS.tagOrCategoryLength}
               onChange={(event) => setTagInput(event.target.value)}
               placeholder="Add tag..."
               onKeyDown={(event) => {

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -19,6 +22,16 @@ describe('Run Key permissions', () => {
 
   it('defaults to what keys could do before template writes existed', () => {
     expect(DEFAULT_RUN_KEY_PERMISSIONS).toEqual(['templates:read', 'runs:read', 'runs:write']);
+  });
+
+  it('defaults to the permissions column default that migration 0027 gave every earlier key', () => {
+    const migration = readFileSync(
+      path.resolve(__dirname, '../../../../db/migrations/0027_add_personal_run_key_permissions.sql'),
+      'utf8',
+    );
+    const columnDefault = /DEFAULT '([^']+)'/.exec(migration)?.[1] ?? 'null';
+
+    expect(JSON.parse(columnDefault)).toEqual([...DEFAULT_RUN_KEY_PERMISSIONS]);
   });
 
   it('treats writing runs as reading templates, because a new run copies template content', () => {

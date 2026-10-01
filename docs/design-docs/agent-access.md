@@ -36,9 +36,12 @@ management routes need a browser session:
   ones (listing still scans every revoked key: TD-25).
 - `DELETE /api/agent-keys/:id` revokes a key.
 - `GET /api/agent-keys/connection` names the MCP endpoint Agent Access shows, which can
-  differ from the page's own origin ([SECURITY.md](../SECURITY.md#model)); until it loads, the
-  page shows `/api/mcp` on its own origin (`getAgentMcpEndpoint`). The `connection` segment
-  sits where a key id would; key ids are UUIDs, so it never names one.
+  differ from the page's own origin ([SECURITY.md](../SECURITY.md#model)): `mcpEndpoint` is
+  null when no host the MCP host check accepts is configured, and `hostMismatch` says the
+  page's own host is not one of them (a per-deployment URL, say), so the endpoint is on a
+  configured host. Until it loads, the page shows `/api/mcp` on its own origin
+  (`getAgentMcpEndpoint`). The `connection` segment sits where a key id would; key ids are
+  UUIDs, so it never names one.
 
 Each tool needs one permission, and the key holds a fixed set of them
 (`src/lib/schemas/runKeyPermissions.ts`):

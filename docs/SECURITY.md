@@ -57,9 +57,10 @@
   value for `name` and `image`, so `databaseHooks.user` in
   `functions/api/better-auth.ts` (rules in `functions/api/utils/user-profile-validation.ts`
   and `src/lib/schemas/userProfileSchema.ts`) rejects with `400` a name that is not
-  1-100 characters of text after trimming, a display username over 30 characters,
-  and an avatar that is not an upload served by SERP Lists (the request or frontend
-  origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters),
+  1-100 characters of text after trimming, a name or display username with a control
+  character (C0 or DEL, never part of a name people can see), a display username over 30
+  characters, and an avatar that is not an upload served by SERP Lists (the request or
+  frontend origin, or `R2_PUBLIC_BASE_URL`, under `/api/uploads/`, at most 2048 characters),
   so an avatar is never a `data:` URI or a third-party tracker.
   `null` or an empty string removes the avatar. Updates check only the fields they
   write, so Better Auth's internal updates (email verification, username) pass.
@@ -127,10 +128,15 @@
   Clearing or replacing template media only unlinks it (TD-19). Each bucket has a
   size limit (avatars 5MB, Template images, videos and files 50MB;
   `src/lib/schemas/uploadLimits.ts`, shared with the upload forms) and takes only
-  the types listed in `src/lib/schemas/uploadTypes.ts` (never HTML, SVG, XML, or
-  scripts, since files are served from the app's origin). A file with no type, or
-  the generic `application/octet-stream`, is typed from its extension and rejected
-  if that type is not allowed. Files are served as attachments, and every download
+  the types listed in `src/lib/schemas/uploadTypes.ts`, which the upload pickers offer
+  too (never HTML, SVG, XML, or scripts, since files are served from the app's origin).
+  Browsers take a file's type from the OS, so one kind of file arrives under several
+  types (Windows reports `.zip` as `application/x-zip-compressed`, and `.csv` as
+  `application/vnd.ms-excel` when Excel is installed), and each kind lists them all. A
+  file with no type, or the generic `application/octet-stream`, is typed from its
+  extension, stored under the first type its kind lists, and rejected if that type is not
+  allowed. The pickers' `accept` lists the extensions as well as the types, since Windows
+  file pickers filter on extensions. Files are served as attachments, and every download
   is sent with `X-Content-Type-Options: nosniff`. There is no per-account storage
   quota yet (TD-18).
 - **Invites** store only a token hash, never the raw token.
@@ -358,9 +364,16 @@ default, 16KB for `/api/auth/*` (sign-in, sign-up and profile bodies are a few h
 bytes, so an oversized value stops before Better Auth parses it), 2MB for Template
 backups, and 50MB (plus 1MB for the multipart envelope) for uploads. Template and run
 content has its own, smaller limit (`src/lib/schemas/contentLimits.ts`,
-`413 content_too_large`), so no write stores content too large for its save route to
-accept again. A save no larger than the content it replaces is allowed, so content
-stored before the limit can still be saved and trimmed.
+`413 content_too_large`): 768KB for a Template, and 896KB for a run, which holds its
+Template's content plus notes. Every save sends the whole content back (the editor's Save,
+and a run page's every tick, note and completion), so no write stores content too large for
+its save route to accept again, with room for the request's other fields; an import, whose
+request holds several Templates, checks each one. Content is measured as the app sends it
+back (`contentSaveBytes`): loading and saving fill in what a stored record may lack (ids,
+titles, descriptions, content lists, block values and completion), so the stored JSON alone
+would undercount content that was imported or written by hand. A save no larger than the
+content it replaces is allowed, so content stored before the limit can still be saved and
+trimmed.
 The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns.
 Every tool result stays within 32KB (`MAX_RESULT_BYTES` in
 `functions/api/handlers/agentMcpPages.ts`), which MCP clients take whole: Claude

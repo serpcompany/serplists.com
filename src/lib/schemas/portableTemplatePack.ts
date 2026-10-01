@@ -1,14 +1,10 @@
 import type { PortableChecklistTemplate } from "./checklistSchema";
 
-// The manifest of a portable pack, computed the same way by the API export and by the
-// page when it adds public catalog templates to that export.
-
 export type PortableSkippedTemplate = { title: string; reason: string };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-/** Counts image, video, and file blocks that point at an upload, which a JSON pack cannot carry. */
 export function countReferencedUploads(sections: unknown[]): number {
   let count = 0;
 
@@ -31,7 +27,6 @@ export function countReferencedUploads(sections: unknown[]): number {
   return count;
 }
 
-/** The manifest for a pack holding `templates`; `skippedTemplates` lists those left out. */
 export function buildPortablePackManifest(templates: PortableChecklistTemplate[], skippedTemplates: PortableSkippedTemplate[]) {
   return {
     totalTemplates: templates.length,

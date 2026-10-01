@@ -33,11 +33,11 @@ const boundedList = (label: string) =>
       z
         .string()
         .max(
-          LIMITS.listItemLength,
-          `${label}: each must be ${LIMITS.listItemLength} characters or fewer.`,
+          LIMITS.tagOrCategoryLength,
+          `${label}: each must be ${LIMITS.tagOrCategoryLength} characters or fewer.`,
         ),
     )
-    .max(LIMITS.listItems, `${label}: use ${LIMITS.listItems} or fewer.`);
+    .max(LIMITS.tagOrCategoryCount, `${label}: use ${LIMITS.tagOrCategoryCount} or fewer.`);
 
 // The same limits as the API (src/lib/schemas/templateFields.ts), with messages that
 // name the field as the editor labels it. The URL slug has no rule here: it is

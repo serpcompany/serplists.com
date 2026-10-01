@@ -1,13 +1,9 @@
 import { z } from "zod";
 
-// Limits for the account fields people type themselves. Shared by the API,
-// which enforces them when Better Auth writes a user, and the forms that
-// collect them, so the two cannot drift.
 export const USER_NAME_MAX_LENGTH = 100;
 export const USER_IMAGE_URL_MAX_LENGTH = 2048;
 export const DISPLAY_USERNAME_MAX_LENGTH = 30;
 
-/** C0 control characters and DEL are never part of a name people can see. */
 function hasControlCharacters(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);

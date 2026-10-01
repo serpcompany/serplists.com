@@ -1,16 +1,3 @@
-// What each upload bucket stores, shared by the API (functions/api/handlers/uploads.ts)
-// and the upload pickers, so the browser never offers or sends a file the API refuses.
-//
-// Browsers take a file's type from the OS, so one kind of file arrives under several
-// types: Windows reports .zip as application/x-zip-compressed and .csv as
-// application/vnd.ms-excel when Excel is installed. A file whose type the OS does not
-// know arrives with an empty type, which the multipart encoder sends as
-// application/octet-stream; such a file is accepted by its extension and stored under
-// the kind's usual type.
-//
-// Never add HTML, SVG, XML, or script types: /api/uploads/file serves files from the
-// app's origin, so they would run as the app.
-
 export const UPLOAD_BUCKETS = [
   'avatars',
   'template-images',
@@ -20,18 +7,15 @@ export const UPLOAD_BUCKETS = [
 
 export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
-// Size limits per bucket are in ./uploadLimits.ts.
-
-// Image types the API stores for avatars and Image blocks. The avatar picker offers
-// and checks the same list, so a file the API would refuse is caught first.
 export const AVATAR_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] as const;
 
 type UploadKind = {
   label: string;
   extensions: readonly string[];
-  // The first type is the one stored when the browser sends no type.
   mimeTypes: readonly string[];
 };
+
+const typeStoredForUntypedFile = (kind: UploadKind): string => kind.mimeTypes[0];
 
 const IMAGE_KINDS: readonly UploadKind[] = [
   { label: 'PNG', extensions: ['.png'], mimeTypes: ['image/png'] },
@@ -46,7 +30,6 @@ const VIDEO_KINDS: readonly UploadKind[] = [
   { label: 'MOV', extensions: ['.mov'], mimeTypes: ['video/quicktime'] },
 ];
 
-// Files are always served as attachments (Content-Disposition: attachment).
 const FILE_KINDS: readonly UploadKind[] = [
   { label: 'PDF', extensions: ['.pdf'], mimeTypes: ['application/pdf'] },
   {
@@ -120,7 +103,6 @@ const extensionOf = (name: string): string => {
 export const isUploadBucket = (value: unknown): value is UploadBucket =>
   typeof value === 'string' && (UPLOAD_BUCKETS as readonly string[]).includes(value);
 
-// The type to store the file under, or null when the bucket does not take it.
 export const resolveUploadContentType = (
   bucket: UploadBucket,
   file: { name: string; type: string },
@@ -134,7 +116,7 @@ export const resolveUploadContentType = (
 
   const extension = extensionOf(file.name);
   const kind = kinds.find((candidate) => candidate.extensions.includes(extension));
-  return kind ? kind.mimeTypes[0] : null;
+  return kind ? typeStoredForUntypedFile(kind) : null;
 };
 
 export const isAllowedUpload = (
@@ -142,7 +124,6 @@ export const isAllowedUpload = (
   file: { name: string; type: string },
 ): boolean => resolveUploadContentType(bucket, file) !== null;
 
-// For an <input type="file" accept>: extensions too, since Windows pickers filter on them.
 export const uploadAcceptAttribute = (bucket: UploadBucket): string => {
   const { kinds } = UPLOAD_KINDS[bucket];
   const entries = new Set<string>();
@@ -151,7 +132,6 @@ export const uploadAcceptAttribute = (bucket: UploadBucket): string => {
   return Array.from(entries).join(',');
 };
 
-// "PDF, ZIP, or CSV files": for messages that say what a bucket takes.
 export const describeUploadTypes = (bucket: UploadBucket): string => {
   const { kinds, noun } = UPLOAD_KINDS[bucket];
   const labels = kinds.map((kind) => kind.label);

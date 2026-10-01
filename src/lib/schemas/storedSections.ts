@@ -1,14 +1,5 @@
 import { z } from "zod";
 
-// Stored checklist JSON (templates.items and checklist_runs.items): sections of tasks, each
-// with optional content blocks and Sub-tasks. Shared by the API, which checks every write
-// against storedSectionsSchema and makes stored content safe before copying it into a run,
-// and the app, which makes stored content safe before rendering it.
-//
-// Only the shapes readers rely on are checked: lists are arrays, text is text, and a content
-// block has a known type. Ids, run state and unknown keys pass through, and null counts as
-// absent, so every legacy row and run the app has stored still saves.
-
 export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems"] as const;
 
 const text = z.string().nullish();
@@ -35,7 +26,6 @@ const sectionSchema = z.object({ title: text, items: z.array(itemSchema).nullish
 
 export const storedSectionsSchema = z.array(sectionSchema);
 
-/** The first problem in `sections`, naming its path ("sections[0].items[2].contents[1].subItems: ..."), or null. */
 export function findStoredSectionsIssue(sections: unknown): string | null {
   const result = storedSectionsSchema.safeParse(sections);
   if (result.success) return null;
@@ -49,11 +39,6 @@ type JsonRecord = Record<string, unknown>;
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/**
- * Whether stored content is a list of sections rather than a legacy flat task list: its
- * first entry is an object with `items`, even `items: null`. The API's payload check and
- * identity pass both use this, and the app's isSectionsShape reads it the same way.
- */
 export const isSectionedList = (values: readonly unknown[]): boolean =>
   isRecord(values[0]) && values[0].items !== undefined;
 
@@ -67,7 +52,6 @@ function withoutKeys(record: JsonRecord, keep: (key: string, value: unknown) => 
 
 const isTextOrAbsent = (value: unknown) => value === undefined || value === null || typeof value === "string";
 
-/** Sub-tasks as objects with text titles and a boolean isCompleted (legacy `completed` folded in). */
 export function sanitizeStoredSubItems(value: unknown): JsonRecord[] {
   return records(value).map((subItem) => {
     const { completed, ...rest } = subItem;
@@ -79,25 +63,13 @@ export function sanitizeStoredSubItems(value: unknown): JsonRecord[] {
   });
 }
 
-/** Whether a content block is a Sub-tasks block, the only kind whose sub-items are Sub-tasks. */
 export const isSubTasksBlock = (content: unknown): content is JsonRecord =>
   isRecord(content) && content.type === "subItems";
 
-/**
- * A stored task's Sub-tasks: the rows of its Sub-tasks blocks, the only sub-items the run page
- * shows and counts. The API reads the same ones (progress, completion, Template identities
- * and reconciliation, Run Keys), so the page and the API never disagree about a task. Sub-items
- * stored on another block or on the task itself (older rows, direct writes) are not Sub-tasks.
- */
 export function getTaskSubTasks(task: JsonRecord): JsonRecord[] {
   return records(task.contents).filter(isSubTasksBlock).flatMap((content) => records(content.subItems));
 }
 
-/**
- * Content blocks safe to render and copy: entries that are not objects or have an unknown
- * type are dropped, a non-text value becomes "", and a Sub-tasks block's list is always an
- * array. Sub-items on any other block are dropped: they are not Sub-tasks (getTaskSubTasks).
- */
 export function sanitizeStoredContents(value: unknown): JsonRecord[] {
   return records(value)
     .filter((content) => contentTypes.has(content.type))
@@ -113,7 +85,6 @@ export function sanitizeStoredContents(value: unknown): JsonRecord[] {
     });
 }
 
-/** A task safe to render and copy: text fields are text, and its lists are arrays of objects. */
 export function sanitizeStoredItem(item: JsonRecord): JsonRecord {
   const next = withoutKeys(item, (key, entry) =>
     key === "description" || key === "notes" ? isTextOrAbsent(entry) : true);
@@ -123,7 +94,6 @@ export function sanitizeStoredItem(item: JsonRecord): JsonRecord {
   return next;
 }
 
-/** Sections (already in the sectioned shape) that always pass storedSectionsSchema. */
 export function sanitizeStoredSections(sections: unknown[]): JsonRecord[] {
   return sections.filter(isRecord).map((section) => {
     const next: JsonRecord = { ...section };

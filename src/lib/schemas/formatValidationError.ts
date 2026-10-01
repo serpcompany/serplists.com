@@ -1,15 +1,8 @@
 import { z } from "zod";
 
-/**
- * Turns a validation failure into one short, readable line for toasts and CLI output.
- * A ZodError's own `message` is a pretty-printed JSON dump of its issues, so it must
- * never be shown as is.
- */
-
 const MAX_ISSUES = 3;
 
-// Array fields named after what the user sees, so ["sections", 0] reads "Section 1".
-const COLLECTION_LABELS: Record<string, string> = {
+const ARRAY_FIELD_LABELS: Record<string, string> = {
   templates: "Template",
   sections: "Section",
   items: "Item",
@@ -20,7 +13,6 @@ const COLLECTION_LABELS: Record<string, string> = {
   tags: "Tag",
 };
 
-// js-yaml's YAMLException message spans several lines with a code excerpt.
 const yamlExceptionSchema = z.object({
   name: z.literal("YAMLException"),
   reason: z.string(),
@@ -33,10 +25,10 @@ const describePath = (path: (string | number)[]): string => {
     const segment = path[index];
     const next = path[index + 1];
     if (typeof segment === "number") {
-      // A leading index means the file itself is an array of templates.
-      parts.push(index === 0 ? `Template ${segment + 1}` : `#${segment + 1}`);
+      const isTemplateInArrayFile = index === 0;
+      parts.push(isTemplateInArrayFile ? `Template ${segment + 1}` : `#${segment + 1}`);
     } else if (typeof next === "number") {
-      parts.push(`${COLLECTION_LABELS[segment] ?? segment} ${next + 1}`);
+      parts.push(`${ARRAY_FIELD_LABELS[segment] ?? segment} ${next + 1}`);
       index += 1;
     } else {
       parts.push(segment);
@@ -48,15 +40,14 @@ const describePath = (path: (string | number)[]): string => {
 const issueDepth = (error: z.ZodError): number =>
   Math.max(0, ...error.issues.map((issue) => issue.path.length));
 
-// A failed union only says "Invalid input"; report the branch that got furthest instead.
-const expandIssue = (issue: z.ZodIssue): z.ZodIssue[] => {
+const issuesOfDeepestUnionBranch = (issue: z.ZodIssue): z.ZodIssue[] => {
   if (issue.code !== z.ZodIssueCode.invalid_union || issue.unionErrors.length === 0) {
     return [issue];
   }
   const deepest = issue.unionErrors.reduce((best, candidate) =>
     issueDepth(candidate) > issueDepth(best) ? candidate : best,
   );
-  return deepest.issues.length > 0 ? deepest.issues.flatMap(expandIssue) : [issue];
+  return deepest.issues.length > 0 ? deepest.issues.flatMap(issuesOfDeepestUnionBranch) : [issue];
 };
 
 const formatIssue = (issue: z.ZodIssue): string => {
@@ -66,7 +57,7 @@ const formatIssue = (issue: z.ZodIssue): string => {
 };
 
 export const formatZodIssues = (error: z.ZodError, maxIssues = MAX_ISSUES): string => {
-  const lines = Array.from(new Set(error.issues.flatMap(expandIssue).map(formatIssue)));
+  const lines = Array.from(new Set(error.issues.flatMap(issuesOfDeepestUnionBranch).map(formatIssue)));
   if (lines.length === 0) return "Invalid data";
   const shown = lines.slice(0, maxIssues).join("; ");
   const hidden = lines.length - maxIssues;

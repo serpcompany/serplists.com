@@ -2,25 +2,22 @@ import { z } from "zod";
 
 export const PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION = "2.0.0" as const;
 
-// Base schema for checklist sub-items
 export const checklistSubItemSchema = z.object({
   id: z.string(),
   title: z.string(),
   isCompleted: z.boolean().optional()
 });
 
-// Schema for checklist item content
 export const checklistItemContentSchema = z.object({
   id: z.string(),
   type: z.enum(["text", "image", "video", "file", "embed", "subItems"]),
-  value: z.string(), // URL for image/video/file, embed code, markdown for text, or empty for subItems
-  uploadType: z.enum(["url", "upload"]).optional(), // For image/video/file: whether it's a URL or uploaded file
-  fileName: z.string().optional(), // Original filename for uploaded files
-  fileSize: z.number().optional(), // File size in bytes for uploaded files
+  value: z.string(),
+  uploadType: z.enum(["url", "upload"]).optional(),
+  fileName: z.string().optional(),
+  fileSize: z.number().optional(),
   subItems: z.array(checklistSubItemSchema).optional()
 });
 
-// Schema for individual checklist items
 export const checklistItemSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -29,7 +26,6 @@ export const checklistItemSchema = z.object({
   isCompleted: z.boolean().optional()
 });
 
-// Schema for checklist sections
 export const checklistSectionSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -44,7 +40,6 @@ export const portableTemplateRuleSchema = z.object({
   severity: z.enum(["error", "warning"]).default("error"),
 });
 
-// Schema for complete checklist templates
 export const checklistTemplateSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -64,7 +59,6 @@ export const checklistTemplateSchema = z.object({
   tags: z.array(z.string()).optional()
 });
 
-// Lenient schema for imports (minimal fields, optional metadata)
 export const checklistTemplateImportSchema = z.object({
   id: z.string().optional(),
   title: z.string(),
@@ -86,7 +80,6 @@ export const checklistTemplateImportSchema = z.object({
   tags: z.union([z.array(z.string()), z.string()]).optional()
 });
 
-// Schema for checklist runs
 export const checklistRunSchema = z.object({
   id: z.string(),
   templateId: z.string(),
@@ -99,7 +92,6 @@ export const checklistRunSchema = z.object({
   userId: z.string()
 });
 
-// Schema for backup data (collection of templates)
 export const templateBackupSchema = z.object({
   version: z.string(),
   exportedAt: z.string(),
@@ -117,10 +109,6 @@ export const portableChecklistSubItemSchema = z.object({
   title: z.string().min(1),
 });
 
-// The content rules are part of each block type's shape (not a refinement) so the
-// generated JSON Schema states them too: tools validating against it must accept exactly
-// what import accepts (tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts).
-// Every type keeps the same keys in the same order, so parsed output is unchanged.
 const portableContentShape = <T extends string, V extends z.ZodTypeAny, S extends z.ZodTypeAny>(
   type: T,
   value: V,
@@ -139,9 +127,7 @@ const portableContentShape = <T extends string, V extends z.ZodTypeAny, S extend
 const optionalContentValue = z.string().optional().default("");
 const optionalSubItems = z.array(portableChecklistSubItemSchema).optional();
 
-// A link, upload URL or embed code: not blank. /\S/ becomes the JSON Schema pattern "\S",
-// which a trim() could not.
-const requiredContentValue = (type: string) => {
+const nonBlankContentValue = (type: string) => {
   const message = `${type} content requires a value`;
   return z.string({ required_error: message }).regex(/\S/, message);
 };
@@ -150,10 +136,10 @@ const subItemsRequiredMessage = "subItems content requires at least one sub-item
 
 export const portableChecklistItemContentSchema = z.discriminatedUnion("type", [
   portableContentShape("text", optionalContentValue, optionalSubItems),
-  portableContentShape("image", requiredContentValue("image"), optionalSubItems),
-  portableContentShape("video", requiredContentValue("video"), optionalSubItems),
-  portableContentShape("file", requiredContentValue("file"), optionalSubItems),
-  portableContentShape("embed", requiredContentValue("embed"), optionalSubItems),
+  portableContentShape("image", nonBlankContentValue("image"), optionalSubItems),
+  portableContentShape("video", nonBlankContentValue("video"), optionalSubItems),
+  portableContentShape("file", nonBlankContentValue("file"), optionalSubItems),
+  portableContentShape("embed", nonBlankContentValue("embed"), optionalSubItems),
   portableContentShape(
     "subItems",
     optionalContentValue,
@@ -210,13 +196,10 @@ export const portableTemplatePackSchema = portableTemplatePackEnvelopeSchema.ext
   schemaVersion: z.literal(PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION),
 });
 
-// Envelope checks only. Importers normalize and validate each template on its own
-// (parsePortableTemplate), so one bad template fails alone instead of rejecting the file.
 export const portableTemplatePackLooseEnvelopeSchema = portableTemplatePackEnvelopeSchema.extend({
   templates: z.array(z.unknown()),
 });
 
-// Type exports
 export type ChecklistSubItem = z.infer<typeof checklistSubItemSchema>;
 export type ChecklistItemContent = z.infer<typeof checklistItemContentSchema>;
 export type ChecklistItem = z.infer<typeof checklistItemSchema>;
@@ -230,7 +213,6 @@ export type PortableChecklistTemplate = z.infer<typeof portableChecklistTemplate
 export type PortableTemplatePackLooseEnvelope = z.infer<typeof portableTemplatePackLooseEnvelopeSchema>;
 export type PortableTemplatePack = z.infer<typeof portableTemplatePackSchema>;
 
-// Validation functions
 export const validateTemplate = (data: unknown): ChecklistTemplate => {
   return checklistTemplateSchema.parse(data);
 };

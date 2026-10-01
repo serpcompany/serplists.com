@@ -23,6 +23,16 @@ describe('run title limit', () => {
     expect(getRunTitleError(`  ${'a'.repeat(RUN_TITLE_MAX)}  `)).toBeNull();
     expect(getRunTitleError('Launch')).toBeNull();
   });
+
+  it('counts UTF-16 code units, as the API schema and an input maxLength do, so an emoji counts twice', () => {
+    const longestEmojiTitle = '\u{1F680}'.repeat(RUN_TITLE_MAX / 2);
+    const oneUnitTooLong = `${longestEmojiTitle}a`;
+
+    expect(checklistPayloadSchema.safeParse({ title: longestEmojiTitle }).success).toBe(true);
+    expect(getRunTitleError(longestEmojiTitle)).toBeNull();
+    expect(checklistPayloadSchema.safeParse({ title: oneUnitTooLong }).success).toBe(false);
+    expect(getRunTitleError(oneUnitTooLong)).toBe('Run title must be 160 characters or fewer.');
+  });
 });
 
 describe('Organization name limit', () => {

@@ -12,7 +12,7 @@ are generated from it and must pass `pnpm run templates:check`.
 ## Storage strategy (D1)
 - `templates.items` stores the full sections JSON today's UI uses (array of sections with nested items/contents).
 - `checklist_runs.items` stores the current sections JSON with completion state.
-- Every write of that JSON from a request (template create, save, and import; run create and save) is checked against `src/lib/schemas/storedSections.ts` (a shared-run save takes the task structure from the stored run and only completion and notes from the request): `items`, `contents`, and `subItems` are arrays of objects, `title`, `description`, `notes`, and `value` are text, and a content block's `type` is one of `text`, `image`, `video`, `file`, `embed`, `subItems`. Ids, run state, and unknown keys pass through, and `null` counts as absent. A failure is a `400` (an `invalid_sections` failure on import) whose message names the path, for example `sections[0].items[2].contents[1].subItems: Expected array, received string`. Content stored before the check is made safe (a malformed Sub-task list becomes empty, a non-text value becomes empty text, a block with an unknown type is dropped) when it is copied into a run or shown in the app, and `db/maintenance/find-malformed-checklist-content.sql` lists it for review.
+- Every write of that JSON from a request (template create, save, and import; run create and save) is checked against `src/lib/schemas/storedSections.ts` (a shared-run save takes the task structure from the stored run and only completion and notes from the request): `items`, `contents`, and `subItems` are arrays of objects, `title`, `description`, `notes`, and `value` are text, and a content block's `type` is one of `text`, `image`, `video`, `file`, `embed`, `subItems`. Ids, run state, and unknown keys pass through, and `null` counts as absent. A failure is a `400` (an `invalid_sections` failure on import) whose message names the path, for example `sections[0].items[2].contents[1].subItems: Expected array, received string`. Content stored before the check is made safe (a malformed Sub-task list becomes empty, a non-text value becomes empty text, a block with an unknown type is dropped, and so are sub-items on any block but a Sub-tasks block) when it is copied into a run or shown in the app, and `db/maintenance/find-malformed-checklist-content.sql` lists it for review.
 - Section, item, and sub-item `id` values are stable identities. Renaming or reordering must retain them.
 - `templates.content_version` advances only for checklist-structure changes. `checklist_runs.template_version` records the content version last applied; `revision` protects run writes from stale clients; `retired_items` preserves removed run state outside readiness calculations.
 - Clients resend the full sections on every save, so `PUT /api/templates/:id` compares them with the stored structure (`functions/api/utils/template-changes.ts`): run state (`isCompleted`, `completed`, `notes`), key order, empty values, and a content block's own `id` are ignored, while text, section, task, and Sub-task ids, additions, removals, and reordering count. Content blocks are often stored without ids (seed and starter Templates, imports, and copies of those) and the editor gives each one a new id when it loads, so comparing those ids would turn the first save of such a Template into a structure change. Only a real structure change bumps `content_version` and reconciles runs. `templates.version` and a `template_versions` row advance whenever a stored field actually changes, visibility included (so an editor loaded before a Share gets `409 edit_conflict` rather than reverting it), and a save with no changes writes nothing. The response reports `version`, `content_version`, `structureChanged`, and `reconciledRuns`.
@@ -90,10 +90,14 @@ Portable template fields are intentionally cleaner than app row exports:
 
 Content blocks are a union on `type`: `image`, `video`, `file` and `embed` need a
 `value` that is not blank, `subItems` needs at least one sub-item, and `text` may be
-empty. Import ignores keys it does not know rather than rejecting them. The generated
-JSON Schema states the same rules and allows additional properties, so a pack valid
-against it imports, and a pack it rejects fails import too
-(`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts` checks both with Ajv).
+empty. Import ignores keys it does not know rather than rejecting them, since SERP Lists'
+own older exports carry keys such as `isCompleted`. The generated JSON Schema states the
+same rules and allows additional properties, so a pack valid against it imports, and a pack
+it rejects fails import too (`tests/unit/lib/schemas/portableTemplateJsonSchemaParity.test.ts`
+checks both with Ajv). That is why the rules are part of each type's shape rather than Zod
+refinements, which the JSON Schema cannot state, and why "not blank" is the pattern `\S`
+rather than a trim. Every type has the same keys in the same order, so a parsed block has
+one shape whatever its type.
 
 An `image`, `video` or `file` block that links to a file outside the app shows its
 `fileName` and `fileSize` only with `uploadType: "url"`. Without it they are treated as
@@ -318,7 +322,8 @@ A file that fails validation is rejected before anything is sent, with a
 one-line reason that names up to three problems by 1-based position, for example
 `Template validation failed: Section 1 > title: String must contain at least 1 character(s)`.
 YAML syntax errors report their line (`Invalid YAML at line 3: ...`). The shared
-formatter is `src/lib/schemas/formatValidationError.ts`.
+formatter is `src/lib/schemas/formatValidationError.ts`; a `ZodError`'s own message is a
+JSON dump of its issues, so it is never shown as is.
 
 ## Strict Markdown template format
 
@@ -393,6 +398,8 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Asset uploads are limited to 50MB each. Import accepts any size an upload can have
   (one shared limit, `src/lib/schemas/templateAssetLimits.ts`), so a template
   exported from the app always imports again; import copies asset URLs, not the files.
+  The size it checks is the `fileSize` the file records, a hint rather than a guarantee,
+  so a missing or invalid one is ignored.
 - For live public-library publishing today, the imported template should be owned by the intended public publisher account before import, because author username is resolved from DB ownership, not from the portable JSON file.
 
 `seoUrl` is represented by the stored `slug` field and mapped back into the editor's `Custom URL Slug` input.
@@ -431,6 +438,13 @@ export const checklistItemContentSchema = z.object({
   subItems: z.array(checklistSubItemSchema).optional(),
 });
 ```
+
+- `value`: the URL of an image, video or file, the code or URL of an embed, the Markdown of
+  a text block, and empty for a `subItems` block.
+- `uploadType`: on an image, video or file block, whether `value` is an uploaded file
+  (`upload`) or a link (`url`).
+- `fileName` and `fileSize`: the original name and the size in bytes of the file `value`
+  points to.
 
 Supported types:
 - `text` (markdown)

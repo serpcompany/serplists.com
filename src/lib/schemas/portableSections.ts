@@ -1,8 +1,3 @@
-// The sections of a portable export: only the keys the portable format defines. Stored
-// sections also hold run state (isCompleted, the legacy completed, notes) and whatever
-// older writers left behind, which does not belong in a file meant for sharing and
-// tools. Shared by the app's exporter and GET /api/templates/backup?format=portable.
-
 type JsonRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -21,8 +16,6 @@ const pick = (source: JsonRecord, keys: readonly string[]): JsonRecord => {
   return picked;
 };
 
-// Entries that are not objects are dropped: they are not sections, tasks or blocks, and
-// the app already skips them when it reads a template.
 const records = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
 
 const toPortableContent = (content: JsonRecord): JsonRecord => ({

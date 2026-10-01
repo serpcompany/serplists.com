@@ -4,11 +4,6 @@ import {
 } from "./checklistSchema";
 import { formatZodIssues } from "./formatValidationError";
 
-// The editor saves content the strict portable schema rejects: an untitled default section
-// (the outline shows "Section N"), a blank trailing sub-task, empty media blocks. Export and
-// import both run templates through this normalizer so every pack we write can be read back,
-// including packs exported before it existed. Ids are kept: they are stable identities.
-
 type JsonRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -27,7 +22,6 @@ const withoutKey = (record: JsonRecord, key: string): JsonRecord => {
 const withoutNonString = (record: JsonRecord, key: string): JsonRecord =>
   typeof record[key] === "string" || !(key in record) ? record : withoutKey(record, key);
 
-// Ids are optional. A lenient JSON import can store a numeric one: keep it as a string.
 const withPortableId = (record: JsonRecord): JsonRecord =>
   typeof record.id === "number" && Number.isFinite(record.id)
     ? { ...record, id: String(record.id) }
@@ -35,8 +29,8 @@ const withPortableId = (record: JsonRecord): JsonRecord =>
 
 const UPLOAD_TYPES = new Set(["url", "upload"]);
 
-// Stored blocks can hold null (read as absent) or ill-typed file details and ids. Only keys
-// that are present and invalid change, so a valid block comes out exactly as it went in.
+const FIRST_PROBLEM_ONLY = 1;
+
 function withPortableContentKeys(content: JsonRecord): JsonRecord {
   let cleaned = withoutNonString(withPortableId(content), "fileName");
   if ("fileSize" in cleaned && !(typeof cleaned.fileSize === "number" && Number.isFinite(cleaned.fileSize))) {
@@ -65,21 +59,11 @@ function normalizeContents(contents: unknown[]): JsonRecord[] {
     }
 
     if (VALUE_CONTENT_TYPES.has(record.type) && isBlank(value)) return [];
-    // Only a Sub-tasks block's sub-items are Sub-tasks; the app never shows any other block's.
     const { subItems: _notSubTasks, ...block } = content;
     return [{ ...block, value }];
   });
 }
 
-/**
- * Makes stored or imported sections valid for the portable schema: blank section titles
- * become "Section N" and blank task titles "Task N" (N is the position, as the editor shows
- * it); blank sub-tasks, empty sub-task blocks, sub-items on any other block, and media or
- * embed blocks without a value are dropped; sections left without tasks are dropped. On
- * content blocks and Sub-tasks a numeric id becomes a string and any other non-string id is
- * dropped, and a fileName that is not a string, a fileSize that is not a finite number, or an
- * uploadType other than "url" or "upload" (null included) is dropped.
- */
 export function normalizePortableSections(sections: unknown): JsonRecord[] {
   if (!Array.isArray(sections)) return [];
 
@@ -102,7 +86,6 @@ export type PortableTemplateParseResult =
   | { success: true; data: PortableChecklistTemplate }
   | { success: false; title: string; reason: string };
 
-/** Normalizes one template from a portable pack, then validates it on its own. */
 export function parsePortableTemplate(input: unknown): PortableTemplateParseResult {
   const record = isRecord(input) ? input : {};
   const title = typeof record.title === "string" ? record.title : "";
@@ -118,6 +101,5 @@ export function parsePortableTemplate(input: unknown): PortableTemplateParseResu
   });
   if (result.success) return { success: true, data: result.data };
 
-  // One readable line naming the first problem ("Section 1 > Item 2 > id: ...").
-  return { success: false, title, reason: formatZodIssues(result.error, 1) };
+  return { success: false, title, reason: formatZodIssues(result.error, FIRST_PROBLEM_ONLY) };
 }

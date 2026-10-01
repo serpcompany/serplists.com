@@ -4,11 +4,6 @@ export type { UploadBucket };
 
 const MB = 1024 * 1024;
 
-/**
- * The largest file each upload bucket accepts. POST /api/uploads enforces
- * these; the upload forms check the same numbers first, so the two cannot
- * drift.
- */
 export const UPLOAD_MAX_BYTES: Record<UploadBucket, number> = {
   avatars: 5 * MB,
   "template-images": 50 * MB,
@@ -16,7 +11,6 @@ export const UPLOAD_MAX_BYTES: Record<UploadBucket, number> = {
   "template-files": 50 * MB,
 };
 
-/** The largest file any Template upload bucket accepts (images, videos, files). */
 export const TEMPLATE_UPLOAD_MAX_BYTES = Math.max(
   UPLOAD_MAX_BYTES["template-images"],
   UPLOAD_MAX_BYTES["template-videos"],
