@@ -105,6 +105,13 @@ describe('template detail export', () => {
     ).toBe('a-b-c.json');
   });
 
+  it('replaces control characters and the characters Windows reserves, and trims dots and dashes at the ends, so the file saves on every system', () => {
+    expect(buildTemplateExportFile(buildTemplate({ slug: 'q1\treport*final?' })).filename).toBe(
+      'q1-report-final.json',
+    );
+    expect(buildTemplateExportFile(buildTemplate({ slug: '..<launch>..' })).filename).toBe('launch.json');
+  });
+
   it('downloads the pack only on a paid plan', () => {
     const download = vi.fn();
 

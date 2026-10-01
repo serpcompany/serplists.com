@@ -15,10 +15,6 @@ import { canCopyTemplate } from "./templatePermissions";
 
 export type { TemplateDetailActionResult } from "./templateDetailApi";
 
-// The template pages' actions (Start Run, Copy/Save, Duplicate, and the model's Share)
-// each resolve to an outcome instead of acting on the page; followTemplateActionResult
-// then acts on that outcome for the page that started it.
-
 type TemplateActionApiClient = Pick<typeof api, "clonePublicTemplate">;
 
 export type CreateTemplate = (
@@ -36,7 +32,6 @@ export type CreateRun = (params: {
 
 export type TemplateDetailBillingState = {
   billingEnabled: boolean;
-  /** The plan check failed and no plan is known; never treat this as Free. */
   isError: boolean;
   isLoading: boolean;
   isPro: boolean;
@@ -82,15 +77,12 @@ export const saveTemplateToAccount = async (params: {
   teamId?: string;
   template: ChecklistTemplate | null;
   userId?: string;
-  // The copy goes to the active context; undefined counts as known, as in assertWorkspaceReady.
   workspaceStatus?: WorkspaceStatus;
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
     return { kind: "error", message: "Template not found." };
   }
 
-  // The API clones only public templates. Checked before the plan so a private
-  // template never sends anyone to checkout for a copy that cannot succeed.
   if (!canCopyTemplate(params.template)) {
     return { kind: "error", message: "Only public templates can be copied." };
   }
@@ -99,21 +91,14 @@ export const saveTemplateToAccount = async (params: {
     return { kind: "login_required" };
   }
 
-  // Until a stored Organization is confirmed the context shows Personal (no teamId), so
-  // a copy now would land in Personal, or the Personal plan would send a Free user to
-  // checkout. Checked before the plan for that reason.
   if (params.workspaceStatus === "loading" || params.workspaceStatus === "error") {
     return { kind: "error", message: WORKSPACE_NOT_READY_MESSAGE };
   }
 
-  // Only Personal copying is a Pro feature. The API enforces an Organization's Template
-  // limit (a Free Organization may copy within it) and reports limit_reached, which
-  // maps to upgrade_required.
   if (!params.teamId && params.billingState.isLoading) {
     return { kind: "error", message: "Checking your plan. Try again in a moment." };
   }
 
-  // A failed plan check is not the Free plan: ask for a retry instead of checkout.
   if (!params.teamId && params.billingState.isError) {
     return { kind: "error", message: "Couldn't check your plan. Try again." };
   }
@@ -145,9 +130,6 @@ export const saveTemplateToAccount = async (params: {
   }
 };
 
-// Duplicate on a template the user can edit. The copy goes where buildTemplateCopyPayload
-// sends it (another Organization's private template stays in that Organization) and counts
-// against that context's template limit, so a plan gate comes back as upgrade_required.
 export const duplicateOwnedTemplate = async (params: {
   activeTeamId?: string;
   createTemplate: CreateTemplate;
@@ -166,15 +148,10 @@ export const duplicateOwnedTemplate = async (params: {
 
 type TemplateActionOutcomeHandlers = {
   loginRequired: () => void;
-  // May resolve with whether a checkout redirect started; the result is not used here.
   upgradeRequired: () => void | Promise<unknown>;
   succeeded: (result: Extract<TemplateDetailActionResult, { kind: "ok" }>) => void;
 };
 
-// Acts on a template page action's result (Start Run, Copy/Save, Share). Every outcome
-// but a failure moves the user (to the new run or template, sign-in or checkout) or
-// opens a dialog on the page, so none of it happens once they have left the page that
-// started the action. A failure is still reported; what succeeded stays done.
 export const followTemplateActionResult = async (
   result: TemplateDetailActionResult,
   visit: PageVisit,

@@ -39,11 +39,6 @@ export const mapActionFailure = (
   return { kind: 'error', message: failure.message };
 };
 
-/**
- * A failed change to the loaded template. A 409 edit conflict or a 404 means the loaded
- * copy is stale: it is reloaded from the server before the control re-enables, so the
- * next attempt sends the stored version instead of repeating the conflict.
- */
 export const mapTemplateChangeFailure = async (
   error: unknown,
   fallbackMessage: string,
@@ -61,11 +56,17 @@ export const mapTemplateChangeFailure = async (
   return { kind: 'error', message: getTemplateChangeErrorMessage(error, fallbackMessage) };
 };
 
-/**
- * The loaded template after a change the server accepted. PUT /api/templates/:id answers
- * with the version and slug it stored, and the next write sends that version as
- * expected_version. An answer without them keeps the loaded values.
- */
+export const tryRefreshTemplateLists = async (
+  invalidateTemplates: (() => Promise<void> | void) | undefined,
+): Promise<boolean> => {
+  try {
+    await invalidateTemplates?.();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const applyTemplateSaveResult = (
   template: ChecklistTemplate,
   change: Partial<ChecklistTemplate>,
@@ -77,7 +78,6 @@ export const applyTemplateSaveResult = (
   slug: saved?.slug ?? template.slug,
 });
 
-// Fills in the owner's username when the loaded row lacks it; the public URL needs it.
 export const hydrateTemplateOwner = async (
   template: ChecklistTemplate,
   apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
@@ -98,13 +98,6 @@ export const hydrateTemplateOwner = async (
   }
 };
 
-/**
- * The template with the owner name its share link should use. Cached lists carry the
- * username from when they were fetched, which is stale after a rename, so the signed-in
- * Creator's current username wins. For a template someone else created (an Organization
- * editor sharing it), the Creator's current username is looked up; the cached one is
- * kept only when that lookup fails.
- */
 export const resolveShareOwnerTemplate = async (
   template: ChecklistTemplate,
   owner: { userId?: string; username?: string },

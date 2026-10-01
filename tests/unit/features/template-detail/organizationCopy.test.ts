@@ -77,7 +77,7 @@ describe('copying a public template into an Organization', () => {
     expect(result.kind).toBe('ok');
   });
 
-  it('reports the Organization limit from the API as an upgrade', async () => {
+  it('reports a limit answer that names no context, as an API older than contexts sends, as an upgrade', async () => {
     const apiClient = buildApiClient(
       vi.fn().mockRejectedValue(
         createApiError(403, { code: 'limit_reached', error: 'Template limit reached.' }),

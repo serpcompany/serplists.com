@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
+import type { ChecklistTemplate } from '@/types/checklist';
 
 import { shareTemplateToPublic } from './shareTemplate';
 import {
@@ -39,9 +40,7 @@ type PublicTemplateDetailHookOptions = {
   ownerUsername?: string;
 };
 
-// The page loads only its own template (by id), never a Template list.
 type PrivateTemplateDetailHookOptions = {
-  // The viewer's role in the active context allows editing Templates.
   canEditTemplates: boolean;
   identifier?: string;
   mode: 'private';
@@ -51,11 +50,9 @@ type TemplateDetailCommonOptions = {
   createRun: CreateRun;
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
-  // Required so every page decides the ownership context: undefined is Personal.
   teamId: string | undefined;
   userId?: string;
   username?: string;
-  // Required so a copy never goes to a context shown only until the stored one is known.
   workspaceStatus: WorkspaceStatus;
 };
 
@@ -67,6 +64,11 @@ export type TemplateDetailHistoryState = {
   isError: boolean;
   isLoading: boolean;
 };
+
+const replaceTemplateIfStillShown =
+  (next: ChecklistTemplate) =>
+  (current: ChecklistTemplate | null): ChecklistTemplate | null =>
+    current?.id === next.id ? next : current;
 
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
@@ -114,9 +116,6 @@ export const useTemplateDetailModel = (
     retry: false,
   });
 
-  // ['templates'] also covers the open template (so the next write sends its current
-  // version), the public catalog, which Share changes, and the Changelog. After a 409 edit
-  // conflict it reloads the stored template in place, without the loading state.
   const invalidateTemplates = async () => {
     if (!options.userId) {
       return;
@@ -135,7 +134,6 @@ export const useTemplateDetailModel = (
 
   const saveTemplate = async (): Promise<TemplateDetailActionResult> => {
     if (billing.status === 'error') {
-      // Check again so the next attempt can go through.
       billing.refetch();
     }
 
@@ -160,15 +158,12 @@ export const useTemplateDetailModel = (
         })
       : { kind: 'error', message: 'Template not found.' };
 
-  // `template` is the only source of visibility; both actions keep it in step with the server.
   const shareTemplate = async (): Promise<TemplateDetailActionResult> =>
     shareTemplateToPublic({
       canShare: permissions.canShare,
       invalidateTemplates,
       isAuthenticated: options.isAuthenticated,
-      // Ignore the result if the page moved to another template during the request.
-      onTemplateChange: (shared) =>
-        updateTemplate((current) => (current?.id === shared.id ? shared : current)),
+      onTemplateChange: (shared) => updateTemplate(replaceTemplateIfStillShown(shared)),
       origin: window.location.origin,
       reloadAfterConflict: invalidateTemplates,
       template,
@@ -191,7 +186,6 @@ export const useTemplateDetailModel = (
   return {
     billingState,
     duplicateTemplate,
-    // Checks the plan again after a failed check, so the next attempt can go through.
     refetchBilling: billing.refetch,
     history: {
       data: history.data ?? null,

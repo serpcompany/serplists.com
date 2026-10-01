@@ -14,20 +14,17 @@ import {
 } from './templateDetailApi';
 import { mapApiTemplateToChecklistTemplate } from './templateDetailMappers';
 
-// Public pages always read the server copy: an in-memory list can be arbitrarily old.
 export type PublicTemplateDetailOptions = {
   identifier?: string;
   mode: 'public';
   ownerUsername?: string;
 };
 
-// The private page loads its own template by id (or slug), never from a list.
 export type PrivateTemplateDetailOptions = {
   identifier?: string;
   mode: 'private';
 };
 
-// not_found is only for a real answer (404, not public, another owner); anything else can be retried.
 export type LoadTemplateDetailResult =
   | { kind: 'ok'; template: ChecklistTemplate }
   | { kind: 'not_found' }
@@ -42,8 +39,6 @@ const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>
     ? { kind: 'not_found' }
     : { kind: 'error', message: getAccessFailure(error, 'Unable to load template.').message };
 
-// The app links a private template by its id, and the API never hands out a slug that
-// looks like one, so only a 404 for another identifier is worth a slug lookup.
 const fetchPrivateTemplate = async (
   identifier: string,
   apiClient: TemplateDetailApiClient,
@@ -59,7 +54,6 @@ const fetchPrivateTemplate = async (
   return apiClient.getTemplateBySlug(identifier);
 };
 
-// The template with this id, or null when there is none (404).
 const findTemplateById = async (
   identifier: string,
   apiClient: TemplateDetailApiClient,
@@ -72,8 +66,6 @@ const findTemplateById = async (
   }
 };
 
-// The template as the public page shows it, or null when it is not public or another
-// user owns it.
 const toOwnedPublicTemplate = async (
   rawTemplate: unknown,
   options: { identifier: string; ownerUsername: string },
@@ -109,7 +101,6 @@ export const loadTemplateDetailData = async (
       return { kind: 'not_found' };
     }
 
-    // Library templates ship in the bundle (the API cannot serve them) and win on a slug clash.
     const libraryTemplate = findPublicTemplateByIdentifier(
       repoTemplates,
       options.identifier,
@@ -127,8 +118,6 @@ export const loadTemplateDetailData = async (
       ownerUsername: options.ownerUsername,
     };
     try {
-      // A UUID is read as an id first. A slug saved before the API refused UUID slugs can
-      // look like one too, so when the id finds nothing this owner shares, try the slug.
       if (looksLikeTemplateId(publicOptions.identifier)) {
         const byId = await findTemplateById(publicOptions.identifier, apiClient);
         const template =
@@ -152,7 +141,6 @@ export const loadTemplateDetailData = async (
   }
 
   const identifier = options.identifier;
-  // Library templates are not in D1, in any context.
   const libraryTemplate = repoTemplates.find((template) => template.id === identifier);
   if (libraryTemplate) {
     return { kind: 'ok', template: libraryTemplate };

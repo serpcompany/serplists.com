@@ -9,24 +9,18 @@ import {
   resolveShareOwnerTemplate,
   type TemplateDetailActionResult,
   type TemplateDetailApiClient,
+  tryRefreshTemplateLists,
 } from './templateDetailApi';
 
 const SHARE_FAILED_MESSAGE = 'Failed to create a share link for this template.';
 
-// Resolves the public URL before changing visibility, so a template that cannot
-// be shared is never published, and once it is published local state follows.
-// The server confirms every Share, even when the loaded copy already says Public: a
-// copy made private, archived or re-slugged elsewhere gets 409 or 404 and a reload
-// instead of a dead link.
 export const shareTemplateToPublic = async (params: {
   apiClient?: TemplateDetailApiClient;
-  // From getTemplateDetailPermissions: edit rights, not who created the template.
   canShare: boolean;
   invalidateTemplates?: () => Promise<void> | void;
   isAuthenticated: boolean;
   onTemplateChange: (template: ChecklistTemplate) => void;
   origin: string;
-  // After a 409 edit conflict or a 404: load the stored template before re-enabling.
   reloadAfterConflict?: () => Promise<void>;
   template: ChecklistTemplate | null;
   userId?: string;
@@ -44,8 +38,6 @@ export const shareTemplateToPublic = async (params: {
 
   const apiClient = params.apiClient ?? api;
   const isCreator = params.template.userId === params.userId;
-  // The link lives under the Creator's username, so only the Creator's own (current) name
-  // may stand in for the one a cached copy carries.
   let nextTemplate = await resolveShareOwnerTemplate(
     params.template,
     { userId: params.userId, username: params.username },
@@ -61,10 +53,9 @@ export const shareTemplateToPublic = async (params: {
     };
   }
 
-  // Public library templates are not stored rows, so there is nothing to confirm.
-  if (!(nextTemplate.isPublic && isRepoTemplate(nextTemplate))) {
+  const isPublicLibraryTemplate = nextTemplate.isPublic && isRepoTemplate(nextTemplate);
+  if (!isPublicLibraryTemplate) {
     try {
-      // On a current copy that is already public this changes nothing on the server.
       const saved = await apiClient.updateTemplate(nextTemplate.id, {
         is_public: true,
         expected_version: nextTemplate.version,
@@ -76,13 +67,8 @@ export const shareTemplateToPublic = async (params: {
   }
 
   params.onTemplateChange({ ...nextTemplate, isPublic: true });
-  try {
-    await params.invalidateTemplates?.();
-  } catch {
-    // The template is public either way; lists catch up on their next fetch.
-  }
+  await tryRefreshTemplateLists(params.invalidateTemplates);
 
-  // Built from the slug the server returned, which can differ from the loaded one.
   const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
   return publicPath
     ? { kind: 'ok', shareUrl: `${params.origin}${publicPath}` }

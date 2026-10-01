@@ -9,21 +9,11 @@ export type CopyTemplateButton = {
   visible: boolean;
 };
 
-/**
- * The copy button on another owner's template. It copies into the active context.
- * Personal copying is a Pro feature, so Personal shows the plan, but only a known Free
- * plan reads as an upgrade: a failed plan check is not Free. An Organization's
- * limits are checked by the API (a Free Organization may copy within its Template
- * limit), so the button never pre-judges them, and it is hidden from roles that
- * cannot add Templates to the Organization. The API clones only public templates, so
- * the button is hidden on a private one in every context.
- */
 export const getCopyTemplateButton = (params: {
   billingState: TemplateDetailBillingState;
   canEditTemplates: boolean;
   isCloning: boolean;
   isTeamWorkspace: boolean;
-  // A stored Organization is not confirmed yet, so the context shown may not be the real one.
   isWorkspaceLoading: boolean;
   template: Pick<ChecklistTemplate, 'id' | 'isPublic' | 'userId'> | null;
 }): CopyTemplateButton => {

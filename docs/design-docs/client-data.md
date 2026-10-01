@@ -73,7 +73,12 @@ one module:
   `src/features/template-detail/templateDetailQuery.ts`) is
   `['templates', 'detail', <route identifier>, user]`, and holds `null` once the server said
   the template is gone. The route identifier can be a slug, so `isTemplateDetailOf` also
-  matches an entry by the id of the template it loaded.
+  matches an entry by the id of the template it loaded. The key names no Ownership Context:
+  `GET /api/templates/:id` answers the same in every context, and a context switch marks it
+  stale with the lists. It is fetched again when invalidated, not when the tab regains focus,
+  which would reload the page under an open dialog for nothing, and a failed load is not
+  retried: the load already tells a missing template from a failure, and the page offers Try
+  again.
 - **One user's private data** (`queryKeys` in `src/lib/queryKeys.ts`): invites, Organization
   members and activity, Run Keys, and the archive lists. The user id (`signed-out` when there
   is none) comes second, so two people who sign in on the same tab never read each other's

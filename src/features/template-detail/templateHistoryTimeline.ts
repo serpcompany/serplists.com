@@ -10,7 +10,6 @@ import { HISTORY_DISPLAY_LIMIT } from '@/lib/history';
 import { queryKeys } from '@/lib/queryCache';
 import { parseDbTimestamp } from '@/lib/utils/dbTimestamp';
 
-// The API client asks for the same number (src/lib/history.ts).
 export const TEMPLATE_HISTORY_DISPLAY_LIMIT = HISTORY_DISPLAY_LIMIT;
 
 export type TemplateHistoryTimelineEntry = {
@@ -20,17 +19,12 @@ export type TemplateHistoryTimelineEntry = {
   label: string;
 };
 
-// Under ['templates'], so every template mutation (edit, Share, visibility, archive,
-// restore, context switch) that invalidates the lists refreshes the Changelog too.
 export const getTemplateHistoryQueryKey = (
   templateId: string | undefined,
   userId: string | undefined,
   teamId: string | undefined,
 ) => queryKeys.templateHistoryFor(templateId ?? 'none', userId, teamId);
 
-// Share and the visibility switch change only is_public; the API marks that update's audit
-// event with metadata.visibility (history lists carry metadata, never diffs), and gives the
-// version the write stored the same metadata.
 const visibilityChangeSchema = z.object({ visibility: z.enum(['public', 'private']) }).passthrough();
 
 const getVisibilityLabel = (entry: TemplateHistoryVersion | TemplateHistoryEvent): string | null => {
@@ -40,8 +34,6 @@ const getVisibilityLabel = (entry: TemplateHistoryVersion | TemplateHistoryEvent
   return change.data.visibility === 'public' ? 'Made template public' : 'Made template private';
 };
 
-// Who made the change, as the run's Changelog names it: an Agent's edit reads
-// "<Run Key name> via MCP · authorized by <user>".
 const getActorName = (entry: TemplateHistoryVersion | TemplateHistoryEvent): string =>
   getAuditActorName(entry.actor, entry.metadata);
 
@@ -51,20 +43,13 @@ const getVersionLabel = (version: TemplateHistoryVersion): string =>
 const getEventLabel = (event: TemplateHistoryEvent): string =>
   getVisibilityLabel(event) ?? formatAuditAction(TEMPLATE_HISTORY_LABELS, event.action);
 
-// Every versioned write also records an audit event with the same action and time.
-const getPairKey = (entry: { action: string; createdAt: string }): string =>
+const getWriteKey = (entry: { action: string; createdAt: string }): string =>
   `${entry.action}|${entry.createdAt}`;
 
 const getTime = (value: string): number => parseDbTimestamp(value)?.getTime() ?? 0;
 
 type RankedEntry = TemplateHistoryTimelineEntry & { rank: number; time: number };
 
-/**
- * One Changelog: every version, plus the events no version records (archive, restore).
- * A visibility change is versioned too, and its version reads as the change it made
- * ("Made template public"). Newest first. The API returns up to `limit` of each list,
- * newest first, which always covers the newest `limit` entries of the merge.
- */
 export const buildTemplateHistoryTimeline = (
   history: TemplateHistoryResponse | null | undefined,
   limit: number = TEMPLATE_HISTORY_DISPLAY_LIMIT,
@@ -73,7 +58,7 @@ export const buildTemplateHistoryTimeline = (
     return [];
   }
 
-  const versionKeys = new Set(history.versions.map(getPairKey));
+  const versionedWriteKeys = new Set(history.versions.map(getWriteKey));
   const entries: RankedEntry[] = [
     ...history.versions.map((version) => ({
       actorName: getActorName(version),
@@ -84,7 +69,7 @@ export const buildTemplateHistoryTimeline = (
       time: getTime(version.createdAt),
     })),
     ...history.events
-      .filter((event) => !versionKeys.has(getPairKey(event)))
+      .filter((event) => !versionedWriteKeys.has(getWriteKey(event)))
       .map((event) => ({
         actorName: getActorName(event),
         createdAt: event.createdAt,

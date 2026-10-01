@@ -26,11 +26,9 @@ export type TemplateDetailRecord = {
   notFound: boolean;
   reload: () => void;
   template: ChecklistTemplate | null;
-  // Applies a change the server has already accepted to the loaded template.
   updateTemplate: (update: TemplateUpdater) => void;
 };
 
-// The public page loads the server copy on every visit and keeps it in local state.
 const usePublicTemplateRecord = (
   options: TemplateDetailRecordOptions,
   enabled: boolean,
@@ -39,7 +37,6 @@ const usePublicTemplateRecord = (
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Bumped by reload(); the only extra effect dependency, so a retry never loops.
   const [reloadKey, setReloadKey] = useState(0);
   const { identifier, ownerUsername } = options;
 
@@ -83,7 +80,6 @@ const usePublicTemplateRecord = (
   return { loadError, loading, notFound, reload, template, updateTemplate: setTemplate };
 };
 
-// The private page loads its own template by id, never a list (docs/design-docs/d1-cost.md).
 const usePrivateTemplateRecord = (
   options: TemplateDetailRecordOptions,
   enabled: boolean,
@@ -98,9 +94,6 @@ const usePrivateTemplateRecord = (
   });
   const queryKey = getTemplateDetailQueryKey(options.identifier, options.userId);
   const { refetch } = query;
-  // undefined: no answer yet. null: the server says the template is gone. A cached gone
-  // answer that is being checked again (the template may have been restored since), or
-  // whose check failed, is not an answer yet.
   const hasTemplate = Boolean(query.data);
   const isGone = query.data === null && !query.isFetching && !query.isError;
 

@@ -8,13 +8,14 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import type { TemplateDetailBillingState } from './useTemplateDetailModel';
 
-// Path separators and characters Windows reserves in file names.
-const RESERVED_FILENAME_CHARACTERS = '\\/:*?"<>|';
+const WINDOWS_RESERVED_FILENAME_CHARACTERS = '\\/:*?"<>|';
+
+const FIRST_PRINTABLE_CHARACTER_CODE = 32;
 
 const isUnsafeFilenameCharacter = (character: string): boolean =>
-  character.charCodeAt(0) < 32 || RESERVED_FILENAME_CHARACTERS.includes(character);
+  character.charCodeAt(0) < FIRST_PRINTABLE_CHARACTER_CODE ||
+  WINDOWS_RESERVED_FILENAME_CHARACTERS.includes(character);
 
-// A missing slug is mapped to '', so fall back to the id on any blank slug.
 export const buildTemplateExportFilename = (template: ChecklistTemplate): string => {
   const base = (template.slug ?? '').trim() || template.id.trim();
   const safeBase = Array.from(base, (character) =>
@@ -26,7 +27,6 @@ export const buildTemplateExportFilename = (template: ChecklistTemplate): string
   return `${safeBase || 'template'}.json`;
 };
 
-// The portable pack is the format Import Templates and POST /api/templates/backup accept.
 export const buildTemplateExportFile = (
   template: ChecklistTemplate,
 ): { filename: string; pack: PortableTemplatePack } => ({
@@ -39,10 +39,6 @@ export type TemplateExportResult =
   | { kind: 'upgrade_required' }
   | { kind: 'error'; message: string };
 
-// Template export is a paid feature (docs/product-specs/portable-templates.md),
-// decided by the active ownership context's plan, like Import Templates. The pack is
-// built in the browser, so no server check can decide for it: a failed plan check asks
-// for a retry, never an upgrade, because it is not the Free plan.
 export const exportTemplateFile = (params: {
   billingState: TemplateDetailBillingState;
   download?: (pack: PortableTemplatePack, filename: string) => void;
@@ -64,10 +60,7 @@ export const exportTemplateFile = (params: {
     return { kind: 'upgrade_required' };
   }
 
-  // A template the portable format can't hold is left out of the pack and listed in the
-  // manifest. A pack with nothing in it is no backup: name the reason, download nothing.
   const { filename, pack } = buildTemplateExportFile(params.template);
-  // A template the portable format cannot hold is left out: say why, never download an empty pack.
   if (pack.templates.length === 0) {
     const skipped = pack.manifest?.skippedTemplates ?? [];
     return { kind: 'error', message: formatExportSummaryMessage({ exported: 0, skipped }).message };

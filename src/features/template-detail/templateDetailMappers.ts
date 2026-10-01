@@ -79,7 +79,6 @@ export const mapApiTemplateToChecklistTemplate = (
     categories,
     tags: asStringArray(foundTemplate.tags) ?? [],
     userId: String(foundTemplate.user_id || ''),
-    // The owning Organization decides where this template's Runs and copies go.
     teamId: readApiTemplateTeamId(foundTemplate),
     createdAt: String(foundTemplate.created_at || ''),
     updatedAt: String(foundTemplate.updated_at || foundTemplate.created_at || ''),
@@ -128,9 +127,6 @@ export const resolveTemplateOwnerProfile = (
   };
 };
 
-// The create payload for Duplicate: the same content under a new title that still fits
-// the title limit, in the context
-// resolveTemplateDestinationTeamId picks. The server gives the copy its own slug.
 export const buildTemplateCopyPayload = (
   template: ChecklistTemplate,
   activeTeamId: string | undefined,

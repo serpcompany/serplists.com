@@ -247,8 +247,9 @@ write: [client data](design-docs/client-data.md).
   life of the provider. [The run page](design-docs/run-execution.md#loading-a-run) loads
   its run only when the run id or share token changes, and reads callbacks when it uses
   them, since a load clears unsaved task notes and the selected task.
-- Template detail pages never show a copy from a list: a list is refetched after an
-  edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
+- [Template detail pages](design-docs/template-editor.md#the-template-detail-page) never
+  show a copy from a list: a list is refetched after an edit only while a page observes it,
+  so an unobserved copy can be arbitrarily old. The
   public template page loads its template from the API on every visit (bundled library
   templates excepted). The private detail page loads its template by id (slug as a
   fallback) with a query keyed under `['templates']`, so every template invalidation

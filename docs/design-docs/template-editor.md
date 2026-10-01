@@ -1,4 +1,4 @@
-# Template Editor
+# Template Editor and Detail Page
 
 The template editor creates a Template (`/dashboard/templates/new/`) and edits one
 (`/dashboard/templates/<id>/edit/`). What it offers users is in
@@ -7,7 +7,9 @@ content is coerced, slugs, the defaults a save applies, and the plan-limit notic
 drafts as users see them) is in [FRONTEND.md](../FRONTEND.md#template-editor-forms), the leave
 guard every page uses is in [unsaved changes](../FRONTEND.md#unsaved-changes), and how a save
 refreshes what the app has cached is in [client data](client-data.md#refreshing-after-a-write).
-This page is how the editor's models in `src/features/template-editor/` work, and why.
+This page is how the editor's models in `src/features/template-editor/` work, and why. The
+[last section](#the-template-detail-page) covers the pages that show one template
+(`src/features/template-detail/`), whose Share and visibility switch save versions too.
 
 ## Where it lives
 
@@ -154,7 +156,7 @@ elsewhere, and offers it back when the editor opens again (`templateDraftStore.t
   of its structure only: a save checks the field limits again. When storage is blocked or full a
   write reports failure (the page then says the changes could not be kept), and a read finds
   nothing.
-- **When a draft is kept.** Before checkout or sign-in from a save notice (`startUpgrade`,
+- **When a draft is kept.** Before checkout or sign-in from a notice (`startUpgrade`,
   `signIn`, which then allow the exit, since nothing is lost), when the session ends in the
   background (`keepDraft`, called by the leave guard while the page still holds the user who typed
   it), and after a new template's save is refused as a plan gate or for an ended session
@@ -202,3 +204,83 @@ elsewhere, and offers it back when the editor opens again (`templateDraftStore.t
   guards the page again when checkout does not start. When Back restores the page from the
   back/forward cache, the editor refetches billing status, since the plan may have changed at
   Stripe or in another tab.
+
+## The template detail page
+
+The private detail page (`/dashboard/templates/<id>/`) and the public template page
+(`/profile/<user>/<slug>/`) show one template and act on it through `useTemplateDetailModel`.
+Which controls each viewer gets is in [features](../product-specs/features.md#templates), how
+both pages load and refresh in [FRONTEND.md](../FRONTEND.md#data-and-state), and the private
+page's cache key in [client data](client-data.md#cache-keys).
+
+### Loading
+
+`loadTemplateDetailData` reads one template:
+
+- The public page takes a bundled library template when its owner matches, since the API cannot
+  serve those. Otherwise it looks a UUID up as an id first and then as a slug, since a slug saved
+  before the API refused UUID slugs can look like one
+  ([import/export](data-persistence.md#importexport)), and anything else as a slug. The answer
+  counts only when the template is public and its Creator's username matches the URL's, in any
+  letter case.
+- The private page takes a bundled library template by id, then asks the API by id, and by slug
+  only after a `404` for an identifier that does not look like an id: the app links private
+  templates by id, and the API never gives out a slug that looks like one.
+- Both fill in the Creator's username from their profile when the row lacks it
+  (`hydrateTemplateOwner`), since the public URL needs it, and only a `404` counts as not found
+  ([missing pages](../FRONTEND.md#missing-pages)).
+
+### Actions
+
+Start Run, Copy, Duplicate and Share resolve to an outcome (`TemplateDetailActionResult`) instead
+of acting on the page, and `followTemplateActionResult` acts on it only while the user is still on
+the page that started it ([FRONTEND.md](../FRONTEND.md#data-and-state)).
+
+- **Copy** (`saveTemplateToAccount`) checks, in order: that the template can be copied at all (the
+  API clones only public templates, and library templates come from the bundle), so a private
+  template never sends anyone to checkout for a copy that cannot succeed; that the user is signed
+  in; that the active context is known, since until a stored Organization is confirmed the
+  context reads Personal, and a copy would land in Personal or start a Personal checkout; then, in
+  Personal only, the plan. A plan still loading, or a failed check, asks the user to try again and
+  is never taken as Free, and Free asks for an upgrade. In an Organization the API decides: a Free
+  Organization may copy within its Template limit, and a limit it reached is an error with the
+  server's message, since a Personal checkout cannot lift it
+  ([error types](client-data.md#error-types)).
+- **Duplicate** (`duplicateOwnedTemplate`) creates the copy where
+  `resolveTemplateDestinationTeamId` sends it (a private template of another Organization stays in
+  that Organization), and counts against that context's template limit.
+- **Share** (`shareTemplateToPublic`) builds the public URL before it changes anything, so a
+  template that cannot be shared (its Creator has no username) is never made public. The URL uses
+  the Creator's current username (`resolveShareOwnerTemplate`): the signed-in Creator's own, which
+  wins over the one a cached copy carries after a rename, or, for someone else's template, the
+  Creator's looked up again, keeping the cached one only when that fails. The server then confirms
+  every Share with the loaded version, even when the loaded copy is already public: a template made
+  private, archived or given a new slug elsewhere answers `409` or `404`, and the page reloads it
+  instead of handing out a dead link. A public library template is not a stored row, so there is
+  nothing to confirm. The link uses the slug the server returned.
+- **The visibility switch** (`setTemplateVisibility`) sends only `is_public`, with the loaded
+  version.
+
+Share and the switch apply what the server accepted (the version and slug in its answer,
+`applyTemplateSaveResult`) only while the page still shows that template, and after a stale-copy
+answer they reload the template before the control re-enables
+([client data](client-data.md#stale-copies-and-conflicts)). An accepted change stands even when
+refreshing the lists afterwards fails (`tryRefreshTemplateLists`): they catch up on their next
+fetch.
+
+### Export
+
+`exportTemplateFile` builds the portable pack in the browser, so no server check can gate it: the
+active context's plan does, and a failed plan check asks for a retry, never an upgrade. A template
+the pack format cannot hold is left out of the pack and named in its manifest, so a pack left
+empty is not downloaded, and the error names the reason. The file is named after the slug, or the
+id, with control characters and the characters Windows reserves replaced.
+
+### Changelog
+
+`buildTemplateHistoryTimeline` merges the template's versions and audit events into one list,
+newest first. A versioned write records its audit event with the same action and time
+([JSON columns](data-persistence.md#json-columns)), so an event that shares both with a version is
+that version's, and shows once. A visibility change reads "Made template public" or "Made template
+private" from its metadata. The page asks the API for `HISTORY_DISPLAY_LIMIT` entries of each
+list, newest first, which always hold the newest `HISTORY_DISPLAY_LIMIT` entries of the merge.
