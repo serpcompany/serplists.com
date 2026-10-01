@@ -212,4 +212,50 @@ export const SCRIPT_CONVENTIONS = [
   },
 ];
 
-export const BROWSER_AND_INTEGRATION_TEST_CONVENTIONS = [TOOL_SHIMS];
+export const E2E_TEMPLATE_PAGES = [
+  "admin/sample-technical-seo-audit-checklist",
+  "admin/internal-publishing-checklist",
+  "admin/shared-growth-launch-checklist",
+  "jane/client-reporting-qa-checklist",
+  "serp/ultimate-camping-checklist",
+  "serp/full-website-launch-qa-checklist",
+];
+
+export const E2E_TEMPLATE_API_SLUGS = ["sample-technical-seo-audit-checklist"];
+
+export const DELIBERATELY_MISSING_PREFIX = "no-such-";
+
+const NAME = "[A-Za-z0-9_-]+";
+const END_OF_NAME = "(?![A-Za-z0-9_$-])";
+const NOT_MISSING_ON_PURPOSE = `(?!${DELIBERATELY_MISSING_PREFIX})`;
+const noneOf = (names) => `(?!(?:${names.map((name) => name.replaceAll("/", SLASH)).join("|")})${END_OF_NAME})`;
+const UNSEEDED_TEMPLATE_PAGE =
+  `/${SLASH}profile${SLASH}${noneOf(E2E_TEMPLATE_PAGES)}` +
+  `${NOT_MISSING_ON_PURPOSE}${NAME}${SLASH}${NOT_MISSING_ON_PURPOSE}${NAME}${END_OF_NAME}/`;
+const UNSEEDED_TEMPLATE_SLUG =
+  `/${SLASH}templates${SLASH}slug${SLASH}${noneOf(E2E_TEMPLATE_API_SLUGS)}${NOT_MISSING_ON_PURPOSE}${NAME}${END_OF_NAME}/`;
+
+export const INTEGRATION_TEST_CONVENTIONS = [TOOL_SHIMS];
+
+export const BROWSER_TEST_CONVENTIONS = [
+  TOOL_SHIMS,
+  {
+    selector:
+      "CallExpression[callee.property.name=/^evaluate(?:Handle)?$/] CallExpression:matches([callee.name='fetch'], " +
+      "[callee.object.name=/^(?:window|globalThis|self)$/][callee.property.name='fetch'])",
+    message:
+      "Set up and read data with apiRequest() or apiJson() from tests/e2e/support/api-requests.ts, not a fetch inside " +
+      "page.evaluate(). If how the browser itself sends the request is what the test checks (a CORS preflight, say), " +
+      "send it with fetchFromThePageUnderTest() from the same file.",
+    owners: ["tests/e2e/support/api-requests.ts"],
+  },
+  {
+    selector: `:matches(${text(UNSEEDED_TEMPLATE_PAGE)}, ${text(UNSEEDED_TEMPLATE_SLUG)})`,
+    message:
+      "The browser tests open only the Templates in E2E_TEMPLATE_PAGES (and ask the API only for E2E_TEMPLATE_API_SLUGS) " +
+      "in scripts/eslint-rules/code-conventions.mjs, which tests/unit/e2e/seeded-template-paths.test.ts checks that " +
+      "`seed-test` (db/seeds/local.ts) creates or src/data bundles. Use one of them, add a seeded or bundled Template to " +
+      "the list, or create one in the test. A path that must be missing names its user or Template with the no-such- " +
+      "prefix, as in /profile/serp/no-such-template/.",
+  },
+];

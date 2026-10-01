@@ -6,7 +6,8 @@ import tseslint from "typescript-eslint";
 import {
   API_CONVENTIONS,
   APP_CONVENTIONS,
-  BROWSER_AND_INTEGRATION_TEST_CONVENTIONS,
+  BROWSER_TEST_CONVENTIONS,
+  INTEGRATION_TEST_CONVENTIONS,
   SCRIPT_CONVENTIONS,
 } from "./scripts/eslint-rules/code-conventions.mjs";
 import { navigateWhileVisitIsCurrent } from "./scripts/eslint-rules/navigate-while-visit-is-current.mjs";
@@ -248,8 +249,12 @@ export default tseslint.config(
     rules: { "serplists/restricted-code": ["error", SCRIPT_CONVENTIONS] },
   },
   {
-    files: ["tests/e2e/**/*.{ts,mjs,js}", "tests/integration/**/*.{ts,mjs,js}"],
-    rules: { "serplists/restricted-code": ["error", BROWSER_AND_INTEGRATION_TEST_CONVENTIONS] },
+    files: ["tests/e2e/**/*.{ts,mjs,js}"],
+    rules: { "serplists/restricted-code": ["error", BROWSER_TEST_CONVENTIONS] },
+  },
+  {
+    files: ["tests/integration/**/*.{ts,mjs,js}"],
+    rules: { "serplists/restricted-code": ["error", INTEGRATION_TEST_CONVENTIONS] },
   },
   {
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**/*.{ts,tsx}"],

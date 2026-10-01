@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
 import { queryKeys } from '@/lib/queryKeys';
+import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions.mjs';
 
 const eslint = new ESLint({ cwd: process.cwd() });
 
@@ -95,6 +96,33 @@ const SCRIPT_CASES: Case[] = [
   refused('a hard-coded localhost port in a script', 'scripts/stripe/sample.mjs', "const url = 'http://localhost:8788/api/stripe/webhook';", 'dev session'),
 ];
 
+const SPEC = 'tests/e2e/sample.spec.ts';
+const PAGE_FETCH_HELPER = 'tests/e2e/support/api-requests.ts';
+
+const BROWSER_TEST_CASES: Case[] = [
+  refused('a fetch inside page.evaluate', SPEC, "await page.evaluate(async (url) => (await fetch(url, { method: 'POST' })).json(), apiUrl);", 'apiRequest()'),
+  refused('window.fetch inside evaluate on another tab', SPEC, "await tab.evaluate(() => window.fetch('/api/x'));", 'fetchFromThePageUnderTest()'),
+  refused('globalThis.fetch inside evaluateHandle', 'tests/e2e/support/sample.ts', "await page.evaluateHandle(() => globalThis.fetch('/api/w'));", 'apiRequest()'),
+  allowed('the page-fetch helper', SPEC, "const { status } = await fetchFromThePageUnderTest(page, '/api/y');"),
+  allowed('an evaluate that fetches nothing', SPEC, 'await page.evaluate(() => window.scrollTo(0, 0));'),
+  allowed('a routed request passed through', SPEC, 'await route.fulfill({ response: await route.fetch() });'),
+  allowed("Playwright's request API", SPEC, "await page.request.fetch('/api/z');"),
+  allowed('the in-page fetch in its helper', PAGE_FETCH_HELPER, 'export const sendFromThePage = (page, to) => page.evaluate(async (url) => (await fetch(url)).status, to);'),
+  allowed('an in-page fetch in an integration test, which has no page', 'tests/integration/sample.test.ts', "await page.evaluate(() => fetch('/api/x'));"),
+  refused('a Template page nothing seeds', SPEC, "await page.goto('/profile/admin/old-slug?x=1');", 'E2E_TEMPLATE_PAGES'),
+  refused('a seeded slug with more after it', SPEC, "await page.goto('/profile/admin/sample-technical-seo-audit-checklist-v2/');", 'E2E_TEMPLATE_PAGES'),
+  refused('an unseeded Template in an absolute URL', SPEC, "const url = 'https://serplists.com/profile/jane/unseeded-checklist/';", 'E2E_TEMPLATE_PAGES'),
+  refused('an unseeded Template in a template literal', SPEC, 'await page.goto(`${origin}/profile/serp/unbundled-checklist/`);', 'E2E_TEMPLATE_PAGES'),
+  refused('an API slug nothing seeds', SPEC, "if (path === '/api/templates/slug/old-slug') {}", 'E2E_TEMPLATE_API_SLUGS'),
+  refused('an API slug only the bundle has, which the API never answers', SPEC, "if (path === '/api/templates/slug/ultimate-camping-checklist') {}", 'E2E_TEMPLATE_API_SLUGS'),
+  allowed('a Template page built from a Template the test made', SPEC, 'await page.goto(`/profile/admin/${created.slug}/`);'),
+  allowed('a Template page missing on purpose', SPEC, "await page.goto('/profile/serp/no-such-template/');"),
+  allowed('an owner missing on purpose', SPEC, "await page.goto('/profile/no-such-user/sample-technical-seo-audit-checklist/');"),
+  allowed('an API slug missing on purpose', SPEC, "if (path === '/api/templates/slug/no-such-slug') {}"),
+  ...E2E_TEMPLATE_PAGES.map((page) => allowed(`the listed Template page ${page}`, SPEC, `await page.goto('/profile/${page}/');`)),
+  ...E2E_TEMPLATE_API_SLUGS.map((slug) => allowed(`the listed API slug ${slug}`, SPEC, `if (path === '/api/templates/slug/${slug}') {}`)),
+];
+
 describe('code conventions in src/ (serplists/restricted-code with APP_CONVENTIONS)', () => {
   it.each(APP_CASES)('$name', (sample) => expectCase(sample, 'serplists/restricted-code'));
 
@@ -114,6 +142,10 @@ describe('code conventions in functions/ (serplists/restricted-code with API_CON
 
 describe('code conventions in scripts/ and the browser and integration tests', () => {
   it.each(SCRIPT_CASES)('$name', (sample) => expectCase(sample, 'serplists/restricted-code'));
+});
+
+describe('code conventions in the browser tests (serplists/restricted-code with BROWSER_TEST_CONVENTIONS)', () => {
+  it.each(BROWSER_TEST_CASES)('$name', (sample) => expectCase(sample, 'serplists/restricted-code'));
 });
 
 describe('toasts on src/ (no-restricted-imports)', () => {
