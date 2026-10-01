@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { capturedGroup } from '../../support/elements';
 import { z } from 'zod';
 
 const repoRoot = process.cwd();
@@ -11,7 +12,7 @@ const packageScripts = z
 const REVIEWED_IDEMPOTENT_REMOTE_SEEDS = ['db/seeds/official-templates.sql'];
 
 const sqlFiles = (command: string) =>
-  [...command.matchAll(/--file[= ](\S+)/g)].map(([, file]) => path.posix.normalize(file.replace(/^\.\//, '')));
+  [...command.matchAll(/--file[= ](\S+)/g)].map((match) => path.posix.normalize(capturedGroup(match, 1).replace(/^\.\//, '')));
 
 const commands = Object.entries(packageScripts).flatMap(([name, script]) =>
   script.split(/&&|\|\||;/).map((command) => ({ name, command: command.trim() })),

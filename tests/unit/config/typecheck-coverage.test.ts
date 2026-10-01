@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { filesGitTracksOrWouldTrack } from '../../../scripts/check-no-comments-lib.mjs';
+import { elementAt } from '../../support/elements';
 
 const repoRoot = process.cwd();
 const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
@@ -22,7 +23,7 @@ const tsconfigsTypecheckRuns = typecheckScript
   .filter(([tool]) => tool === 'tsc')
   .map((args) => {
     const projectFlag = args.findIndex((arg) => arg === '-p' || arg === '--project');
-    return path.posix.normalize(projectFlag === -1 ? 'tsconfig.json' : args[projectFlag + 1]);
+    return path.posix.normalize(projectFlag === -1 ? 'tsconfig.json' : elementAt(args, projectFlag + 1));
   });
 
 const filesTheTsconfigIncludes = (tsconfig: string): string[] => {

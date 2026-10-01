@@ -1,5 +1,6 @@
 import { createServer } from 'node:net';
 import { describe, expect, it } from 'vitest';
+import { elementAt } from '../../support/elements';
 
 import { verifyDeployment } from '../../../scripts/verify-deployment.mjs';
 
@@ -12,7 +13,7 @@ const stubFetchAnsweringEachUrlFromItsList = (replies: Record<string, Reply[]>) 
   const fetchImpl = async (url: string) => {
     calls.push(url);
     const list = replies[url.slice(BASE_URL.length)] ?? [200];
-    const reply = list[Math.min(calls.filter((call) => call === url).length, list.length) - 1];
+    const reply = elementAt(list, Math.min(calls.filter((call) => call === url).length, list.length) - 1);
     if (reply instanceof Error) throw reply;
     return new Response(null, { status: reply });
   };

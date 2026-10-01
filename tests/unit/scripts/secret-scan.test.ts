@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
+import { valueAt } from '../../support/elements';
 
 import { selectScanTargets } from '../../../scripts/secret-scan-lib.mjs';
 
@@ -108,6 +109,6 @@ describe('pre-commit secret scan', () => {
       'pre-commit': { commands: Record<string, { run: string }> };
     };
 
-    expect(config['pre-commit'].commands['secret-scan'].run).toBe('node scripts/secret-scan.mjs {staged_files}');
+    expect(valueAt(config['pre-commit'].commands, 'secret-scan').run).toBe('node scripts/secret-scan.mjs {staged_files}');
   });
 });

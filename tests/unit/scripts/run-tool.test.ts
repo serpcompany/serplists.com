@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 
 import {
   buildPnpmInvocation,
@@ -19,7 +20,7 @@ describe('buildToolInvocation', () => {
       const invocation = buildToolInvocation(tool, ['--version']);
 
       expect(invocation.command).toBe(process.execPath);
-      expect(existsSync(invocation.args[0])).toBe(true);
+      expect(existsSync(firstOf(invocation.args))).toBe(true);
       expect(invocation.args[0]).not.toMatch(/\.(cmd|ps1|sh)$/);
       expect(invocation.args.slice(1)).toEqual(['--version']);
     }

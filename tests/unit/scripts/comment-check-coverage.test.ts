@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
+import { firstOf } from '../../support/elements';
 import { parse } from 'yaml';
 import { z } from 'zod';
 
@@ -17,7 +18,7 @@ const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: str
 const COMMENT_CHECK_COMMAND = 'node scripts/check-no-comments.mjs';
 
 const packageScripts = z
-  .object({ scripts: z.record(z.string()) })
+  .object({ scripts: z.object({ 'check:repo': z.string() }).catchall(z.string()) })
   .parse(JSON.parse(readFileSync('package.json', 'utf8'))).scripts;
 const preCommitCommands = z
   .object({ 'pre-commit': z.object({ commands: z.record(z.object({ glob: z.string().optional(), run: z.string() })) }) })
@@ -83,7 +84,7 @@ describe('WORKFLOWS_AWAITING_A_PERSON', () => {
   });
 
   it('leaves the listed workflows to a person and still checks the other files it is given', () => {
-    const [workflow] = WORKFLOWS_AWAITING_A_PERSON;
+    const workflow = firstOf(WORKFLOWS_AWAITING_A_PERSON);
     const result = spawnSync(process.execPath, ['scripts/check-no-comments.mjs', workflow, 'lefthook.yml'], { encoding: 'utf8' });
 
     expect(result.status).toBe(0);

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { valueAt } from '../../support/elements';
 
 import {
   parseBaselineArgs,
@@ -119,7 +120,7 @@ describe('package.json baseline scripts', () => {
   const scripts = (JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>;
   }).scripts;
-  const argvOf = (name: string) => scripts[name].split(/\s+/).slice(2);
+  const argvOf = (name: string) => valueAt(scripts, name).split(/\s+/).slice(2);
 
   it('points the staging baseline at the staging database', () => {
     expect(resolve(argvOf('db:migrations:baseline:staging'))).toMatchObject({

@@ -60,7 +60,7 @@ describe('.gitattributes', () => {
 
   it('marks every tracked binary file as binary and stores no CRLF in the index', () => {
     const entries = git(['ls-files', '--eol']).trim().split('\n').map((line) => {
-      const [info, file] = line.split('\t');
+      const [info = '', file] = line.split('\t');
       return { index: info.split(/\s+/)[0], attributes: info.split(/\s+/)[2] ?? '', file };
     });
 

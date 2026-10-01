@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import yaml from 'js-yaml';
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { readWranglerToml } from '../../support/wranglerToml';
 
@@ -74,13 +74,11 @@ describe('the staging deploy', () => {
 
   it('checks the new deployment responds and meets the site standards', () => {
     const deployIndex = steps.findIndex((step) => step.id === 'deploy');
-    const probes = ['node scripts/verify-deployment.mjs', 'node scripts/check-site-standards.mjs "$DEPLOY_URL" staging'].map(
-      (command) => steps.find((step) => step.run?.trim() === command),
-    );
-
-    for (const probe of probes) {
-      expect(probe?.env?.DEPLOY_URL).toBe('${{ steps.deploy.outputs.url }}');
-      expect(steps.indexOf(probe!)).toBeGreaterThan(deployIndex);
+    for (const command of ['node scripts/verify-deployment.mjs', 'node scripts/check-site-standards.mjs "$DEPLOY_URL" staging']) {
+      const probe = steps.find((step) => step.run?.trim() === command);
+      assert.exists(probe, `no step runs ${command}`);
+      expect(probe.env?.DEPLOY_URL).toBe('${{ steps.deploy.outputs.url }}');
+      expect(steps.indexOf(probe)).toBeGreaterThan(deployIndex);
     }
   });
 });

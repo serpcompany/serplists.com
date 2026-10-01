@@ -5,11 +5,12 @@ import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
 import { queryKeys } from '@/lib/queryKeys';
 import { E2E_TEMPLATE_API_SLUGS, E2E_TEMPLATE_PAGES } from '../../../scripts/eslint-rules/code-conventions.mjs';
 import type { apiJson, apiRequest, fetchFromThePageUnderTest } from '../../e2e/support/api-requests';
+import { onlyElement } from '../../support/elements';
 
 const eslint = new ESLint({ cwd: process.cwd() });
 
 async function reportsOf(ruleId: string, filePath: string, code: string): Promise<string[]> {
-  const [result] = await eslint.lintText(code, { filePath });
+  const result = onlyElement(await eslint.lintText(code, { filePath }));
   return result.messages.filter((message) => message.ruleId === ruleId).map((message) => message.message);
 }
 

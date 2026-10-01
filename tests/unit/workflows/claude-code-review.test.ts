@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
+import { elementAt } from '../../support/elements';
 import { z } from 'zod';
 
 import {
@@ -26,8 +27,8 @@ const workflowSchema = z.object({
 
 const steps = workflowSchema.parse(readWorkflowFile('.github/workflows/claude-code-review.yml')).jobs.review.steps;
 const reviewIndex = steps.findIndex((step) => step.uses?.startsWith('anthropics/claude-code-action'));
-const reviewStep = steps[reviewIndex];
-const claudeArgs = String(reviewStep?.with?.claude_args ?? '');
+const reviewStep = elementAt(steps, reviewIndex);
+const claudeArgs = String(reviewStep.with?.claude_args ?? '');
 
 const findGuard = () => {
   const outputRef = `steps.${reviewStep.id}.outputs.execution_file`;
@@ -35,7 +36,8 @@ const findGuard = () => {
     Object.values(step.env ?? {}).some((value) => value.includes(outputRef)),
   );
   const guard = steps[guardIndex];
-  const envName = Object.entries(guard?.env ?? {}).find(([, value]) => value.includes(outputRef))?.[0];
+  if (!guard) throw new Error('No step reads the review execution_file output');
+  const envName = Object.entries(guard.env ?? {}).find(([, value]) => value.includes(outputRef))?.[0];
   return { guard, guardIndex, envName };
 };
 
@@ -114,7 +116,7 @@ const deniedGhPrView = {
 
 describe('Claude code review workflow', () => {
   it('runs the repository review skill, from the base branch, with every tool it uses', () => {
-    expect(reviewStep?.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
+    expect(reviewStep.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
     expect(reviewStep.with?.prompt, 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
     expect(reviewStep.with?.plugins).toBeUndefined();
     const allowList = claudeArgs.match(/--allowedTools\s+"([^"]+)"/)?.[1] ?? '';
@@ -138,10 +140,11 @@ describe('Claude code review workflow', () => {
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
-    expect(steps[rulesStep].env?.BASE_REF, 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
-    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:AGENTS.md');
-    expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
-    expect(steps[rulesStep].run).not.toMatch(/\bcat AGENTS\.md/);
+    const rules = elementAt(steps, rulesStep);
+    expect(rules.env?.BASE_REF, 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
+    expect(rules.run).toContain('git show FETCH_HEAD:AGENTS.md');
+    expect(rules.run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
+    expect(rules.run).not.toMatch(/\bcat AGENTS\.md/);
     expect(claudeArgs).toContain('--append-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--append-subagent-system-prompt-file ${{ runner.temp }}/review-context.md');
     expect(claudeArgs).toContain('--strict-mcp-config');
@@ -150,7 +153,6 @@ describe('Claude code review workflow', () => {
   it('runs a guard after the review that reads its execution log and the PR', () => {
     const { guard, guardIndex, envName } = findGuard();
 
-    expect(guard, 'no step reads the review execution_file output').toBeDefined();
     expect(guardIndex).toBeGreaterThan(reviewIndex);
     expect(envName).toBeTruthy();
     expect(guard.shell).toBe('node {0}');
@@ -279,7 +281,7 @@ describe('earlier findings passed to the review', () => {
     expect(findingsIndex).toBeLessThan(reviewIndex);
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(findingsIndex).toBeGreaterThan(rulesStep);
-    expect(findingsStep.env).toMatchObject({ GITHUB_TOKEN: '${{ github.token }}', REVIEW_BOT: BOT });
+    expect(elementAt(steps, findingsIndex).env).toMatchObject({ GITHUB_TOKEN: '${{ github.token }}', REVIEW_BOT: BOT });
   });
 
   it("lists Claude's inline comments and summary, and leaves out everyone else's", async () => {

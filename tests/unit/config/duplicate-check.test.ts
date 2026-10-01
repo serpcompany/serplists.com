@@ -39,7 +39,10 @@ const settings = z
   .passthrough()
   .parse(storedSettings);
 
-const packageJson = z.object({ scripts: z.record(z.string()) }).passthrough().parse(readJson('package.json'));
+const packageJson = z
+  .object({ scripts: z.object({ 'check:repo': z.string() }).catchall(z.string()) })
+  .passthrough()
+  .parse(readJson('package.json'));
 const [checkTool, ...checkedFolders] = (packageJson.scripts['duplicates:check'] ?? '').trim().split(/\s+/);
 
 const isFolder = (folder: string) =>

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
+import { onlyElement } from "../../support/elements";
 import { z } from "zod";
 import * as drizzleSchema from "../../../db/schema/index";
 import {
@@ -156,8 +157,8 @@ describe("schema query", () => {
 });
 
 describe("trigger checks", () => {
-  const ownerInsert = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_owner_users_insert")!;
-  const templatesUpdate = sqlOnlyTriggers.find((trigger) => trigger.name === "sitemap_templates_update")!;
+  const ownerInsert = onlyElement(sqlOnlyTriggers.filter((trigger) => trigger.name === "sitemap_owner_users_insert"));
+  const templatesUpdate = onlyElement(sqlOnlyTriggers.filter((trigger) => trigger.name === "sitemap_templates_update"));
 
   it("accepts a trigger whose SQL differs only in whitespace and quoting", () => {
     const actual = mapTriggerResults({

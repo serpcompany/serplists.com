@@ -4,6 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { firstOf } from "../../support/elements";
 import {
   buildCorsAllowedOrigins,
   buildDevServerCommand,
@@ -71,7 +72,7 @@ describe("buildDevServerCommand", () => {
 
     expect(command.command).toBe("node-bin");
     expect(command.args[0]).toMatch(/[\\/]next[\\/]dist[\\/]bin[\\/]next$/);
-    expect(existsSync(command.args[0])).toBe(true);
+    expect(existsSync(firstOf(command.args))).toBe(true);
     expect(command.args.slice(1)).toEqual(["dev", "--port", "3002"]);
     expect(command.options).toEqual({});
   });

@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { filesGitTracksOrWouldTrack, GENERATED_FILES } from '../../../scripts/check-no-comments-lib.mjs';
 import { walkFiles } from '../../../scripts/lib/repo-files.mjs';
+import { onlyElement } from '../../support/elements';
 
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
@@ -14,7 +15,7 @@ const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8
 const MAX_LINES = 500;
 
 const packageScripts = z
-  .object({ scripts: z.record(z.string()) })
+  .object({ scripts: z.object({ 'test:run': z.string(), 'test:local-d1': z.string() }).catchall(z.string()) })
   .parse(JSON.parse(readText('package.json'))).scripts;
 
 const workflowFiles = readdirSync(path.join(repoRoot, '.github/workflows'))
@@ -107,7 +108,7 @@ describe('no exceptions to the repository checks', { timeout: 60_000 }, () => {
   it('refuses skipped, todo, fixme and focused tests in Vitest and Playwright files', async () => {
     const eslint = new ESLint({ cwd: repoRoot });
     const refusals = async (code: string, filePath: string) => {
-      const [result] = await eslint.lintText(code, { filePath });
+      const result = onlyElement(await eslint.lintText(code, { filePath }));
       return result.messages.filter((message) => message.ruleId === 'no-restricted-syntax').length;
     };
     const samples: Array<[string, string]> = [
