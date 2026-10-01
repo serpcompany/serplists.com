@@ -40,7 +40,7 @@ const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : [
 const stringId = (value: unknown): string | null =>
   isRecord(value) && typeof value.id === 'string' && value.id !== '' ? value.id : null;
 
-function readCompletion(state: { isCompleted?: boolean; completed?: boolean }): boolean | undefined {
+function readCompletion(state: { isCompleted?: boolean | undefined; completed?: boolean | undefined }): boolean | undefined {
   return state.isCompleted ?? state.completed;
 }
 

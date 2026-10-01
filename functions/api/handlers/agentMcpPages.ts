@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
+import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds } from "./agentMcpTools";
 
 export const MAX_RESULT_BYTES = 32 * 1024;
 
@@ -262,7 +262,7 @@ export function taskPage(paged: Paged, sections: JsonRecord[], sectionIndex: num
   });
 }
 
-export function readSectionOrTask(paged: Paged, sections: JsonRecord[], args: { sectionId?: string; taskId?: string }): JsonRecord {
+export function readSectionOrTask(paged: Paged, sections: JsonRecord[], args: SectionAndTaskIds): JsonRecord {
   if (args.taskId !== undefined) {
     const { sectionIndex, taskIndex } = findTask(sections, args.taskId, args.sectionId);
     const section = sections[sectionIndex];
@@ -279,7 +279,7 @@ export function continuePage(
   header: JsonRecord,
   sections: JsonRecord[],
   cursor: ReadCursor,
-  args: { sectionId?: string; taskId?: string },
+  args: SectionAndTaskIds,
   outlineExtra: JsonRecord = {},
 ): JsonRecord {
   const section = cursor.m === "outline" || cursor.s === undefined ? undefined : sections[cursor.s];

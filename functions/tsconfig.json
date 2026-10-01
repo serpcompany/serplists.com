@@ -13,7 +13,8 @@
     "noEmit": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,
-    "noImplicitOverride": true
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true
   },
   "include": ["./**/*.ts", "../db/**/*.ts"]
 }

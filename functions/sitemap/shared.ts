@@ -21,7 +21,7 @@ const XML_CACHE_CONTROL = 'public, max-age=300, s-maxage=86400, stale-while-reva
 
 export type SitemapEntry = {
   path: string;
-  lastmod?: string | null;
+  lastmod?: string | null | undefined;
 };
 
 type BundledTemplate = {

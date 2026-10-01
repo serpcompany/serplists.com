@@ -7,7 +7,7 @@ import { getTaskSubTasks, isSubTasksBlock, sanitizeStoredSections } from "../../
 import { contentFits } from "../utils/content-limits";
 import { normalizeSectionsPayload, parseJsonArray } from "../utils/payloads";
 import { findRunCompletionRefusal } from "../utils/run-completion";
-import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
+import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
 export function parseStoredSections(value: unknown): JsonRecord[] {
   const normalized = normalizeSectionsPayload(parseJsonArray(value) ?? []);
@@ -167,7 +167,7 @@ function retiredEntriesForTask(entries: JsonRecord[], taskId: string): JsonRecor
   });
 }
 
-export function retiredWorkOf(entries: JsonRecord[], scope: { sectionId?: string; taskId?: string }): JsonRecord[] {
+export function retiredWorkOf(entries: JsonRecord[], scope: SectionAndTaskIds): JsonRecord[] {
   const inSection = scope.sectionId === undefined
     ? entries
     : entries.filter((entry) => retiredSectionId(entry) === scope.sectionId);

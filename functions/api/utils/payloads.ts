@@ -96,7 +96,7 @@ export function describePayloadError(
   if (!issue) return { message: fallback, details: {} };
   const field = issue.path.length > 0 ? String(issue.path[0]) : undefined;
   const message = field && !issue.message.startsWith(field) ? `${field}: ${issue.message}` : issue.message;
-  return { message, details: { field } };
+  return { message, details: field === undefined ? {} : { field } };
 }
 
 export function parseJsonArray(value: unknown): unknown[] | null {

@@ -91,7 +91,7 @@ const stripeErrorBodySchema = z.object({
     .passthrough(),
 });
 
-function parseStripeErrorBody(text: string): { type?: string; code?: string; param?: string } {
+function parseStripeErrorBody(text: string): { type?: string | undefined; code?: string | undefined; param?: string | undefined } {
   try {
     const parsed = stripeErrorBodySchema.safeParse(JSON.parse(text));
     return parsed.success ? parsed.data.error : {};
@@ -102,9 +102,9 @@ function parseStripeErrorBody(text: string): { type?: string; code?: string; par
 
 export class StripeApiError extends Error {
   readonly status: number;
-  readonly type?: string;
-  readonly code?: string;
-  readonly param?: string;
+  readonly type: string | undefined;
+  readonly code: string | undefined;
+  readonly param: string | undefined;
 
   constructor(status: number, body: string) {
     const { type, code, param } = parseStripeErrorBody(body);

@@ -29,7 +29,7 @@ export type AuditEventInput = {
   before?: JsonValue;
   after?: JsonValue;
   diff?: JsonValue;
-  metadata?: JsonValue;
+  metadata?: JsonValue | undefined;
   request?: Request;
   createdAt?: string;
 };

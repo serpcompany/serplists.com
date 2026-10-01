@@ -32,7 +32,7 @@ import {
   retiredWorkOf,
   summarizeRun,
 } from "./agentMcpRuns";
-import { isRecord, ToolError, type JsonRecord, type UpdateRunArgs } from "./agentMcpTools";
+import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds, type UpdateRunArgs } from "./agentMcpTools";
 
 export type RunView = { header: JsonRecord; sections: JsonRecord[]; retired: JsonRecord[] };
 
@@ -52,15 +52,13 @@ function pagedRun(header: JsonRecord): Paged {
 
 const retiredStats = ({ retired }: RunView): JsonRecord => ({ retiredCount: retired.length, retiredBytes: byteSize(retired) });
 
-type RetiredScope = { sectionId?: string; taskId?: string };
-
-const idsInCursor = (scope: RetiredScope): ReadScope => ({
+const idsInCursor = (scope: SectionAndTaskIds): ReadScope => ({
   m: "retired",
   ...(scope.sectionId === undefined ? {} : { rs: scope.sectionId }),
   ...(scope.taskId === undefined ? {} : { rt: scope.taskId }),
 });
 
-function retiredPage(view: RunView, scope: RetiredScope, entries: JsonRecord[], start: Position): JsonRecord {
+function retiredPage(view: RunView, scope: SectionAndTaskIds, entries: JsonRecord[], start: Position): JsonRecord {
   const paged = pagedRun(view.header);
   const cursorScope = idsInCursor(scope);
   const longestCursor = encodeCursor({ t: paged.id, v: paged.version, ...cursorScope, u: entries.length, o: Number.MAX_SAFE_INTEGER });
@@ -75,7 +73,7 @@ function retiredPage(view: RunView, scope: RetiredScope, entries: JsonRecord[], 
   });
 }
 
-function retiredHolds(view: RunView, scope: RetiredScope): boolean {
+function retiredHolds(view: RunView, scope: SectionAndTaskIds): boolean {
   return retiredWorkOf(view.retired, scope).length > 0;
 }
 
@@ -88,7 +86,7 @@ function taskIsLive(view: RunView, taskId: string, sectionId?: string): boolean 
     && tasksOf(section).some((task) => task.id === taskId));
 }
 
-function readRetired(view: RunView, scope: RetiredScope): JsonRecord {
+function readRetired(view: RunView, scope: SectionAndTaskIds): JsonRecord {
   const { sectionId, taskId } = scope;
   if (sectionId !== undefined && !sectionIsLive(view, sectionId) && !retiredHolds(view, { sectionId })) {
     throw new ToolError("Section not found (sectionId)", "section_not_found");
@@ -101,7 +99,7 @@ function readRetired(view: RunView, scope: RetiredScope): JsonRecord {
   return fits(whole) ? whole : retiredPage(view, scope, entries, START);
 }
 
-function refuseRetiredOnlyIds(view: RunView, { sectionId, taskId }: RetiredScope): void {
+function refuseRetiredOnlyIds(view: RunView, { sectionId, taskId }: SectionAndTaskIds): void {
   if (taskId !== undefined && !taskIsLive(view, taskId, sectionId) && retiredHolds(view, { sectionId, taskId })) {
     throw new ToolError("Task not found (taskId): it is retired work; read it with retired: true", "task_not_found");
   }
@@ -130,7 +128,7 @@ function continueRead(view: RunView, value: string, args: RunReadArgs): JsonReco
   return retiredPage(view, scope, retiredWorkOf(view.retired, scope), { unit: cursor.u, offset: cursor.o });
 }
 
-export type RunReadArgs = { sectionId?: string; taskId?: string; retired?: boolean; cursor?: string };
+export type RunReadArgs = SectionAndTaskIds & { retired?: boolean | undefined; cursor?: string | undefined };
 
 export function readRun(view: RunView, args: RunReadArgs): JsonRecord {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);

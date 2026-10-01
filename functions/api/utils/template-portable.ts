@@ -16,7 +16,7 @@ export type PortableExportSource = {
   type: unknown;
   seoTitle: unknown;
   seoDescription: unknown;
-  rules?: unknown[];
+  rules?: unknown[] | undefined;
   sections: unknown[];
   categories: unknown[];
   tags: unknown[];

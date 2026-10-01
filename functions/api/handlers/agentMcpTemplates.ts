@@ -6,7 +6,7 @@ import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
 import { applyTemplateOperation } from "./agentMcpTemplateEdits";
 import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
 import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
-import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
+import { isRecord, parseToolArguments, ToolError, type JsonRecord, type SectionAndTaskIds } from "./agentMcpTools";
 import { createTemplateForUser } from "./template-create";
 import { updateTemplateForUser } from "./template-update";
 
@@ -66,7 +66,7 @@ async function loadWrittenTemplate(
   env: Env,
   identity: PersonalRunKeyIdentity,
   written: JsonRecord & { id: string },
-  changed: { sectionId?: string; taskId?: string } = {},
+  changed: SectionAndTaskIds = {},
 ): Promise<JsonRecord> {
   let row: JsonRecord;
   try {

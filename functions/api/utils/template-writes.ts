@@ -103,7 +103,7 @@ export type ReconciledRunUpdate = {
   revision: number;
   whereClause: SQL | undefined;
   updatedAt: string;
-  auditEvent?: AuditEventValues;
+  auditEvent: AuditEventValues | undefined;
 };
 
 export async function updateTemplateWithHistoryFallback(

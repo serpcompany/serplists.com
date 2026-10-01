@@ -4,6 +4,8 @@ import { cursorArg, cursorJsonSchema, templateToolDefinitions } from "./agentMcp
 
 export type JsonRecord = Record<string, unknown>;
 
+export type SectionAndTaskIds = { sectionId?: string | undefined; taskId?: string | undefined };
+
 export class ToolError extends Error {
   constructor(
     message: string,

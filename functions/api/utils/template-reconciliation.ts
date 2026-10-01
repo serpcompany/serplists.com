@@ -225,7 +225,7 @@ export function reconcileRunSections(
           kind: 'subItem',
           sectionId,
           itemId: getId(templateItem) ?? '',
-          itemTitle: typeof templateItem.title === 'string' ? templateItem.title : undefined,
+          ...(typeof templateItem.title === 'string' ? { itemTitle: templateItem.title } : {}),
           subItem,
         });
       }
@@ -237,7 +237,7 @@ export function reconcileRunSections(
       retired.push({
         kind: 'item',
         sectionId,
-        sectionTitle: typeof templateSection.title === 'string' ? templateSection.title : undefined,
+        ...(typeof templateSection.title === 'string' ? { sectionTitle: templateSection.title } : {}),
         item: withoutMovedSubItems(previousItem, subItems.claimed),
       });
     }

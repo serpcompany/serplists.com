@@ -83,7 +83,7 @@ export async function insertTemplateWithUniqueSlug(
     title: string;
     slug: string;
     buildRows: (slug: string) => Promise<NewTemplateRows>;
-    capacity?: TemplateCapacity;
+    capacity?: TemplateCapacity | undefined;
   },
 ): Promise<NewTemplateInsertResult> {
   let slug = params.slug;

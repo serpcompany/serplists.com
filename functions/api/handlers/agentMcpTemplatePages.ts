@@ -17,7 +17,7 @@ import {
   tasksOf,
   type Paged,
 } from "./agentMcpPages";
-import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
+import { isRecord, ToolError, type JsonRecord, type SectionAndTaskIds } from "./agentMcpTools";
 
 export type TemplateView = { header: JsonRecord; sections: JsonRecord[] };
 
@@ -56,7 +56,7 @@ function pagedTemplate(header: JsonRecord): Paged {
   };
 }
 
-function continueRead(view: TemplateView, value: string, args: { sectionId?: string; taskId?: string }): JsonRecord {
+function continueRead(view: TemplateView, value: string, args: SectionAndTaskIds): JsonRecord {
   const cursor = decodeCursor(value, readCursorSchema, "get_template");
   const { header, sections } = view;
   if (cursor.t !== header.id) throw invalidCursor("It belongs to another template");
@@ -69,7 +69,7 @@ function continueRead(view: TemplateView, value: string, args: { sectionId?: str
   return continuePage(pagedTemplate(header), header, sections, cursor, args);
 }
 
-export function readTemplate(view: TemplateView, args: { sectionId?: string; taskId?: string; cursor?: string }): JsonRecord {
+export function readTemplate(view: TemplateView, args: SectionAndTaskIds & { cursor?: string | undefined }): JsonRecord {
   if (args.cursor !== undefined) return continueRead(view, args.cursor, args);
   if (args.taskId !== undefined || args.sectionId !== undefined) {
     return readSectionOrTask(pagedTemplate(view.header), view.sections, args);
@@ -92,7 +92,7 @@ function locateTask(sections: JsonRecord[], taskId: string | undefined) {
   }
 }
 
-export function writtenTemplateResult(view: TemplateView, changed: { sectionId?: string; taskId?: string } = {}): JsonRecord {
+export function writtenTemplateResult(view: TemplateView, changed: SectionAndTaskIds = {}): JsonRecord {
   const { header, sections } = view;
   const taskAt = locateTask(sections, changed.taskId);
   const sectionIndex = taskAt?.sectionIndex

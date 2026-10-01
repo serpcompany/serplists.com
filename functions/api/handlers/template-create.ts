@@ -39,7 +39,7 @@ export type TemplateWriteOptions = {
   auditMetadata?: Record<string, unknown>;
 };
 
-function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: URL): string | null {
+function getRequestedTeamId(parsed: { teamId?: string | undefined; team_id?: string | undefined }, url: URL): string | null {
   return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
 }
 
