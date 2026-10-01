@@ -19,6 +19,7 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Organizations](organizations.md) | current | 2026-09-19 | Roles, data model, API routes, invites, audit history |
 | [Billing](billing.md) | current | 2026-09-25 | Stripe setup, portal, webhooks, local and production verification |
 | [Agent access](agent-access.md) | current | 2026-09-30 | Run Keys and the MCP endpoint: transport, tool arguments, permissions, result bounds and paging |
+| [SEO and sitemaps](seo-and-sitemaps.md) | current | 2026-09-30 | XML sitemaps (URLs, what is listed, lastmod, caching and revision triggers) and the lookups behind public pages' metadata |
 | [Template content types](template-content-types.md) | current | 2026-09-27 | Adding a checklist content type or editor tab |
 | [Development environment](development-environment.md) | current | 2026-09-27 | Setup, running, signing in, UI snapshots, logs, local D1, tests |
 | [Agent workflow](agent-workflow.md) | current | 2026-09-29 | Issue to merge, agent tooling (skills, Chrome, permissions), triage labels, weekly maintenance, admin settings |

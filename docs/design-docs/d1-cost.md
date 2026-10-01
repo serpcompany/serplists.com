@@ -79,8 +79,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      only `profiles`, so the templates and categories shards stay cached); the index
      depends on all three.
      The triggers must bump a family's kind whenever its inputs change: the dependency
-     list beside `cachedSitemap()` and `tests/unit/functions/sitemap-migrations.test.ts`
-     record which. A key that the caller controls (such as a page number)
+     table in [SEO and sitemaps](seo-and-sitemaps.md#caching) and
+     `tests/unit/functions/sitemap-migrations.test.ts` record which. A key that the caller controls (such as a page number)
      must be bounded before the cache, or every new value is a miss: shard pages above
      1 that the index never published (no `sitemap_shard_revisions` row) get an uncached
      404 after a 1-row primary-key read, and page numbers above 50,000 read nothing.

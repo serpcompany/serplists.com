@@ -27,17 +27,9 @@ import {
   type SitemapEntry,
 } from './shared';
 
-// What each sitemap URL serves. The Next.js route handlers in src/app/sitemap.xml and
-// src/app/sitemaps only hand these the request, the Worker's bindings and waitUntil.
-
-/**
- * The page number in a shard's file name (`1.xml`, in any letter case), or the name itself
- * when it is not one, which parsePage then refuses with a 404.
- */
 export const shardPageParam = (fileName: string): string =>
   /^(\d+)\.xml$/i.exec(fileName)?.[1] ?? fileName;
 
-/** /sitemap.xml: the index of every shard, with each one's last change. */
 export const serveSitemapIndex = (context: SitemapContext): Promise<Response> =>
   cachedSitemap(context, (request, revisions) => buildSitemapIndex(request, context.env, revisions), 'index');
 
@@ -102,11 +94,9 @@ async function buildSitemapIndex(request: Request, env: Env, revisions: SitemapR
   return xmlResponse(request, renderSitemapIndex(entries));
 }
 
-/** /sitemaps/pages/<page>.xml: the static pages, from the bundled catalog. */
 export const servePagesSitemap = (request: Request, page: string): Promise<Response> =>
   handleInMemoryPagedSitemap(request, page, staticSitemapEntries);
 
-/** /sitemaps/categories/<page>.xml: the categories page and every category in use. */
 export const serveCategoriesSitemap = (context: SitemapContext, page: string): Promise<Response> =>
   cachedSitemap(context, (request) => handleInMemoryPagedSitemap(
     request,
@@ -121,7 +111,6 @@ type ProfileRow = {
   profile_revision: string | null;
 };
 
-/** /sitemaps/profiles/<page>.xml: every profile with a public username. */
 export const serveProfilesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
   const db = createDb(context.env);
   return cachedSitemap(context, (request) => handlePagedDatabaseSitemap<ProfileRow>({
@@ -161,7 +150,6 @@ type TemplateRow = {
   owner_updated_at: string | null;
 };
 
-/** /sitemaps/templates/<page>.xml: the library page, the bundled and every public template. */
 export const serveTemplatesSitemap = (context: SitemapContext, page: string): Promise<Response> => {
   const db = createDb(context.env);
   const landingPage = catalogPageEntry('/templates/');
@@ -208,11 +196,6 @@ export const serveTemplatesSitemap = (context: SitemapContext, page: string): Pr
   }), { kind: 'templates', page });
 };
 
-/**
- * The sitemaps from before the shards: /sitemaps/static.xml (the static pages) and
- * /categories/sitemap.xml. A permanent redirect to the shard's page (`?page=`, 1 by default)
- * on the production site.
- */
 export const redirectLegacySitemap = (request: Request, shard: 'pages' | 'categories'): Response => {
   if (!requestSupportsSitemap(request.method)) return methodNotAllowed();
   const legacyPage = new URL(request.url).searchParams.get('page');

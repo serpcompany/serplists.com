@@ -15,8 +15,6 @@ import { buildCanonicalUrl, CANONICAL_ORIGIN } from '../../src/lib/seo/siteOrigi
 
 export { CANONICAL_ORIGIN };
 export const SITEMAP_PAGE_SIZE = 25_000;
-// A sitemap index lists at most 50,000 sitemaps, so no shard number above it is ever
-// published. Rejecting it early also keeps the page's row offset a safe integer.
 export const SITEMAP_MAX_PAGE = 50_000;
 
 const XML_CACHE_CONTROL = 'public, max-age=300, s-maxage=86400, stale-while-revalidate=3600';
@@ -62,18 +60,10 @@ export function sitemapImplementationLastmod(): string | null {
   return validLastmod(inventoryMetadata?.implementationLastmod);
 }
 
-// Drizzle has no builders for SQLite's GLOB or string functions. Keep these
-// validation predicates small and typed so pagination excludes invalid rows in D1.
 export const validUsernameCondition = sql<boolean>`
   length(trim(${users.username})) between 3 and 30
   and trim(${users.username}) not glob ${'*[^A-Za-z0-9_.]*'}`;
 
-// A public Personal or Organization Template. The library, category pages and link
-// previews list both under the Creator's username (the users join on templates.user_id),
-// so the sitemaps do too. Rows whose owner fields disagree (a Personal row with a
-// team_id, an Organization row without one) stay out. The 0023 revision triggers still
-// fire only for Personal rows, so an Organization Template edit reaches a cached shard
-// only when it expires (see cache.ts).
 export const publicTemplateCondition = and(
   eq(templates.is_public, true),
   isNull(templates.deleted_at),
@@ -102,8 +92,6 @@ export function xmlEscape(value: string): string {
     .replaceAll("'", '&apos;');
 }
 
-// Every <loc> names the production site in the URL standard's canonical form: a page with its
-// trailing slash, a sitemap file without one (src/lib/http/urlStandard.ts).
 export function canonicalUrl(path: string): string {
   return buildCanonicalUrl(path);
 }
@@ -319,22 +307,20 @@ export async function buildDurableShardIndex(
   return plan.shards;
 }
 
-// The category pages slug categories with the same function, so every entry resolves.
 export { categorySlug };
+
+function parseJsonOrNull(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
 
 export function parseCategories(value: unknown): string[] {
   if (typeof value !== 'string' || !value.trim()) return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === 'string');
-    }
-  } catch {
-    // Legacy category values may be stored as plain strings.
-  }
-
-  return [value];
+  const parsed = parseJsonOrNull(value);
+  return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [value];
 }
 
 export function requestSupportsSitemap(method: string): boolean {
@@ -356,11 +342,6 @@ export async function handleInMemoryPagedSitemap(
     : xmlResponse(request, renderUrlset(pageEntries));
 }
 
-// The index hashes this list to date the categories shard and the shard serves it, so it
-// takes nothing a caller could pass differently. The landing page lists every category,
-// so its lastmod follows every category revision, including the row of a category whose
-// last public Template just left. It ignores sitemap_revisions['categories'], which the
-// triggers bump on every public Template change, with or without a category.
 export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   const db = createDb(env);
   const rows = await db
@@ -373,8 +354,6 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
     .from(templates)
     .innerJoin(users, eq(users.id, templates.user_id))
     .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
-    // Same owner rule as the template and profile sitemaps: a template whose owner has no
-    // valid username has no public URL, so the category page does not list it.
     .where(and(
       publicTemplateCondition,
       validUsernameCondition,
@@ -401,8 +380,6 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
     );
     parseCategories(row.category).forEach((category) => addCategory(category, lastmod));
   });
-  // A registry category's page shows its registry name and description, but it is only
-  // worth listing once a public Template uses it; otherwise it is an empty page.
   PUBLIC_CATEGORY_REGISTRY.forEach((category) => {
     if (lastmodBySlug.has(category.slug)) addCategory(category.slug, catalogPageEntry('/categories/').lastmod);
   });
@@ -415,7 +392,6 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
   let categoryRevisedAt: string | null = null;
   for (const row of categoryRevisions) {
     const categories = parseCategories(row.category).filter((category) => categorySlug(category));
-    // Uncategorized Templates store '[]', and the triggers record that value too.
     if (categories.length === 0) continue;
     categoryRevisedAt = mostRecentLastmod(categoryRevisedAt, row.revised_at);
     categories.forEach((category) => {

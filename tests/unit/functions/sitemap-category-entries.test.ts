@@ -2,9 +2,16 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 import { createDb } from '../../../functions/api/db';
-import { loadCategoryEntries, publicTemplateCondition } from '../../../functions/sitemap/shared';
+import {
+  isValidTemplateSlug,
+  isValidUsername,
+  loadCategoryEntries,
+  publicTemplateCondition,
+  validTemplateSlugCondition,
+  validUsernameCondition,
+} from '../../../functions/sitemap/shared';
 import type { Env } from '../../../functions/api/types';
-import { templates } from '../../../db/schema/index';
+import { templates, users } from '../../../db/schema/index';
 
 type SqlValue = string | number | null;
 
@@ -119,5 +126,24 @@ describe('public Template rule for the sitemaps', () => {
       .orderBy(templates.id);
 
     expect(rows.map((row) => row.id)).toEqual(['organization', 'personal']);
+  });
+});
+
+describe('public URL rules for the sitemaps', () => {
+  const usernames = ['alice', 'al', 'a'.repeat(30), 'a'.repeat(31), 'bob_smith.2', ' padded ', 'with space', 'émile', 'semi;colon', ''];
+  const slugs = ['plan', 'plan-2', 'Plan', '-plan', 'plan-', 'pl--an', 'a'.repeat(160), 'a'.repeat(161), ' trimmed ', 'café', 'x', ''];
+
+  it("applies the same username and slug rules in SQL as in code, so a shard page's LIMIT counts only rows it lists", async () => {
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT); CREATE TABLE templates (id TEXT PRIMARY KEY, slug TEXT);');
+    usernames.forEach((username, index) => db.prepare('INSERT INTO users (id, username) VALUES (?, ?)').run(`user-${index}`, username));
+    slugs.forEach((slug, index) => db.prepare('INSERT INTO templates (id, slug) VALUES (?, ?)').run(`template-${index}`, slug));
+    const queries = createDb({ DB: sqliteD1(db) } as unknown as Env);
+
+    const usernameRows = await queries.select({ username: users.username }).from(users).where(validUsernameCondition);
+    const slugRows = await queries.select({ slug: templates.slug }).from(templates).where(validTemplateSlugCondition);
+
+    expect(usernameRows.map((row) => row.username).sort()).toEqual(usernames.filter((username) => isValidUsername(username.trim())).sort());
+    expect(slugRows.map((row) => row.slug).sort()).toEqual(slugs.filter((slug) => isValidTemplateSlug(slug.trim())).sort());
   });
 });

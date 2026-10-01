@@ -10,6 +10,7 @@ SERP Lists is a Next.js app on Cloudflare Workers (through OpenNext); the same W
 - API: the router in `functions/api/[[route]].ts`, run for every `/api/*` request by the route handler `src/app/api/[[...route]]/route.ts`.
 - Database: Cloudflare D1 through the `DB` binding, queried with Drizzle in `functions/api/db.ts`.
 - Object storage: Cloudflare R2 bucket bound as `R2_UPLOADS`.
+- Public discovery: XML sitemaps built in `functions/sitemap/` and the lookups behind the public pages' metadata in `functions/seo/` ([SEO and sitemaps](seo-and-sitemaps.md)).
 - Auth: Better Auth mounted under `/api/auth/*` with D1-backed users, accounts, sessions, and verification records.
 - Client state: TanStack React Query plus app contexts for auth, ownership context, Templates, and Runs.
 
