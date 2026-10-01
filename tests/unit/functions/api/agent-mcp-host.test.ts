@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => ({})) }));
@@ -12,23 +10,13 @@ import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { requestHostIsSafe, resolveAgentMcpConnection } from "@functions/api/utils/agent-mcp-host";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import type { Env } from "@functions/api/types";
-
-// The deployed allowlists, read from wrangler.toml so a config change is tested too.
-function wranglerVar(section: string, name: string): string {
-  const toml = readFileSync(path.resolve(__dirname, "../../../../wrangler.toml"), "utf8");
-  const start = toml.indexOf(`[${section}]`);
-  expect(start, `wrangler.toml has no [${section}]`).toBeGreaterThanOrEqual(0);
-  const body = toml.slice(start).split(/\n\[/, 2)[0] ?? "";
-  const match = body.match(new RegExp(`^${name}\\s*=\\s*"([^"]*)"`, "m"));
-  expect(match, `[${section}] sets ${name}`).not.toBeNull();
-  return match?.[1] ?? "";
-}
+import { varFromWranglerToml } from "../../../support/wranglerToml";
 
 const baseEnv = { DB: {} } as Env;
-const previewEnv: Env = { ...baseEnv, CORS_ALLOWED_ORIGINS: wranglerVar("env.preview.vars", "CORS_ALLOWED_ORIGINS") };
+const previewEnv: Env = { ...baseEnv, CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS") };
 const productionEnv: Env = {
   ...baseEnv,
-  CORS_ALLOWED_ORIGINS: wranglerVar("env.production.vars", "CORS_ALLOWED_ORIGINS"),
+  CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.production.vars", "CORS_ALLOWED_ORIGINS"),
 };
 
 const envs: Array<[string, Env]> = [
@@ -59,8 +47,7 @@ function connectionRequest(origin: string): Request {
   return new Request(`${origin}/api/agent-keys/connection`);
 }
 
-// An MCP client posting to `endpoint`, with the Host header it would send.
-function initializeRequest(endpoint: string): Request {
+function initializeSentByAClientTo(endpoint: string): Request {
   return new Request(endpoint, {
     method: "POST",
     headers: {
@@ -90,7 +77,7 @@ describe("advertised MCP endpoint", () => {
 
   it("still rejects a per-deployment staging URL at the MCP endpoint", async () => {
     const response = await handleAgentMcp(
-      initializeRequest("https://3f2a1b9c.serp-checklists.pages.dev/api/mcp"),
+      initializeSentByAClientTo("https://3f2a1b9c.serp-checklists.pages.dev/api/mcp"),
       previewEnv,
     );
     expect(response.status).toBe(403);
@@ -137,7 +124,7 @@ describe("advertised MCP endpoint", () => {
       if (mcpEndpoint === null) return;
 
       expect(requestHostIsSafe(new Request(mcpEndpoint), env)).toBe(true);
-      const response = await handleAgentMcp(initializeRequest(mcpEndpoint), env);
+      const response = await handleAgentMcp(initializeSentByAClientTo(mcpEndpoint), env);
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ result: { protocolVersion: "2025-06-18" } });
     });

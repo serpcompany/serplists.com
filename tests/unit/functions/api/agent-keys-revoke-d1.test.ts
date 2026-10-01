@@ -1,11 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
-// Revoking a Run Key that is already revoked (in another tab, or a retry after the first
-// response was lost) must succeed with the time it was revoked, not answer "not found".
-// A missing key or another user's key still gets the same 404. Runs the real handler and
-// Drizzle queries against a migrated SQLite database.
-
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
 
@@ -13,7 +8,7 @@ import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 
 const ORIGINAL_REVOKED_AT = "2026-09-19T02:00:00.000Z";
 
-describe("DELETE /api/agent-keys/:id", () => {
+describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
   let database: ReturnType<typeof createMigratedD1>;
 
   const addUser = (id: string) =>

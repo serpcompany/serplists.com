@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// get_template's pages and update_template's operations over the MCP endpoint, with D1
-// mocked: what a client receives, and what an operation saves through the editor's code.
 const dbMocks = vi.hoisted(() => {
   const selectChain = { from: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn() };
   const insertChain = { values: vi.fn(), select: vi.fn() };
@@ -24,7 +22,6 @@ vi.mock("@functions/api/utils/personal-run-key", () => ({
 
 vi.mock("@functions/api/utils/entitlements", () => ({ getEntitlementsForUser: vi.fn() }));
 
-// Pass through, but record what each write puts in audit_events.
 vi.mock("@functions/api/utils/audit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@functions/api/utils/audit")>();
   return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
@@ -36,31 +33,17 @@ import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { mcpRequest, runKeyWithEveryPermission } from "../../../support/agentMcp";
 import { readTemplateInFull } from "../../../support/templatePages";
 
 type JsonRecord = Record<string, unknown>;
 
-const identity = {
-  keyId: "key-1",
-  userId: "user-1",
-  name: "Codex",
-  permissions: ["templates:read", "templates:write", "runs:read", "runs:write"] as const,
-};
 const env = { DB: {} } as never;
 
 let requestId = 0;
 async function send(method: string, params?: JsonRecord): Promise<{ raw: string; body: JsonRecord }> {
   requestId += 1;
-  const response = await handleAgentMcp(new Request("http://localhost/api/mcp", {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer test",
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      "MCP-Protocol-Version": "2025-06-18",
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", id: requestId, method, ...(params ? { params } : {}) }),
-  }), env);
+  const response = await handleAgentMcp(mcpRequest(method, params, requestId), env);
   const raw = await response.text();
   return { raw, body: JSON.parse(raw) as JsonRecord };
 }
@@ -76,8 +59,7 @@ const task = (id: string, textBytes = 200) => ({
   contents: [{ id: `${id}-text`, type: "text", value: "x".repeat(textBytes) }],
 });
 
-// A template of 30 sections of 12 tasks, about 120KB: too large for one result.
-const largeSections = () => Array.from({ length: 30 }, (_, s) => ({
+const sectionsTooLargeForOneResult = () => Array.from({ length: 30 }, (_, s) => ({
   id: `s${s}`,
   title: `Section ${s}`,
   items: Array.from({ length: 12 }, (_, t) => task(`t${s}-${t}`)),
@@ -106,12 +88,11 @@ const templateRow = (sections: unknown[], overrides: JsonRecord = {}): JsonRecor
 
 const resultOf = (body: JsonRecord) => body.result as { structuredContent: JsonRecord; content: Array<{ text: string }>; isError?: boolean };
 
-// The row every select reads, and what the batch reports.
-function storedRow(row: JsonRecord) {
+function everySelectReads(row: JsonRecord) {
   dbMocks.selectChain.limit.mockResolvedValue([row]);
 }
 
-describe("personal run MCP template tools", () => {
+describe("personal run MCP template tools over the endpoint, with D1 mocked", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -125,7 +106,7 @@ describe("personal run MCP template tools", () => {
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(identity);
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(runKeyWithEveryPermission);
     vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "pro", limits: { maxTemplates: null, maxActiveRuns: null } } as never);
   });
@@ -144,12 +125,11 @@ describe("personal run MCP template tools", () => {
     for (const keyword of ["oneOf", "anyOf", "allOf"]) expect(update).not.toHaveProperty(keyword);
   });
 
-  it("warns that sections replaces the whole checklist, and to edit a template read in pages by part", async () => {
+  it("warns that sections, accepted for a template of any size, replaces the whole checklist, and to edit a template read in pages by part", async () => {
     const tools = ((await send("tools/list")).body.result as { tools: JsonRecord[] }).tools;
     const update = tools.find((tool) => tool.name === "update_template") as JsonRecord;
     const sections = ((update.inputSchema as JsonRecord).properties as JsonRecord).sections as JsonRecord;
 
-    // sections is still accepted for a template of any size, so the description says what it does.
     expect(update.description).toContain(
       "sections, which replaces the whole checklist: any section, task, or subtask it leaves out is removed.",
     );
@@ -161,8 +141,8 @@ describe("personal run MCP template tools", () => {
   });
 
   it("reads a template too large for one result in pages, each response within the bound", async () => {
-    const row = templateRow(largeSections());
-    storedRow(row);
+    const row = templateRow(sectionsTooLargeForOneResult());
+    everySelectReads(row);
     const responses: string[] = [];
 
     const { template } = await readTemplateInFull(async (args) => {
@@ -170,8 +150,8 @@ describe("personal run MCP template tools", () => {
       responses.push(raw);
       const result = resultOf(body);
       expect(result.isError).toBeUndefined();
-      // The text a client that shows text reads starts with what the page holds.
-      expect(result.content[0].text.split("\n\n")[0]).toMatch(/^(Template "Release SOP" is too large|Loaded section "Section \d+"\.)/);
+      const summaryForClientsThatShowText = result.content[0].text.split("\n\n")[0];
+      expect(summaryForClientsThatShowText).toMatch(/^(Template "Release SOP" is too large|Loaded section "Section \d+"\.)/);
       return result.structuredContent;
     }, "template-1");
 
@@ -186,11 +166,11 @@ describe("personal run MCP template tools", () => {
   });
 
   it("refuses a stale cursor with edit_conflict and a forged one as invalid arguments", async () => {
-    storedRow(templateRow([{ id: "big", title: "Big", items: Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500)) }]));
+    everySelectReads(templateRow([{ id: "big", title: "Big", items: Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500)) }]));
     const first = resultOf((await rpc("get_template", { templateId: "template-1", sectionId: "big" })).body).structuredContent;
     expect(typeof first.nextCursor).toBe("string");
 
-    storedRow(templateRow([], { version: 5 }));
+    everySelectReads(templateRow([], { version: 5 }));
     const stale = resultOf((await rpc("get_template", { templateId: "template-1", cursor: first.nextCursor })).body);
     expect(stale.isError).toBe(true);
     expect(stale.structuredContent).toMatchObject({ error: "edit_conflict", details: { expectedVersion: 4, currentVersion: 5 } });
@@ -206,19 +186,21 @@ describe("personal run MCP template tools", () => {
       { id: "s2", title: "Ship", items: [task("t3")] },
     ];
 
-    // getOwnedTemplate, then updateTemplateForUser's read, then the result's read back.
     function mockWrite(before: JsonRecord, after: JsonRecord) {
+      const ownedTemplateCheck = [before];
+      const editorRead = [before];
+      const resultReadBack = [after];
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([before])
-        .mockResolvedValueOnce([before])
-        .mockResolvedValueOnce([after]);
+        .mockResolvedValueOnce(ownedTemplateCheck)
+        .mockResolvedValueOnce(editorRead)
+        .mockResolvedValueOnce(resultReadBack);
     }
 
     const savedTemplate = () => dbMocks.updateChain.set.mock.calls
       .map(([values]) => values as JsonRecord)
       .find((values) => typeof values.items === "string");
 
-    it("saves the whole checklist with one task added, through the editor's code", async () => {
+    it("saves the whole checklist with one task added, through the editor's code, naming the key and operation in its history", async () => {
       const before = templateRow(sections());
       mockWrite(before, templateRow(sections(), { version: 5 }));
 
@@ -240,7 +222,6 @@ describe("personal run MCP template tools", () => {
       expect(saved[1]).toEqual(sections()[1]);
       expect(savedTemplate()).toMatchObject({ version: 5, content_version: 4 });
 
-      // The template's history names the key and the operation.
       const audit = vi.mocked(buildAuditEventValues).mock.calls.map(([values]) => values)
         .find((values) => values.action === "template.updated");
       expect(audit?.metadata).toEqual({ source: "mcp", operation: "insert_task", personalRunKeyId: "key-1", personalRunKeyName: "Codex" });
@@ -249,7 +230,7 @@ describe("personal run MCP template tools", () => {
     });
 
     it("refuses a stale version, a public template, and an unknown section before writing", async () => {
-      storedRow(templateRow(sections()));
+      everySelectReads(templateRow(sections()));
       const stale = resultOf((await rpc("update_template", {
         templateId: "template-1",
         expectedVersion: 3,
@@ -258,7 +239,7 @@ describe("personal run MCP template tools", () => {
       })).body);
       expect(stale.structuredContent).toMatchObject({ error: "edit_conflict", details: { expectedVersion: 3, currentVersion: 4 } });
 
-      storedRow(templateRow(sections(), { is_public: true }));
+      everySelectReads(templateRow(sections(), { is_public: true }));
       const published = resultOf((await rpc("update_template", {
         templateId: "template-1",
         expectedVersion: 4,
@@ -267,7 +248,7 @@ describe("personal run MCP template tools", () => {
       })).body);
       expect(published.structuredContent).toMatchObject({ error: "template_is_public" });
 
-      storedRow(templateRow(sections()));
+      everySelectReads(templateRow(sections()));
       const missing = resultOf((await rpc("update_template", {
         templateId: "template-1",
         expectedVersion: 4,
@@ -281,8 +262,8 @@ describe("personal run MCP template tools", () => {
     });
 
     it("returns a large template's fields and the changed task, within the bound", async () => {
-      const before = templateRow(largeSections());
-      const changed = largeSections();
+      const before = templateRow(sectionsTooLargeForOneResult());
+      const changed = sectionsTooLargeForOneResult();
       changed[3].items[2] = { ...changed[3].items[2], title: "Rolled back" };
       mockWrite(before, templateRow(changed, { version: 5 }));
 
@@ -305,10 +286,9 @@ describe("personal run MCP template tools", () => {
     });
 
     it("treats a null operation as absent, replacing fields as before", async () => {
-      // updateTemplateForUser's read, then the result's read back.
-      dbMocks.selectChain.limit
-        .mockResolvedValueOnce([templateRow(sections())])
-        .mockResolvedValueOnce([templateRow(sections(), { version: 5, title: "Release SOP v2" })]);
+      const editorRead = [templateRow(sections())];
+      const resultReadBack = [templateRow(sections(), { version: 5, title: "Release SOP v2" })];
+      dbMocks.selectChain.limit.mockResolvedValueOnce(editorRead).mockResolvedValueOnce(resultReadBack);
 
       const result = resultOf((await rpc("update_template", {
         templateId: "template-1",

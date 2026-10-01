@@ -2,10 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SqliteD1 } from "../../../support/sqlite-d1";
 
-// list_templates and list_runs over MCP, on every migration and the SQL the tools send: pages
-// in order, each within the result bound, cursors that continue exactly where a page ended, and
-// query plans that read through the owner indexes.
-
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
   markPersonalRunKeyUsed: vi.fn(),
@@ -13,43 +9,25 @@ vi.mock("@functions/api/utils/personal-run-key", () => ({
 
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { LIST_PAGE_ROWS } from "@functions/api/handlers/agentMcpLists";
-import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
+import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+import { authenticateWithAFreshRunKey, mcpToolCall, resultBytes } from "../../../support/agentMcp";
+import { costliestJsonText } from "../../../support/jsonText";
 
 type JsonRecord = Record<string, unknown>;
-
-const identity = {
-  keyId: "key-1",
-  userId: "user-1",
-  name: "Codex",
-  permissions: ["templates:read", "templates:write", "runs:read", "runs:write"] as const,
-};
 
 let d1: SqliteD1;
 let requestId = 0;
 
 async function call(name: string, args: JsonRecord = {}): Promise<{ result: JsonRecord; error?: JsonRecord }> {
   requestId += 1;
-  // A key of its own per call keeps long walks under the per-key request limit.
-  vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, keyId: `list-key-${requestId}` });
-  const response = await handleAgentMcp(new Request("http://localhost/api/mcp", {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer test",
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      "MCP-Protocol-Version": "2025-06-18",
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", id: requestId, method: "tools/call", params: { name, arguments: args } }),
-  }), { DB: d1.binding } as never);
+  authenticateWithAFreshRunKey(authenticatePersonalRunKey);
+  const response = await handleAgentMcp(mcpToolCall(name, args, requestId), { DB: d1.binding } as never);
   const body = await response.json() as JsonRecord;
   return { result: body.result as JsonRecord, error: body.error as JsonRecord | undefined };
 }
 
-const resultBytes = (value: unknown) => new TextEncoder().encode(toJson(value)).byteLength;
-
-// Every page of a list, following nextCursor, each checked against the bound.
-async function readAll(name: "list_templates" | "list_runs", args: JsonRecord = {}): Promise<JsonRecord[]> {
+async function everyPageWithinTheBound(name: "list_templates" | "list_runs", args: JsonRecord = {}): Promise<JsonRecord[]> {
   const pages: JsonRecord[] = [];
   let cursor: string | undefined;
   do {
@@ -65,8 +43,6 @@ async function readAll(name: "list_templates" | "list_runs", args: JsonRecord = 
 }
 
 const CREATED = "2026-01-01T00:00:00.000Z";
-// Text that costs the most JSON bytes per character: a control character is a 6-byte escape.
-const costly = (length: number) => "\u0001".repeat(length);
 const timestamp = (index: number) => `2026-0${1 + (index % 9)}-${String(1 + (index % 28)).padStart(2, "0")}T00:00:00.000Z`;
 
 function seedUsers() {
@@ -93,7 +69,7 @@ function insertRun(id: string, fields: { userId?: string; createdAt: string; sta
   fields.team ? "team-1" : null, fields.userId ?? "user-1", fields.userId ?? "user-1", fields.deleted ? CREATED : null);
 }
 
-describe("MCP list tools", () => {
+describe("MCP list tools on the migrated tables", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
@@ -102,54 +78,54 @@ describe("MCP list tools", () => {
   });
 
   describe("list_templates", () => {
-    // 260 of the owner's active Personal templates: edited and never edited, many sharing a
-    // timestamp, a fifth with the costliest title and description a row can hold.
-    function seedTemplates(): string[] {
+    function seedTemplatesNeverListed() {
+      insertTemplate("archived", { createdAt: "2027-01-01T00:00:00.000Z", deleted: true });
+      insertTemplate("organization", { createdAt: "2027-01-01T00:00:00.000Z", team: true });
+      insertTemplate("other-user", { userId: "user-2", createdAt: "2027-01-01T00:00:00.000Z" });
+    }
+
+    function seedTemplatesReturningTheListedOrder(): string[] {
       const expected: Array<{ id: string; key: string }> = [];
       for (let index = 0; index < 260; index += 1) {
         const id = `t-${String(index).padStart(3, "0")}`;
         const edited = index % 3 === 0;
         const createdAt = timestamp(index);
         const updatedAt = edited ? timestamp(index + 5) : null;
-        const worst = index % 5 === 0;
+        const costliest = index % 5 === 0;
         insertTemplate(id, {
           createdAt,
           updatedAt,
-          title: worst ? costly(400) : `SOP ${index}`,
-          description: worst ? costly(5_000) : "How we ship",
+          title: costliest ? costliestJsonText(400) : `SOP ${index}`,
+          description: costliest ? costliestJsonText(5_000) : "How we ship",
         });
         expected.push({ id, key: updatedAt ?? createdAt });
       }
-      // Never listed: archived, an Organization's, and another user's.
-      insertTemplate("archived", { createdAt: "2027-01-01T00:00:00.000Z", deleted: true });
-      insertTemplate("organization", { createdAt: "2027-01-01T00:00:00.000Z", team: true });
-      insertTemplate("other-user", { userId: "user-2", createdAt: "2027-01-01T00:00:00.000Z" });
+      seedTemplatesNeverListed();
       return expected
         .sort((left, right) => (left.key === right.key ? right.id.localeCompare(left.id) : right.key.localeCompare(left.key)))
         .map(({ id }) => id);
     }
 
-    it("lists every active Personal template once, newest change first, a page within the bound at a time", async () => {
-      const expected = seedTemplates();
+    it("lists every active Personal template once, newest change first, a page within the bound at a time, cutting long titles and descriptions", async () => {
+      const expected = seedTemplatesReturningTheListedOrder();
 
-      const pages = await readAll("list_templates");
+      const pages = await everyPageWithinTheBound("list_templates");
 
       const listed = pages.flatMap((page) => (page.templates as JsonRecord[]).map(({ id }) => id));
       expect(listed).toEqual(expected);
       expect(pages.length).toBeGreaterThan(3);
       expect(pages.at(-1)).not.toHaveProperty("nextCursor");
       expect(pages.slice(0, -1).every((page) => typeof page.nextCursor === "string")).toBe(true);
-      // Long titles and descriptions are cut; get_template returns them whole.
-      const worst = pages.flatMap((page) => page.templates as JsonRecord[]).find(({ id }) => id === "t-000") as JsonRecord;
-      expect(String(worst.title)).toHaveLength(160);
-      expect(String(worst.description)).toHaveLength(500);
+      const costliest = pages.flatMap((page) => page.templates as JsonRecord[]).find(({ id }) => id === "t-000") as JsonRecord;
+      expect(String(costliest.title)).toHaveLength(160);
+      expect(String(costliest.description)).toHaveLength(500);
       expect(pages[0].templates).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "checklist", contentVersion: 1, createdAt: expect.any(String) }),
       ]));
     });
 
-    it("reads a page from the owner index, stopping at the page's rows", async () => {
-      seedTemplates();
+    it("reads a page from the owner index, stopping at the page's rows and never reading content", async () => {
+      seedTemplatesReturningTheListedOrder();
       d1.queries.length = 0;
 
       await call("list_templates");
@@ -159,12 +135,11 @@ describe("MCP list tools", () => {
       const plan = d1.queryPlan(query as never).join("; ");
       expect(plan).toContain("idx_templates_owner");
       expect(plan).not.toMatch(/SCAN templates\b/);
-      // Summaries never read a template's content.
       expect(query?.sql).not.toMatch(/"items"/);
     });
 
     it("never repeats a template that is edited while the list is read", async () => {
-      seedTemplates();
+      seedTemplatesReturningTheListedOrder();
       const first = (await call("list_templates")).result.structuredContent as JsonRecord;
       const firstIds = (first.templates as JsonRecord[]).map(({ id }) => id);
       d1.run("UPDATE templates SET updated_at = '2027-06-01T00:00:00.000Z' WHERE id = ?", firstIds[1]);
@@ -183,7 +158,7 @@ describe("MCP list tools", () => {
     it("returns one page without a cursor for a short list", async () => {
       insertTemplate("only", { createdAt: CREATED });
 
-      const pages = await readAll("list_templates");
+      const pages = await everyPageWithinTheBound("list_templates");
 
       expect(pages).toEqual([{ templates: [expect.objectContaining({ id: "only", title: "SOP only" })] }]);
     });
@@ -196,7 +171,7 @@ describe("MCP list tools", () => {
         const id = `r-${String(index).padStart(3, "0")}`;
         const status = index % 4 === 0 ? "completed" : "in_progress";
         const createdAt = timestamp(index);
-        insertRun(id, { createdAt, status, title: index % 3 === 0 ? costly(400) : `Run ${index}` });
+        insertRun(id, { createdAt, status, title: index % 3 === 0 ? costliestJsonText(400) : `Run ${index}` });
         runs.push({ id, createdAt, status });
       }
       insertRun("archived", { createdAt: "2027-01-01T00:00:00.000Z", deleted: true });
@@ -213,7 +188,7 @@ describe("MCP list tools", () => {
     it("lists every active Personal run once, newest first, a page within the bound at a time", async () => {
       const { all } = seedRuns();
 
-      const pages = await readAll("list_runs");
+      const pages = await everyPageWithinTheBound("list_runs");
 
       const runs = pages.flatMap((page) => page.runs as JsonRecord[]);
       expect(runs.map(({ id }) => id)).toEqual(all);
@@ -224,21 +199,20 @@ describe("MCP list tools", () => {
       expect(String(runs.find(({ id }) => id === "r-000")?.title)).toHaveLength(160);
     });
 
-    it("keeps the status filter in its cursor", async () => {
+    it("keeps the status filter in its cursor, so a continuation may leave it out or repeat it", async () => {
       const { completed } = seedRuns();
 
-      const pages = await readAll("list_runs", { status: "completed" });
+      const pages = await everyPageWithinTheBound("list_runs", { status: "completed" });
       expect(pages.flatMap((page) => (page.runs as JsonRecord[]).map(({ id }) => id))).toEqual(completed);
 
-      // Continuing without the status keeps it; passing the same one is allowed.
       const first = (await call("list_runs", { status: "completed" })).result.structuredContent as JsonRecord;
-      const next = (await call("list_runs", { cursor: first.nextCursor })).result.structuredContent as JsonRecord;
-      const same = (await call("list_runs", { cursor: first.nextCursor, status: "completed" })).result.structuredContent as JsonRecord;
-      expect(next).toEqual(same);
-      expect((next.runs as JsonRecord[]).every(({ status }) => status === "completed")).toBe(true);
+      const continuedWithoutStatus = (await call("list_runs", { cursor: first.nextCursor })).result.structuredContent as JsonRecord;
+      const continuedWithSameStatus = (await call("list_runs", { cursor: first.nextCursor, status: "completed" })).result.structuredContent as JsonRecord;
+      expect(continuedWithoutStatus).toEqual(continuedWithSameStatus);
+      expect((continuedWithoutStatus.runs as JsonRecord[]).every(({ status }) => status === "completed")).toBe(true);
     });
 
-    it("reads a page from the user index, stopping at the page's rows", async () => {
+    it("reads a page from the user index, stopping at the page's rows and never reading content", async () => {
       seedRuns();
       d1.queries.length = 0;
 
@@ -256,8 +230,8 @@ describe("MCP list tools", () => {
   describe("cursors", () => {
     beforeEach(() => {
       for (let index = 0; index < 150; index += 1) {
-        insertTemplate(`t-${index}`, { createdAt: timestamp(index), title: costly(200) });
-        insertRun(`r-${index}`, { createdAt: timestamp(index), title: costly(200), status: index % 2 ? "completed" : "in_progress" });
+        insertTemplate(`t-${index}`, { createdAt: timestamp(index), title: costliestJsonText(200) });
+        insertRun(`r-${index}`, { createdAt: timestamp(index), title: costliestJsonText(200), status: index % 2 ? "completed" : "in_progress" });
       }
     });
 

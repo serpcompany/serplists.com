@@ -366,7 +366,10 @@ Common failures:
   is portable.
 - API handler unit tests mock `drizzle-orm/d1` at the adapter boundary with
   `vi.hoisted` chains and keep real schema and query expressions. Call
-  `vi.clearAllMocks()` in `beforeEach()` when hoisted chains are reused.
+  `vi.clearAllMocks()` in `beforeEach()` when hoisted chains are reused. It keeps the
+  values a test queued with `mockResolvedValueOnce()`, so also `mockReset()` the calls a
+  test queues rows on: a test that stops early (an early `400`) would leave its rows to
+  the next one.
 
   ```ts
   const dbMocks = vi.hoisted(() => {
@@ -384,6 +387,13 @@ Common failures:
   just before the handler's next `db.batch()`, and `queryPlan()` returns
   `EXPLAIN QUERY PLAN` for a recorded statement. See
   `tests/unit/functions/api/teams-sqlite.test.ts`.
+- MCP tests send their requests with `mcpRequest()` and `mcpToolCall()` from
+  `tests/support/agentMcp.ts`. A test that makes more calls than one Run Key may make in a
+  minute (`RUN_KEY_REQUESTS_PER_MINUTE`, counted per key in the process) gives each call a
+  key of its own with `authenticateWithAFreshRunKey()`, or the limit answers `429`.
+- A test that reads values from the deployed configuration (the CORS allowlists)
+  takes them from `wrangler.toml` with `varFromWranglerToml()` from
+  `tests/support/wranglerToml.ts`, so a change to that file is tested too.
 - Unit tests run in Vitest's node environment, with no DOM, jsdom or testing-library, so a
   component test takes one of three routes:
   - Render the component to HTML with `renderToStaticMarkup` and read the markup.

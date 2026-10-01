@@ -33,7 +33,6 @@ vi.mock("@functions/api/utils/entitlements", () => ({
   getEntitlementsForUser: vi.fn(),
 }));
 
-// Pass through, but record what each tool writes to audit_events.
 vi.mock("@functions/api/utils/audit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@functions/api/utils/audit")>();
   return { ...actual, buildAuditEventValues: vi.fn(actual.buildAuditEventValues) };
@@ -54,34 +53,19 @@ import {
   TICKED_TEMPLATE_SECTIONS,
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
+import {
+  authenticateWithAFreshRunKey,
+  mcpRequest,
+  mcpToolCall,
+  runKeyWithEveryPermission,
+} from "../../../support/agentMcp";
 import { readRunInFull } from "../../../support/runPages";
 
-const identity = {
-  keyId: "key-1",
-  userId: "user-1",
-  name: "Codex",
-  permissions: ["templates:read", "templates:write", "runs:read", "runs:write"] as const,
-};
 const env = { DB: {} } as any;
 
-function rpcRequest(method: string, params?: unknown, id: number | undefined = 1): Request {
-  return new Request("http://localhost/api/mcp", {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer test",
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      ...(method === "initialize" ? {} : { "MCP-Protocol-Version": "2025-06-18" }),
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", ...(id === undefined ? {} : { id }), method, ...(params ? { params } : {}) }),
-  });
-}
-
-function callTool(name: string, args: JsonRecord = {}, id = 1): Request {
-  return rpcRequest("tools/call", { name, arguments: args }, id);
-}
-
 type JsonRecord = Record<string, unknown>;
+
+const NO_TEMPLATE_HOLDS_THE_SLUG: JsonRecord[] = [];
 
 function personalRun(overrides: JsonRecord = {}): JsonRecord {
   return {
@@ -120,9 +104,7 @@ function personalRun(overrides: JsonRecord = {}): JsonRecord {
 
 const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
-// Sections whose serialized size is at least `targetBytes`: the standard task-1 (with
-// subtasks sub-1/sub-2) followed by filler tasks carrying long ASCII notes.
-function largeSections(targetBytes: number, fillerNotes = 10_000): JsonRecord[] {
+function sectionsOfAtLeast(targetBytes: number, fillerNotesLength = 10_000): JsonRecord[] {
   const task1 = {
     id: "task-1",
     title: "Verify",
@@ -140,13 +122,12 @@ function largeSections(targetBytes: number, fillerNotes = 10_000): JsonRecord[] 
   const sections = [{ id: "section-1", title: "Release", items }];
   let index = 0;
   while (byteLength(sections) < targetBytes) {
-    items.push({ id: `filler-${index}`, title: `Filler ${index}`, isCompleted: false, notes: "x".repeat(fillerNotes) });
+    items.push({ id: `filler-${index}`, title: `Filler ${index}`, isCompleted: false, notes: "x".repeat(fillerNotesLength) });
     index += 1;
   }
   return sections;
 }
 
-// Every task and Sub-task ticked: set_run_status completed refuses a run with work left.
 function tickEverything(sections: JsonRecord[]): JsonRecord[] {
   const tick = (record: JsonRecord) => ({ ...record, isCompleted: true });
   return sections.map((section) => ({
@@ -163,7 +144,7 @@ function tickEverything(sections: JsonRecord[]): JsonRecord[] {
 const finishedRun = (overrides: JsonRecord = {}) =>
   personalRun({ items: JSON.stringify(tickEverything(JSON.parse(personalRun().items as string))), ...overrides });
 
-const finishedFor = (operation: string, sections: JsonRecord[]) =>
+const finishedIfCompleting = (operation: string, sections: JsonRecord[]) =>
   operation === "set_run_status" ? tickEverything(sections) : sections;
 
 function ownedTemplate(items: unknown[]): JsonRecord {
@@ -183,13 +164,15 @@ async function toolBody(response: Response): Promise<any> {
   return response.json();
 }
 
+function dropRowsAndBatchResultsALastTestLeftQueued() {
+  dbMocks.selectChain.limit.mockReset();
+  dbMocks.db.batch.mockReset();
+}
+
 describe("personal run MCP handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // clearAllMocks keeps queued mockResolvedValueOnce values; drop them so one test's
-    // unused rows cannot leak into the next.
-    dbMocks.selectChain.limit.mockReset();
-    dbMocks.db.batch.mockReset();
+    dropRowsAndBatchResultsALastTestLeftQueued();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.orderBy.mockReturnValue(dbMocks.selectChain);
@@ -199,7 +182,7 @@ describe("personal run MCP handler", () => {
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
     dbMocks.db.batch.mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(identity);
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue(runKeyWithEveryPermission);
     vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: "pro",
@@ -209,7 +192,7 @@ describe("personal run MCP handler", () => {
 
   it("requires bearer authentication", async () => {
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
-    const response = await handleAgentMcp(rpcRequest("initialize"), env);
+    const response = await handleAgentMcp(mcpRequest("initialize"), env);
     const body = await response.json() as any;
 
     expect(response.status).toBe(401);
@@ -267,7 +250,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("counter-offers the supported protocol version during initialization", async () => {
-    const response = await handleAgentMcp(rpcRequest("initialize", {
+    const response = await handleAgentMcp(mcpRequest("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
       clientInfo: { name: "test-client", version: "1.0.0" },
@@ -276,8 +259,8 @@ describe("personal run MCP handler", () => {
     expect(body.result.protocolVersion).toBe("2025-06-18");
   });
 
-  it("names the server version, with release notes for agents in the product spec", async () => {
-    const response = await handleAgentMcp(rpcRequest("initialize", {
+  it("names the server version, with release notes in the product spec that tell agents already using the MCP what it changes", async () => {
+    const response = await handleAgentMcp(mcpRequest("initialize", {
       protocolVersion: "2025-06-18",
       capabilities: {},
       clientInfo: { name: "test-client", version: "1.0.0" },
@@ -285,7 +268,6 @@ describe("personal run MCP handler", () => {
     const body = await response.json() as any;
     expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.3.0" });
 
-    // Agents already using the MCP learn what a new version changes from these notes.
     const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
     expect(spec).toContain("\n## MCP Changes For Agents\n");
     const notes = spec.slice(spec.indexOf("\n## MCP Changes For Agents\n"));
@@ -293,7 +275,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("rejects invalid request ids and incomplete initialize parameters", async () => {
-    const validRequest = rpcRequest("ping");
+    const validRequest = mcpRequest("ping");
     for (const invalidRequestId of [null, 1.5, { invalid: true }, false]) {
       const invalidId = await handleAgentMcp(new Request(validRequest.url, {
         method: "POST",
@@ -318,7 +300,7 @@ describe("personal run MCP handler", () => {
       error: { code: -32600, message: "Invalid Request" },
     });
 
-    const incomplete = await handleAgentMcp(rpcRequest("initialize", {
+    const incomplete = await handleAgentMcp(mcpRequest("initialize", {
       protocolVersion: "2025-06-18",
     }), env);
     expect((await incomplete.json() as any).error.code).toBe(-32602);
@@ -341,7 +323,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("returns safe JSON-RPC errors for malformed and unexpected requests", async () => {
-    const malformed = rpcRequest("ping");
+    const malformed = mcpRequest("ping");
     const malformedResponse = await handleAgentMcp(new Request(malformed.url, {
       method: "POST",
       headers: malformed.headers,
@@ -350,7 +332,7 @@ describe("personal run MCP handler", () => {
     expect((await malformedResponse.json() as any).error.code).toBe(-32700);
 
     dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("sensitive database detail"));
-    const failed = await handleAgentMcp(callTool("list_templates"), env);
+    const failed = await handleAgentMcp(mcpToolCall("list_templates"), env);
     const body = await failed.json() as any;
     expect(body.error).toEqual({ code: -32603, message: "Internal error" });
     expect(JSON.stringify(body)).not.toContain("sensitive");
@@ -374,7 +356,7 @@ describe("personal run MCP handler", () => {
   });
 
   it("advertises personal template and run tools without delete or publish controls", async () => {
-    const response = await handleAgentMcp(rpcRequest("tools/list"), env);
+    const response = await handleAgentMcp(mcpRequest("tools/list"), env);
     const body = await response.json() as any;
 
     expect(body.result.tools.map((tool: any) => tool.name)).toEqual([
@@ -414,36 +396,35 @@ describe("personal run MCP handler", () => {
   });
 
   it("lists never-edited templates by when they were created, not after every edited one", async () => {
-    await handleAgentMcp(callTool("list_templates"), env);
+    await handleAgentMcp(mcpToolCall("list_templates"), env);
     const orderBy = dbMocks.selectChain.orderBy.mock.calls[0].map((part: unknown) =>
       new SQLiteSyncDialect().sqlToQuery(part as SQL));
 
-    // Run the handler's ORDER BY on real SQLite, which sorts NULL below every value.
-    const sqlite = new DatabaseSync(":memory:");
-    sqlite.exec('create table "templates" ("id" text, "created_at" text, "updated_at" text)');
-    const insert = sqlite.prepare('insert into "templates" values (?, ?, ?)');
+    const realSqlite = new DatabaseSync(":memory:");
+    realSqlite.exec('create table "templates" ("id" text, "created_at" text, "updated_at" text)');
+    const insert = realSqlite.prepare('insert into "templates" values (?, ?, ?)');
     insert.run("edited-long-ago", "2024-01-01T00:00:00.000Z", "2024-02-01T00:00:00.000Z");
     insert.run("edited-recently", "2024-01-01T00:00:00.000Z", "2026-09-01T00:00:00.000Z");
     insert.run("created-today", "2026-09-20T00:00:00.000Z", null);
     insert.run("imported-a", "2025-05-05T00:00:00.000Z", null);
     insert.run("imported-b", "2025-05-05T00:00:00.000Z", null);
-    const ordered = sqlite
+    const ordered = realSqlite
       .prepare(`select "id" from "templates" order by ${orderBy.map((part: { sql: string }) => part.sql).join(", ")}`)
       .all(...orderBy.flatMap((part: { params: unknown[] }) => part.params as string[]))
       .map((row) => row.id);
-    sqlite.close();
+    realSqlite.close();
 
     expect(ordered).toEqual(["created-today", "edited-recently", "imported-b", "imported-a", "edited-long-ago"]);
   });
 
   it("offers and allows only the tools a key's permissions cover", async () => {
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, permissions: ["runs:read"] });
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...runKeyWithEveryPermission, permissions: ["runs:read"] });
 
-    const listResponse = await handleAgentMcp(rpcRequest("tools/list"), env);
+    const listResponse = await handleAgentMcp(mcpRequest("tools/list"), env);
     const list = await listResponse.json() as any;
     expect(list.result.tools.map((tool: any) => tool.name)).toEqual(["list_runs", "get_run"]);
 
-    const deniedResponse = await handleAgentMcp(callTool("create_template", {
+    const deniedResponse = await handleAgentMcp(mcpToolCall("create_template", {
       title: "Denied",
       sections: [{ title: "Section", items: [{ title: "Task" }] }],
     }), env);
@@ -488,17 +469,17 @@ describe("personal run MCP handler", () => {
       },
     ]);
 
-    const response = await handleAgentMcp(callTool("list_templates"), env);
+    const response = await handleAgentMcp(mcpToolCall("list_templates"), env);
     const body = await response.json() as any;
 
     expect(body.result.structuredContent.templates.map((template: any) => template.id)).toEqual(["owned"]);
     expect(body.result.structuredContent.templates[0]).not.toHaveProperty("sections");
     expect(body.result.content[0].text).toContain('"id":"owned"');
-    expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+    expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
   });
 
   it("returns protocol errors for unknown tools and invalid tool arguments", async () => {
-    const unknownResponse = await handleAgentMcp(callTool("not_a_tool"), env);
+    const unknownResponse = await handleAgentMcp(mcpToolCall("not_a_tool"), env);
     const unknown = await unknownResponse.json() as any;
     expect(unknown.error).toEqual({
       code: -32602,
@@ -506,7 +487,7 @@ describe("personal run MCP handler", () => {
       data: { code: "tool_not_found" },
     });
 
-    const invalidResponse = await handleAgentMcp(callTool("get_run", {}), env);
+    const invalidResponse = await handleAgentMcp(mcpToolCall("get_run", {}), env);
     const invalid = await invalidResponse.json() as any;
     expect(invalid.error.code).toBe(-32602);
     expect(invalid.error.data.code).toBe("invalid_arguments");
@@ -528,7 +509,7 @@ describe("personal run MCP handler", () => {
       content_version: 4,
     }]);
 
-    const response = await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+    const response = await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env);
     const body = await response.json() as any;
 
     expect(body.result.isError).toBeUndefined();
@@ -562,32 +543,30 @@ describe("personal run MCP handler", () => {
       content_version: 2,
     }]);
 
-    const response = await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+    const response = await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env);
     const body = await response.json() as any;
 
     expect(body.result.isError).toBeUndefined();
-    // Same fixture and expectation as the web create test in checklists-handler.test.ts.
     expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(runSections);
   });
 
   describe("template tools", () => {
     const ids = (sections: any[]) => sections.map((section) => [section.id, section.items.map((item: any) => item.id)]);
 
-    it("reads a template stored without ids with the ids its runs and next save use", async () => {
+    it("reads a template stored without ids with the ids its runs and next save use, so sending them back keeps the runs' progress", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(LEGACY_ID_TEMPLATE_SECTIONS)]);
-      const read = await toolBody(await handleAgentMcp(callTool("get_template", { templateId: "template-1" }), env));
+      const read = await toolBody(await handleAgentMcp(mcpToolCall("get_template", { templateId: "template-1" }), env));
 
       expect(read.result.isError).toBeUndefined();
-      // Sending these back in update_template keeps every id, so runs keep their progress.
       expect(ids(read.result.structuredContent.template.sections)).toEqual(ids(LEGACY_ID_RUN_SECTIONS));
     });
 
     it("treats null optional fields as absent, as every other tool does", async () => {
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([]) // the slug is free
+        .mockResolvedValueOnce(NO_TEMPLATE_HOLDS_THE_SLUG)
         .mockResolvedValueOnce([{ ...ownedTemplate(JSON.parse(personalRun().items as string)), version: 1 }]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("create_template", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("create_template", {
         title: "Release SOP",
         description: null,
         categories: null,
@@ -603,7 +582,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("names the offending field when template arguments are invalid", async () => {
-      const body = await toolBody(await handleAgentMcp(callTool("update_template", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_template", {
         templateId: "template-1",
         expectedVersion: 1,
         title: "",
@@ -614,19 +593,18 @@ describe("personal run MCP handler", () => {
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
-    it("reports a committed create as success when reading it back fails", async () => {
+    it("reports a committed create as success when reading it back fails, since a retried create would make a duplicate", async () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         dbMocks.selectChain.limit
-          .mockResolvedValueOnce([]) // the slug is free
+          .mockResolvedValueOnce(NO_TEMPLATE_HOLDS_THE_SLUG)
           .mockRejectedValueOnce(new Error("D1_ERROR: database is locked"));
 
-        const body = await toolBody(await handleAgentMcp(callTool("create_template", {
+        const body = await toolBody(await handleAgentMcp(mcpToolCall("create_template", {
           title: "Release SOP",
           sections: [{ title: "Release", items: [{ title: "Verify" }] }],
         }), env));
 
-        // A retried create would make a duplicate, so the committed write is never an error.
         expect(dbMocks.db.batch).toHaveBeenCalledOnce();
         expect(body.result.isError).toBeUndefined();
         expect(body.result.structuredContent).toEqual({
@@ -641,10 +619,10 @@ describe("personal run MCP handler", () => {
 
     it("records the Run Key on the template's history", async () => {
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(NO_TEMPLATE_HOLDS_THE_SLUG)
         .mockResolvedValueOnce([{ ...ownedTemplate([]), version: 1 }]);
 
-      await handleAgentMcp(callTool("create_template", {
+      await handleAgentMcp(mcpToolCall("create_template", {
         title: "Release SOP",
         sections: [{ title: "Release", items: [{ title: "Verify" }] }],
       }), env);
@@ -665,13 +643,15 @@ describe("personal run MCP handler", () => {
     });
 
     it("rejects start_run when a concurrent start filled the limit after the pre-check", async () => {
+      const preCheckLeavingOneSlot = [{ count: 2 }];
+      const recountAfterTheGuardedInsertIsRefused = [{ count: 3 }];
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([ownedTemplate(largeSections(1))])
-        .mockResolvedValueOnce([{ count: 2 }]) // pre-check: one slot left
-        .mockResolvedValueOnce([{ count: 3 }]); // re-count after the guarded insert is refused
+        .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
+        .mockResolvedValueOnce(preCheckLeavingOneSlot)
+        .mockResolvedValueOnce(recountAfterTheGuardedInsertIsRefused);
       dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
 
       expect(body.result.isError).toBe(true);
       expect(body.result.structuredContent).toEqual(expect.objectContaining({
@@ -683,10 +663,10 @@ describe("personal run MCP handler", () => {
 
     it("inserts the run and its audit event only while the owner is under the limit", async () => {
       dbMocks.selectChain.limit
-        .mockResolvedValueOnce([ownedTemplate(largeSections(1))])
+        .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
         .mockResolvedValueOnce([{ count: 2 }]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
@@ -705,9 +685,9 @@ describe("personal run MCP handler", () => {
         plan: "pro",
         limits: { maxTemplates: null, maxActiveRuns: null },
       });
-      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(largeSections(1))]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.select).not.toHaveBeenCalled();
@@ -729,7 +709,7 @@ describe("personal run MCP handler", () => {
     });
     dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 3,
       operation: "set_subtask_completed",
@@ -749,7 +729,7 @@ describe("personal run MCP handler", () => {
   it("returns a structured edit conflict without writing", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 4,
       operation: "set_task_notes",
@@ -771,7 +751,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 5,
       operation: "set_task_notes",
@@ -799,7 +779,7 @@ describe("personal run MCP handler", () => {
       completed_by_user_id: "user-1",
     })]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_run_status",
@@ -826,7 +806,7 @@ describe("personal run MCP handler", () => {
       completed_by_user_id: "user-1",
     })]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_run_status",
@@ -844,7 +824,7 @@ describe("personal run MCP handler", () => {
   it("stamps the completer and time when a run becomes completed", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([finishedRun({ revision: 2 })]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_run_status",
@@ -858,12 +838,10 @@ describe("personal run MCP handler", () => {
     expect(typeof updates.completed_at).toBe("string");
   });
 
-  // The run page completes a run only once every task and Sub-task is done, and then freezes
-  // it, so an agent may not leave a run Completed with open work the page cannot reopen.
-  describe("completing a run with work left", () => {
+  describe("completing a run with work left, which the run page would freeze with open work it cannot reopen", () => {
     const completeRun = (run: JsonRecord) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      return handleAgentMcp(callTool("update_run", {
+      return handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_run_status",
@@ -930,7 +908,7 @@ describe("personal run MCP handler", () => {
       .mockResolvedValueOnce([personalRun({ status: "completed", revision: 2 })])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_run_status",
@@ -951,7 +929,7 @@ describe("personal run MCP handler", () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_run_status",
@@ -967,7 +945,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_task_notes",
@@ -988,7 +966,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
     dbMocks.db.batch.mockRejectedValueOnce(new Error("audit constraint secret"));
 
-    const response = await handleAgentMcp(callTool("update_run", {
+    const response = await handleAgentMcp(mcpToolCall("update_run", {
       runId: "run-1",
       expectedRevision: 2,
       operation: "set_task_notes",
@@ -1008,7 +986,7 @@ describe("personal run MCP handler", () => {
       items: JSON.stringify([{ id: "section-1", title: "Release", items: [{ id: "task-1", notes: "x".repeat(600_000) }] }]),
     })]);
 
-    const response = await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env);
+    const response = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
     const body = await response.json() as any;
 
     expect(body.result.isError).toBeUndefined();
@@ -1038,9 +1016,9 @@ describe("personal run MCP handler", () => {
     }
 
     it("records a run summary, not its content, when start_run creates a run", async () => {
-      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(largeSections(200 * 1024))]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(200 * 1024))]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
       const audit = await recordedAudit();
 
       expect(body.result.isError).toBeUndefined();
@@ -1060,12 +1038,12 @@ describe("personal run MCP handler", () => {
       ["set_run_status", { status: "completed" }],
     ])("records a compact %s change instead of copies of the run", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-        items: JSON.stringify(finishedFor(operation, largeSections(200 * 1024))),
-        retired_items: JSON.stringify(largeSections(20 * 1024)),
+        items: JSON.stringify(finishedIfCompleting(operation, sectionsOfAtLeast(200 * 1024))),
+        retired_items: JSON.stringify(sectionsOfAtLeast(20 * 1024)),
         revision: 4,
       })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 4,
         operation,
@@ -1090,7 +1068,7 @@ describe("personal run MCP handler", () => {
     it("does not rewrite run content for a status-only change", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([finishedRun({ progress: 40 })]);
 
-      await handleAgentMcp(callTool("update_run", {
+      await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_run_status",
@@ -1106,17 +1084,13 @@ describe("personal run MCP handler", () => {
   });
 
   describe("tool input schemas", () => {
-    // Model APIs reject tool schemas with a combinator at the root (the Messages API
-    // returns 400 for the whole request), and bridges that build function signatures
-    // read only top-level properties.
     const ROOT_KEYWORDS_CLIENTS_REJECT = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else", "$ref", "enum", "const"];
 
     async function listTools(): Promise<any[]> {
-      return (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
+      return (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
     }
 
-    // The checks a client makes against the advertised schema: known keys, types, enums, required.
-    function advertisedSchemaProblems(schema: any, args: JsonRecord): string[] {
+    function problemsAClientFindsAgainstTheAdvertisedSchema(schema: any, args: JsonRecord): string[] {
       const problems = (schema.required ?? []).filter((name: string) => !(name in args))
         .map((name: string) => `missing ${name}`);
       for (const [name, value] of Object.entries(args)) {
@@ -1162,13 +1136,13 @@ describe("personal run MCP handler", () => {
     ])("accepts %s arguments that match the advertised schema, with unused fields sent as null", async (operation, fields) => {
       const updateRun = (await listTools()).find((tool) => tool.name === "update_run");
       const args = { runId: "run-1", expectedRevision: 1, operation, ...fields };
-      expect(advertisedSchemaProblems(updateRun.inputSchema, args)).toEqual([]);
+      expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, args)).toEqual([]);
 
       const unused = Object.fromEntries(["taskId", "subtaskId", "completed", "notes", "status"]
         .filter((name) => !(name in fields))
         .map((name) => [name, null]));
       dbMocks.selectChain.limit.mockResolvedValueOnce([operation === "set_run_status" ? finishedRun() : personalRun()]);
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", { ...args, ...unused }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", { ...args, ...unused }), env));
 
       expect(body.error).toBeUndefined();
       expect(body.result.isError).toBeUndefined();
@@ -1176,7 +1150,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("names the offending field when update_run arguments do not fit the operation", async () => {
-      const missing = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const missing = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
@@ -1185,7 +1159,7 @@ describe("personal run MCP handler", () => {
       expect(missing.error.code).toBe(-32602);
       expect(missing.error.message).toContain("notes");
 
-      const extra = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const extra = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_completed",
@@ -1200,16 +1174,15 @@ describe("personal run MCP handler", () => {
   });
 
   describe("run size bounds", () => {
-    // A new run drops template notes (run-only state), so a template is padded with descriptions.
-    const templateSections = (targetBytes: number) => largeSections(targetBytes).map((section) => ({
+    const templateSectionsPaddedWithDescriptions = (targetBytes: number) => sectionsOfAtLeast(targetBytes).map((section) => ({
       ...section,
       items: (section.items as JsonRecord[]).map(({ notes, ...task }) => ({ ...task, description: notes })),
     }));
 
     it("rejects start_run on a template whose run would be too large to save, before writing anything", async () => {
-      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(templateSections(RUN_CONTENT_MAX_BYTES + 32 * 1024))]);
+      dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(templateSectionsPaddedWithDescriptions(RUN_CONTENT_MAX_BYTES + 32 * 1024))]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
 
       expect(body.result.isError).toBe(true);
       expect(body.result.structuredContent).toMatchObject({ error: "content_too_large", details: { limit: RUN_CONTENT_MAX_BYTES } });
@@ -1218,11 +1191,11 @@ describe("personal run MCP handler", () => {
     });
 
     it("starts a run from a template at the template limit and returns its fields without sections", async () => {
-      const sections = templateSections(TEMPLATE_CONTENT_MAX_BYTES - 24 * 1024);
+      const sections = templateSectionsPaddedWithDescriptions(TEMPLATE_CONTENT_MAX_BYTES - 24 * 1024);
       expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sections)]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
@@ -1237,12 +1210,12 @@ describe("personal run MCP handler", () => {
     });
 
     it("rejects set_task_notes that pushes a run past the content limit without writing", async () => {
-      const sections = largeSections(RUN_CONTENT_MAX_BYTES - 24 * 1024);
+      const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES - 24 * 1024);
       expect(contentSaveBytes(sections)).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
       expect(contentSaveBytes(sections) + 20_000).toBeGreaterThan(RUN_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
@@ -1256,15 +1229,16 @@ describe("personal run MCP handler", () => {
     });
 
     it("counts notes by UTF-8 bytes, not characters", async () => {
-      // Room for 20,000 characters of ASCII, but not for 10,000 three-byte characters (30,000
-      // bytes, within the notes limit).
-      const sections = largeSections(RUN_CONTENT_MAX_BYTES - 32 * 1024);
-      const room = RUN_CONTENT_MAX_BYTES - contentSaveBytes(sections);
-      expect(room).toBeGreaterThan(20_000);
-      expect(room).toBeLessThan(30_000);
+      const asciiNotes = "n".repeat(20_000);
+      const threeByteNotes = "界".repeat(10_000);
+      const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES - 32 * 1024);
+      const bytesLeftUnderTheRunLimit = RUN_CONTENT_MAX_BYTES - contentSaveBytes(sections);
+      expect(bytesLeftUnderTheRunLimit).toBeGreaterThan(asciiNotes.length);
+      expect(bytesLeftUnderTheRunLimit).toBeLessThan(new TextEncoder().encode(threeByteNotes).byteLength);
+      expect(new TextEncoder().encode(threeByteNotes).byteLength).toBeLessThanOrEqual(MAX_TASK_NOTES_BYTES);
       const setNotes = (notes: string) => {
         dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
-        return handleAgentMcp(callTool("update_run", {
+        return handleAgentMcp(mcpToolCall("update_run", {
           runId: "run-1",
           expectedRevision: 1,
           operation: "set_task_notes",
@@ -1273,9 +1247,9 @@ describe("personal run MCP handler", () => {
         }), env).then(toolBody);
       };
 
-      expect((await setNotes("界".repeat(10_000))).result.structuredContent.error).toBe("content_too_large");
+      expect((await setNotes(threeByteNotes)).result.structuredContent.error).toBe("content_too_large");
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
-      expect((await setNotes("n".repeat(20_000))).result.isError).toBeUndefined();
+      expect((await setNotes(asciiNotes)).result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
     });
 
@@ -1286,11 +1260,11 @@ describe("personal run MCP handler", () => {
       ["set_run_status", { status: "completed" }],
     ])("never reports a committed %s on a run over the content limit as a failure", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-        items: JSON.stringify(finishedFor(operation, largeSections(RUN_CONTENT_MAX_BYTES + 64 * 1024))),
+        items: JSON.stringify(finishedIfCompleting(operation, sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024))),
         revision: 7,
       })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 7,
         operation,
@@ -1301,16 +1275,14 @@ describe("personal run MCP handler", () => {
       expect(body.result.isError).toBeUndefined();
       expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
     });
 
     it.each([
       ["set_task_completed", { taskId: "task-1", completed: false }],
       ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: false }],
-    ])("allows unchecking with %s on a run already over the content limit", async (operation, fields) => {
-      // "isCompleted":false is one byte longer than "isCompleted":true, so unchecking grows the
-      // stored run slightly; the limit counts every task as unticked, so it must still commit.
-      const sections = largeSections(RUN_CONTENT_MAX_BYTES + 64 * 1024);
+    ])("allows unchecking with %s on a run already over the content limit, which counts every task as unticked", async (operation, fields) => {
+      const sections = sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024);
       const task1 = (sections[0].items as JsonRecord[])[0];
       task1.isCompleted = true;
       for (const subtask of (task1.contents as JsonRecord[])[0].subItems as JsonRecord[]) subtask.isCompleted = true;
@@ -1321,7 +1293,7 @@ describe("personal run MCP handler", () => {
         revision: 7,
       })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 7,
         operation,
@@ -1332,47 +1304,46 @@ describe("personal run MCP handler", () => {
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
       expect(body.result.structuredContent.task).toEqual(expect.objectContaining({ id: "task-1", isCompleted: false }));
-      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, identity);
+      expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
     });
 
     it("returns every committed mutation within the result bound", async () => {
-      const tools = (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
+      const tools = (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
       const mutatingTools = tools.filter((tool: any) => tool.annotations.readOnlyHint === false)
         .map((tool: any) => tool.name);
       expect(mutatingTools).toEqual(["create_template", "update_template", "start_run", "update_run"]);
 
-      // A template the write stored, read back too large to return whole.
-      const storedTemplate = { ...ownedTemplate(largeSections(600 * 1024)), version: 2, is_public: false, slug: "release-sop" };
+      const storedTemplateTooLargeToReturnWhole = { ...ownedTemplate(sectionsOfAtLeast(600 * 1024)), version: 2, is_public: false, slug: "release-sop" };
       const calls: Record<string, () => Promise<Response>> = {
         create_template: () => {
           dbMocks.selectChain.limit
-            .mockResolvedValueOnce([]) // the slug is free
-            .mockResolvedValueOnce([storedTemplate]);
-          return handleAgentMcp(callTool("create_template", {
+            .mockResolvedValueOnce(NO_TEMPLATE_HOLDS_THE_SLUG)
+            .mockResolvedValueOnce([storedTemplateTooLargeToReturnWhole]);
+          return handleAgentMcp(mcpToolCall("create_template", {
             title: "Release SOP",
             sections: [{ title: "Release", items: [{ title: "Verify" }] }],
           }), env);
         },
         update_template: () => {
           dbMocks.selectChain.limit
-            .mockResolvedValueOnce([{ ...storedTemplate, version: 1 }])
-            .mockResolvedValueOnce([storedTemplate]);
+            .mockResolvedValueOnce([{ ...storedTemplateTooLargeToReturnWhole, version: 1 }])
+            .mockResolvedValueOnce([storedTemplateTooLargeToReturnWhole]);
           dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 1 } }, { meta: { changes: 1 } }]);
-          return handleAgentMcp(callTool("update_template", {
+          return handleAgentMcp(mcpToolCall("update_template", {
             templateId: "template-1",
             expectedVersion: 1,
             title: "Release SOP v2",
           }), env);
         },
         start_run: () => {
-          dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(templateSections(TEMPLATE_CONTENT_MAX_BYTES - 24 * 1024))]);
-          return handleAgentMcp(callTool("start_run", { templateId: "template-1" }), env);
+          dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(templateSectionsPaddedWithDescriptions(TEMPLATE_CONTENT_MAX_BYTES - 24 * 1024))]);
+          return handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env);
         },
         update_run: () => {
           dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-            items: JSON.stringify(largeSections(RUN_CONTENT_MAX_BYTES - 24 * 1024)),
+            items: JSON.stringify(sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES - 24 * 1024)),
           })]);
-          return handleAgentMcp(callTool("update_run", {
+          return handleAgentMcp(mcpToolCall("update_run", {
             runId: "run-1",
             expectedRevision: 1,
             operation: "set_task_completed",
@@ -1406,7 +1377,7 @@ describe("personal run MCP handler", () => {
     it("returns the changed task and a compact run summary from update_run", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 2,
         operation: "set_task_notes",
@@ -1424,12 +1395,12 @@ describe("personal run MCP handler", () => {
     });
 
     it("names a changed task too large for one result instead of returning it", async () => {
-      // Short notes on a task whose own content, from its template, is too large for one result.
+      const templateTextTooLargeForOneResult = "Read the runbook first. ".repeat(1_500);
       const [section] = JSON.parse(personalRun().items as string);
-      section.items[0].contents.unshift({ id: "guide", type: "text", value: "Read the runbook first. ".repeat(1_500) });
+      section.items[0].contents.unshift({ id: "guide", type: "text", value: templateTextTooLargeForOneResult });
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify([section]), revision: 2 })]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 2,
         operation: "set_task_notes",
@@ -1449,10 +1420,10 @@ describe("personal run MCP handler", () => {
     });
 
     it("reads a run too large for one result a section, a page of tasks, or a task at a time", async () => {
-      const oversized = personalRun({ items: JSON.stringify(largeSections(600 * 1024)) });
+      const oversized = personalRun({ items: JSON.stringify(sectionsOfAtLeast(600 * 1024)) });
       const read = async (args: JsonRecord) => {
         dbMocks.selectChain.limit.mockResolvedValueOnce([oversized]);
-        const body = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", ...args }), env));
+        const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", ...args }), env));
         expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
         return body.result;
       };
@@ -1474,7 +1445,7 @@ describe("personal run MCP handler", () => {
       expect((await read({ taskId: "nope" })).structuredContent.error).toBe("task_not_found");
 
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun()]);
-      const section = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", sectionId: "section-1" }), env));
+      const section = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", sectionId: "section-1" }), env));
       expect(section.result.structuredContent).toEqual({
         run: { id: "run-1", revision: 1 },
         section: expect.objectContaining({ id: "section-1", title: "Release" }),
@@ -1487,7 +1458,7 @@ describe("personal run MCP handler", () => {
 
     const setNotes = async (notes: string, run = personalRun()) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      return toolBody(await handleAgentMcp(callTool("update_run", {
+      return toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
@@ -1498,7 +1469,7 @@ describe("personal run MCP handler", () => {
 
     it("keeps the limits in the advertised schema", async () => {
       expect(MAX_TASK_NOTES_BYTES).toBe(30 * 1024);
-      const tools = (await toolBody(await handleAgentMcp(rpcRequest("tools/list"), env))).result.tools;
+      const tools = (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
       const updateRun = tools.find((tool: any) => tool.name === "update_run");
       expect(updateRun.inputSchema.properties.notes).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
       for (const text of [updateRun.description, updateRun.inputSchema.properties.notes.description]) {
@@ -1525,7 +1496,7 @@ describe("personal run MCP handler", () => {
 
       const stored = dbMocks.updateChain.set.mock.calls[0][0].items as string;
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: stored, revision: 2 })]);
-      const read = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "task-1" }), env));
+      const read = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", taskId: "task-1" }), env));
       expect(read.result.structuredContent).toEqual({
         run: { id: "run-1", revision: 2 },
         sectionId: "section-1",
@@ -1556,7 +1527,7 @@ describe("personal run MCP handler", () => {
       const run = personalRun({ items: JSON.stringify([section]) });
 
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      const read = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", taskId: "task-1" }), env));
+      const read = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", taskId: "task-1" }), env));
       expect(read.result.structuredContent.part).toMatchObject({ of: "task", from: 0 });
       expect(typeof read.result.structuredContent.nextCursor).toBe("string");
 
@@ -1570,12 +1541,12 @@ describe("personal run MCP handler", () => {
   });
 
   it("applies a process-local request limit per key", async () => {
-    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, keyId: "rate-limited-key" });
+    vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...runKeyWithEveryPermission, keyId: "rate-limited-key" });
     for (let index = 0; index < 120; index += 1) {
-      const response = await handleAgentMcp(rpcRequest("ping", undefined, index + 1), env);
+      const response = await handleAgentMcp(mcpRequest("ping", undefined, index + 1), env);
       expect(response.status).toBe(200);
     }
-    const limited = await handleAgentMcp(rpcRequest("ping", undefined, 999), env);
+    const limited = await handleAgentMcp(mcpRequest("ping", undefined, 999), env);
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("Retry-After"))).toBeGreaterThan(0);
   });
@@ -1586,12 +1557,12 @@ describe("personal run MCP handler", () => {
     ];
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
 
-    const getResponse = await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env);
+    const getResponse = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
     const getBody = await getResponse.json() as any;
     expect(getBody.result.structuredContent.run.retiredItems).toEqual(retired);
 
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
-    const listResponse = await handleAgentMcp(callTool("list_runs"), env);
+    const listResponse = await handleAgentMcp(mcpToolCall("list_runs"), env);
     const listBody = await listResponse.json() as any;
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("retiredItems");
     expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("sections");
@@ -1625,7 +1596,7 @@ describe("personal run MCP handler", () => {
     it("leaves them out of get_run, live and retired", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
       const { sections, retiredItems } = body.result.structuredContent.run;
 
       expectOnlySubTasks(sections[0].items[0]);
@@ -1636,7 +1607,7 @@ describe("personal run MCP handler", () => {
     it("leaves them out of the task update_run returns, but keeps the stored ones on the task", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
 
-      const body = await toolBody(await handleAgentMcp(callTool("update_run", {
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
@@ -1674,33 +1645,30 @@ describe("personal run MCP handler", () => {
       itemTitle: "Verify",
       subItem: { id: "sub-3", title: "Old check", isCompleted: true },
     };
-    // Small live sections; one retired section over the result bound on its own.
-    const retiredHeavyRun = personalRun({
+    const runWithARetiredSectionOverTheBound = personalRun({
       retired_items: JSON.stringify([retiredSection("old-section", 2, 30_000), retiredTask, retiredSubtask]),
     });
 
-    let readCount = 0;
     async function getRun(run: JsonRecord, args: JsonRecord = {}) {
-      // A key of its own per read keeps a long walk under the per-key request limit.
-      vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...identity, keyId: `retired-read-${readCount++}` });
+      authenticateWithAFreshRunKey(authenticatePersonalRunKey);
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      const body = await toolBody(await handleAgentMcp(callTool("get_run", { runId: "run-1", ...args }), env));
+      const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", ...args }), env));
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
       return body.result;
     }
 
     it("reads retired work with retired: true, all of it or one section's or task's", async () => {
-      const whole = await getRun(retiredHeavyRun);
+      const whole = await getRun(runWithARetiredSectionOverTheBound);
       expect(whole.structuredContent).toMatchObject({ sectionsOmitted: true, run: { retiredCount: 3 } });
 
-      const section = await getRun(retiredHeavyRun, { retired: true, sectionId: "section-1" });
+      const section = await getRun(runWithARetiredSectionOverTheBound, { retired: true, sectionId: "section-1" });
       expect(section.structuredContent).toEqual({ run: { id: "run-1", revision: 1 }, retiredItems: [retiredTask, retiredSubtask] });
       expect(section.content[0].text).toMatch(/^Loaded 2 retired entries\./);
 
-      const task = await getRun(retiredHeavyRun, { retired: true, taskId: "task-1" });
+      const task = await getRun(runWithARetiredSectionOverTheBound, { retired: true, taskId: "task-1" });
       expect(task.structuredContent.retiredItems).toEqual([retiredSubtask]);
 
-      const oldTask = await getRun(retiredHeavyRun, { retired: true, sectionId: "old-section", taskId: "old-section-task-1" });
+      const oldTask = await getRun(runWithARetiredSectionOverTheBound, { retired: true, sectionId: "old-section", taskId: "old-section-task-1" });
       expect(oldTask.structuredContent.retiredItems).toEqual([{
         kind: "section",
         section: {
@@ -1710,15 +1678,15 @@ describe("personal run MCP handler", () => {
         },
       }]);
 
-      const live = await getRun(retiredHeavyRun, { sectionId: "old-section" });
+      const live = await getRun(runWithARetiredSectionOverTheBound, { sectionId: "old-section" });
       expect(live.structuredContent).toMatchObject({ error: "section_not_found" });
       expect(live.structuredContent.message).toContain("retired: true");
     });
 
     it.each([
-      ["a large retired section", retiredHeavyRun],
+      ["a large retired section", runWithARetiredSectionOverTheBound],
       ["large live and retired work in the same section", personalRun({
-        items: JSON.stringify(largeSections(600 * 1024)),
+        items: JSON.stringify(sectionsOfAtLeast(600 * 1024)),
         retired_items: JSON.stringify([
           retiredSection("gone", 40, 15_000),
           ...Array.from({ length: 60 }, (_, index) => ({
@@ -1743,7 +1711,7 @@ describe("personal run MCP handler", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
-      const toolRequest = callTool("get_run", { runId: "run-1" });
+      const toolRequest = mcpToolCall("get_run", { runId: "run-1" });
       toolRequest.headers.set("Authorization", "Bearer slrk_secret-canary");
       toolRequest.headers.set("X-Request-Id", "req-123");
       await handleAgentMcp(toolRequest, env);
@@ -1778,7 +1746,7 @@ describe("personal run MCP handler", () => {
   it("refuses an IP that keeps failing authentication before reading D1", async () => {
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
     const fromIp = () => {
-      const request = rpcRequest("ping");
+      const request = mcpRequest("ping");
       request.headers.set("CF-Connecting-IP", "203.0.113.7");
       return request;
     };
@@ -1791,7 +1759,7 @@ describe("personal run MCP handler", () => {
     expect(blocked.status).toBe(429);
     expect(authenticatePersonalRunKey).not.toHaveBeenCalled();
 
-    const otherIp = rpcRequest("ping");
+    const otherIp = mcpRequest("ping");
     otherIp.headers.set("CF-Connecting-IP", "203.0.113.8");
     expect((await handleAgentMcp(otherIp, env)).status).toBe(401);
   });
@@ -1799,13 +1767,13 @@ describe("personal run MCP handler", () => {
   it("counts failed authentication from IPv6 addresses per /64, like the router's limits", async () => {
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
     const fromIp = (ip: string) => {
-      const request = rpcRequest("ping");
+      const request = mcpRequest("ping");
       request.headers.set("CF-Connecting-IP", ip);
       return request;
     };
-    // A new address in the same /64 for every attempt.
+    const newAddressInTheSame64 = (attempt: number) => `2001:db8:5:6::${(attempt + 1).toString(16)}`;
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      expect((await handleAgentMcp(fromIp(`2001:db8:5:6::${(attempt + 1).toString(16)}`), env)).status).toBe(401);
+      expect((await handleAgentMcp(fromIp(newAddressInTheSame64(attempt)), env)).status).toBe(401);
     }
     vi.mocked(authenticatePersonalRunKey).mockClear();
 
@@ -1817,7 +1785,7 @@ describe("personal run MCP handler", () => {
   it("hides a personal run owned by another user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
 
-    const response = await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env);
+    const response = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
     const body = await response.json() as any;
 
     expect(body.result.isError).toBe(true);
@@ -1825,9 +1793,6 @@ describe("personal run MCP handler", () => {
   });
 
   describe("strict JSON clients", () => {
-    // JSON.stringify writes a paired surrogate (an emoji) as the character itself and
-    // escapes only a lone surrogate, which serde_json (the Codex client) rejects. Any
-    // surrogate escape in a response body therefore breaks the whole response.
     const LONE_SURROGATE_ESCAPE = /\\ud[89a-f][0-9a-f]{2}/i;
 
     const ownedTemplateRow = (overrides: JsonRecord) => ({
@@ -1847,7 +1812,7 @@ describe("personal run MCP handler", () => {
         ownedTemplateRow({ description: `${"a".repeat(498)}\u{1F680}${"b".repeat(60)}` }),
       ]);
 
-      const raw = await (await handleAgentMcp(callTool("list_templates"), env)).text();
+      const raw = await (await handleAgentMcp(mcpToolCall("list_templates"), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
       const description = JSON.parse(raw).result.structuredContent.templates[0].description as string;
@@ -1860,7 +1825,7 @@ describe("personal run MCP handler", () => {
         personalRun({ title: `${"R".repeat(158)}\u{1F680}${"x".repeat(40)}` }),
       ]);
 
-      const raw = await (await handleAgentMcp(callTool("get_run", { runId: "run-1" }), env)).text();
+      const raw = await (await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
       expect(JSON.parse(raw).result.structuredContent.run.title).toBe(`${"R".repeat(158)}\u{1F680}${"x".repeat(40)}`);
@@ -1871,7 +1836,7 @@ describe("personal run MCP handler", () => {
         ownedTemplateRow({ title: "Broken \uD83D title", description: "Half \uDE80 emoji" }),
       ]);
 
-      const raw = await (await handleAgentMcp(callTool("list_templates"), env)).text();
+      const raw = await (await handleAgentMcp(mcpToolCall("list_templates"), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
       const [template] = JSON.parse(raw).result.structuredContent.templates;
@@ -1916,7 +1881,7 @@ describe("personal run MCP handler", () => {
       const logs = captureLogs();
       dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("D1_ERROR: no such column: content_version"));
 
-      const response = await handleAgentMcp(withRequestId(callTool("list_templates")), env);
+      const response = await handleAgentMcp(withRequestId(mcpToolCall("list_templates")), env);
 
       expect(response.status).toBe(200);
       expect((await response.json() as any).error).toEqual({ code: -32603, message: "Internal error" });
@@ -1938,7 +1903,7 @@ describe("personal run MCP handler", () => {
       );
       dbMocks.db.batch.mockRejectedValueOnce(queryError);
 
-      await handleAgentMcp(withRequestId(callTool("update_run", {
+      await handleAgentMcp(withRequestId(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 2,
         operation: "set_task_notes",
@@ -1962,7 +1927,7 @@ describe("personal run MCP handler", () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
       dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
 
-      await handleAgentMcp(withRequestId(callTool("update_run", {
+      await handleAgentMcp(withRequestId(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 2,
         operation: "set_task_notes",
@@ -1984,15 +1949,15 @@ describe("personal run MCP handler", () => {
       const logs = captureLogs();
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
 
-      await handleAgentMcp(withRequestId(callTool("update_run", {
+      await handleAgentMcp(withRequestId(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 4,
         operation: "set_task_notes",
         taskId: "task-1",
         notes: "Verified locally",
       })), env);
-      await handleAgentMcp(withRequestId(callTool("get_run", {})), env);
-      await handleAgentMcp(withRequestId(callTool("delete_everything")), env);
+      await handleAgentMcp(withRequestId(mcpToolCall("get_run", {})), env);
+      await handleAgentMcp(withRequestId(mcpToolCall("delete_everything")), env);
 
       expect(logs.errors()).toEqual([]);
     });
@@ -2002,7 +1967,7 @@ describe("personal run MCP handler", () => {
       vi.mocked(authenticatePersonalRunKey).mockRejectedValueOnce(new Error("D1_ERROR: database is locked"));
 
       const response = await handleAgentMcp(
-        withRequestId(callTool("list_templates"), "req-789", "Bearer slrk_secret_run_key"),
+        withRequestId(mcpToolCall("list_templates"), "req-789", "Bearer slrk_secret_run_key"),
         env,
       );
 
@@ -2019,7 +1984,7 @@ describe("personal run MCP handler", () => {
       const logs = captureLogs();
       vi.mocked(markPersonalRunKeyUsed).mockRejectedValueOnce(new Error("D1_ERROR: database is locked"));
 
-      const response = await handleAgentMcp(withRequestId(callTool("list_runs")), env);
+      const response = await handleAgentMcp(withRequestId(mcpToolCall("list_runs")), env);
 
       expect((await response.json() as any).result.isError).toBeUndefined();
       expect(logs.errors()).toEqual([]);

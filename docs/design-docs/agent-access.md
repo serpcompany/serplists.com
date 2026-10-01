@@ -34,7 +34,10 @@ management routes need a browser session:
 - `GET /api/agent-keys` returns at most 50 keys, active ones first, then newest. A user
   holds at most 10 active keys, so that is every active key and the most recent revoked
   ones (listing still scans every revoked key: TD-25).
-- `DELETE /api/agent-keys/:id` revokes a key.
+- `DELETE /api/agent-keys/:id` revokes a key and returns its `revokedAt`. A key already
+  revoked (in another tab, or by a retry whose first response was lost) gets the same
+  answer with the time it was first revoked, which stays stored; a missing key or another
+  user's key gets `404`.
 - `GET /api/agent-keys/connection` names the MCP endpoint Agent Access shows, which can
   differ from the page's own origin ([SECURITY.md](../SECURITY.md#model)): `mcpEndpoint` is
   null when no host the MCP host check accepts is configured, and `hostMismatch` says the
@@ -106,8 +109,8 @@ its call.
 
 `update_run` and `update_template` advertise one flat object, describing in prose which
 fields each operation takes. Model APIs reject a `oneOf`, `anyOf` or `allOf` at the root of a
-tool schema, and many clients read only top-level properties. A Zod discriminated union then
-enforces each operation's fields.
+tool schema (the Messages API refuses the whole request with `400`), and many clients read
+only top-level properties. A Zod discriminated union then enforces each operation's fields.
 
 ## Result bounds
 

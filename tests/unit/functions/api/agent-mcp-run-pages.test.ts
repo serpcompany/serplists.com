@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
+import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
   describeRunRead,
   readRun,
@@ -10,15 +10,18 @@ import {
   type RunReadArgs,
   type RunView,
 } from "@functions/api/handlers/agentMcpRunPages";
-import { ToolError } from "@functions/api/handlers/agentMcpTools";
+import { MAX_TASK_NOTES_LENGTH } from "@functions/api/handlers/agentMcpTools";
+import { RUN_KEY_REQUESTS_PER_MINUTE } from "@functions/api/utils/mcp-limits";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
+import { asTheClientReceives, cursorMovedPastTheEnd, resultBytes, toolErrorOf } from "../../../support/agentMcp";
+import { MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse, TEXT_COSTLIER_IN_JSON } from "../../../support/jsonText";
+import { reproducibleShapes } from "../../../support/reproducibleRandom";
 import { readRetiredWork, readRunInFull } from "../../../support/runPages";
 
 type JsonRecord = Record<string, unknown>;
 
-// What a client receives: agentMcp.ts sends every string well formed.
-const onWire = <T>(value: T): T => JSON.parse(toJson(value)) as T;
-const resultBytes = (value: unknown) => new TextEncoder().encode(toJson(value)).byteLength;
+const D1_ROW_MAX_BYTES = 2_000_000;
+const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 
 const row = (sections: unknown[], retired: unknown[] = [], overrides: JsonRecord = {}): JsonRecord => ({
   id: "run-1",
@@ -42,8 +45,7 @@ const row = (sections: unknown[], retired: unknown[] = [], overrides: JsonRecord
 
 const viewOf = (sections: unknown[], retired: unknown[] = [], overrides: JsonRecord = {}) => runView(row(sections, retired, overrides));
 
-// A task as a run stores it: completion, notes, a text block and a Sub-tasks block.
-const task = (id: string, notesBytes = 100, notes = "x") => ({
+const runTask = (id: string, notesBytes = 100, notes = "x") => ({
   id,
   title: `Task ${id}`,
   description: "",
@@ -58,7 +60,7 @@ const task = (id: string, notesBytes = 100, notes = "x") => ({
 const section = (id: string, tasks: JsonRecord[], title = `Section ${id}`) => ({ id, title, items: tasks });
 
 const sections = (count: number, tasks: number, notesBytes: number) =>
-  Array.from({ length: count }, (_, s) => section(`s${s}`, Array.from({ length: tasks }, (_, t) => task(`t${s}-${t}`, notesBytes))));
+  Array.from({ length: count }, (_, s) => section(`s${s}`, Array.from({ length: tasks }, (_, t) => runTask(`t${s}-${t}`, notesBytes))));
 
 const retiredSection = (id: string, tasks: JsonRecord[]) => ({ kind: "section", section: section(id, tasks, `Retired ${id}`) });
 const retiredTask = (sectionId: string, retired: JsonRecord) => ({ kind: "item", sectionId, sectionTitle: "Release", item: retired });
@@ -73,48 +75,21 @@ const retiredSubTask = (sectionId: string, itemId: string, id: string) => ({
 const wholeOf = (view: RunView) => ({ ...view.header, sections: view.sections, retiredItems: view.retired });
 const ref = { id: "run-1", revision: 5 };
 
-function toolErrorOf(action: () => unknown): ToolError {
-  try {
-    action();
-  } catch (error) {
-    if (error instanceof ToolError) return error;
-    throw error;
-  }
-  throw new Error("expected a ToolError");
-}
-
-// Reads the whole run as a client receives it, checking every result against the bound.
-async function readBack(view: RunView) {
-  const read = await readRunInFull((args) => onWire(readRun(view, args as RunReadArgs)), "run-1");
+async function readInFullWithinTheBound(view: RunView) {
+  const read = await readRunInFull((args) => asTheClientReceives(readRun(view, args as RunReadArgs)), "run-1");
   for (const result of read.results) expect(resultBytes(result)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
   return read;
 }
 
-// Every page of one read, following nextCursor.
-function pagesOf(view: RunView, args: RunReadArgs): JsonRecord[] {
+function everyPageOf(view: RunView, args: RunReadArgs): JsonRecord[] {
   const pages = [readRun(view, args)];
   while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readRun(view, { cursor: pages.at(-1)?.nextCursor as string }));
   return pages;
 }
 
-// A small deterministic generator, so a failing shape can be reproduced.
-function random(seed: number) {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Text that costs more inside JSON than it looks: escapes, control characters, several scripts,
-// emoji (surrogate pairs) and a lone surrogate half.
-const AWKWARD = 'He said "ship it" \\ now\n\ttabs\u0001\u001f · Ünïcödé 日本語テキスト 🚀🧪 \uD83D end';
-
 describe("get_run results", () => {
   it("returns a run whole up to the bound, and an outline one byte over", () => {
-    const sized = (notesBytes: number) => viewOf([section("s1", [task("t1", notesBytes)])]);
+    const sized = (notesBytes: number) => viewOf([section("s1", [runTask("t1", notesBytes)])]);
     const base = resultBytes(readRun(sized(0), {}));
     const atBound = readRun(sized(MAX_RESULT_BYTES - base), {});
     const overBound = readRun(sized(MAX_RESULT_BYTES - base + 1), {});
@@ -128,8 +103,8 @@ describe("get_run results", () => {
 
   it("outlines a larger run: its fields, counts, retired work, and each section's id, title, tasks, and size", () => {
     const longTitle = `Launch ${"L".repeat(300)}`;
-    const retired = [retiredTask("s0", task("gone", 400))];
-    const view = viewOf([...sections(3, 20, 1_000), section("long", [task("t-long")], longTitle)], retired);
+    const retired = [retiredTask("s0", runTask("gone", 400))];
+    const view = viewOf([...sections(3, 20, 1_000), section("long", [runTask("t-long")], longTitle)], retired);
     const outline = readRun(view, {});
 
     expect(outline).toEqual({
@@ -159,7 +134,7 @@ describe("get_run results", () => {
 
   it("pages an outline longer than one result and reads every section behind it", async () => {
     const view = viewOf(sections(600, 1, 100));
-    const { run, results } = await readBack(view);
+    const { run, results } = await readInFullWithinTheBound(view);
 
     const outlinePages = results.filter((result) => Array.isArray(result.outline));
     expect(outlinePages.length).toBeGreaterThan(1);
@@ -177,8 +152,8 @@ describe("get_run results", () => {
   });
 
   it("pages a section too large for one result a run of whole tasks at a time, its fields first", () => {
-    const view = viewOf([section("big", Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500)))]);
-    const pages = pagesOf(view, { sectionId: "big" });
+    const view = viewOf([section("big", Array.from({ length: 200 }, (_, index) => runTask(`t${index}`, 500)))]);
+    const pages = everyPageOf(view, { sectionId: "big" });
 
     expect(pages.length).toBeGreaterThan(3);
     const [first, second] = pages.map((page) => page.section as JsonRecord);
@@ -193,8 +168,8 @@ describe("get_run results", () => {
   });
 
   it("returns a task whose notes are too large for one result in parts whose text joins into it", () => {
-    const view = viewOf([section("s1", [task("small"), task("huge", 100_000, AWKWARD), task("after")])]);
-    const pages = pagesOf(view, { taskId: "huge" });
+    const view = viewOf([section("s1", [runTask("small"), runTask("huge", 100_000, TEXT_COSTLIER_IN_JSON), runTask("after")])]);
+    const pages = everyPageOf(view, { taskId: "huge" });
 
     expect(pages.length).toBeGreaterThan(3);
     for (const page of pages) {
@@ -202,21 +177,15 @@ describe("get_run results", () => {
       expect(page).toMatchObject({ run: ref, sectionId: "s1", part: { of: "task", index: 1 } });
     }
     const text = pages.map((page) => (page.part as JsonRecord).text).join("");
-    expect(JSON.parse(text)).toEqual(onWire((view.sections[0].items as JsonRecord[])[1]));
+    expect(JSON.parse(text)).toEqual(asTheClientReceives((view.sections[0].items as JsonRecord[])[1]));
     expect(describeRunRead(pages[0])).toContain("join its parts' text in order");
   });
 
   it("keeps every result within the bound and reads any run back in full", async () => {
     for (let seed = 1; seed <= 20; seed += 1) {
-      const next = random(seed);
-      const pick = (max: number) => Math.floor(next() * max);
-      const text = (max: number) => {
-        const length = pick(max);
-        const source = next() < 0.3 ? AWKWARD : "Checked the rollback plan with the on-call engineer. ";
-        return source.repeat(Math.ceil(length / source.length) + 1).slice(0, length);
-      };
+      const { next, pick, text } = reproducibleShapes(seed, "Checked the rollback plan with the on-call engineer. ");
       const randomTask = (id: string) => ({
-        ...task(id, 0),
+        ...runTask(id, 0),
         title: text(80) || "Task",
         notes: text(next() < 0.03 ? 60_000 : 400),
         isCompleted: next() < 0.5,
@@ -230,20 +199,20 @@ describe("get_run results", () => {
         return retiredSubTask(`s${pick(live.length)}`, `s0-t0`, `r${index}-sub`);
       });
       const view = viewOf(live, retired, { title: text(200) || "Run" });
-      const { run, results } = await readBack(view);
+      const { run, results } = await readInFullWithinTheBound(view);
 
-      expect(run, `seed ${seed}`).toEqual(onWire(wholeOf(view)));
+      expect(run, `seed ${seed}`).toEqual(asTheClientReceives(wholeOf(view)));
       expect(results.every((result) => resultBytes(result) <= MAX_RESULT_BYTES), `seed ${seed}`).toBe(true);
     }
   }, 60_000);
 });
 
 describe("get_run retired work", () => {
-  const live = [section("s1", [task("t1"), task("t2")]), section("s2", [task("t3")])];
+  const live = [section("s1", [runTask("t1"), runTask("t2")]), section("s2", [runTask("t3")])];
   const retired = [
-    retiredSection("old", [task("old-1"), task("old-2")]),
-    retiredTask("s1", task("dns")),
-    retiredTask("old", { ...task("dns"), title: "DNS, earlier" }),
+    retiredSection("old", [runTask("old-1"), runTask("old-2")]),
+    retiredTask("s1", runTask("dns")),
+    retiredTask("old", { ...runTask("dns"), title: "DNS, earlier" }),
     retiredSubTask("s1", "t1", "sub-9"),
     { kind: "section" },
     { sectionId: "s1" },
@@ -263,12 +232,12 @@ describe("get_run retired work", () => {
     expect(readRun(view, { retired: true, sectionId: "old" }).retiredItems).toEqual([view.retired[0], view.retired[2]]);
     expect(readRun(view, { retired: true, taskId: "t1" }).retiredItems).toEqual([view.retired[3]]);
     expect(readRun(view, { retired: true, taskId: "dns" }).retiredItems).toEqual([view.retired[1], view.retired[2]]);
-    // A retired section narrowed to one of its tasks.
-    const old = view.retired[0].section as JsonRecord;
-    expect(readRun(view, { retired: true, sectionId: "old", taskId: "old-2" }).retiredItems).toEqual([
-      { kind: "section", section: { ...old, items: [(old.items as JsonRecord[])[1]] } },
-    ]);
-    // A live section or task without retired work has none.
+    const oldSection = view.retired[0].section as JsonRecord;
+    const oldSectionNarrowedToItsSecondTask = { kind: "section", section: { ...oldSection, items: [(oldSection.items as JsonRecord[])[1]] } };
+    expect(readRun(view, { retired: true, sectionId: "old", taskId: "old-2" }).retiredItems).toEqual([oldSectionNarrowedToItsSecondTask]);
+  });
+
+  it("reads no retired work for a live section or task that has none", () => {
     expect(readRun(view, { retired: true, sectionId: "s2" }).retiredItems).toEqual([]);
     expect(readRun(view, { retired: true, taskId: "t3" }).retiredItems).toEqual([]);
   });
@@ -291,14 +260,14 @@ describe("get_run retired work", () => {
     expect(toolErrorOf(() => readRun(view, { taskId: "missing" }))).toMatchObject({ code: "task_not_found", message: "Task not found (taskId)" });
   });
 
-  it("pages retired work too large for one result, whole entries first and parts of any larger one", async () => {
+  it("pages retired work too large for one result, all of it or a section's, whole entries first and parts of any larger one", async () => {
     const many = [
-      ...Array.from({ length: 300 }, (_, index) => retiredTask("s1", task(`gone-${index}`, 400))),
-      retiredSection("huge", [task("huge-1", 90_000, AWKWARD)]),
+      ...Array.from({ length: 300 }, (_, index) => retiredTask("s1", runTask(`gone-${index}`, 400))),
+      retiredSection("huge", [runTask("huge-1", 90_000, TEXT_COSTLIER_IN_JSON)]),
       retiredSubTask("s1", "t1", "sub-last"),
     ];
     const large = viewOf(live, many);
-    const pages = pagesOf(large, { retired: true });
+    const pages = everyPageOf(large, { retired: true });
 
     expect(pages.length).toBeGreaterThan(8);
     for (const page of pages) {
@@ -308,19 +277,18 @@ describe("get_run retired work", () => {
     }
     expect(pages.some((page) => (page.part as JsonRecord | undefined)?.of === "retiredItem")).toBe(true);
     expect(describeRunRead(pages[0])).toMatch(/^Loaded retired entries 1-\d+ of the 302, too many for one result\. More follows/);
-    expect(await readRetiredWork((args) => onWire(readRun(large, args as RunReadArgs)))).toEqual(onWire(large.retired));
+    expect(await readRetiredWork((args) => asTheClientReceives(readRun(large, args as RunReadArgs)))).toEqual(asTheClientReceives(large.retired));
 
-    // A scope's retired work pages the same way, its ids kept in the cursor.
-    const scoped = pagesOf(large, { retired: true, sectionId: "s1" });
-    expect(scoped.length).toBeGreaterThan(2);
-    expect(scoped.flatMap((page) => (page.retiredItems as JsonRecord[]) ?? [])).toHaveLength(301);
+    const sectionPages = everyPageOf(large, { retired: true, sectionId: "s1" });
+    expect(sectionPages.length).toBeGreaterThan(2);
+    expect(sectionPages.flatMap((page) => (page.retiredItems as JsonRecord[]) ?? [])).toHaveLength(301);
   });
 });
 
 describe("get_run cursors", () => {
   const view = viewOf(
-    [section("big", Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500))), section("s2", [task("x")])],
-    Array.from({ length: 200 }, (_, index) => retiredTask("s2", task(`gone-${index}`, 400))),
+    [section("big", Array.from({ length: 200 }, (_, index) => runTask(`t${index}`, 500))), section("s2", [runTask("x")])],
+    Array.from({ length: 200 }, (_, index) => retiredTask("s2", runTask(`gone-${index}`, 400))),
   );
   const sectionCursor = readRun(view, { sectionId: "big" }).nextCursor as string;
   const retiredCursor = readRun(view, { retired: true, sectionId: "s2" }).nextCursor as string;
@@ -347,10 +315,7 @@ describe("get_run cursors", () => {
     ["a section cursor with retired", () => readRun(view, { cursor: sectionCursor, retired: true })],
     ["a retired cursor without retired", () => readRun(view, { cursor: retiredCursor, retired: false })],
     ["a retired cursor with another section", () => readRun(view, { cursor: retiredCursor, sectionId: "big" })],
-    ["a cursor past the end", () => {
-      const decoded = JSON.parse(Buffer.from(sectionCursor, "base64url").toString("utf8")) as JsonRecord;
-      return readRun(view, { cursor: Buffer.from(JSON.stringify({ ...decoded, u: 5_000 })).toString("base64url") });
-    }],
+    ["a cursor past the end", () => readRun(view, { cursor: cursorMovedPastTheEnd(sectionCursor) })],
   ])("refuses %s as invalid arguments", (_name, action) => {
     const error = toolErrorOf(action);
     expect(error.code).toBe("invalid_arguments");
@@ -359,56 +324,53 @@ describe("get_run cursors", () => {
 });
 
 describe("a run at the size limits", () => {
-  const PROSE = "Confirmed the owner, the rollback plan, and the customer notice — then recorded it. Überprüfen. 界 🚀 ";
-  const prose = (length: number) => PROSE.repeat(Math.ceil(length / PROSE.length)).slice(0, length);
+  const notedTask = (id: string, notesLength: number) => ({ ...runTask(id, 0), notes: multibyteProse(notesLength) });
 
-  // Content just under the run limit as the app counts it: tasks with 20,000-character notes (the
-  // most update_run writes), a task with a 200,000-character note (the web app writes any length),
-  // and sections of shorter tasks; beside it about 1MB of retired work, which only D1's 2MB row
-  // bounds.
-  function maximumRun(): RunView {
+  function liveContentJustUnderTheRunLimit(): JsonRecord[] {
     const live: JsonRecord[] = [
-      section("notes", Array.from({ length: 12 }, (_, index) => ({ ...task(`note-${index}`, 0), notes: prose(20_000) }))),
-      section("huge", [{ ...task("huge-note", 0), notes: prose(200_000) }]),
+      section("notes", Array.from({ length: 12 }, (_, index) => notedTask(`note-${index}`, MAX_TASK_NOTES_LENGTH))),
+      section("huge", [notedTask("huge-note", NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES)]),
     ];
     for (let index = 0; contentSaveBytes(live) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
-      live.push(section(`area-${index}`, Array.from({ length: 12 }, (_, t) => ({ ...task(`area-${index}-${t}`, 0), notes: prose(700) }))));
+      live.push(section(`area-${index}`, Array.from({ length: 12 }, (_, t) => notedTask(`area-${index}-${t}`, 700))));
     }
-    // PROSE takes about 1.06 bytes a character.
     const filler = (live.at(-1)?.items as JsonRecord[])[0];
-    filler.notes = prose(String(filler.notes).length + Math.floor((RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(live)) / 1.1));
-    const retired: JsonRecord[] = [
-      ...Array.from({ length: 20 }, (_, index) =>
-        retiredSection(`gone-${index}`, Array.from({ length: 10 }, (_, t) => ({ ...task(`gone-${index}-${t}`, 0), notes: prose(2_000) })))),
-      retiredSection("gone-large", [{ ...task("gone-large-1", 0), notes: prose(120_000) }]),
-      ...Array.from({ length: 300 }, (_, index) => retiredTask(`area-${index % 20}`, { ...task(`removed-${index}`, 0), notes: prose(900) })),
-      ...Array.from({ length: 200 }, (_, index) => retiredSubTask("notes", `note-${index % 12}`, `removed-sub-${index}`)),
-    ];
-    return viewOf(live, retired, { title: prose(160) });
+    const bytesLeft = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(live);
+    filler.notes = multibyteProse(String(filler.notes).length + Math.floor(bytesLeft / MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST));
+    return live;
   }
 
-  it("reads a maximum run back in full, each result within the bound", async () => {
+  const aboutOneMegabyteOfRetiredWork = (): JsonRecord[] => [
+    ...Array.from({ length: 20 }, (_, index) =>
+      retiredSection(`gone-${index}`, Array.from({ length: 10 }, (_, t) => notedTask(`gone-${index}-${t}`, 2_000)))),
+    retiredSection("gone-large", [notedTask("gone-large-1", 120_000)]),
+    ...Array.from({ length: 300 }, (_, index) => retiredTask(`area-${index % 20}`, notedTask(`removed-${index}`, 900))),
+    ...Array.from({ length: 200 }, (_, index) => retiredSubTask("notes", `note-${index % 12}`, `removed-sub-${index}`)),
+  ];
+
+  const maximumRun = (): RunView =>
+    viewOf(liveContentJustUnderTheRunLimit(), aboutOneMegabyteOfRetiredWork(), { title: multibyteProse(160) });
+
+  it("reads a maximum run back in full, each result within the bound, in fewer calls than a Run Key may make a minute", async () => {
     const view = maximumRun();
     const content = contentSaveBytes(view.sections);
     expect(content).toBeLessThanOrEqual(RUN_CONTENT_MAX_BYTES);
     expect(content).toBeGreaterThan(RUN_CONTENT_MAX_BYTES - 8 * 1024);
     expect(resultBytes(view.retired)).toBeGreaterThan(900 * 1024);
-    // Within the 2MB a D1 row holds.
-    expect(resultBytes(view.sections) + resultBytes(view.retired)).toBeLessThan(2_000_000);
+    expect(resultBytes(view.sections) + resultBytes(view.retired)).toBeLessThan(D1_ROW_MAX_BYTES);
 
-    const { run, results } = await readBack(view);
+    const { run, results } = await readInFullWithinTheBound(view);
 
-    expect(run).toEqual(onWire(wholeOf(view)));
+    expect(run).toEqual(asTheClientReceives(wholeOf(view)));
     const parts = new Set(results.flatMap((result) => (result.part ? [(result.part as JsonRecord).of] : [])));
     expect(parts).toEqual(new Set(["task", "retiredItem"]));
-    // About 2MB in 32KB results: a few dozen calls, within a Run Key's 120 a minute.
-    expect(results.length).toBeLessThan(120);
+    expect(results.length).toBeLessThan(RUN_KEY_REQUESTS_PER_MINUTE);
   });
 });
 
 describe("run write results", () => {
   it("returns a started run whole when it fits, otherwise its fields without sections", () => {
-    const small = viewOf([section("s1", [task("t1")])]);
+    const small = viewOf([section("s1", [runTask("t1")])]);
     const large = viewOf(sections(40, 10, 400));
     const legacy = viewOf(sections(40, 10, 400), [], { title: "\u0001".repeat(10_000) });
 
@@ -422,7 +384,7 @@ describe("run write results", () => {
   });
 
   it("returns an update's run fields and the changed task when it fits, and names it otherwise", () => {
-    const stored = [section("s1", [task("t1"), task("big", 40_000)])];
+    const stored = [section("s1", [runTask("t1"), runTask("big", 40_000)])];
     const header = viewOf(stored).header;
     const notes = { runId: "run-1", expectedRevision: 5, operation: "set_task_notes" as const, notes: "Done" };
 

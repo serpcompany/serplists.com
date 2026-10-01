@@ -33,6 +33,7 @@ vi.mock("@functions/api/utils/session", () => sessionMocks);
 vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
+import { varFromWranglerToml } from "../../../support/wranglerToml";
 
 const mockEnv = { DB: {} as D1Database };
 
@@ -212,10 +213,9 @@ describe("Personal run key management handler", () => {
   });
 
   describe("MCP connection", () => {
-    // The staging (preview) allowlist from wrangler.toml.
     const previewEnv = {
       ...mockEnv,
-      CORS_ALLOWED_ORIGINS: "https://staging.serplists.com,https://staging.serp-checklists.pages.dev",
+      CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS"),
     };
 
     const connection = async (url: string, env: typeof mockEnv & Record<string, string> = previewEnv) => {

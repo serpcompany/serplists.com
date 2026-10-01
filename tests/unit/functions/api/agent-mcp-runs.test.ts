@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import { boundedText, toWellFormedText } from "@functions/api/handlers/agentMcpPages";
 import { retiredWorkOf } from "@functions/api/handlers/agentMcpRuns";
 
-// A UTF-16 surrogate half without its partner. JSON.stringify writes one as a "\ud83d"
-// escape, which strict parsers such as serde_json (Codex) reject.
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
 describe("boundedText", () => {
@@ -38,8 +36,7 @@ describe("boundedText", () => {
     expect(boundedText(`${"a".repeat(170)}\uDE80`)).not.toMatch(LONE_SURROGATE);
   });
 
-  it("handles the smallest limits", () => {
-    // An emoji is two UTF-16 units.
+  it("handles the smallest limits, where an emoji takes two UTF-16 units", () => {
     expect(boundedText("\u{1F680}\u{1F680}", 1)).toBe("…");
     expect(boundedText("\u{1F680}\u{1F680}", 2)).toBe("…");
     expect(boundedText("\u{1F680}\u{1F680}", 3)).toBe("\u{1F680}…");
