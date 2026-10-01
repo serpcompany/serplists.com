@@ -15,13 +15,17 @@ let ownerCookie = "";
 
 function send(path: string, options: SendOptions = {}): Promise<Response> {
   const headers: Record<string, string> = {};
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = String(new TextEncoder().encode(body).byteLength);
+  }
   if (options.cookie) headers.Cookie = options.cookie;
   if (options.origin) headers.Origin = ORIGIN;
   const request = new Request(`${ORIGIN}/api/${path}`, {
-    method: options.method ?? (options.body === undefined ? "GET" : "POST"),
+    method: options.method ?? (body === undefined ? "GET" : "POST"),
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body,
   });
   return apiWorker.fetch(request, d1.env as never);
 }
