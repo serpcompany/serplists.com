@@ -197,7 +197,10 @@ Rules:
 - `pnpm run secret:scan` (secretlint) runs in CI and on staged files at commit.
   `scripts/secret-scan.mjs` scans every git-tracked file, or the files passed to
   it, as literal paths through secretlint's engine. The secretlint CLI would read
-  route files such as `functions/api/[[route]].ts` as globs and skip them.
+  route files such as `functions/api/[[route]].ts` as globs and skip them. Deleted
+  files, folders, and anything under `.git` or `node_modules` (the folders the CLI skips
+  by default) are dropped. A test that needs a token-shaped value assembles it at
+  runtime, so the scan never finds one in the test's source.
 - Keep preview and production Pages secrets separate.
 - GitHub Actions secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_EMAIL`, and
   `CLOUDFLARE_API_KEY` for deploys; `CLAUDE_CODE_OAUTH_TOKEN` for Claude code review.

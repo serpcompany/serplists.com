@@ -1,11 +1,3 @@
-// Scans files for secrets with secretlint.
-//
-//   node scripts/secret-scan.mjs              every file tracked by git
-//   node scripts/secret-scan.mjs <files...>   just these files (the pre-commit hook)
-//
-// Files go to secretlint's engine as literal paths. The secretlint CLI reads
-// its arguments as globs, which silently skipped route files like
-// functions/api/[[route]].ts.
 import { spawnSync } from "node:child_process";
 import { createEngine } from "@secretlint/node";
 

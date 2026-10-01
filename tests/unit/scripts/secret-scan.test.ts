@@ -9,8 +9,7 @@ import { selectScanTargets } from '../../../scripts/secret-scan-lib.mjs';
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, 'scripts', 'secret-scan.mjs');
-// Built at runtime so the repository's own scan never sees a token in this file.
-const fakeGithubToken = ['gh', 'p_', 'wWPw5k4aXcaT4fNP0UcnZwJUVFk6LO0pINUx'].join('');
+const fakeGithubTokenAssembledAtRuntime = ['gh', 'p_', 'wWPw5k4aXcaT4fNP0UcnZwJUVFk6LO0pINUx'].join('');
 
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'secret-scan-'));
 
@@ -34,10 +33,11 @@ function runScan(paths: string[]) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-// Each case starts a Node process, which can take several seconds on a busy machine.
-describe('secret scan', { timeout: 30_000 }, () => {
+const NODE_PROCESS_START_ON_A_BUSY_MACHINE_MS = 30_000;
+
+describe('secret scan', { timeout: NODE_PROCESS_START_ON_A_BUSY_MACHINE_MS }, () => {
   it('reports a secret in a Pages Functions catch-all route file', () => {
-    const route = writeFixture('leaky/functions/api/[[route]].ts', `export const key = "${fakeGithubToken}";\n`);
+    const route = writeFixture('leaky/functions/api/[[route]].ts', `export const key = "${fakeGithubTokenAssembledAtRuntime}";\n`);
 
     const { status, output } = runScan([route]);
 
@@ -47,8 +47,8 @@ describe('secret scan', { timeout: 30_000 }, () => {
   });
 
   it('reports secrets in every bracketed route file passed together', () => {
-    const route = writeFixture('both/functions/api/[[route]].ts', `const a = "${fakeGithubToken}";\n`);
-    const sitemap = writeFixture('both/functions/sitemaps/pages/[page].xml.ts', `const b = "${fakeGithubToken}";\n`);
+    const route = writeFixture('both/functions/api/[[route]].ts', `const a = "${fakeGithubTokenAssembledAtRuntime}";\n`);
+    const sitemap = writeFixture('both/functions/sitemaps/pages/[page].xml.ts', `const b = "${fakeGithubTokenAssembledAtRuntime}";\n`);
     const plain = writeFixture('both/functions/api/db.ts', 'export const ok = true;\n');
 
     const { status, output } = runScan([plain, route, sitemap]);
