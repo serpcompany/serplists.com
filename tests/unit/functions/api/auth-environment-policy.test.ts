@@ -4,6 +4,8 @@ import { silenceLogs } from '../../../support/apiRouter';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { wranglerEnvVars } from '../../../support/wranglerToml';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
 const PASSWORD = 'a-strong-unbreached-passphrase-81';
@@ -13,30 +15,30 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
   let breachedPasswordAndEmailProviderCalls: ReturnType<typeof vi.fn>;
 
   const previewEnv = () =>
-    ({
+    apiEnv({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('preview').AUTH_EMAIL_VERIFICATION_REQUIRED,
       CORS_ALLOWED_ORIGINS: wranglerEnvVars('preview').CORS_ALLOWED_ORIGINS,
-    }) as any;
+    });
 
-  const productionEnv = (overrides: Record<string, unknown> = {}) =>
-    ({
+  const productionEnv = (overrides: Partial<Env> = {}) =>
+    apiEnv({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars('production').AUTH_EMAIL_VERIFICATION_REQUIRED,
       CORS_ALLOWED_ORIGINS: wranglerEnvVars('production').CORS_ALLOWED_ORIGINS,
       ...overrides,
-    }) as any;
+    });
 
-  function signUp(origin: string, env: unknown, email: string) {
+  function signUp(origin: string, env: Env, email: string) {
     return apiWorker.fetch(
       new Request(`${origin}/api/auth/sign-up/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Origin: origin },
         body: JSON.stringify({ email, password: PASSWORD, name: 'Staging Tester' }),
       }),
-      env as any,
+      env,
     );
   }
 

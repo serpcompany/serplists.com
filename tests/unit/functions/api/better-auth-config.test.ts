@@ -4,11 +4,22 @@ import { createBetterAuth } from "@functions/api/better-auth";
 import { getAuthEmailPolicy } from "@functions/api/utils/auth-policy";
 import { betterAuthLogger } from "@functions/api/utils/better-auth-logger";
 import { wranglerEnvVars } from "../../../support/wranglerToml";
+import { apiEnv, withoutVars, type OptionalEnvVar } from "../../../support/apiEnv";
+import type { Env } from "@functions/api/types";
+import type {
+  deliverAuthEmail,
+  discardUnsentPasswordResetToken,
+  shouldSendAuthEmail,
+} from "@functions/api/utils/auth-email-throttle";
 
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn((_options: BetterAuthOptions) => ({ handler: vi.fn() })),
   drizzleAdapterMock: vi.fn(() => ({})),
-  emailThrottle: { shouldSend: vi.fn(), deliver: vi.fn(), discardToken: vi.fn() },
+  emailThrottle: {
+    shouldSend: vi.fn<typeof shouldSendAuthEmail>(),
+    deliver: vi.fn<typeof deliverAuthEmail>(),
+    discardToken: vi.fn<typeof discardUnsentPasswordResetToken>(),
+  },
 }));
 
 vi.mock("better-auth", () => ({
@@ -34,15 +45,16 @@ vi.mock("@functions/api/utils/auth-email-throttle", () => ({
   discardUnsentPasswordResetToken: emailThrottle.discardToken,
 }));
 
-function productionEnvWith(overrides?: Record<string, unknown>) {
-  return {
+function productionEnvWith(overrides: Partial<Env> = {}, without: readonly OptionalEnvVar[] = []): Env {
+  const env = apiEnv({
     AUTH_EMAIL_VERIFICATION_REQUIRED: wranglerEnvVars("production").AUTH_EMAIL_VERIFICATION_REQUIRED,
     BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters!!",
     FRONTEND_URL: "https://app.serplists.com",
     RESEND_API_KEY: "re_test_123",
     EMAIL_FROM: "SERP Lists <support@serplists.com>",
     ...overrides,
-  } as any;
+  });
+  return withoutVars(env, without);
 }
 
 function defined<T>(value: T | undefined): T {
@@ -110,12 +122,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("allows non-production account creation without email delivery", () => {
-    const env = productionEnvWith({
-      AUTH_EMAIL_VERIFICATION_REQUIRED: "false",
-      FRONTEND_URL: undefined,
-      RESEND_API_KEY: undefined,
-      USESEND_API_KEY: undefined,
-    });
+    const env = productionEnvWith({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false" }, ["FRONTEND_URL", "RESEND_API_KEY", "USESEND_API_KEY"]);
     const request = new Request("http://localhost:8788/api/auth/sign-up/email");
 
     createBetterAuth(env, request);
@@ -135,7 +142,7 @@ describe("createBetterAuth config", () => {
     ["production", productionEnvWith(), "https://serplists.com/api/auth/reset-password"],
     [
       "local",
-      productionEnvWith({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
+      productionEnvWith({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false" }, ["FRONTEND_URL", "RESEND_API_KEY"]),
       "http://localhost:8788/api/auth/reset-password",
     ],
   ])("revokes every session when a password is reset (%s), reading sessions from the database so it takes effect at once", (_label, env, url) => {
@@ -215,10 +222,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("requires production account verification to have email delivery", () => {
-    const env = productionEnvWith({
-      RESEND_API_KEY: undefined,
-      USESEND_API_KEY: undefined,
-    });
+    const env = productionEnvWith({}, ["RESEND_API_KEY", "USESEND_API_KEY"]);
 
     expect(getAuthEmailPolicy(env)).toEqual({
       accountRegistrationAvailable: false,
@@ -229,10 +233,7 @@ describe("createBetterAuth config", () => {
 
   it("trusts only the request origin when no frontend origins are configured", () => {
     createBetterAuth(
-      productionEnvWith({
-        FRONTEND_URL: undefined,
-        CORS_ALLOWED_ORIGINS: undefined,
-      }),
+      productionEnvWith({}, ["FRONTEND_URL", "CORS_ALLOWED_ORIGINS"]),
       new Request("https://api.serplists.com/api/auth/sign-in/email")
     );
 
@@ -355,7 +356,7 @@ describe("createBetterAuth config", () => {
   it("falls back to UseSend when RESEND_API_KEY is not configured", async () => {
     const fetchMock = stubFetchAnsweringOk();
 
-    await sendAResetEmailWith(productionEnvWith({ RESEND_API_KEY: undefined, USESEND_API_KEY: "us_test_123" }));
+    await sendAResetEmailWith(productionEnvWith({ USESEND_API_KEY: "us_test_123" }, ["RESEND_API_KEY"]));
 
     expectOneEmailPostedTo(fetchMock, "https://app.usesend.com/api/v1/emails");
   });
@@ -364,10 +365,7 @@ describe("createBetterAuth config", () => {
     const fetchMock = stubFetchAnsweringOk();
 
     createBetterAuth(
-      productionEnvWith({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      }),
+      productionEnvWith({}, ["RESEND_API_KEY", "USESEND_API_KEY"]),
       new Request("https://serplists.com/api/auth/sign-up/email")
     );
     const options = capturedOptions();

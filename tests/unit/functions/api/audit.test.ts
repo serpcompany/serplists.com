@@ -7,8 +7,11 @@ import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
+import { apiEnv } from '../../../support/apiEnv';
+import { recordsIn } from '../../../support/mcpResponses';
+import { jsonRecordIn } from '../../../support/storedJson';
 
-const drizzleThatOnlyBuildsSql = createDb({ DB: {} } as never);
+const drizzleThatOnlyBuildsSql = createDb(apiEnv());
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 type SqlParam = string | number | null;
@@ -66,7 +69,7 @@ describe('insertAuditEventWhen', () => {
     expect(events(db)).toEqual([
       objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
-    expect(JSON.parse(valueAt(firstOf(events(db)), 'metadata_json')).retired[0].id).toBe('item-dns');
+    expect(firstOf(recordsIn(jsonRecordIn(valueAt(firstOf(events(db)), 'metadata_json')).retired)).id).toBe('item-dns');
   });
 
   it('records nothing when the guarded write misses because someone saved the run after it was read', async () => {
@@ -145,13 +148,13 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
 
     expect(rowBytes(values)).toBeLessThan(ROW_BUDGET_BYTES);
     for (const column of [values.before_json, values.after_json]) {
-      const snapshot = JSON.parse(column ?? '{}');
+      const snapshot = jsonRecordIn(column ?? '{}');
       expect(snapshot).not.toHaveProperty('items');
       expect(snapshot).not.toHaveProperty('retired_items');
       expect(snapshot).not.toHaveProperty('share_token');
       expect(snapshot).toEqual(objectContaining({ id: 'run-1', status: 'in_progress' }));
     }
-    const diff = JSON.parse(values.diff_json ?? '{}');
+    const diff = jsonRecordIn(values.diff_json ?? '{}');
     expect(diff).toEqual({
       items: { sections: 1, items: 700, completed: ['item-42'] },
       progress: 1,
@@ -178,7 +181,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
       diff: { items: JSON.stringify(after) },
     }));
 
-    expect(JSON.parse(values.diff_json ?? '{}').items).toEqual({
+    expect(jsonRecordIn(values.diff_json ?? '{}').items).toEqual({
       sections: 1,
       items: 4,
       completed: ['c/c1'],
@@ -205,7 +208,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     expect(bytes(threeByteText)).toBe(90_000);
     const values = await buildAuditEventValues(input({ metadata: { note: threeByteText } }));
 
-    const marker = JSON.parse(values.metadata_json ?? '{}');
+    const marker = jsonRecordIn(values.metadata_json ?? '{}');
     expect(marker).toEqual({ truncated: true, bytes: anyInstanceOf(Number), sha256: stringMatching(/^[0-9a-f]{64}$/) });
     expect(marker.bytes).toBeGreaterThan(90_000);
     expect(bytes(values.metadata_json)).toBeLessThan(200);

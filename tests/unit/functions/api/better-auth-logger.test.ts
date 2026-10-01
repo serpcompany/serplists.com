@@ -4,6 +4,7 @@ import { username } from 'better-auth/plugins';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
 import { betterAuthLogger } from '@functions/api/utils/better-auth-logger';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const BASE_URL = 'http://localhost:8788';
 const VICTIM = 'victim@example.com';
@@ -27,7 +28,7 @@ function captureConsole(): Captured[] {
 function expectStructuredAndClean(captured: Captured[], secrets: string[]) {
   for (const { line } of captured) {
     for (const secret of secrets) expect(line).not.toContain(secret);
-    expect(() => JSON.parse(line), line).not.toThrow();
+    expect((): unknown => JSON.parse(line), line).not.toThrow();
     expect(JSON.parse(line)).toMatchObject({ message: 'better_auth' });
   }
 }
@@ -62,7 +63,7 @@ describe('betterAuthLogger', () => {
     betterAuthLogger.log('error', 'INTERNAL_SERVER_ERROR', queryError);
 
     expectStructuredAndClean(captured, [VICTIM, 'sess_SECRET_TOKEN']);
-    const entry = JSON.parse(firstOf(captured).line);
+    const entry = jsonRecordIn(firstOf(captured).line);
     expect(firstOf(captured).method).toBe('error');
     expect(entry).toMatchObject({ level: 'error', detail: 'INTERNAL_SERVER_ERROR', errorName: 'DrizzleQueryError' });
     expect(entry.errorMessage).toContain('Failed query: select "id" from "session"');
@@ -70,7 +71,7 @@ describe('betterAuthLogger', () => {
   });
 
   it('handles an Error passed as the message', () => {
-    betterAuthLogger.log('error', new TypeError(`bad input from ${VICTIM}`) as unknown as string);
+    betterAuthLogger.log('error', new TypeError(`bad input from ${VICTIM}`));
 
     expectStructuredAndClean(captured, [VICTIM]);
     expect(JSON.parse(firstOf(captured).line)).toMatchObject({ errorName: 'TypeError' });
@@ -103,7 +104,7 @@ describe('a real Better Auth instance with betterAuthLogger, which fails when an
   afterEach(() => vi.restoreAllMocks());
 
   function createMemoryAuth() {
-    const db: Record<string, any[]> = { user: [], session: [], account: [], verification: [] };
+    const db: Record<string, Record<string, unknown>[]> = { user: [], session: [], account: [], verification: [] };
     return betterAuth({
       baseURL: BASE_URL,
       basePath: '/api/auth',

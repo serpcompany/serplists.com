@@ -5,6 +5,8 @@ import {
   shouldSendAuthEmail,
 } from '@functions/api/utils/auth-email-throttle';
 import { SqliteD1 } from '../../../support/sqlite-d1';
+import { apiEnv } from '../../../support/apiEnv';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const D1_OUTAGE = 'D1_ERROR: Network connection lost';
 const RESET_TOKEN = 'resettoken123secret';
@@ -31,10 +33,10 @@ describe('auth email throttle failure logs, which name the D1 error and never th
     d1.close();
   });
 
-  const env = () => ({ DB: d1.binding }) as never;
+  const env = () => apiEnv({ DB: d1.binding });
 
   function loggedEvent(message: string) {
-    const entry = lines.map((line) => JSON.parse(line)).find((logged) => logged.message === message);
+    const entry = lines.map((line) => jsonRecordIn(line)).find((logged) => logged.message === message);
     expect(entry).toBeDefined();
     return entry;
   }

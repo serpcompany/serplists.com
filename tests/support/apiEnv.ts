@@ -4,25 +4,27 @@ function bindingNotGiven(binding: keyof Env): never {
   throw new Error(`The test gave the API no ${binding}: pass apiEnv({ ${binding}: ... }) the binding the code under test uses.`);
 }
 
-class D1DatabaseNotGiven implements D1Database {
+export class D1DatabaseThatThrows implements D1Database {
+  constructor(private readonly fail: () => never) {}
+
   prepare(): never {
-    return bindingNotGiven('DB');
+    return this.fail();
   }
 
   batch(): never {
-    return bindingNotGiven('DB');
+    return this.fail();
   }
 
   exec(): never {
-    return bindingNotGiven('DB');
+    return this.fail();
   }
 
   withSession(): never {
-    return bindingNotGiven('DB');
+    return this.fail();
   }
 
   dump(): never {
-    return bindingNotGiven('DB');
+    return this.fail();
   }
 }
 
@@ -56,6 +58,14 @@ class R2BucketNotGiven implements R2Bucket {
   }
 }
 
+export type OptionalEnvVar = { [Name in keyof Env]-?: undefined extends Env[Name] ? Name : never }[keyof Env];
+
+export function withoutVars(env: Env, names: readonly OptionalEnvVar[]): Env {
+  const left = { ...env };
+  for (const name of names) delete left[name];
+  return left;
+}
+
 export function apiEnv(vars: Partial<Env> = {}): Env {
-  return { DB: new D1DatabaseNotGiven(), R2_UPLOADS: new R2BucketNotGiven(), ...vars };
+  return { DB: new D1DatabaseThatThrows(() => bindingNotGiven('DB')), R2_UPLOADS: new R2BucketNotGiven(), ...vars };
 }

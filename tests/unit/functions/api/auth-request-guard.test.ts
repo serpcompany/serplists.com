@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { rejectUnsafeAuthRequest } from '@functions/api/utils/auth-request-guard';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   FRONTEND_URL: 'http://localhost:8080',
   CORS_ALLOWED_ORIGINS: 'https://preview.serplists.com',
-} as any;
+});
 
 function authRequest(method: string, headers: Record<string, string>) {
   return new Request('http://localhost:8788/api/auth/sign-in/email', { method, headers });

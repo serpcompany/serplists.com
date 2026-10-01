@@ -3,7 +3,7 @@ import type { BetterAuthOptions } from 'better-auth';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
 type MemoryTables = { users: Row[]; session: Row[]; account: Row[]; verification: Row[] };
 const memory = vi.hoisted((): { db: MemoryTables; claimBetweenCheckAndWrite: null | { id: string; username: string } } => ({
   db: { users: [], session: [], account: [], verification: [] },
@@ -57,11 +57,12 @@ vi.mock('@functions/api/db', () => ({
 import { isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
 import { postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 import { betterAuthErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-} as any;
+});
 
 const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 

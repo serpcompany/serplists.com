@@ -14,14 +14,15 @@ import {
   sessionCookieFrom,
 } from '../../../support/betterAuth';
 import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
 
 const EMAIL = 'john@test.com';
 const PASSWORD = 'original-password-1';
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
   RESEND_API_KEY: 're_test_123',
-} as any;
+});
 
 const ascii = (bytes: number) => 'a'.repeat(bytes);
 const fourByteEmoji = (count: number) => '\u{1F600}'.repeat(count);

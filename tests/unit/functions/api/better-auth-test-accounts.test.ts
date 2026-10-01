@@ -4,13 +4,15 @@ import { silenceLogs } from '../../../support/apiRouter';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
 import { betterAuthErrorBody, readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const PASSWORD = 'original-password-1';
 
 describe('test accounts under the production auth policy, which Better Auth enforces on the ways in the router does not check', { timeout: 30_000 }, () => {
   let database: SqliteD1;
-  let localEnv: any;
-  let productionEnv: any;
+  let localEnv: Env;
+  let productionEnv: Env;
 
   function authRequest(origin: string, path: string, body: unknown, env = productionEnv) {
     return postToBetterAuth(env, path, { body, origin });
@@ -29,11 +31,11 @@ describe('test accounts under the production auth policy, which Better Auth enfo
 
   beforeEach(() => {
     database = new SqliteD1();
-    localEnv = {
+    localEnv = apiEnv({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-    };
+    });
     productionEnv = { ...localEnv, AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', RESEND_API_KEY: 're_test_123' };
     const breachedPasswordLookupFindingNothing = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordLookupFindingNothing);

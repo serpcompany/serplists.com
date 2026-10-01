@@ -4,6 +4,8 @@ import apiWorker from '@functions/api/[[route]]';
 import { silenceLogs } from '../../../support/apiRouter';
 import { captureTheEmailsSent } from '../../../support/betterAuth';
 import { SqliteD1 } from '../../../support/sqlite-d1';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 
 const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'victim@example.com';
@@ -12,7 +14,7 @@ const FORGED_HEADERS = { 'X-Forwarded-Host': FORGED_HOST, 'X-Forwarded-Proto': '
 
 describe('Better Auth base URL, from the host the request reached and never the forwarded headers a client can send', { timeout: 30_000 }, () => {
   let database: SqliteD1;
-  let env: any;
+  let env: Env;
   let sentEmails: string[];
 
   function authPost(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -40,12 +42,12 @@ describe('Better Auth base URL, from the host the request reached and never the 
   beforeEach(() => {
     clearTheBaseUrlsBetterAuthWouldReadFromNodesProcessEnv();
     database = new SqliteD1();
-    env = {
+    env = apiEnv({
       DB: database.binding,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
       RESEND_API_KEY: 're_test_123',
-    };
+    });
     sentEmails = captureTheEmailsSent();
     silenceLogs();
   });

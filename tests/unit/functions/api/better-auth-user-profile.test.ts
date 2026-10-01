@@ -3,15 +3,16 @@ import { firstOf } from '../../../support/elements';
 import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { apiEnv } from '../../../support/apiEnv';
 
 const R2_BASE_URL = 'https://files.serplists.test';
 const EMAIL = 'john@test.com';
-const env = {
+const env = apiEnv({
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
   FRONTEND_URL: 'http://localhost:8080',
   R2_PUBLIC_BASE_URL: R2_BASE_URL,
-} as any;
+});
 
 const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 
