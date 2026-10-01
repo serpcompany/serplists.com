@@ -167,8 +167,11 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     message saying what to use instead, and the modules that own that code, if any (the one
     module that may import `react-markdown`, read `maxActiveRuns`, listen for storage events
     or touch the clipboard). It runs with `APP_CONVENTIONS` on `src/`, `API_CONVENTIONS` on
-    `functions/`, `SCRIPT_CONVENTIONS` on `scripts/`, and the tool-spawn convention on the
-    browser and integration tests, one rule name per folder, so no block overrides another.
+    `functions/`, `SCRIPT_CONVENTIONS` on `scripts/`, `BROWSER_TEST_CONVENTIONS` on
+    `tests/e2e/` and `INTEGRATION_TEST_CONVENTIONS` on `tests/integration/`, one rule name per
+    folder, so no block overrides another. The browser specs' conventions are the tool-spawn
+    one, setup requests through the API helpers rather than a fetch inside `page.evaluate()`,
+    and Template paths the e2e stack has ([testing conventions](#testing-conventions)).
   - `serplists/navigate-while-visit-is-current`
     (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses an async handler in
     `src/` that moves the user after an await outside a page-visit check ([frontend
@@ -422,8 +425,8 @@ Common failures:
     - The root layout and the stylesheet: `rootLayout.ts` (`rootLayoutOn(siteEnv)`,
       `plainScriptsInTheHead()`) and `appStylesheet.ts`
       (`compileTheStylesheetTheRootLayoutImports()`).
-    - Scripts and workflows: `workflowGuards.ts`, `throwawayGitRepository.ts` and
-      `e2eSourceFiles.ts`; ESLint rules: `ruleTester.ts`.
+    - Scripts and workflows: `workflowGuards.ts` and `throwawayGitRepository.ts`; ESLint
+      rules: `ruleTester.ts`.
   - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
     template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
     (`billing.ts`), API calls (`api-requests.ts`), a mocked API (`mocked-api.ts`) and
@@ -531,10 +534,14 @@ Common failures:
   prefetch, so parallel browsers only queue up behind each other there.
 - That database holds only what `seed-test` creates (`db/seeds/local.ts`), plus the
   Templates bundled in `src/data`. A spec that opens `/profile/<user>/<slug>` uses one
-  of those or creates its own Template; `tests/unit/e2e/seeded-template-paths.test.ts`
-  fails on any other literal path. A path that must be missing names its user or Template
-  with the `no-such-` prefix (`/profile/serp/no-such-template/`), which the check skips
-  and no seeded or bundled name may start with.
+  of those or creates its own Template. A literal Template path in `tests/e2e` must name one
+  in `E2E_TEMPLATE_PAGES` (and an `/api/templates/slug/<slug>` one in
+  `E2E_TEMPLATE_API_SLUGS`, which the API answers only for seeded Templates) in
+  `scripts/eslint-rules/code-conventions.mjs`, or ESLint refuses it;
+  `tests/unit/e2e/seeded-template-paths.test.ts` checks that seed-test or the bundle has
+  every one. A path that must be missing names its user or Template with the `no-such-`
+  prefix (`/profile/serp/no-such-template/`), which the rule skips and no seeded or bundled
+  name may start with.
 - The local app runs on workerd (wrangler's dev server, under the preview), which closes a keep-alive
   connection that has been idle for 5 seconds; a request sent on it at that moment is
   lost. Playwright's request client (`page.request`, the `request` fixture,
@@ -576,8 +583,8 @@ Common failures:
   client with the page's cookies, so no CORS preflight runs, no `page.route()` stub catches
   the call, and a failure names the request instead of `TypeError: Failed to fetch`. When
   how the browser itself sends a request is what the test checks (a CORS preflight, say),
-  the spec sends it with `fetchFromThePageUnderTest()` from the same file, the one fetch
-  inside `page.evaluate()` that `tests/unit/e2e/e2e-setup-requests.test.ts` allows.
+  the spec sends it with `fetchFromThePageUnderTest()` from the same file: ESLint refuses a
+  fetch inside `page.evaluate()` in any other file under `tests/e2e`.
 - `trackApiRequests()` in the same file waits for the page's own requests to finish: the
   several that My Templates sends when signing in lands there, or those before a step that
   must be the page's only request (a save meant to meet an ended session). A page often
@@ -725,8 +732,10 @@ Common failures:
   fits, otherwise its outline, each section by id and a run's retired work a page at a time,
   joining the parts of anything too large for one result, to show it can be read in full.
 - A test that reads values from the deployed configuration (the CORS allowlists, the auth
-  policy) takes them from `wrangler.toml` with `varFromWranglerToml()` from
-  `tests/support/wranglerToml.ts`, so a change to that file is tested too.
+  policy, the D1 bindings) takes them from `wrangler.toml` with `wranglerEnvVars(environment)`
+  or `readWranglerToml()` from `tests/support/wranglerToml.ts`, so a change to that file is
+  tested too. They parse the file with `smol-toml` and then Zod, never with a regular
+  expression.
 - Unit tests run in UTC: `vitest.config.ts` sets `TZ` before Vitest starts its workers, which
   inherit it, so a date renders the same on every machine and in CI
   (`tests/unit/config/test-environment.test.ts`).
