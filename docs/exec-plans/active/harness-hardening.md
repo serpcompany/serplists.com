@@ -260,6 +260,25 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, app side of round 2 done: boundary validation
+  (01ee5793..8d3ec6d7). TD-2, TD-50 and TD-59 are closed.
+  - `serplists/no-external-data-casts` refuses casts of `JSON.parse`, response bodies,
+    storage reads, message data and form data, and every `as unknown as`. It covers
+    `src/`, `functions/`, `scripts/` and `db/`, and fixed 65 casts.
+  - The type-aware `no-unsafe-*` rules fixed 29 more. They run in
+    `eslint.type-aware.config.js`, which `pnpm run lint` uses.
+  - `apiRequest(endpoint, schema)` takes a required Zod schema at all 56 endpoints, and
+    the client's types are `z.infer` of shared schemas in `src/lib/schemas/`. A response
+    it cannot read is an `ApiError` with code `unreadable_response`.
+  - D1 rows are typed with Drizzle's `$inferSelect`, which removed 54 double casts.
+  - Stripe replies, the webhook body, stored JSON and browser storage are parsed.
+  - Bug fixed: the Stripe webhook recorded signed events with mistyped fields. It now
+    answers 400 (7ee8b92c).
+  - `pnpm run lint` takes about 49 s, up from 21 s.
+  - New tracker rows:
+    - TD-63: `.mjs` scripts are not type-checked, and the recommended JavaScript rules
+      skip them;
+    - TD-64: internal type assertions.
 - 2026-10-01: phase 4, the round 1 settings reach the tests, and `!` is refused everywhere
   (9f50b031..d3c7dcff). TD-58 is closed.
   - `tests/tsconfig.json` inherits the four settings. It fixed 973 errors, 914 of them from
@@ -392,6 +411,16 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: the type-aware lint rules run from `eslint.type-aware.config.js`, the base
+  config plus one block, and `pnpm run lint` uses it. The pre-commit hook and the editor
+  keep the base config.
+  - With type information, ESLint cannot lint the in-memory samples that
+    `code-conventions.test.ts` and `no-exceptions.test.ts` use.
+  - Type-aware lint takes about 2.4 times as long, which the owner's machine feels on
+    every commit.
+  - Every file is still held to the rules by `pnpm run verify`, the pre-push hook and CI,
+    so this exempts no code.
+  - Rejected: one config, with those tests building ESLint without type information.
 - 2026-09-30: the Node clone hazard is TD-29, not TD-27. TD-27 and TD-28 were the MCP result
   bounds, closed earlier. The tracker now keeps a next-ID line, so a closed ID is never
   reused.
