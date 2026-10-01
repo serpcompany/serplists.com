@@ -4,12 +4,6 @@ import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-// The shared Claude Code configuration (docs/design-docs/agent-workflow.md#agent-tooling).
-// .claude/settings.json asks before commands that reach staging, production, Cloudflare, or
-// live Stripe, backing the escalation rules in AGENTS.md. The CI Claude jobs run in the same
-// checkout with the same settings, where an ask rule cannot prompt and so denies, so the
-// settings must leave alone every tool those jobs use.
-
 const repoRoot = process.cwd();
 const readText = (file: string) => readFileSync(path.join(repoRoot, file), 'utf8');
 
@@ -34,9 +28,6 @@ const parseRule = (rule: string): Rule => {
 const denyRules = permissions.deny.map(parseRule);
 const askRules = permissions.ask.map(parseRule);
 
-// Claude Code's matching for Bash and PowerShell rules (https://code.claude.com/docs/en/permissions):
-// `*` stands for any text, a trailing ` *` (or `:*`) that is the rule's only wildcard also
-// matches the bare command, and PowerShell compares without case.
 const ruleMatches = (rule: Rule, tool: string, command: string) => {
   if (rule.tool !== tool) return false;
   if (rule.pattern === null) return true;
@@ -53,18 +44,16 @@ const ruleMatches = (rule: Rule, tool: string, command: string) => {
 
 const SHELLS = ['Bash', 'PowerShell'];
 
-// Deny and ask rules also match past leading variable assignments (`FOO=bar cmd` is `cmd`).
-const withoutAssignments = (command: string) => command.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '');
+const withoutLeadingVariableAssignments = (command: string) =>
+  command.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, '');
 
 const decision = (tool: string, command: string) => {
-  const commands = [command, withoutAssignments(command)];
+  const commands = [command, withoutLeadingVariableAssignments(command)];
   if (denyRules.some((rule) => commands.some((text) => ruleMatches(rule, tool, text)))) return 'deny';
   if (askRules.some((rule) => commands.some((text) => ruleMatches(rule, tool, text)))) return 'ask';
   return 'default';
 };
 
-// Package scripts that reach a remote database, deploy, change secrets, or call Stripe with the
-// configured key. A new one must be covered by an ask rule.
 const REMOTE_COMMAND =
   /--remote\b|--preview\b|--allow-production\b|--label (?:production|staging)\b|wrangler (?:deploy|secret|versions|rollback|delete)\b|opennextjs-cloudflare (?:deploy|upload)\b|scripts\/stripe\/configure-portal/;
 const remoteScripts = Object.entries(packageScripts)
@@ -106,14 +95,12 @@ describe('.claude/settings.json', () => {
     for (const shell of SHELLS) expect(decision(shell, command), shell).toBe('ask');
   });
 
-  // In CI an ask rule denies, so a rule that matched text inside another command would stop
-  // the review from posting a comment that mentions a deploy, or from searching for one.
   it.each([
     'gh pr comment 7 --body "Run npx wrangler deploy --remote after this merges"',
     'gh pr comment 7 --body "This adds a wrangler secret put step"',
     'grep -rn "wrangler deploy" scripts docs',
     'git commit -m "docs: explain npx wrangler d1 migrations apply --remote"',
-  ])('lets %s through, which only mentions such a command', (command) => {
+  ])('lets %s through: it only mentions such a command, and in CI an ask rule would deny it', (command) => {
     for (const shell of SHELLS) expect(decision(shell, command), shell).toBe('default');
   });
 
@@ -155,7 +142,6 @@ describe('.claude/settings.json', () => {
 const stepSchema = z.object({ uses: z.string().optional(), with: z.record(z.unknown()).optional() });
 const workflowSchema = z.object({ jobs: z.record(z.object({ steps: z.array(stepSchema).optional() })) });
 
-// The tools a workflow's Claude Code steps allow (--allowedTools in claude_args).
 const allowedToolsIn = (file: string) =>
   Object.values(workflowSchema.parse(yaml.load(readText(file))).jobs)
     .flatMap((job) => job.steps ?? [])
@@ -168,8 +154,8 @@ const allowedToolsIn = (file: string) =>
 describe('the CI Claude jobs under .claude/settings.json', () => {
   const reviewTools = allowedToolsIn('.github/workflows/claude-code-review.yml');
   const maintenanceTools = allowedToolsIn('.github/workflows/maintenance.yml');
-  // Read-only tools need no allow rule, so the review uses them without listing them.
-  const tools = [...new Set([...reviewTools, ...maintenanceTools, 'Read', 'Glob', 'Grep'])];
+  const readOnlyToolsNeedingNoAllowRule = ['Read', 'Glob', 'Grep'];
+  const tools = [...new Set([...reviewTools, ...maintenanceTools, ...readOnlyToolsNeedingNoAllowRule])];
 
   it('finds both allow lists', () => {
     expect(reviewTools).toContain('Task');
@@ -185,12 +171,11 @@ describe('the CI Claude jobs under .claude/settings.json', () => {
     expect(blocked).toEqual([]);
   });
 
-  // The weekly doc-gardening job commits, pushes its branch, and opens a pull request.
   it.each([
     'git push -u origin docs/weekly-doc-gardening',
     'gh pr create --base staging --title "docs: weekly doc gardening"',
     'pnpm run docs:check',
-  ])('lets the maintenance job run %s', (command) => {
+  ])('lets the doc-gardening job run %s, so it can commit, push its branch and open its PR', (command) => {
     expect(decision('Bash', command)).toBe('default');
   });
 });

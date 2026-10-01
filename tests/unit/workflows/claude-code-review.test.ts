@@ -8,8 +8,6 @@ import yaml from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-// The tools the review skill runs with, from its allowed-tools frontmatter. A tool missing
-// from claude_args is denied at runtime.
 const SKILL_PATH = '.claude/skills/pr-review/SKILL.md';
 const skillFrontmatter = z
   .object({ 'allowed-tools': z.string() })
@@ -54,11 +52,8 @@ const REPO = 'serpcompany/serplists.com';
 const PR = '7';
 const BOT = 'claude[bot]';
 const STARTED_AT = '2026-10-01T10:00:00Z';
-// A timestamp this many minutes after the review started (negative: before it).
 const minutesAfterStart = (minutes: number) => new Date(Date.parse(STARTED_AT) + minutes * 60_000).toISOString();
 
-// `updatedAt` marks a comment edited after it was posted, as the review's summary is.
-// `details` adds fields such as path, line and body to what the API returns.
 type Posted = { login: string; at: string; updatedAt?: string; details?: Record<string, unknown> };
 type PullRequest = {
   issueComments?: Posted[];
@@ -67,7 +62,6 @@ type PullRequest = {
   status?: number;
 };
 
-// A stand-in for the GitHub REST API that serves one pull request's comments and reviews.
 const withFakeGitHub = async <T>(pullRequest: PullRequest, run: (apiUrl: string) => Promise<T>) => {
   const toComments = (items: Posted[] = []) =>
     items.map(({ login, at, updatedAt, details }) => ({
@@ -98,7 +92,6 @@ const withFakeGitHub = async <T>(pullRequest: PullRequest, run: (apiUrl: string)
   }
 };
 
-// Runs the guard step's code as the workflow does, against an execution log and a PR.
 const runGuard = (executionLog: unknown, pullRequest: PullRequest = {}) =>
   withFakeGitHub(pullRequest, (apiUrl) => {
     const { guard, envName } = findGuard();
@@ -153,8 +146,7 @@ const deniedGhPrView = {
 describe('Claude code review workflow', () => {
   it('runs the repository review skill, from the base branch, with every tool it uses', () => {
     expect(reviewStep?.id, 'the review step needs an id so later steps can read its outputs').toBeTruthy();
-    // The skill lives in .claude/, which the action restores from the base branch.
-    expect(reviewStep.with?.prompt).toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
+    expect(reviewStep.with?.prompt, 'the review runs the skill in .claude/, which the action restores from the base branch').toBe('/pr-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}');
     expect(reviewStep.with?.plugins).toBeUndefined();
     const allowList = claudeArgs.match(/--allowedTools\s+"([^"]+)"/)?.[1] ?? '';
     const allowed = new Set(allowList.split(',').map((tool) => tool.trim()));
@@ -170,14 +162,14 @@ describe('Claude code review workflow', () => {
   });
 
   it('gives Claude and its subagents the rules outside the checkout', () => {
-    // The action deletes a CLAUDE.md the base branch lacks, so writing one is lost work.
-    for (const step of steps) expect(step.run ?? '').not.toMatch(/>\s*"?CLAUDE\.md/);
+    for (const step of steps) {
+      expect(step.run ?? '', 'the action deletes a CLAUDE.md the base branch lacks, so no step may write one').not.toMatch(/>\s*"?CLAUDE\.md/);
+    }
 
     const rulesStep = steps.findIndex((step) => step.run?.includes('"$RUNNER_TEMP/review-context.md"'));
     expect(rulesStep, 'no step writes $RUNNER_TEMP/review-context.md').toBeGreaterThan(-1);
     expect(rulesStep).toBeLessThan(reviewIndex);
-    // From the base branch, so a PR cannot weaken the rules it is reviewed against.
-    expect(steps[rulesStep].env?.BASE_REF).toBe('${{ github.event.pull_request.base.ref }}');
+    expect(steps[rulesStep].env?.BASE_REF, 'the rules come from the base branch, so a PR cannot weaken them').toBe('${{ github.event.pull_request.base.ref }}');
     expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:AGENTS.md');
     expect(steps[rulesStep].run).toContain('git show FETCH_HEAD:docs/design-docs/core-beliefs.md');
     expect(steps[rulesStep].run).not.toMatch(/\bcat AGENTS\.md/);
@@ -208,7 +200,6 @@ describe('Claude code review workflow', () => {
   });
 
   it('fails when the run ended while subagents were still working', async () => {
-    // What every run since 2026-09-29 looked like: 2 turns, no denials, nothing posted.
     const { status, output } = await runGuard([
       { type: 'system', subtype: 'init' },
       {
@@ -281,8 +272,7 @@ describe('Claude code review workflow', () => {
     expect(status).toBe(0);
   });
 
-  // Every push is reviewed again, so a run must at least update the summary.
-  it('fails when Claude reviewed an earlier push but posted and updated nothing now', async () => {
+  it('fails when Claude reviewed an earlier push but posted and updated nothing now, since every push is reviewed again', async () => {
     const { status, output } = await runGuard(cleanLog, {
       reviewComments: [{ login: BOT, at: minutesAfterStart(-90) }],
       issueComments: [{ login: BOT, at: minutesAfterStart(-90) }],
@@ -293,7 +283,6 @@ describe('Claude code review workflow', () => {
   });
 });
 
-// The step before the review appends Claude's earlier findings to the review's context.
 const findingsIndex = steps.findIndex((step) => step.env?.CONTEXT_FILE !== undefined);
 const findingsStep = steps[findingsIndex];
 

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Weekly repository maintenance report (Markdown on stdout). Run locally with
-// `pnpm run maintenance:report`; .github/workflows/maintenance.yml posts it as an issue.
-// Every signal here is deterministic; the checklist at the end is for the agent doing the work.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -21,19 +18,16 @@ function lastCommitTime(file) {
   return out ? Number(out) : null;
 }
 
-// A missing folder (docs/exec-plans/active/ with every plan completed) has no files.
 const walk = (dir, predicate) => walkFiles(repoRoot, dir, predicate);
 
 const sections = [];
 
-// 1. Docs check
 const docs = spawnSync("node", ["scripts/check-docs.mjs"], { cwd: repoRoot, encoding: "utf8" });
 sections.push(
   "## Docs check",
   docs.status === 0 ? `Passing. ${docs.stdout.trim()}` : `Failing:\n\n\`\`\`text\n${(docs.stderr || docs.stdout).trim()}\n\`\`\``,
 );
 
-// 2. Docs whose referenced code changed after the doc was last edited
 const docFiles = ["AGENTS.md", "ARCHITECTURE.md", ...walk("docs", (file) => file.endsWith(".md"))];
 const staleDocs = [];
 for (const doc of docFiles) {
@@ -65,7 +59,6 @@ sections.push(
   nearLimit.length === 0 ? "None." : nearLimit.map(({ file, lines }) => `- \`${file}\`: ${lines}`).join("\n"),
 );
 
-// 5. Plans, tech debt, quality score
 const activePlans = walk("docs/exec-plans/active", (file) => file.endsWith(".md")).map((file) => {
   const updated = read(file).match(/\*\*Last updated:\*\*\s*(\d{4}-\d{2}-\d{2})/)?.[1];
   const age = updated ? Math.floor((now - Date.parse(updated) / 1000) / DAY) : null;
@@ -91,7 +84,6 @@ sections.push(
   ].join("\n"),
 );
 
-// 6. Checklist
 sections.push(
   "## This week's checklist",
   [

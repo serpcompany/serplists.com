@@ -8,10 +8,6 @@ import yaml from 'js-yaml';
 import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-// The weekly doc-gardening job in .github/workflows/maintenance.yml. The action stops at
-// Claude's first result, so the job keeps subagents in the foreground, and a guard after
-// Claude's step checks the job's outcome instead of trusting a green run.
-
 const stepSchema = z.object({
   id: z.string().optional(),
   name: z.string().optional(),
@@ -42,8 +38,6 @@ type OpenPr = { number: number; ref: string; createdAt: string };
 const workDir = mkdtempSync(path.join(tmpdir(), 'doc-gardening-guard-'));
 afterAll(() => rmSync(workDir, { recursive: true, force: true }));
 
-// Runs the guard step's code as the workflow does, against an execution log and a stand-in
-// for the GitHub API that lists the open PRs into staging.
 const runGuard = async (executionLog: unknown, openPrs: OpenPr[] = [], status = 200) => {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
