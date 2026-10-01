@@ -177,10 +177,12 @@ export function paginateEntries<T>(entries: T[], page: number): T[] {
 }
 
 export function bundledTemplateEntries(): SitemapEntry[] {
-  return bundledTemplates.filter((template) => isValidTemplateSlug(template.slug ?? '')).map((template) => ({
-    path: `/profile/serp/${encodeURIComponent(template.slug!.trim())}/`,
-    lastmod: template.lastmod,
-  }));
+  return bundledTemplates.flatMap((template) => {
+    const slug = template.slug ?? '';
+    return isValidTemplateSlug(slug)
+      ? [{ path: `/profile/serp/${encodeURIComponent(slug.trim())}/`, lastmod: template.lastmod }]
+      : [];
+  });
 }
 
 export function staticSitemapEntries(): SitemapEntry[] {

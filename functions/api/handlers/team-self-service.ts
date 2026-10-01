@@ -19,7 +19,7 @@ export async function getCurrentUserEmail(env: Env, userId: string): Promise<str
 }
 
 function emailMatches(userEmail: string | null, inviteEmail: string): boolean {
-  return Boolean(userEmail) && userEmail!.toLowerCase() === inviteEmail.toLowerCase();
+  return userEmail ? userEmail.toLowerCase() === inviteEmail.toLowerCase() : false;
 }
 
 function isExpired(expiresAt: string): boolean {
