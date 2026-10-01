@@ -1,7 +1,8 @@
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { vi } from 'vitest';
 
-type AuthTables = { users: any[]; session: any[]; account: any[]; verification: any[] };
+type AuthRow = Record<string, unknown>;
+type AuthTables = { users: AuthRow[]; session: AuthRow[]; account: AuthRow[]; verification: AuthRow[] };
 
 const inMemoryAuth = vi.hoisted((): { tables: AuthTables } => ({
   tables: { users: [], session: [], account: [], verification: [] },

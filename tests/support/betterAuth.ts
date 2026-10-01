@@ -1,6 +1,9 @@
 import { vi } from 'vitest';
+import { z } from 'zod';
 import { createBetterAuth } from '@functions/api/better-auth';
 import type { Env } from '@functions/api/types';
+
+const sentEmail = z.object({ text: z.string() }).passthrough();
 
 export const LOCAL_AUTH_ORIGIN = 'http://localhost:8788';
 
@@ -28,7 +31,7 @@ export function captureTheEmailsSent(): string[] {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (_url: string, init?: RequestInit) => {
-      sentEmails.push(String(JSON.parse(String(init?.body)).text));
+      sentEmails.push(sentEmail.parse(JSON.parse(String(init?.body))).text);
       return new Response('{}', { status: 200 });
     }),
   );
