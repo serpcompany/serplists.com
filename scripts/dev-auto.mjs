@@ -1,6 +1,3 @@
-// `pnpm run dev:all`: the Next.js dev server (pages and the API on one origin) on a free
-// port, recorded in tmp/dev-session.json so `pnpm run dev:stop`, ui:snap and the Stripe
-// listener find it. Output is mirrored to tmp/logs/dev-all.log.
 import { spawn } from "node:child_process";
 import {
   buildDevServerCommand,
@@ -35,8 +32,6 @@ async function main() {
   }
   console.log(`App and API: ${config.origin} (API at ${config.origin}/api)`);
 
-  // The start time lets dev:stop and later launches tell this process from an unrelated one
-  // that reuses its pid after it exits.
   writeDevSession({ port: config.port, pid: process.pid, startedAt: currentProcessStartedAt() });
 
   const command = buildDevServerCommand({ config, baseEnv });
@@ -51,13 +46,11 @@ async function main() {
 
   const cleanupSession = () => releaseDevSession({ pid: process.pid });
 
-  // On Windows this ends the whole tree, so Next.js and workerd do not keep the port.
-  const shutdown = (signal) => killProcessTree(child, signal);
+  const stopTheServerAndEverythingItStarted = (signal) => killProcessTree(child, signal);
 
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  // Closing the terminal window arrives as SIGHUP on Windows.
-  process.on("SIGHUP", () => shutdown("SIGHUP"));
+  process.on("SIGINT", () => stopTheServerAndEverythingItStarted("SIGINT"));
+  process.on("SIGTERM", () => stopTheServerAndEverythingItStarted("SIGTERM"));
+  process.on("SIGHUP", () => stopTheServerAndEverythingItStarted("SIGHUP"));
 
   child.on("error", (error) => {
     cleanupSession();

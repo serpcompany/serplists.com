@@ -13,9 +13,7 @@ afterAll(() => {
   rmSync(workDir, { recursive: true, force: true });
 });
 
-// Starts an idle Node process from a script with this file name; resolves with the
-// pid and start time it reports, the same values dev-auto records.
-function startIdleProcess(fileName: string): Promise<{ pid: number; startedAt: number }> {
+function startIdleProcessReportingWhatTheLauncherRecords(fileName: string): Promise<{ pid: number; startedAt: number }> {
   const script = path.join(workDir, fileName);
   writeFileSync(
     script,
@@ -47,8 +45,7 @@ async function waitUntil(condition: () => boolean): Promise<boolean> {
   return condition();
 }
 
-// Runs dev:stop in a fresh checkout-like folder holding only tmp/dev-session.json.
-function runDevStop(session: Record<string, unknown>) {
+function runDevStopInACheckoutHoldingOnly(session: Record<string, unknown>) {
   const cwd = mkdtempSync(path.join(workDir, 'checkout-'));
   const sessionPath = path.join(cwd, 'tmp', 'dev-session.json');
   mkdirSync(path.dirname(sessionPath));
@@ -59,9 +56,9 @@ function runDevStop(session: Record<string, unknown>) {
 
 describe('dev:stop', { timeout: 60_000 }, () => {
   it('leaves a process alone when the recorded pid now belongs to another program', async () => {
-    const other = await startIdleProcess('editor-helper.cjs');
+    const other = await startIdleProcessReportingWhatTheLauncherRecords('editor-helper.cjs');
 
-    const result = runDevStop({ port: 3001, pid: other.pid, startedAt: other.startedAt });
+    const result = runDevStopInACheckoutHoldingOnly({ port: 3001, pid: other.pid, startedAt: other.startedAt });
 
     expect(result.status).toBe(0);
     expect(isRunning(other.pid)).toBe(true);
@@ -70,9 +67,9 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   });
 
   it('leaves a process alone when the session has no start times', async () => {
-    const other = await startIdleProcess('browser-helper.cjs');
+    const other = await startIdleProcessReportingWhatTheLauncherRecords('browser-helper.cjs');
 
-    const result = runDevStop({ port: 3001, pid: other.pid });
+    const result = runDevStopInACheckoutHoldingOnly({ port: 3001, pid: other.pid });
 
     expect(result.status).toBe(0);
     expect(isRunning(other.pid)).toBe(true);
@@ -80,9 +77,9 @@ describe('dev:stop', { timeout: 60_000 }, () => {
   });
 
   it('stops the dev launcher the session recorded', async () => {
-    const launcher = await startIdleProcess('dev-auto.mjs');
+    const launcher = await startIdleProcessReportingWhatTheLauncherRecords('dev-auto.mjs');
 
-    const result = runDevStop({ port: 3001, pid: launcher.pid, startedAt: launcher.startedAt });
+    const result = runDevStopInACheckoutHoldingOnly({ port: 3001, pid: launcher.pid, startedAt: launcher.startedAt });
 
     expect(result.status).toBe(0);
     expect(result.output).toContain(`Stopped dev session (pid ${launcher.pid})`);

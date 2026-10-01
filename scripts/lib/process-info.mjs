@@ -1,6 +1,3 @@
-// Read when a process started and its command line, so a recorded pid can be
-// checked against the process that actually holds it now. Operating systems
-// reuse pids, so a live pid alone does not prove it is the same process.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -21,7 +18,6 @@ function windowsQuery(pid) {
   );
 }
 
-/** Parses the PowerShell query's JSON; null when the process was not found or the output is unexpected. */
 export function parseWindowsProcessInfo(stdout) {
   const text = String(stdout ?? "").trim();
   if (!text) return null;
@@ -34,23 +30,16 @@ export function parseWindowsProcessInfo(stdout) {
   }
 }
 
-// `ps -o lstart=,args=` with LC_ALL=C: "Mon Sep 28 06:30:00 2026 node scripts/dev-auto.mjs all".
-const PS_LINE = /^\s*([A-Z][a-z]{2} [A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2} \d{4})\s+(.*)$/;
+const PS_LSTART_AND_ARGS_LINE = /^\s*([A-Z][a-z]{2} [A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2} \d{4})\s+(.*)$/;
 
-/** Parses `ps` output (local time, whole seconds); null when it does not match. */
 export function parsePsProcessInfo(stdout) {
-  const match = String(stdout ?? "").trim().match(PS_LINE);
+  const match = String(stdout ?? "").trim().match(PS_LSTART_AND_ARGS_LINE);
   if (!match) return null;
 
   const startedAt = Date.parse(match[1]);
   return Number.isFinite(startedAt) ? { startedAt, commandLine: match[2] } : null;
 }
 
-/**
- * `{ startedAt, commandLine }` for a pid (startedAt in epoch milliseconds), or
- * null when the process is gone, belongs to someone we cannot inspect, or the
- * query fails. Never throws.
- */
 export async function readProcessInfo(pid, { platform = process.platform, run = execFileAsync } = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return null;
 
@@ -75,7 +64,6 @@ export async function readProcessInfo(pid, { platform = process.platform, run = 
   }
 }
 
-/** When the current process started, in epoch milliseconds (compare with readProcessInfo). */
 export function currentProcessStartedAt() {
   return Math.round(Date.now() - process.uptime() * 1000);
 }

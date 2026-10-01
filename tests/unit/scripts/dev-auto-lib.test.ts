@@ -21,9 +21,6 @@ import {
 } from "../../../scripts/dev-auto-lib.mjs";
 import { applyDevBindings, DEV_BINDINGS_VARIABLE, parseDevBindings } from "../../../scripts/lib/dev-bindings.mjs";
 
-// `pnpm run dev:all` runs one Next.js dev server, which serves the pages and the API on one
-// origin, on the first free port from 3000, and records it in tmp/dev-session.json.
-
 describe("buildCorsAllowedOrigins", () => {
   it("adds the dev server's origin and preserves existing allowed origins", () => {
     expect(buildCorsAllowedOrigins("http://localhost:3000,https://tools.example.com", "http://localhost:3001")).toBe(
@@ -140,10 +137,6 @@ describe("findOpenPort", () => {
   });
 });
 
-// Dev servers listen on one address each (`localhost` on ::1 or 127.0.0.1, Wrangler on
-// 127.0.0.1 on Windows, next dev on a wildcard), from another process. On Windows a bind to another
-// address of the same port still succeeds, so a probe that binds only the wildcard calls
-// such a port free.
 describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
   const HOLDER = `
     const server = require("node:net").createServer();
@@ -153,8 +146,7 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
     process.stdin.resume();
   `;
 
-  // Holds a port on `listen` from another process; null when this machine lacks the address.
-  async function holdPort(listen: Record<string, unknown>) {
+  async function holdPortFromAnotherProcess(listen: Record<string, unknown>) {
     const child = spawn(process.execPath, ["-e", HOLDER, JSON.stringify(listen)], { stdio: ["pipe", "pipe", "inherit"] });
     const line = await new Promise<string>((resolve) => {
       child.stdout.once("data", (data) => resolve(String(data).trim()));
@@ -177,9 +169,10 @@ describe("isPortAvailable with real sockets", { timeout: 20_000 }, () => {
     ["::1", { host: "::1" }],
     ["0.0.0.0", { host: "0.0.0.0" }],
     [":: (dual-stack)", { host: "::", ipv6Only: false }],
-  ])("calls a port busy while another process listens on %s", async (_label, listen) => {
-    const holder = await holdPort(listen);
-    if (!holder) return; // No IPv6 on this machine.
+  ])("calls a port busy while another process listens on %s, though on Windows a bind to another of its addresses succeeds", async (_label, listen) => {
+    const holder = await holdPortFromAnotherProcess(listen);
+    const thisMachineLacksTheAddress = holder === null;
+    if (thisMachineLacksTheAddress) return;
     try {
       expect(await isPortAvailable(holder.port)).toBe(false);
     } finally {
@@ -231,11 +224,10 @@ describe("resolveDevServerPort", () => {
 });
 
 describe("resolveDevServerPort with a reused pid", { timeout: 60_000 }, () => {
-  // This test process is alive but is not a dev launcher, like a pid the OS reused.
   const reusedPid = process.pid;
   const reusedStartedAt = Math.round(Date.now() - process.uptime() * 1000);
 
-  it("starts a new server instead of trusting the stale session", async () => {
+  it("starts a new server instead of trusting a session whose pid now runs another program, as this test process does", async () => {
     const actual = await resolveDevServerPort({
       existingSession: { port: 3001, pid: reusedPid, startedAt: reusedStartedAt },
       portAvailabilityChecker: async () => true,
@@ -306,7 +298,7 @@ describe("isProcessAlive", () => {
     expect(isProcessAlive(1234, failingKill("ESRCH"))).toBe(false);
   });
 
-  it("treats a process we may not signal (EPERM) as not ours", () => {
+  it("treats a process we may not signal (EPERM) as not ours, since the launcher runs as the current user", () => {
     expect(isProcessAlive(1234, failingKill("EPERM"))).toBe(false);
   });
 });
@@ -315,7 +307,7 @@ describe("isOwnedDevProcess", () => {
   const launcher = { startedAt: 1_000_000, commandLine: "C:\\node\\node.exe scripts/dev-auto.mjs" };
   const alive = () => true;
 
-  it("accepts the recorded dev launcher", async () => {
+  it("accepts the recorded dev launcher at a start time the OS reports a little apart, as ps gives whole seconds", async () => {
     expect(await isOwnedDevProcess(4321, 1_000_400, { isAlive: alive, readInfo: async () => launcher })).toBe(true);
   });
 

@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Stop the dev server started by `pnpm run dev:all`, including its child processes. Killing
-// only the launcher (for example, stopping a background task) leaves Next.js and workerd
-// running on Windows and holding the port.
-// A recorded pid is killed only while it still belongs to the dev launcher that wrote it:
-// after the launcher dies, the OS can give its pid to an unrelated process.
 import { DEV_SESSION_PATH, readDevSession, stopDevSession } from "./dev-auto-lib.mjs";
 
 const session = readDevSession();

@@ -11,15 +11,10 @@ import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings.mjs";
 import { readProcessInfo } from "./lib/process-info.mjs";
 import { buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
 
-// `pnpm run dev:all` runs one Next.js dev server (pages and the API on one origin). It
-// prefers Next.js's own default port and moves up when another checkout or program holds it.
 export const DEFAULT_DEV_PORT = 3000;
 export const PORT_SEARCH_LIMIT = 25;
 export const DEV_SESSION_PATH = "tmp/dev-session.json";
-// The recorded start time and the one the OS reports differ by clock granularity
-// (ps prints whole seconds) and Node's startup time.
 export const START_TIME_TOLERANCE_MS = 5_000;
-// Used only when neither .dev.vars nor the shell has an auth secret.
 export const DEV_FALLBACK_AUTH_SECRET = "local-dev-better-auth-secret-32-chars";
 const DEV_LAUNCHER_SCRIPT = /dev-auto\.mjs/;
 
@@ -31,8 +26,6 @@ function normalizeStartedAt(value) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-// The launcher pid is stored with its process start time, so a pid the OS has since given
-// to another process is never mistaken for the launcher.
 function normalizeDevSession(value) {
   if (!value || !Number.isInteger(value.port) || value.port <= 0) {
     return null;
@@ -82,12 +75,6 @@ export function buildCorsAllowedOrigins(existingValue, origin) {
   return Array.from(origins).join(",");
 }
 
-/**
- * The dev server on `port`: its origin, and the Worker vars it needs that .dev.vars cannot
- * know (the port is picked at start). The API builds its own links (Stripe returns, invites)
- * from FRONTEND_URL, so it names this server; CORS_ALLOWED_ORIGINS keeps the configured
- * origins and adds it. `baseEnv` is .dev.vars with the shell's variables over it.
- */
 export function buildDevServerConfig({ port, baseEnv = {} }) {
   const origin = `http://localhost:${port}`;
   return {
@@ -101,12 +88,6 @@ export function buildDevServerConfig({ port, baseEnv = {} }) {
   };
 }
 
-/**
- * How dev-auto starts the server: `next dev` run with the current Node and Next.js's bin
- * script (no npx or pnpm shims, no shell), with .dev.vars and the shell's variables in its
- * environment (Next.js inlines NEXT_PUBLIC_* values from there) and the Worker vars in
- * DEV_BINDINGS_VARIABLE (scripts/lib/dev-bindings.mjs).
- */
 export function buildDevServerCommand({ config, baseEnv = {}, execPath = process.execPath }) {
   return {
     ...buildToolInvocation("next", ["dev", "--port", String(config.port)], { execPath }),
@@ -119,10 +100,6 @@ export function buildDevServerCommand({ config, baseEnv = {}, execPath = process
   };
 }
 
-// A dev server listens on one address: `localhost` is ::1 or 127.0.0.1 depending on the
-// resolver, Wrangler binds 127.0.0.1 on Windows and `localhost` elsewhere, and other tools
-// (next dev) take a wildcard. On Windows a bind to one of these succeeds while another
-// process holds the port on a different one, so a port is free only if every one of them binds.
 const PORT_PROBE_BINDS = [
   { host: "127.0.0.1" },
   { host: "::1" },
@@ -131,22 +108,17 @@ const PORT_PROBE_BINDS = [
 ];
 const PORT_PROBE_CONNECT_HOSTS = ["127.0.0.1", "::1"];
 const PORT_PROBE_CONNECT_TIMEOUT_MS = 500;
-// The machine lacks that address (IPv6 disabled): the bind says nothing about the port.
-const MISSING_ADDRESS_CODES = new Set(["EADDRNOTAVAIL", "EAFNOSUPPORT", "ENETUNREACH", "EPROTONOSUPPORT"]);
+const ADDRESS_THIS_MACHINE_LACKS_CODES = new Set(["EADDRNOTAVAIL", "EAFNOSUPPORT", "ENETUNREACH", "EPROTONOSUPPORT"]);
 
-// Resolves only after the probe server has closed, so the probe never holds the port itself.
-function canBind(port, listenOptions) {
+function bindsAndClosesAgain(port, listenOptions) {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once("error", (error) => resolve(MISSING_ADDRESS_CODES.has(error?.code)));
+    server.once("error", (error) => resolve(ADDRESS_THIS_MACHINE_LACKS_CODES.has(error?.code)));
     server.once("listening", () => server.close(() => resolve(true)));
     server.listen({ ...listenOptions, port, exclusive: true });
   });
 }
 
-// True when something accepts a connection there. A refusal, a missing address, or no answer
-// in time leaves the answer to the binds: on some Windows setups a refused loopback
-// connection takes a second or more, and that must not make every port look busy.
 function acceptsConnection(port, host) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port });
@@ -160,22 +132,15 @@ function acceptsConnection(port, host) {
   });
 }
 
-/**
- * True when no server holds `port` on any address a dev server may use: nothing accepts a
- * connection on either loopback address, and the port binds on 127.0.0.1, ::1, 0.0.0.0 and
- * the dual-stack wildcard in turn. The dev launcher, the smoke runner and the Stripe
- * listener's predicted target all pick ports with it (findOpenPort).
- */
 export async function isPortAvailable(port) {
   const accepted = await Promise.all(PORT_PROBE_CONNECT_HOSTS.map((host) => acceptsConnection(port, host)));
   if (accepted.some(Boolean)) return false;
   for (const listenOptions of PORT_PROBE_BINDS) {
-    if (!(await canBind(port, listenOptions))) return false;
+    if (!(await bindsAndClosesAgain(port, listenOptions))) return false;
   }
   return true;
 }
 
-/** The first free port from `preferredPort` up, trying `searchLimit` more after it. */
 export async function findOpenPort({
   preferredPort = DEFAULT_DEV_PORT,
   searchLimit = PORT_SEARCH_LIMIT,
@@ -189,8 +154,6 @@ export async function findOpenPort({
   throw new Error(`Unable to find an open port from ${preferredPort} to ${preferredPort + searchLimit}.`);
 }
 
-// EPERM means the pid belongs to another user or an elevated process. The dev
-// launcher always runs as the current user, so that process is not ours.
 export function isProcessAlive(pid, kill = (target, signal) => process.kill(target, signal)) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
@@ -204,11 +167,6 @@ export function isProcessAlive(pid, kill = (target, signal) => process.kill(targ
   }
 }
 
-/**
- * True only when `pid` is still the dev launcher that recorded it: the process
- * runs scripts/dev-auto.mjs and started at `startedAt`. A session written
- * without a start time is never trusted. Never throws.
- */
 export async function isOwnedDevProcess(pid, startedAt, { isAlive = isProcessAlive, readInfo = readProcessInfo } = {}) {
   if (normalizePid(pid) == null || normalizeStartedAt(startedAt) == null || !isAlive(pid)) {
     return false;
@@ -252,11 +210,6 @@ export function removeDevSession(sessionPath = DEV_SESSION_PATH) {
   }
 }
 
-/**
- * Where dev:all should run: on the recorded session's port while the launcher that
- * recorded it still runs (`running`, so dev:all does not start a second server), otherwise
- * on the first free port from `preferredPort`.
- */
 export async function resolveDevServerPort({
   existingSession = null,
   preferredPort = DEFAULT_DEV_PORT,
@@ -275,10 +228,6 @@ export async function resolveDevServerPort({
   };
 }
 
-/**
- * Removes the session file when it still records this launcher (`pid`). A session another
- * launcher wrote since is left alone.
- */
 export function releaseDevSession({ pid, sessionPath = DEV_SESSION_PATH }) {
   const session = readDevSession(sessionPath);
   if (session && session.pid !== pid) return session;
@@ -286,11 +235,6 @@ export function releaseDevSession({ pid, sessionPath = DEV_SESSION_PATH }) {
   return null;
 }
 
-/**
- * Stops the launcher a session recorded (dev:stop), with everything it started. Only a pid
- * that still belongs to its dev launcher is killed; a stale or reused pid is skipped. The
- * session file is always removed.
- */
 export async function stopDevSession({
   session,
   isOwned = isOwnedDevProcess,

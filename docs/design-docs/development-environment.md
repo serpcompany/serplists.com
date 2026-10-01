@@ -63,13 +63,21 @@ predicted target pick ports the same way. The URL is printed and saved in
 server's origin), `CORS_ALLOWED_ORIGINS` (the configured origins plus that one) and the
 auth secret to `next dev` in `SERPLISTS_DEV_BINDINGS`, and `next.config.ts` sets them
 over the bindings (`scripts/lib/dev-bindings.mjs`), so the API's own links (Stripe
-returns, invites) come back to this server. Use `pnpm run dev:stop` to stop: killing only
-the launcher leaves Next.js and workerd running on Windows and holding the port.
+returns, invites) come back to this server. `next.config.ts` sets them once
+`initOpenNextCloudflareForDev()` has set up the bindings; Next.js also loads the config in a
+process that serves no requests and has no bindings, where nothing is set. A connection
+probe that is refused or gets no answer within half a second leaves the answer to the binds,
+since on some Windows setups a refused loopback connection takes a second or more, and an
+address the machine lacks (`::1` with IPv6 off) does not make a port busy. Use
+`pnpm run dev:stop` to stop: killing only the launcher leaves Next.js and workerd running
+on Windows and holding the port. The launcher itself stops the server's whole process tree
+on Ctrl+C, on `SIGTERM`, and when its terminal window closes (`SIGHUP` on Windows).
 
 The session records the launcher's pid with its process start time. A launch or
 `dev:stop` trusts a recorded pid only while that pid still runs
-`scripts/dev-auto.mjs` and started at the recorded time, because the OS reuses the
-pid of a launcher that was killed. So a stale session file never makes `dev:all`
+`scripts/dev-auto.mjs` and started at the recorded time (within five seconds: `ps` reports
+whole seconds, and Node takes a moment to start), because the OS reuses the pid of a
+launcher that was killed. So a stale session file never makes `dev:all`
 skip starting, and `dev:stop` never kills an unrelated process: it skips (and
 reports) such a pid and always clears the file. While the recorded launcher runs,
 `dev:all` prints its URL and exits instead of starting a second server.
