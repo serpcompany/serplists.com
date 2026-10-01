@@ -1,17 +1,11 @@
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { truncateToUtf16Length } from '@/lib/utils/truncateText';
 
-// POST /api/checklists rejects a run title longer than this (checklistPayloadSchema in
-// functions/api/utils/payloads.ts); src/lib/schemas/nameLimits.ts holds the number and a
-// unit test keeps the two in step.
 export const RUN_TITLE_MAX_LENGTH = RUN_TITLE_MAX;
 
 const SEPARATOR = ' - ';
 const ELLIPSIS = '…';
 
-// '<title> - <suffix>', shortening the title so the whole name fits the run title limit.
-// The suffix is kept because it tells runs apart; a Date (the default: now) becomes its
-// toLocaleString(), which is the default name every Start Run entry point gives a run.
 export const buildDefaultRunName = (
   templateTitle: string,
   suffix: string | Date = new Date(),
@@ -30,15 +24,14 @@ export const buildDefaultRunName = (
   }
 
   const titleBudget = maxLength - SEPARATOR.length - tail.length - ELLIPSIS.length;
-  // A suffix that leaves no room (or none at all): the title alone is the better name.
-  if (!tail || titleBudget < 1) {
+  const nameIsTitleAlone = !tail || titleBudget < 1;
+  if (nameIsTitleAlone) {
     return truncateToUtf16Length(title, maxLength).trimEnd();
   }
 
   return `${truncateToUtf16Length(title, titleBudget).trimEnd()}${ELLIPSIS}${SEPARATOR}${tail}`;
 };
 
-// A typed run name (trimmed), or the default name when the field was left blank.
 export const resolveRunName = (
   input: string | undefined,
   templateTitle: string,
