@@ -129,6 +129,22 @@ describe("sharing from the runs list, where each Share replaces the run's token 
     expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
   });
 
+  it('forgets the link once Stop sharing succeeds, since that link no longer works, so the next Share makes a new one', async () => {
+    const list = await mountRunsList([listedRun('run-1', false)]);
+    await list.share('run-1');
+    await list.render([listedRun('run-1', true)]);
+    await list.closeDialog();
+
+    await act(async () => {
+      await list.current().stopSharing('run-1');
+    });
+
+    expect(list.current().sharedLink).toBeNull();
+    await list.share('run-1');
+    expect(createChecklistRunShare).toHaveBeenCalledTimes(2);
+    expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
+  });
+
   it('forgets the link, and closes its dialog, when the run is deleted elsewhere and leaves the list', async () => {
     const list = await mountRunsList([listedRun('run-1', false), listedRun('run-2', false)]);
     await list.share('run-1');

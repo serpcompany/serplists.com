@@ -38,7 +38,7 @@ describe('getRunRowActions', () => {
     expect(getRunRowActions(staleRun, getOrganizationPermissions('admin')).canDelete).toBe(true);
   });
 
-  it('never offers to revalidate a shared snapshot or a current run', () => {
+  it('never offers to revalidate a current run, or a shared snapshot, which is frozen so revalidating it always fails', () => {
     expect(getRunRowActions({ ...staleRun, isPublic: true }, PERSONAL_PERMISSIONS).canRevalidate).toBe(false);
     expect(getRunRowActions({ ...staleRun, isStale: false }, PERSONAL_PERMISSIONS).canRevalidate).toBe(false);
   });

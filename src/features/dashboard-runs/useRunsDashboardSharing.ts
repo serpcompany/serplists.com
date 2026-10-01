@@ -8,17 +8,9 @@ import { createRunsDashboardShareUrl } from './shareRun';
 
 type SharedLink = { runId: string; url: string };
 
-// A link is reused only while the list shows its run shared. Another tab or a teammate may
-// have stopped sharing it (the list refetches), which killed the link.
 const isLinkListedShared = (link: SharedLink, runs: Pick<ChecklistRun, 'id' | 'isPublic'>[]) =>
   runs.find((run) => run.id === link.runId)?.isPublic === true;
 
-/**
- * Share and Stop sharing on the runs list. The link is always shown in a dialog; copying is
- * best effort (see createShareLinkAndCopy). Each create replaces the run's share token, so a
- * second tap waits and a reopen reuses it while the list shows the run shared; stopping
- * sharing, or a refreshed list that shows the run private or no longer lists it, forgets it.
- */
 export function useRunsDashboardSharing({
   runs,
   onRunShared,
@@ -26,9 +18,7 @@ export function useRunsDashboardSharing({
   onStopSharingRun,
 }: {
   runs: Pick<ChecklistRun, 'id' | 'isPublic'>[];
-  // Called once a share has made the run public (see createRunsDashboardShareUrl).
   onRunShared?: (runId: string) => void;
-  // Awaited before a refused share shows its error (refreshAfterShareFailure).
   onShareFailed?: (error: unknown) => Promise<void>;
   onStopSharingRun?: (runId: string) => Promise<void>;
 }) {
@@ -37,8 +27,6 @@ export function useRunsDashboardSharing({
   const sharingRunId = useRef<string | null>(null);
   const [stoppingShareRunId, setStoppingShareRunId] = useState<string | null>(null);
 
-  // Checked only when the list itself changes, so a link made before the list catches up
-  // with the share (markRunShared marks the run public in it) is kept.
   const [checkedRuns, setCheckedRuns] = useState(runs);
   if (checkedRuns !== runs) {
     setCheckedRuns(runs);
@@ -78,7 +66,6 @@ export function useRunsDashboardSharing({
     setStoppingShareRunId(runId);
     try {
       await onStopSharingRun(runId);
-      // The link shown for this run no longer works: the next Share makes a new one.
       setSharedLink((current) => (current?.runId === runId ? null : current));
       toast.success('Sharing stopped. The old link no longer works.');
     } catch (error) {
@@ -89,7 +76,6 @@ export function useRunsDashboardSharing({
   };
 
   return {
-    // A forgotten link closes its dialog rather than showing an empty one.
     isShareDialogOpen: isShareDialogOpen && sharedLink !== null,
     setIsShareDialogOpen,
     sharedLink,

@@ -3,11 +3,6 @@ import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 export type RunSourceTemplate = Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>;
 export type RunStatusFilter = 'all' | 'in_progress' | 'completed';
 
-// The runs page links each run to the Template it started from. The catalog holds only
-// public Templates, so a run from a private Personal or Organization Template finds its
-// source in the workspace list; an Organization run from someone else's public Template
-// finds it only in the catalog. The workspace copy wins because the catalog is
-// edge-cached for up to five minutes.
 export function buildRunTemplateLookup<T extends { id: string }>(
   catalog: readonly T[],
   workspace: readonly T[] | undefined,
@@ -19,7 +14,6 @@ export function buildRunTemplateLookup<T extends { id: string }>(
   return byId;
 }
 
-// Runs started from a library Template store no template_id, so an empty id never matches.
 export function findRunTemplate<T>(
   lookup: ReadonlyMap<string, T>,
   templateId: string | undefined,
