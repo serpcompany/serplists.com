@@ -55,7 +55,7 @@ describe('getPrimaryTaskAction', () => {
   });
 });
 
-describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, which older runs and API writes can hold and which is not done', () => {
+describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, which older runs and API writes can hold, treats the task as not done', () => {
   const subTasks = (...done: boolean[]) => ({
     type: 'subItems' as const,
     value: '',

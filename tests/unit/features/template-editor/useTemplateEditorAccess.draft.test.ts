@@ -115,7 +115,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("useTemplateEditorAccess with a kept draft it offered, whose slot work on a different template neither clears nor replaces until the user restores or discards it", () => {
+describe("useTemplateEditorAccess with an offered kept draft, which work on a different template neither clears nor replaces until the user restores or discards it", () => {
   it("keeps an unrestored draft when a different template is created", () => {
     saveTemplateDraft(owner, draftA, storage);
     const access = editorOnceItReadTheKeptDraft();

@@ -37,7 +37,7 @@ const draftValues = buildTemplateEditorFormValues({
   ],
 });
 
-describe("saveTemplateForVisit, for a restored draft whose create succeeds after the user left, which the editor must never offer back for a duplicate save", () => {
+describe("saveTemplateForVisit when a restored draft's create succeeds after the user left, so the editor never offers it back for a duplicate save", () => {
   const owner = { userId: "u1" };
 
   const shownPage = () => {
