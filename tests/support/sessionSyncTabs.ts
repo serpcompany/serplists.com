@@ -101,3 +101,12 @@ export function createTab(options: {
 }
 
 export const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+export function twoTabsOnOneChannel(secondTabUser: typeof alice, firstTab: Parameters<typeof createTab>[0]) {
+  const hub = createBroadcastChannelHub();
+  const tab1 = createTab(firstTab);
+  const tab2 = createTab({ state: signedInAs(secondTabUser) });
+  const disconnectTab1 = tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
+  tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+  return { hub, tab1, tab2, disconnectTab1 };
+}

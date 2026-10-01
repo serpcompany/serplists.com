@@ -36,19 +36,18 @@ const template = launchChecklist({
 
 const renderProvider = aTemplatesProviderForEachTest();
 
-async function showRunsPageWhileTheServerHoldsRevision5(client: QueryClient) {
-  const listFetch = vi.fn(async () => [run(4)]);
-  const observer = new QueryObserver(client, {
-    queryKey: ['runs', 'user-1', 'personal'],
-    queryFn: listFetch,
-    staleTime: 5 * 60 * 1000,
-  });
+async function showAListThatWillReadNext<T>(client: QueryClient, queryKey: unknown[], shown: T[], next: T[]) {
+  const listFetch = vi.fn(async () => shown);
+  const observer = new QueryObserver(client, { queryKey, queryFn: listFetch, staleTime: 5 * 60 * 1000 });
   const unsubscribe = observer.subscribe(() => {});
-  await vi.waitFor(() => expect(client.getQueryData(['runs', 'user-1', 'personal'])).toEqual([run(4)]));
+  await vi.waitFor(() => expect(client.getQueryData(queryKey)).toEqual(shown));
   listFetch.mockClear();
-  listFetch.mockResolvedValue([run(5)]);
+  listFetch.mockResolvedValue(next);
   return { listFetch, unsubscribe };
 }
+
+const showRunsPageWhileTheServerHoldsRevision5 = (client: QueryClient) =>
+  showAListThatWillReadNext(client, ['runs', 'user-1', 'personal'], [run(4)], [run(5)]);
 
 const conflict = (code: string) => createApiError(409, { error: 'Checklist run changed since it was loaded.', code });
 
@@ -111,18 +110,9 @@ describe('refresh after a conflict, so a retry sends the current revision or ver
 });
 
 async function showTemplateListWithTheCatalogCached(client: QueryClient) {
-  const listFetch = vi.fn(async () => [template]);
-  const observer = new QueryObserver(client, {
-    queryKey: ['templates', 'user-1', 'personal'],
-    queryFn: listFetch,
-    staleTime: 5 * 60 * 1000,
-  });
-  const unsubscribe = observer.subscribe(() => {});
-  await vi.waitFor(() => expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([template]));
-  listFetch.mockClear();
-  listFetch.mockResolvedValue([]);
+  const shown = await showAListThatWillReadNext(client, ['templates', 'user-1', 'personal'], [template], []);
   client.setQueryData(['templates', 'catalog'], [template, { ...template, id: 'template-2' }]);
-  return { listFetch, unsubscribe };
+  return shown;
 }
 
 const archivedTemplate = () => createApiError(404, { error: 'Template not found or unauthorized' });

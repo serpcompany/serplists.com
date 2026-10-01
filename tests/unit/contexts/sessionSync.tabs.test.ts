@@ -11,15 +11,12 @@ import {
   flush,
   signedInAs,
   signedInCheck,
+  twoTabsOnOneChannel,
 } from '../../support/sessionSyncTabs';
 
 describe('session sync across tabs, which share one session cookie', () => {
   it('switches a tab signed in as Alice to Bob when another tab signs in as Bob, while the announcing tab reads nothing', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, { state: signedInAs(alice), answers: [signedInCheck(bob)] });
 
     tab2.sync.announce(bob.id);
     await flush();
@@ -31,11 +28,7 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('signs a tab out when another tab signs out', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }] });
-    const tab2 = createTab({ state: signedInAs(alice) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(alice, { state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }] });
 
     tab2.sync.announce(null);
     await flush();
@@ -59,11 +52,7 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('keeps the current user, and the same state object, when the check fails or finds the same user', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unknown', status: 503 }, signedInCheck(alice)] });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, { state: signedInAs(alice), answers: [{ kind: 'unknown', status: 503 }, signedInCheck(alice)] });
     const before = tab1.state();
 
     tab2.sync.announce(bob.id);
@@ -77,15 +66,11 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('checks once more after a running check, since that one may have read the old session', async () => {
-    const hub = createBroadcastChannelHub();
     const pending: Array<(check: SessionCheck) => void> = [];
-    const tab1 = createTab({
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, {
       state: signedInAs(alice),
       readSession: () => new Promise<SessionCheck>((resolve) => pending.push(resolve)),
     });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
 
     tab2.sync.announce(bob.id);
     tab2.sync.announce(bob.id);
@@ -103,11 +88,7 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('drops a session answer that started before a newer one was applied', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, { state: signedInAs(alice), answers: [signedInCheck(bob)] });
 
     const pageLoadCheckStillOut = tab1.sync.beginRead();
     tab2.sync.announce(bob.id);
@@ -118,11 +99,7 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('does not let a failed re-check drop an older answer that is still coming', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: { user: null, session: null, status: 'unavailable' }, answers: [{ kind: 'unknown' }] });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, { state: { user: null, session: null, status: 'unavailable' }, answers: [{ kind: 'unknown' }] });
 
     const retry = tab1.sync.beginRead();
     tab2.sync.announce(bob.id);
@@ -134,14 +111,10 @@ describe('session sync across tabs, which share one session cookie', () => {
 
   it('lets a sign-in or sign-out in this tab win over a check still in flight', async () => {
     let resolveCheck: (check: SessionCheck) => void = () => {};
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, {
       state: signedInAs(alice),
       readSession: () => new Promise<SessionCheck>((resolve) => { resolveCheck = resolve; }),
     });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
 
     tab2.sync.announce(bob.id);
     tab1.sync.claim();
@@ -201,13 +174,9 @@ describe('session sync across tabs, which share one session cookie', () => {
   });
 
   it('stops listening and closes its channel when disconnected', async () => {
-    const hub = createBroadcastChannelHub();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    const disconnect = tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { hub, tab1, tab2, disconnectTab1 } = twoTabsOnOneChannel(bob, { state: signedInAs(alice), answers: [signedInCheck(bob)] });
 
-    disconnect();
+    disconnectTab1();
     tab2.sync.announce(bob.id);
     tab1.showTab();
     await flush();

@@ -1,11 +1,12 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TeamSummary } from '@/lib/api';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer } from '../../fixtures/fakeDom';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 
 const apiMocks = vi.hoisted(() => ({ createTeam: vi.fn(), getTeams: vi.fn() }));
@@ -31,24 +32,16 @@ const team = (id: string, name: string): TeamSummary => ({
 const joined = team('team-x', 'Joined Org');
 const stored = team('team-y', 'Stored Org');
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
-
-let root: Root | null = null;
-
 beforeEach(() => {
   apiMocks.getTeams.mockReset();
   safeLocalStorage.setItem(STORAGE_KEY, stored.id);
 });
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   safeLocalStorage.removeItem(STORAGE_KEY);
 });
+
+const fakeDom = aFakeDomForEachTest();
 
 async function mountWorkspace() {
   let value: ReturnType<typeof useWorkspace> | undefined;
@@ -57,9 +50,9 @@ async function mountWorkspace() {
     return null;
   };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  root = createRoot(createFakeContainer() as unknown as Element);
+  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
   act(() =>
-    root?.render(
+    root.render(
       <QueryClientProvider client={queryClient}>
         <WorkspaceProvider>
           <Probe />

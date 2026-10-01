@@ -27,18 +27,12 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-vi.mock('@/contexts/sessionSync', async (importOriginal) => {
-  const realSessionSync = await importOriginal<typeof import('@/contexts/sessionSync')>();
-  return {
-    ...realSessionSync,
-    createSessionSync: (...args: Parameters<typeof realSessionSync.createSessionSync>) => ({
-      ...realSessionSync.createSessionSync(...args),
-      keepAlive,
-    }),
+vi.mock('@/contexts/sessionSync', async (importOriginal) =>
+  (await import('../../support/sessionSyncModule')).sessionSyncModuleWith(importOriginal, () => ({ keepAlive }), {
     browserSessionSyncEnvironment: () => withoutBrowserListeners,
     startSessionKeepAlive,
-  };
-});
+  }),
+);
 
 import { anAuthProviderForEachTest } from '../../support/authProviderHarness';
 

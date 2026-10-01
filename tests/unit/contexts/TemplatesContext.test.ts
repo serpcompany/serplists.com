@@ -99,6 +99,17 @@ describe('buildCreateRunRequest', () => {
   });
 });
 
+const textBlock = { id: 'content-1', type: 'text', value: 'Some text content' };
+const subItemsBlock = (secondSubItem: Record<string, unknown>) => ({
+  id: 'content-2',
+  type: 'subItems',
+  value: '',
+  subItems: [
+    { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
+    { id: 'sub-2', title: 'Sub-item 2', ...secondSubItem },
+  ],
+});
+
 const importedSections = [
   {
     id: 'section-1',
@@ -108,18 +119,7 @@ const importedSections = [
         id: 'item-1',
         title: 'Item with description',
         description: 'This is a detailed description',
-        contents: [
-          { id: 'content-1', type: 'text', value: 'Some text content' },
-          {
-            id: 'content-2',
-            type: 'subItems',
-            value: '',
-            subItems: [
-              { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
-              { id: 'sub-2', title: 'Sub-item 2' },
-            ],
-          },
-        ],
+        contents: [textBlock, subItemsBlock({})],
       },
       { id: 'item-2', title: 'Simple item', description: 'Just a simple item' },
     ],
@@ -140,18 +140,7 @@ describe('mapApiTemplate on an imported template as the API stores it', () => {
     const [section] = mapApiTemplate(storedTemplateRow(JSON.stringify(importedSections))).sections;
 
     expect(section.items.map((item) => item.description)).toEqual(['This is a detailed description', 'Just a simple item']);
-    expect(section.items[0].contents).toEqual([
-      { id: 'content-1', type: 'text', value: 'Some text content' },
-      {
-        id: 'content-2',
-        type: 'subItems',
-        value: '',
-        subItems: [
-          { id: 'sub-1', title: 'Sub-item 1', isCompleted: true },
-          { id: 'sub-2', title: 'Sub-item 2', isCompleted: false },
-        ],
-      },
-    ]);
+    expect(section.items[0].contents).toEqual([textBlock, subItemsBlock({ isCompleted: false })]);
   });
 
   it('reads the items column the same whether it arrives as JSON text or as an array', () => {

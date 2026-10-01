@@ -20,22 +20,14 @@ vi.mock('@/lib/auth-client', () => ({
 
 const { observedProfileAnnouncement } = vi.hoisted(() => ({ observedProfileAnnouncement: vi.fn() }));
 
-vi.mock('@/contexts/sessionSync', async (importOriginal) => {
-  const realSessionSync = await importOriginal<typeof import('@/contexts/sessionSync')>();
-  return {
-    ...realSessionSync,
-    createSessionSync: (...args: Parameters<typeof realSessionSync.createSessionSync>) => {
-      const sync = realSessionSync.createSessionSync(...args);
-      return {
-        ...sync,
-        announceProfileChange: (userId: string) => {
-          observedProfileAnnouncement(userId);
-          sync.announceProfileChange(userId);
-        },
-      };
+vi.mock('@/contexts/sessionSync', async (importOriginal) =>
+  (await import('../../support/sessionSyncModule')).sessionSyncModuleWith(importOriginal, (sync) => ({
+    announceProfileChange: (userId: string) => {
+      observedProfileAnnouncement(userId);
+      sync.announceProfileChange(userId);
     },
-  };
-});
+  })),
+);
 
 import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
 

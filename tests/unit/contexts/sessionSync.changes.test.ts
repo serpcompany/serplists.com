@@ -11,16 +11,13 @@ import {
   flush,
   signedInAs,
   signedInCheck,
+  twoTabsOnOneChannel,
 } from '../../support/sessionSyncTabs';
 
 describe('keeping unsaved work before a background session change, while the tab still shows the user who typed it', () => {
   it("runs before another tab's sign-out signs this tab out", async () => {
-    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }], beforeSessionLost });
-    const tab2 = createTab({ state: signedInAs(alice) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(alice, { state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }], beforeSessionLost });
 
     tab2.sync.announce(null);
     await flush();
@@ -60,12 +57,8 @@ describe('keeping unsaved work before a background session change, while the tab
   });
 
   it('runs before the tab switches to a user another tab signed in as', async () => {
-    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
-    const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)], beforeSessionLost });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, { state: signedInAs(alice), answers: [signedInCheck(bob)], beforeSessionLost });
 
     tab2.sync.announce(bob.id);
     await flush();
@@ -102,16 +95,12 @@ describe('keeping unsaved work before a background session change, while the tab
 
   it('does not run for an answer that a sign-in or sign-out in this tab replaced', async () => {
     let resolveCheck: (check: SessionCheck) => void = () => {};
-    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
-    const tab1 = createTab({
+    const { tab1, tab2 } = twoTabsOnOneChannel(bob, {
       state: signedInAs(alice),
       readSession: () => new Promise<SessionCheck>((resolve) => { resolveCheck = resolve; }),
       beforeSessionLost,
     });
-    const tab2 = createTab({ state: signedInAs(bob) });
-    tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
-    tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
 
     tab2.sync.announce(null);
     tab1.sync.claim();
