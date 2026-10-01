@@ -1,3 +1,5 @@
+import { urlOrigin } from "./origin-list";
+
 export type TeamInviteDelivery =
   | {
       mode: "link";
@@ -18,18 +20,8 @@ type BuildTeamInviteDeliveryOptions = {
   token: string;
 };
 
-function originOf(url: string | null | undefined): string | null {
-  const trimmed = url?.trim();
-  if (!trimmed) return null;
-  try {
-    return new URL(trimmed).origin;
-  } catch {
-    return null;
-  }
-}
-
 function resolveInviteOrigin(request: Request, frontendUrl?: string): string {
-  return originOf(request.headers.get("Origin")) ?? originOf(frontendUrl) ?? new URL(request.url).origin;
+  return urlOrigin(request.headers.get("Origin")) ?? urlOrigin(frontendUrl) ?? new URL(request.url).origin;
 }
 
 export function buildTeamInvitePath(token: string): string {
