@@ -27,6 +27,12 @@ vi.mock('sonner', () => ({ toast }));
 
 const EXISTING_URL = '/api/uploads/file?key=template-images%2Fu1%2Fa.png';
 
+async function chooseFiles(tree: unknown, files: File[]) {
+  const fileInput = findFileInput(tree);
+  assert.exists(fileInput, 'the file input');
+  await (fileInput.props.onChange as (event: unknown) => Promise<void>)({ target: { files } });
+}
+
 describe('FileUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,12 +42,8 @@ describe('FileUpload', () => {
 
   it('uploads nothing when the page passes no signed-in user, since the presentational field cannot read the session', async () => {
     const tree = FileUpload({ type: 'file', value: '', onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
-    assert.exists(fileInput, 'the file input');
 
-    await (fileInput.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [new File(['PK'], 'report.zip', { type: 'application/zip' })] },
-    });
+    await chooseFiles(tree, [new File(['PK'], 'report.zip', { type: 'application/zip' })]);
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
   });
@@ -85,13 +87,7 @@ describe('FileUpload', () => {
       onFileChange,
     });
 
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
-    assert.exists(fileInput, 'the file input');
-
-    const file = new File(['png'], 'b.png', { type: 'image/png' });
-    await (fileInput.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [file] },
-    });
+    await chooseFiles(tree, [new File(['png'], 'b.png', { type: 'image/png' })]);
 
     expect(onFileChange).toHaveBeenCalledTimes(1);
     expect(onFileChange).toHaveBeenCalledWith({
@@ -114,12 +110,8 @@ describe('FileUpload', () => {
 
   it('names the supported types instead of uploading a file the API would refuse', async () => {
     const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
-    assert.exists(fileInput, 'the file input');
 
-    await (fileInput.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [new File(['<p>'], 'page.html', { type: 'text/html' })] },
-    });
+    await chooseFiles(tree, [new File(['<p>'], 'page.html', { type: 'text/html' })]);
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
@@ -131,13 +123,9 @@ describe('FileUpload', () => {
   it('uploads a Windows ZIP to a File block', async () => {
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: '/api/uploads/file?key=k', fileName: 'r.zip' });
     const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
-    const fileInput = findElement(tree, (element) => element.props.type === 'file');
     const zip = new File(['PK'], 'report.zip', { type: 'application/x-zip-compressed' });
-    assert.exists(fileInput, 'the file input');
 
-    await (fileInput.props.onChange as (event: unknown) => Promise<void>)({
-      target: { files: [zip] },
-    });
+    await chooseFiles(tree, [zip]);
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: zip });
   });

@@ -21,6 +21,7 @@ import type { TemplatesContextProps } from '@/types/checklist';
 import { buildRun } from '../../fixtures/runExecutionFixtures';
 
 const template = launchChecklist();
+const theTemplateMadePublic = { ...savePayloadOf(template), isPublic: true };
 
 const renderTemplatesProvider = aTemplatesProviderForEachTest();
 const renderProvider = () =>
@@ -69,7 +70,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...savePayloadOf(template), isPublic: true });
+    await context.updateTemplate(theTemplateMadePublic);
 
     expectNoToasts();
     expect(isInvalidated(client, ['templates', 'user-1', 'personal'])).toBe(true);
@@ -79,7 +80,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
     const { client, context } = renderProvider();
 
-    await context.updateTemplate({ ...savePayloadOf(template), isPublic: true });
+    await context.updateTemplate(theTemplateMadePublic);
 
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(false);
   });
@@ -103,7 +104,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.updateTemplate.mockRejectedValue(new Error('Version conflict'));
     const { context } = renderProvider();
 
-    await expect(context.updateTemplate({ ...savePayloadOf(template), isPublic: true })).rejects.toThrow('Version conflict');
+    await expect(context.updateTemplate(theTemplateMadePublic)).rejects.toThrow('Version conflict');
     expectNoToasts();
   });
 
