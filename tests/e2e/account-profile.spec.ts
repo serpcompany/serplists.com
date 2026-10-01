@@ -1,11 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// Account Settings profile form against a mocked API, so it does not depend on
-// R2 uploads or change seeded users.
-
 const AVATAR_URL = 'https://avatars.e2e.test/new-avatar.png';
-// 1x1 transparent PNG.
-const PNG_BYTES = Buffer.from(
+const TRANSPARENT_PIXEL_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
   'base64',
 );
@@ -26,7 +22,7 @@ async function mockProfileApi(page: Page) {
   const updateRequests: unknown[] = [];
 
   await page.route('https://avatars.e2e.test/**', (route) =>
-    route.fulfill({ body: PNG_BYTES, contentType: 'image/png' }),
+    route.fulfill({ body: TRANSPARENT_PIXEL_PNG, contentType: 'image/png' }),
   );
 
   await page.route('**/api/**', async (route) => {
@@ -85,7 +81,7 @@ async function mockProfileApi(page: Page) {
   return { updateRequests };
 }
 
-test.describe('account profile form', () => {
+test.describe('account profile form, on a mocked API that needs no R2 upload and changes no seeded user', () => {
   test('an avatar upload keeps unsaved name and username edits', async ({ page }) => {
     const api = await mockProfileApi(page);
     await page.goto('/dashboard/settings/');
@@ -101,7 +97,7 @@ test.describe('account profile form', () => {
     await (await fileChooser).setFiles({
       name: 'avatar.png',
       mimeType: 'image/png',
-      buffer: PNG_BYTES,
+      buffer: TRANSPARENT_PIXEL_PNG,
     });
     await expect(page.getByText('Avatar updated successfully!')).toBeVisible({ timeout: 15_000 });
 

@@ -229,6 +229,12 @@ Common failures:
   `next dev`), and move inside the app without a reload with `navigateInApp()` from
   `tests/e2e/support/navigation.ts` (Next.js's router; a synthetic `pushState` only
   changes the URL).
+- A spec about what the app keeps in memory between pages (the query cache across a
+  sign-out and the next sign-in, the session read right after signing in, a page title
+  after a client-side navigation) gets there through the app: `navigateInApp()`, a link or
+  a button. `page.goto()` and `page.reload()` start the app afresh, with a new QueryClient
+  and a new session read, which hides the bug. Arriving through the app also keeps browser
+  Back inside it.
 - The browser tests run the production configuration (`E2E_SITE_ENV` in
   `tests/e2e/run-smoke-lib.mjs`): the runner builds with `SITE_ENV=production`, the preview
   gets the same var, and CI's Build step sets it too. Pages are then indexable and load Tag

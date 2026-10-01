@@ -1,13 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// The URL parser removes dot segments, so a return path such as /.//evil.com/share/x
-// normalizes to //evil.com/share/x, which a browser resolves to another origin. Sign-in
-// must never follow it: Login loads a sensitive return path as a new page when Tag
-// Manager runs in the document, and that full page load could leave the site.
-
 const OFFSITE_RETURN_PATH = '/.//evil.com/share/x';
+const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
 const TAG_HOSTS = /(^|\.)(googletagmanager\.com|google-analytics\.com|analytics\.google\.com|doubleclick\.net)$/;
+
+async function stubTagManagerContainer(page: Page) {
+  await page.route(
+    (url) => TAG_HOSTS.test(url.hostname),
+    (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
+  );
+}
 
 async function recordOffsiteRequests(page: Page): Promise<string[]> {
   const requests: string[] = [];
@@ -18,11 +21,7 @@ async function recordOffsiteRequests(page: Page): Promise<string[]> {
       await route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>Left the app</h1>' });
     },
   );
-  // The container stays stubbed so the test never calls out, but its bootstrap still runs.
-  await page.route(
-    (url) => TAG_HOSTS.test(url.hostname),
-    (route) => route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
-  );
+  await stubTagManagerContainer(page);
   return requests;
 }
 
@@ -39,8 +38,7 @@ test.describe('sign-in return path', () => {
     await page.goto(`/login/?next=${encodeURIComponent(OFFSITE_RETURN_PATH)}`);
     await signInAsJohn(page);
 
-    // A refused return path counts as none: the console home, My Templates.
-    await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(CONSOLE_HOME_URL, { timeout: 30_000 });
     expect(new URL(page.url()).origin).toBe(appOrigin);
     expect(offsite).toEqual([]);
   });
@@ -51,7 +49,7 @@ test.describe('sign-in return path', () => {
 
     await page.goto('/login/');
     await signInAsJohn(page);
-    await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(CONSOLE_HOME_URL, { timeout: 30_000 });
 
     await page.goto(`/login/?next=${OFFSITE_RETURN_PATH}`);
 

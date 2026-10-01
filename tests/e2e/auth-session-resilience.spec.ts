@@ -1,8 +1,7 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// A failed session check (5xx, 429, network) is not a sign-out: the user keeps their page and
-// their stored Organization, and gets a retry instead of /login (src/contexts/authSession.ts).
+const CONSOLE_HOME_PATH = '/dashboard/templates/';
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({ body: JSON.stringify(body), contentType: 'application/json', status });
@@ -70,8 +69,6 @@ test('a failing session check keeps the page and the Organization, then recovers
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
 });
 
-// A rate-limited session check is retried with backoff, and a check that keeps failing offers
-// a retry, against the real API.
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
@@ -107,9 +104,7 @@ test('a 429 on the page-load session check retries instead of redirecting to log
   await page.goto('/dashboard');
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
   expect(rejected).toBe(1);
-  // Once the retried check confirms the session, /dashboard forwards a signed-in user to
-  // their Templates (a redirect in next.config.ts), never to /login.
-  expect(new URL(page.url()).pathname).toBe('/dashboard/templates/');
+  expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);
   expect(loginNavigations).toEqual([]);
 });
 
@@ -125,11 +120,10 @@ test('a session check that keeps failing offers a retry instead of the login pag
     await route.continue();
   });
 
-  // The server sends /dashboard to My Templates (next.config.ts); the tab stays there.
   await page.goto('/dashboard');
   const retry = page.getByRole('button', { name: 'Retry' });
   await expect(retry).toBeVisible({ timeout: 30_000 });
-  expect(new URL(page.url()).pathname).toBe('/dashboard/templates/');
+  expect(new URL(page.url()).pathname).toBe(CONSOLE_HOME_PATH);
 
   failing = false;
   await retry.click();

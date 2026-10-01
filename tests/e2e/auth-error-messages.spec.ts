@@ -1,9 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// Errors the API router sends for /api/auth/* itself must reach the user, and a
-// 429 must read as "wait", never as a failed sign-in (src/lib/auth/authErrors.ts).
-
 test('a rate-limited sign-in tells the user to wait', async ({ page }) => {
   await page.route('**/api/auth/sign-in/email*', async (route) => {
     await route.fulfill({

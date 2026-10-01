@@ -1,8 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-// Better Auth sends a failed verification link to the callback with
-// `&error=<code>` appended (see tests/unit/functions/api/verify-email-redirect.test.ts).
-
 test.describe('email verification return', () => {
   test('an expired link explains itself and offers a new email instead of claiming success', async ({
     page,
