@@ -37,7 +37,7 @@ export const NAVIGATE_WHILE_VISIT_IS_CURRENT_MESSAGE =
   "account change means the user must move on wherever they went (sign-in, sign-up, a password reset), call it inside " +
   `${MOVE_ON_WHEREVER_THE_USER_WENT}() from src/lib/navigation/moveOnAfterAnAccountChange.ts.`;
 
-export const NAVIGATE_IN_A_PROMISE_CALLBACK_MESSAGE =
+const NAVIGATE_IN_A_PROMISE_CALLBACK_MESSAGE =
   "{{call}}() moves the user in a .then(), .catch() or .finally() callback, which runs once a request settles, " +
   "without checking that they are still on this page, so a request that finishes after they left pulls them back. " +
   "Check visit.isCurrent() inside the callback (or return early once it is not), pass the visit to a helper that " +
