@@ -141,7 +141,7 @@ module.exports = {
         "This module is not reachable from any route file in src/app (the API's route handler, the sitemaps, " +
         "page metadata), so it is dead code. Delete it or import it where needed.",
       from: { path: APP_ROUTES },
-      to: { path: "^functions/", pathNot: ["\\.json$"], reachable: false },
+      to: { path: "^functions/", pathNot: ["\\.json$", "\\.d\\.ts$"], reachable: false },
     },
     {
       name: "no-circular",
