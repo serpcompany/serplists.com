@@ -486,7 +486,9 @@ page with tags of its own builds them with `buildPageMetadata`
 `og:url` at the page's canonical URL on `https://serplists.com` (`buildCanonicalUrl` in
 `src/lib/seo/siteOrigin.ts`, on every environment), and sets robots to `index, follow` unless
 the page says otherwise. The route also renders the same text as JSON-LD (`JsonLd` and
-`PageJsonLd` in `src/components/seo/`). A build that is not production also sends
+`PageJsonLd` in `src/components/seo/`); a page whose text waits for a lookup gives
+`PageJsonLd` the lookup still in flight, inside `<Suspense>`, so the rest of the page
+streams without waiting for it. A build that is not production also sends
 `X-Robots-Tag: noindex, nofollow`, which wins over the tag (below).
 
 ### Production and other environments

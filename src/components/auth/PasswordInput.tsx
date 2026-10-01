@@ -11,14 +11,10 @@ import {
 } from '@/components/ui/input-group';
 
 type PasswordInputProps = Omit<ComponentProps<typeof InputGroupInput>, 'type'> & {
-  // A leading icon, such as a lock.
   icon?: ReactNode;
-  // What the show and hide button names: "Show password", "Hide confirm password".
   toggleLabel?: string;
 };
 
-// A password field with a button that shows or hides what was typed (the shadcn InputGroup).
-// Each field shows or hides on its own.
 export function PasswordInput({ icon, toggleLabel = 'password', ...props }: PasswordInputProps) {
   const [visible, setVisible] = useState(false);
 

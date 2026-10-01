@@ -7,21 +7,15 @@ import { FieldDescription } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 type AuthCardProps = {
-  // Beside the content from lg (hidden below it), as the image in shadcn's login block.
   aside?: ReactNode;
   children: ReactNode;
   description?: ReactNode;
-  // A short line above the title, such as the brand name.
   eyebrow?: ReactNode;
-  // A line under the content, such as a link to the other sign-in page.
   footer?: ReactNode;
   icon: ReactNode;
   title: ReactNode;
 };
 
-// A card centered in the window with a page's own short task: an icon tile, the page's h1 and
-// description, the content (a form, a message) and a footer line, with an optional aside
-// beside them from lg. shadcn's login block: the sign-in pages and the Organization invite.
 export function AuthCard({ aside, children, description, eyebrow, footer, icon, title }: AuthCardProps) {
   return (
     <PageSection

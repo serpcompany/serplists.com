@@ -4,7 +4,6 @@ import { useThemeToggle } from '@/components/theme/useThemeToggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-// The sun in light mode and the moon in dark mode, from the page's class.
 export function ThemeIcon() {
   return (
     <span className="relative size-4" aria-hidden="true">

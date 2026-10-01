@@ -10,7 +10,6 @@ const POINTS = [
   'Clean sharing when someone needs visibility without dashboard access.',
 ];
 
-// What SERP Lists is for, beside the sign-in forms from lg.
 function AuthAside() {
   return (
     <div className="flex flex-1 flex-col justify-between gap-8">
@@ -36,8 +35,6 @@ function AuthAside() {
   );
 }
 
-// The frame of Log in, Register, Forgot password and Reset password: the auth card with the
-// brand over the page's title, and what SERP Lists is for beside the form from lg.
 export function AuthPageShell(props: {
   title: string;
   description?: ReactNode;

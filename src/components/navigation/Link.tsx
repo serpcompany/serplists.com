@@ -10,18 +10,6 @@ import { reportNavigation } from '@/lib/navigation/navigationSignal';
 
 type LinkProps = ComponentProps<typeof NextLink>;
 
-/**
- * Every in-app link. While a page has a leave guard (useUnsavedChangesGuard), a link to
- * another page goes through it (leavePage): the page decides whether the user leaves, and
- * the router then opens the link. A link that only changes the search or hash of the current
- * page never asks. External, modifier-key, and new-tab clicks are left to the browser
- * (Next.js does not call onNavigate for them), and beforeunload covers those.
- *
- * A link prefetches its page on intent: once the user points at, focuses or touches it
- * (Next.js's hover-triggered prefetch pattern). Next.js would otherwise prefetch every link
- * that scrolls into view, and each prefetch is a request to the Worker. A caller's own
- * `prefetch` wins.
- */
 export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   { href, onNavigate, replace, scroll, prefetch, onMouseEnter, onFocus, onTouchStart, ...props },
   ref,
@@ -62,7 +50,6 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
           reportNavigation();
           return;
         }
-        // The page decides first, so the router opens the link instead of Next.js's Link.
         event.preventDefault();
         const target = hrefToString(href);
         leavePage(replace ? 'replace' : 'push', (method) => {

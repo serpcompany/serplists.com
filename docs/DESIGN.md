@@ -41,6 +41,8 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   `<html>` has `suppressHydrationWarning` because the class it sets is not in the server's
   HTML. The server cannot read the stored theme, so a component that shows
   the theme (a toggle's label) renders light first and follows the stored theme on mount.
+  An icon that follows the `dark` class through CSS (`ThemeIcon`, the sun or the moon) is
+  right from the first paint, so the toggle's icon never waits for its label.
 - **Icons:** `lucide-react`.
 - **Feedback:** `sonner` toasts for results of user actions. The app's providers
   (`src/app/providers.tsx`) mount only the sonner `Toaster`, so import `toast`
