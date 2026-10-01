@@ -103,7 +103,7 @@ Personal data uses User ownership. Organization data uses Organization ownership
 - Personal templates: `templates.owner_type = 'user'`, `templates.user_id = current user`, `templates.team_id IS NULL`.
 - Organization Templates: `templates.owner_type = 'team'`, `templates.team_id = active Organization`, with creator/updater attribution on User columns. The stored `team` values are legacy identifiers.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
-- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion. The handler decides from the status it read; the write's revision guard turns it into `409 edit_conflict` if another save changed the run in between, so the decision always matches the stored status.
+- Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion: the run page sends the run's status with every save, so a rename, a tick or a note on a completed run arrives as `completed` again. Reopening keeps both stamps too; only revalidation clears them. A completion through a share link names nobody, so a reopened run does not keep its previous completer, and an already completed legacy row without a date gets one once, naming nobody. The handler decides from the status it read; the write's revision guard turns it into `409 edit_conflict` if another save changed the run in between, so the decision always matches the stored status.
 
 Handlers must authorize Organization access before returning or mutating Organization-scoped rows. Do not trust the legacy client-supplied `teamId` without checking Organization Membership and role.
 
@@ -242,7 +242,13 @@ active-run limit like any other (the old `POST /api/checklists/:templateId/share
 route, which created public runs outside that count, is gone and returns `404`).
 The public guest URL is `/share/:token/`. Guest saves never replace the run's
 structure: the server copies only completion and notes from the payload onto the
-stored sections, matched by the ids the share page uses. When sharing fails, distinguish an
+stored sections, matched by the ids the share page uses (the stored ids, or positions
+such as `1` and `1-1` where an id is missing). A stored entry the payload leaves out
+keeps its state, and an unknown id is ignored. A Sub-task matches by its id when that id
+is unique within the task, and otherwise by its position in the same list, only when the
+guest's entry carries the same id or none. The share page sends back stored values it
+does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
+than failing whole. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.
 

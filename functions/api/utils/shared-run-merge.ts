@@ -1,18 +1,12 @@
 import { z } from 'zod';
 import { normalizeSectionsPayload, parseJsonArray } from './payloads';
 
-// What a share-link guest may change on a run: task and sub-item completion, and task
-// notes. Titles, descriptions, contents, order, and ids always come from the stored run,
-// so a forwarded link can never rewrite, inject into, or wipe the run.
-
 export const MAX_SHARED_RUN_NOTES_LENGTH = 5000;
 
 const sharedRunItemSchema = z.object({
   id: z.string(),
   isCompleted: z.boolean().optional(),
   completed: z.boolean().optional(),
-  // The share page sends back stored values it does not normalize, so their shape is
-  // checked where they are used instead of failing the whole save.
   notes: z.unknown().optional(),
   subItems: z.unknown().optional(),
   contents: z.unknown().optional(),
@@ -61,9 +55,6 @@ function parseSubItem(value: unknown): SharedSubItem | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-// Sub-items live in item.subItems and in item.contents[].subItems. Stored ids that are
-// unique within the item match by id; missing or duplicate ids match by position in the
-// same list, and only when the guest entry carries the same (or no) id.
 function mergeItemSubItems(stored: JsonRecord, guest: SharedRunItem): { subItems?: unknown[]; contents?: unknown[] } {
   const guestContents = asArray(guest.contents);
   const guestSubItems = [
@@ -126,17 +117,11 @@ function mergeItem(stored: JsonRecord, guest: SharedRunItem): { item: JsonRecord
   return { item: next };
 }
 
-/** Parses a run's stored `items` column into the sections shape the share page renders. */
 export function readStoredRunSections(items: unknown): unknown[] | null {
   const parsed = parseJsonArray(items ?? '[]');
   return parsed ? normalizeSectionsPayload(parsed).sections : null;
 }
 
-/**
- * Applies a guest's completion and notes onto the stored sections, matched by the same ids
- * the share page uses (stored ids, or `String(s + 1)` / `${s + 1}-${i + 1}` when missing).
- * Stored entries the payload leaves out keep their state; unknown ids are ignored.
- */
 export function mergeSharedRunState(
   storedSections: unknown[],
   payloadSections: SharedRunSection[],

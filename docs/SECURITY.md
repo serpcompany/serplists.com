@@ -102,7 +102,8 @@
   (`functions/api/utils/shared-run-merge.ts`); every other field is ignored.
   Because the token grants write access, run reads (lists, detail, archived,
   the share page) never return it or its timestamps
-  (`serializeChecklistRun`), and history lists never return the audit diffs
+  (`serializeChecklistRun`), or a read-only Organization viewer could edit shared
+  runs, and history lists never return the audit diffs
   where older rows may still hold it. Only the share-creation
   responses hand out a link, and they require permission to update the run.
   `GET /api/checklists/shared/:token` selects and returns a fixed field list
@@ -113,7 +114,8 @@
   Link holders are guests: a signed-in visitor's edit is attributed to them only
   if they already belong to the run's owner context (the Personal owner or an
   active member of its Organization), and run history and the Organization
-  activity feed hide any other share-link actor, including on older rows. Only the
+  activity feed hide any other share-link actor, including on older rows, so posting
+  a link cannot be used to collect the names and emails of people who use it. Only the
   share-link rows are hidden; that person's other events keep their name
   (`functions/api/utils/share-link-actors.ts`).
 - **Uploads** are written under the uploader's key prefix. Only an account's own

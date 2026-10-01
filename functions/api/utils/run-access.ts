@@ -1,10 +1,6 @@
 import type { Env } from '../types';
 import { canManageTeam, canRunTeamTemplates, canViewTeam, getActiveTeamMembership, normalizeTeamRole } from './team-access';
 
-// Who may do what with a checklist run. A Personal run belongs to its owner; an Organization
-// run to the active members of its Organization, by role. Archived runs are only visible to
-// history and restore.
-
 type RunRecord = Record<string, unknown>;
 
 const isArchived = (run: RunRecord) => typeof run.deleted_at === 'string' && Boolean(run.deleted_at);
