@@ -9,6 +9,8 @@ Security rules and required secrets are in [SECURITY.md](../SECURITY.md).
 - `functions/api/better-auth.ts`: Better Auth configuration
 - `functions/api/[[route]].ts`: forwards `/api/auth/*` to `auth.handler(request)`
 - `functions/api/utils/session.ts`: read-only session lookup for API handlers
+- `functions/api/utils/better-auth-logger.ts`: Better Auth's own log lines, as JSON without
+  email addresses (its default logger prints them to the console)
 - `functions/api/handlers/auth.ts`: profile endpoints
 - `src/lib/auth-client.ts`: client (`credentials: "include"` plus the username plugin)
 - `src/contexts/CloudflareAuthContext.tsx`: auth state, login, and registration
@@ -51,7 +53,10 @@ and user-facing failure states when a supporting service is unavailable.
   email delivery is available.
 - Each account gets at most one email of each kind a minute and five an hour;
   extra requests succeed without sending, and a send that fails does not count
-  ([rate limits](../SECURITY.md#rate-limits)).
+  ([rate limits](../SECURITY.md#rate-limits)). `/send-verification-email` needs no
+  session and accepts any registered address, so its callback sends nothing to an
+  address that is already verified. (Change-email, which is not enabled, would pass
+  the user with `emailVerified` false, so the skip would not get in its way.)
 - Protected routes preserve the requested destination (path, query, and hash)
   through login and sign-up (`src/lib/auth/returnPath.ts`), so a signed-out
   return from Stripe keeps `?billing=success`. It travels as the `next` query
@@ -61,8 +66,10 @@ and user-facing failure states when a supporting service is unavailable.
   `/.//host` is rejected too); without one, Login goes to the console home,
   `/dashboard/templates/` (`getPostSignInDestination`).
 - A password reset revokes every session for the account, including the one in
-  the browser doing the reset; `ResetPassword.tsx` signs that browser out locally
-  (the server answers that its session is gone) before sending it to `/login/`.
+  the browser doing the reset (`onPasswordReset` runs before Better Auth deletes the
+  sessions, so it only logs `password_reset_completed` and must never throw);
+  `ResetPassword.tsx` signs that browser out locally (the server answers that its
+  session is gone) before sending it to `/login/`.
   Change password revokes other sessions only when asked (`revokeOtherSessions`,
   on by default in `SecuritySection.tsx`).
 - Sessions last 7 days and slide: Better Auth extends a session, and resends its
@@ -156,7 +163,9 @@ and user-facing failure states when a supporting service is unavailable.
   mixed-case one is found only in that casing) and previews an unsaved edit as the
   lowercase URL it will have (`buildProfilePreviewPath` in `src/lib/routes.ts`).
   Better Auth does not validate `name` or `image`, so `databaseHooks.user` checks
-  them on every user write (`functions/api/utils/user-profile-validation.ts`): the
+  them on every user write (`functions/api/utils/user-profile-validation.ts`), and
+  the update hook always returns the checked data, because Better Auth replaces the
+  update with what that hook returns: the
   name is trimmed and must be 1-100 characters, and the avatar must be an upload
   served under `/api/uploads/` by this API or `R2_PUBLIC_BASE_URL`. Updates check
   only the fields they write. The limits live in `src/lib/schemas/userProfileSchema.ts`,

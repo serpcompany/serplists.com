@@ -3,13 +3,6 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import { json, jsonError } from '../utils/response';
 
-/**
- * Usernames are stored lowercased (Better Auth's username plugin), but a typed
- * or shared /profile/JohnDoe URL keeps its casing. Look up both the value as
- * given (usernames saved before the plugin may be mixed case) and its lowercase
- * form, preferring an exact match. An IN list keeps both lookups on
- * idx_users_username; lower(username) or COLLATE NOCASE would scan the table.
- */
 export async function handleProfileByUsername(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const username = url.searchParams.get('username')?.trim();
@@ -41,9 +34,6 @@ export async function handleProfileByUsername(request: Request, env: Env): Promi
   return json(user);
 }
 
-// Resolves only users with a public username, the same profiles by-username serves. An id
-// taken from a public response (a template's creator, say) must not turn into the name and
-// avatar of someone who never made a public profile. Unknown ids get the same 404.
 export async function handleProfileById(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const userId = url.searchParams.get('userId');

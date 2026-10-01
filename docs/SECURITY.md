@@ -23,8 +23,11 @@
 - **Reset and verification links use the host the request reached.**
   `createBetterAuth` pins `baseURL` to the request origin, because Better Auth
   1.3.4 otherwise builds links (and a trusted origin) from `X-Forwarded-Host`,
-  which a client can send; the router also drops that header. Keep `baseURL`
-  pinned and leave `advanced.trustedProxyHeaders` off when upgrading.
+  which a client can send; the router also drops that header. On Cloudflare the
+  host in `request.url` is one routed to this project, so a client cannot choose
+  it. Keep `baseURL` pinned, as an origin with no path (Better Auth does not append
+  `basePath` to one that has a path), and leave `advanced.trustedProxyHeaders` off
+  when upgrading.
 - **New passwords are 10 characters to 72 UTF-8 bytes.** Passwords are hashed
   with bcrypt, which ignores everything after 72 bytes, so a longer password
   would be stored as its first 72 bytes. A Better Auth `hooks.before`
@@ -45,8 +48,10 @@
   `/api/auth/*` request to send `Content-Type: application/json` (`415` otherwise),
   which forces a CORS preflight for other origins, and refuses with `403` a request
   whose `Origin` is not the API's own origin, `FRONTEND_URL`, or
-  `CORS_ALLOWED_ORIGINS` (including `Origin: null`), or that has no `Origin` but is
-  marked `Sec-Fetch-Site: cross-site`. Scripts that send neither header still work.
+  `CORS_ALLOWED_ORIGINS` (the set Better Auth trusts, `resolveTrustedOrigins` in
+  `functions/api/utils/cors.ts`; including `Origin: null`), or that has no `Origin`
+  but is marked `Sec-Fetch-Site: cross-site`. Scripts that send neither header still
+  work.
 - **Account fields are validated on every user write.** Better Auth accepts any
   value for `name` and `image`, so `databaseHooks.user` in
   `functions/api/better-auth.ts` (rules in `functions/api/utils/user-profile-validation.ts`
