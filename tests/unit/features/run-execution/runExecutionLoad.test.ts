@@ -3,28 +3,31 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApiError } from '@/lib/api-errors';
 import { loadRunExecutionData } from '@/features/run-execution/runExecutionLoad';
 
-import { buildRun, runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
+import { runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
 
 describe('run execution model loading', () => {
-  it('loads a private run from cache before hitting the API', async () => {
-    const cachedRun = buildRun();
-    const apiClient = runExecutionApiClient();
+  it('loads a private run from the API by its id', async () => {
+    const apiClient = {
+      ...runExecutionApiClient(),
+      getChecklistById: vi.fn().mockResolvedValue({
+        id: 'run-1',
+        template_id: 'template-1',
+        title: 'Private checklist',
+        items: JSON.stringify([{ id: 'item-1', title: 'Only item' }]),
+        status: 'in_progress',
+        user_id: 'user-1',
+      }),
+    };
 
-    const result = await loadRunExecutionData(
-      {
-        getCachedRun: () => cachedRun,
-        runId: 'run-1',
-      },
-      { apiClient, updateRun: vi.fn() },
-    );
+    const result = await loadRunExecutionData({ runId: 'run-1' }, { apiClient, updateRun: vi.fn() });
 
-    expect(result).toEqual({
+    expect(apiClient.getChecklistById).toHaveBeenCalledWith('run-1');
+    expect(result).toMatchObject({
       kind: 'ok',
       mode: 'private',
-      run: cachedRun,
+      run: { id: 'run-1', title: 'Private checklist', userId: 'user-1' },
       selectedItemId: 'item-1',
     });
-    expect(apiClient.getChecklistById).not.toHaveBeenCalled();
   });
 
   it('loads a shared run by share token and normalizes legacy items', async () => {

@@ -1,12 +1,10 @@
 import { getApiErrorMessage, isApiError } from '@/lib/api-errors';
-import type { ChecklistRun } from '@/types/checklist';
 
 import { getInitialSelectedItemId, mapChecklistToRun } from './runExecutionMappers';
 import type { RunExecutionLoadResult, RunExecutionMode } from './runExecutionResult';
 import { getApiClient, type RunExecutionDependencies } from './runPersistence';
 
 export type RunExecutionLoadOptions = {
-  getCachedRun?: ((id: string) => ChecklistRun | undefined) | undefined;
   runId?: string | undefined;
   shareToken?: string | undefined;
 };
@@ -27,16 +25,6 @@ export const loadRunExecutionData = async (
   if (mode === 'private') {
     if (!options.runId) {
       return { kind: 'not_found', mode };
-    }
-
-    const cachedRun = options.getCachedRun?.(options.runId);
-    if (cachedRun) {
-      return {
-        kind: 'ok',
-        mode,
-        run: cachedRun,
-        selectedItemId: getInitialSelectedItemId(cachedRun),
-      };
     }
 
     try {

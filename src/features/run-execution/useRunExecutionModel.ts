@@ -83,7 +83,6 @@ export const useRunExecutionModel = (
 
       const result = await loadRunExecutionData(
         {
-          getCachedRun: latestOptions.current.getCachedRun,
           runId: options.runId,
           shareToken: options.shareToken,
         },
