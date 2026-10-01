@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -82,7 +83,7 @@ async function put(body: Record<string, unknown>) {
     method: 'PUT',
     body: JSON.stringify({ expected_revision: 4, ...body }),
   }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  return { response, data: await readJson(response, jsonObject) };
 }
 
 function savedUpdates(): Record<string, unknown> {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -38,7 +39,7 @@ const put = async (body: Record<string, unknown>) => {
     new Request('http://localhost/api/templates/template-1', { method: 'PUT', body: JSON.stringify(body) }),
     mockEnv as never,
   );
-  return { status: response.status, data: (await response.json()) as Record<string, unknown> };
+  return { status: response.status, data: await readJson(response, jsonObject) };
 };
 
 describe('PUT /api/templates/:id response, which names the version and slug it stored so the editor\'s next save needs no list reload', () => {

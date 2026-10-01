@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { readJson } from '../../../support/readJson';
+
+const requestIdBody = z.object({ requestId: z.string() }).passthrough();
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
@@ -59,7 +63,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
     );
 
     const responseRequestId = response.headers.get('X-Request-Id');
-    const data = await response.json();
+    const data = await readJson(response, requestIdBody);
 
     expect(response.status).toBe(200);
     expect(responseRequestId).toBeTruthy();

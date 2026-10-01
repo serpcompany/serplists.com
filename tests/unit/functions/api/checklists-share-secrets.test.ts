@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
+import { readJson } from '../../../support/readJson';
 import { getTableColumns } from 'drizzle-orm';
 
 const dbMocks = vi.hoisted(() => {
@@ -194,7 +196,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
       method: 'POST',
       body: '{}',
     }), env);
-    const data = await response.json() as { shareToken: string; sharePath: string };
+    const data = await readJson(response, z.object({ shareToken: z.string(), sharePath: z.string() }).passthrough());
 
     expect(response.status).toBe(200);
     expect(data.shareToken).toEqual(expect.any(String));

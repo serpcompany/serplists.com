@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 import { varFromWranglerToml } from '../../../support/wranglerToml';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
 const PASSWORD = 'a-strong-unbreached-passphrase-81';
@@ -75,7 +76,7 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
       const response = await signUp(origin, productionEnv(), 'new-user@example.com');
 
       expect(response.status).toBe(503);
-      expect((await response.json()).code).toBe('auth_email_unavailable');
+      expect((await readJson(response, apiErrorBody)).code).toBe('auth_email_unavailable');
       expect(userCount()).toBe(0);
     },
   );

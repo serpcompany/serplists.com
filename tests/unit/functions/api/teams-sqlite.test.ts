@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
+import { apiEnv } from "../../../support/apiEnv";
 
 const sessionMocks = vi.hoisted(() => ({
   userId: "owner-user" as string | null,
@@ -15,7 +16,7 @@ const createdAt = "2026-01-01T00:00:00.000Z";
 let d1: MigratedSqliteD1;
 
 function env() {
-  return { DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" };
+  return apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 }
 
 async function asUser(userId: string, method: string, path: string, body?: unknown) {

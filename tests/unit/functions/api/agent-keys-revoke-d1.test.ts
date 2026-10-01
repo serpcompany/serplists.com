@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
+import { apiEnv } from "../../../support/apiEnv";
+import { jsonObject, readJson } from "../../../support/readJson";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
@@ -31,9 +33,9 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
   const revoke = async (id: string) => {
     const response = await handleAgentKeys(
       new Request(`http://localhost/api/agent-keys/${id}`, { method: "DELETE" }),
-      { DB: database.d1 } as never,
+      apiEnv({ DB: database.d1 }),
     );
-    return { status: response.status, body: await response.json() };
+    return { status: response.status, body: await readJson(response, jsonObject) };
   };
 
   beforeEach(() => {

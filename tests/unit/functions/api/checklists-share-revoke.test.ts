@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
@@ -81,7 +82,7 @@ async function stopSharing(runId = 'run-1') {
   const response = await handleChecklists(new Request(`http://localhost/api/checklists/run/${runId}/share`, {
     method: 'DELETE',
   }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  return { response, data: await readJson(response, jsonObject) };
 }
 
 function sqlText(condition: unknown): string {
@@ -205,7 +206,7 @@ describe('stopping a run share, which makes the run private and ends its old lin
       method: 'POST',
       body: JSON.stringify({ expected_revision: 4 }),
     }), env);
-    const data = await response.json() as { code: string; error: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('shared_run_conflict');

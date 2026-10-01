@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { handleStripe } from "@functions/api/handlers/stripe";
 import { seedBillingUser } from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
+import { apiErrorBody, readJson } from "../../../support/readJson";
+
+const webhookReceipt = z.object({ received: z.boolean().optional(), duplicate: z.boolean().optional() }).passthrough();
 
 const WEBHOOK_SECRET = "whsec_test";
 
@@ -142,7 +146,7 @@ describe("Stripe webhook handler", () => {
     await deliver(checkoutCompletedEvent("evt_duplicate"));
 
     const response = await deliver(checkoutCompletedEvent("evt_duplicate"));
-    const data = await response.json();
+    const data = await readJson(response, webhookReceipt);
 
     expect(response.status).toBe(200);
     expect(data.duplicate).toBe(true);
@@ -174,7 +178,7 @@ describe("Stripe webhook handler", () => {
       livemode: true,
       data: { object: subscriptionObject() },
     });
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(500);
     expect(data.error).toBe("Stripe webhook processing failed");
@@ -247,7 +251,7 @@ describe("Stripe webhook handler", () => {
     failOnlyTheFirstWrite();
 
     const response = await deliver(checkoutCompletedEvent("evt_transient"));
-    const data = await response.json();
+    const data = await readJson(response, webhookReceipt);
 
     expect(response.status).toBe(500);
     expect(data.duplicate).toBeUndefined();
@@ -291,7 +295,7 @@ describe("Stripe webhook handler", () => {
 
     expect(await (await deliver(event)).json()).toEqual({ received: true });
     expect(eventErrors("evt_invoice")).toEqual([{ error: null }]);
-    expect((await (await deliver(event)).json()).duplicate).toBe(true);
+    expect((await readJson(await deliver(event), webhookReceipt)).duplicate).toBe(true);
   });
 
   it("acknowledges a subscription event for a user who no longer exists instead of failing forever", async () => {

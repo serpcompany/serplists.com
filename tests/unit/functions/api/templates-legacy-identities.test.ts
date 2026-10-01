@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -103,8 +104,9 @@ type Store = ReturnType<typeof createStore>;
 function serveFromAndWriteBatchesTo(store: Store) {
   dbMocks.selectChain.limit.mockImplementation(async () => [store.template]);
   dbMocks.selectChain.orderBy.mockImplementation(async () => [store.run]);
-  dbMocks.db.update.mockImplementation((table: unknown) => ({
-    set: (values: Row) => ({ where: () => ({ table, values }) }),
+  dbMocks.db.update.mockImplementation((table?: unknown) => ({
+    ...dbMocks.updateChain,
+    set: vi.fn((values: Row) => ({ where: () => ({ table, values }) })),
   }));
   dbMocks.db.batch.mockImplementation(async (statements: Array<{ table?: unknown; values?: Row }>) => {
     for (const statement of statements) {
@@ -132,7 +134,7 @@ const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistT
       method: 'PUT',
       body: JSON.stringify(buildTemplateUpdateRequest(payload)),
     }), mockEnv as never);
-    const body = (await response.json()) as Record<string, unknown>;
+    const body = await readJson(response, jsonObject);
     responses.push(body);
     if (!response.ok) throw new Error(String(body.error));
     return parseTemplateUpdateResponse(body);
@@ -276,7 +278,7 @@ describe('saving a Template whose content blocks have no ids', () => {
 
   it('keeps content_version and the run when a save changes only the description', async () => {
     const { template, run } = createStore(cases[0][1]);
-    const store = {
+    const store: Store = {
       template: { ...template, items: JSON.stringify(sectionsWithContentBlocksWithoutIds()) },
       run: { ...run, items: JSON.stringify(sectionsWithContentBlocksWithoutIds(true)) },
     };

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
@@ -98,7 +99,7 @@ async function send(handler: typeof handleChecklists, path: string, method: stri
     method,
     body: body === undefined ? undefined : JSON.stringify(body),
   }), env);
-  return { status: response.status, body: await response.json() as Record<string, unknown> };
+  return { status: response.status, body: await readJson(response, jsonObject) };
 }
 
 function batchStatements(): Statement[] {
@@ -225,7 +226,7 @@ describe('audit rows are written only when the guarded write lands', () => {
     );
 
     expect(response.status).toBe(409);
-    expect((await response.json() as Record<string, unknown>).code).toBe('edit_conflict');
+    expect((await readJson(response, jsonObject)).code).toBe('edit_conflict');
     expectGuardedAuditBeforeItsUpdate(schema.templates, ['"version" = ?', '"deleted_at" is null', '"is_public" = ?']);
   });
 

@@ -8,6 +8,7 @@ import {
   stripeSubscription as stripeSubscriptionFor,
 } from "../../../support/billingCheckout";
 import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+import { apiErrorBody, readJson } from "../../../support/readJson";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const teamAccessMocks = vi.hoisted(() => ({
@@ -154,7 +155,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription, where
     );
 
     expect(response.status).toBe(409);
-    expect((await response.json()).code).toBe("already_subscribed");
+    expect((await readJson(response, apiErrorBody)).code).toBe("already_subscribed");
     expect(stripeCalls()).toEqual([]);
   });
 
@@ -393,7 +394,7 @@ describe("billing for a user whose plan support manages", () => {
       new Request("http://localhost/api/billing/portal", { method: "POST", body: "{}" }),
       env(),
     );
-    const body = await response.json();
+    const body = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(body.code).toBe("no_billing_account");

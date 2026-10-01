@@ -1,6 +1,7 @@
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 const memory = vi.hoisted(() => ({ db: {} as Record<string, any[]> }));
 
@@ -16,6 +17,7 @@ vi.mock('@functions/api/db', () => ({
 import { createBetterAuth } from '@functions/api/better-auth';
 import { NEW_PASSWORD_BODY_FIELDS } from '@functions/api/utils/password-length';
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { readJson } from '../../../support/readJson';
 
 const EMAIL = 'john@test.com';
 const PASSWORD = 'original-password-1';
@@ -39,7 +41,7 @@ function signIn(password: string, email = EMAIL) {
 }
 
 async function errorMessage(response: Response): Promise<string> {
-  return String((await response.json()).message ?? '');
+  return String((await readJson(response, z.object({ message: z.string().optional() }).passthrough())).message ?? '');
 }
 
 describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes', { timeout: 30_000 }, () => {

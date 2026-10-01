@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
 let ipCounter = 0;
@@ -36,7 +37,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
 
   async function expectAuthErrorBody(response: Response, status: number, code?: string) {
     expect(response.status).toBe(status);
-    const body = await response.json();
+    const body = await readJson(response, betterAuthErrorBody);
     expect(typeof body.message).toBe('string');
     expect(body.message.trim()).not.toBe('');
     expect(body.error).toBe(body.message);
@@ -133,7 +134,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
     );
 
     expect(response.status).toBe(413);
-    const body = await response.json();
+    const body = await readJson(response, apiErrorBody);
     expect(body.error).toMatch(/Payload too large/);
     expect(body).not.toHaveProperty('message');
   });

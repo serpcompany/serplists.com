@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import {
   classifyClipySummary,
@@ -8,8 +9,25 @@ import {
 import { withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
 import { PREDEFINED_CATEGORIES } from '@/utils/categories';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
+import { apiEnv } from '../../support/apiEnv';
+import { readJson } from '../../support/readJson';
 
 const sourceUrl = 'https://clipy.online/video/8fptqlnappr6';
+
+const draftContent = z.object({ type: z.string(), value: z.string() }).passthrough();
+const clipyDraftBody = z
+  .object({
+    draft: z
+      .object({
+        categories: z.array(z.string()),
+        tags: z.array(z.string()),
+        sections: z.array(
+          z.object({ items: z.array(z.object({ contents: z.array(draftContent) }).passthrough()) }).passthrough(),
+        ),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 function completeContext() {
   return {
@@ -76,7 +94,7 @@ function request(url = sourceUrl) {
 describe('Clipy template generation', () => {
   it('requires a Serplists session before fetching Clipy', async () => {
     const fetchMock = vi.fn();
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: fetchMock,
       getUserId: vi.fn().mockResolvedValue(null),
     });
@@ -89,7 +107,7 @@ describe('Clipy template generation', () => {
     const fetchMock = vi.fn();
     const response = await handleGenerateTemplateFromClipy(
       request('https://example.com/video/8fptqlnappr6'),
-      {} as never,
+      apiEnv(),
       {
         fetch: fetchMock,
         getUserId: vi.fn().mockResolvedValue('user-1'),
@@ -104,7 +122,7 @@ describe('Clipy template generation', () => {
   it('reports recordings that are still processing', async () => {
     const context = completeContext();
     context.readiness.state = 'processing';
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -116,7 +134,7 @@ describe('Clipy template generation', () => {
   it('waits for key moments before generating the media-complete draft', async () => {
     const context = completeContext();
     context.readiness.keyMoments = 'processing';
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -126,7 +144,7 @@ describe('Clipy template generation', () => {
   });
 
   it('reports unavailable public recordings without using their response as content', async () => {
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(new Response('Not found', { status: 404 })),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -137,7 +155,7 @@ describe('Clipy template generation', () => {
 
   it('fetches only the fixed Clipy JSON endpoint and returns an unsaved draft', async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json(completeContext()));
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: fetchMock,
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -147,7 +165,7 @@ describe('Clipy template generation', () => {
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
     expect(response.status).toBe(200);
-    const payload = await response.json();
+    const payload = await readJson(response, clipyDraftBody);
     expect(payload).toMatchObject({
       draft: {
         title: 'Creating Issues In GitHub Repositories',
@@ -171,25 +189,25 @@ describe('Clipy template generation', () => {
     const context = completeContext();
     context.clip.title = 'A process for reviewing a routine project';
     context.summary.tldr = 'Review the process and organize project tasks.';
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
 
-    expect((await response.json()).draft.categories).toEqual([]);
+    expect((await readJson(response, clipyDraftBody)).draft.categories).toEqual([]);
   });
 
   it('preserves the complete transcript returned within the response size limit', async () => {
     const context = completeContext();
     context.transcript.plaintext = `Start ${'detailed transcript '.repeat(900)} Finish`;
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
-    const payload = await response.json();
+    const payload = await readJson(response, clipyDraftBody);
     const sourceText = payload.draft.sections[0].items[0].contents.find(
       (content: { type: string }) => content.type === 'text',
-    ).value;
+    )?.value;
 
     expect(sourceText).toContain('Finish');
   });
@@ -213,11 +231,11 @@ describe('Clipy template generation', () => {
         frameUrl: 'https://cdn.clipy.online/key-moments/demo/second.jpg',
       },
     ];
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
-    const payload = await response.json();
+    const payload = await readJson(response, clipyDraftBody);
 
     expect(
       payload.draft.sections[0].items
@@ -252,7 +270,7 @@ describe('Clipy link parsing', () => {
     `  https://clipy.online/video/${id}  `,
   ])('accepts %s and fetches only the fixed Clipy JSON endpoint', async (url) => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json(completeContext()));
-    const response = await handleGenerateTemplateFromClipy(request(url), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(url), apiEnv(), {
       fetch: fetchMock,
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -260,7 +278,7 @@ describe('Clipy link parsing', () => {
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0][0]).toBe(`https://clipy.online/video/${id}.json`);
-    const payload = await response.json();
+    const payload = await readJson(response, clipyDraftBody);
     expect(payload.draft.sections[0].items[0].contents[0].value).toBe(referredWatchUrl);
   });
 
@@ -281,7 +299,7 @@ describe('Clipy link parsing', () => {
     'not a url',
   ])('rejects %s without making an outbound request', async (url) => {
     const fetchMock = vi.fn();
-    const response = await handleGenerateTemplateFromClipy(request(url), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(url), apiEnv(), {
       fetch: fetchMock,
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
@@ -326,12 +344,12 @@ describe('Clipy draft categories and tags', () => {
     if (overrides.title !== undefined) context.clip.title = overrides.title;
     if (overrides.tldr !== undefined) context.summary.tldr = overrides.tldr;
     if (overrides.transcript !== undefined) context.transcript.plaintext = overrides.transcript;
-    const response = await handleGenerateTemplateFromClipy(request(), {} as never, {
+    const response = await handleGenerateTemplateFromClipy(request(), apiEnv(), {
       fetch: vi.fn().mockResolvedValue(Response.json(context)),
       getUserId: vi.fn().mockResolvedValue('user-1'),
     });
     expect(response.status).toBe(200);
-    return (await response.json()).draft as { categories: string[]; tags: string[] };
+    return (await readJson(response, clipyDraftBody)).draft;
   }
 
   it('never classifies from the transcript, whose narration ("moving on to", "pack it up") filed walkthroughs under unrelated categories', async () => {

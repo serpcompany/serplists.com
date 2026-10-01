@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -26,6 +27,32 @@ import { columnNamesIn, paramValuesIn } from '../../../support/drizzleSql';
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { apiErrorBody, jsonObject, jsonObjects, readJson } from '../../../support/readJson';
+
+const templateListBody = z.array(
+  z.object({ sections: z.array(z.object({ items: z.array(z.unknown()) }).passthrough()) }).passthrough(),
+);
+const templateOrList = z.union([jsonObjects, jsonObject]);
+const createdBody = z.object({ id: z.string() }).passthrough();
+const slugBody = z.object({ slug: z.string() }).passthrough();
+const successBody = z.object({ success: z.boolean() }).passthrough();
+const reconciledBody = z.object({ reconciledRuns: z.number() }).passthrough();
+const historyBody = z
+  .object({
+    versions: z.array(z.object({ version: z.number(), metadata: z.unknown() }).passthrough()),
+    events: z.array(z.record(z.unknown())),
+  })
+  .passthrough();
+const exportBody = z.object({ templates: z.array(z.record(z.unknown())) }).passthrough();
+const importBody = z
+  .object({
+    imported: z.number(),
+    failed: z.array(z.object({ index: z.number(), code: z.string(), reason: z.string() }).passthrough()),
+  })
+  .passthrough();
+const importFailedError = apiErrorBody.extend({
+  details: z.object({ imported: z.number(), failed: z.array(z.unknown()) }).passthrough(),
+});
 
 const templateWithASlugTheMigrationBackfillsLeftUnstripped = () => ({
   id: 'template-1',
@@ -88,7 +115,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, templateListBody);
 
     expect(response.status).toBe(200);
     expect(data[0].sections).toHaveLength(1);
@@ -134,7 +161,7 @@ describe('Templates Handlers', () => {
       else dbMocks.selectChain.orderBy.mockResolvedValueOnce([row(items)]);
       const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv);
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = await readJson(response, templateOrList);
       return Array.isArray(data) ? data[0] : data;
     };
 
@@ -217,7 +244,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, createdBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -258,7 +285,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, createdBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -292,7 +319,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates?teamId=team-1', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
     expect(data[0].id).toBe('template-1');
@@ -344,7 +371,7 @@ describe('Templates Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ seoDescription: 'x'.repeat(321), expected_version: 1 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.error).toContain('seoDescription');
@@ -403,7 +430,7 @@ describe('Templates Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ slug: 'moving-checklist', expected_version: 1 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, slugBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('moving-checklist-1a2b3c4d');
@@ -420,7 +447,7 @@ describe('Templates Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ title: 'Edited', expected_version: 1 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, slugBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('existing-template');
@@ -440,7 +467,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -455,7 +482,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.error).toMatch(/sections\/items/i);
@@ -500,7 +527,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -625,7 +652,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -721,7 +748,7 @@ describe('Templates Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ title: 'Stale edit', expected_version: 2 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
@@ -750,7 +777,7 @@ describe('Templates Handlers', () => {
         sections: [{ id: 'section-1', title: 'Checklist', items: [] }],
       }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
@@ -833,7 +860,7 @@ describe('Templates Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ title: 'Concurrent edit', expected_version: 3 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
@@ -868,7 +895,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/template-1', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, slugBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('seo-template');
@@ -955,7 +982,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/template-1/history?limit=8', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, historyBody);
 
     expect(response.status).toBe(200);
     expect(data.subject).toEqual({ type: 'team', id: 'team-1' });
@@ -1010,7 +1037,7 @@ describe('Templates Handlers', () => {
 
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1/history?limit=', { method: 'GET' }), mockEnv);
     const body = await response.text();
-    const data = JSON.parse(body);
+    const data = historyBody.parse(JSON.parse(body));
 
     expect(response.status).toBe(200);
     expect(data.events).toEqual([expect.objectContaining({ id: 'audit-1', metadata: { source: 'test' } })]);
@@ -1059,10 +1086,10 @@ describe('Templates Handlers', () => {
       new Request('http://localhost/api/templates/template-1/history?limit=2', { method: 'GET' }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, historyBody);
 
     expect(response.status).toBe(200);
-    expect(data.versions.map(({ version, metadata }: { version: number; metadata: unknown }) => [version, metadata])).toEqual([
+    expect(data.versions.map(({ version, metadata }) => [version, metadata])).toEqual([
       [3, agent],
       [2, null],
     ]);
@@ -1141,7 +1168,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/template-1', { method: 'DELETE' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -1177,7 +1204,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/archived', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
     expect(data[0]).toEqual(
@@ -1214,7 +1241,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/template-1/restore', { method: 'POST' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -1239,7 +1266,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/backup', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('upgrade_required');
@@ -1271,7 +1298,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/backup?format=backup', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, exportBody);
 
     expect(response.status).toBe(200);
     expect(data.version).toBe('1.0.0');
@@ -1302,7 +1329,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.total).toBe(1);
@@ -1358,7 +1385,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.total).toBe(2);
@@ -1402,7 +1429,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, importFailedError);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe('template_import_failed');
@@ -1441,7 +1468,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe('template_import_failed');
@@ -1474,7 +1501,7 @@ describe('Templates Handlers', () => {
         method: 'POST',
         body: JSON.stringify({ title: 'Launch plan', sections: sectionsWith(content) }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(400);
       expect(data.error.startsWith(`${path}: `)).toBe(true);
@@ -1489,7 +1516,7 @@ describe('Templates Handlers', () => {
         method: 'PUT',
         body: JSON.stringify({ sections: sectionsWith(content), expected_version: 1 }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(400);
       expect(data.error.startsWith(`${path}: `)).toBe(true);
@@ -1531,7 +1558,7 @@ describe('Templates Handlers', () => {
           { title: 'Fine', sections: sectionsWith({ type: 'subItems', value: '', subItems: [{ title: 'Short' }] }) },
         ] }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, importBody);
 
       expect(response.status).toBe(200);
       expect(data.imported).toBe(1);
@@ -1553,7 +1580,7 @@ describe('Templates Handlers', () => {
       method: 'POST',
       body: JSON.stringify({ templates: [{ title: 'Huge', sections: [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'T' }] }] }] }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, importFailedError);
 
     expect(response.status).toBe(400);
     expect(data.details.failed).toEqual([expect.objectContaining({
@@ -1598,7 +1625,7 @@ describe('Templates Handlers', () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([{ count: 0 }]).mockResolvedValueOnce([publicSource]);
 
       const response = await clone({ visibility: 'private' });
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(403);
       expect(data.code).toBe('upgrade_required');
@@ -1616,7 +1643,7 @@ describe('Templates Handlers', () => {
         .mockResolvedValueOnce([]);
 
       const response = await clone({ visibility: 'private', teamId: 'team-1' });
-      const data = await response.json();
+      const data = await readJson(response, createdBody);
 
       expect(response.status).toBe(200);
       expect(data.id).toBeDefined();
@@ -1629,7 +1656,7 @@ describe('Templates Handlers', () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([editor]).mockResolvedValueOnce([{ count: 1 }]);
 
       const response = await clone({ visibility: 'private', teamId: 'team-1' });
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(403);
       expect(data.code).toBe('limit_reached');
@@ -1685,7 +1712,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, createdBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -1806,7 +1833,7 @@ describe('Templates Handlers', () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...storedTemplate, is_public: true, version: 4 }]);
 
       const response = await put({ ...editorSaveOfTheStoredTemplate, title: 'Launch plan (typo fixed)', is_public: false, expected_version: 3 });
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
       expect(data.code).toBe('edit_conflict');
@@ -1865,7 +1892,7 @@ describe('Templates Handlers', () => {
       dbMocks.db.batch.mockResolvedValueOnce([changed, changed, changed, changed, changed, { meta: { changes: 0 } }]);
 
       const response = await put({ ...editorSaveOfTheStoredTemplate, sections: withoutPublish });
-      const data = await response.json();
+      const data = await readJson(response, reconciledBody);
 
       expect(response.status).toBe(200);
       expect(data.reconciledRuns).toBe(1);
@@ -1917,7 +1944,7 @@ describe('Templates Handlers', () => {
         method: 'POST',
         body: JSON.stringify({ visibility: 'private' }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug.length).toBeLessThanOrEqual(160);
@@ -1975,7 +2002,7 @@ describe('Templates Handlers', () => {
         method: 'PUT',
         body: JSON.stringify({ description: 'd'.repeat(5001), expected_version: 1 }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(400);
       expect(data.error).toMatch(/^description: /);
@@ -1992,7 +2019,7 @@ describe('Templates Handlers', () => {
         method: 'PUT',
         body: JSON.stringify({ slug: 'b'.repeat(160), expected_version: 1 }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug.length).toBeLessThanOrEqual(160);
@@ -2015,7 +2042,7 @@ describe('Templates Handlers', () => {
           ],
         }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, importBody);
 
       expect(response.status).toBe(200);
       expect(data.imported).toBe(1);
@@ -2039,7 +2066,7 @@ describe('Templates Handlers', () => {
       vi.mocked(getSessionUserId).mockResolvedValue('user-123');
 
       const response = await create({ title });
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug).toBe(slug);
@@ -2056,7 +2083,7 @@ describe('Templates Handlers', () => {
         method: 'PUT',
         body: JSON.stringify({ slug: 'café-guide', expected_version: 1 }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug).toBe('cafe-guide');
@@ -2072,7 +2099,7 @@ describe('Templates Handlers', () => {
         method: 'PUT',
         body: JSON.stringify({ title: 'Plan v2', slug: 'Список', expected_version: 1 }),
       }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(400);
       expect(data.error).toMatch(/^slug: /);
@@ -2128,7 +2155,7 @@ describe('Templates Handlers', () => {
     });
 
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.error).toMatch(/^slug: /);
@@ -2160,7 +2187,7 @@ describe('Templates Handlers', () => {
       { method: 'GET' },
     );
     const response = await handleTemplates(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, slugBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('qanda:-launch-plan-1a2b3c4d');

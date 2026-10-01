@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE } from '@functions/api/utils/test-email-block';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
+import { betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const PASSWORD = 'original-password-1';
 
@@ -55,7 +56,7 @@ describe('test accounts under the production auth policy, which Better Auth enfo
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
+    expect((await readJson(response, betterAuthErrorBody)).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
     expect(response.headers.get('set-cookie') ?? '').not.toContain('session_token=');
     expect(database.sqlite.prepare('SELECT count(*) AS count FROM session').get()).toEqual({ count: 1 });
   });
@@ -69,7 +70,7 @@ describe('test accounts under the production auth policy, which Better Auth enfo
     });
 
     expect(response.status).toBe(403);
-    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
+    expect((await readJson(response, betterAuthErrorBody)).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
   });
 
   it('refuses a test-domain sign-up in production and stores nothing', async () => {

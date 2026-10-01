@@ -8,6 +8,7 @@ vi.mock('@functions/api/utils/session', () => ({
 }));
 
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const MB = 1024 * 1024;
 
@@ -49,7 +50,7 @@ describe('Uploads Handler', () => {
     const env = uploadEnv();
 
     const response = await handleUploads(uploadRequest('avatars', new File(['hello'], 'hello.txt', { type: 'text/plain' })), env);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(415);
     expect(data.code).toBe('unsupported_file_type');

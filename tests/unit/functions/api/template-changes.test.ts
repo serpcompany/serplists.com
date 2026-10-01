@@ -11,6 +11,7 @@ import { buildTemplateEditorFormValues, normalizeTemplateEditorFormForSave } fro
 import { normalizePortableTemplate } from '@/lib/templates/portableTemplateNormalization';
 import { parseTemplateMarkdown, renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 import type { ChecklistSection } from '@/types/checklist';
+import type { PortableChecklistTemplate } from '@/lib/schemas/checklistSchema';
 
 const storedSections = [
   {
@@ -97,7 +98,7 @@ describe('templateStructureChanged', () => {
 });
 
 describe('templateStructureChanged after an editor round trip of content blocks stored without ids, which the editor ids anew on load', () => {
-  const seedSections = [
+  const seedSections: PortableChecklistTemplate['sections'] = [
     {
       id: 'sec-1',
       title: 'Crawlability',

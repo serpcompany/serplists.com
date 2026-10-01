@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { jsonObject, readJson } from "../../../support/readJson";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
@@ -19,7 +20,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
 
   const post = async (handler: typeof handleTemplates, path: string) => {
     const response = await handler(new Request(`http://localhost/api/${path}`, { method: "POST" }), env());
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return { status: response.status, body: await readJson(response, jsonObject) };
   };
 
   const auditCount = (action: string) =>

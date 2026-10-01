@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getTableColumns } from 'drizzle-orm';
+import { z } from 'zod';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -57,6 +58,12 @@ import {
 } from '../../../fixtures/runStartFixtures';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiErrorBody, jsonObjects, readJson } from '../../../support/readJson';
+
+const runBody = z.object({ id: z.string() }).passthrough();
+const successBody = z.object({ success: z.boolean() }).passthrough();
+const progressBody = z.object({ progress: z.number() }).passthrough();
+const runHistoryBody = z.object({ events: z.array(z.record(z.unknown())) }).passthrough();
 
 describe('Checklists Handlers', () => {
   let mockEnv: any;
@@ -109,7 +116,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -159,7 +166,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -193,7 +200,7 @@ describe('Checklists Handlers', () => {
       }), mockEnv);
 
       expect(response.status).toBe(400);
-      expect((await response.json()).error).toBe(path);
+      expect((await readJson(response, apiErrorBody)).error).toBe(path);
       expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
     });
 
@@ -206,7 +213,7 @@ describe('Checklists Handlers', () => {
       }), mockEnv);
 
       expect(response.status).toBe(400);
-      expect((await response.json()).error).toBe(path);
+      expect((await readJson(response, apiErrorBody)).error).toBe(path);
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
@@ -361,7 +368,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -395,7 +402,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBeDefined();
@@ -423,7 +430,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -438,7 +445,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.error).toMatch(/No fields to update/i);
@@ -488,7 +495,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -538,7 +545,7 @@ describe('Checklists Handlers', () => {
 
     const request = new Request('http://localhost/api/checklists/run-1/history', { method: 'GET' });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runHistoryBody);
 
     expect(response.status).toBe(200);
     expect(data.subject).toEqual({ type: 'team', id: 'team-1' });
@@ -645,7 +652,7 @@ describe('Checklists Handlers', () => {
 
     const request = new Request('http://localhost/api/checklists/run-1', { method: 'DELETE' });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -678,7 +685,7 @@ describe('Checklists Handlers', () => {
 
     const request = new Request('http://localhost/api/checklists/archived', { method: 'GET' });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
     expect(data[0]).toEqual(
@@ -715,7 +722,7 @@ describe('Checklists Handlers', () => {
 
     const request = new Request('http://localhost/api/checklists/run-1/restore', { method: 'POST' });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -788,7 +795,7 @@ describe('Checklists Handlers', () => {
       body: JSON.stringify({}),
     });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBe('run-1');
@@ -836,7 +843,7 @@ describe('Checklists Handlers', () => {
       body: JSON.stringify({}),
     });
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBe('run-1');
@@ -915,7 +922,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, runBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBe('shared-run');
@@ -1024,7 +1031,7 @@ describe('Checklists Handlers', () => {
     });
 
     const response = await handleChecklists(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, successBody);
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
@@ -1117,7 +1124,7 @@ describe('Checklists Handlers', () => {
         expected_revision: 4,
       }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
@@ -1146,7 +1153,7 @@ describe('Checklists Handlers', () => {
       method: 'PUT',
       body: JSON.stringify({ title: 'Concurrent edit', expected_revision: 5 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('edit_conflict');
@@ -1361,7 +1368,7 @@ describe('Checklists Handlers', () => {
       method: 'POST',
       body: JSON.stringify({ expected_revision: 2 }),
     }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, progressBody);
 
     expect(response.status).toBe(200);
     expect(data.progress).toBeLessThan(100);

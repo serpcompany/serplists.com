@@ -8,8 +8,8 @@ describe('log', () => {
 
   function capture(level: 'info' | 'warn' | 'error' | 'debug') {
     const lines: string[] = [];
-    vi.spyOn(console, level).mockImplementation((line: unknown) => {
-      lines.push(String(line));
+    vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+      lines.push(String(args[0]));
     });
     return lines;
   }

@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   calculateRunProgress,
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
+
+const reconciledSections = z.array(
+  z
+    .object({
+      items: z.array(
+        z
+          .object({
+            contents: z
+              .array(z.object({ subItems: z.array(z.record(z.unknown())).optional() }).passthrough())
+              .optional(),
+          })
+          .passthrough(),
+      ),
+    })
+    .passthrough(),
+);
+
+const sectionsOf = (result: { sections: unknown[] }) => reconciledSections.parse(result.sections);
 
 const originalRun = [
   {
@@ -72,20 +91,20 @@ describe('template run reconciliation', () => {
 
     const result = reconcileRunSections(originalRun, evolvedTemplate, []);
 
-    expect(result.sections[0].title).toBe('Launch content');
-    expect(result.sections[0].items.map((item) => item.id)).toEqual([
+    expect(sectionsOf(result)[0].title).toBe('Launch content');
+    expect(sectionsOf(result)[0].items.map((item) => item.id)).toEqual([
       'item-media',
       'item-copy',
     ]);
-    expect(result.sections[0].items[0].isCompleted).toBe(false);
-    expect(result.sections[0].items[1]).toMatchObject({
+    expect(sectionsOf(result)[0].items[0].isCompleted).toBe(false);
+    expect(sectionsOf(result)[0].items[1]).toMatchObject({
       id: 'item-copy',
       title: 'Write listing copy',
       description: 'New instructions',
       isCompleted: false,
       notes: 'Approved by Devin',
     });
-    expect(result.sections[0].items[1].contents[0].subItems).toEqual([
+    expect(sectionsOf(result)[0].items[1].contents?.[0].subItems).toEqual([
       { id: 'sub-long', title: 'Full description', isCompleted: false },
       { id: 'sub-tagline', title: 'Tagline', isCompleted: false },
       { id: 'sub-short', title: 'Short copy', isCompleted: true },
@@ -221,18 +240,18 @@ describe('template run reconciliation', () => {
 
     const result = reconcileRunSections(legacyRun, firstEvolution, []);
 
-    expect(result.sections[0]).toMatchObject({ id: 'legacy-section-1', title: 'Renamed content section' });
-    expect(result.sections[0].items[0]).toMatchObject({
+    expect(sectionsOf(result)[0]).toMatchObject({ id: 'legacy-section-1', title: 'Renamed content section' });
+    expect(sectionsOf(result)[0].items[0]).toMatchObject({
       id: 'legacy-item-1-1',
       title: 'Renamed copy task',
       isCompleted: false,
       notes: 'Legacy note',
     });
-    expect(result.sections[0].items[0].contents[0].subItems).toEqual([
+    expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([
       expect.objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
       expect.objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
     ]);
-    expect(result.sections[0].items[1]).toMatchObject({
+    expect(sectionsOf(result)[0].items[1]).toMatchObject({
       id: 'legacy-item-1-2',
       isCompleted: false,
     });
@@ -292,7 +311,7 @@ describe('template run reconciliation', () => {
       { id: 's', title: 'S', items: [{ id: 'task', title: 'Write copy', contents: blocks.map(block) }, { id: 'publish', title: 'Publish' }] },
     ];
     const reconciledTask = (previous: unknown[], next: unknown[]) =>
-      reconcileRunSections(previous, next, []).sections[0].items[0] as Json;
+      sectionsOf(reconcileRunSections(previous, next, []))[0].items[0];
     const subTasksBlockRows = (item: Json): Json[] => (item.contents ?? [])
       .filter((content: Json) => content.type === 'subItems')
       .flatMap((content: Json) => content.subItems ?? []);
@@ -300,7 +319,7 @@ describe('template run reconciliation', () => {
     it('reopens a completed task when the template adds a Sub-task to it', () => {
       const previous = run(true, subTasks(['short', true], ['long', true]));
       const result = reconcileRunSections(previous, template(subTasks(['short'], ['long'], ['tagline'])), []);
-      const task = result.sections[0].items[0] as Json;
+      const task: Json = sectionsOf(result)[0].items[0];
 
       expect(task.isCompleted).toBe(false);
       expect(subTasksBlockRows(task).map((subItem) => [subItem.id, subItem.isCompleted]))
@@ -380,7 +399,7 @@ describe('malformed Template content', () => {
       }],
     }];
 
-    const [item] = reconcileRunSections(previous, template, []).sections[0].items as Array<Record<string, unknown>>;
+    const [item] = sectionsOf(reconcileRunSections(previous, template, []))[0].items;
 
     expect(item.contents).toEqual([
       { type: 'subItems', value: '', subItems: [] },
@@ -415,7 +434,7 @@ describe('retired run work', () => {
       removed.retired,
     );
 
-    expect(restored.sections[0].items[0]).toEqual(expect.objectContaining({
+    expect(sectionsOf(restored)[0].items[0]).toEqual(expect.objectContaining({
       id: 'item-dns',
       isCompleted: true,
       notes: 'TTL lowered to 300',
@@ -448,12 +467,12 @@ describe('retired run work', () => {
 
     const result = reconcileRunSections(section([withSubTask]), template, previousRetired);
 
-    expect(result.sections[0].items[0].contents[0].subItems).toEqual([
+    expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([
       { id: 'sub-short', title: 'Short', isCompleted: true },
       { id: 'sub-long', title: 'Long', isCompleted: true },
     ]);
-    expect(result.sections[0].items[0].isCompleted).toBe(true);
-    expect(result.sections[1].items[0]).toEqual(expect.objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
+    expect(sectionsOf(result)[0].items[0].isCompleted).toBe(true);
+    expect(sectionsOf(result)[1].items[0]).toEqual(expect.objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
     expect(result.retired).toEqual([]);
   });
 
@@ -461,7 +480,7 @@ describe('retired run work', () => {
     const stale = { kind: 'item', sectionId: 'section-1', item: { ...dns, notes: 'Stale' } };
     const result = reconcileRunSections(section([dns]), section([{ id: 'item-dns', title: 'Check DNS' }]), [stale]);
 
-    expect(result.sections[0].items[0].notes).toBe('TTL lowered to 300');
+    expect(sectionsOf(result)[0].items[0].notes).toBe('TTL lowered to 300');
     expect(result.retired).toEqual([stale]);
   });
 });
@@ -482,8 +501,8 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] },
     ], []);
 
-    expect(result.sections[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
-    expect(result.sections[1].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
+    expect(sectionsOf(result)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(sectionsOf(result)[1].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
     expect(result.retired).toEqual([]);
     expect(result.newlyRetired).toEqual([]);
     expect(calculateRunProgress(result.sections)).toBe(calculateRunProgress(previous));
@@ -495,21 +514,21 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [] },
     ], []);
 
-    expect(result.sections[0].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
+    expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ id: 'z', isCompleted: true, notes: 'live' }));
     expect(result.retired).toEqual([]);
   });
 
   it('leaves a moved task out of the section it left when that section is removed', () => {
     const result = reconcileRunSections(previous, [{ id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] }], []);
 
-    expect(result.sections[0].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(sectionsOf(result)[0].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
     expect(result.newlyRetired).toEqual([{ kind: 'section', section: { id: 'A', title: 'Plan', items: [y] } }]);
   });
 
   it('retires nothing for a removed section whose tasks all moved', () => {
     const result = reconcileRunSections(previous, [{ id: 'B', title: 'Ship', items: [fresh(x), fresh(z), fresh(y)] }], []);
 
-    expect(result.sections[0].items.map((item) => [item.id, item.isCompleted])).toEqual([['x', true], ['z', true], ['y', false]]);
+    expect(sectionsOf(result)[0].items.map((item) => [item.id, item.isCompleted])).toEqual([['x', true], ['z', true], ['y', false]]);
     expect(result.retired).toEqual([]);
   });
 
@@ -518,7 +537,7 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'A', title: 'Plan', items: [fresh(y)] },
       { id: 'B', title: 'Ship', items: [fresh(z), fresh(x)] },
     ], []);
-    const untickedAndNotedAgainInItsNewSection = structuredClone(moved.sections);
+    const untickedAndNotedAgainInItsNewSection = structuredClone(sectionsOf(moved));
     untickedAndNotedAgainInItsNewSection[1].items[1] = { ...untickedAndNotedAgainInItsNewSection[1].items[1], isCompleted: false, notes: 'vendor called back' };
     const stale = { kind: 'item', sectionId: 'A', item: x };
 
@@ -527,7 +546,7 @@ describe('work that moves to another section or task, which keeps its run state 
       { id: 'B', title: 'Ship', items: [fresh(z)] },
     ], [stale]);
 
-    expect(back.sections[0].items[0]).toEqual(expect.objectContaining({ id: 'x', isCompleted: false, notes: 'vendor called back' }));
+    expect(sectionsOf(back)[0].items[0]).toEqual(expect.objectContaining({ id: 'x', isCompleted: false, notes: 'vendor called back' }));
     expect(back.newlyRetired).toEqual([]);
   });
 
@@ -547,8 +566,8 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s1)) }] },
       ], []);
 
-      expect(result.sections[1].items[0].contents[0].subItems).toEqual([{ id: 's1', title: 'Quote', isCompleted: true }]);
-      expect(result.sections[0].items[0].contents[0].subItems).toEqual([{ id: 's2', title: 'Invoice', isCompleted: false }]);
+      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems).toEqual([{ id: 's1', title: 'Quote', isCompleted: true }]);
+      expect(sectionsOf(result)[0].items[0].contents?.[0].subItems).toEqual([{ id: 's2', title: 'Invoice', isCompleted: false }]);
       expect(result.retired).toEqual([]);
     });
 
@@ -558,8 +577,8 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s2)) }] },
       ], []);
 
-      expect(result.sections[0].items[0].isCompleted).toBe(true);
-      expect(result.sections[1].items[0].contents[0].subItems[0]).toEqual({ id: 's2', title: 'Invoice', isCompleted: false });
+      expect(sectionsOf(result)[0].items[0].isCompleted).toBe(true);
+      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems?.[0]).toEqual({ id: 's2', title: 'Invoice', isCompleted: false });
       expect(result.retired).toEqual([]);
     });
 
@@ -569,7 +588,7 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: 'q', title: 'Pay', subItems: [{ id: 's3', title: 'Pay' }], contents: subTasks(bare(s1)) }] },
       ], []);
 
-      expect(result.sections[1].items[0].contents[0].subItems[0]).toEqual({ id: 's1', title: 'Quote', isCompleted: true });
+      expect(sectionsOf(result)[1].items[0].contents?.[0].subItems?.[0]).toEqual({ id: 's1', title: 'Quote', isCompleted: true });
       expect(result.newlyRetired).toEqual([{
         kind: 'item',
         sectionId: 'A',
@@ -591,21 +610,21 @@ describe('work that moves to another section or task, which keeps its run state 
         { id: 'B', title: 'Ship', items: [{ id: '1', title: 'First' }] },
       ], []);
 
-      expect(result.sections.map((section) => section.items[0].notes)).toEqual(['a', 'b']);
+      expect(sectionsOf(result).map((section) => section.items[0].notes)).toEqual(['a', 'b']);
       expect(result.retired).toEqual([]);
     });
 
     it('retires the copy of a removed section instead of moving it', () => {
       const result = reconcileRunSections(legacy, [{ id: 'B', title: 'Ship', items: [{ id: '1', title: 'First' }] }], []);
 
-      expect(result.sections[0].items[0]).toEqual(expect.objectContaining({ notes: 'b', isCompleted: false }));
+      expect(sectionsOf(result)[0].items[0]).toEqual(expect.objectContaining({ notes: 'b', isCompleted: false }));
       expect(result.newlyRetired).toEqual([{ kind: 'section', section: legacy[0] }]);
     });
 
     it('never guesses which copy moved to another section', () => {
       const result = reconcileRunSections(legacy, [{ id: 'C', title: 'Later', items: [{ id: '1', title: 'First' }] }], []);
 
-      expect(result.sections[0].items[0]).toEqual({ id: '1', title: 'First', isCompleted: false });
+      expect(sectionsOf(result)[0].items[0]).toEqual({ id: '1', title: 'First', isCompleted: false });
       expect(result.newlyRetired).toHaveLength(2);
     });
   });
@@ -642,12 +661,13 @@ describe('work that moves to another section or task, which keeps its run state 
       })),
     }));
     const before = notesAndOwnCompletionById(run);
-
-    for (const rearranged of [
+    const rearrangements: Array<Record<string, Record<string, string[]>>> = [
       { C: { b2: [], a1: ['u3'] }, A: { c1: ['u2', 'u1'], a2: [] }, B: { b1: [] } },
       { B: { a2: ['u1', 'u2', 'u3'], b1: [], b2: [] }, A: { c1: [], a1: [] }, C: {} },
       { A: { b1: ['u2'], a1: ['u1'] }, B: {}, C: { c1: ['u3'], a2: [], b2: [] } },
-    ]) {
+    ];
+
+    for (const rearranged of rearrangements) {
       const result = reconcileRunSections(run, layout(rearranged), []);
       for (const [id, after] of notesAndOwnCompletionById(result.sections as Array<{ items: Entry[] }>)) {
         const had = before.get(id)!;

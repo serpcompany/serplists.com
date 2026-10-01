@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { jsonObject, readJson } from "../../../support/readJson";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
@@ -44,7 +45,7 @@ describe("revalidate refusals on the migrated tables, which tell a gone run from
       }),
       { DB: database.d1, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" } as never,
     );
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    return { status: response.status, body: await readJson(response, jsonObject) };
   };
 
   const storedItems = (runId: string) =>

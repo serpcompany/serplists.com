@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -13,6 +14,14 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { apiEnv } from '../../../support/apiEnv';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+
+const slugBody = z.object({ slug: z.string() }).passthrough();
+const importBody = z
+  .object({ imported: z.number(), successes: z.array(z.object({ slug: z.string() }).passthrough()) })
+  .passthrough();
+const importFailedError = apiErrorBody.extend({ details: z.object({ failed: z.array(z.unknown()) }).passthrough() });
 
 const slugTaken = () => new Error('D1_ERROR: UNIQUE constraint failed: templates.slug: SQLITE_CONSTRAINT');
 const versionTaken = () => new Error('D1_ERROR: UNIQUE constraint failed: template_versions.template_id, template_versions.version: SQLITE_CONSTRAINT');
@@ -28,7 +37,7 @@ const publicSource = {
   slug: 'weekly-review-source',
   version: 1,
 };
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as never;
+const env = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const post = (path: string, body: unknown) =>
   handleTemplates(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }), env);
@@ -71,7 +80,7 @@ describe('template slugs claimed between the check and the write, which the uniq
       dbMocks.db.batch.mockRejectedValueOnce(slugTaken());
 
       const response = await send();
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug).toMatch(/^weekly-review-[0-9a-f]{8}$/);
@@ -86,7 +95,7 @@ describe('template slugs claimed between the check and the write, which the uniq
       dbMocks.db.batch.mockRejectedValue(slugTaken());
 
       const response = await send();
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
       expect(data.code).toBe('slug_taken');
@@ -105,7 +114,7 @@ describe('template slugs claimed between the check and the write, which the uniq
     dbMocks.db.batch.mockRejectedValueOnce(slugTaken());
 
     const response = await post('/api/templates/backup', { templates: [{ title: 'Weekly Review', sections }] });
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
@@ -117,7 +126,7 @@ describe('template slugs claimed between the check and the write, which the uniq
     dbMocks.db.batch.mockRejectedValue(slugTaken());
 
     const response = await post('/api/templates/backup', { templates: [{ title: 'Weekly Review', sections }] });
-    const data = await response.json();
+    const data = await readJson(response, importFailedError);
 
     expect(response.status).toBe(400);
     expect(data.details.failed).toEqual([expect.objectContaining({ code: 'insert_failed' })]);
@@ -138,7 +147,7 @@ describe('template slugs claimed between the check and the write, which the uniq
         .mockResolvedValueOnce(templateHoldingGuideTemplate);
 
       const response = await put({ slug: 'guide', expected_version: 1 });
-      const data = await response.json();
+      const data = await readJson(response, slugBody);
 
       expect(response.status).toBe(200);
       expect(data.slug).toMatch(/^guide-[0-9a-f]{8}$/);
@@ -149,7 +158,7 @@ describe('template slugs claimed between the check and the write, which the uniq
       dbMocks.selectChain.limit.mockResolvedValueOnce([stored]).mockResolvedValue([{ id: 'template-2' }]);
 
       const response = await put({ slug: 'guide', expected_version: 1 });
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
       expect(data.code).toBe('slug_taken');
@@ -172,7 +181,7 @@ describe('template slugs claimed between the check and the write, which the uniq
       dbMocks.db.batch.mockRejectedValue(versionTaken());
 
       const response = await put({ title: 'Guide v2', expected_version: 1 });
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
       expect(data.code).toBe('edit_conflict');

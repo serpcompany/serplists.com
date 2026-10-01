@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -10,6 +11,9 @@ vi.mock('drizzle-orm/d1', () => ({
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 import { handleProfileById, handleProfileByUsername } from '@functions/api/handlers/auth';
+import { readJson } from '../../../support/readJson';
+
+const profileBody = z.object({ id: z.string(), username: z.string() }).passthrough();
 
 const renderWhere = () => new SQLiteSyncDialect().sqlToQuery(dbMocks.selectChain.where.mock.calls[0][0] as SQL).sql;
 
@@ -53,7 +57,7 @@ describe('Profiles Handlers', () => {
 
     const request = new Request('http://localhost/api/profiles/by-username?username=test');
     const response = await handleProfileByUsername(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, profileBody);
 
     expect(response.status).toBe(200);
     expect(data.id).toBe('user-1');

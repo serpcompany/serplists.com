@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
@@ -80,7 +81,7 @@ async function revalidate() {
     method: 'POST',
     body: JSON.stringify({ expected_revision: 2 }),
   }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  return { response, data: await readJson(response, jsonObject) };
 }
 
 function expectNothingWritten() {

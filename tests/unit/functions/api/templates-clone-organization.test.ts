@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -87,7 +88,7 @@ describe('POST /api/templates/:id/clone into an Organization, which decides for 
       .mockResolvedValueOnce([{ count: 1 }]);
 
     const response = await cloneIntoOrganization();
-    const data = (await response.json()) as { code?: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -97,7 +98,7 @@ describe('POST /api/templates/:id/clone into an Organization, which decides for 
     dbMocks.selectChain.limit.mockResolvedValueOnce(membership('viewer'));
 
     const response = await cloneIntoOrganization();
-    const data = (await response.json()) as { code?: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBeUndefined();

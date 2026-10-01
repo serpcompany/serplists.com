@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 
 const fake = vi.hoisted(() => ({ rows: new Map<unknown, unknown[]>(), counts: new Map<unknown, number>() }));
 
@@ -96,7 +97,7 @@ describe('limit_reached names the context whose limit was hit, and offers Pro on
       method,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }), env);
-    const data = await response.json() as { error: string; code: string; details: Record<string, unknown> };
+    const data = await readJson(response, apiErrorBody.extend({ details: jsonObject }));
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('limit_reached');
@@ -119,7 +120,7 @@ describe('copying a public template into Personal on Free', () => {
       method: 'POST',
       body: JSON.stringify({}),
     }), env);
-    const data = await response.json() as { error: string; code: string };
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe('upgrade_required');

@@ -1861,8 +1861,8 @@ describe("personal run MCP handler", () => {
     const captureLogs = () => {
       const lines: { level: string; raw: string; entry: LogLine }[] = [];
       for (const level of ["error", "warn", "info"] as const) {
-        consoleSpies.push(vi.spyOn(console, level).mockImplementation((line: unknown) => {
-          const raw = String(line);
+        consoleSpies.push(vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+          const raw = String(args[0]);
           lines.push({ level, raw, entry: JSON.parse(raw) as LogLine });
         }));
       }

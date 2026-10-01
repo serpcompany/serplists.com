@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -80,7 +81,7 @@ async function send(path: string, method: string, body: unknown) {
     method,
     body: JSON.stringify(body),
   }), env);
-  return { response, data: await response.json() as Record<string, unknown> };
+  return { response, data: await readJson(response, jsonObject) };
 }
 
 function expectLimitReached(

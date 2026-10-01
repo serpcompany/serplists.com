@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 
 const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
@@ -50,12 +51,18 @@ vi.mock("@functions/api/utils/audit", () => ({
 }));
 
 import { handleTeams } from "@functions/api/handlers/teams";
+import { apiEnv } from "../../../support/apiEnv";
 import { columnNamesIn } from "../../../support/drizzleSql";
+import { apiErrorBody, jsonObjects, readJson } from "../../../support/readJson";
 
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
+
+const teamBody = z.object({ slug: z.string() }).passthrough();
+const updatedTeamBody = z.object({ team: z.record(z.unknown()) }).passthrough();
+const inviteBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
+const activityBody = z.array(z.object({ actor: z.record(z.unknown()) }).passthrough());
+const pendingInviteError = apiErrorBody.extend({ details: z.object({ inviteId: z.string() }).passthrough() });
+const joinedTeamBody = z.object({ teamId: z.string(), memberId: z.string(), team: z.record(z.unknown()) }).passthrough();
 
 describe("Teams handler", () => {
   beforeEach(() => {
@@ -89,7 +96,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
@@ -126,7 +133,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe("equipe-cafe-strasse");
@@ -161,7 +168,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe("acme");
@@ -178,7 +185,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toMatch(/^acme-[0-9a-f]{8}$/);
@@ -203,7 +210,7 @@ describe("Teams handler", () => {
       dbMocks.db.batch.mockRejectedValueOnce(slugViolation()).mockResolvedValueOnce([]);
 
       const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, teamBody);
 
       expect(response.status).toBe(200);
       expect(dbMocks.db.batch).toHaveBeenCalledTimes(2);
@@ -219,7 +226,7 @@ describe("Teams handler", () => {
       dbMocks.db.batch.mockRejectedValue(slugViolation());
 
       const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
-      const data = await response.json();
+      const data = await readJson(response, apiErrorBody);
 
       expect(response.status).toBe(409);
       expect(data.code).toBe("team_slug_exists");
@@ -299,7 +306,7 @@ describe("Teams handler", () => {
     ]);
 
     const response = await handleTeams(new Request("http://localhost/api/teams"), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
     expect(data[0]).toEqual(expect.objectContaining({ id: "team-1", role: "admin" }));
@@ -323,7 +330,7 @@ describe("Teams handler", () => {
       new Request("http://localhost/api/teams/team-1/members"),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, jsonObjects);
     const memberListPredicate = dbMocks.selectChain.where.mock.calls[1]?.[0];
 
     expect(response.status).toBe(200);
@@ -371,7 +378,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, updatedTeamBody);
 
     expect(response.status).toBe(200);
     expect(data.team).toEqual(expect.objectContaining({ name: "New Team", slug: "new-team" }));
@@ -417,7 +424,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("team_slug_exists");
@@ -532,7 +539,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, inviteBody);
 
     expect(response.status).toBe(200);
     expect(data.email).toBe("new@example.com");
@@ -743,7 +750,7 @@ describe("Teams handler", () => {
     dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
 
     const response = await handleTeams(new Request("http://localhost/api/teams/team-1/activity"), mockEnv);
-    const data = (await response.json()) as Array<{ id: string; actor: Record<string, unknown> }>;
+    const data = await readJson(response, activityBody);
 
     expect(response.status).toBe(200);
     expect(data[0].actor).toEqual({ userId: null, email: null, name: null, username: null });
@@ -824,7 +831,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(403);
     expect(data.code).toBe("owner_required");
@@ -844,7 +851,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe("owner_transfer_noop");
@@ -895,7 +902,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("owner_transfer_conflict");
@@ -920,7 +927,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("member_update_conflict");
@@ -942,7 +949,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("team_member_exists");
@@ -964,7 +971,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, pendingInviteError);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("team_invite_exists");
@@ -1001,7 +1008,7 @@ describe("Teams handler", () => {
       new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, joinedTeamBody);
 
     expect(response.status).toBe(200);
     expect(data.teamId).toBe("team-1");
@@ -1140,7 +1147,7 @@ describe("Teams handler", () => {
       new Request("http://localhost/api/teams/invites/invite-token/accept", { method: "POST" }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("invite_acceptance_conflict");
@@ -1415,7 +1422,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("invite_already_accepted");
@@ -1440,7 +1447,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe("self_membership_update_forbidden");
@@ -1464,7 +1471,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe("owner_membership_update_forbidden");
@@ -1482,7 +1489,7 @@ describe("Teams handler", () => {
       }),
       mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, teamBody);
 
     expect(response.status).toBe(200);
     expect(data.slug.length).toBeLessThanOrEqual(120);

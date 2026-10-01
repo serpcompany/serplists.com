@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const sessionMocks = vi.hoisted(() => ({
   getSessionUserId: vi.fn(),
@@ -97,12 +98,13 @@ vi.mock("@functions/api/utils/team-access", () => ({
 }));
 
 import { handleBilling } from "@functions/api/handlers/billing";
+import { apiEnv } from "../../../support/apiEnv";
 import { emptyStripeList } from "../../../support/billingCheckout";
+import { apiErrorBody, readJson } from "../../../support/readJson";
 
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-} as const;
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
+
+const billingStatusBody = z.object({ plan: z.string(), billingEnabled: z.boolean() }).passthrough();
 
 const stripeEnv = {
   ...mockEnv,
@@ -193,7 +195,7 @@ describe("Billing handler", () => {
   it("GET /api/billing/status reports billing disabled when Stripe is not configured", async () => {
     const request = new Request("http://localhost/api/billing/status");
     const response = await handleBilling(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, billingStatusBody);
 
     expect(response.status).toBe(200);
     expect(data.plan).toBe("free");
@@ -207,7 +209,7 @@ describe("Billing handler", () => {
       STRIPE_SECRET_KEY: "sk_live_example",
       STRIPE_PRO_PRICE_ID: "price_live_example",
     });
-    const data = await response.json();
+    const data = await readJson(response, billingStatusBody);
 
     expect(response.status).toBe(200);
     expect(data.plan).toBe("free");
@@ -217,7 +219,7 @@ describe("Billing handler", () => {
   it("GET /api/billing/status can report team-scoped entitlements", async () => {
     const request = new Request("http://localhost/api/billing/status?teamId=team-1");
     const response = await handleBilling(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, billingStatusBody);
 
     expect(response.status).toBe(200);
     expect(data.plan).toBe("team");
@@ -237,7 +239,7 @@ describe("Billing handler", () => {
 
     const request = new Request("http://localhost/api/billing/status?teamId=team-1");
     const response = await handleBilling(request, mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(404);
     expect(data.error).toBe("Organization not found");
@@ -246,7 +248,7 @@ describe("Billing handler", () => {
 
   it("POST /api/billing/checkout returns 503 when Stripe is not configured", async () => {
     const response = await handleBilling(postBilling("checkout"), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(503);
     expect(data.code).toBe("billing_unavailable");
@@ -263,7 +265,7 @@ describe("Billing handler", () => {
       STRIPE_SECRET_KEY: "sk_live_example",
       STRIPE_PRO_PRICE_ID: "price_live_example",
     });
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("already_subscribed");
@@ -271,7 +273,7 @@ describe("Billing handler", () => {
 
   it("POST /api/billing/portal returns 503 when Stripe is not configured", async () => {
     const response = await handleBilling(postBilling("portal"), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(503);
     expect(data.code).toBe("billing_unavailable");
@@ -293,7 +295,7 @@ describe("Billing handler", () => {
 
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get("Retry-After"))).toBeGreaterThan(0);
-    expect((await blocked.json()).error).toMatch(/try again/i);
+    expect((await readJson(blocked, apiErrorBody)).error).toMatch(/try again/i);
     expect(stripe.calls.length).toBe(stripeCallsBefore);
     expect((await handleBilling(new Request("http://localhost/api/billing/status"), stripeEnv)).status).toBe(200);
   });
@@ -345,7 +347,7 @@ describe("Billing handler", () => {
     const response = await handleBilling(postBilling("checkout"), stripeEnv);
 
     expect(response.status).toBe(409);
-    expect((await response.json()).code).toBe("checkout_in_progress");
+    expect((await readJson(response, apiErrorBody)).code).toBe("checkout_in_progress");
     expect(fakeStripeCustomersTable.mapping?.stripe_customer_id).toBe("cus_saved_first");
     expect(stripe.checkoutCustomers()).toEqual([]);
   });

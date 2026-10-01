@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -33,10 +34,16 @@ vi.mock("@functions/api/utils/session", () => sessionMocks);
 vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
+import type { Env } from "@functions/api/types";
+import { apiEnv } from "../../../support/apiEnv";
+import { apiErrorBody, readJson } from "../../../support/readJson";
 import { varFromWranglerToml } from "../../../support/wranglerToml";
 import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
-const mockEnv = { DB: {} as D1Database };
+const mockEnv = apiEnv();
+
+const createdKeyBody = z.object({ key: z.object({ permissions: z.array(z.string()) }).passthrough() }).passthrough();
+const keyListBody = z.array(z.object({ status: z.string(), permissions: z.array(z.string()) }).passthrough());
 
 describe("Personal run key management handler", () => {
   beforeEach(() => {
@@ -118,7 +125,7 @@ describe("Personal run key management handler", () => {
       }),
       mockEnv,
     );
-    const body = await response.json();
+    const body = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(body.error).toContain("10 active Run Keys");
@@ -133,7 +140,7 @@ describe("Personal run key management handler", () => {
       }),
       mockEnv,
     );
-    const body = await response.json();
+    const body = await readJson(response, createdKeyBody);
 
     expect(response.status).toBe(201);
     expect(body.key.permissions).toEqual(["templates:read", "templates:write"]);
@@ -201,7 +208,7 @@ describe("Personal run key management handler", () => {
       new Request("http://localhost/api/agent-keys"),
       mockEnv,
     );
-    const body = await response.json();
+    const body = await readJson(response, keyListBody);
 
     expect(response.status).toBe(200);
     expect(body.map((key: { status: string }) => key.status)).toEqual(["active", "revoked"]);
@@ -214,12 +221,9 @@ describe("Personal run key management handler", () => {
   });
 
   describe("MCP connection", () => {
-    const previewEnv = {
-      ...mockEnv,
-      CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS"),
-    };
+    const previewEnv = apiEnv({ CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS") });
 
-    const connection = async (url: string, env: typeof mockEnv & Record<string, string> = previewEnv) => {
+    const connection = async (url: string, env: Env = previewEnv) => {
       const response = await handleAgentKeys(new Request(url), env);
       return { status: response.status, body: await response.json() };
     };
@@ -249,7 +253,7 @@ describe("Personal run key management handler", () => {
           status: 200,
           body: { mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: false },
         });
-      await expect(connection("http://localhost:8788/api/agent-keys/connection", mockEnv as never))
+      await expect(connection("http://localhost:8788/api/agent-keys/connection", mockEnv))
         .resolves.toEqual({
           status: 200,
           body: { mcpEndpoint: "http://localhost:8788/api/mcp", hostMismatch: false },
@@ -257,7 +261,7 @@ describe("Personal run key management handler", () => {
     });
 
     it("returns no endpoint when a remote host has no configured origin", async () => {
-      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", mockEnv as never))
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", mockEnv))
         .resolves.toEqual({ status: 200, body: { mcpEndpoint: null, hostMismatch: true } });
     });
 

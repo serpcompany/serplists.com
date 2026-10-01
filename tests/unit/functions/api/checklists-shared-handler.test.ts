@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { assert, describe, it, expect, beforeEach, vi } from 'vitest';
 
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
@@ -39,6 +39,8 @@ vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
+import { jsonObject, readJson } from '../../../support/readJson';
 
 const storedSections = [
   {
@@ -89,7 +91,13 @@ function sharedRun(overrides: Record<string, unknown> = {}) {
 }
 
 function sectionsTheSharePageRendered() {
-  return JSON.parse(JSON.stringify(storedSections)) as typeof storedSections;
+  return structuredClone(storedSections);
+}
+
+function contentsOfTheFirstTask(sections: typeof storedSections) {
+  const { contents } = sections[0].items[0];
+  assert.exists(contents);
+  return contents;
 }
 
 function sectionsWithEveryTaskAndSubTaskTicked() {
@@ -107,8 +115,8 @@ async function putShared(body: unknown) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run', {
     method: 'PUT',
     body: JSON.stringify(body),
-  }), { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any);
-  return { response, data: await response.json() as Record<string, unknown> };
+  }), apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' }));
+  return { response, data: await readJson(response, jsonObject) };
 }
 
 function storedUpdate(): Record<string, unknown> {
@@ -172,7 +180,7 @@ describe('shared run updates, which take only completion and notes from a guest 
     sections[0].items[0].title = 'Log in here';
     sections[0].items[0].description = 'Visit https://attacker.example';
     sections[0].items[0].isCompleted = true;
-    sections[0].items[0].contents[0].value = '[Log in](https://attacker.example)';
+    contentsOfTheFirstTask(sections)[0].value = '[Log in](https://attacker.example)';
     (sections[0].items[0].contents as unknown[]).push({ type: 'file', value: 'https://attacker.example/x.exe' });
     (sections[0].items as unknown[]).push({ id: 'item-99', title: 'Injected', isCompleted: true });
     (sections as unknown[]).push({ id: 'section-99', title: 'Injected', items: [{ id: 'item-98', title: 'Injected' }] });
@@ -288,7 +296,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('refuses to complete a run whose ticked task still has an open Sub-task', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsWithEveryTaskAndSubTaskTicked();
-    sections[0].items[0].contents[1].subItems![1].isCompleted = false;
+    contentsOfTheFirstTask(sections)[1].subItems![1].isCompleted = false;
 
     const { response, data } = await putShared({ sections, status: 'completed', expected_revision: 3 });
 
@@ -372,8 +380,8 @@ describe('shared run updates, which take only completion and notes from a guest 
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
     (sections[0].items[0] as Record<string, unknown>).notes = 'Guest note';
-    sections[0].items[0].contents[1].subItems!.reverse();
-    const [sub2AfterTheReverse] = sections[0].items[0].contents[1].subItems!;
+    contentsOfTheFirstTask(sections)[1].subItems!.reverse();
+    const [sub2AfterTheReverse] = contentsOfTheFirstTask(sections)[1].subItems!;
     sub2AfterTheReverse.isCompleted = true;
 
     const { response } = await putShared({ sections, expected_revision: 3 });

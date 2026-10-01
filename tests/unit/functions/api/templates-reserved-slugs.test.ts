@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 import bundledCatalog from '../../../../functions/sitemap/bundled-catalog.generated.json';
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
@@ -19,22 +20,27 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 }));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import {
+  type Entitlements,
+  getEntitlementsForContext,
+  getEntitlementsForUser,
+} from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
+import { readJson } from '../../../support/readJson';
+
+const slugBody = z.object({ slug: z.string() }).passthrough();
 
 const bundledSlugs = bundledCatalog.templates.map((template) => template.slug);
 const titleFor = (slug: string) => slug.split('-').map((word) => word.toUpperCase()).join(' ');
 const sections = [{ id: 'section-1', title: 'Checklist', items: [] }];
 
-const mockEnv = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const post = (path: string, body: unknown) =>
   handleTemplates(
     new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }),
-    mockEnv as never,
+    mockEnv,
   );
 
 const expectSuffixed = (stored: unknown, slug: string) => {
@@ -61,7 +67,7 @@ const put = (slug: string, fields: Record<string, unknown> = {}) =>
       method: 'PUT',
       body: JSON.stringify({ ...fields, slug, expected_version: 1 }),
     }),
-    mockEnv as never,
+    mockEnv,
   );
 
 beforeEach(() => {
@@ -75,7 +81,7 @@ beforeEach(() => {
   dbMocks.db.batch.mockResolvedValue([]);
 
   vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-  const unlimited = { plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } };
+  const unlimited: Entitlements = { plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } };
   vi.mocked(getEntitlementsForUser).mockResolvedValue(unlimited);
   vi.mocked(getEntitlementsForContext).mockResolvedValue(unlimited);
 });
@@ -93,7 +99,7 @@ describe('bundled starter slugs are reserved against an empty D1, since bundled 
     expect(response.status).toBe(200);
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expectSuffixed(inserted.slug, slug);
-    expect((await response.json()).slug).toBe(inserted.slug);
+    expect((await readJson(response, slugBody)).slug).toBe(inserted.slug);
   });
 
   it.each(bundledSlugs)('suffixes a title that slugifies to %s on create', async (slug) => {
@@ -182,7 +188,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     expect(response.status).toBe(200);
     const inserted = dbMocks.insertChain.values.mock.calls[0][0];
     expectNotUuid(inserted.slug);
-    expect((await response.json()).slug).toBe(inserted.slug);
+    expect((await readJson(response, slugBody)).slug).toBe(inserted.slug);
   });
 
   it.each([uuid, uuid.toUpperCase(), ` ${uuid.toUpperCase()}. `])('suffixes a Template titled %j on create', async (title) => {
@@ -212,7 +218,7 @@ describe('UUID-shaped slugs are reserved, since template pages and link previews
     expect(response.status).toBe(200);
     const stored = dbMocks.updateChain.set.mock.calls[0][0].slug;
     expectNotUuid(stored);
-    expect((await response.json()).slug).toBe(stored);
+    expect((await readJson(response, slugBody)).slug).toBe(stored);
   });
 
   it('keeps a UUID slug a Template already holds, so saving never changes its shared URL', async () => {

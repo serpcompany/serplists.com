@@ -55,6 +55,7 @@ vi.mock('@functions/api/db', () => ({
 
 import { isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
 import { postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const env = {
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
@@ -77,7 +78,7 @@ function userRow(email: string) {
 
 async function expectUsernameTaken(response: Response) {
   expect(response.status).toBe(422);
-  const body = await response.json();
+  const body = await readJson(response, betterAuthErrorBody);
   expect(body.code).toBe('USERNAME_IS_ALREADY_TAKEN');
   expect(body.message).toMatch(/already taken/i);
 }

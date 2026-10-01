@@ -34,13 +34,16 @@ vi.mock('@functions/api/utils/entitlements', () => ({
 }));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
-import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import {
+  type Entitlements,
+  getEntitlementsForContext,
+  getEntitlementsForUser,
+} from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
-const mockEnv = {
-  DB: {},
-  BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
 const privateTeamBTemplate = {
   id: 'template-b',
@@ -57,7 +60,7 @@ const routesThatStartARunFromATemplate = [
 ] as const;
 
 const post = (url: string, body: unknown) =>
-  handleChecklists(new Request(url, { method: 'POST', body: JSON.stringify(body) }), mockEnv as never);
+  handleChecklists(new Request(url, { method: 'POST', body: JSON.stringify(body) }), mockEnv);
 
 describe('runs from a private template of another Organization, whose content never lands in the requested one', () => {
   beforeEach(() => {
@@ -74,7 +77,7 @@ describe('runs from a private template of another Organization, whose content ne
     dbMocks.db.batch.mockResolvedValue([]);
 
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const team = { plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } };
+    const team: Entitlements = { plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } };
     vi.mocked(getEntitlementsForUser).mockResolvedValue(team);
     vi.mocked(getEntitlementsForContext).mockResolvedValue(team);
   });
@@ -85,7 +88,7 @@ describe('runs from a private template of another Organization, whose content ne
       .mockResolvedValueOnce([{ id: 'member-1', team_id: 'team-b', user_id: 'user-123', role: 'runner', status: 'active' }]);
 
     const response = await post(url, body);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe('organization_mismatch');

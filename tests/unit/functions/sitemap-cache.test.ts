@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cachedSitemap } from '../../../functions/sitemap/cache';
+import { cachedSitemap, type SitemapRevisions } from '../../../functions/sitemap/cache';
 import { parsePage, xmlResponse } from '../../../functions/sitemap/shared';
 import type { Env } from '../../../functions/api/types';
 import { GET as sitemapIndexGet } from '@/app/sitemap.xml/route';
@@ -118,7 +118,7 @@ describe('cached sitemaps', () => {
     vi.unstubAllGlobals();
   });
 
-  const builder = () => vi.fn(async (request: Request) => xmlResponse(request, '<urlset/>'));
+  const builder = () => vi.fn(async (request: Request, _revisions: SitemapRevisions) => xmlResponse(request, '<urlset/>'));
 
   it('builds once and serves repeats from the cache until a sitemap revision changes', async () => {
     const build = builder();

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const BILLING_LIMIT_PER_MINUTE = 10;
 let ipCounter = 0;
@@ -48,7 +49,7 @@ describe('API router billing rate limit on a deployed host', { timeout: FRESH_RO
     const blocked = await send(ip, 'POST', path);
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get('Retry-After'))).toBeGreaterThan(0);
-    expect((await blocked.json()).error).toMatch(/try again/i);
+    expect((await readJson(blocked, apiErrorBody)).error).toMatch(/try again/i);
     expect(handleBilling).toHaveBeenCalledTimes(BILLING_LIMIT_PER_MINUTE);
   });
 

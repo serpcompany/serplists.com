@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 
 const dbMocks = await vi.hoisted(async () => (await import("../../../support/drizzleChainMocks")).drizzleChainMocks());
@@ -40,13 +41,15 @@ vi.mock("@functions/api/utils/audit", () => ({
 }));
 
 import { handleTeams } from "@functions/api/handlers/teams";
+import { apiEnv } from "../../../support/apiEnv";
 import { columnNamesIn } from "../../../support/drizzleSql";
+import { jsonObject, readJson } from "../../../support/readJson";
 import { sha256Hex } from "@functions/api/utils/crypto";
 
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
+
+const inviteLinkBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
+const inviteBody = z.object({ role: z.string() }).passthrough();
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 
@@ -77,7 +80,7 @@ async function replaceTheLinkAsAnAdmin() {
     .mockResolvedValueOnce([membership("admin")])
     .mockResolvedValueOnce([pendingInvite()]);
   const response = await handleTeams(newLinkRequest(), mockEnv);
-  return { response, data: await response.json(), storedChanges: () => dbMocks.updateChain.set.mock.calls[0][0] };
+  return { response, data: await readJson(response, inviteLinkBody), storedChanges: () => dbMocks.updateChain.set.mock.calls[0][0] };
 }
 
 describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost link since only its token hash is kept", () => {
@@ -157,7 +160,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
       .mockResolvedValueOnce([pendingInvite()]);
 
     const response = await handleTeams(newLinkRequest({ role: "editor" }), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, inviteBody);
 
     expect(response.status).toBe(200);
     expect(data.role).toBe("editor");
@@ -211,7 +214,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTeams(newLinkRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
     expect(data.inviteToken).toBeUndefined();

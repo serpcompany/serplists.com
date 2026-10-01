@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonObject, readJson } from '../../../support/readJson';
 
 import { normalizeSectionsPayload } from '@functions/api/utils/payloads';
 import {
@@ -78,7 +79,7 @@ describe('saving a Template whose first section has items: null', () => {
       headers: { 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }), env());
-    return { status: response.status, data: await response.json() as Json };
+    return { status: response.status, data: await readJson(response, jsonObject) };
   };
 
   beforeEach(() => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -25,12 +26,20 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
+import { apiErrorBody, readJson } from '../../../support/readJson';
+
+const exportedTemplate = z
+  .object({
+    title: z.string(),
+    sections: z.array(z.object({ items: z.array(z.record(z.unknown())) }).passthrough()),
+  })
+  .passthrough();
+const packBody = z.object({ templates: z.array(exportedTemplate), manifest: z.record(z.unknown()) }).passthrough();
+const importBody = z.object({ imported: z.number() }).passthrough();
 
 describe('portable template import/export API', () => {
-  const mockEnv = {
-    DB: {},
-    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-  };
+  const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -81,8 +90,8 @@ describe('portable template import/export API', () => {
     ]);
 
     const request = new Request('http://localhost/api/templates/backup', { method: 'GET' });
-    const response = await handleTemplates(request, mockEnv as never);
-    const data = await response.json();
+    const response = await handleTemplates(request, mockEnv);
+    const data = await readJson(response, packBody);
 
     expect(response.status).toBe(200);
     expect(data.kind).toBe('serplists-template-pack');
@@ -124,8 +133,8 @@ describe('portable template import/export API', () => {
       }),
     });
 
-    const response = await handleTemplates(request, mockEnv as never);
-    const data = await response.json();
+    const response = await handleTemplates(request, mockEnv);
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.total).toBe(1);
@@ -171,8 +180,8 @@ describe('portable template import/export API', () => {
     ]);
 
     const request = new Request('http://localhost/api/templates/backup?teamId=team-1', { method: 'GET' });
-    const response = await handleTemplates(request, mockEnv as never);
-    const data = await response.json();
+    const response = await handleTemplates(request, mockEnv);
+    const data = await readJson(response, packBody);
 
     expect(response.status).toBe(200);
     expect(vi.mocked(getEntitlementsForContext)).toHaveBeenCalledWith(
@@ -207,11 +216,11 @@ describe('portable template import/export API', () => {
         },
       ]);
 
-      const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv as never);
-      const data = await response.json();
+      const response = await handleTemplates(new Request(`http://localhost${path}`), mockEnv);
+      const data = await readJson(response, packBody);
 
       expect(response.status).toBe(200);
-      expect(data.templates.map((template: { title: string }) => template.title)).toEqual(['Owned']);
+      expect(data.templates.map((template) => template.title)).toEqual(['Owned']);
       const dialect = new SQLiteSyncDialect();
       const templateQueries = dbMocks.selectChain.where.mock.calls
         .map(([where]) => dialect.sqlToQuery(where as SQL).sql)
@@ -244,8 +253,8 @@ describe('portable template import/export API', () => {
       }),
     });
 
-    const response = await handleTemplates(request, mockEnv as never);
-    const data = await response.json();
+    const response = await handleTemplates(request, mockEnv);
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
@@ -274,8 +283,8 @@ describe('portable template import/export API', () => {
       }),
     });
 
-    const response = await handleTemplates(request, mockEnv as never);
-    const data = await response.json();
+    const response = await handleTemplates(request, mockEnv);
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(400);
     expect(data.code).toBe('unsupported_portable_schema_version');
@@ -315,12 +324,12 @@ describe('portable template import/export API', () => {
           templates,
         }),
       }),
-      mockEnv as never,
+      mockEnv,
     );
 
   it('imports assets up to the upload limit, so an export holding a 50MB upload imports again', async () => {
     const response = await importPack([packWithAsset(8 * 1024 * 1024), packWithAsset(50 * 1024 * 1024)]);
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(2);
@@ -329,7 +338,7 @@ describe('portable template import/export API', () => {
 
   it('fails only the template whose asset is over the upload limit', async () => {
     const response = await importPack([packWithAsset(50 * 1024 * 1024 + 1), packWithAsset(1024)]);
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
@@ -344,7 +353,7 @@ describe('portable template import/export API', () => {
       sections: [{ title: 'Guide', items: [{ title: 'Read it', contents: [{ type: 'text', value: 'x'.repeat(1_200_000) }] }] }],
     };
     const response = await importPack([textHeavy, packWithAsset(1024)]);
-    const data = await response.json();
+    const data = await readJson(response, importBody);
 
     expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
@@ -395,9 +404,9 @@ describe('portable template import/export API', () => {
 
     const response = await handleTemplates(
       new Request('http://localhost/api/templates/backup', { method: 'GET' }),
-      mockEnv as never,
+      mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, packBody);
 
     expect(response.status).toBe(200);
     expect(JSON.stringify(data.templates[0].sections)).not.toMatch(/"(isCompleted|completed|notes)"/);
@@ -413,7 +422,7 @@ describe('portable template import/export API', () => {
     expect(validate(data), JSON.stringify(validate.errors)).toBe(true);
 
     const reimport = await importPack(data.templates);
-    expect((await reimport.json()).imported).toBe(1);
+    expect((await readJson(reimport, importBody)).imported).toBe(1);
   });
 
   it('exports content blocks with a numeric id or null file details, as a lenient JSON import stores them, in the portable format instead of skipping the template', async () => {
@@ -454,9 +463,9 @@ describe('portable template import/export API', () => {
 
     const response = await handleTemplates(
       new Request('http://localhost/api/templates/backup', { method: 'GET' }),
-      mockEnv as never,
+      mockEnv,
     );
-    const data = await response.json();
+    const data = await readJson(response, packBody);
 
     expect(response.status).toBe(200);
     expect(data.manifest.skippedTemplates).toBeUndefined();
@@ -526,8 +535,8 @@ describe('portable template import/export API', () => {
     it('exports a pack that passes the portable schema and re-imports', async () => {
       dbMocks.selectChain.orderBy.mockResolvedValueOnce(editorRows());
 
-      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', { method: 'GET' }), mockEnv as never);
-      const pack = await response.json();
+      const response = await handleTemplates(new Request('http://localhost/api/templates/backup', { method: 'GET' }), mockEnv);
+      const pack = await readJson(response, packBody);
 
       expect(response.status).toBe(200);
       expect(portableTemplatePackSchema.safeParse(pack).success).toBe(true);
@@ -536,7 +545,7 @@ describe('portable template import/export API', () => {
       expect(pack.manifest.skippedTemplates).toEqual([expect.objectContaining({ title: 'Corrupt' })]);
       const [template] = pack.templates;
       expect(template.type).toBe('checklist');
-      expect(template.sections.map((section: { id: string; title: string }) => [section.id, section.title]))
+      expect(template.sections.map((section) => [section.id, section.title]))
         .toEqual([['s-1', 'Section 1'], ['s-2', 'Section 2']]);
       expect(template.sections[0].items[1].title).toBe('Task 2');
       expect(template.sections[0].items[0].contents).toEqual([
@@ -547,8 +556,8 @@ describe('portable template import/export API', () => {
       const importResponse = await handleTemplates(new Request('http://localhost/api/templates/backup', {
         method: 'POST',
         body: JSON.stringify(pack),
-      }), mockEnv as never);
-      const summary = await importResponse.json();
+      }), mockEnv);
+      const summary = await readJson(importResponse, importBody);
 
       expect(importResponse.status).toBe(200);
       expect(summary.imported).toBe(1);
@@ -569,8 +578,8 @@ describe('portable template import/export API', () => {
             },
           ],
         }),
-      }), mockEnv as never);
-      const summary = await response.json();
+      }), mockEnv);
+      const summary = await readJson(response, importBody);
 
       expect(response.status).toBe(200);
       expect(summary.total).toBe(2);

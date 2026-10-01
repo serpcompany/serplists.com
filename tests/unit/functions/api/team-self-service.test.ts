@@ -29,11 +29,10 @@ vi.mock("@functions/api/utils/audit", () => ({
 }));
 
 import { handleTeams } from "@functions/api/handlers/teams";
+import { apiEnv } from "../../../support/apiEnv";
+import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
 
-const mockEnv = {
-  DB: {} as D1Database,
-  BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!",
-};
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -150,7 +149,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const response = await handleTeams(previewRequest(), mockEnv);
 
     expect(response.status).toBe(410);
-    expect((await response.json()).code).toBe("invite_expired");
+    expect((await readJson(response, apiErrorBody)).code).toBe("invite_expired");
     expectNoWrites();
   });
 
@@ -275,7 +274,7 @@ describe("Organization invite decline", () => {
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
     const response = await handleTeams(declineRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, jsonObject);
 
     expect(response.status).toBe(404);
     expect(data.success).toBeUndefined();
@@ -366,7 +365,7 @@ describe("Leaving an Organization", () => {
     dbMocks.db.batch.mockResolvedValueOnce(membershipChangedAfterTheRead);
 
     const response = await handleTeams(leaveRequest(), mockEnv);
-    const data = await response.json();
+    const data = await readJson(response, apiErrorBody);
 
     expect(response.status).toBe(409);
     expect(data.code).toBe("membership_changed");
@@ -381,7 +380,7 @@ describe("Leaving an Organization", () => {
     const response = await handleTeams(leaveRequest(), mockEnv);
 
     expect(response.status).toBe(400);
-    expect((await response.json()).code).toBe("owner_must_transfer");
+    expect((await readJson(response, apiErrorBody)).code).toBe("owner_must_transfer");
     expectNoWrites();
   });
 

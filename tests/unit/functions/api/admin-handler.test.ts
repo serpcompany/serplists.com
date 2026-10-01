@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAdmin } from '@functions/api/handlers/admin';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const ADMIN_SECRET = 'admin-secret-for-tests';
 const DAY = 24 * 60 * 60;
@@ -70,7 +71,7 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
     const response = await post({ userId: 'user-1', plan: 'pro', expiresAt });
 
     expect(response.status).toBe(400);
-    expect((await response.json()).error).toMatch(/expiresAt/);
+    expect((await readJson(response, apiErrorBody)).error).toMatch(/expiresAt/);
     expect(overrideRows()).toEqual([]);
   });
 

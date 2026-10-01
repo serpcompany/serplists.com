@@ -10,8 +10,9 @@ import {
   createPersonalRunKeySecret,
   markPersonalRunKeyUsed,
 } from "@functions/api/utils/personal-run-key";
+import { apiEnv } from "../../../support/apiEnv";
 
-const mockEnv = { DB: {} as D1Database };
+const mockEnv = apiEnv();
 
 describe("personal run key utility", () => {
   beforeEach(() => {
@@ -91,6 +92,7 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: null,
     });
 
@@ -102,6 +104,7 @@ describe("personal run key utility", () => {
       keyId: "key-1",
       userId: "user-1",
       name: "Codex",
+      permissions: ["runs:read"],
       lastUsedAt: new Date().toISOString(),
     });
     expect(dbMocks.db.update).not.toHaveBeenCalled();
