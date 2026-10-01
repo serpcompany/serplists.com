@@ -1,10 +1,8 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
-import type { ChecklistRun, ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
+import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 const apiMock = vi.hoisted(() => ({
   createChecklist: vi.fn(),
@@ -15,14 +13,7 @@ const apiMock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeTeamId: undefined, isWorkspaceLoading: false, workspaceScopeId: 'personal' }),
-}));
-
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
 
 const run = (revision: number): ChecklistRun => ({
   id: 'run-1',
@@ -37,40 +28,13 @@ const run = (revision: number): ChecklistRun => ({
   revision,
 });
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Launch Checklist',
-  description: '',
+const template = launchChecklist({
   sections: [],
-  userId: 'user-1',
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-  version: 3,
-};
+});
 
-const clients: QueryClient[] = [];
-
-function renderProvider() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  clients.push(client);
-  let context: TemplatesContextProps | undefined;
-  const Probe = () => {
-    context = useTemplates();
-    return null;
-  };
-  renderToStaticMarkup(
-    <QueryClientProvider client={client}>
-      <TemplatesProvider>
-        <Probe />
-      </TemplatesProvider>
-    </QueryClientProvider>,
-  );
-  if (!context) throw new Error('TemplatesProvider did not render');
-  return { client, context };
-}
+const renderProvider = aTemplatesProviderForEachTest();
 
 async function showRunsPageWhileTheServerHoldsRevision5(client: QueryClient) {
   const listFetch = vi.fn(async () => [run(4)]);
@@ -90,7 +54,6 @@ const conflict = (code: string) => createApiError(409, { error: 'Checklist run c
 
 describe('refresh after a conflict, so a retry sends the current revision or version instead of failing the same way', () => {
   afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
   });
 
@@ -178,7 +141,6 @@ async function openTemplatePageThatWillFindItGone(client: QueryClient) {
 
 describe('refresh after an action on an item archived elsewhere, which the cached lists can show for up to 5 minutes', () => {
   afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
   });
 

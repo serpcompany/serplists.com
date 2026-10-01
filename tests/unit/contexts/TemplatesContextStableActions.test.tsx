@@ -1,45 +1,26 @@
 import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRun, TemplatesContextProps } from '@/types/checklist';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer } from '../../fixtures/fakeDom';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 import { settle } from '../../support/queryHookProbe';
-
-const workspace = vi.hoisted(() => ({ activeTeamId: undefined as string | undefined, scope: 'personal' }));
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({ api: {} }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' }, isLoading: false }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeTeamId: workspace.activeTeamId,
-    isWorkspaceLoading: false,
-    workspaceScopeId: workspace.scope,
-    workspaceStatus: 'ready',
-  }),
-}));
-
+import { providerWorkspace } from '../../support/templatesProviderHarness';
 import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
 import { markRunShared, queryKeys } from '@/lib/queryCache';
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
-
-let root: Root | null = null;
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-  workspace.activeTeamId = undefined;
-  workspace.scope = 'personal';
+  providerWorkspace.activeTeamId = undefined;
+  providerWorkspace.workspaceScopeId = 'personal';
 });
+
+const fakeDom = aFakeDomForEachTest();
 
 const privateRun: ChecklistRun = {
   id: 'run-1',
@@ -80,14 +61,14 @@ function mountProvider(queryClient: QueryClient) {
       </TemplatesProvider>
     </QueryClientProvider>
   );
-  root = createRoot(createFakeContainer() as unknown as Element);
-  act(() => root?.render(tree()));
+  const root = fakeDom.track(createRoot(createFakeContainer() as unknown as Element));
+  act(() => root.render(tree()));
   return {
     context: () => {
       if (!context) throw new Error('TemplatesProvider did not render');
       return context;
     },
-    rerender: () => act(() => root?.render(tree())),
+    rerender: () => act(() => root.render(tree())),
   };
 }
 
@@ -119,8 +100,8 @@ describe('TemplatesProvider actions, which pages key effects on, so a new identi
     const before = actionsOf(context());
     const templatesBefore = context().allTemplates;
 
-    workspace.activeTeamId = 'team-1';
-    workspace.scope = 'team-1';
+    providerWorkspace.activeTeamId = 'team-1';
+    providerWorkspace.workspaceScopeId = 'team-1';
     rerender();
 
     expect(context().allTemplates).not.toBe(templatesBefore);

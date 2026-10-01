@@ -1,10 +1,6 @@
-import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
-import { settle } from '../../support/queryHookProbe';
 
 const { getSession, keepAlive, signOut, startSessionKeepAlive, stopKeepAlive, withoutBrowserListeners } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -44,43 +40,13 @@ vi.mock('@/contexts/sessionSync', async (importOriginal) => {
   };
 });
 
-import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
+import { anAuthProviderForEachTest } from '../../support/authProviderHarness';
 
-let restoreGlobals: () => void = () => {};
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals();
-});
-afterAll(() => restoreGlobals());
-
-let root: Root | null = null;
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   vi.clearAllMocks();
 });
 
-async function mountAuth() {
-  let auth: ReturnType<typeof useAuth> | undefined;
-  function Probe() {
-    auth = useAuth();
-    return null;
-  }
-  root = createRoot(createFakeContainer() as unknown as Element);
-  await act(async () => {
-    root?.render(
-      <QueryClientProvider client={new QueryClient()}>
-        <AuthProvider>
-          <Probe />
-        </AuthProvider>
-      </QueryClientProvider>,
-    );
-    await settle();
-  });
-  return () => {
-    if (!auth) throw new Error('AuthProvider did not render');
-    return auth;
-  };
-}
+const mountAuth = anAuthProviderForEachTest();
 
 describe('AuthProvider session keep-alive, without which a session expires while the user is still active', () => {
   it("starts the session sync's own keepAlive once signed in and stops it on sign-out", async () => {

@@ -1,9 +1,6 @@
-import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { settle } from '../../support/queryHookProbe';
 
 const { getSession } = vi.hoisted(() => ({ getSession: vi.fn() }));
@@ -38,7 +35,7 @@ vi.mock('@/contexts/sessionSync', async (importOriginal) => {
   };
 });
 
-import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
+import { anAuthProviderForEachTest } from '../../support/authProviderHarness';
 
 const windowListeners = new Map<string, Set<() => void>>();
 const browserWindow = {
@@ -57,44 +54,12 @@ const signedInSession = {
 };
 const serverDown = { data: null, error: { status: 503 } };
 
-let restoreGlobals: () => void = () => undefined;
-let root: Root | null = null;
-
-beforeAll(() => {
-  restoreGlobals = installFakeDomGlobals(browserWindow);
-});
-
-afterAll(() => restoreGlobals());
-
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   windowListeners.clear();
   getSession.mockReset();
 });
 
-async function mountAuth() {
-  let auth: ReturnType<typeof useAuth> | undefined;
-  function Probe() {
-    auth = useAuth();
-    return null;
-  }
-  root = createRoot(createFakeContainer() as unknown as Element);
-  await act(async () => {
-    root?.render(
-      <QueryClientProvider client={new QueryClient()}>
-        <AuthProvider>
-          <Probe />
-        </AuthProvider>
-      </QueryClientProvider>,
-    );
-    await settle();
-  });
-  return () => {
-    if (!auth) throw new Error('AuthProvider did not render');
-    return auth;
-  };
-}
+const mountAuth = anAuthProviderForEachTest(browserWindow);
 
 describe('AuthProvider after the session check failed', () => {
   it('checks the session again when the browser comes back online', async () => {

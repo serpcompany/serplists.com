@@ -1,11 +1,8 @@
-import React from 'react';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const apiMock = vi.hoisted(() => ({
@@ -16,54 +13,17 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: toastMock }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1' } }),
-}));
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({ activeTeamId: undefined, isWorkspaceLoading: false, workspaceScopeId: 'personal' }),
-}));
-
-import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
+import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
 import { getTemplateSaveSuccessMessage } from '@/features/template-editor/useTemplateEditorModel';
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Launch Checklist',
-  description: '',
-  sections: [{ id: 'section-1', title: 'Prep', items: [{ id: 'item-1', title: 'Confirm owner' }] }],
-  userId: 'user-1',
-  createdAt: '2026-07-03T12:00:00.000Z',
-  updatedAt: '2026-07-03T12:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-  version: 3,
-};
+const template = launchChecklist();
 
-const clients: QueryClient[] = [];
-
-function renderProvider() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+const renderTemplatesProvider = aTemplatesProviderForEachTest();
+const renderProvider = () =>
+  renderTemplatesProvider((client) => {
+    client.setQueryData(['templates', 'user-1', 'personal'], [template]);
+    client.setQueryData(['runs', 'user-1', 'personal'], []);
   });
-  clients.push(client);
-  client.setQueryData(['templates', 'user-1', 'personal'], [template]);
-  client.setQueryData(['runs', 'user-1', 'personal'], []);
-  let context: TemplatesContextProps | undefined;
-  const Probe = () => {
-    context = useTemplates();
-    return null;
-  };
-  renderToStaticMarkup(
-    <QueryClientProvider client={client}>
-      <TemplatesProvider>
-        <Probe />
-      </TemplatesProvider>
-    </QueryClientProvider>,
-  );
-  if (!context) throw new Error('TemplatesProvider did not render');
-  return { client, context };
-}
 
 const isInvalidated = (client: QueryClient, key: unknown[]) =>
   client.getQueryState(key)?.isInvalidated === true;
@@ -80,10 +40,6 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
     apiMock.createTemplate.mockReset();
     apiMock.updateTemplate.mockReset();
     apiMock.createChecklist.mockReset();
-  });
-
-  afterEach(() => {
-    clients.splice(0).forEach((client) => client.clear());
   });
 
   it('creates a template without a toast and still refreshes the lists', async () => {
