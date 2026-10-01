@@ -229,7 +229,7 @@ describe('audit rows are written only when the guarded write lands', () => {
       'user-123',
       'template-1',
       { expected_version: 3, title: 'Renamed by an agent' },
-      { personalOnly: true, auditMetadata: { source: 'mcp', personalRunKeyId: 'key-1' } },
+      { privatePersonalOnly: true, auditMetadata: { source: 'mcp', personalRunKeyId: 'key-1' } },
     );
 
     expect(response.status).toBe(409);

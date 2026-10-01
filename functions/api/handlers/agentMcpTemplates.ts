@@ -117,7 +117,7 @@ export async function createTemplate(
     env,
     identity.userId,
     { ...args, is_public: false },
-    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
   if (typeof created.id !== "string") throw new Error("Template write returned no id");
   return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
@@ -150,7 +150,7 @@ async function updateTemplatePart(
     identity.userId,
     args.templateId,
     { sections: edit.sections, expected_version: args.expectedVersion },
-    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
   ));
   return loadWrittenTemplate(request, env, identity, {
     id: args.templateId,
@@ -175,7 +175,7 @@ export async function updateTemplate(
     identity.userId,
     templateId,
     { ...changes, expected_version: expectedVersion },
-    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
   return loadWrittenTemplate(request, env, identity, {
     id: templateId,

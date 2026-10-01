@@ -1,6 +1,6 @@
 import { Env } from '../types';
 import { decodeSlugPath } from '../utils/slug';
-import { and, desc, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { schema } from '../db';
 import { json, jsonError } from '../utils/response';
 import { withEdgeCache } from '../utils/edge-cache';
@@ -26,9 +26,181 @@ import {
   serializeTemplateForViewer,
 } from '../utils/template-permissions';
 
+const PUBLIC_CATALOG_CACHE_KEY = '/api/templates?scope=public&fields=public';
+const PUBLIC_CATALOG_CACHE_SECONDS = 5 * 60;
+
 function isMissingHistoryReadTableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /no such table: (audit_events|template_versions)/i.test(message);
+}
+
+async function canListOrganizationTemplates(env: Env, teamId: string, userId: string): Promise<boolean> {
+  const membership = await getActiveTeamMembership(env, teamId, userId);
+  return membership !== null && canViewTeam(normalizeTeamRole(membership.role));
+}
+
+export function selectPublicProfileTemplates(env: Env, ownerId: string, includeRules: boolean) {
+  const { templates } = schema;
+  const isPublicWithoutItsIndex = sql`+${templates.is_public} = 1`;
+  return selectTemplatesWithOwner(env, includeRules)
+    .where(
+      and(
+        eq(templates.owner_type, 'user'),
+        eq(templates.user_id, ownerId),
+        isNull(templates.team_id),
+        isPublicWithoutItsIndex,
+        isNull(templates.deleted_at),
+      ),
+    )
+    .orderBy(desc(templates.created_at));
+}
+
+async function listPublicProfileTemplates(env: Env, url: URL): Promise<Response> {
+  const ownerId = url.searchParams.get('userId');
+  if (!ownerId) {
+    return jsonError('userId required', 400);
+  }
+
+  const rows = await withRulesColumnFallback((includeRules) => selectPublicProfileTemplates(env, ownerId, includeRules));
+  return json(rows.map((row) => toPublicTemplate(parseTemplateRow(row as unknown as Record<string, unknown>))));
+}
+
+async function readActiveTemplate(env: Env, userId: string | null, matches: SQL): Promise<Response> {
+  const { templates } = schema;
+  const [template] = await withRulesColumnFallback((includeRules) =>
+    selectTemplatesWithOwner(env, includeRules)
+      .where(and(matches, isNull(templates.deleted_at)))
+      .limit(1),
+  );
+
+  const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
+  return body ? json(body) : jsonError('Template not found', 404);
+}
+
+async function listArchivedTemplates(env: Env, url: URL, userId: string | null): Promise<Response> {
+  const { templates } = schema;
+  if (!userId) {
+    return jsonError('Unauthorized', 401);
+  }
+
+  const teamId = url.searchParams.get('teamId');
+  if (teamId && !(await canListOrganizationTemplates(env, teamId, userId))) {
+    return jsonError('Organization not found', 404);
+  }
+  const ownedByContext = teamId
+    ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId))
+    : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id));
+
+  const rows = await withRulesColumnFallback((includeRules) =>
+    selectTemplatesWithOwner(env, includeRules)
+      .where(and(ownedByContext, isNotNull(templates.deleted_at)))
+      .orderBy(desc(templates.updated_at)),
+  );
+
+  return json(rows.map((row) => parseTemplateRow(row as unknown as Record<string, unknown>)));
+}
+
+async function readTemplateHistory(
+  env: Env,
+  db: TemplateDb,
+  url: URL,
+  userId: string | null,
+  templateId: string,
+): Promise<Response> {
+  const { templates } = schema;
+  if (!userId) {
+    return jsonError('Unauthorized', 401);
+  }
+
+  const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
+  const [template] = await withRulesColumnFallback((includeRules) =>
+    db
+      .select(getTemplateSelectColumns(includeRules))
+      .from(templates)
+      .where(eq(templates.id, templateId))
+      .limit(1),
+  );
+
+  if (!template || !(await canViewPrivateTemplate(env, template as unknown as Record<string, unknown>, userId))) {
+    return jsonError('Template not found', 404);
+  }
+  const subject = getTemplateSubject(template as unknown as Record<string, unknown>, userId);
+
+  try {
+    const [versionRows, eventRows] = await Promise.all([
+      selectTemplateVersionHistory(db, templateId, historyLimit),
+      selectAuditEventHistory(db, 'template', templateId, historyLimit),
+    ]);
+    const events = eventRows.map(serializeHistoryEvent);
+
+    return json({
+      templateId,
+      subject,
+      versions: serializeTemplateVersionHistory(versionRows, events),
+      events,
+    });
+  } catch (error) {
+    if (isMissingHistoryReadTableError(error)) {
+      return json({ templateId, subject, versions: [], events: [] });
+    }
+
+    throw error;
+  }
+}
+
+async function listOrganizationTemplates(env: Env, teamId: string, userId: string | null): Promise<Response> {
+  const { templates } = schema;
+  if (!userId) return jsonError('Unauthorized', 401);
+  if (!(await canListOrganizationTemplates(env, teamId, userId))) {
+    return jsonError('Organization not found', 404);
+  }
+
+  const rows = await withRulesColumnFallback((includeRules) =>
+    selectTemplatesWithOwner(env, includeRules)
+      .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
+      .orderBy(desc(templates.created_at)),
+  );
+
+  return json(rows.map((row) => parseTemplateRow(row as unknown as Record<string, unknown>)));
+}
+
+async function listCatalogOrPersonalTemplates(
+  request: Request,
+  env: Env,
+  url: URL,
+  userId: string | null,
+): Promise<Response> {
+  const { templates } = schema;
+  const scope = url.searchParams.get('scope');
+  if (scope === 'personal' && !userId) return jsonError('Unauthorized', 401);
+
+  const ownPersonalTemplates = userId
+    ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id))
+    : undefined;
+  const isPublicCatalog = !ownPersonalTemplates || scope === 'public';
+  const listed = isPublicCatalog
+    ? eq(templates.is_public, true)
+    : scope === 'personal'
+      ? ownPersonalTemplates
+      : or(eq(templates.is_public, true), ownPersonalTemplates);
+
+  const respond = async () => {
+    const rows = await withRulesColumnFallback((includeRules) =>
+      selectTemplatesWithOwner(env, includeRules)
+        .where(and(listed, isNull(templates.deleted_at)))
+        .orderBy(desc(templates.created_at)),
+    );
+    return json(rows.map((row) => {
+      const template = row as unknown as Record<string, unknown>;
+      return !isPublicCatalog && isOwnPersonalTemplateRow(template, userId)
+        ? parseTemplateRow(template)
+        : toPublicTemplate(parseTemplateRow(template));
+    }));
+  };
+
+  return isPublicCatalog
+    ? withEdgeCache(request, PUBLIC_CATALOG_CACHE_KEY, PUBLIC_CATALOG_CACHE_SECONDS, respond)
+    : respond();
 }
 
 export async function handleTemplateReads(
@@ -40,189 +212,34 @@ export async function handleTemplateReads(
   templatesSubpath: string[],
 ): Promise<Response> {
   const { templates } = schema;
+  const [first, second] = templatesSubpath;
 
-  // GET /api/templates/public?userId=...
-  if (templatesSubpath[0] === 'public') {
-    const targetUserId = url.searchParams.get('userId');
-    if (!targetUserId) {
-      return jsonError('userId required', 400);
-    }
-
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(
-          and(
-            eq(templates.owner_type, 'user'),
-            eq(templates.user_id, targetUserId),
-            isNull(templates.team_id),
-            // Unary + stops SQLite using an index for this term, which keeps the planner on
-            // idx_templates_owner instead of scanning every public Template (see the D1 cost doc).
-            sql`+${templates.is_public} = 1`,
-            isNull(templates.deleted_at),
-          ),
-        )
-        .orderBy(desc(templates.created_at)),
-    );
-
-    return json(rows.map((t) => toPublicTemplate(parseTemplateRow(t as unknown as Record<string, unknown>))));
+  if (first === 'public') {
+    return listPublicProfileTemplates(env, url);
   }
 
-  // GET /api/templates/slug/:slug
-  if (templatesSubpath[0] === 'slug' && templatesSubpath[1]) {
+  if (first === 'slug' && second) {
     const slug = decodeSlugPath(templatesSubpath.slice(1));
     if (!slug) return jsonError('Template not found', 404);
-    const [template] = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(and(eq(templates.slug, slug), isNull(templates.deleted_at)))
-        .limit(1),
-    );
-
-    const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
-    return body ? json(body) : jsonError('Template not found', 404);
+    return readActiveTemplate(env, userId, eq(templates.slug, slug));
   }
 
-  // GET /api/templates/archived?teamId=...
-  if (templatesSubpath[0] === 'archived') {
-    if (!userId) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const teamId = url.searchParams.get('teamId');
-    if (teamId) {
-      const membership = await getActiveTeamMembership(env, teamId, userId);
-      if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-        return jsonError('Organization not found', 404);
-      }
-
-      const rows = await withRulesColumnFallback((includeRules) =>
-        selectTemplatesWithOwner(env, includeRules)
-          .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNotNull(templates.deleted_at)))
-          .orderBy(desc(templates.updated_at)),
-      );
-
-      return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
-    }
-
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at)))
-        .orderBy(desc(templates.updated_at)),
-    );
-
-    return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+  if (first === 'archived') {
+    return listArchivedTemplates(env, url, userId);
   }
 
-  // GET /api/templates/:id/history
-  if (templatesSubpath[0] && templatesSubpath[1] === 'history') {
-    if (!userId) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    const templateId = templatesSubpath[0];
-    const historyLimit = parseHistoryLimit(url.searchParams.get('limit'));
-    const [template] = await withRulesColumnFallback((includeRules) =>
-      db
-        .select(getTemplateSelectColumns(includeRules))
-        .from(templates)
-        .where(eq(templates.id, templateId))
-        .limit(1),
-    );
-
-    if (!template || !(await canViewPrivateTemplate(env, template as unknown as Record<string, unknown>, userId))) {
-      return jsonError('Template not found', 404);
-    }
-
-    try {
-      // The Changelog merges both lists: archive and restore record only an event, and a
-      // Share's event labels its version (templateHistoryTimeline.ts). Both reads stop at
-      // LIMIT on an index.
-      const [versionRows, eventRows] = await Promise.all([
-        selectTemplateVersionHistory(db, templateId, historyLimit),
-        selectAuditEventHistory(db, 'template', templateId, historyLimit),
-      ]);
-      const events = eventRows.map(serializeHistoryEvent);
-
-      return json({
-        templateId,
-        subject: getTemplateSubject(template as unknown as Record<string, unknown>, userId),
-        versions: serializeTemplateVersionHistory(versionRows, events),
-        events,
-      });
-    } catch (error) {
-      if (isMissingHistoryReadTableError(error)) {
-        return json({
-          templateId,
-          subject: getTemplateSubject(template as unknown as Record<string, unknown>, userId),
-          versions: [],
-          events: [],
-        });
-      }
-
-      throw error;
-    }
+  if (first && second === 'history') {
+    return readTemplateHistory(env, db, url, userId, first);
   }
 
-  // GET /api/templates/:id
-  if (templatesSubpath[0]) {
-    const templateId = templatesSubpath[0];
-    const [template] = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(and(eq(templates.id, templateId), isNull(templates.deleted_at)))
-        .limit(1),
-    );
-
-    const body = template ? await serializeTemplateForViewer(env, template as unknown as Record<string, unknown>, userId) : null;
-    return body ? json(body) : jsonError('Template not found', 404);
+  if (first) {
+    return readActiveTemplate(env, userId, eq(templates.id, first));
   }
 
-  // GET /api/templates (list)
   const teamId = url.searchParams.get('teamId');
   if (teamId) {
-    if (!userId) return jsonError('Unauthorized', 401);
-    const membership = await getActiveTeamMembership(env, teamId, userId);
-    if (!membership || !canViewTeam(normalizeTeamRole(membership.role))) {
-      return jsonError('Organization not found', 404);
-    }
-
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(and(eq(templates.owner_type, 'team'), eq(templates.team_id, teamId), isNull(templates.deleted_at)))
-        .orderBy(desc(templates.created_at)),
-    );
-
-    return json(rows.map((t) => parseTemplateRow(t as unknown as Record<string, unknown>)));
+    return listOrganizationTemplates(env, teamId, userId);
   }
 
-  // ?scope=public is the catalog, identical for everyone. ?scope=personal is the user's
-  // own Personal templates (idx_templates_owner). No scope returns public OR mine for
-  // clients loaded before scopes existed (see the D1 cost plan).
-  const scope = url.searchParams.get('scope');
-  if (scope === 'personal' && !userId) return jsonError('Unauthorized', 401);
-  const ownClause = userId
-    ? and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id))
-    : undefined;
-  const publicCatalog = !ownClause || scope === 'public';
-  const whereClause = and(
-    publicCatalog ? eq(templates.is_public, true) : scope === 'personal' ? ownClause : or(eq(templates.is_public, true), ownClause),
-    isNull(templates.deleted_at),
-  );
-
-  const listTemplates = async () => {
-    const rows = await withRulesColumnFallback((includeRules) =>
-      selectTemplatesWithOwner(env, includeRules)
-        .where(whereClause)
-        .orderBy(desc(templates.created_at)),
-    );
-    // Only the user's own Personal rows are sent whole. The catalog is one body for every
-    // visitor, so it always carries public fields only, even the user's own templates.
-    return json(rows.map((t) => {
-      const row = t as unknown as Record<string, unknown>;
-      return !publicCatalog && isOwnPersonalTemplateRow(row, userId) ? parseTemplateRow(row) : toPublicTemplate(parseTemplateRow(row));
-    }));
-  };
-
-  // The public catalog reads every public Template, so serve it from the edge for up to
-  // 5 minutes (the app's client staleTime). The key names the response shape, so a deploy
-  // that changes the shape never serves the previous one from the edge.
-  return publicCatalog ? withEdgeCache(request, '/api/templates?scope=public&fields=public', 5 * 60, listTemplates) : listTemplates();
+  return listCatalogOrPersonalTemplates(request, env, url, userId);
 }

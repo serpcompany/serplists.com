@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 import { createDb } from '@functions/api/db';
+import { selectPublicProfileTemplates } from '@functions/api/handlers/template-reads';
 import { selectAuditEventHistory, selectTemplateVersionHistory } from '@functions/api/utils/history-queries';
 
 // D1 bills rows scanned. These plans come from the real migrations and the SQL Drizzle
@@ -65,5 +66,15 @@ describe('history query plans', () => {
     const rows = db.prepare(sql).all(...(params as Array<string | number>)) as Array<Record<string, unknown>>;
 
     expect(rows.map((row) => Object.values(row)[1])).toEqual([300, 299, 298, 297, 296, 295, 294, 293]);
+  });
+});
+
+describe('public profile template query plan', () => {
+  it("reads a Creator's public templates from the owner index, not by scanning every public template", () => {
+    const db = migratedDatabase();
+    const plan = explain(db, selectPublicProfileTemplates({ DB: {} } as never, 'user-1', true));
+
+    expect(plan).toContain('idx_templates_owner');
+    expect(plan).not.toContain('idx_templates_public_created_at');
   });
 });

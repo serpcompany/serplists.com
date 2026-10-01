@@ -87,19 +87,18 @@ export async function restoreTemplate(
   const archivedTemplate = teamId
     ? and(eq(templates.team_id, teamId), isNotNull(templates.deleted_at))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNotNull(templates.deleted_at));
-  // With a limit, the restore re-checks it in the same statement. The audit row is written
-  // first and only while the restore will apply, so a lost race records nothing.
-  const restoreGuard = limit === null ? archivedTemplate : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
+  const stillArchivedWithinLimit = limit === null
+    ? archivedTemplate
+    : and(archivedTemplate, templateCapacityAvailableSql({ owner, limit }));
   const restoreResults = await db.batch([
-    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, restoreGuard)),
-    db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), restoreGuard)),
+    insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, stillArchivedWithinLimit)),
+    db.update(templates).set(restoreUpdates).where(and(eq(templates.id, templateId), stillArchivedWithinLimit)),
   ]);
   if (batchUpdateMissed(restoreResults[1])) {
     if (limit !== null) {
       const currentCount = await countTemplates(env, owner);
       if (currentCount >= limit) return templateLimitResponse(owner, 'restore', limit, currentCount);
     }
-    // A concurrent request restored it first.
     return jsonError('Template is not archived', 400, { code: 'not_archived' });
   }
 
@@ -115,7 +114,6 @@ export async function archiveTemplate(
 ): Promise<Response> {
   const { templates, audit_events } = schema;
 
-  // First check if the template exists and belongs to the user.
   const [existingTemplate] = await withRulesColumnFallback((includeRules) =>
     db
       .select(getTemplateSelectColumns(includeRules))
@@ -158,13 +156,11 @@ export async function archiveTemplate(
   const activeTemplate = existingTemplate.owner_type === 'team' && existingTemplate.team_id
     ? and(eq(templates.team_id, existingTemplate.team_id), isNull(templates.deleted_at))
     : and(eq(templates.owner_type, 'user'), eq(templates.user_id, userId), isNull(templates.team_id), isNull(templates.deleted_at));
-  // The audit row is written first and only while the template is still active.
   const archiveResults = await db.batch([
     insertRowWhere(db, audit_events, auditEvent, rowExistsSql(templates.id, templateId, activeTemplate)),
     db.update(templates).set(archiveUpdates).where(and(eq(templates.id, templateId), activeTemplate)),
   ]);
   if (batchUpdateMissed(archiveResults[1])) {
-    // A concurrent request archived it first.
     return jsonError('Template not found or unauthorized', 404);
   }
 

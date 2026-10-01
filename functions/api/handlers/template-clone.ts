@@ -37,20 +37,16 @@ export async function cloneTemplate(
 
   let visibility: 'preserve' | 'public' | 'private' = 'private';
   let cloneTeamId: string | null = null;
-  try {
-    const raw = await request.json();
-    if (isRecord(raw)) {
-      if (raw.visibility === 'preserve' || raw.visibility === 'public' || raw.visibility === 'private') {
-        visibility = raw.visibility;
-      }
-      if (typeof raw.teamId === 'string' && raw.teamId.trim()) {
-        cloneTeamId = raw.teamId.trim();
-      } else if (typeof raw.team_id === 'string' && raw.team_id.trim()) {
-        cloneTeamId = raw.team_id.trim();
-      }
+  const optionalBody: unknown = await request.json().catch(() => null);
+  if (isRecord(optionalBody)) {
+    if (optionalBody.visibility === 'preserve' || optionalBody.visibility === 'public' || optionalBody.visibility === 'private') {
+      visibility = optionalBody.visibility;
     }
-  } catch {
-    // allow empty body
+    if (typeof optionalBody.teamId === 'string' && optionalBody.teamId.trim()) {
+      cloneTeamId = optionalBody.teamId.trim();
+    } else if (typeof optionalBody.team_id === 'string' && optionalBody.team_id.trim()) {
+      cloneTeamId = optionalBody.team_id.trim();
+    }
   }
 
   if (cloneTeamId) {
@@ -102,10 +98,7 @@ export async function cloneTemplate(
       seo_title: typeof source.seo_title === 'string' ? source.seo_title : '',
       seo_description: typeof source.seo_description === 'string' ? source.seo_description : '',
       rules: typeof source.rules === 'string' ? source.rules : null,
-      // A source stored without ids gives its copy the ids its editor and runs use.
       items: withStableItemsColumn(source.items),
-      // A copy is a new template: its edit counter and content version start at 1, like
-      // create and import. The source's counters are provenance, kept in the audit event.
       version: 1,
       content_version: 1,
       is_public: isPublic,

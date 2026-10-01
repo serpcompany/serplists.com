@@ -47,10 +47,12 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    avoid single-column indexes on low-cardinality columns (`is_public`, `status`); the
    planner picks them and scans half the table. When such an index still beats a better
    one, write the term as ``sql`+${column} = 1` ``: unary `+` stops SQLite using an index
-   for that term (the public profile query does this). Never wrap an indexed column in a
-   function: `lower(email) = ?` cannot use the email index and reads the whole table.
-   Normalize on write and compare with plain equality (invite emails are lowercased by
-   the create-invite Zod schema, so incoming invites match `email = ?`).
+   for that term. The public profile query does this, and
+   `tests/unit/functions/api/history-query-plan.test.ts` fails if its plan goes back to the
+   `is_public` index. Never wrap an indexed column in a function: `lower(email) = ?`
+   cannot use the email index and reads the whole table. Normalize on write and compare
+   with plain equality (invite emails are lowercased by the create-invite Zod schema, so
+   incoming invites match `email = ?`).
 3. **Never write on a read path.** Make upserts conditional so an unchanged value writes
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
@@ -79,7 +81,10 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      `/sitemaps/<kind>/1.xml`.
    - **Often:** use a short TTL, so cost is bounded by the TTL rather than the edit
      rate. The anonymous catalog uses `withEdgeCache()`
-     (`functions/api/utils/edge-cache.ts`) for 5 minutes: a hit reads nothing. So do the
+     (`functions/api/utils/edge-cache.ts`) for 5 minutes, the template lists' client
+     `staleTime`: a hit reads nothing. Its cache key names the response shape
+     (`/api/templates?scope=public&fields=public`), so a deploy that changes the shape
+     misses rather than serving the old one. So do the
      lookups behind the public pages' server-rendered metadata (docs/FRONTEND.md), which
      run on every visit: the template page's single-row read by slug or id
      (`functions/seo/public-template-lookup.ts`; a UUID that matches no public id reads

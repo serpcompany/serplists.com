@@ -12,13 +12,10 @@ import { updateTemplateForUser } from './template-update';
 export async function handleTemplates(request: Request, env: Env): Promise<Response> {
   const userId = await getSessionUserId(request, env);
   const url = new URL(request.url);
-  const pathParts = url.pathname.split('/').filter(Boolean); // ["api", "templates", ...]
-  const templatesSubpath = pathParts.slice(2); // after /api/templates
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const templatesSubpath = pathParts.slice(2);
   const db = createDb(env);
 
-  // Pro-only: export/import templates as JSON backup
-  // GET  /api/templates/backup?teamId=...&format=portable|backup (owned templates only)
-  // POST /api/templates/backup?teamId=...  { templates: [...], options?: { visibility } }
   if (templatesSubpath[0] === 'backup') {
     if (!userId) {
       return jsonError('Unauthorized', 401);
@@ -36,13 +33,10 @@ export async function handleTemplates(request: Request, env: Env): Promise<Respo
       return jsonError('Unauthorized', 401);
     }
 
-    // POST /api/templates/:id/restore
     if (templatesSubpath[0] && templatesSubpath[1] === 'restore') {
       return restoreTemplate(request, env, db, userId, templatesSubpath[0]);
     }
 
-    // POST /api/templates/:id/clone: Pro only into Personal; Organization copies follow the
-    // Organization's role and template limit (see pricing-and-entitlements.md).
     if (templatesSubpath[0] && templatesSubpath[1] === 'clone') {
       return cloneTemplate(request, env, db, userId, templatesSubpath[0]);
     }

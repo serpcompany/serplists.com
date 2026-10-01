@@ -478,7 +478,7 @@ describe('Templates Handlers', () => {
     expect(dbMocks.updateChain.set.mock.calls[0][0].slug).toBe(data.slug);
   });
 
-  it('returns the slug the template keeps when a save requests none', async () => {
+  it('keeps and returns the stored slug when a title edit requests none, so shared links keep working', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([
       { id: 'template-1', user_id: 'user-123', owner_type: 'user', team_id: null, items: '[]', version: 1, is_public: false, slug: 'existing-template' },
@@ -1448,7 +1448,7 @@ describe('Templates Handlers', () => {
     ]);
   });
 
-  it('should reject imported templates whose sections, tasks or sub-tasks are not objects', async () => {
+  it('rejects imported sections, tasks or sub-tasks that are not objects, naming them as a person reads the file, not as a JSON path', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     vi.mocked(getEntitlementsForUser).mockResolvedValue({
       plan: 'pro',

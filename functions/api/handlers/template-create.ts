@@ -35,9 +35,7 @@ import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
 export const junkTemplateTitles = new Set(['Test Template', 'Updated Template Title']);
 
 export type TemplateWriteOptions = {
-  // Run Key writes (the MCP): only the key owner's Personal templates, never a public one.
-  personalOnly?: boolean;
-  // Added to the audit events the write records; the MCP names the Run Key there.
+  privatePersonalOnly?: boolean;
   auditMetadata?: Record<string, unknown>;
 };
 
@@ -45,7 +43,6 @@ function getRequestedTeamId(parsed: { teamId?: string; team_id?: string }, url: 
   return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
 }
 
-// POST /api/templates, and the MCP's create_template.
 export async function createTemplateForUser(
   request: Request,
   env: Env,
@@ -61,7 +58,7 @@ export async function createTemplateForUser(
     return jsonError(message, 400, { details });
   }
 
-  const requestedTeamId = options.personalOnly ? null : getRequestedTeamId(parsed.data, new URL(request.url));
+  const requestedTeamId = options.privatePersonalOnly ? null : getRequestedTeamId(parsed.data, new URL(request.url));
   if (requestedTeamId) {
     const accessError = await assertTeamTemplateCreateAccess(env, requestedTeamId, userId);
     if (accessError) return accessError;

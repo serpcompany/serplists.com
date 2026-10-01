@@ -71,7 +71,7 @@ Organization scoping applies.
 
 - Auth (Better Auth): `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`, `GET /api/auth/get-session`, `GET /api/auth/status`
 - Public profiles: `GET /api/profiles/by-username`, `GET /api/profiles/by-id`
-- Templates: `GET /api/templates`, `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...`, `POST /api/templates`, `PUT|DELETE /api/templates/:id`
+- Templates: `GET /api/templates` (see [public and private data](#public-and-private-data)), `GET /api/templates/:id`, `GET /api/templates/slug/:slug`, `GET /api/templates/public?userId=...` (a Public Profile's templates), `GET /api/templates/archived`, `GET /api/templates/:id/history`, `POST /api/templates`, `PUT|DELETE /api/templates/:id` (`DELETE` archives), `POST /api/templates/:id/restore`, `POST /api/templates/:id/clone`, `GET|POST /api/templates/backup` (export and import, [portable templates](../product-specs/portable-templates.md)), `POST /api/templates/generate-from-clipy` (an unsaved draft from a public Clipy recording)
 - Runs: `GET /api/checklists`, `GET /api/checklists/:id`, `POST /api/checklists`, `PUT|DELETE /api/checklists/:id`, `POST /api/checklists/:id/revalidate`
 - Organizations: `GET|POST /api/teams`, `GET|PUT /api/teams/:teamId`, `GET /api/teams/:teamId/members`, `PUT /api/teams/:teamId/members/:memberId`, `PUT /api/teams/:teamId/owner`, invites, and activity (see [organizations](organizations.md))
 - Billing: `POST /api/billing/checkout`, `POST /api/billing/portal`, `GET /api/billing/status`; Stripe webhook `POST /api/stripe/webhook`
