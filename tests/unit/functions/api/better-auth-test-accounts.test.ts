@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_ACCOUNTS_DISABLED_MESSAGE } from '@functions/api/utils/test-email-block';
+import { silenceLogs } from '../../../support/apiRouter';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
 import { betterAuthErrorBody, readJson } from '../../../support/readJson';
@@ -36,9 +37,7 @@ describe('test accounts under the production auth policy, which Better Auth enfo
     productionEnv = { ...localEnv, AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', RESEND_API_KEY: 're_test_123' };
     const breachedPasswordLookupFindingNothing = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordLookupFindingNothing);
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    silenceLogs();
   });
 
   afterEach(() => {

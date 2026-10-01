@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import { jsonObject, readJson } from "../../../support/readJson";
 import { SqliteD1 } from "../../../support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => sessionMocks);
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 

@@ -1,10 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import { SqliteD1 } from "../../../support/sqlite-d1";
 import { apiEnv } from "../../../support/apiEnv";
 import { jsonObject, readJson } from "../../../support/readJson";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => sessionMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
 

@@ -1,19 +1,8 @@
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const inMemoryDatabase = vi.hoisted(() => ({ tables: {} as Record<string, any[]> }));
-
-vi.mock('better-auth/adapters/drizzle', () => ({
-  drizzleAdapter: () => memoryAdapter(inMemoryDatabase.tables),
-}));
-
-vi.mock('@functions/api/db', () => ({
-  createDb: vi.fn(() => ({})),
-  schema: {},
-}));
+import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 
 import { getSessionUserId } from '@functions/api/utils/session';
-import { LOCAL_AUTH_ORIGIN, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
+import { captureTheEmailsSent, LOCAL_AUTH_ORIGIN, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 
 const EMAIL = 'john@test.com';
 const env = {
@@ -30,15 +19,8 @@ describe('password reset through the app\'s Better Auth configuration on an in-m
   let sentEmails: string[];
 
   beforeEach(() => {
-    inMemoryDatabase.tables = { users: [], session: [], account: [], verification: [] };
-    sentEmails = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
-        sentEmails.push(String(JSON.parse(String(init?.body)).text));
-        return new Response('{}', { status: 200 });
-      }),
-    );
+    emptyTheAuthTables();
+    sentEmails = captureTheEmailsSent();
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
   });
 
@@ -60,7 +42,7 @@ describe('password reset through the app\'s Better Auth configuration on an in-m
     expect(attackerSignIn.status).toBe(200);
     const attackerCookie = sessionCookieFrom(attackerSignIn);
 
-    const userId = inMemoryDatabase.tables.users[0].id;
+    const userId = inMemoryAuth.tables.users[0].id;
     expect(await userIdFor(victimCookie)).toBe(userId);
     expect(await userIdFor(attackerCookie)).toBe(userId);
 
@@ -78,7 +60,7 @@ describe('password reset through the app\'s Better Auth configuration on an in-m
 
     expect(await userIdFor(attackerCookie)).toBeNull();
     expect(await userIdFor(victimCookie)).toBeNull();
-    expect(inMemoryDatabase.tables.session.filter((row) => row.userId === userId)).toEqual([]);
+    expect(inMemoryAuth.tables.session.filter((row) => row.userId === userId)).toEqual([]);
 
     const signInWithNewPassword = await postToBetterAuth(env, 'sign-in/email', {
       body: { email: EMAIL, password: 'brand-new-password-2' },

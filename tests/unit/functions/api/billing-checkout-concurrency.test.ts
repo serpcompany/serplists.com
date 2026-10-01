@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import {
   billingSchemaSql,
   emptyStripeList,
@@ -8,9 +9,6 @@ import {
   stripeErrorResponse,
 } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 
 const USER_ID = "user-1";
 

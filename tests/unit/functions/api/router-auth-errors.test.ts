@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceLogs } from '../../../support/apiRouter';
 import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
@@ -49,9 +49,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
     ipCounter += 1;
     betterAuthHandler.mockReset().mockImplementation(async () => Response.json({ ok: true }));
     vi.doMock(BETTER_AUTH_MODULE, () => ({ createBetterAuth: vi.fn(() => ({ handler: betterAuthHandler })) }));
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    silenceLogs();
   });
 
   afterEach(() => {

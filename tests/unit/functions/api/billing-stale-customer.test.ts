@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
+import "../../../support/checkoutWithoutARateLimit";
 import {
   billingSchemaSql,
   emptyStripeList,
@@ -11,13 +13,6 @@ import {
 } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
 import { signedWebhookRequest } from "./support/stripe-webhook";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
-  checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
-}));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 
 import { handleBilling } from "@functions/api/handlers/billing";
 import { handleStripe } from "@functions/api/handlers/stripe";

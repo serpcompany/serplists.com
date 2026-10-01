@@ -1,16 +1,5 @@
-import { memoryAdapter } from 'better-auth/adapters/memory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const memory = vi.hoisted(() => ({ db: {} as Record<string, any[]> }));
-
-vi.mock('better-auth/adapters/drizzle', () => ({
-  drizzleAdapter: () => memoryAdapter(memory.db),
-}));
-
-vi.mock('@functions/api/db', () => ({
-  createDb: vi.fn(() => ({})),
-  schema: {},
-}));
+import { emptyTheAuthTables, inMemoryAuth } from '../../../support/betterAuthInMemory';
 
 import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 
@@ -36,14 +25,14 @@ async function signedUpCookie() {
 }
 
 function storedUser() {
-  return memory.db.users[0];
+  return inMemoryAuth.tables.users[0];
 }
 
 const uploadUrl = (base: string) => `${base}/api/uploads/file?key=${encodeURIComponent('avatars/u1/a.png')}`;
 
 describe('account name and avatar validation', { timeout: 30_000 }, () => {
   beforeEach(() => {
-    memory.db = { users: [], session: [], account: [], verification: [] };
+    emptyTheAuthTables();
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
@@ -63,22 +52,22 @@ describe('account name and avatar validation', { timeout: 30_000 }, () => {
     const response = await signUp({ name });
 
     expect(response.status).toBe(400);
-    expect(memory.db.users).toEqual([]);
-    expect(memory.db.account).toEqual([]);
+    expect(inMemoryAuth.tables.users).toEqual([]);
+    expect(inMemoryAuth.tables.account).toEqual([]);
   });
 
   it('rejects sign-up without a name', async () => {
     const response = await signUp({});
 
     expect(response.status).toBe(400);
-    expect(memory.db.users).toEqual([]);
+    expect(inMemoryAuth.tables.users).toEqual([]);
   });
 
   it('rejects sign-up with an avatar image outside SERP Lists uploads', async () => {
     const response = await signUp({ name: 'John', image: 'https://tracker.example/pixel.gif' });
 
     expect(response.status).toBe(400);
-    expect(memory.db.users).toEqual([]);
+    expect(inMemoryAuth.tables.users).toEqual([]);
   });
 
   it('stores a trimmed name on sign-up', async () => {

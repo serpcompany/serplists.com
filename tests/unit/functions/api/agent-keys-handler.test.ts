@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import { z } from "zod";
 import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 import { dbMocks } from "../../../support/mockedDrizzleD1";
 
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const keyMocks = vi.hoisted(() => ({
   createPersonalRunKeySecret: vi.fn(),
   insertPersonalRunKeyWithinCap: vi.fn(),
   MAX_ACTIVE_PERSONAL_RUN_KEYS: 10,
 }));
 
-vi.mock("@functions/api/utils/session", () => sessionMocks);
 vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";

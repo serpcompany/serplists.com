@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createBetterAuth } from '@functions/api/better-auth';
 import apiWorker from '@functions/api/[[route]]';
+import { silenceLogs } from '../../../support/apiRouter';
+import { captureTheEmailsSent } from '../../../support/betterAuth';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 
 const BASE_URL = 'http://localhost:8788';
@@ -44,17 +46,8 @@ describe('Better Auth base URL, from the host the request reached and never the 
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
       RESEND_API_KEY: 're_test_123',
     };
-    sentEmails = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (_url: string, init?: RequestInit) => {
-        sentEmails.push(String(JSON.parse(String(init?.body)).text));
-        return new Response('{}', { status: 200 });
-      }),
-    );
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    sentEmails = captureTheEmailsSent();
+    silenceLogs();
   });
 
   afterEach(() => {

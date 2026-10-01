@@ -26,3 +26,7 @@ export function captureLogLines(levels: ReadonlyArray<'debug' | 'info' | 'warn' 
   }
   return lines;
 }
+
+export function silenceLogs() {
+  captureLogLines(['info', 'warn', 'error']);
+}

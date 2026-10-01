@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
+import { silenceLogs } from '../../../support/apiRouter';
 import { SqliteD1 } from '../../../support/sqlite-d1';
 import { varFromWranglerToml } from '../../../support/wranglerToml';
 import { apiErrorBody, readJson } from '../../../support/readJson';
@@ -45,9 +46,7 @@ describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED 
     database = new SqliteD1();
     breachedPasswordAndEmailProviderCalls = vi.fn(async () => new Response('', { status: 200 }));
     vi.stubGlobal('fetch', breachedPasswordAndEmailProviderCalls);
-    for (const level of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, level).mockImplementation(() => undefined);
-    }
+    silenceLogs();
   });
 
   afterEach(() => {

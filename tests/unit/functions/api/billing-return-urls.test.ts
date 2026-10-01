@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
 import { buildConsoleSettingsPath } from "@/lib/routes";
 import { billingSchemaSql, emptyStripeList, postToBilling, seedBillingUser, stripeBillingEnv } from "../../../support/billingCheckout";
 import { SqliteD1 } from "../../../support/sqlite-d1";
-
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 
 const ORIGIN = "https://serplists.test";
 

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { sessionMocks } from "../../../support/mockedSession";
+import "../../../support/checkoutWithoutARateLimit";
 import {
   billingSchemaSql,
   postToBilling,
@@ -11,18 +13,12 @@ import {
 import { SqliteD1 } from "../../../support/sqlite-d1";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 
-const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 const teamAccessMocks = vi.hoisted(() => ({
   canViewTeam: vi.fn(() => true),
   getActiveTeamMembership: vi.fn(async () => ({ id: "member-1", role: "viewer", status: "active" })),
   normalizeTeamRole: vi.fn((role: string) => role),
 }));
 
-vi.mock("@functions/api/utils/rate-limit", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@functions/api/utils/rate-limit")>()),
-  checkRateLimit: () => ({ allowed: true, remaining: 1, resetAt: 0 }),
-}));
-vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: sessionMocks.getSessionUserId }));
 vi.mock("@functions/api/utils/team-access", () => teamAccessMocks);
 
 import { handleBilling } from "@functions/api/handlers/billing";

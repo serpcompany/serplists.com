@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { createBetterAuth } from '@functions/api/better-auth';
 import type { Env } from '@functions/api/types';
 
@@ -20,4 +21,16 @@ export function sessionCookieFrom(response: Response): string {
   const match = (response.headers.get('set-cookie') ?? '').match(/better-auth\.session_token=[^;]+/);
   if (!match) throw new Error('No session cookie');
   return match[0];
+}
+
+export function captureTheEmailsSent(): string[] {
+  const sentEmails: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) => {
+      sentEmails.push(String(JSON.parse(String(init?.body)).text));
+      return new Response('{}', { status: 200 });
+    }),
+  );
+  return sentEmails;
 }
