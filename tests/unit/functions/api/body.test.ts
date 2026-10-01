@@ -29,8 +29,6 @@ describe('isBodyWithinLimit', () => {
   it('settles as soon as a cloned body passes the limit, without waiting for a cancel only the other branch can settle', async () => {
     const request = chunkedRequest(64 * 1024);
 
-    // Cancelling one branch of a cloned body only settles once the other
-    // branch is cancelled too, so the check must not wait for it.
     const result = await Promise.race([
       isBodyWithinLimit(request.clone(), 8 * 1024),
       new Promise((resolve) => setTimeout(() => resolve('timed out'), 1000)),
