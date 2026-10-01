@@ -197,7 +197,7 @@ async function main() {
       const response = await fetch(`${origin}${scenario.path}`, {
         method: scenario.method ?? "GET",
         headers: { Cookie: cookies[scenario.actor], Origin: origin, "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? null : JSON.stringify(body),
       });
       const responseText = await response.text();
       await settle();

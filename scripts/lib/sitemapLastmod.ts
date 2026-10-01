@@ -100,7 +100,7 @@ export function resolveLastmod({
 }: {
   hash: string;
   committed: DatedHash | null | undefined;
-  previous: { hash?: string; lastmod?: string | null } | null | undefined;
+  previous: { hash?: string | undefined; lastmod?: string | null | undefined } | null | undefined;
   now: string;
 }): string {
   if (committed?.hash === hash) return committed.lastmod;

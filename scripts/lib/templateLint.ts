@@ -239,10 +239,10 @@ export const lintTemplatePair = async (jsonPath: string, markdownPath: string): 
 export const lintYamlTemplateBundle = async (
   yamlPath: string,
   paths: {
-    jsonPath?: string;
-    readmePath?: string;
-    previewHtmlPath?: string;
-    markdownPath?: string;
+    jsonPath?: string | undefined;
+    readmePath?: string | undefined;
+    previewHtmlPath?: string | undefined;
+    markdownPath?: string | undefined;
   }
 ): Promise<TemplateLintIssue[]> => {
   const issues: TemplateLintIssue[] = [];
