@@ -98,9 +98,7 @@ describe('betterAuthLogger', () => {
   });
 });
 
-// Drives a real Better Auth instance, so an upgrade that adds a new email-bearing
-// log call, or changes how the logger is called, fails here.
-describe('Better Auth with betterAuthLogger', { timeout: 30_000 }, () => {
+describe('a real Better Auth instance with betterAuthLogger, which fails when an upgrade logs emails a new way', { timeout: 30_000 }, () => {
   afterEach(() => vi.restoreAllMocks());
 
   function createMemoryAuth() {

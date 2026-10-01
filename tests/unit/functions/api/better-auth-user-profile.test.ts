@@ -1,9 +1,6 @@
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Runs the app's real Better Auth configuration (createBetterAuth) against an
-// in-memory database, so sign-up and update-user go through Better Auth's own
-// endpoints and the app's user hooks.
 const memory = vi.hoisted(() => ({ db: {} as Record<string, any[]> }));
 
 vi.mock('better-auth/adapters/drizzle', () => ({
@@ -15,9 +12,8 @@ vi.mock('@functions/api/db', () => ({
   schema: {},
 }));
 
-import { createBetterAuth } from '@functions/api/better-auth';
+import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 
-const BASE_URL = 'http://localhost:8788';
 const R2_BASE_URL = 'https://files.serplists.test';
 const EMAIL = 'john@test.com';
 const env = {
@@ -27,16 +23,7 @@ const env = {
   R2_PUBLIC_BASE_URL: R2_BASE_URL,
 } as any;
 
-function authRequest(path: string, init: { body?: unknown; cookie?: string } = {}) {
-  const headers: Record<string, string> = { Origin: BASE_URL, 'Content-Type': 'application/json' };
-  if (init.cookie) headers.Cookie = init.cookie;
-  const request = new Request(`${BASE_URL}/api/auth/${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(init.body ?? {}),
-  });
-  return createBetterAuth(env, request).handler(request);
-}
+const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 
 function signUp(body: Record<string, unknown>) {
   return authRequest('sign-up/email', { body: { email: EMAIL, password: 'original-password-1', ...body } });
@@ -45,9 +32,7 @@ function signUp(body: Record<string, unknown>) {
 async function signedUpCookie() {
   const response = await signUp({ name: 'John' });
   expect(response.status).toBe(200);
-  const match = (response.headers.get('set-cookie') ?? '').match(/better-auth\.session_token=[^;]+/);
-  if (!match) throw new Error('No session cookie');
-  return match[0];
+  return sessionCookieFrom(response);
 }
 
 function storedUser() {

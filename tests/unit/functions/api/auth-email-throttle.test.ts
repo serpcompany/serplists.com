@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBetterAuth } from '@functions/api/better-auth';
 import { createDb } from '@functions/api/db';
 import {
   claimAuthEmailSend,
@@ -8,27 +7,20 @@ import {
 } from '@functions/api/utils/auth-email-throttle';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
+import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth } from '../../../support/betterAuth';
 
-// Runs the app's real Better Auth configuration and its Drizzle adapter against
-// a migrated SQLite database, with only the email provider (fetch) faked.
-const BASE_URL = 'http://localhost:8788';
 const START = Date.parse('2026-01-01T00:00:00Z');
 const SECOND = 1000;
 
 type SentEmail = { to: string; subject: string };
 
-describe('auth email throttle', { timeout: 30_000 }, () => {
+describe('auth email throttle, through the real Better Auth configuration on the migrated tables', { timeout: 30_000 }, () => {
   let database: ReturnType<typeof createMigratedD1>;
   let env: any;
   let sent: SentEmail[];
 
   function authRequest(path: string, body: unknown) {
-    const request = new Request(`${BASE_URL}/api/auth/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: BASE_URL },
-      body: JSON.stringify(body),
-    });
-    return createBetterAuth(env, request).handler(request);
+    return postToBetterAuth(env, path, { body });
   }
 
   function at(offsetMs: number) {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBetterAuth } from "@functions/api/better-auth";
 import { getAuthEmailPolicy } from "@functions/api/utils/auth-policy";
 import { betterAuthLogger } from "@functions/api/utils/better-auth-logger";
+import { varFromWranglerToml } from "../../../support/wranglerToml";
 
 const { betterAuthMock, drizzleAdapterMock, emailThrottle } = vi.hoisted(() => ({
   betterAuthMock: vi.fn(() => ({ handler: vi.fn() })),
@@ -27,16 +28,14 @@ vi.mock("@functions/api/db", () => ({
   schema: {},
 }));
 
-// The throttle itself runs against SQLite in auth-email-throttle.test.ts.
 vi.mock("@functions/api/utils/auth-email-throttle", () => ({
   deliverAuthEmail: emailThrottle.deliver,
   discardUnsentPasswordResetToken: emailThrottle.discardToken,
 }));
 
-// Production, as wrangler.toml configures it; local and preview set "false".
-function buildEnv(overrides?: Record<string, unknown>) {
+function productionEnvWith(overrides?: Record<string, unknown>) {
   return {
-    AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
+    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml("env.production.vars", "AUTH_EMAIL_VERIFICATION_REQUIRED"),
     BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters!!",
     FRONTEND_URL: "https://app.serplists.com",
     RESEND_API_KEY: "re_test_123",
@@ -60,7 +59,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("enforces email verification and wires verification sender", () => {
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
 
     expect(betterAuthMock).toHaveBeenCalledTimes(1);
     const options = betterAuthMock.mock.calls[0]?.[0];
@@ -70,7 +69,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("allows non-production account creation without email delivery", () => {
-    const env = buildEnv({
+    const env = productionEnvWith({
       AUTH_EMAIL_VERIFICATION_REQUIRED: "false",
       FRONTEND_URL: undefined,
       RESEND_API_KEY: undefined,
@@ -92,43 +91,39 @@ describe("createBetterAuth config", () => {
   });
 
   it.each([
-    ["production", buildEnv(), "https://serplists.com/api/auth/reset-password"],
+    ["production", productionEnvWith(), "https://serplists.com/api/auth/reset-password"],
     [
       "local",
-      buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
+      productionEnvWith({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: undefined, RESEND_API_KEY: undefined }),
       "http://localhost:8788/api/auth/reset-password",
     ],
-  ])("revokes every session when a password is reset (%s)", (_label, env, url) => {
+  ])("revokes every session when a password is reset (%s), reading sessions from the database so it takes effect at once", (_label, env, url) => {
     createBetterAuth(env, new Request(url));
 
     const options = betterAuthMock.mock.calls[0]?.[0];
     expect(options.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
-    // Revocation is immediate only while sessions are read from the database.
     expect(options.session?.cookieCache?.enabled).not.toBe(true);
     expect(options.secondaryStorage).toBeUndefined();
   });
 
-  it("routes Better Auth's own logs through the JSON logger", () => {
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-in/email"));
+  it("routes Better Auth's own logs through the JSON logger, with no level that would also print errors through its default logger", () => {
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-in/email"));
 
     const options = betterAuthMock.mock.calls[0]?.[0];
-    // The default logger prints emails to the console (better-auth-logger.test.ts).
     expect(options.logger).toBe(betterAuthLogger);
     expect(typeof options.logger.log).toBe("function");
-    // Setting a level makes Better Auth 1.3.4 also print API errors through its
-    // default console logger, bypassing log().
     expect(options.logger.level).toBeUndefined();
     expect(options.logger.disabled).not.toBe(true);
   });
 
   it("checks name and avatar on every user write but leaves internal updates alone", async () => {
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/update-user"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/update-user"));
     const userHooks = betterAuthMock.mock.calls[0]?.[0].databaseHooks.user;
     const updatedAt = new Date();
 
-    // Email verification and timestamp updates carry no name or image.
-    await expect(userHooks.update.before({ emailVerified: true, updatedAt })).resolves.toEqual({
-      data: { emailVerified: true, updatedAt },
+    const internalUpdateWithoutNameOrImage = { emailVerified: true, updatedAt };
+    await expect(userHooks.update.before(internalUpdateWithoutNameOrImage)).resolves.toEqual({
+      data: internalUpdateWithoutNameOrImage,
     });
     await expect(userHooks.update.before({ name: "x".repeat(101) })).rejects.toMatchObject({ statusCode: 400 });
     await expect(
@@ -141,7 +136,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("enables breached-password checks when setting production passwords", () => {
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
 
     const options = betterAuthMock.mock.calls[0]?.[0];
 
@@ -155,7 +150,7 @@ describe("createBetterAuth config", () => {
     "keeps production-only checks off under the preview policy on %s",
     async (origin) => {
       createBetterAuth(
-        buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: origin }),
+        productionEnvWith({ AUTH_EMAIL_VERIFICATION_REQUIRED: "false", FRONTEND_URL: origin }),
         new Request(`${origin}/api/auth/sign-up/email`)
       );
 
@@ -168,7 +163,7 @@ describe("createBetterAuth config", () => {
   );
 
   it("does not check breached passwords on production sign-in", () => {
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-in/email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-in/email"));
 
     const options = betterAuthMock.mock.calls[0]?.[0];
 
@@ -176,7 +171,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("requires production account verification to have email delivery", () => {
-    const env = buildEnv({
+    const env = productionEnvWith({
       RESEND_API_KEY: undefined,
       USESEND_API_KEY: undefined,
     });
@@ -190,7 +185,7 @@ describe("createBetterAuth config", () => {
 
   it("trusts only the request origin when no frontend origins are configured", () => {
     createBetterAuth(
-      buildEnv({
+      productionEnvWith({
         FRONTEND_URL: undefined,
         CORS_ALLOWED_ORIGINS: undefined,
       }),
@@ -204,7 +199,7 @@ describe("createBetterAuth config", () => {
 
   it("includes configured frontend and CORS origins in trusted origins", () => {
     createBetterAuth(
-      buildEnv({
+      productionEnvWith({
         FRONTEND_URL: "http://localhost:8080",
         CORS_ALLOWED_ORIGINS: "http://127.0.0.1:4173, https://preview.serplists.com",
       }),
@@ -225,7 +220,7 @@ describe("createBetterAuth config", () => {
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
     const options = betterAuthMock.mock.calls[0]?.[0];
 
     await options.emailVerification.sendVerificationEmail(
@@ -250,7 +245,7 @@ describe("createBetterAuth config", () => {
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/request-password-reset"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/request-password-reset"));
     const options = betterAuthMock.mock.calls[0]?.[0];
 
     await options.emailAndPassword.sendResetPassword(
@@ -274,7 +269,7 @@ describe("createBetterAuth config", () => {
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     emailThrottle.shouldSend.mockResolvedValue(false);
-    const env = buildEnv();
+    const env = productionEnvWith();
 
     createBetterAuth(env, new Request("https://serplists.com/api/auth/request-password-reset"));
     const options = betterAuthMock.mock.calls[0]?.[0];
@@ -295,7 +290,7 @@ describe("createBetterAuth config", () => {
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/send-verification-email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/send-verification-email"));
     const options = betterAuthMock.mock.calls[0]?.[0];
     const send = (user: Record<string, unknown>) =>
       options.emailVerification.sendVerificationEmail(
@@ -315,7 +310,7 @@ describe("createBetterAuth config", () => {
   it("lets sign-up succeed when the verification email fails, but not other senders", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("rate limited", { status: 429 })));
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    createBetterAuth(buildEnv(), new Request("https://serplists.com/api/auth/sign-up/email"));
+    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
     const options = betterAuthMock.mock.calls[0]?.[0];
     const user = { id: "u1", email: "new-user@example.com", emailVerified: false };
     const verify = (request?: Request) =>
@@ -343,7 +338,7 @@ describe("createBetterAuth config", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     createBetterAuth(
-      buildEnv({
+      productionEnvWith({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: "us_test_123",
       }),
@@ -373,7 +368,7 @@ describe("createBetterAuth config", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     createBetterAuth(
-      buildEnv({
+      productionEnvWith({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: undefined,
       }),

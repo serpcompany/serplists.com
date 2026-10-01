@@ -3,18 +3,13 @@ import type { BetterAuthOptions } from 'better-auth';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Runs the app's real Better Auth configuration (createBetterAuth) against an
-// in-memory database that enforces D1's UNIQUE idx_users_username the way D1
-// does through Drizzle: the write throws a DrizzleQueryError whose cause is
-// the SQLite constraint error.
 type Row = Record<string, any>;
 const memory = vi.hoisted(() => ({
   db: {} as Record<string, Row[]>,
-  // Simulates another request claiming a username between the app's check and its write.
-  claimBeforeWrite: null as null | { id: string; username: string },
+  claimBetweenCheckAndWrite: null as null | { id: string; username: string },
 }));
 
-function uniqueUsernameError(): Error {
+function uniqueUsernameErrorAsDrizzleWrapsD1s(): Error {
   return new DrizzleQueryError(
     'update "users" set "username" = ? where "users"."id" = ?',
     [],
@@ -22,14 +17,14 @@ function uniqueUsernameError(): Error {
   );
 }
 
-function assertUsernameFree(username: unknown, selfId?: string) {
+function enforceUniqueUsernameIndex(username: unknown, selfId?: string) {
   if (typeof username !== 'string') return;
-  if (memory.claimBeforeWrite) {
-    memory.db.users.push({ ...memory.claimBeforeWrite, email: `${memory.claimBeforeWrite.id}@example.com` });
-    memory.claimBeforeWrite = null;
+  if (memory.claimBetweenCheckAndWrite) {
+    memory.db.users.push({ ...memory.claimBetweenCheckAndWrite, email: `${memory.claimBetweenCheckAndWrite.id}@example.com` });
+    memory.claimBetweenCheckAndWrite = null;
   }
   if (memory.db.users.some((row) => row.username === username && row.id !== selfId)) {
-    throw uniqueUsernameError();
+    throw uniqueUsernameErrorAsDrizzleWrapsD1s();
   }
 }
 
@@ -39,13 +34,13 @@ vi.mock('better-auth/adapters/drizzle', () => ({
     return {
       ...adapter,
       create: async (args: Parameters<typeof adapter.create>[0]) => {
-        if (args.model === 'user') assertUsernameFree((args.data as Row).username);
+        if (args.model === 'user') enforceUniqueUsernameIndex((args.data as Row).username);
         return adapter.create(args);
       },
       update: async (args: Parameters<typeof adapter.update>[0]) => {
         if (args.model === 'user') {
           const selfId = args.where.find((clause) => clause.field === 'id')?.value;
-          assertUsernameFree((args.update as Row).username, String(selfId));
+          enforceUniqueUsernameIndex((args.update as Row).username, String(selfId));
         }
         return adapter.update(args);
       },
@@ -58,34 +53,22 @@ vi.mock('@functions/api/db', () => ({
   schema: {},
 }));
 
-import { createBetterAuth } from '@functions/api/better-auth';
 import { isUsernameUniqueViolation } from '@functions/api/utils/username-conflict';
+import { postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 
-const BASE_URL = 'http://localhost:8788';
 const env = {
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
   AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
 } as any;
 
-function authRequest(path: string, init: { body?: unknown; cookie?: string } = {}) {
-  const headers: Record<string, string> = { Origin: BASE_URL, 'Content-Type': 'application/json' };
-  if (init.cookie) headers.Cookie = init.cookie;
-  const request = new Request(`${BASE_URL}/api/auth/${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(init.body ?? {}),
-  });
-  return createBetterAuth(env, request).handler(request);
-}
+const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 
 async function signUp(email: string, extra: Record<string, unknown> = {}) {
   const response = await authRequest('sign-up/email', {
     body: { email, password: 'original-password-1', name: 'Person', ...extra },
   });
   expect(response.status).toBe(200);
-  const match = (response.headers.get('set-cookie') ?? '').match(/better-auth\.session_token=[^;]+/);
-  if (!match) throw new Error('No session cookie');
-  return match[0];
+  return sessionCookieFrom(response);
 }
 
 function userRow(email: string) {
@@ -105,7 +88,7 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
 
   beforeEach(async () => {
     memory.db = { users: [], session: [], account: [], verification: [] };
-    memory.claimBeforeWrite = null;
+    memory.claimBetweenCheckAndWrite = null;
     vi.spyOn(console, 'info').mockImplementation(() => undefined);
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -136,7 +119,7 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
   });
 
   it('answers 422, not a bodyless 500, when another account claims the username during the save', async () => {
-    memory.claimBeforeWrite = { id: 'racer', username: 'carol' };
+    memory.claimBetweenCheckAndWrite = { id: 'racer', username: 'carol' };
 
     const response = await authRequest('update-user', { cookie: bobCookie, body: { username: 'carol' } });
 
@@ -145,7 +128,7 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
   });
 
   it('answers 422 when two sign-ups race for the same username', async () => {
-    memory.claimBeforeWrite = { id: 'racer', username: 'dana' };
+    memory.claimBetweenCheckAndWrite = { id: 'racer', username: 'dana' };
 
     const response = await authRequest('sign-up/email', {
       body: { email: 'dana@example.com', password: 'original-password-1', name: 'Dana', username: 'dana' },
@@ -175,7 +158,7 @@ describe('changing username to one another account uses', { timeout: 30_000 }, (
 
 describe('isUsernameUniqueViolation', () => {
   it('finds the users.username constraint on the error Drizzle wraps', () => {
-    expect(isUsernameUniqueViolation(uniqueUsernameError())).toBe(true);
+    expect(isUsernameUniqueViolation(uniqueUsernameErrorAsDrizzleWrapsD1s())).toBe(true);
   });
 
   it.each([

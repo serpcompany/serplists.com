@@ -3,17 +3,12 @@ import { createBetterAuth } from '@functions/api/better-auth';
 import apiWorker from '@functions/api/[[route]]';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 
-// Better Auth 1.3.4 builds its base URL from X-Forwarded-Host and
-// X-Forwarded-Proto when no baseURL is configured, and a client can send those
-// headers. Reset and verification links must point at the host the request
-// actually reached. Runs the real router and Better Auth config on SQLite; only
-// the email provider (fetch) is faked.
 const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'victim@example.com';
 const FORGED_HOST = 'evil.example';
 const FORGED_HEADERS = { 'X-Forwarded-Host': FORGED_HOST, 'X-Forwarded-Proto': 'https' };
 
-describe('Better Auth base URL', { timeout: 30_000 }, () => {
+describe('Better Auth base URL, from the host the request reached and never the forwarded headers a client can send', { timeout: 30_000 }, () => {
   let database: ReturnType<typeof createMigratedD1>;
   let env: any;
   let sentEmails: string[];
@@ -34,11 +29,14 @@ describe('Better Auth base URL', { timeout: 30_000 }, () => {
     expect(response.status).toBe(200);
   }
 
-  beforeEach(() => {
-    // Node fills process.env, which Better Auth also reads; Pages does not.
+  function clearTheBaseUrlsBetterAuthWouldReadFromNodesProcessEnv() {
     vi.stubEnv('BETTER_AUTH_URL', '');
     vi.stubEnv('NEXT_PUBLIC_BETTER_AUTH_URL', '');
     vi.stubEnv('BASE_URL', '');
+  }
+
+  beforeEach(() => {
+    clearTheBaseUrlsBetterAuthWouldReadFromNodesProcessEnv();
     database = createMigratedD1();
     env = {
       DB: database.d1,

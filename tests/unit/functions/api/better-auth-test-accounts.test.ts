@@ -1,32 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBetterAuth } from '@functions/api/better-auth';
+import { TEST_ACCOUNTS_DISABLED_MESSAGE } from '@functions/api/utils/test-email-block';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { LOCAL_AUTH_ORIGIN, postToBetterAuth } from '../../../support/betterAuth';
 
-// Runs the app's real Better Auth configuration and Drizzle adapter against a
-// migrated SQLite database. The router blocks test emails only on the routes
-// whose body carries an email, so Better Auth must enforce it for every other
-// way in (username sign-in, direct handler calls). The production policy comes
-// from AUTH_EMAIL_VERIFICATION_REQUIRED, never the hostname.
 const PASSWORD = 'original-password-1';
 
-describe('test accounts under the production auth policy', { timeout: 30_000 }, () => {
+describe('test accounts under the production auth policy, which Better Auth enforces on the ways in the router does not check', { timeout: 30_000 }, () => {
   let database: ReturnType<typeof createMigratedD1>;
   let localEnv: any;
   let productionEnv: any;
 
   function authRequest(origin: string, path: string, body: unknown, env = productionEnv) {
-    const request = new Request(`${origin}/api/auth/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: origin },
-      body: JSON.stringify(body),
-    });
-    return createBetterAuth(env, request).handler(request);
+    return postToBetterAuth(env, path, { body, origin });
   }
 
-  // Created locally, then verified so production sign-in reaches the test-account check.
   async function createVerifiedAccount(email: string, username: string) {
     const signUp = await authRequest(
-      'http://localhost:8788',
+      LOCAL_AUTH_ORIGIN,
       'sign-up/email',
       { email, password: PASSWORD, name: 'Member', username },
       localEnv,
@@ -43,9 +33,8 @@ describe('test accounts under the production auth policy', { timeout: 30_000 }, 
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
     };
     productionEnv = { ...localEnv, AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', RESEND_API_KEY: 're_test_123' };
-    // Production sign-up checks the password against Have I Been Pwned; answer
-    // "not found" instead of calling the real range API.
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 200 })));
+    const breachedPasswordLookupFindingNothing = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', breachedPasswordLookupFindingNothing);
     for (const level of ['info', 'warn', 'error'] as const) {
       vi.spyOn(console, level).mockImplementation(() => undefined);
     }
@@ -66,6 +55,7 @@ describe('test accounts under the production auth policy', { timeout: 30_000 }, 
     });
 
     expect(response.status).toBe(403);
+    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
     expect(response.headers.get('set-cookie') ?? '').not.toContain('session_token=');
     expect(database.sqlite.prepare('SELECT count(*) AS count FROM session').get()).toEqual({ count: 1 });
   });
@@ -79,6 +69,7 @@ describe('test accounts under the production auth policy', { timeout: 30_000 }, 
     });
 
     expect(response.status).toBe(403);
+    expect((await response.json()).message).toBe(TEST_ACCOUNTS_DISABLED_MESSAGE);
   });
 
   it('refuses a test-domain sign-up in production and stores nothing', async () => {
@@ -101,7 +92,7 @@ describe('test accounts under the production auth policy', { timeout: 30_000 }, 
       password: PASSWORD,
     });
     const local = await authRequest(
-      'http://localhost:8788',
+      LOCAL_AUTH_ORIGIN,
       'sign-in/username',
       { username: 'qabot', password: PASSWORD },
       localEnv,

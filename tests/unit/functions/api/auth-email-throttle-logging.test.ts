@@ -6,12 +6,10 @@ import {
 } from '@functions/api/utils/auth-email-throttle';
 import { createSqliteD1, type SqliteD1 } from './support/sqlite-d1';
 
-// Drizzle puts a failed query's bound values in its error message
-// ("Failed query: ...\nparams: ..."). These warnings must log the D1 error only.
 const D1_OUTAGE = 'D1_ERROR: Network connection lost';
 const RESET_TOKEN = 'resettoken123secret';
 
-describe('auth email throttle failure logs', () => {
+describe('auth email throttle failure logs, which name the D1 error and never the bound params Drizzle puts in its message', () => {
   let d1: SqliteD1;
   let lines: string[];
 

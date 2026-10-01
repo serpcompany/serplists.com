@@ -2,9 +2,6 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import bcrypt from 'bcryptjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// bcrypt only uses the first 72 UTF-8 bytes of a password. Runs the app's real
-// Better Auth configuration (createBetterAuth) against an in-memory database so
-// every endpoint that sets a password is checked end to end.
 const memory = vi.hoisted(() => ({ db: {} as Record<string, any[]> }));
 
 vi.mock('better-auth/adapters/drizzle', () => ({
@@ -18,8 +15,8 @@ vi.mock('@functions/api/db', () => ({
 
 import { createBetterAuth } from '@functions/api/better-auth';
 import { NEW_PASSWORD_BODY_FIELDS } from '@functions/api/utils/password-length';
+import { LOCAL_AUTH_ORIGIN as BASE_URL, postToBetterAuth, sessionCookieFrom } from '../../../support/betterAuth';
 
-const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'john@test.com';
 const PASSWORD = 'original-password-1';
 const env = {
@@ -29,18 +26,9 @@ const env = {
 } as any;
 
 const ascii = (bytes: number) => 'a'.repeat(bytes);
-const emoji = (count: number) => '\u{1F600}'.repeat(count); // 4 bytes, 2 UTF-16 code units each
+const fourByteEmoji = (count: number) => '\u{1F600}'.repeat(count);
 
-function authRequest(path: string, init: { body?: unknown; cookie?: string } = {}) {
-  const headers: Record<string, string> = { Origin: BASE_URL, 'Content-Type': 'application/json' };
-  if (init.cookie) headers.Cookie = init.cookie;
-  const request = new Request(`${BASE_URL}/api/auth/${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(init.body ?? {}),
-  });
-  return createBetterAuth(env, request).handler(request);
-}
+const authRequest = (path: string, init: { body?: unknown; cookie?: string } = {}) => postToBetterAuth(env, path, init);
 
 function signUp(password: string, email = EMAIL) {
   return authRequest('sign-up/email', { body: { email, password, name: 'John' } });
@@ -50,17 +38,11 @@ function signIn(password: string, email = EMAIL) {
   return authRequest('sign-in/email', { body: { email, password } });
 }
 
-function sessionCookieFrom(response: Response): string {
-  const match = (response.headers.get('set-cookie') ?? '').match(/better-auth\.session_token=[^;]+/);
-  if (!match) throw new Error('No session cookie');
-  return match[0];
-}
-
 async function errorMessage(response: Response): Promise<string> {
   return String((await response.json()).message ?? '');
 }
 
-describe('password byte limit', { timeout: 30_000 }, () => {
+describe('password byte limit, since bcrypt uses only the first 72 UTF-8 bytes', { timeout: 30_000 }, () => {
   let sentEmails: string[];
 
   beforeEach(() => {
@@ -116,9 +98,9 @@ describe('password byte limit', { timeout: 30_000 }, () => {
 
   it.each([
     ['73 ASCII characters', ascii(73), 400],
-    ['19 emoji (38 characters, 76 bytes)', emoji(19), 400],
+    ['19 emoji (38 characters, 76 bytes)', fourByteEmoji(19), 400],
     ['72 ASCII characters', ascii(72), 200],
-    ['18 emoji (72 bytes)', emoji(18), 200],
+    ['18 emoji (72 bytes)', fourByteEmoji(18), 200],
   ])('sign-up with %s', async (_label, password, status) => {
     const response = await signUp(password);
 
@@ -145,7 +127,7 @@ describe('password byte limit', { timeout: 30_000 }, () => {
     const token = sentEmails.at(-1)?.match(/reset-password\/([^?\s]+)/)?.[1];
     expect(token).toBeTruthy();
 
-    const tooLong = await authRequest('reset-password', { body: { token, newPassword: `${ascii(40)}${emoji(9)}` } });
+    const tooLong = await authRequest('reset-password', { body: { token, newPassword: `${ascii(40)}${fourByteEmoji(9)}` } });
     expect(tooLong.status).toBe(400);
     expect(await errorMessage(tooLong)).toMatch(/72/);
 
@@ -173,8 +155,7 @@ describe('password byte limit', { timeout: 30_000 }, () => {
   });
 });
 
-// Endpoints that only check a password someone already set: never limited.
-const VERIFY_ONLY_PASSWORD_ENDPOINTS = ['/sign-in/email', '/sign-in/username', '/delete-user'];
+const ENDPOINTS_THAT_ONLY_CHECK_A_PASSWORD_ALREADY_SET = ['/sign-in/email', '/sign-in/username', '/delete-user'];
 
 describe('NEW_PASSWORD_BODY_FIELDS', () => {
   it('covers every configured Better Auth endpoint that takes a new password', () => {
@@ -192,10 +173,10 @@ describe('NEW_PASSWORD_BODY_FIELDS', () => {
     expect(passwordFields.length).toBeGreaterThan(0);
 
     for (const { path, field } of passwordFields) {
-      if (VERIFY_ONLY_PASSWORD_ENDPOINTS.includes(path)) continue;
+      if (ENDPOINTS_THAT_ONLY_CHECK_A_PASSWORD_ALREADY_SET.includes(path)) continue;
       expect(NEW_PASSWORD_BODY_FIELDS[path], `${path} takes ${field}`).toBe(field);
     }
     expect(NEW_PASSWORD_BODY_FIELDS['/sign-up/email']).toBe('password');
-    for (const path of VERIFY_ONLY_PASSWORD_ENDPOINTS) expect(NEW_PASSWORD_BODY_FIELDS[path]).toBeUndefined();
+    for (const path of ENDPOINTS_THAT_ONLY_CHECK_A_PASSWORD_ALREADY_SET) expect(NEW_PASSWORD_BODY_FIELDS[path]).toBeUndefined();
   });
 });

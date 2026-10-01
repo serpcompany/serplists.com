@@ -1,33 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiWorker from '@functions/api/[[route]].ts';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
+import { varFromWranglerToml } from '../../../support/wranglerToml';
 
-// The auth policy comes from AUTH_EMAIL_VERIFICATION_REQUIRED in wrangler.toml
-// ("false" on local and preview, "true" on production), never from the request
-// hostname: preview aliases and custom staging domains such as
-// staging.serplists.com must behave like staging.serp-checklists.pages.dev.
-// Runs the real router and Better Auth against a migrated SQLite database.
 const STAGING_ORIGINS = ['https://staging.serplists.com', 'https://staging.serp-checklists.pages.dev'];
 const PASSWORD = 'a-strong-unbreached-passphrase-81';
 
-describe('auth policy per deployment', { timeout: 30_000 }, () => {
+describe('auth policy per deployment, from its AUTH_EMAIL_VERIFICATION_REQUIRED and never the request host', { timeout: 30_000 }, () => {
   let database: ReturnType<typeof createMigratedD1>;
-  let outbound: ReturnType<typeof vi.fn>;
+  let breachedPasswordAndEmailProviderCalls: ReturnType<typeof vi.fn>;
 
   const previewEnv = () =>
     ({
       DB: database.d1,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: 'false',
-      CORS_ALLOWED_ORIGINS: STAGING_ORIGINS.join(','),
+      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.preview.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.preview.vars', 'CORS_ALLOWED_ORIGINS'),
     }) as any;
 
   const productionEnv = (overrides: Record<string, unknown> = {}) =>
     ({
       DB: database.d1,
       BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
-      CORS_ALLOWED_ORIGINS: 'https://serplists.com',
+      AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+      CORS_ALLOWED_ORIGINS: varFromWranglerToml('env.production.vars', 'CORS_ALLOWED_ORIGINS'),
       ...overrides,
     }) as any;
 
@@ -46,9 +42,8 @@ describe('auth policy per deployment', { timeout: 30_000 }, () => {
 
   beforeEach(() => {
     database = createMigratedD1();
-    // Breached-password (Have I Been Pwned) and email provider calls.
-    outbound = vi.fn(async () => new Response('', { status: 200 }));
-    vi.stubGlobal('fetch', outbound);
+    breachedPasswordAndEmailProviderCalls = vi.fn(async () => new Response('', { status: 200 }));
+    vi.stubGlobal('fetch', breachedPasswordAndEmailProviderCalls);
     for (const level of ['info', 'warn', 'error'] as const) {
       vi.spyOn(console, level).mockImplementation(() => undefined);
     }
@@ -67,12 +62,11 @@ describe('auth policy per deployment', { timeout: 30_000 }, () => {
     expect(userCount()).toBe(1);
   });
 
-  it.each(STAGING_ORIGINS)('keeps production-only checks off on %s', async (origin) => {
+  it.each(STAGING_ORIGINS)('keeps production-only checks off on %s, signing up a test-domain account with no breached-password lookup', async (origin) => {
     const response = await signUp(origin, previewEnv(), 'qa-bot@serplists.dev');
 
-    // Test-domain accounts are allowed and no breached-password lookup is made.
     expect(response.status).toBe(200);
-    expect(outbound).not.toHaveBeenCalled();
+    expect(breachedPasswordAndEmailProviderCalls).not.toHaveBeenCalled();
   });
 
   it.each(['https://serplists.com', 'https://serp-checklists.pages.dev'])(

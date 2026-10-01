@@ -391,8 +391,8 @@ Common failures:
   `tests/support/agentMcp.ts`. A test that makes more calls than one Run Key may make in a
   minute (`RUN_KEY_REQUESTS_PER_MINUTE`, counted per key in the process) gives each call a
   key of its own with `authenticateWithAFreshRunKey()`, or the limit answers `429`.
-- A test that reads values from the deployed configuration (the CORS allowlists)
-  takes them from `wrangler.toml` with `varFromWranglerToml()` from
+- A test that reads values from the deployed configuration (the CORS allowlists, the auth
+  policy) takes them from `wrangler.toml` with `varFromWranglerToml()` from
   `tests/support/wranglerToml.ts`, so a change to that file is tested too.
 - Unit tests run in Vitest's node environment, with no DOM, jsdom or testing-library, so a
   component test takes one of three routes:
