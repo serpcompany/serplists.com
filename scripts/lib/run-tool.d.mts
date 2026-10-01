@@ -29,5 +29,5 @@ export function killProcessTree(
   child: ChildProcess,
   signal?: NodeJS.Signals,
   options?: { platform?: NodeJS.Platform },
-): void;
+): boolean;
 export function describeSpawnError(error: unknown, label: string): string;

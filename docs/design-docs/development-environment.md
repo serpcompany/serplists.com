@@ -233,11 +233,17 @@ Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-convention
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
 `scripts/lib/run-tool.mjs`: `execTool`/`spawnTool` run a dependency's bin script
 (wrangler, next, opennextjs-cloudflare, tsx, playwright, drizzle-kit) with the current Node,
-and `execPnpm` runs pnpm itself through the pnpm that launched the script. Never
+and `execPnpm` runs pnpm itself through the pnpm that launched the script (`npm_execpath`).
+A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin. Outside
+`pnpm run` there is no pnpm script to reuse, so on Windows `execPnpm` goes through `cmd.exe`
+and refuses any argument that is not a plain token. Never
 spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
-shell fails with `ENOENT` (or `EINVAL` for `npx.cmd`), and passing arguments through
-a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in values like
-the auth secret. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
+shell fails with `ENOENT` (or, since Node 18.20.2, `EINVAL` for `npx.cmd`), and passing
+arguments through a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%`
+in values like the auth secret. `killPidTree` and `killProcessTree` stop a process with
+everything it started: on Windows they end the tree with `taskkill`, since the children
+(Next.js, workerd) would otherwise keep running and hold their ports; elsewhere the process
+gets the signal, which the dev launcher and Wrangler pass on. `tests/unit/scripts/tool-spawns.test.ts` fails when a script names
 `npx` or `pnpm` as a command. `opennextjs-cloudflare preview` itself hands its extra
 arguments to `wrangler dev` through a shell without quoting them, so the smoke runner
 (`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`) and `d1:profile` pass it only plain

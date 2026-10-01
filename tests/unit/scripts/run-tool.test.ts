@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-import { buildPnpmInvocation, buildToolInvocation, execTool } from '../../../scripts/lib/run-tool.mjs';
+import { buildPnpmInvocation, buildToolInvocation, execTool, killProcessTree } from '../../../scripts/lib/run-tool.mjs';
 
 describe('buildToolInvocation', () => {
   it('runs local tools with the current Node and their bin script, never a shim', () => {
@@ -10,7 +10,6 @@ describe('buildToolInvocation', () => {
 
       expect(invocation.command).toBe(process.execPath);
       expect(existsSync(invocation.args[0])).toBe(true);
-      // A script Node runs itself (Next.js's bin has no extension), never a .cmd or shell shim.
       expect(invocation.args[0]).not.toMatch(/\.(cmd|ps1|sh)$/);
       expect(invocation.args.slice(1)).toEqual(['--version']);
     }
@@ -56,6 +55,21 @@ describe('buildPnpmInvocation', () => {
       args: ['run', 'build'],
       options: {},
     });
+  });
+});
+
+describe('killProcessTree', () => {
+  const pidNoProcessHolds = 2 ** 22 + 1;
+
+  it('signals nothing once the child has exited', () => {
+    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: 0, signalCode: null } as never)).toBe(false);
+    expect(killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: 'SIGTERM' } as never)).toBe(false);
+  });
+
+  it('reports a failed taskkill on Windows instead of throwing, as when the child exits just before it', () => {
+    expect(
+      killProcessTree({ pid: pidNoProcessHolds, exitCode: null, signalCode: null } as never, 'SIGTERM', { platform: 'win32' }),
+    ).toBe(false);
   });
 });
 

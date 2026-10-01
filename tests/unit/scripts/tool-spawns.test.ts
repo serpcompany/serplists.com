@@ -2,10 +2,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Scripts must launch pnpm, npx and local tools through scripts/lib/run-tool.mjs.
-// On Windows "npx" and "pnpm" are .cmd shims: spawning them by name without a shell
-// fails with ENOENT, and spawning "npx.cmd" without a shell fails with EINVAL.
-
 const repoRoot = process.cwd();
 const HELPER = 'scripts/lib/run-tool.mjs';
 const SCRIPT_EXTENSIONS = /\.(mjs|cjs|js|ts)$/;
@@ -26,7 +22,7 @@ function findShimNames(source: string): string[] {
   });
 }
 
-describe('tool spawns', () => {
+describe('tool spawns, since npx and pnpm are .cmd shims on Windows that fail to start without a shell', () => {
   it('flags pnpm and npx named as a command', () => {
     expect(findShimNames('spawn("npx", ["wrangler"]);')).toEqual(['line 1: "npx"']);
     expect(findShimNames('function run(c, a) { execFileSync(c, a); }\nrun("pnpm", ["exec", "tsx"]);')).toEqual([

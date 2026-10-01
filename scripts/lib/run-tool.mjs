@@ -1,12 +1,3 @@
-// Launch repo tools (wrangler, next, tsx, ...) and pnpm from Node scripts the same
-// way on every OS. Scripts must not spawn "npx" or "pnpm" by name: on Windows they
-// exist only as .cmd shims, so a spawn without a shell fails with ENOENT, and
-// spawning a .cmd file without a shell fails with EINVAL (Node 18.20.2+).
-// Joining arguments for a shell instead lets cmd.exe reinterpret & | ^ % and
-// spaces in values such as secrets from .dev.vars.
-//
-// So local tools run as `node <package bin script>`, which needs no shell, and
-// pnpm runs through the pnpm script that launched us (npm_execpath).
 import { execFileSync, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -14,7 +5,6 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-// Tool name -> the package that ships its bin. Add an entry to launch a new tool.
 export const TOOL_PACKAGES = {
   "drizzle-kit": "drizzle-kit",
   next: "next",
@@ -24,7 +14,6 @@ export const TOOL_PACKAGES = {
   wrangler: "wrangler",
 };
 
-/** Absolute path to the bin script of a local tool, read from its package.json. */
 export function resolveToolBin(tool, { repoRoot = REPO_ROOT } = {}) {
   const packageName = Object.hasOwn(TOOL_PACKAGES, tool) ? TOOL_PACKAGES[tool] : null;
   if (!packageName) {
@@ -46,20 +35,12 @@ export function resolveToolBin(tool, { repoRoot = REPO_ROOT } = {}) {
   return path.join(packageDir, bin);
 }
 
-/** `{ command, args }` that runs a local tool with the current Node, without a shell. */
 export function buildToolInvocation(tool, args = [], { execPath = process.execPath, repoRoot = REPO_ROOT } = {}) {
   return { command: execPath, args: [resolveToolBin(tool, { repoRoot }), ...args], options: {} };
 }
 
-// Plain tokens that cmd.exe passes through unchanged.
-const PLAIN_CMD_ARG = /^[\w@+=:./\\-]+$/;
+const ARG_CMD_EXE_PASSES_UNCHANGED = /^[\w@+=:./\\-]+$/;
 
-/**
- * `{ command, args, options }` that runs pnpm itself (for `pnpm run <script>`).
- * Prefers the pnpm entry script that started this process (`pnpm run` sets
- * npm_execpath), so no shell is involved. Otherwise Windows goes through
- * cmd.exe, which only accepts plain arguments here.
- */
 export function buildPnpmInvocation(
   args,
   { platform = process.platform, env = process.env, execPath = process.execPath } = {},
@@ -70,7 +51,7 @@ export function buildPnpmInvocation(
   }
 
   if (platform === "win32") {
-    const unsafe = args.find((arg) => !PLAIN_CMD_ARG.test(arg));
+    const unsafe = args.find((arg) => !ARG_CMD_EXE_PASSES_UNCHANGED.test(arg));
     if (unsafe !== undefined) {
       throw new Error(
         `Cannot pass "${unsafe}" to pnpm through cmd.exe. Run this script with "pnpm run", or launch the tool with execTool/spawnTool.`,
@@ -86,30 +67,21 @@ export function buildPnpmInvocation(
   return { command: "pnpm", args, options: {} };
 }
 
-/** spawn() a local tool (see TOOL_PACKAGES) with the current Node. */
 export function spawnTool(tool, args, options = {}) {
   const invocation = buildToolInvocation(tool, args);
   return spawn(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
 
-/** execFileSync() a local tool (see TOOL_PACKAGES) with the current Node. */
 export function execTool(tool, args, options = {}) {
   const invocation = buildToolInvocation(tool, args);
   return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
 
-/** execFileSync() pnpm itself, e.g. `execPnpm(["run", "build"])`. */
 export function execPnpm(args, options = {}) {
   const invocation = buildPnpmInvocation(args);
   return execFileSync(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
 
-/**
- * Stop a process by pid and everything it started. On Windows, killing only the
- * process leaves its children (Next.js, workerd) running and holding their ports,
- * so the whole tree is ended with taskkill. Elsewhere the process gets `signal`
- * (the dev launcher and Wrangler pass it on). Throws when the kill fails.
- */
 export function killPidTree(pid, signal = "SIGTERM", { platform = process.platform } = {}) {
   if (platform === "win32") {
     execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
@@ -118,23 +90,18 @@ export function killPidTree(pid, signal = "SIGTERM", { platform = process.platfo
   process.kill(pid, signal);
 }
 
-/** Stop a child and everything it started (see killPidTree); a no-op once it has exited. */
 export function killProcessTree(child, signal = "SIGTERM", { platform = process.platform } = {}) {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return false;
+  if (platform !== "win32") return child.kill(signal);
 
-  if (platform === "win32") {
-    try {
-      killPidTree(child.pid, signal, { platform });
-    } catch {
-      // The process already exited.
-    }
-    return;
+  try {
+    killPidTree(child.pid, signal, { platform });
+    return true;
+  } catch {
+    return false;
   }
-
-  child.kill(signal);
 }
 
-/** A clearer message when a tool could not be started at all. */
 export function describeSpawnError(error, label) {
   const message = error instanceof Error ? error.message : String(error);
   if (error?.code === "ENOENT" || error?.code === "EINVAL") {
