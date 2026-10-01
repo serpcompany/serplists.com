@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
+import { NO_DEV_VARS_OR_DOTENV_FILES } from "../../scripts/data/local-d1";
 import { execTool, REPO_ROOT } from "../../scripts/lib/run-tool.mjs";
 
 export type LocalD1HandlerEnv = { DB: D1Database; BETTER_AUTH_SECRET: string };
@@ -23,7 +24,7 @@ export function runToolInRepo(tool: "tsx" | "wrangler", args: string[]): string 
 export function platformProxyOnLocalD1<Env>(persistPath: string): Promise<PlatformProxy<Env>> {
   return getPlatformProxy<Env>({
     configPath: path.join(REPO_ROOT, "wrangler.toml"),
-    envFiles: [".local-d1-env-disabled"],
+    envFiles: NO_DEV_VARS_OR_DOTENV_FILES,
     persist: { path: path.resolve(REPO_ROOT, persistPath, "v3") },
     remoteBindings: false,
   });
