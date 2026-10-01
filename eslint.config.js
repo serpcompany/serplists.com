@@ -181,11 +181,7 @@ export default tseslint.config(
       "tests/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
       "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
     ],
-    ignores: [
-      "scripts/maintenance-report.mjs",
-      "tests/unit/config/agent-tooling.test.ts",
-      "tests/unit/workflows/**",
-    ],
+    ignores: ["tests/unit/workflows/cloudflare-pages-deploy.test.ts"],
     linterOptions: { noInlineConfig: true },
     plugins: { serplists: { rules: { "no-comments": noComments } } },
     rules: { "serplists/no-comments": "error" },
