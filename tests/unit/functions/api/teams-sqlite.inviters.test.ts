@@ -6,6 +6,7 @@ import {
   d1,
   expectOneActiveOwnerAndClose,
   inviteColumns,
+  listAsUser,
   newUserMembership,
   openTheSeededOrganization,
   revocationAndAcceptance,
@@ -35,8 +36,8 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(revokedInviteAudits()).toEqual([
         { resource_id: inviteId, metadata_json: JSON.stringify({ reason: "inviter_access_removed" }) },
       ]);
-      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
-      expect((await asUser("new-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await listAsUser("owner-user", "/team-1/invites")).data).toEqual([]);
+      expect((await listAsUser("new-user", "/invites/pending")).data).toEqual([]);
       expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(404);
       expect(newUserMembership()).toEqual([]);
     });
@@ -78,7 +79,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       const inviteId = await inviteNewUser();
       d1.run("UPDATE team_members SET role = 'viewer' WHERE id = 'admin-member'");
 
-      expect((await asUser("new-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await listAsUser("new-user", "/invites/pending")).data).toEqual([]);
       expect((await asUser("new-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(404);
       expect(inviteState(inviteId)).toEqual({ revoked_at: null, accepted_at: null });
       expect(newUserMembership()).toEqual([]);
@@ -105,7 +106,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       inviteColumns<{ revoked_at: string | null; invited_by_user_id: string }>(id, "revoked_at, invited_by_user_id");
 
     async function expectTheInviteHiddenFromTheListAndItsLink(token: string) {
-      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await listAsUser("owner-user", "/team-1/invites")).data).toEqual([]);
       expect((await asUser("new-user", "GET", `/invites/${token}`)).status).toBe(404);
     }
 

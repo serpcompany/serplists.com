@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { callToolWithAFreshRunKey, openAFreshMcpDatabase } from "../../../support/agentMcpOnSqlite";
-import { runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { mcpRunResult, mcpTemplateResult, runKeyWithEveryPermission } from "../../../support/agentMcp";
 import { apiEnv } from "../../../support/apiEnv";
 import { apiRequest } from "../../../support/apiRequest";
 import { sessionMocks } from "../../../support/mockedSession";
@@ -24,9 +24,6 @@ const withVersion = z.object({ version: z.number() }).passthrough();
 const withRevision = z.object({ revision: z.number() }).passthrough();
 const createdShare = z.object({ shareToken: z.string() }).passthrough();
 const createdInvite = z.object({ id: z.string(), inviteToken: z.string() }).passthrough();
-const mcpTemplate = z.object({ template: z.object({ id: z.string(), version: z.number() }).passthrough() }).passthrough();
-const mcpRun = z.object({ run: z.object({ id: z.string(), revision: z.number() }).passthrough() }).passthrough();
-const mcpToolResult = z.object({ result: z.object({ structuredContent: z.unknown() }).passthrough() }).passthrough();
 
 type Handler = typeof handleTemplates;
 type Drive = { route: string; writes: AuditAction; status: number; actionsWritten: string[] };
@@ -52,8 +49,7 @@ function as(userId: string, handler: Handler, path: string, method: string, body
 }
 
 async function mcpTool(name: string, args: Record<string, unknown>) {
-  const body = await callToolWithAFreshRunKey(d1, name, args);
-  return mcpToolResult.parse(body).result.structuredContent;
+  return (await callToolWithAFreshRunKey(d1, name, args)).result.structuredContent;
 }
 
 function seed() {
@@ -136,13 +132,13 @@ async function driveOrganizationRoutes() {
 }
 
 async function driveMcpTools() {
-  const created = mcpTemplate.parse(await driveTool("MCP create_template", "template.created", "create_template", { title: "From an agent", sections: SECTIONS }));
+  const created = mcpTemplateResult.parse(await driveTool("MCP create_template", "template.created", "create_template", { title: "From an agent", sections: SECTIONS }));
   await driveTool("MCP update_template", "template.updated", "update_template", {
     templateId: created.template.id,
     expectedVersion: created.template.version,
     title: "Renamed by an agent",
   });
-  const started = mcpRun.parse(await driveTool("MCP start_run", "checklist_run.created", "start_run", { templateId: created.template.id }));
+  const started = mcpRunResult.parse(await driveTool("MCP start_run", "checklist_run.created", "start_run", { templateId: created.template.id }));
   await driveTool("MCP update_run", "checklist_run.updated", "update_run", {
     runId: started.run.id,
     expectedRevision: started.run.revision,

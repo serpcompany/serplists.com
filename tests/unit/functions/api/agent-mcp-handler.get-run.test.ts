@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   dbMocks,
   env,
@@ -13,7 +14,8 @@ import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { toJson } from "@functions/api/handlers/agentMcpPages";
 import { runView } from "@functions/api/handlers/agentMcpRunPages";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
-import { authenticateWithAFreshRunKey, mcpToolCall } from "../../../support/agentMcp";
+import { authenticateWithAFreshRunKey, mcpRunsPage, mcpToolCall } from "../../../support/agentMcp";
+import { jsonObject } from "../../../support/readJson";
 import { readRunInFull } from "../../../support/runPages";
 
 describe("personal run MCP handler", () => {
@@ -25,15 +27,14 @@ describe("personal run MCP handler", () => {
     ];
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
 
-    const getResponse = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
-    const getBody = await getResponse.json() as any;
-    expect(getBody.result.structuredContent.run.retiredItems).toEqual(retired);
+    const getBody = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
+    expect(getBody.result.structuredContent.run).toEqual(expect.objectContaining({ retiredItems: retired }));
 
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
-    const listResponse = await handleAgentMcp(mcpToolCall("list_runs"), env);
-    const listBody = await listResponse.json() as any;
-    expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("retiredItems");
-    expect(listBody.result.structuredContent.runs[0]).not.toHaveProperty("sections");
+    const listBody = await toolBody(await handleAgentMcp(mcpToolCall("list_runs"), env));
+    const [listed] = mcpRunsPage.parse(listBody.result.structuredContent).runs;
+    expect(listed).not.toHaveProperty("retiredItems");
+    expect(listed).not.toHaveProperty("sections");
   });
 
   describe("sub-items the run page never shows", () => {
@@ -55,17 +56,27 @@ describe("personal run MCP handler", () => {
       ]),
     });
 
-    function expectOnlySubTasks(task: any) {
+    const taskContents = z.object({ contents: z.array(jsonObject).length(2) }).passthrough();
+    const tasksOf = z.object({ items: z.array(jsonObject).min(1) }).passthrough();
+    const runWithRetiredWork = z.object({
+      run: z.object({
+        sections: z.array(tasksOf).min(1),
+        retiredItems: z.tuple([z.object({ item: jsonObject }).passthrough(), z.object({ section: tasksOf }).passthrough()]),
+      }).passthrough(),
+    }).passthrough();
+
+    function expectOnlySubTasks(task: unknown) {
       expect(task).not.toHaveProperty("subItems");
-      expect(task.contents[0]).not.toHaveProperty("subItems");
-      expect(task.contents[1].subItems).toEqual([expect.objectContaining({ id: "sub-1" })]);
+      const [text, subTasks] = taskContents.parse(task).contents;
+      expect(text).not.toHaveProperty("subItems");
+      expect(subTasks.subItems).toEqual([expect.objectContaining({ id: "sub-1" })]);
     }
 
     it("leaves them out of get_run, live and retired", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run()]);
 
       const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
-      const { sections, retiredItems } = body.result.structuredContent.run;
+      const { sections, retiredItems } = runWithRetiredWork.parse(body.result.structuredContent).run;
 
       expectOnlySubTasks(sections[0].items[0]);
       expectOnlySubTasks(retiredItems[0].item);
@@ -175,8 +186,7 @@ describe("personal run MCP handler", () => {
   it("hides a personal run owned by another user", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ user_id: "user-2" })]);
 
-    const response = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
-    const body = await response.json() as any;
+    const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error).toBe("run_not_found");

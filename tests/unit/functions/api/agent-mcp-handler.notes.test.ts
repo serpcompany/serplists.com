@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { assert, beforeEach, describe, expect, it } from "vitest";
 import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH } from "@functions/api/handlers/agentMcpTools";
-import { mcpRequest, mcpToolCall } from "../../../support/agentMcp";
+import { mcpArgumentsError, mcpRequest, mcpToolCall, mcpToolList } from "../../../support/agentMcp";
+import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -10,21 +11,23 @@ describe("personal run MCP handler", () => {
   describe("the notes update_run writes", () => {
     const utf8Bytes = (text: string) => new TextEncoder().encode(text).byteLength;
 
-    const setNotes = async (notes: string, run = personalRun()) => {
+    const sendNotes = async (notes: string, run = personalRun()) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      return toolBody(await handleAgentMcp(mcpToolCall("update_run", {
+      return handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
         taskId: "task-1",
         notes,
-      }), env));
+      }), env);
     };
+    const setNotes = async (notes: string, run = personalRun()) => toolBody(await sendNotes(notes, run));
 
     it("keeps the limits in the advertised schema", async () => {
       expect(MAX_TASK_NOTES_BYTES).toBe(30 * 1024);
-      const tools = (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
-      const updateRun = tools.find((tool: any) => tool.name === "update_run");
+      const { tools } = (await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList)).result;
+      const updateRun = tools.find((tool) => tool.name === "update_run");
+      assert.exists(updateRun);
       expect(updateRun.inputSchema.properties.notes).toMatchObject({ type: "string", maxLength: MAX_TASK_NOTES_LENGTH });
       for (const text of [updateRun.description, updateRun.inputSchema.properties.notes.description]) {
         expect(text).toContain("at most 20,000 characters and 30KB (30,720 bytes of UTF-8)");
@@ -64,7 +67,7 @@ describe("personal run MCP handler", () => {
       ["of four-byte emoji", "🚀".repeat(MAX_TASK_NOTES_BYTES / 4 + 1), "15,362 characters and 30,724 bytes"],
       ["over 20,000 characters", "n".repeat(MAX_TASK_NOTES_LENGTH + 1), "20,001 characters and 20,001 bytes"],
     ])("refuses notes %s, naming both limits, before reading the run", async (_notes, notes, size) => {
-      const body = await setNotes(notes);
+      const body = await readJson(await sendNotes(notes), mcpArgumentsError);
 
       expect(body.error.code).toBe(-32602);
       expect(body.error.data.code).toBe("invalid_arguments");

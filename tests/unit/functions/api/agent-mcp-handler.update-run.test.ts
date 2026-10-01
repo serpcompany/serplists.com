@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   callTool,
   dbMocks,
@@ -6,11 +7,17 @@ import {
   finishedRun,
   personalRun,
   resetAgentMcpHandlerMocks,
+  rpcErrorBody,
+  sendTool,
   type JsonRecord,
 } from "../../../support/agentMcpHandler";
 import { FREE_PLAN } from "../../../fixtures/plans";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
+
+const openTasks = z.object({
+  details: z.object({ openTaskCount: z.number(), openTaskIds: z.array(z.string()) }).passthrough(),
+}).passthrough();
 
 const updateRun = (args: JsonRecord) => callTool("update_run", { runId: "run-1", ...args });
 
@@ -160,8 +167,9 @@ describe("personal run MCP handler", () => {
     it("names at most 20 open tasks", async () => {
       const body = await completeRun(runOf(...Array.from({ length: 30 }, (_, index) => task({ id: `task-${index}`, isCompleted: false }))));
 
-      expect(body.result.structuredContent.details.openTaskCount).toBe(30);
-      expect(body.result.structuredContent.details.openTaskIds).toHaveLength(20);
+      const { details } = openTasks.parse(body.result.structuredContent);
+      expect(details.openTaskCount).toBe(30);
+      expect(details.openTaskIds).toHaveLength(20);
     });
 
     it("ignores open sub-items the run page never shows, on the task itself or on another block", async () => {
@@ -230,7 +238,9 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
     dbMocks.db.batch.mockRejectedValueOnce(new Error("audit constraint secret"));
 
-    expect(await setTaskNotes(2, "Evidence")).toEqual({
+    const failed = await sendTool("update_run", { runId: "run-1", expectedRevision: 2, operation: "set_task_notes", taskId: "task-1", notes: "Evidence" });
+
+    expect(await rpcErrorBody(failed)).toEqual({
       jsonrpc: "2.0",
       id: 1,
       error: { code: -32603, message: "Internal error" },

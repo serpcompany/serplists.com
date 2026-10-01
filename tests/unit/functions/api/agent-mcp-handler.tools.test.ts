@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assert, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dbMocks,
   env,
@@ -12,16 +12,24 @@ import {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { updateRunArgs } from "@functions/api/handlers/agentMcpTools";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpRequest, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import {
+  mcpErrorResponse,
+  mcpRequest,
+  mcpRunResult,
+  mcpToolCall,
+  mcpToolList,
+  runKeyWithEveryPermission,
+  type McpToolInputSchema,
+} from "../../../support/agentMcp";
+import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
   it("advertises personal template and run tools without delete or publish controls", async () => {
-    const response = await handleAgentMcp(mcpRequest("tools/list"), env);
-    const body = await response.json() as any;
+    const body = await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList);
 
-    expect(body.result.tools.map((tool: any) => tool.name)).toEqual([
+    expect(body.result.tools.map((tool) => tool.name)).toEqual([
       "list_templates",
       "get_template",
       "create_template",
@@ -36,7 +44,8 @@ describe("personal run MCP handler", () => {
       expect(serialized).not.toContain(forbidden);
     }
 
-    const updateRun = body.result.tools.find((tool: any) => tool.name === "update_run");
+    const updateRun = body.result.tools.find((tool) => tool.name === "update_run");
+    assert.exists(updateRun);
     expect(updateRun.inputSchema.required).toEqual(["runId", "expectedRevision", "operation"]);
     expect(updateRun.inputSchema.properties.operation.enum).toEqual([
       "set_task_completed",
@@ -44,7 +53,7 @@ describe("personal run MCP handler", () => {
       "set_task_notes",
       "set_run_status",
     ]);
-    expect(body.result.tools.map((tool: any) => tool.annotations)).toEqual([
+    expect(body.result.tools.map((tool) => tool.annotations)).toEqual([
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -60,15 +69,13 @@ describe("personal run MCP handler", () => {
   it("offers and allows only the tools a key's permissions cover", async () => {
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue({ ...runKeyWithEveryPermission, permissions: ["runs:read"] });
 
-    const listResponse = await handleAgentMcp(mcpRequest("tools/list"), env);
-    const list = await listResponse.json() as any;
-    expect(list.result.tools.map((tool: any) => tool.name)).toEqual(["list_runs", "get_run"]);
+    const list = await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList);
+    expect(list.result.tools.map((tool) => tool.name)).toEqual(["list_runs", "get_run"]);
 
-    const deniedResponse = await handleAgentMcp(mcpToolCall("create_template", {
+    const denied = await toolBody(await handleAgentMcp(mcpToolCall("create_template", {
       title: "Denied",
       sections: [{ title: "Section", items: [{ title: "Task" }] }],
-    }), env);
-    const denied = await deniedResponse.json() as any;
+    }), env));
     expect(denied.result.isError).toBe(true);
     expect(denied.result.structuredContent).toMatchObject({
       error: "permission_denied",
@@ -81,13 +88,18 @@ describe("personal run MCP handler", () => {
   describe("tool input schemas", () => {
     const ROOT_KEYWORDS_CLIENTS_REJECT = ["oneOf", "anyOf", "allOf", "not", "if", "then", "else", "$ref", "enum", "const"];
 
-    async function listTools(): Promise<any[]> {
-      return (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
+    async function listTools() {
+      return (await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList)).result.tools;
     }
 
-    function problemsAClientFindsAgainstTheAdvertisedSchema(schema: any, args: JsonRecord): string[] {
-      const problems = (schema.required ?? []).filter((name: string) => !(name in args))
-        .map((name: string) => `missing ${name}`);
+    async function updateRunTool() {
+      const updateRun = (await listTools()).find((tool) => tool.name === "update_run");
+      assert.exists(updateRun);
+      return updateRun;
+    }
+
+    function problemsAClientFindsAgainstTheAdvertisedSchema(schema: McpToolInputSchema, args: JsonRecord): string[] {
+      const problems = (schema.required ?? []).filter((name) => !(name in args)).map((name) => `missing ${name}`);
       for (const [name, value] of Object.entries(args)) {
         const property = schema.properties[name];
         if (!property) {
@@ -114,7 +126,7 @@ describe("personal run MCP handler", () => {
     });
 
     it("keeps the advertised update_run schema in step with its validator", async () => {
-      const updateRun = (await listTools()).find((tool) => tool.name === "update_run");
+      const updateRun = await updateRunTool();
       const operations = updateRunArgs.options.map((option) => option.shape.operation.value);
       expect(updateRun.inputSchema.properties.operation.enum).toEqual(operations);
       for (const option of updateRunArgs.options) {
@@ -124,7 +136,7 @@ describe("personal run MCP handler", () => {
     });
 
     it.each(everyUpdateRunOperation({ taskId: "task-1", notes: "Checked" }))("accepts %s arguments that match the advertised schema, with unused fields sent as null", async (operation, fields) => {
-      const updateRun = (await listTools()).find((tool) => tool.name === "update_run");
+      const updateRun = await updateRunTool();
       const args = { runId: "run-1", expectedRevision: 1, operation, ...fields };
       expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, args)).toEqual([]);
 
@@ -134,29 +146,28 @@ describe("personal run MCP handler", () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([operation === "set_run_status" ? finishedRun() : personalRun()]);
       const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", { ...args, ...unused }), env));
 
-      expect(body.error).toBeUndefined();
       expect(body.result.isError).toBeUndefined();
-      expect(body.result.structuredContent.run.revision).toBe(2);
+      expect(mcpRunResult.parse(body.result.structuredContent).run.revision).toBe(2);
     });
 
     it("names the offending field when update_run arguments do not fit the operation", async () => {
-      const missing = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
+      const missing = await readJson(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_notes",
         taskId: "task-1",
-      }), env));
+      }), env), mcpErrorResponse);
       expect(missing.error.code).toBe(-32602);
       expect(missing.error.message).toContain("notes");
 
-      const extra = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
+      const extra = await readJson(await handleAgentMcp(mcpToolCall("update_run", {
         runId: "run-1",
         expectedRevision: 1,
         operation: "set_task_completed",
         taskId: "task-1",
         completed: true,
         notes: "Not for this operation",
-      }), env));
+      }), env), mcpErrorResponse);
       expect(extra.error.code).toBe(-32602);
       expect(extra.error.message).toContain("notes");
       expect(dbMocks.db.batch).not.toHaveBeenCalled();

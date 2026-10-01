@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   asUser,
   auditActions,
@@ -7,6 +7,7 @@ import {
   d1,
   expectOneActiveOwnerAndClose,
   inviteColumns,
+  listAsUser,
   member,
   newUserMembership,
   openTheSeededOrganization,
@@ -31,7 +32,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
     it("hides the invite, refuses it without changing the role, and revokes it", async () => {
       insertInvite("stale-invite", "member@example.test", "admin");
 
-      const incoming = await asUser("member-user", "GET", "/invites/pending");
+      const incoming = await listAsUser("member-user", "/invites/pending");
       const accepted = await asUser("member-user", "POST", "/invites/pending/stale-invite/accept");
 
       expect(incoming.data).toEqual([]);
@@ -47,7 +48,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(d1.rows("SELECT metadata_json FROM audit_events WHERE action = 'team_invite.revoked'")).toEqual([
         { metadata_json: JSON.stringify({ reason: "invitee_already_member" }) },
       ]);
-      expect((await asUser("admin-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await listAsUser("admin-user", "/team-1/invites")).data).toEqual([]);
     });
 
     it("never changes the owner's role through an invite", async () => {
@@ -65,17 +66,18 @@ describe("Organization membership writes against SQLite, which leave every Organ
       d1.beforeNextBatch(async () => {
         const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "member@example.test", role: "admin" });
         expect(created.status).toBe(200);
-        inviteId = created.data?.id as string;
+        assert.exists(created.data.id);
+        inviteId = created.data.id;
       });
       expect((await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "active" })).status).toBe(200);
       expect(inviteState(inviteId).revoked_at).toBeNull();
 
-      expect((await asUser("member-user", "GET", "/invites/pending")).data).toEqual([]);
+      expect((await listAsUser("member-user", "/invites/pending")).data).toEqual([]);
       expect((await asUser("member-user", "POST", `/invites/pending/${inviteId}/accept`)).status).toBe(409);
 
       expect(member("member-m")).toEqual({ role: "editor", status: "active" });
       expect(inviteState(inviteId).revoked_at).not.toBeNull();
-      expect((await asUser("admin-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await listAsUser("admin-user", "/team-1/invites")).data).toEqual([]);
     });
   });
 
@@ -89,7 +91,8 @@ describe("Organization membership writes against SQLite, which leave every Organ
       d1.beforeNextBatch(async () => {
         const reissued = await asUser("owner-user", "POST", `/team-1/invites/${inviteId}/link`, { role });
         expect(reissued.status).toBe(200);
-        newToken = reissued.data?.inviteToken as string;
+        assert.exists(reissued.data.inviteToken);
+        newToken = reissued.data.inviteToken;
       });
       return () => newToken;
     }
@@ -212,7 +215,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "New@Example.test", role: "viewer" });
       d1.queries.splice(0);
 
-      const pending = await asUser("new-user", "GET", "/invites/pending");
+      const pending = await listAsUser("new-user", "/invites/pending");
 
       expect(pending.data).toEqual([expect.objectContaining({ id: created.data?.id, teamId: "team-1" })]);
       const inviteQuery = d1.queries.find((query) => query.sql.includes('from "team_invites"'));

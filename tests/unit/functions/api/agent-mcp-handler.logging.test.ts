@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
+import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpToolCall } from "../../../support/agentMcp";
+import { mcpErrorResponse, mcpToolCall } from "../../../support/agentMcp";
+import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -82,7 +83,7 @@ describe("personal run MCP handler", () => {
       const response = await handleAgentMcp(withRequestId(mcpToolCall("list_templates")), env);
 
       expect(response.status).toBe(200);
-      expect((await response.json() as any).error).toEqual({ code: -32603, message: "Internal error" });
+      expect((await readJson(response, mcpErrorResponse)).error).toEqual({ code: -32603, message: "Internal error" });
       expect(logs.errors()).toEqual([expect.objectContaining({
         message: "mcp_tool_error",
         requestId: "req-123",
@@ -184,7 +185,7 @@ describe("personal run MCP handler", () => {
 
       const response = await handleAgentMcp(withRequestId(mcpToolCall("list_runs")), env);
 
-      expect((await response.json() as any).result.isError).toBeUndefined();
+      expect((await toolBody(response)).result.isError).toBeUndefined();
       expect(logs.errors()).toEqual([]);
       expect(logs.warnings()).toEqual([expect.objectContaining({
         message: "mcp_key_usage_error",

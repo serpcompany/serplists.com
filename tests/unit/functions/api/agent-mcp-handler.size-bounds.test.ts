@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   byteLength,
   callTool,
@@ -20,7 +21,10 @@ import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages"
 import { MAX_TASK_NOTES_BYTES } from "@functions/api/handlers/agentMcpTools";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
-import { mcpRequest, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { mcpRequest, mcpToolCall, mcpToolList, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { jsonObject, readJson } from "../../../support/readJson";
+
+const sectionPage = z.object({ section: z.object({ firstTask: z.number(), items: z.array(jsonObject) }).passthrough() }).passthrough();
 
 const setTaskNotes = (expectedRevision: number, notes: string) =>
   callTool("update_run", { runId: "run-1", expectedRevision, operation: "set_task_notes", taskId: "task-1", notes });
@@ -158,9 +162,8 @@ describe("personal run MCP handler", () => {
     });
 
     it("returns every committed mutation within the result bound", async () => {
-      const tools = (await toolBody(await handleAgentMcp(mcpRequest("tools/list"), env))).result.tools;
-      const mutatingTools = tools.filter((tool: any) => tool.annotations.readOnlyHint === false)
-        .map((tool: any) => tool.name);
+      const { tools } = (await readJson(await handleAgentMcp(mcpRequest("tools/list"), env), mcpToolList)).result;
+      const mutatingTools = tools.filter((tool) => tool.annotations.readOnlyHint === false).map((tool) => tool.name);
       expect(mutatingTools).toEqual(["create_template", "update_template", "start_run", "update_run"]);
 
       const storedTemplateTooLargeToReturnWhole = { ...ownedTemplate(sectionsOfAtLeast(600 * 1024)), version: 2, is_public: false, slug: "release-sop" };
@@ -272,7 +275,8 @@ describe("personal run MCP handler", () => {
       const firstPage = await read({ sectionId: "section-1" });
       expect(firstPage.structuredContent.section).toMatchObject({ id: "section-1", taskCount: expect.any(Number), firstTask: 0 });
       const nextPage = await read({ cursor: firstPage.structuredContent.nextCursor });
-      expect(nextPage.structuredContent.section.firstTask).toBe(firstPage.structuredContent.section.items.length);
+      expect(sectionPage.parse(nextPage.structuredContent).section.firstTask)
+        .toBe(sectionPage.parse(firstPage.structuredContent).section.items.length);
       expect(nextPage.content[0].text).toMatch(/^Loaded tasks \d+-\d+ of the \d+ in a section too large for one result\./);
 
       expect((await read({ taskId: "nope" })).structuredContent.error).toBe("task_not_found");

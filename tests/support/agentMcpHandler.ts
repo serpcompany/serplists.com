@@ -2,8 +2,9 @@ import { expect, vi } from "vitest";
 import { dbMocks } from "./mockedDrizzleD1";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpToolCall, runKeyWithEveryPermission } from "./agentMcp";
+import { mcpErrorResponse, mcpToolCall, mcpToolResponse, runKeyWithEveryPermission } from "./agentMcp";
 import { apiEnv } from "./apiEnv";
+import { readJson } from "./readJson";
 import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
 import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
@@ -109,12 +110,18 @@ export function ownedTemplate(items: unknown[]): JsonRecord {
   };
 }
 
-export async function toolBody(response: Response): Promise<any> {
-  return response.json();
+export async function toolBody(response: Response) {
+  return readJson(response, mcpToolResponse);
 }
 
+export async function rpcErrorBody(response: Response) {
+  return readJson(response, mcpErrorResponse);
+}
+
+export const sendTool = (name: string, args: JsonRecord) => handleAgentMcp(mcpToolCall(name, args), env);
+
 export async function callTool(name: string, args: JsonRecord) {
-  return toolBody(await handleAgentMcp(mcpToolCall(name, args), env));
+  return toolBody(await sendTool(name, args));
 }
 
 function dropRowsAndBatchResultsALastTestLeftQueued() {

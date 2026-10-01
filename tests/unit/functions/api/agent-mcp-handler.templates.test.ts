@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import {
   dbMocks,
   env,
@@ -15,7 +16,8 @@ import {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { RUN_SECTIONS_WITH_LEGACY_IDS, TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS } from "../../../fixtures/runStartFixtures";
-import { mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { mcpArgumentsError, mcpTemplatesPage, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -73,24 +75,26 @@ describe("personal run MCP handler", () => {
       },
     ]);
 
-    const response = await handleAgentMcp(mcpToolCall("list_templates"), env);
-    const body = await response.json() as any;
+    const body = await toolBody(await handleAgentMcp(mcpToolCall("list_templates"), env));
+    const { templates } = mcpTemplatesPage.parse(body.result.structuredContent);
 
-    expect(body.result.structuredContent.templates.map((template: any) => template.id)).toEqual(["owned"]);
-    expect(body.result.structuredContent.templates[0]).not.toHaveProperty("sections");
+    expect(templates.map((template) => template.id)).toEqual(["owned"]);
+    expect(templates[0]).not.toHaveProperty("sections");
     expect(body.result.content[0].text).toContain('"id":"owned"');
     expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
   });
 
   describe("template tools", () => {
-    const ids = (sections: any[]) => sections.map((section) => [section.id, section.items.map((item: any) => item.id)]);
+    const sectionIds = z.array(z.object({ id: z.string(), items: z.array(z.object({ id: z.string() }).passthrough()) }).passthrough());
+    const ids = (sections: unknown) => sectionIds.parse(sections).map((section) => [section.id, section.items.map((item) => item.id)]);
+    const templateSections = z.object({ template: z.object({ sections: z.unknown() }).passthrough() }).passthrough();
 
     it("reads a template stored without ids with the ids its runs and next save use, so sending them back keeps the runs' progress", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS)]);
       const read = await toolBody(await handleAgentMcp(mcpToolCall("get_template", { templateId: "template-1" }), env));
 
       expect(read.result.isError).toBeUndefined();
-      expect(ids(read.result.structuredContent.template.sections)).toEqual(ids(RUN_SECTIONS_WITH_LEGACY_IDS));
+      expect(ids(templateSections.parse(read.result.structuredContent).template.sections)).toEqual(ids(RUN_SECTIONS_WITH_LEGACY_IDS));
     });
 
     it("treats null optional fields as absent, as every other tool does", async () => {
@@ -114,11 +118,11 @@ describe("personal run MCP handler", () => {
     });
 
     it("names the offending field when template arguments are invalid", async () => {
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_template", {
+      const body = await readJson(await handleAgentMcp(mcpToolCall("update_template", {
         templateId: "template-1",
         expectedVersion: 1,
         title: "",
-      }), env));
+      }), env), mcpArgumentsError);
 
       expect(body.error.data.code).toBe("invalid_arguments");
       expect(body.error.message).toMatch(/^title: /);

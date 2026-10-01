@@ -1,3 +1,5 @@
+import { jsonObject, jsonObjects } from './readJson';
+
 type JsonRecord = Record<string, unknown>;
 
 export type PagedRead = (args: JsonRecord) => Promise<JsonRecord> | JsonRecord;
@@ -23,7 +25,7 @@ export function jsonTextPartsJoiner() {
 
 export async function readSectionInFull(call: PagedRead, sectionId: unknown): Promise<JsonRecord> {
   let page = await call({ sectionId });
-  const first = page.section as JsonRecord | undefined;
+  const first = jsonObject.optional().parse(page.section);
   if (first && typeof first.taskCount !== 'number') return first;
 
   const addPart = jsonTextPartsJoiner();
@@ -38,10 +40,10 @@ export async function readSectionInFull(call: PagedRead, sectionId: unknown): Pr
         else tasks.push(completedUnit);
       }
     } else {
-      const { taskCount: _taskCount, firstTask, items, ...rest } = page.section as JsonRecord;
+      const { taskCount: _taskCount, firstTask, items, ...rest } = jsonObject.parse(page.section);
       fieldsOnTheFirstPage ??= rest;
       if (firstTask !== tasks.length) throw new Error(`page starts at task ${String(firstTask)}, expected ${tasks.length}`);
-      tasks.push(...(items as JsonRecord[]));
+      tasks.push(...jsonObjects.parse(items));
     }
     if (typeof page.nextCursor !== 'string') break;
     page = await call({ cursor: page.nextCursor });
@@ -67,8 +69,8 @@ export async function readOutlineFromItsFirstPage(
         else outline.push(completedUnit);
       }
     } else {
-      fieldsOnTheFirstPage ??= page[fieldsKey] as JsonRecord;
-      outline.push(...(page.outline as JsonRecord[]));
+      fieldsOnTheFirstPage ??= jsonObject.optional().parse(page[fieldsKey]);
+      outline.push(...jsonObjects.parse(page.outline));
     }
     if (typeof page.nextCursor !== 'string') break;
     page = await call({ cursor: page.nextCursor });
@@ -92,7 +94,7 @@ export async function readTemplateInFull(
   const call = callRecordingResults(read, { templateId }, results);
 
   const page = await call({});
-  if (page.sectionsOmitted !== true) return { template: page.template as JsonRecord, results };
+  if (page.sectionsOmitted !== true) return { template: jsonObject.parse(page.template), results };
 
   const { fields, outline } = await readOutlineFromItsFirstPage(call, page, 'template');
   const sections: JsonRecord[] = [];

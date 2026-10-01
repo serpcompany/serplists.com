@@ -13,7 +13,7 @@ import {
 } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
-import { mcpToolCall } from "../../../support/agentMcp";
+import { mcpRunResult, mcpToolCall } from "../../../support/agentMcp";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -41,7 +41,7 @@ describe("personal run MCP handler", () => {
       expect(body.result.isError).toBeUndefined();
       expectCompact(audit.after_json);
       expect(JSON.parse(audit.after_json ?? "{}")).toEqual(expect.objectContaining({
-        id: body.result.structuredContent.run.id,
+        id: mcpRunResult.parse(body.result.structuredContent).run.id,
         status: "in_progress",
         revision: 1,
       }));

@@ -3,7 +3,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { dbMocks, env, resetAgentMcpHandlerMocks } from "../../../support/agentMcpHandler";
 import { handleAgentMcp, MCP_SERVER_VERSION } from "@functions/api/handlers/agentMcp";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
-import { mcpRequest, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import {
+  mcpArgumentsError,
+  mcpErrorResponse,
+  mcpRequest,
+  mcpResultResponse,
+  mcpToolCall,
+  runKeyWithEveryPermission,
+} from "../../../support/agentMcp";
+import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -11,7 +19,7 @@ describe("personal run MCP handler", () => {
   it("requires bearer authentication", async () => {
     vi.mocked(authenticatePersonalRunKey).mockResolvedValue(null);
     const response = await handleAgentMcp(mcpRequest("initialize"), env);
-    const body = await response.json() as any;
+    const body = await readJson(response, mcpErrorResponse);
 
     expect(response.status).toBe(401);
     expect(body.error.message).toBe("Unauthorized");
@@ -73,7 +81,7 @@ describe("personal run MCP handler", () => {
       capabilities: {},
       clientInfo: { name: "test-client", version: "1.0.0" },
     }), env);
-    const body = await response.json() as any;
+    const body = await readJson(response, mcpResultResponse);
     expect(body.result.protocolVersion).toBe("2025-06-18");
   });
 
@@ -83,7 +91,7 @@ describe("personal run MCP handler", () => {
       capabilities: {},
       clientInfo: { name: "test-client", version: "1.0.0" },
     }), env);
-    const body = await response.json() as any;
+    const body = await readJson(response, mcpResultResponse);
     expect(body.result.serverInfo).toEqual({ name: "serp-lists-personal-runs", version: "0.3.0" });
 
     const spec = readFileSync(new URL("../../../../docs/product-specs/features.md", import.meta.url), "utf8");
@@ -121,7 +129,7 @@ describe("personal run MCP handler", () => {
     const incomplete = await handleAgentMcp(mcpRequest("initialize", {
       protocolVersion: "2025-06-18",
     }), env);
-    expect((await incomplete.json() as any).error.code).toBe(-32602);
+    expect((await readJson(incomplete, mcpErrorResponse)).error.code).toBe(-32602);
   });
 
   it("requires the negotiated protocol header after initialization", async () => {
@@ -134,7 +142,7 @@ describe("personal run MCP handler", () => {
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
     }), env);
-    const body = await response.json() as any;
+    const body = await readJson(response, mcpErrorResponse);
     expect(response.status).toBe(400);
     expect(body.error.code).toBe(-32600);
     expect(body.error.message).toContain("MCP-Protocol-Version");
@@ -147,11 +155,11 @@ describe("personal run MCP handler", () => {
       headers: malformed.headers,
       body: "{broken",
     }), env);
-    expect((await malformedResponse.json() as any).error.code).toBe(-32700);
+    expect((await readJson(malformedResponse, mcpErrorResponse)).error.code).toBe(-32700);
 
     dbMocks.selectChain.limit.mockRejectedValueOnce(new Error("sensitive database detail"));
     const failed = await handleAgentMcp(mcpToolCall("list_templates"), env);
-    const body = await failed.json() as any;
+    const body = await readJson(failed, mcpErrorResponse);
     expect(body.error).toEqual({ code: -32603, message: "Internal error" });
     expect(JSON.stringify(body)).not.toContain("sensitive");
   });
@@ -175,7 +183,7 @@ describe("personal run MCP handler", () => {
 
   it("returns protocol errors for unknown tools and invalid tool arguments", async () => {
     const unknownResponse = await handleAgentMcp(mcpToolCall("not_a_tool"), env);
-    const unknown = await unknownResponse.json() as any;
+    const unknown = await readJson(unknownResponse, mcpErrorResponse);
     expect(unknown.error).toEqual({
       code: -32602,
       message: "Unknown tool: not_a_tool",
@@ -183,7 +191,7 @@ describe("personal run MCP handler", () => {
     });
 
     const invalidResponse = await handleAgentMcp(mcpToolCall("get_run", {}), env);
-    const invalid = await invalidResponse.json() as any;
+    const invalid = await readJson(invalidResponse, mcpArgumentsError);
     expect(invalid.error.code).toBe(-32602);
     expect(invalid.error.data.code).toBe("invalid_arguments");
   });

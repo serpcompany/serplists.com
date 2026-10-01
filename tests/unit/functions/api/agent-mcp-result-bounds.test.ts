@@ -9,7 +9,7 @@ import {
   TEMPLATE_CONTENT_MAX_BYTES,
 } from "@/lib/schemas/contentLimits";
 import { TEMPLATE_DESCRIPTION_MAX, TEMPLATE_LIST_ITEM_MAX, TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_TITLE_MAX } from "@/lib/schemas/templateLimits";
-import { resultBytes } from "../../../support/agentMcp";
+import { mcpRunsPage, mcpTemplateResult, mcpTemplatesPage, resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText, MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse } from "../../../support/jsonText";
 import { readRunInFull } from "../../../support/runPages";
 import { readTemplateInFull } from "../../../support/templatePages";
@@ -23,11 +23,9 @@ const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 let d1: SqliteD1;
 
 async function call(name: string, args: JsonRecord): Promise<JsonRecord> {
-  const body = await callToolWithAFreshRunKey(d1, name, args);
-  expect(body.error, name).toBeUndefined();
-  const result = body.result as JsonRecord;
+  const { result } = await callToolWithAFreshRunKey(d1, name, args);
   expect(result.isError, `${name}: ${toJson(result.structuredContent).slice(0, 300)}`).toBeUndefined();
-  return result.structuredContent as JsonRecord;
+  return result.structuredContent;
 }
 
 const task = (id: string, textLength: number) => ({
@@ -134,7 +132,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
       insertTemplate(`t-${String(index).padStart(3, "0")}`, [], { title: titleOverTodaysLimit, description: descriptionOverTodaysLimit });
     }
     const pages = await everyPageOf("list_templates");
-    expect(pages.flatMap((page) => page.templates as unknown[])).toHaveLength(150);
+    expect(pages.flatMap((page) => mcpTemplatesPage.parse(page).templates)).toHaveLength(150);
     return pages;
   },
 
@@ -157,8 +155,8 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
 
   async update_template() {
     const created = await call("create_template", { ...largestTemplateHeader(), sections: maximumTemplateSections() });
-    const templateId = (created.template as JsonRecord).id;
-    const versionOf = (result: JsonRecord) => (result.template as JsonRecord).version;
+    const templateId = mcpTemplateResult.parse(created).template.id;
+    const versionOf = (result: JsonRecord) => mcpTemplateResult.parse(result).template.version;
     const results = [
       await call("update_template", { templateId, expectedVersion: 1, operation: "replace_task", taskId: "big", task: { title: "Bigger" } }),
     ];
@@ -179,7 +177,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
   async list_runs() {
     for (let index = 0; index < 150; index += 1) insertRun(`r-${String(index).padStart(3, "0")}`, [], [], { title: costliestJsonText(1_000) });
     const pages = await everyPageOf("list_runs");
-    expect(pages.flatMap((page) => page.runs as unknown[])).toHaveLength(150);
+    expect(pages.flatMap((page) => mcpRunsPage.parse(page).runs)).toHaveLength(150);
     return pages;
   },
 

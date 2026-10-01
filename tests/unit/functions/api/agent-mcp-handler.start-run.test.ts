@@ -18,6 +18,7 @@ import {
   TEMPLATE_SECTIONS_CARRYING_RUN_STATE,
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
+import { mcpRunResult } from "../../../support/agentMcp";
 
 const startRun = () => callTool("start_run", { templateId: "template-1" });
 
@@ -103,9 +104,10 @@ describe("personal run MCP handler", () => {
       const [runInsert, auditInsert] = dbMocks.insertChain.select.mock.calls.map(([query]) => renderSql(query));
       expect(runInsert.sql).toMatch(/where \(select count\(\*\) from "checklist_runs" where .*"status" = \? .*\) < \?$/s);
       expect(runInsert.params.at(-1)).toBe(3);
-      expect(runInsert.params).toEqual(expect.arrayContaining([body.result.structuredContent.run.id, "user-1", "in_progress"]));
+      const startedRunId = mcpRunResult.parse(body.result.structuredContent).run.id;
+      expect(runInsert.params).toEqual(expect.arrayContaining([startedRunId, "user-1", "in_progress"]));
       expect(auditInsert.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);
-      expect(auditInsert.params.at(-1)).toBe(body.result.structuredContent.run.id);
+      expect(auditInsert.params.at(-1)).toBe(startedRunId);
     });
 
     it("keeps a plain insert for plans without an active run limit", async () => {

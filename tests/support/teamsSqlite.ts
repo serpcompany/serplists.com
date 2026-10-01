@@ -1,6 +1,8 @@
 import { expect, vi } from "vitest";
+import { z } from "zod";
 import { SqliteD1 } from "./sqlite-d1";
 import { apiEnv } from "./apiEnv";
+import { jsonObjects, readJson } from "./readJson";
 
 const sessionMocks = vi.hoisted(() => ({
   userId: "owner-user" as string | null,
@@ -19,17 +21,33 @@ function env() {
   return apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" });
 }
 
-export async function asUser(userId: string, method: string, path: string, body?: unknown) {
+const teamsApiBody = z.object({
+  id: z.string().optional(),
+  inviteToken: z.string().optional(),
+  code: z.string().optional(),
+  slug: z.string().optional(),
+  status: z.string().optional(),
+}).passthrough();
+
+function sendAs(userId: string, method: string, path: string, body?: unknown) {
   sessionMocks.userId = userId;
-  const response = await handleTeams(
+  return handleTeams(
     new Request(`http://localhost/api/teams${path}`, {
       method,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }),
     env(),
   );
-  const data = await response.json().catch(() => null) as Record<string, unknown> | null;
-  return { status: response.status, data };
+}
+
+export async function asUser(userId: string, method: string, path: string, body?: unknown) {
+  const response = await sendAs(userId, method, path, body);
+  return { status: response.status, data: await readJson(response, teamsApiBody) };
+}
+
+export async function listAsUser(userId: string, path: string) {
+  const response = await sendAs(userId, "GET", path);
+  return { status: response.status, data: await readJson(response, jsonObjects) };
 }
 
 function seedOrganization() {

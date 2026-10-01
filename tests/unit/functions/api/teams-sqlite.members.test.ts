@@ -7,6 +7,7 @@ import {
   createInvite,
   d1,
   expectOneActiveOwnerAndClose,
+  listAsUser,
   member,
   openTheSeededOrganization,
   revocationAndAcceptance,
@@ -141,7 +142,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
       ]);
       expect((await asUser("admin-user", "PUT", "/team-1/members/member-m", { status: "disabled" })).status).toBe(200);
 
-      const pending = await asUser("member-user", "GET", "/invites/pending");
+      const pending = await listAsUser("member-user", "/invites/pending");
       const accepted = await asUser("member-user", "POST", `/invites/pending/${inviteId}/accept`);
 
       expect(pending.data).toEqual([]);
