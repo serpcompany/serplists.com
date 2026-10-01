@@ -1,13 +1,5 @@
 import { jsonError } from './response';
 
-/**
- * Serves R2 objects with byte ranges and conditional requests (RFC 9110).
- * Media players depend on this: Safari will not play a video whose
- * `Range: bytes=0-1` probe gets a 200, and no browser can seek past what it has
- * buffered without 206 responses. Pages Functions responses do not pass through
- * the CDN cache, so nothing else answers ranges for us.
- */
-
 export type RangeRequest =
   | { kind: 'full' }
   | { kind: 'partial'; range: R2Range }
@@ -15,10 +7,6 @@ export type RangeRequest =
 
 const SINGLE_BYTE_RANGE = /^bytes=(\d*)-(\d*)$/i;
 
-/**
- * Parses a single `bytes` range. Multiple ranges, other units and invalid
- * values are ignored (the whole file is a valid answer); R2 serves one range.
- */
 export function parseRangeHeader(value: string | null): RangeRequest {
   const match = value ? SINGLE_BYTE_RANGE.exec(value.trim()) : null;
   if (!match) return { kind: 'full' };
@@ -40,14 +28,12 @@ export function parseRangeHeader(value: string | null): RangeRequest {
   return { kind: 'partial', range: { offset, length: end - offset + 1 } };
 }
 
-/**
- * First and last byte served for `range` of an object of `size` bytes, or null when
- * unsatisfiable. The range an R2 object reports can list every field, with the ones that
- * do not apply undefined (workerd's local R2 does: `{ offset: 0, length: 2, suffix: undefined }`),
- * so a suffix range is one whose `suffix` is a number.
- */
+function isSuffixRange(range: R2Range): range is { suffix: number } {
+  return 'suffix' in range && typeof range.suffix === 'number';
+}
+
 export function resolveByteRange(range: R2Range, size: number): { start: number; end: number } | null {
-  if ('suffix' in range && typeof range.suffix === 'number') {
+  if (isSuffixRange(range)) {
     if (range.suffix <= 0 || size === 0) return null;
     return { start: Math.max(0, size - range.suffix), end: size - 1 };
   }
@@ -61,7 +47,6 @@ export function resolveByteRange(range: R2Range, size: number): { start: number;
 function objectHeaders(object: R2Object, cacheControl: string): Headers {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
-  // Files are served from the app's origin: never let a browser guess another type.
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('etag', object.httpEtag);
   headers.set('Cache-Control', cacheControl);
@@ -82,6 +67,11 @@ async function rangeNotSatisfiable(bucket: R2Bucket, key: string): Promise<Respo
   return response;
 }
 
+async function isRangeUnsatisfiable(bucket: R2Bucket, key: string, range: R2Range): Promise<boolean> {
+  const object = await bucket.head(key);
+  return object !== null && resolveByteRange(range, object.size) === null;
+}
+
 async function getObject(
   bucket: R2Bucket,
   key: string,
@@ -92,11 +82,19 @@ async function getObject(
   try {
     return await bucket.get(key, { onlyIf: headers, range });
   } catch (error) {
-    // R2 rejects a range that starts at or past the end of the object.
-    const object = await bucket.head(key);
-    if (object && resolveByteRange(range, object.size) === null) return 'unsatisfiable';
+    if (await isRangeUnsatisfiable(bucket, key, range)) return 'unsatisfiable';
     throw error;
   }
+}
+
+function ifRangeNamesAnotherVersion(request: Request, object: R2Object): boolean {
+  const ifRange = request.headers.get('If-Range');
+  return ifRange !== null && ifRange !== object.httpEtag;
+}
+
+function preconditionFailedStatus(request: Request): 304 | 412 {
+  const isCacheRevalidation = request.headers.has('If-None-Match') || request.headers.has('If-Modified-Since');
+  return isCacheRevalidation ? 304 : 412;
 }
 
 export async function serveR2Object(
@@ -120,9 +118,7 @@ export async function serveR2Object(
   let object = await getObject(bucket, key, request.headers, range);
   if (object === 'unsatisfiable') return rangeNotSatisfiable(bucket, key);
 
-  // If-Range: only serve part of the file when the client's copy is current.
-  const ifRange = request.headers.get('If-Range');
-  if (range && object && hasBody(object) && ifRange !== null && ifRange !== object.httpEtag) {
+  if (range && object && hasBody(object) && ifRangeNamesAnotherVersion(request, object)) {
     await object.body.cancel();
     range = undefined;
     object = await getObject(bucket, key, request.headers, undefined);
@@ -132,9 +128,7 @@ export async function serveR2Object(
 
   const headers = objectHeaders(object, cacheControl);
   if (!hasBody(object)) {
-    // A precondition failed: a cache revalidation gets 304, a write-style precondition 412.
-    const revalidation = request.headers.has('If-None-Match') || request.headers.has('If-Modified-Since');
-    return new Response(null, { status: revalidation ? 304 : 412, headers });
+    return new Response(null, { status: preconditionFailedStatus(request), headers });
   }
 
   if (!range) {

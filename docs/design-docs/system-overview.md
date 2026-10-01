@@ -162,8 +162,16 @@ Do not use git history for user-generated Template or Organization history. Git 
   `immutable` cache headers (a key holds a UUID, so its object never changes), single byte
   ranges (`206`, `416`), and `If-None-Match` revalidation (`304`) through
   `functions/api/utils/r2-file-response.ts`, always with `X-Content-Type-Options: nosniff`.
-  Uploaded videos need ranges: Safari will not play one without them, and no browser can
-  seek past what it has buffered.
+  Uploaded videos need ranges: Safari will not play one whose `Range: bytes=0-1` probe
+  gets a `200`, and no browser can seek past what it has buffered. The API's responses
+  do not pass through the CDN cache, so nothing else answers ranges for it. Several
+  ranges, another unit or an invalid range get the whole file, which is always a valid
+  answer. R2 throws for a range that starts at or past the end of the object, which is
+  answered `416`, and the range an object reports can list every field with the unused
+  ones undefined (workerd's local R2 does), so a suffix range is one whose `suffix` is a
+  number. An `If-Range` that names another version gets the whole file, and a failed
+  precondition answers `304` to a cache revalidation (`If-None-Match`,
+  `If-Modified-Since`) and `412` otherwise.
 - `DELETE /api/uploads/file?key=...` deletes only the signed-in user's own avatar
   (`avatars/<userId>/<file>`). Template uploads (`template-images/`, `template-videos/`,
   `template-files/`) answer `403 asset_referenced`: Templates, versions, Runs and clones

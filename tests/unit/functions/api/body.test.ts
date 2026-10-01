@@ -26,7 +26,7 @@ describe('isBodyWithinLimit', () => {
     expect((await request.arrayBuffer()).byteLength).toBe(10 * 1024);
   });
 
-  it('settles as soon as a cloned body passes the limit', async () => {
+  it('settles as soon as a cloned body passes the limit, without waiting for a cancel only the other branch can settle', async () => {
     const request = chunkedRequest(64 * 1024);
 
     // Cancelling one branch of a cloned body only settles once the other

@@ -15,10 +15,10 @@ export async function isBodyWithinLimit(request: Pick<Request, 'body'>, maxBytes
       }
     }
   } finally {
-    // Do not await: the router passes a clone, and cancelling one branch of a
-    // cloned (teed) body settles only once the other branch is cancelled too,
-    // so awaiting here would hang every oversized request.
-    reader.cancel().catch(() => undefined);
+    cancelWithoutWaiting(reader);
   }
 }
 
+function cancelWithoutWaiting(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  reader.cancel().catch(() => undefined);
+}

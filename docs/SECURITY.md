@@ -165,9 +165,11 @@ Rules:
   validated so a malformed value cannot weaken CORS: `FRONTEND_URL` and every
   comma-separated `CORS_ALLOWED_ORIGINS` entry must be an `http(s)` URL with a real
   host (`functions/api/utils/origin-list.ts`, mirrored for the script in
-  `scripts/lib/origin-list.mjs`). A bare host (`serplists.com`), `host:port` with no
-  scheme, a wildcard, or a list with no entries fails every request with the
-  configuration `500`. Empty entries (a trailing comma) are ignored.
+  `scripts/lib/origin-list.mjs`, which `tests/unit/scripts/origin-list-parity.test.ts`
+  keeps equal). A bare host (`serplists.com`), `host:port` with no scheme (which
+  parses with the opaque origin `null`), a wildcard, a URL with credentials, or a list
+  with no entries fails every request with the configuration `500`. A path or
+  trailing slash is dropped, and empty entries (a trailing comma) are ignored.
 - Invalid runtime configuration returns a structured JSON `500`, never an uncaught
   Cloudflare `1101`.
 - Stripe live keys never enter `.dev.vars`: env validation rejects `sk_live_`
@@ -196,9 +198,11 @@ Applied in `functions/api/[[route]].ts` through `functions/api/utils/cors.ts`:
   when the values are malformed and yield no valid origin: preflights skip env
   validation, so `cors.ts` fails closed on its own rather than treating the empty
   result as "no allowlist".
-- `Origin: null` (sandboxed frames, `file:` pages) is never reflected, and the opaque
-  `null` origin is never added to the allowlist or Better Auth's trusted origins.
-- `X-Request-Id` is exposed to the client for correlation.
+- `Origin: null` (sandboxed frames, `file:` pages) is never reflected, since it would
+  be reflected with credentials, and the opaque `null` origin is never added to the
+  allowlist or Better Auth's trusted origins.
+- `X-Request-Id` is exposed to the client for correlation, and `Retry-After` so a
+  cross-origin client (local development) can read how long a `429` lasts.
 
 Locally, `pnpm run dev:all` passes its server's origin as `FRONTEND_URL` and adds it to
 `CORS_ALLOWED_ORIGINS` for the port it picks (`scripts/lib/dev-bindings.mjs`).
@@ -265,21 +269,27 @@ dispatch. An IPv4 client is counted per address and an IPv6 client per /64
 (`functions/api/utils/rate-limit-key.ts`), because a home connection, phone or VPS
 normally holds a whole /64 and could otherwise start a fresh bucket with every
 address. An IPv4-mapped address (`::ffff:203.0.113.5`) counts as its IPv4 address.
-Clients that share a /64 (some office or campus networks) share one budget.
+Clients that share a /64 (some office or campus networks) share one budget. A value
+that does not parse as an address is keyed as it is, trimmed, so an odd header can
+neither throw nor merge unrelated clients into one bucket, and the port that
+`X-Forwarded-For` can carry in local development is dropped.
 
 - Session checks (exactly `GET /api/auth/get-session` and `GET /api/auth/status`):
   600 requests per 5 minutes, in their own bucket, so page loads from a shared IP
-  never lock signed-in users out or eat into the sign-in limit.
+  never lock signed-in users out or eat into the sign-in limit, and sign-in attempts
+  cannot hide among them. Each check reads D1, so they are capped too.
 - Every other `/api/auth/*` route (sign-in by email or username, sign-up, password
   reset, verification links, username checks, and any future Better Auth
   endpoint): 30 requests per 5 minutes on deployed hosts; 300 per hour locally for
   testing. This is deny-by-default: `functions/api/utils/auth-rate-limit.ts` matches
-  the session-check allowlist on method and exact path.
+  the session-check allowlist on method and exact path, the path as `URL` parses it
+  (no query string, dot segments resolved).
 - Sensitive writes (`POST`/`PUT`/`PATCH`/`DELETE` under templates, checklists,
   uploads, the legacy Organization routes `teams`, and Run Key management under
   `agent-keys`): 120 per minute.
 - Admin (every request under `/api/admin`, whatever its method): 10 per minute per IP
-  on deployed hosts (120 locally), in its own bucket. The endpoint checks a secret that
+  on deployed hosts (120 locally, where local and browser-test runs share 127.0.0.1),
+  in its own bucket. The endpoint checks a secret that
   grants plans without payment, so every request counts as a guess, reads included.
 - MCP (`POST /api/mcp`): 240 per minute per IP, in its own bucket. MCP is JSON-RPC
   over POST, so every call counts, reads included; the separate bucket keeps a local
@@ -288,16 +298,20 @@ Clients that share a /64 (some office or campus networks) share one budget.
   error (`code: -32000`, `Rate limit exceeded`) with `Retry-After`.
 - Billing checkout and portal (`POST /api/billing/*`), which each call Stripe, whose
   rate limit the whole Stripe account shares: 10 per minute per IP on deployed hosts
-  (120 locally), in their own bucket, and 10 per minute per account in the billing
-  handler whatever the IP. `GET /api/billing/status` and Stripe webhooks are never
-  limited.
+  (120 locally, as for admin), in their own bucket, and 10 per minute per account in
+  the billing handler whatever the IP. `GET /api/billing/status` and Stripe webhooks
+  are never limited.
 - `functions/api/utils/route-rate-limit.ts` holds the non-auth buckets. Every route
   family the router dispatches is either limited there or listed in
   `RATE_LIMIT_EXEMPT_ROUTES` with a reason; a unit test reads the router to check.
-- MCP also limits each authenticated Run Key to 120 requests per minute, so one
-  key's full budget always fits under the per-IP MCP limit, and refuses an IP after
-  10 failed authentications in a minute, before the D1 key lookup
-  (`functions/api/utils/mcp-limits.ts`).
+  Its prefixes match the router's own dispatch (`path.startsWith`), so every request a
+  handler receives is counted.
+- MCP also limits each authenticated Run Key to 120 requests per minute
+  (`RUN_KEY_REQUESTS_PER_MINUTE`, which the per-IP MCP limit doubles), so one key's
+  full budget always fits under the per-IP MCP limit, and refuses an IP after 10
+  failed authentications in a minute, before the D1 key lookup
+  (`functions/api/utils/mcp-limits.ts`): an invalid key cannot be limited per key,
+  and each lookup reads D1.
 - Cloudflare WAF rate-limiting rule `MCP rate limit` (zone `serplists.com`, Free plan,
   the zone's only rate-limiting slot): `http.host eq "serplists.com" and
   starts_with(http.request.uri.path, "/api/mcp")`, 20 requests per 10 seconds per IP,
@@ -318,22 +332,32 @@ Clients that share a /64 (some office or campus networks) share one budget.
   If D1 fails, the email is sent (fail open), so a database problem never blocks
   sign-up or password recovery.
 
-The limiter is an in-memory map (`functions/api/utils/rate-limit.ts`), so it is not
-consistent across Cloudflare edges, and it is skipped when `CF-Connecting-IP` is
-missing. Each isolate keeps at most 10,000 keys: when a new key arrives at a full
-map, expired windows are dropped first, then the oldest ones, keeping clients that
-are currently blocked while any other can go. An evicted client starts a new window
-(fail open), so a flood of new addresses cannot exhaust the isolate's memory. A `429` during intensive local QA means the limit, not broken credentials.
+The limiter is a fixed-window counter per key in an in-memory map
+(`functions/api/utils/rate-limit.ts`), so it is not consistent across Cloudflare
+edges, and it and the MCP failed-authentication count are skipped for a request with neither
+`CF-Connecting-IP` nor `X-Forwarded-For` (which local development sends instead).
+Each isolate keeps at most 10,000 keys (about 2MB), so a flood of new addresses
+cannot exhaust its memory. When a new key arrives at a full map, every expired window
+is dropped first (each key's own window: the buckets' windows differ, so insertion
+order is not expiry order), then the oldest ones, a renewed window counting as new,
+keeping clients that are currently blocked while any other can go. Each pass makes
+room down to 90% of the cap, so a flood costs one pass per thousand or so new keys
+rather than one per request. An evicted client starts a new window (fail open):
+anyone who can fill the map already controls enough addresses to get around a per-IP
+limit. A `429` during intensive local QA means the limit, not broken credentials.
 
 ## Request size limits
 
 Request bodies are capped in the router before any handler runs
 (`functions/api/utils/body-limit.ts`), for every `POST`/`PUT`/`PATCH`/`DELETE`
 whatever the `Content-Type`, because handlers parse JSON without checking it: 1MB by
-default, 16KB for `/api/auth/*`, 2MB for Template backups, and 50MB (plus multipart
-overhead) for uploads. Template and run content has its own, smaller limit
-(`src/lib/schemas/contentLimits.ts`, `413 content_too_large`), so no write stores content
-too large for its save route to accept again.
+default, 16KB for `/api/auth/*` (sign-in, sign-up and profile bodies are a few hundred
+bytes, so an oversized value stops before Better Auth parses it), 2MB for Template
+backups, and 50MB (plus 1MB for the multipart envelope) for uploads. Template and run
+content has its own, smaller limit (`src/lib/schemas/contentLimits.ts`,
+`413 content_too_large`), so no write stores content too large for its save route to
+accept again. A save no larger than the content it replaces is allowed, so content
+stored before the limit can still be saved and trimmed.
 The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns.
 Every tool result stays within 32KB (`MAX_RESULT_BYTES` in
 `functions/api/handlers/agentMcpPages.ts`), which MCP clients take whole: Claude
@@ -345,8 +369,11 @@ whole large template or run, and no edit needs one sent back. MCP run writes kee
 content limit as the web app's, and `update_run` refuses task notes over 20,000 characters or
 30KB of UTF-8 (`MAX_TASK_NOTES_BYTES` in `functions/api/handlers/agentMcpTools.ts`), so notes an
 agent writes come back in one result.
-The cap uses `Content-Length`, or counts streamed bytes when it is missing or
-malformed. Uploads are the exception: counting would buffer up to 51MB, and the
+The cap uses `Content-Length`, or counts the bytes of a clone of the body when it is
+missing or malformed, which buffers at most the cap. The count never waits for the
+clone's cancel: cancelling one branch of a cloned (teed) body settles only once the
+other branch is cancelled too, so waiting would hang every oversized request. Uploads
+are the exception: counting would buffer up to 51MB, and the
 upload handler's form parsing reads the whole body before it can check the file
 size, so an upload without a valid `Content-Length` (a chunked body) gets `411`
 before the handler runs. Browsers always send one for `FormData` uploads. The
