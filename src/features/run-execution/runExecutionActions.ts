@@ -25,13 +25,9 @@ import {
 import { isRunTitleChange } from './runTitle';
 import { createRunExecutionShare, stopRunExecutionSharing } from './runSharing';
 
-// isCompleted is the value the user clicked, set rather than flipped: a save queued behind
-// another, or retried on a reloaded run, never inverts it or undoes the same change made
-// elsewhere.
 type ToggleRunItemParams = RunExecutionMutationParams & {
   isCompleted: boolean;
   itemId: string;
-  // Unsaved notes; the toggled task's draft is saved with the toggle (one PUT).
   noteDrafts?: NoteDrafts;
 };
 
@@ -39,7 +35,6 @@ type ToggleRunSubItemParams = RunExecutionMutationParams & {
   contentIndex: number;
   isCompleted: boolean;
   itemId: string;
-  // Finds the sub-task by id when a reloaded run moved it to another row.
   subItemId?: string;
   subItemIndex: number;
 };
@@ -55,7 +50,6 @@ type SaveRunTitleParams = RunExecutionMutationParams & {
 
 type CompleteRunExecutionParams = RunExecutionMutationParams & {
   completedAt?: string;
-  // Unsaved notes for any task, saved with the completion before the page leaves.
   noteDrafts?: NoteDrafts;
 };
 
@@ -64,16 +58,14 @@ const withClonedRun = (run: ChecklistRun): ChecklistRun => ({
   sections: cloneRunSections(run.sections),
 });
 
-// Saves a toggled run. A run the toggle left unchanged (it already had the chosen value)
-// is not sent.
 const saveToggledRun = async (
   run: ChecklistRun,
-  changed: boolean,
+  runChanged: boolean,
   shareToken: string | undefined,
   dependencies: RunExecutionDependencies,
 ): Promise<RunExecutionActionResult> => {
   try {
-    const saved = changed ? await persistRun({ run, shareToken }, dependencies) : run;
+    const saved = runChanged ? await persistRun({ run, shareToken }, dependencies) : run;
     return {
       kind: 'ok',
       run: saved,
@@ -91,7 +83,6 @@ export const toggleRunItem = async (
   if (!params.run) {
     return { kind: 'not_found' };
   }
-  // Checked on the latest run in the queue, so a toggle queued behind completion is refused.
   if (params.run.status === 'completed') {
     return { kind: 'error', message: COMPLETED_RUN_FROZEN_MESSAGE };
   }
@@ -108,8 +99,6 @@ export const toggleRunItem = async (
 
       const { isCompleted } = params;
       if (itemHasCompletion(item, isCompleted)) {
-        // Completed elsewhere or by a queued save: still save the task's draft notes, since
-        // the page moves on after Mark Complete.
         const notesChanged = hasNoteDraftFor(params.noteDrafts ?? {}, params.run, params.itemId);
         return saveToggledRun(notesChanged ? nextRun : params.run, notesChanged, params.shareToken, dependencies);
       }
@@ -160,7 +149,6 @@ export const toggleRunSubItem = async (
         return saveToggledRun(params.run, false, params.shareToken, dependencies);
       }
       subItem.isCompleted = params.isCompleted;
-      // Every Sub-tasks block counts, not only the one that was clicked.
       item.isCompleted = areItemSubItemsCompleted(item);
 
       return saveToggledRun(nextRun, true, params.shareToken, dependencies);
@@ -213,10 +201,8 @@ export const saveRunExecutionTitle = async (
   }
 
   const title = params.title.trim();
-  // Empty or over the API's limit: say so rather than send it and show a raw schema error.
   const titleError = getRunTitleError(title);
   if (titleError) return { kind: 'error', message: titleError };
-  // Compared with the latest run in the queue: an unchanged title sends nothing.
   if (!isRunTitleChange(title, params.run.title)) {
     return { kind: 'ok', run: params.run };
   }
@@ -247,8 +233,6 @@ export const completeRunExecution = async (
     return { kind: 'not_found' };
   }
 
-  // Checked on the latest run inside the queued save, so an untick queued before this
-  // save wins. Re-sending completion would overwrite completed_at and add an audit event.
   if (params.run.status === 'completed') {
     return { kind: 'ok', run: params.run };
   }
@@ -275,9 +259,6 @@ export const completeRunExecution = async (
   }
 };
 
-// The page's saves, each bound to the run it runs on (see runSaver.ts). A toggle sets the
-// value the user clicked; notes, a title, and completion are not retried over notes or a
-// title someone else changed.
 export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
   dependencies: RunExecutionDependencies;
   noteDrafts: () => NoteDrafts;

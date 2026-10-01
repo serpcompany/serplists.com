@@ -3,9 +3,6 @@ import { buildSharePath } from '@/lib/routes';
 import { toErrorResult, type RunExecutionActionResult } from './runExecutionResult';
 import { getApiClient, type RunExecutionDependencies, type RunExecutionMutationParams } from './runPersistence';
 
-// Sharing a run from the run page, and stopping it. Neither changes the run's revision on
-// the server, so the page keeps saving on the run it has.
-
 export const createRunExecutionShare = async (
   params: RunExecutionMutationParams,
   dependencies: RunExecutionDependencies,
@@ -29,7 +26,6 @@ export const createRunExecutionShare = async (
 
     return {
       kind: 'ok',
-      // Public now; the server does not change the revision.
       run: { ...params.run, isPublic: true },
       shareUrl: `${origin}${buildSharePath(result.shareToken)}`,
     };
@@ -38,7 +34,6 @@ export const createRunExecutionShare = async (
   }
 };
 
-/** Stop sharing: the share link stops working and the run becomes private. */
 export const stopRunExecutionSharing = async (
   params: RunExecutionMutationParams,
   dependencies: RunExecutionDependencies,
@@ -54,7 +49,6 @@ export const stopRunExecutionSharing = async (
   try {
     await getApiClient(dependencies).revokeChecklistRunShare(params.run.id);
     void dependencies.refreshRuns?.();
-    // No revision bump on the server either, so later saves keep working.
     return { kind: 'ok', run: { ...params.run, isPublic: false } };
   } catch (error) {
     return toErrorResult(error, 'Unable to stop sharing this run.');

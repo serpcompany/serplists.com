@@ -6,15 +6,8 @@ import { useAuth } from '@/contexts/CloudflareAuthContext';
 import { getSessionStorage } from '@/lib/browserStorage';
 import type { ChecklistRun } from '@/types/checklist';
 
-import type { NoteDrafts } from './noteDrafts';
+import { savedNotesById, type NoteDrafts } from './noteDrafts';
 
-// Unsaved task notes, kept when the session ends in the background (a sign-out in another
-// tab, an expired or revoked session), which unmounts the run page without asking. The run
-// page gives them back as unsaved drafts once the same user opens the run again.
-// - sessionStorage: it survives the /login redirect and ends with the tab.
-// - The key names the user and the run, so notes never open for another account.
-// - Each draft keeps the saved notes it was typed over. A task whose notes changed on the
-//   server since then gets nothing back: saving the draft would overwrite that text.
 const KEY_PREFIX = 'serplists:run-note-drafts';
 const FORMAT = 1;
 
@@ -30,10 +23,6 @@ const getKey = ({ userId, runId }: KeptNoteDraftOwner): string => `${KEY_PREFIX}
 
 const defaultStorage = (): KeptNoteDraftStorage | null => getSessionStorage() ?? null;
 
-const savedNotesById = (run: ChecklistRun): Map<string, string> =>
-  new Map(run.sections.flatMap((section) => section.items.map((item) => [item.id, item.notes ?? ''] as const)));
-
-// True when the drafts are stored (or there are none).
 export const keepRunNoteDrafts = (
   owner: KeptNoteDraftOwner,
   drafts: NoteDrafts,
@@ -52,7 +41,6 @@ export const keepRunNoteDrafts = (
   }
 };
 
-// The kept drafts that still apply to the run as loaded now, removed from storage.
 export const takeKeptRunNoteDrafts = (
   owner: KeptNoteDraftOwner,
   run: ChecklistRun,
@@ -83,39 +71,33 @@ export const takeKeptRunNoteDrafts = (
   );
 };
 
-// A session that ends in the background keeps unsaved notes: the page's leave guard
-// (useUnsavedChangesGuard) calls the returned function, which returns true when it kept
-// them. The kept notes come back once this user opens the run again.
-// `run` is the private run on the page (null for a shared run, which is not the user's).
 export const useKeptRunNoteDrafts = ({
-  run,
+  privateRun,
   noteDrafts,
   restoreNoteDrafts,
 }: {
-  run: ChecklistRun | null;
+  privateRun: ChecklistRun | null;
   noteDrafts: NoteDrafts;
   restoreNoteDrafts: (drafts: NoteDrafts) => void;
 }): (() => boolean) => {
   const { user } = useAuth();
   const userId = user?.id;
-  const latest = useRef({ userId, run, noteDrafts, restoreNoteDrafts });
-  // Before the restore effect below, which reads it.
+  const latest = useRef({ userId, privateRun, noteDrafts, restoreNoteDrafts });
   useEffect(() => {
-    latest.current = { userId, run, noteDrafts, restoreNoteDrafts };
+    latest.current = { userId, privateRun, noteDrafts, restoreNoteDrafts };
   });
 
   const keepNoteDrafts = useCallback(() => {
-    const { userId: owner, run: shown, noteDrafts: drafts } = latest.current;
-    // A shared run's page is public: it stays open, with its notes, after a sign-out.
-    if (!shown) return true;
-    return Boolean(owner) && keepRunNoteDrafts({ userId: owner ?? '', runId: shown.id }, drafts, shown);
+    const { userId: owner, privateRun: run, noteDrafts: drafts } = latest.current;
+    if (!run) return true;
+    return Boolean(owner) && keepRunNoteDrafts({ userId: owner ?? '', runId: run.id }, drafts, run);
   }, []);
 
-  const runId = run?.id;
+  const runId = privateRun?.id;
   useEffect(() => {
-    const shown = latest.current.run;
-    if (!userId || !runId || !shown) return;
-    const kept = takeKeptRunNoteDrafts({ userId, runId }, shown);
+    const run = latest.current.privateRun;
+    if (!userId || !runId || !run) return;
+    const kept = takeKeptRunNoteDrafts({ userId, runId }, run);
     if (Object.keys(kept).length === 0) return;
     latest.current.restoreNoteDrafts(kept);
     toast('Your unsaved task notes were restored.');

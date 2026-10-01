@@ -28,7 +28,6 @@ export type RunExecutionActionResult =
       shouldPromptComplete?: boolean;
     }
   | {
-      // The same action was already pending (a double click); nothing was sent.
       kind: 'ignored';
     }
   | {
@@ -40,12 +39,9 @@ export type RunExecutionActionResult =
   | {
       kind: 'error';
       message: string;
-      // The API error code, such as edit_conflict when another session saved first.
       code?: string;
     };
 
-// Completed runs are frozen: ticking or unticking a task would leave a run labelled
-// Completed with open tasks, and re-ticking would never offer completion again.
 export const COMPLETED_RUN_FROZEN_MESSAGE = 'This run is completed, so its tasks can no longer be changed.';
 
 export const toErrorResult = (

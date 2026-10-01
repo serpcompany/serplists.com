@@ -32,7 +32,7 @@ describe('run history query', () => {
     expect(query.enabled).toBe(true);
   });
 
-  it('keys the cache by limit, so a longer history never reuses the preview entry', () => {
+  it("keys the cache under the run's Changelog key, which the run page's saves refresh, and by limit, so a longer history never reuses the preview entry", () => {
     const client = { getChecklistHistory: vi.fn() };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client });
 

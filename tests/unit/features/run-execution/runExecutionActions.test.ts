@@ -227,7 +227,7 @@ describe('completing a run', () => {
     expect(updateRun).not.toHaveBeenCalled();
   });
 
-  it('does not re-send completion for a run that is already completed', async () => {
+  it('does not re-send completion for a run that is already completed, which would bump its revision and write another audit event', async () => {
     const updateRun = vi.fn();
     const run = withEveryTaskAndSubTaskTicked(buildRun({ status: 'completed', completedAt: '2026-04-20T00:00:00.000Z' }));
 

@@ -3,8 +3,6 @@ import { z } from 'zod';
 import { getTaskSubTasks } from '@/lib/schemas/storedSections';
 import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
 
-// checklist_runs.retired_items, written by Template reconciliation and Revalidate: a JSON
-// array of { kind, section | item | subItem } holding the Run's copy of the removed work.
 const recordWithId = z.object({ id: z.string().min(1) }).passthrough();
 const retiredEntrySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('section'), section: recordWithId }),
@@ -21,7 +19,6 @@ const records = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-// Older runs store `completed` instead of `isCompleted`.
 const wasCompleted = (value: JsonRecord): boolean =>
   typeof value.isCompleted === 'boolean' ? value.isCompleted : value.completed === true;
 
@@ -31,7 +28,6 @@ const toSubTask = (subItem: JsonRecord, index: number): RetiredRunSubTask => ({
   isCompleted: wasCompleted(subItem),
 });
 
-// Sub-tasks are the rows of the task's Sub-tasks blocks, the ones the run page showed.
 const toTask = (item: JsonRecord, index: number): RetiredRunTask => {
   const subItems = getTaskSubTasks(item);
   const notes = text(item.notes);
@@ -55,10 +51,6 @@ const parseArray = (value: unknown): unknown[] => {
   }
 };
 
-/**
- * Parses a Run's retired_items (a JSON string or an array). Malformed entries are dropped.
- * An id retired more than once keeps only its latest entry.
- */
 export function parseRetiredRunItems(value: unknown): RetiredRunItem[] {
   const byKey = new Map<string, RetiredRunItem>();
 

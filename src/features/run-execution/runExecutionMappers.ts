@@ -73,7 +73,6 @@ export const mapChecklistToRun = (
       new Date().toISOString(),
     completedAt: asString(checklist.completed_at),
     userId: asString(checklist.user_id) ?? '',
-    // The owning Organization decides what the viewer may do with the run.
     teamId: asString(checklist.team_id) || undefined,
     templateVersion:
       typeof checklist.template_version === 'number'
@@ -82,15 +81,10 @@ export const mapChecklistToRun = (
     revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
     isStale: checklist.is_stale === true,
     isPublic: checklist.is_public === true || checklist.is_public === 1,
-    // Read-only: kept out of `sections`, so progress and task selection never see it.
     retiredItems: parseRetiredRunItems(checklist.retired_items),
   };
 };
 
-/**
- * Maps GET /api/checklists rows for the Runs list. A run that still fails to map is listed
- * with no tasks, so one bad row never empties the list and the run can still be deleted.
- */
 export const mapChecklistRuns = (checklists: unknown): ChecklistRun[] =>
   (Array.isArray(checklists) ? checklists : []).flatMap((checklist): ChecklistRun[] => {
     if (typeof checklist !== 'object' || checklist === null || typeof (checklist as ApiRecord).id !== 'string') {
@@ -127,8 +121,6 @@ export const getInitialSelectedItemId = (
   return run.sections[0]?.items[0]?.id ?? null;
 };
 
-// After a task is completed, move to the next unfinished task after it (isRunItemFinished),
-// wrapping to earlier ones; stay on it when every task is done.
 export const getNextSelectedItemId = (
   run: ChecklistRun,
   completedItemId: string,
@@ -141,10 +133,6 @@ export const getNextSelectedItemId = (
   return next?.id ?? completedItemId;
 };
 
-// The selection once a task toggle's save lands. Completing a task moves on from it only
-// if it is still the selected task; a task the user opened while the save was in flight
-// (Next, Previous, the task list) is kept. Pass the selection at the moment the save lands
-// (a state updater's argument), never the one captured when the task was clicked.
 export const getSelectionAfterToggle = (
   run: ChecklistRun,
   toggledItemId: string,
@@ -155,7 +143,6 @@ export const getSelectionAfterToggle = (
   return toggled?.isCompleted ? getNextSelectedItemId(run, toggledItemId) : currentSelectedItemId;
 };
 
-// Tasks and sub-tasks of the run, counted apart, with the overall progress that weights both.
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
 ): RunTaskCounts & { progress: number } => {
@@ -187,9 +174,6 @@ export const getSelectedRunItem = (
   return null;
 };
 
-// A task is finished when it is ticked and so is every Sub-task in all of its Sub-tasks
-// blocks. A ticked task can still hold an open Sub-task (older runs, API writes): it is not
-// finished, so the run opens on it, moving on leads to it, and the run cannot be completed.
 export const isRunItemFinished = (item: ChecklistItem): boolean =>
   item.isCompleted === true && getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
 
@@ -210,21 +194,15 @@ const getItemSubItems = (item: ChecklistItem): ChecklistSubItem[] =>
     content.type === 'subItems' ? (content.subItems ?? []) : [],
   ) ?? [];
 
-// A task is done by its sub-tasks only when it has at least one and every one, across
-// all of its Sub-tasks blocks, is ticked. Same rule as the agent API's set_subtask_completed.
 export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
   const subItems = getItemSubItems(item);
   return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
 };
 
-// True when the task and every one of its sub-tasks already have this completion, so
-// setting it changes nothing.
 export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): boolean =>
   (item.isCompleted === true) === isCompleted &&
   getItemSubItems(item).every((subItem) => (subItem.isCompleted === true) === isCompleted);
 
-// The sub-task at a block and row. When its id is given and that row now holds another
-// sub-task (a reloaded run), the sub-task with that id in any block.
 export const findRunSubItem = (
   item: ChecklistItem,
   at: { contentIndex: number; subItemId?: string; subItemIndex: number },

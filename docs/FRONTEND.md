@@ -121,8 +121,10 @@ and agents (MCP) call them directly and do not follow redirects.
 
 A page that holds unsaved edits must ask before they are lost, whichever way the user
 leaves. `src/lib/navigation/useUnsavedChangesGuard.ts` covers every way out (the
-first three points below); [the template editor](design-docs/template-editor.md#the-leave-guard-in-the-editor)
-(`useTemplateEditorLeaveGuard`) and the run page (unsaved task notes) use it. A page's own back buttons just navigate and
+first three points below);
+[the template editor](design-docs/template-editor.md#the-leave-guard-in-the-editor)
+(`useTemplateEditorLeaveGuard`) and [the run page](design-docs/run-execution.md#task-notes)
+(unsaved task notes) use it. A page's own back buttons just navigate and
 let it ask, so the user is asked once.
 
 - The app's `Link` and `useAppRouter` ask before opening another page: sidebar, header,
@@ -242,9 +244,9 @@ write: [client data](design-docs/client-data.md).
 - Context values and helpers (`getTemplate`, the lists) keep their identity until their
   data changes, but never key a fetch on them: providers still re-render for unrelated
   reasons. Actions (`updateRun`, `deleteRun`, `createTemplate`, ...) keep theirs for the
-  life of the provider. The run page loads its run only when the run id or share token
-  changes, and reads callbacks when it uses them, since a load clears unsaved task
-  notes and the selected task.
+  life of the provider. [The run page](design-docs/run-execution.md#loading-a-run) loads
+  its run only when the run id or share token changes, and reads callbacks when it uses
+  them, since a load clears unsaved task notes and the selected task.
 - Template detail pages never show a copy from a list: a list is refetched after an
   edit only while a page observes it, so an unobserved copy can be arbitrarily old. The
   public template page loads its template from the API on every visit (bundled library

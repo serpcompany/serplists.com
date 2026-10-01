@@ -2,8 +2,6 @@ import { api } from '@/lib/api';
 import { calculateSectionsProgress } from '@/lib/utils/checklistSections';
 import type { ChecklistRun } from '@/types/checklist';
 
-// How the run page writes a run: through the page's private updateRun, or the share link's PUT.
-
 export type RunExecutionApiClient = Pick<
   typeof api,
   | 'createChecklistRunShare'
@@ -13,8 +11,6 @@ export type RunExecutionApiClient = Pick<
   | 'updateSharedChecklist'
 >;
 
-// Private run saves. Only a rename passes { includeTitle: true }: a stored title can predate
-// the 160-character limit, and resending it would fail every tick, note and completion.
 export type UpdateRun = (
   run: ChecklistRun,
   options?: { includeTitle?: boolean },
@@ -22,10 +18,8 @@ export type UpdateRun = (
 
 export type RunExecutionDependencies = {
   apiClient?: RunExecutionApiClient;
-  // Called once a share has made the run public, so cached runs lists can follow.
   onShared?: (runId: string) => void;
   origin?: string;
-  // Refreshes the runs lists, which show whether a run is shared (and offer Revalidate).
   refreshRuns?: () => unknown;
   updateRun: UpdateRun;
 };

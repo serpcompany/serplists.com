@@ -7,8 +7,6 @@ import {
   isRunItemFinished,
 } from './runExecutionMappers';
 
-// What the task panel's primary button does. Every action either calls a handler or
-// renders disabled, so the button can never look clickable and do nothing.
 export type PrimaryTaskAction =
   | { kind: 'complete_task' }
   | { kind: 'next_task' }
@@ -25,16 +23,12 @@ export type PrimaryTaskButton = {
 };
 
 type PrimaryTaskHandlers = {
-  // Marks the task complete (a set, not a flip: the button shows only for an open task).
   onCompleteTask: () => void;
   onFinishRun: () => void;
   onNavigateNext: () => void;
   onSelectTask: (itemId: string) => void;
 };
 
-// A run can be finished once every task is done. The server never completes a run on its
-// own, so this stays true after a dismissed dialog, a reload, or tasks ticked over MCP.
-// A run with no tasks has nothing to finish.
 export const canFinishRun = (run: ChecklistRun): boolean =>
   run.status !== 'completed' &&
   run.sections.some((section) => section.items.length > 0) &&
@@ -44,18 +38,14 @@ export const getPrimaryTaskAction = (
   run: ChecklistRun,
   taskId: string,
   hasNext: boolean,
-  // False for Organization members whose role cannot update the run (viewers).
   canUpdate = true,
 ): PrimaryTaskAction => {
-  // A completed run is frozen, even one saved with open tasks before that rule: it only
-  // navigates.
   if (run.status === 'completed') {
     return hasNext ? { kind: 'next_task' } : { kind: 'run_completed' };
   }
   if (!canUpdate) {
     return hasNext ? { kind: 'next_task' } : { kind: 'view_only' };
   }
-  // A ticked task with an open Sub-task is not finished either: Mark Complete ticks the rest.
   const selected = getSelectedRunItem(run, taskId)?.item;
   if (!selected || !isRunItemFinished(selected)) {
     return { kind: 'complete_task' };
@@ -66,8 +56,6 @@ export const getPrimaryTaskAction = (
   if (hasNext) {
     return { kind: 'next_task' };
   }
-  // This task is finished and the run cannot be, so another task is not: lead to it. Only a
-  // completed run (above) reads "Run completed".
   const nextUnfinishedId = getNextSelectedItemId(run, taskId);
   return nextUnfinishedId !== taskId
     ? { kind: 'next_unfinished', itemId: nextUnfinishedId }

@@ -37,8 +37,6 @@ export const useRunExecutionModel = (
 ) => {
   const mode = resolveMode(options);
   const queryClient = useQueryClient();
-  // Read when used: the page's updateRun (the Templates context's) and getCachedRun may
-  // change identity whenever the cached lists do, and that must never reload the open run.
   const latestOptions = useRef(options);
   const dependencies = useMemo<RunExecutionDependencies>(
     () => ({
@@ -51,7 +49,6 @@ export const useRunExecutionModel = (
     [options.dependencies?.apiClient, options.dependencies?.origin, queryClient],
   );
   const latestDependencies = useRef(dependencies);
-  // Before the effects below (the load reads both).
   useLayoutEffect(() => {
     latestOptions.current = options;
     latestDependencies.current = dependencies;
@@ -61,15 +58,12 @@ export const useRunExecutionModel = (
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  // The latest run, updated as soon as a save returns so the next queued save builds on it.
   const latestRun = useRef<ChecklistRun | null>(null);
-  // Every save writes an audit event: refresh the Changelog once the saves settle.
   const [saveRun] = useState(() =>
     createRunSaver((latest) => {
       if (latest) void refreshRunHistory(queryClient, latest.id);
     }),
   );
-  // Drafts are read inside queued saves, so the ref always holds the latest value.
   const [noteDrafts, setNoteDrafts] = useState<NoteDrafts>({});
   const latestNoteDrafts = useRef<NoteDrafts>({});
   const commitNoteDrafts = (next: NoteDrafts) => {
@@ -77,8 +71,6 @@ export const useRunExecutionModel = (
     setNoteDrafts(next);
   };
 
-  // Loads only when the page opens another run: a load clears the unsaved notes and the
-  // selection, so nothing else (a new callback or client) may start one.
   useEffect(() => {
     let cancelled = false;
 
@@ -159,8 +151,6 @@ export const useRunExecutionModel = (
   };
 
   const shareToken = options.shareToken;
-  // Saves run one at a time on the latest run, and recover from an edit conflict by
-  // reloading the run (never from a cache) and retrying once (see runSaver.ts).
   const enqueueSave = (save: QueuedRunSave) =>
     saveRun(save, {
       apply: applyResult,
@@ -168,7 +158,6 @@ export const useRunExecutionModel = (
       onNotFound: () => setNotFound(true),
       reload: () => loadRunExecutionData({ runId: options.runId, shareToken }, dependencies),
     });
-  // Bound when the user acts: queued saves read the drafts as they are when their turn comes.
   const saves = () => bindRunSaves({ dependencies, noteDrafts: () => latestNoteDrafts.current, shareToken });
 
   return {
@@ -179,7 +168,6 @@ export const useRunExecutionModel = (
       commitNoteDrafts(
         updateNoteDraft(latestNoteDrafts.current, itemId, value, getSelectedRunItem(latestRun.current, itemId)?.item.notes),
       ),
-    // Notes kept when the session ended (keptNoteDrafts.ts), back as unsaved drafts.
     restoreNoteDrafts: (drafts: NoteDrafts) => commitNoteDrafts({ ...latestNoteDrafts.current, ...drafts }),
     createShare: () => enqueueSave(saves().share),
     history: {
@@ -199,14 +187,10 @@ export const useRunExecutionModel = (
     selectedData,
     selectedItemId,
     setSelectedItemId,
-    // Stop sharing: the share link stops working and the run becomes private.
     stopSharing: () => enqueueSave(saves().stopSharing),
     completeRun: () => enqueueSave(saves().complete),
-    // isCompleted is the value the user clicked on the run they saw.
     toggleItem: async (itemId: string, isCompleted: boolean) => {
       const result = await enqueueSave(saves().toggleItem(itemId, isCompleted));
-      // Completing the selected task moves on to the next unfinished one, judged on the
-      // selection when the save lands (an updater), not the one captured at the click.
       const saved = result.kind === 'ok' ? result.run : undefined;
       if (saved) setSelectedItemId((current) => getSelectionAfterToggle(saved, itemId, current));
       return result;
