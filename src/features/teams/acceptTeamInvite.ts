@@ -16,16 +16,9 @@ export function persistAcceptedWorkspace(workspaceId: string): void {
     return;
   }
 
-  // safeLocalStorage never throws; the context selection handles in-memory state too.
   safeLocalStorage.setItem(ACTIVE_WORKSPACE_STORAGE_KEY, workspaceId);
 }
 
-/**
- * Accepts an invite link and adds the Organization to the context list. It does
- * not switch the active context: the invite page offers "Switch to" as a
- * separate choice, so new Templates and Runs never land in an Organization the
- * user did not pick.
- */
 export async function acceptTeamInviteForWorkspace(
   token: string,
   dependencies: AcceptTeamInviteDependencies,

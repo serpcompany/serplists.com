@@ -103,7 +103,9 @@ mark them stale, so they load when a page next shows them.
 - **Reloading one query.** `reloadQuery` (`src/lib/queryReload.ts`) cancels a fetch in flight,
   which read the server before the write (the query goes back to its state before that
   fetch), applies the caller's update so the written item shows at once, then invalidates the
-  query.
+  query. The Organization settings lists (members, activity, pending and incoming invites)
+  also cancel first, then refetch only the queries a page observes (`reloadObservedQueries`
+  in `src/features/teams/`, and `cancelThenRefetch` in `useTeamSettingsQueries`).
 - **Changelogs.** They stay fresh for the app's default 60 seconds, but every save writes an
   audit event (and a Template save a version), so saves refresh them explicitly
   (`refreshRunHistory` and `refreshTemplateHistory`, called by the list refreshes in

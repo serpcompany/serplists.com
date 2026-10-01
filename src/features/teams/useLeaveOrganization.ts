@@ -13,11 +13,6 @@ type AfterLeaveDependencies = {
   selectWorkspace: (workspaceId: string) => void;
 };
 
-/**
- * After leaving an Organization: return to Personal if it was the active
- * context (selectWorkspace also stores the choice and refetches Templates and
- * Runs), then reload the Organization list so it drops out of the switcher.
- */
 export async function afterLeavingOrganization(
   teamId: string,
   { activeTeamId, refreshTeams, selectWorkspace }: AfterLeaveDependencies,

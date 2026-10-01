@@ -10,7 +10,6 @@ import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/contexts/CloudflareAuthContext';
-import { createSingleFlight } from '@/features/teams/singleFlight';
 import {
   describeTeamInviteError,
   formatTeamRole,
@@ -27,6 +26,7 @@ import {
   buildLoginPath,
   buildRegisterPath,
 } from '@/lib/routes';
+import { createSingleFlight } from '@/lib/utils/singleFlight';
 
 import { Link } from '@/components/navigation/Link';
 
@@ -65,7 +65,7 @@ export default function TeamInviteAccept() {
   const preview = invite.preview;
   // Signing in, signing up, or switching accounts all come back to this path.
   const invitePath = useCurrentPath();
-  const [signOutOnce] = useState(createSingleFlight);
+  const [signOutFlight] = useState(() => createSingleFlight());
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleAccept = async () => {
@@ -91,7 +91,7 @@ export default function TeamInviteAccept() {
   // would send the still signed-in account straight back here. A refused
   // sign-out keeps the user here with the error.
   const handleSignOutAndContinue = () =>
-    signOutOnce(async () => {
+    signOutFlight.run(async () => {
       setIsSigningOut(true);
       try {
         await signOutAndReturn({

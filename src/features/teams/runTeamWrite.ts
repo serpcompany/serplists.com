@@ -1,11 +1,3 @@
-/**
- * Runs an Organization settings change and the refreshes that follow it.
- * Only a failed write is reported as a failure: once the write resolves the
- * change is saved, so a refresh that fails afterwards (for example GET
- * /api/teams during a brief outage) is reported separately and never as
- * "Failed to ...". Every refresh runs even if another one fails.
- * Resolves to whether the write was saved.
- */
 export async function runTeamWrite<T>({
   write,
   refreshes,

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { useAuth } from '@/contexts/CloudflareAuthContext';
 
-import { createSingleFlight } from '@/features/teams/singleFlight';
+import { reloadObservedQueries } from '@/features/teams/reloadObservedQueries';
 import {
   createInviteLink,
   isInviteAlreadyAcceptedError,
@@ -17,6 +17,7 @@ import {
 } from '@/features/teams/teamInviteLinks';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { createSingleFlight } from '@/lib/utils/singleFlight';
 
 const inviteApi = {
   createInvite: (teamId: string, payload: { email: string; role: AssignableTeamRole }) =>
@@ -25,12 +26,6 @@ const inviteApi = {
     api.reissueTeamInviteLink(teamId, inviteId, payload),
 };
 
-/**
- * Pending invites for the active Organization and the actions a manager takes
- * on them. Actions throw on failure so the screen can report it; create and
- * new-link requests run one at a time, so a double click cannot replace a
- * link twice and leave a dead one on screen.
- */
 export function useTeamInvites(activeTeamId: string | null | undefined, canManageTeam: boolean) {
   const queryClient = useQueryClient();
   const userId = useAuth().user?.id;
@@ -39,7 +34,7 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
   const [isCreating, setIsCreating] = useState(false);
   const [reissuingInviteId, setReissuingInviteId] = useState<string | null>(null);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
-  const [linkOnce] = useState(createSingleFlight);
+  const [linkFlight] = useState(() => createSingleFlight());
 
   const invitesQuery = useQuery({
     queryKey: queryKeys.teamInvites(userId, activeTeamId ?? undefined),
@@ -48,7 +43,6 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
     staleTime: 30 * 1000,
   });
 
-  // A link or conflict belongs to the Organization it was made in.
   const [shownTeamId, setShownTeamId] = useState(activeTeamId);
   if (shownTeamId !== activeTeamId) {
     setShownTeamId(activeTeamId);
@@ -56,19 +50,18 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
     setConflict(null);
   }
 
-  // refetch joins a first load still in flight, which predates the change; cancel it first.
-  // Only active queries: an unobserved key keeps the previous user's queryFn.
-  const reload = async (queryKey: QueryKey) => {
-    await queryClient.cancelQueries({ queryKey });
-    await queryClient.refetchQueries({ queryKey, type: 'active' });
-  };
+  const reload = (queryKey: QueryKey) => reloadObservedQueries(queryClient, queryKey);
   const reloadInvitesAndActivity = async (teamId: string) => {
     await reload(queryKeys.teamInvites(userId, teamId));
     await reload(queryKeys.teamActivity(userId, teamId));
   };
+  const reloadAfterInviteeJoined = async (teamId: string) => {
+    await reloadInvitesAndActivity(teamId);
+    await reload(queryKeys.teamMembers(userId, teamId));
+  };
 
   const createInvite = (teamId: string, email: string, role: AssignableTeamRole) =>
-    linkOnce(async () => {
+    linkFlight.run(async () => {
       setIsCreating(true);
       try {
         const result = await createInviteLink(inviteApi, teamId, { email, role });
@@ -86,7 +79,7 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
     });
 
   const reissueLink = (teamId: string, inviteId: string, role?: AssignableTeamRole) =>
-    linkOnce(async () => {
+    linkFlight.run(async () => {
       setReissuingInviteId(inviteId);
       try {
         const nextLink = await reissueInviteLink(inviteApi, teamId, inviteId, role);
@@ -99,8 +92,6 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
       }
     });
 
-  // Hide the revoked invite's link (and any offer to replace it) before the
-  // reloads, so a failed reload cannot leave a dead link on screen.
   const forgetInvite = (inviteId: string) => {
     setLink((current) => withoutRevokedLink(current, inviteId));
     setConflict((current) => (current?.inviteId === inviteId ? null : current));
@@ -114,8 +105,7 @@ export function useTeamInvites(activeTeamId: string | null | undefined, canManag
       } catch (error) {
         if (isInviteAlreadyAcceptedError(error)) {
           forgetInvite(inviteId);
-          // The invitee joined before the revoke landed: the member list changed too.
-          void reloadInvitesAndActivity(teamId).then(() => reload(queryKeys.teamMembers(userId, teamId)));
+          void reloadAfterInviteeJoined(teamId);
         } else if (isInviteGoneError(error)) {
           forgetInvite(inviteId);
           void reloadInvitesAndActivity(teamId);
