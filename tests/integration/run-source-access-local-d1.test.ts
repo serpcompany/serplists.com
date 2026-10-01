@@ -5,10 +5,6 @@ import { schema } from "../../functions/api/db";
 import { checklistRunSelectFor } from "../../functions/api/utils/checklist-runs";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
-// Against real local D1: a run whose source template the caller can no longer use (made
-// private by its owner, or archived) is never reported stale and cannot be revalidated,
-// so the template's new private content never reaches the run.
-
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
 }));
@@ -36,24 +32,24 @@ async function seed() {
       progress, created_by_user_id, started_by_user_id, template_version, revision, retired_items, is_public)
     VALUES (?, ?, ?, ?, 'Run', ?, 'in_progress', ?, ?, 100, ?, ?, 1, 1, '[]', 0)
   `);
+  const oncePublicNowPrivateWithNewContent = template.bind("t-private", "user-a", "Made private", privateItems, 0, now, "user", null, "user-a", null);
+  const archivedPublicTemplate = template.bind("t-archived", "user-a", "Archived", privateItems, 1, now, "user", null, "user-a", now);
+  const stillPublicTemplateWhoseRunsMayGoStaleForAnyone = template.bind("t-public", "user-a", "Public", privateItems, 1, now, "user", null, "user-a", null);
+  const organizationRunFromAMembersPersonalTemplate = run.bind("org-from-a-personal", "user-a", "org-1", "t-private", oldItems, now, now, "user-a", "user-a");
   await db.batch([
     user.bind("user-a", "a@example.test", "A", now),
     user.bind("user-b", "b@example.test", "B", now),
     db.prepare("INSERT INTO teams (id, name, slug, billing_owner_user_id, created_by_user_id, created_at) VALUES ('org-1', 'Org', 'org', 'user-a', 'user-a', ?)").bind(now),
     db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m-a', 'org-1', 'user-a', 'owner', 'active', ?)").bind(now),
     db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m-b', 'org-1', 'user-b', 'runner', 'active', ?)").bind(now),
-    // A's template, once public, now private with new content (content_version 2).
-    template.bind("t-private", "user-a", "Made private", privateItems, 0, now, "user", null, "user-a", null),
-    // Archived public template.
-    template.bind("t-archived", "user-a", "Archived", privateItems, 1, now, "user", null, "user-a", now),
-    // Still-public template: its runs may go stale for anyone.
-    template.bind("t-public", "user-a", "Public", privateItems, 1, now, "user", null, "user-a", null),
+    oncePublicNowPrivateWithNewContent,
+    archivedPublicTemplate,
+    stillPublicTemplateWhoseRunsMayGoStaleForAnyone,
     run.bind("b-from-private", "user-b", null, "t-private", oldItems, now, now, "user-b", "user-b"),
     run.bind("b-from-archived", "user-b", null, "t-archived", oldItems, now, now, "user-b", "user-b"),
     run.bind("b-from-public", "user-b", null, "t-public", oldItems, now, now, "user-b", "user-b"),
     run.bind("a-from-private", "user-a", null, "t-private", oldItems, now, now, "user-a", "user-a"),
-    // Organization run built from A's Personal template.
-    run.bind("org-from-a-personal", "user-a", "org-1", "t-private", oldItems, now, now, "user-a", "user-a"),
+    organizationRunFromAMembersPersonalTemplate,
   ]);
 }
 
@@ -78,7 +74,7 @@ async function storedItems(runId: string): Promise<string> {
   return row?.items ?? "";
 }
 
-describe.sequential("run source access against local D1", () => {
+describe.sequential("run source access against local D1, where a run whose template the caller can no longer use is never stale and never revalidates", () => {
   beforeAll(async () => {
     d1 = await startLocalD1("run-source-access");
     await seed();
@@ -101,10 +97,9 @@ describe.sequential("run source access against local D1", () => {
     expect((await listAs("user-a", "?teamId=org-1"))["org-from-a-personal"].is_stale).toBe(true);
   });
 
-  it("refuses to copy a now-private template into another user's run", async () => {
+  it("refuses to copy a now-private template into another user's run, keeping the run and naming its source unavailable for the page", async () => {
     const response = await revalidateAs("user-b", "b-from-private");
     expect(response.status).toBe(404);
-    // The run is still there; the code lets the page say its template is unavailable.
     expect(await response.json()).toMatchObject({ code: "source_template_unavailable" });
     expect(await storedItems("b-from-private")).toBe(oldItems);
   });

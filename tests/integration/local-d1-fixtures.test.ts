@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import type { D1Database } from "@cloudflare/workers-types";
 import { count, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { getPlatformProxy } from "wrangler";
 import {
   DEV_PASSWORD_HASH,
   TEST_RUN_IDS,
@@ -31,11 +30,10 @@ import {
   users,
 } from "../../db/schema/index";
 import { withLocalD1, type LocalDb } from "../../scripts/data/local-d1";
-import { execTool } from "../../scripts/lib/run-tool.mjs";
 import { handleTemplates } from "../../functions/api/handlers/templates";
 import { getSessionUserId } from "../../functions/api/utils/session";
+import { platformProxyOnLocalD1, runToolInRepo } from "./local-d1-handler-env";
 
-// The Template save test calls the API handler as a signed-in user.
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn() }));
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -55,31 +53,16 @@ async function officialTemplateIds(db: LocalDb) {
   return rows.map(({ id }) => id).sort();
 }
 
-// Tools run through run-tool.mjs: spawning pnpm by name fails on Windows
-// installs where pnpm is only a .cmd shim.
 function runWrangler(args: string[]) {
-  execTool("wrangler", args, {
-    cwd: repoRoot,
-    env: { ...process.env, CI: "1" },
-    stdio: "pipe",
-  });
+  runToolInRepo("wrangler", args);
+}
+
+function runOfficialTemplateSeed() {
+  runWrangler(["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", "db/seeds/official-templates.sql"]);
 }
 
 function runLocalData(command: "seed-test" | "seed-official-login" | "cleanup" | "reset-passwords") {
-  execTool(
-    "tsx",
-    [
-      "scripts/data/local-d1-data.ts",
-      command,
-      "--persist-to",
-      persistPath,
-    ],
-    {
-      cwd: repoRoot,
-      env: { ...process.env, CI: "1" },
-      stdio: "pipe",
-    },
-  );
+  runToolInRepo("tsx", ["scripts/data/local-d1-data.ts", command, "--persist-to", persistPath]);
 }
 
 async function fixtureCounts(db: LocalDb) {
@@ -163,29 +146,11 @@ describe("local Drizzle fixture commands", () => {
       await withLocalD1(persistPath, insertOutsider);
 
       runLocalData("seed-test");
-      runWrangler([
-        "d1",
-        "execute",
-        "serp-checklists-db",
-        "--local",
-        "--persist-to",
-        persistPath,
-        "--file",
-        "db/seeds/official-templates.sql",
-      ]);
+      runOfficialTemplateSeed();
       runLocalData("seed-official-login");
 
       runLocalData("seed-test");
-      runWrangler([
-        "d1",
-        "execute",
-        "serp-checklists-db",
-        "--local",
-        "--persist-to",
-        persistPath,
-        "--file",
-        "db/seeds/official-templates.sql",
-      ]);
+      runOfficialTemplateSeed();
       runLocalData("seed-official-login");
 
       let initialTestAccountIds: string[] = [];
@@ -204,12 +169,11 @@ describe("local Drizzle fixture commands", () => {
         const testAccounts = await db.select().from(account).where(inArray(account.userId, TEST_USER_IDS));
 
         expect(admin).toMatchObject({ email: "admin@test.com", name: "Admin (Pro)" });
-        // The API never grants Pro by email, so the Pro personas depend on these rows.
-        const personaOverrides = await db
+        const overridesThatAloneMakeThePersonasPro = await db
           .select({ userId: entitlement_overrides.user_id, plan: entitlement_overrides.plan })
           .from(entitlement_overrides)
           .where(inArray(entitlement_overrides.user_id, ["user-1", "user-3"]));
-        expect(personaOverrides.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
+        expect(overridesThatAloneMakeThePersonasPro.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
           { userId: "user-1", plan: "pro" },
           { userId: "user-3", plan: "pro" },
         ]);
@@ -421,7 +385,7 @@ describe("local Drizzle fixture commands", () => {
   );
 
   it(
-    "seeds Template versions that a save can advance",
+    "seeds Template versions no history row outruns, so a signed-in user's save through the API advances them",
     async () => {
       runLocalData("seed-test");
       const seededTemplateIds = [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS];
@@ -440,7 +404,6 @@ describe("local Drizzle fixture commands", () => {
           .from(checklist_runs)
           .where(inArray(checklist_runs.id, TEST_RUN_IDS));
 
-        // A save writes history row templates.version + 1, so no seeded history row may be newer.
         for (const template of seeded) {
           const newestHistory = Math.max(0, ...history.filter((row) => row.templateId === template.id).map((row) => row.version));
           expect(newestHistory, template.id).toBeLessThanOrEqual(template.version);
@@ -451,12 +414,7 @@ describe("local Drizzle fixture commands", () => {
         }
       });
 
-      const platform = await getPlatformProxy<{ DB: D1Database }>({
-        configPath: path.join(repoRoot, "wrangler.toml"),
-        envFiles: [".local-d1-env-disabled"],
-        persist: { path: path.resolve(repoRoot, persistPath, "v3") },
-        remoteBindings: false,
-      });
+      const platform = await platformProxyOnLocalD1<{ DB: D1Database }>(persistPath);
       try {
         const env = { DB: platform.env.DB } as unknown as Parameters<typeof handleTemplates>[1];
         const url = "http://localhost/api/templates/team-template-growth-launch";

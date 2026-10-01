@@ -5,10 +5,6 @@ import { schema } from "../../functions/api/db";
 import { rowExistsSql } from "../../functions/api/utils/guarded-insert";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
-// Against real local D1: when concurrent requests race on the same run or template, only the
-// request whose guarded write lands gets an audit row (and a template version). The losers
-// get a conflict or not-found response, never success, and leave no phantom history.
-
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
 }));
@@ -36,10 +32,11 @@ async function seed() {
       created_by_user_id, content_version, deleted_at)
     VALUES (?, 'owner', 'Template', ?, 0, ?, 3, 'checklist', 'user', NULL, 'owner', ?, ?)
   `);
+  const proOverrideSoRestoresNeverMeetTheFreeLimits =
+    db.prepare("INSERT INTO entitlement_overrides (user_id, plan, note, created_at, updated_at) VALUES ('owner', 'pro', 'test', ?, ?)").bind(now, now);
   await db.batch([
     db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('owner', 'owner@example.test', 'Owner', 1, ?)").bind(now),
-    // Pro, so restores do not hit the Free limits.
-    db.prepare("INSERT INTO entitlement_overrides (user_id, plan, note, created_at, updated_at) VALUES ('owner', 'pro', 'test', ?, ?)").bind(now, now),
+    proOverrideSoRestoresNeverMeetTheFreeLimits,
     template.bind("template-source", runItems, now, 2, null),
     template.bind("template-put", runItems, now, 1, null),
     template.bind("template-archive", runItems, now, 1, null),
@@ -66,8 +63,7 @@ async function burst(handler: Handler, makeRequest: (index: number) => Request) 
 const request = (path: string, method: string, body?: unknown) =>
   new Request(`http://localhost/api/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) });
 
-/** An env whose next batch first runs `statement`: a concurrent write landing after the handler's read. */
-function raceBeforeBatch(statement: string): never {
+function envWhoseNextBatchFollowsAConcurrentWrite(statement: string): never {
   const db = d1.env.DB;
   let fired = false;
   const racing = new Proxy(db, {
@@ -99,7 +95,7 @@ function expectOneSuccess(statuses: number[], loserStatus: number) {
   expect(statuses.filter((status) => status === loserStatus)).toHaveLength(PARALLEL - 1);
 }
 
-describe.sequential("audit rows under concurrent writes (local D1)", () => {
+describe.sequential("audit rows under concurrent writes (local D1), recorded only for the request whose guarded write lands", () => {
   beforeAll(async () => {
     d1 = await startLocalD1("audit-guards");
     await seed();
@@ -140,18 +136,17 @@ describe.sequential("audit rows under concurrent writes (local D1)", () => {
     expect(await auditCount("run-restore", "checklist_run.restored")).toBe(1);
   });
 
-  it("template PUT: a save that loses to a concurrent version bump writes nothing", async () => {
+  it("template PUT: a save that loses to a concurrent version bump writes nothing, not even a content save's run reconciliation", async () => {
     vi.mocked(getSessionUserId).mockResolvedValue("owner");
     const bump = "UPDATE templates SET version = version + 1 WHERE id = 'template-put'";
-    const visibility = await handleTemplates(request("templates/template-put", "PUT", { is_public: true, expected_version: 3 }), raceBeforeBatch(bump));
+    const visibility = await handleTemplates(request("templates/template-put", "PUT", { is_public: true, expected_version: 3 }), envWhoseNextBatchFollowsAConcurrentWrite(bump));
     expect(visibility.status).toBe(409);
 
-    // A content save also reconciles the template's runs; none of that may land either.
-    const content = await handleTemplates(request("templates/template-put", "PUT", {
+    const contentSaveThatWouldAlsoReconcileRuns = await handleTemplates(request("templates/template-put", "PUT", {
       expected_version: 4,
       sections: [{ id: "s1", title: "S", items: [{ id: "i1", title: "Task" }, { id: "i9", title: "Lost" }] }],
-    }), raceBeforeBatch(bump));
-    expect(content.status).toBe(409);
+    }), envWhoseNextBatchFollowsAConcurrentWrite(bump));
+    expect(contentSaveThatWouldAlsoReconcileRuns.status).toBe(409);
 
     expect(await auditCount("template-put", "template.updated")).toBe(0);
     const versions = await d1.env.DB.prepare("SELECT count(*) AS value FROM template_versions WHERE template_id = 'template-put'")

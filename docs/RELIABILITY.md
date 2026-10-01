@@ -393,6 +393,14 @@ Common failures:
   just before the handler's next `db.batch()`, and `queryPlan()` returns
   `EXPLAIN QUERY PLAN` for a recorded statement. See
   `tests/unit/functions/api/teams-sqlite.test.ts`.
+- `pnpm run test:local-d1` runs the API on real local D1 through wrangler's
+  `getPlatformProxy`, with no dev server. `startLocalD1()`
+  (`tests/integration/local-d1-handler-env.ts`) applies every migration to a throwaway
+  database in its own temp directory and returns the handler env and a `dispose()` that
+  removes it. `runToolInRepo()` and `platformProxyOnLocalD1()` there run wrangler or tsx
+  from the repository root and open a proxy on a database a test built itself. Each file
+  starts its own D1 and takes about 20 seconds, so run a changed one alone:
+  `pnpm exec vitest run <file> --testTimeout=20000 --maxWorkers=1`.
 - A test that needs only a few tables (billing, the sitemap queries) builds them with
   `createSqliteD1(setupSql)` from `tests/unit/functions/api/support/sqlite-d1.ts`: node:sqlite
   with just that SQL applied, behind the D1 calls Drizzle makes, whose batches are

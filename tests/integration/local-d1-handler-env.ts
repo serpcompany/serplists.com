@@ -1,14 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { getPlatformProxy, type PlatformProxy } from "wrangler";
-import { execTool } from "../../scripts/lib/run-tool.mjs";
-
-// A throwaway local D1 with every migration applied, for calling API handlers against
-// real SQL (no dev server). Each call gets its own temp directory.
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+import { execTool, REPO_ROOT } from "../../scripts/lib/run-tool.mjs";
 
 export type LocalD1HandlerEnv = { DB: D1Database; BETTER_AUTH_SECRET: string };
 
@@ -17,24 +11,30 @@ export type LocalD1 = {
   dispose: () => Promise<void>;
 };
 
-export async function startLocalD1(prefix: string): Promise<LocalD1> {
-  const persistPath = mkdtempSync(path.join(tmpdir(), `serplists-${prefix}-`));
-  // Through run-tool.mjs: spawning pnpm by name fails where pnpm is only a .cmd shim.
-  execTool("wrangler", [
-    "d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath,
-  ], {
-    cwd: repoRoot,
+export function runToolInRepo(tool: "tsx" | "wrangler", args: string[]): string {
+  return execTool(tool, args, {
+    cwd: REPO_ROOT,
     env: { ...process.env, CI: "1" },
-    stdio: "pipe",
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }) as string;
+}
+
+export function platformProxyOnLocalD1<Env>(persistPath: string): Promise<PlatformProxy<Env>> {
+  return getPlatformProxy<Env>({
+    configPath: path.join(REPO_ROOT, "wrangler.toml"),
+    envFiles: [".local-d1-env-disabled"],
+    persist: { path: path.resolve(REPO_ROOT, persistPath, "v3") },
+    remoteBindings: false,
   });
+}
+
+export async function startLocalD1(tempDirectoryPrefix: string): Promise<LocalD1> {
+  const persistPath = mkdtempSync(path.join(tmpdir(), `serplists-${tempDirectoryPrefix}-`));
+  runToolInRepo("wrangler", ["d1", "migrations", "apply", "serp-checklists-db", "--local", "--persist-to", persistPath]);
   let platform: PlatformProxy<{ DB: D1Database }>;
   try {
-    platform = await getPlatformProxy<{ DB: D1Database }>({
-      configPath: path.join(repoRoot, "wrangler.toml"),
-      envFiles: [".local-d1-env-disabled"],
-      persist: { path: path.resolve(repoRoot, persistPath, "v3") },
-      remoteBindings: false,
-    });
+    platform = await platformProxyOnLocalD1<{ DB: D1Database }>(persistPath);
   } catch (error) {
     rmSync(persistPath, { recursive: true, force: true });
     throw error;

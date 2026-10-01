@@ -2,18 +2,21 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getPlatformProxy, type PlatformProxy } from "wrangler";
+import type { PlatformProxy } from "wrangler";
 import { afterAll, beforeAll, describe, expect, it, onTestFinished } from "vitest";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import { MAX_RESULT_BYTES } from "../../functions/api/handlers/agentMcpPages";
+import { MAX_TASK_NOTES_LENGTH } from "../../functions/api/handlers/agentMcpTools";
+import { RUN_KEY_REQUESTS_PER_MINUTE } from "../../functions/api/utils/mcp-limits";
 import {
   createPersonalRunKeySecret,
   insertPersonalRunKeyWithinCap,
+  MAX_ACTIVE_PERSONAL_RUN_KEYS,
 } from "../../functions/api/utils/personal-run-key";
-import { execTool } from "../../scripts/lib/run-tool.mjs";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "../../src/lib/schemas/contentLimits";
 import { readRunInFull } from "../support/runPages";
 import { readTemplateInFull } from "../support/templatePages";
+import { platformProxyOnLocalD1, runToolInRepo } from "./local-d1-handler-env";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const migrationsDir = path.join(repoRoot, "db/migrations");
@@ -91,42 +94,39 @@ function toolError(body: JsonRecord): string | undefined {
 const byteLength = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 
 const PROSE = "Confirm the owner, the rollback plan, and the customer notice — then record it. Überprüfen. 🚀 ";
-// Text of `length` characters, never cutting an emoji in half.
 const PROSE_CHARACTERS = Array.from(PROSE);
-const prose = (length: number) =>
-  Array.from({ length }, (_, index) => PROSE_CHARACTERS[index % PROSE_CHARACTERS.length]).join("");
-// At most `length` UTF-16 units, what update_run's notes limit counts, never splitting an emoji.
-const notesOf = (length: number) => {
+const proseOfWholeCharacters = (characterCount: number) =>
+  Array.from({ length: characterCount }, (_, index) => PROSE_CHARACTERS[index % PROSE_CHARACTERS.length]).join("");
+const notesWithinUtf16Units = (unitCount: number) => {
   let units = 0;
-  return Array.from(prose(length)).filter((character) => (units += character.length) <= length).join("");
+  return Array.from(proseOfWholeCharacters(unitCount)).filter((character) => (units += character.length) <= unitCount).join("");
 };
 const textTask = (id: string, textLength: number) => ({
   id,
   title: `Task ${id}`,
   description: `Why ${id} matters`,
-  contents: [{ id: `${id}-text`, type: "text", value: prose(textLength) }],
+  contents: [{ id: `${id}-text`, type: "text", value: proseOfWholeCharacters(textLength) }],
 });
 
-// A template about 1KB under the 768KB content limit, as the app counts it: a section whose
-// second task grows to about 120KB (read in parts), a section of 130 tasks, about 90KB (read
-// in pages), and 22 sections of about 25KB (read whole). Reading it takes 31 calls.
-function nearLimitSections(): JsonRecord[] {
-  const sections: JsonRecord[] = [
-    { id: "guide", title: "Guide", items: [textTask("guide-intro", 400), textTask("guide-long", 90_000)] },
-    { id: "checks", title: "Checks", items: Array.from({ length: 130 }, (_, index) => textTask(`check-${index}`, 520)) },
-  ];
+function sectionsAbout1KbUnderTheTemplateLimit(): JsonRecord[] {
+  const longTaskReadInParts = textTask("guide-long", 90_000);
+  const guide = { id: "guide", title: "Guide", items: [textTask("guide-intro", 400), longTaskReadInParts] };
+  const checksOf130TasksReadInPages = { id: "checks", title: "Checks", items: Array.from({ length: 130 }, (_, index) => textTask(`check-${index}`, 520)) };
+  const sections: JsonRecord[] = [guide, checksOf130TasksReadInPages];
   for (let index = 0; sections.length < 24; index += 1) {
-    sections.push({
+    const areaReadWhole = {
       id: `area-${index}`,
       title: `Area ${index}`,
       items: Array.from({ length: 16 }, (_, task) => textTask(`area-${index}-${task}`, 1_350)),
-    });
+    };
+    sections.push(areaReadWhole);
   }
-  // Grow the long task until the template is about 1KB under the limit.
-  const block = ((sections[0].items as JsonRecord[])[1].contents as JsonRecord[])[0];
+  const longTaskText = longTaskReadInParts.contents[0];
   const bytesPerCharacter = new TextEncoder().encode(PROSE).byteLength / PROSE_CHARACTERS.length;
-  const room = TEMPLATE_CONTENT_MAX_BYTES - 1_000 - contentSaveBytes(sections);
-  block.value = prose(Array.from(String(block.value)).length + Math.floor(room / bytesPerCharacter));
+  const roomToGrowUntilAbout1KbUnderTheLimit = TEMPLATE_CONTENT_MAX_BYTES - 1_000 - contentSaveBytes(sections);
+  longTaskText.value = proseOfWholeCharacters(
+    Array.from(longTaskText.value).length + Math.floor(roomToGrowUntilAbout1KbUnderTheLimit / bytesPerCharacter),
+  );
   return sections;
 }
 
@@ -208,27 +208,8 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
         .map((name) => readFileSync(path.join(migrationsDir, name), "utf8"))
         .join("\n"),
     );
-    // Through run-tool.mjs: spawning pnpm by name fails where pnpm is only a .cmd shim.
-    execTool("wrangler", [
-      "d1",
-      "execute",
-      "serp-checklists-db",
-      "--local",
-      "--persist-to",
-      persistPath,
-      "--file",
-      pre25SqlPath,
-    ], {
-      cwd: repoRoot,
-      env: { ...process.env, CI: "1" },
-      stdio: "pipe",
-    });
-    platform = await getPlatformProxy<TestEnv>({
-      configPath: path.join(repoRoot, "wrangler.toml"),
-      envFiles: [".local-d1-env-disabled"],
-      persist: { path: path.resolve(repoRoot, persistPath, "v3") },
-      remoteBindings: false,
-    });
+    runToolInRepo("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", pre25SqlPath]);
+    platform = await platformProxyOnLocalD1<TestEnv>(persistPath);
     env = { DB: platform.env.DB, PERSONAL_RUN_MCP_ENABLED: "true" };
     await seedPreMigrationData();
   }, 60_000);
@@ -326,7 +307,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(toolError(teamTemplate)).toBe("template_not_found");
   });
 
-  it("persists a run, notes, task state, and audit attribution", async () => {
+  it("persists a run, notes, task state, and audit attribution, in audit rows that describe each change without copying the run's content", async () => {
     const startBody = await bodyOf(await callTool("start_run", {
       templateId: "template-a",
       title: "Local D1 MCP Trial",
@@ -377,16 +358,15 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
 
-    // Audit rows describe the change; they do not store copies of the run's content.
-    const payloads = await rows<JsonRecord>(`
+    const itemsCopiesAndSizeOfEachAuditRow = await rows<JsonRecord>(`
       SELECT
         coalesce(json_extract(before_json, '$.items'), json_extract(after_json, '$.items'),
           json_extract(diff_json, '$.items'), json_extract(after_json, '$.retired_items')) AS stored_items,
         length(coalesce(before_json, '')) + length(coalesce(after_json, '')) + length(coalesce(diff_json, '')) AS bytes
       FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ?
     `, runId);
-    expect(payloads.map(({ stored_items }) => stored_items)).toEqual([null, null, null]);
-    expect(Math.max(...payloads.map(({ bytes }) => Number(bytes)))).toBeLessThan(2_048);
+    expect(itemsCopiesAndSizeOfEachAuditRow.map(({ stored_items }) => stored_items)).toEqual([null, null, null]);
+    expect(Math.max(...itemsCopiesAndSizeOfEachAuditRow.map(({ bytes }) => Number(bytes)))).toBeLessThan(2_048);
   });
 
   it("allows exactly one same-revision update and writes exactly one audit event", async () => {
@@ -468,20 +448,14 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(afterAudit.count).toBe(beforeAudit.count);
   });
 
-  it("creates no run when start_run rejects an oversized template", async () => {
-    const items = [{
-      id: "section-large",
-      title: "Large",
-      // About 930 KB, stored before the 768KB template limit: over the 896KB a run's content may
-      // hold. The size is in task descriptions, which a new run copies; run-only notes on a
-      // template are dropped.
-      items: Array.from({ length: 93 }, (_, index) => ({
-        id: `large-task-${index}`,
-        title: `Large task ${index}`,
-        isCompleted: false,
-        description: "x".repeat(10_000),
-      })),
-    }];
+  it("creates no run when start_run rejects a template stored before the 768KB limit with more than a run's 896KB", async () => {
+    const about930KbOfDescriptionsThatANewRunCopies = Array.from({ length: 93 }, (_, index) => ({
+      id: `large-task-${index}`,
+      title: `Large task ${index}`,
+      isCompleted: false,
+      description: "x".repeat(10_000),
+    }));
+    const items = [{ id: "section-large", title: "Large", items: about930KbOfDescriptionsThatANewRunCopies }];
     await env.DB.prepare(`
       INSERT INTO templates (
         id, user_id, title, items, is_public, created_at, version, type, owner_type,
@@ -536,11 +510,11 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       const suffix = String(index).padStart(3, "0");
       return insertTemplate(`edited-${suffix}`, "2024-01-01T00:00:00.000Z", `2025-01-01T00:00:00.${suffix}Z`);
     }));
-    // Imported in one request: created in the same millisecond and never edited.
-    await env.DB.batch([
+    const importedInOneRequestAndNeverEdited = [
       insertTemplate("imported-a", "2026-09-20T00:00:00.000Z", null),
       insertTemplate("imported-b", "2026-09-20T00:00:00.000Z", null),
-    ]);
+    ];
+    await env.DB.batch(importedInOneRequestAndNeverEdited);
 
     const payload = toolPayload(await bodyOf(await callTool("list_templates", {}, 71)));
     const ids = (payload.templates as JsonRecord[]).map(({ id }) => id);
@@ -550,14 +524,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(ids).toHaveLength(100);
     expect(byteLength(payload)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
 
-    // The oldest edits follow on the next page.
-    const next = toolPayload(await bodyOf(await callTool("list_templates", { cursor: payload.nextCursor }, 72)));
-    expect((next.templates as JsonRecord[]).map(({ id }) => id))
+    const nextPageWithTheOldestEdits = toolPayload(await bodyOf(await callTool("list_templates", { cursor: payload.nextCursor }, 72)));
+    expect((nextPageWithTheOldestEdits.templates as JsonRecord[]).map(({ id }) => id))
       .toEqual(["edited-004", "edited-003", "edited-002", "edited-001", "edited-000"]);
-    expect(next).not.toHaveProperty("nextCursor");
+    expect(nextPageWithTheOldestEdits).not.toHaveProperty("nextCursor");
   });
 
-  it("creates and edits a private personal template and syncs its in-progress runs", async () => {
+  it("creates and edits a private personal template and syncs its in-progress runs, whose Changelog names the Run Key", async () => {
     const sections = [{
       title: "Boot",
       items: [{
@@ -639,13 +612,12 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
 
-    // The run's Changelog names the Run Key that changed its template.
-    const reconciled = await rows<JsonRecord>(
+    const reconciledEventsInTheRunsChangelog = await rows<JsonRecord>(
       "SELECT metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? AND action = 'checklist_run.reconciled'",
       templateRunId,
     );
-    expect(reconciled).toHaveLength(1);
-    expect(String(reconciled[0].metadata_json)).toContain(`"personalRunKeyId":"${keyId}"`);
+    expect(reconciledEventsInTheRunsChangelog).toHaveLength(1);
+    expect(String(reconciledEventsInTheRunsChangelog[0].metadata_json)).toContain(`"personalRunKeyId":"${keyId}"`);
   });
 
   it("keeps template writes inside the key owner's private personal templates", async () => {
@@ -715,7 +687,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
   });
 
   it("reads a template near the 768KB limit back in full and edits it a part at a time", async () => {
-    const sections = nearLimitSections();
+    const sections = sectionsAbout1KbUnderTheTemplateLimit();
     expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
     expect(contentSaveBytes(sections)).toBeGreaterThan(TEMPLATE_CONTENT_MAX_BYTES - 16 * 1024);
 
@@ -736,13 +708,11 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       return result.structuredContent as JsonRecord;
     };
 
-    // Every section, task, and field comes back, one bounded result at a time.
     const { template, results } = await readTemplateInFull(readTool, templateId);
     expect(template).toMatchObject({ id: templateId, title: "Operations Handbook", version: 1 });
     expect(template.sections).toEqual(sections);
     expect(Math.max(...resultBytes)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-    // A few dozen calls, well within a Run Key's 120 a minute.
-    expect(results.length).toBeLessThan(40);
+    expect(results.length).toBeLessThan(RUN_KEY_REQUESTS_PER_MINUTE / 3);
     expect(results.some((result) => (result.part as JsonRecord | undefined)?.of === "task")).toBe(true);
     expect(results.some((result) => typeof (result.section as JsonRecord | undefined)?.firstTask === "number")).toBe(true);
     const guideCursor = (await readTool({ templateId, sectionId: "guide" })).nextCursor as string;
@@ -750,7 +720,6 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
 
     const update = async (args: JsonRecord) => toolPayload(await bodyOf(await callTool("update_template", { templateId, ...args })));
 
-    // Each operation sends one task or section, never the whole template.
     const replaced = await update({ expectedVersion: 1, operation: "replace_task", taskId: "check-7", task: { title: "Check the pager" } });
     expect(replaced).toMatchObject({ sectionsOmitted: true, sectionId: "checks", taskId: "check-7", task: { title: "Check the pager" } });
     expect(replaced.template).toMatchObject({ version: 2 });
@@ -780,16 +749,15 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const staleRead = await bodyOf(await callTool("get_template", { templateId, cursor: guideCursor }));
     expect(toolError(staleRead)).toBe("edit_conflict");
 
-    // D1 holds the template with those four changes and nothing else.
-    const expected = structuredClone(sections);
-    const checks = expected[1].items as JsonRecord[];
+    const templateWithOnlyThoseFourChanges = structuredClone(sections);
+    const checks = templateWithOnlyThoseFourChanges[1].items as JsonRecord[];
     checks[7] = { ...checks[7], title: "Check the pager" };
-    (expected[0].items as JsonRecord[]).splice(1, 0, { id: insertedId, title: "Read the summary first" });
-    expected.push(expected.shift() as JsonRecord);
-    (expected[1].items as JsonRecord[]).splice(3, 1);
+    (templateWithOnlyThoseFourChanges[0].items as JsonRecord[]).splice(1, 0, { id: insertedId, title: "Read the summary first" });
+    templateWithOnlyThoseFourChanges.push(templateWithOnlyThoseFourChanges.shift() as JsonRecord);
+    (templateWithOnlyThoseFourChanges[1].items as JsonRecord[]).splice(3, 1);
     const [stored] = await rows<JsonRecord>("SELECT items, version FROM templates WHERE id = ?", templateId);
     expect(stored.version).toBe(5);
-    expect(JSON.parse(stored.items as string)).toEqual(expected);
+    expect(JSON.parse(stored.items as string)).toEqual(templateWithOnlyThoseFourChanges);
 
     const outline = await readTool({ templateId });
     expect((outline.outline as JsonRecord[]).map(({ id }) => id).at(-1)).toBe("guide");
@@ -804,26 +772,25 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
   }, 60_000);
 
   it("reads a run near the 896KB limit back in full, a bounded result at a time, and updates it", async () => {
-    // A key of its own: the read takes a few dozen of a Run Key's 120 calls a minute.
-    const runKey = await createPersonalRunKeySecret();
+    const runKeyOfItsOwnForTheLongRead = await createPersonalRunKeySecret();
     await env.DB.prepare(`
       INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash, created_at, permissions)
       VALUES ('key-user-a-runs', 'user-a', 'Run reader', ?, ?, ?, ?)
     `).bind(
-      runKey.keyPrefix,
-      runKey.keyHash,
+      runKeyOfItsOwnForTheLongRead.keyPrefix,
+      runKeyOfItsOwnForTheLongRead.keyHash,
       "2026-09-19T02:50:00.000Z",
       '["templates:read","templates:write","runs:read","runs:write"]',
     ).run();
-    // The key-count checks below expect only the first key.
-    onTestFinished(async () => {
+    const removeItForTheKeyCountChecksThatExpectOnlyTheFirstKey = async () => {
       await env.DB.prepare("DELETE FROM personal_run_keys WHERE id = 'key-user-a-runs'").run();
-    });
+    };
+    onTestFinished(removeItForTheKeyCountChecksThatExpectOnlyTheFirstKey);
     let calls = 0;
     const call = async (name: string, args: JsonRecord): Promise<JsonRecord> => {
       calls += 1;
       const body = await bodyOf(await handleAgentMcp(
-        mcpRequest("tools/call", { name, arguments: args }, calls, "/api/mcp", runKey.key),
+        mcpRequest("tools/call", { name, arguments: args }, calls, "/api/mcp", runKeyOfItsOwnForTheLongRead.key),
         env as never,
       ));
       expect(body.error, `${name}: ${JSON.stringify(body.error)}`).toBeUndefined();
@@ -837,8 +804,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       return payload;
     };
 
-    // A template 1KB under the 768KB limit, and a run of it: too large to return whole.
-    const created = await tool("create_template", { title: "Incident Runbook", sections: nearLimitSections() });
+    const created = await tool("create_template", { title: "Incident Runbook", sections: sectionsAbout1KbUnderTheTemplateLimit() });
     const templateId = (created.template as JsonRecord).id as string;
     const started = await tool("start_run", { templateId, title: "Incident drill" });
     expect(started).toMatchObject({ run: { title: "Incident drill", revision: 1 }, sectionsOmitted: true });
@@ -854,22 +820,24 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       runId,
     ))[0];
 
-    // Notes on a section and a task the template then removes: the run keeps them as retired work.
-    await update({ operation: "set_task_notes", taskId: "area-0-0", notes: notesOf(20_000) });
+    await update({ operation: "set_task_notes", taskId: "area-0-0", notes: notesWithinUtf16Units(MAX_TASK_NOTES_LENGTH) });
     await update({ operation: "set_task_notes", taskId: "check-5", notes: "Pager rotated before the drill." });
+    const removalsOfTheNotedSectionAndTaskTheRunKeepsAsRetiredWork = [
+      { operation: "remove_section", sectionId: "area-0" },
+      { operation: "remove_task", taskId: "check-5" },
+    ];
     let version = 1;
-    for (const operation of [{ operation: "remove_section", sectionId: "area-0" }, { operation: "remove_task", taskId: "check-5" }]) {
+    for (const operation of removalsOfTheNotedSectionAndTaskTheRunKeepsAsRetiredWork) {
       version = ((await tool("update_template", { templateId, expectedVersion: version, ...operation })).template as JsonRecord).version as number;
     }
     revision = Number((await storedRun()).revision);
     expect(revision).toBe(5);
 
-    // 20,000-character notes (the most one update_run writes) until the run is within about 2KB
-    // of the run limit.
     for (let area = 1; ; area += 1) {
-      const room = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(JSON.parse(String((await storedRun()).items)));
-      if (room < 1_000) break;
-      await update({ operation: "set_task_notes", taskId: `area-${area}-0`, notes: notesOf(Math.min(20_000, Math.floor(room / 1.1))) });
+      const roomLeftAbove1KbUnderTheRunLimit = RUN_CONTENT_MAX_BYTES - 1_024 - contentSaveBytes(JSON.parse(String((await storedRun()).items)));
+      if (roomLeftAbove1KbUnderTheRunLimit < 1_000) break;
+      const notes = notesWithinUtf16Units(Math.min(MAX_TASK_NOTES_LENGTH, Math.floor(roomLeftAbove1KbUnderTheRunLimit / 1.1)));
+      await update({ operation: "set_task_notes", taskId: `area-${area}-0`, notes });
     }
     const stored = await storedRun();
     const storedSections = JSON.parse(String(stored.items)) as JsonRecord[];
@@ -878,7 +846,6 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(contentSaveBytes(storedSections)).toBeGreaterThan(RUN_CONTENT_MAX_BYTES - 4 * 1024);
     expect(storedRetired.map(({ kind }) => kind)).toEqual(["section", "item"]);
 
-    // Every section, task, note and retired entry comes back, one bounded result at a time.
     const before = calls;
     const { run, results } = await readRunInFull((args) => tool("get_run", args), runId);
     expect(run).toMatchObject({ id: runId, title: "Incident drill", revision, templateVersion: 3 });
@@ -892,7 +859,6 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const staleCursor = results.find((result) => typeof result.nextCursor === "string")?.nextCursor;
     expect(typeof staleCursor).toBe("string");
 
-    // Each update sends one task's change and returns that task, or names one too large to return.
     const ticked = await update({ operation: "set_task_completed", taskId: "check-100", completed: true });
     expect(ticked).toMatchObject({ sectionId: "checks", taskId: "check-100", task: { id: "check-100", isCompleted: true } });
     const noted = await update({ operation: "set_task_notes", taskId: "guide-long", notes: "Read the summary first." });
@@ -947,13 +913,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       permissions: ["runs:read"] as const,
     });
 
-    // Twelve parallel creates: exactly ten may succeed.
+    const parallelCreatesPastTheCap = MAX_ACTIVE_PERSONAL_RUN_KEYS + 2;
     const results = await Promise.all(
-      Array.from({ length: 12 }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
+      Array.from({ length: parallelCreatesPastTheCap }, (_, index) => insertPersonalRunKeyWithinCap(env as never, record(index))),
     );
-    expect(results.filter(Boolean)).toHaveLength(10);
+    expect(results.filter(Boolean)).toHaveLength(MAX_ACTIVE_PERSONAL_RUN_KEYS);
     expect(await rows("SELECT id FROM personal_run_keys WHERE user_id = 'cap-user' AND revoked_at IS NULL"))
-      .toHaveLength(10);
+      .toHaveLength(MAX_ACTIVE_PERSONAL_RUN_KEYS);
 
     await env.DB.prepare("UPDATE personal_run_keys SET revoked_at = ? WHERE id = ?")
       .bind("2026-09-19T05:00:00.000Z", "cap-key-0")

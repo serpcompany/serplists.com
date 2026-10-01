@@ -1,12 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
-// Against real local D1: stopping a share turns the link off for guests, writes exactly one
-// audit event, and lets a shared run that went stale be revalidated again. Shared runs count
-// toward the Free active-run limit like any other active run. A signed-in visitor who edits
-// through a link is named in history only if they belong to the run's Organization. A link
-// holder can complete a run only once every task and Sub-task is done.
-
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
 }));
@@ -21,6 +15,16 @@ const templateItems = JSON.stringify([{ id: "s1", title: "S", items: [{ id: "i1"
 
 async function seed() {
   const db = d1.env.DB;
+  const runSharedWhileItsTemplateMovedToContentVersion2 = db.prepare(`
+    INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
+      progress, template_version, revision, retired_items, is_public)
+    VALUES ('run-1', 'owner', NULL, 'template-1', 'Run', ?, 'in_progress', ?, ?, 100, 1, 1, '[]', 0)
+  `).bind(runItems, now, now);
+  const freeUsersThreeActiveRunsAllShared = [1, 2, 3].map((n) => db.prepare(`
+    INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
+      progress, template_version, revision, retired_items, is_public, share_token)
+    VALUES (?, 'free', NULL, NULL, 'Shared', ?, 'in_progress', ?, ?, 0, 1, 1, '[]', 1, ?)
+  `).bind(`free-shared-${n}`, runItems, now, now, `free-token-${n}`));
   await db.batch([
     db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('owner', 'owner@example.test', 'Owner', 1, ?)").bind(now),
     db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('free', 'free@example.test', 'Free', 1, ?)").bind(now),
@@ -38,18 +42,8 @@ async function seed() {
         created_by_user_id, content_version)
       VALUES ('template-1', 'owner', 'SOP', ?, 0, ?, 2, 'checklist', 'user', NULL, 'owner', 2)
     `).bind(templateItems, now),
-    // The template moved to content version 2 while the run was shared, so the run is stale.
-    db.prepare(`
-      INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
-        progress, template_version, revision, retired_items, is_public)
-      VALUES ('run-1', 'owner', NULL, 'template-1', 'Run', ?, 'in_progress', ?, ?, 100, 1, 1, '[]', 0)
-    `).bind(runItems, now, now),
-    // A Free user (limit 3) whose three active runs are all shared.
-    ...[1, 2, 3].map((n) => db.prepare(`
-      INSERT INTO checklist_runs (id, user_id, team_id, template_id, title, items, status, started_at, created_at,
-        progress, template_version, revision, retired_items, is_public, share_token)
-      VALUES (?, 'free', NULL, NULL, 'Shared', ?, 'in_progress', ?, ?, 0, 1, 1, '[]', 1, ?)
-    `).bind(`free-shared-${n}`, runItems, now, now, `free-token-${n}`)),
+    runSharedWhileItsTemplateMovedToContentVersion2,
+    ...freeUsersThreeActiveRunsAllShared,
     db.prepare(`
       INSERT INTO templates (id, user_id, title, items, is_public, created_at, version, type, owner_type, team_id,
         created_by_user_id, content_version)
@@ -88,7 +82,7 @@ describe.sequential("run sharing against local D1", () => {
     await d1?.dispose();
   });
 
-  it("turns the link off, keeps the run's progress, and allows revalidation again", async () => {
+  it("turns the link off with one audit event even when stopped twice, keeps the run's progress, and allows revalidation again", async () => {
     const share = await call("run/run-1/share", "POST", "owner", {});
     expect(share.status).toBe(200);
     const token = share.body.shareToken as string;
@@ -105,8 +99,8 @@ describe.sequential("run sharing against local D1", () => {
       is_public: 0, share_token: null, share_expires_at: null, share_used_at: null, revision: 1, items: runItems,
     }));
 
-    // Stopping again changes nothing and records nothing.
-    expect((await call("run/run-1/share", "DELETE", "owner")).status).toBe(200);
+    const stopAgain = await call("run/run-1/share", "DELETE", "owner");
+    expect(stopAgain.status).toBe(200);
     expect(await auditActions()).toEqual(["checklist_run.share_created", "checklist_run.share_revoked"]);
 
     const listed = await call("run-1", "GET", "owner");
@@ -121,9 +115,8 @@ describe.sequential("run sharing against local D1", () => {
     expect(create.status).toBe(403);
     expect(create.body.code).toBe("limit_reached");
 
-    // The legacy template-share route created public runs its count left out; it is gone.
-    const templateShare = await call("public-template/share", "POST", "free", { runName: "Fourth" });
-    expect(templateShare.status).toBe(404);
+    const legacyTemplateShareRouteThatLeftItsRunsUncounted = await call("public-template/share", "POST", "free", { runName: "Fourth" });
+    expect(legacyTemplateShareRouteThatLeftItsRunsUncounted.status).toBe(404);
 
     expect(await freeRunCount()).toBe(3);
   });
@@ -135,11 +128,11 @@ describe.sequential("run sharing against local D1", () => {
     };
     await tick("free", 1);
     await tick("member", 2);
-    // A row written before the rule, naming an outsider.
-    await d1.env.DB.prepare(`
+    const outsidersShareEditRecordedBeforeTheRule = d1.env.DB.prepare(`
       INSERT INTO audit_events (id, actor_user_id, subject_type, subject_id, resource_type, resource_id, action, metadata_json, created_at)
       VALUES ('old-share-edit', 'free', 'team', 'org-1', 'checklist_run', 'org-run', 'checklist_run.shared_updated', '{"source":"public_share"}', '2026-01-01T00:00:00.000Z')
-    `).run();
+    `);
+    await outsidersShareEditRecordedBeforeTheRule.run();
 
     const { results } = await d1.env.DB.prepare(
       "SELECT actor_user_id FROM audit_events WHERE resource_id = 'org-run' AND id != 'old-share-edit' ORDER BY created_at",

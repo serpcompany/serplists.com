@@ -5,10 +5,6 @@ import { activeRunCapacityAvailableSql } from "../../functions/api/utils/active-
 import { templateCapacityAvailableSql } from "../../functions/api/utils/template-writes";
 import { startLocalD1, type LocalD1 } from "./local-d1-handler-env";
 
-// Free-plan limits (3 active runs, 1 template) must hold under concurrent requests. The
-// limit check is part of the write itself, so parallel requests cannot all pass a count
-// that was read before any of them inserted.
-
 vi.mock("../../functions/api/utils/session", () => ({
   getSessionUserId: vi.fn(),
 }));
@@ -40,16 +36,18 @@ async function seed() {
       created_by_user_id, content_version, slug, deleted_at)
     VALUES (?, ?, ?, ?, ?, ?, 1, 'checklist', 'user', NULL, ?, 1, ?, ?)
   `);
+  const activeRunsOneBelowEachContextsLimitOf3 = [
+    ...["runs", "restore", "mcp"].flatMap((userId) => [1, 2].map((n) => run.bind(`${userId}-active-${n}`, userId, null, sections, now, now, null))),
+    run.bind("org-active-1", "org-owner", "org-free", sections, now, now, null),
+    run.bind("org-active-2", "org-member", "org-free", sections, now, now, null),
+  ];
   await db.batch([
     ...users.map((id) => db.prepare("INSERT INTO users (id, email, name, email_verified, created_at) VALUES (?, ?, ?, 1, ?)")
       .bind(id, `${id}@example.test`, id, now)),
     db.prepare("INSERT INTO teams (id, name, slug, billing_owner_user_id, created_by_user_id, created_at) VALUES ('org-free', 'Org', 'org-free', 'org-owner', 'org-owner', ?)").bind(now),
     db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m1', 'org-free', 'org-owner', 'owner', 'active', ?)").bind(now),
     db.prepare("INSERT INTO team_members (id, team_id, user_id, role, status, created_at) VALUES ('m2', 'org-free', 'org-member', 'runner', 'active', ?)").bind(now),
-    // Each context starts one below its limit of 3 active runs.
-    ...["runs", "restore", "mcp"].flatMap((userId) => [1, 2].map((n) => run.bind(`${userId}-active-${n}`, userId, null, sections, now, now, null))),
-    run.bind("org-active-1", "org-owner", "org-free", sections, now, now, null),
-    run.bind("org-active-2", "org-member", "org-free", sections, now, now, null),
+    ...activeRunsOneBelowEachContextsLimitOf3,
     ...Array.from({ length: 5 }, (_, n) => run.bind(`restore-archived-${n}`, "restore", null, sections, now, now, now)),
     template.bind("mcp-template", "mcp", "MCP SOP", sections, 0, now, "mcp", "mcp-sop", null),
     template.bind("public-source", "author", "Public SOP", sections, 1, now, "author", "public-sop", null),
@@ -65,7 +63,6 @@ async function seed() {
 }
 
 async function burst(userIds: string[], handler: Handler, makeRequest: (index: number) => Request) {
-  // Every request authenticates as its user, then all run concurrently.
   vi.mocked(getSessionUserId).mockImplementation(async (request: Request) => request.headers.get("x-test-user"));
   const responses = await Promise.all(Array.from({ length: PARALLEL }, (_, index) => {
     const request = makeRequest(index);
@@ -93,7 +90,7 @@ function expectOneWinner({ statuses, bodies }: { statuses: number[]; bodies: Rec
   }
 }
 
-describe.sequential("Free plan limits under concurrent requests (local D1)", () => {
+describe.sequential("Free plan limits under concurrent requests (local D1), checked inside each write so no request passes a count read before the others inserted", () => {
   beforeAll(async () => {
     d1 = await startLocalD1("plan-limits");
     await seed();
@@ -146,9 +143,7 @@ describe.sequential("Free plan limits under concurrent requests (local D1)", () 
     expect(await scalar("SELECT count(*) AS value FROM audit_events WHERE actor_user_id = 'tpl' AND action = 'template.created'")).toBe(1);
   });
 
-  // Copying into Personal needs Pro, which has no template limit, so the Free template limit
-  // applies to copies into a Free Organization.
-  it("clones only one template into a Free Organization", async () => {
+  it("clones only one template into a Free Organization, the one copy target a Free template limit applies to", async () => {
     expectOneWinner(await burst(["org-owner"], handleTemplates as Handler, () => post("templates/public-source/clone", { teamId: "org-free" })));
     expect(await scalar("SELECT count(*) AS value FROM templates WHERE team_id = 'org-free' AND deleted_at IS NULL")).toBe(1);
     expect(await scalar("SELECT count(*) AS value FROM template_versions WHERE template_id IN (SELECT id FROM templates WHERE team_id = 'org-free')")).toBe(1);
