@@ -88,7 +88,7 @@ function resetTaskState(item: unknown): unknown {
   const next = freshRunState(item);
   if (Array.isArray(item.subItems)) next.subItems = resetSubItems(item.subItems);
   if (Array.isArray(item.contents)) {
-    next.contents = item.contents.map((content) => (
+    next.contents = item.contents.map((content: unknown) => (
       isRecord(content) && Array.isArray(content.subItems)
         ? { ...content, subItems: resetSubItems(content.subItems) }
         : content

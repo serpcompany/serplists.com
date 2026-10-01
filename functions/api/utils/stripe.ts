@@ -153,13 +153,13 @@ export async function stripeGet(secretKey: string, path: string): Promise<unknow
   return readStripeResponse(resp);
 }
 
-export async function stripePostForm<Reply extends z.ZodTypeAny>(
+export async function stripePostForm<Reply>(
   secretKey: string,
   path: string,
   body: Record<string, string | number | boolean | undefined | null>,
-  reply: Reply,
+  reply: z.ZodType<Reply, z.ZodTypeDef, unknown>,
   options?: { idempotencyKey?: string },
-): Promise<z.output<Reply>> {
+): Promise<Reply> {
   const resp = await fetch(`https://api.stripe.com${path}`, {
     method: "POST",
     headers: {

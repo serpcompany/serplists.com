@@ -56,7 +56,7 @@ function readTasks(raw: unknown): { sections: number; tasks: Map<string, TaskSta
         completed: item.isCompleted === true || item.completed === true,
         notes: item.notes,
         subItems,
-        shapeWithoutRunState: JSON.stringify(item, (name, entry) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
+        shapeWithoutRunState: JSON.stringify(item, (name: string, entry: unknown) => (RUN_STATE_FIELDS.has(name) ? undefined : entry)),
       });
     });
   });

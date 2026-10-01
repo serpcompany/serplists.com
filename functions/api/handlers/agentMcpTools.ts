@@ -94,7 +94,10 @@ function dropNullFields(rawArguments: unknown): unknown {
   return Object.fromEntries(Object.entries(rawArguments).filter(([, value]) => value !== null));
 }
 
-export function parseToolArguments<Schema extends z.ZodTypeAny>(schema: Schema, rawArguments: unknown): z.infer<Schema> {
+export function parseToolArguments<Arguments>(
+  schema: z.ZodType<Arguments, z.ZodTypeDef, unknown>,
+  rawArguments: unknown,
+): Arguments {
   const parsed = schema.safeParse(dropNullFields(rawArguments));
   if (parsed.success) return parsed.data;
   const issues = parsed.error.issues.slice(0, MAX_REPORTED_ISSUES).map((issue) => ({

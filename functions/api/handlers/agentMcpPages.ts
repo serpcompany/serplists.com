@@ -83,18 +83,19 @@ export function encodeCursor(cursor: JsonRecord): string {
 export const invalidCursor = (message: string) =>
   new ToolError(`cursor: ${message}`, "invalid_arguments", { issues: [{ path: "cursor", message }] });
 
-function parseCursor<Schema extends z.ZodTypeAny>(value: string, schema: Schema): z.infer<Schema> | undefined {
+function parseCursor<Cursor>(value: string, schema: z.ZodType<Cursor, z.ZodTypeDef, unknown>): Cursor | undefined {
   try {
     const bytes = Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (character) => character.charCodeAt(0));
     const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
-    const parsed = schema.safeParse(JSON.parse(text));
+    const cursor: unknown = JSON.parse(text);
+    const parsed = schema.safeParse(cursor);
     return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
   }
 }
 
-export function decodeCursor<Schema extends z.ZodTypeAny>(value: string, schema: Schema, tool: string): z.infer<Schema> {
+export function decodeCursor<Cursor>(value: string, schema: z.ZodType<Cursor, z.ZodTypeDef, unknown>, tool: string): Cursor {
   const cursor = parseCursor(value, schema);
   if (cursor === undefined) throw invalidCursor(`Not a cursor ${tool} returned`);
   return cursor;

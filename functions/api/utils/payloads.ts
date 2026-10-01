@@ -99,12 +99,14 @@ export function describePayloadError(
   return { message, details: field === undefined ? {} : { field } };
 }
 
+const isArray = (value: unknown): value is unknown[] => Array.isArray(value);
+
 export function parseJsonArray(value: unknown): unknown[] | null {
-  if (Array.isArray(value)) return value;
+  if (isArray(value)) return value;
   if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : null;
+      const parsed: unknown = JSON.parse(value);
+      return isArray(parsed) ? parsed : null;
     } catch {
       return null;
     }

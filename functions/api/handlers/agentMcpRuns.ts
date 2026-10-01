@@ -31,7 +31,7 @@ export function agentTaskView(task: JsonRecord): JsonRecord {
 
 export function agentSectionView(section: JsonRecord): JsonRecord {
   if (!Array.isArray(section.items)) return { ...section, items: [] };
-  return { ...section, items: section.items.map((task) => (isRecord(task) ? agentTaskView(task) : task)) };
+  return { ...section, items: section.items.map((task: unknown) => (isRecord(task) ? agentTaskView(task) : task)) };
 }
 
 export function agentRetiredView(entry: JsonRecord): JsonRecord {

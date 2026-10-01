@@ -228,7 +228,7 @@ export function withStableTemplateIdentities(sections: unknown[]): unknown[] {
     if (!Array.isArray(section.items)) return { ...section, id: stableSection.id };
     const stableItems = getArray(stableSection.items).filter(isRecord);
     let itemIndex = 0;
-    const items = section.items.map((item) =>
+    const items = section.items.map((item: unknown) =>
       (isRecord(item) ? withItemIds(item, stableRecordAt(stableItems, itemIndex++, 'item')) : item));
     return { ...section, id: stableSection.id, items };
   });

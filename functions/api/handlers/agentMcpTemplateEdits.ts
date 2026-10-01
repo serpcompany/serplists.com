@@ -12,7 +12,7 @@ function withTaskIds(task: JsonRecord): JsonRecord {
   const withSubTaskIds = (content: unknown) => (isSubTasksBlock(content) && Array.isArray(content.subItems)
     ? {
       ...content,
-      subItems: content.subItems.map((subItem) =>
+      subItems: content.subItems.map((subItem: unknown) =>
         (isRecord(subItem) && !getId(subItem) ? { ...subItem, id: newEditorId("subitem") } : subItem)),
     }
     : content);

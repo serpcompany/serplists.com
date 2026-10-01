@@ -93,7 +93,7 @@ function mergeItemSubItems(stored: JsonRecord, guest: SharedRunItem): { subItems
     merged.subItems = mergeList(stored.subItems, asArray(guest.subItems));
   }
   if (Array.isArray(stored.contents)) {
-    merged.contents = stored.contents.map((content, index) => {
+    merged.contents = stored.contents.map((content: unknown, index) => {
       if (!isRecord(content) || !Array.isArray(content.subItems)) return content;
       const guestContent = guestContents[index];
       return {
@@ -140,7 +140,7 @@ export function mergeSharedRunState(
     const sectionId = typeof section.id === 'string' ? section.id : String(sectionIndex + 1);
     return {
       ...section,
-      items: section.items.map((item, itemIndex) => {
+      items: section.items.map((item: unknown, itemIndex) => {
         if (!isRecord(item)) return item;
         const itemId = typeof item.id === 'string' ? item.id : `${sectionIndex + 1}-${itemIndex + 1}`;
         const guestItem = guestItems.get(`${sectionId}\u0000${itemId}`)?.shift();
