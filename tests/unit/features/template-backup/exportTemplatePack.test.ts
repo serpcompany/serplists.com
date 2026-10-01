@@ -22,13 +22,11 @@ const buildDependencies = (response: unknown, catalog: unknown[] = []) => ({
 });
 
 describe('exportTemplatePack', () => {
-  it('lets the server decide even when the loaded list looks empty', async () => {
-    // A failed list request also looks like an empty list, so the page never guesses.
+  it("asks the server for the context's own templates even when the loaded list looks empty, as a failed list request also does", async () => {
     const dependencies = buildDependencies(pack([{ title: 'Owned' }]));
 
     const result = await exportTemplatePack({ includePublic: false, teamId: 'team-1' }, dependencies);
 
-    // The server exports only the context's own templates.
     expect(dependencies.exportBackup).toHaveBeenCalledWith({ teamId: 'team-1' });
     expect(dependencies.loadPublicCatalog).not.toHaveBeenCalled();
     expect(result).toEqual({ exported: 1, skipped: [] });
@@ -44,7 +42,7 @@ describe('exportTemplatePack', () => {
     expect(dependencies.download).not.toHaveBeenCalled();
   });
 
-  it('does not download an empty pack when public templates were requested', async () => {
+  it('loads the public catalog for an export that asks for public templates, and downloads no empty pack', async () => {
     const dependencies = buildDependencies(pack([]));
 
     const result = await exportTemplatePack(
@@ -53,7 +51,6 @@ describe('exportTemplatePack', () => {
     );
 
     expect(dependencies.exportBackup).toHaveBeenCalledWith({ teamId: undefined });
-    // Public templates come from the catalog, loaded only for this export.
     expect(dependencies.loadPublicCatalog).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ exported: 0, skipped: [] });
     expect(dependencies.download).not.toHaveBeenCalled();
@@ -72,7 +69,7 @@ describe('exportTemplatePack', () => {
     expect(result).toEqual({ exported: 2, skipped: [] });
   });
 
-  it('rejects a response that is not a template pack with a readable message', async () => {
+  it('rejects a response that is not a template pack with a readable message, which the page toasts as-is', async () => {
     const dependencies = buildDependencies({ error: 'unexpected' });
 
     const error = await exportTemplatePack({ includePublic: false }, dependencies).then(
@@ -82,7 +79,6 @@ describe('exportTemplatePack', () => {
 
     expect(error).toBeInstanceOf(Error);
     expect(error).not.toBeInstanceOf(ZodError);
-    // The page toasts this message as-is (getAccessFailure falls back to it).
     const { message } = getAccessFailure(error, 'Failed to export templates');
     expect(message).toBe(EXPORT_PACK_UNREADABLE_MESSAGE);
     expect(message).not.toMatch(/[{}[\]\n]/);
@@ -90,10 +86,7 @@ describe('exportTemplatePack', () => {
   });
 });
 
-// In an Organization, catalog rows carry no team_id, so only the page's list recognised
-// the Organization's own public templates. When that list failed to load (or predates a
-// teammate's new template), they were exported twice: from the server and the catalog.
-describe('exportTemplatePack with public templates in an Organization', () => {
+describe("exportTemplatePack with public templates in an Organization, whose catalog rows carry no team_id to tell its own apart", () => {
   const sections = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Check DNS' }] }];
   const stored = (slug: string, title: string) => ({
     id: `${slug}-id`, title, description: '', type: 'checklist', seoTitle: '', seoDescription: '',
@@ -104,7 +97,7 @@ describe('exportTemplatePack with public templates in an Organization', () => {
     createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', categories: [], tags: [],
   });
 
-  it('adds each public template once, even when the page list is empty', async () => {
+  it("adds each public template once, even when the page list is empty, as one that failed to load or predates a teammate's template is", async () => {
     const serverPack = JSON.parse(JSON.stringify(buildPortableTemplatePack(
       [stored('org-guide', 'Org guide'), stored('launch-qa', 'Launch QA')],
       'admin@example.com',
