@@ -157,3 +157,10 @@ export function normalizeSectionsPayload(input: unknown): { sections: unknown[];
     ],
   };
 }
+
+export function getRequestedTeamId(
+  parsed: { teamId?: string | undefined; team_id?: string | undefined },
+  url: URL,
+): string | null {
+  return parsed.teamId ?? parsed.team_id ?? url.searchParams.get("teamId");
+}

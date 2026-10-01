@@ -2,6 +2,7 @@ import { Env } from '../types';
 import { createDb } from '../db';
 import {
   describePayloadError,
+  getRequestedTeamId,
   normalizeStringArray,
   parseSectionsPayload,
   templatePayloadSchema,
@@ -38,10 +39,6 @@ export type TemplateWriteOptions = {
   privatePersonalOnly?: boolean;
   auditMetadata?: Record<string, unknown>;
 };
-
-function getRequestedTeamId(parsed: { teamId?: string | undefined; team_id?: string | undefined }, url: URL): string | null {
-  return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
-}
 
 export async function createTemplateForUser(
   request: Request,

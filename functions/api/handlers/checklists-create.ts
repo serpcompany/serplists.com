@@ -1,7 +1,13 @@
 import { Env } from '../types';
 import { and, eq, isNull } from 'drizzle-orm';
 import { createDb, schema } from '../db';
-import { checklistPayloadSchema, normalizeSectionsPayload, parseJsonArray, parseSectionsPayload } from '../utils/payloads';
+import {
+  checklistPayloadSchema,
+  getRequestedTeamId,
+  normalizeSectionsPayload,
+  parseJsonArray,
+  parseSectionsPayload,
+} from '../utils/payloads';
 import { sanitizeStoredSections } from '../../../src/lib/schemas/storedSections';
 import { json, jsonError } from '../utils/response';
 import { buildAuditEventValues } from '../utils/audit';
@@ -18,10 +24,6 @@ import {
 } from '../utils/active-run-limit';
 import { completionStamps } from '../utils/run-completion';
 import { contentTooLargeResponse } from '../utils/content-limits';
-
-function getRequestedTeamId(parsed: { teamId?: string | undefined; team_id?: string | undefined }, url: URL): string | null {
-  return parsed.teamId ?? parsed.team_id ?? url.searchParams.get('teamId');
-}
 
 async function assertTeamRunAccess(env: Env, teamId: string, userId: string): Promise<Response | null> {
   const membership = await getActiveTeamMembership(env, teamId, userId);
