@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-41.**
+then you raise it. **Next ID: TD-43.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -40,3 +40,5 @@ then you raise it. **Next ID: TD-41.**
 | TD-38 | Duplication | `TemplateUpdater` is declared twice: `src/features/template-detail/templateVisibility.ts` and `useTemplateDetailRecord.ts`. | Import the exported one. Small. | None |
 | TD-39 | Dead code | `shouldBlockTemplateEditorNavigation` (`src/features/template-editor/navigationGuards.ts`) takes an `isSaving` parameter it never reads; only its test passes it. | Remove the parameter and its test arguments. Small. | None |
 | TD-40 | Tests | Some browser specs open a page by a non-canonical path, without its trailing slash, so the page loads only after a redirect: `template-detail-loading` and `workspace-teams-error` (`PUBLIC_TEMPLATE_PATH`), and `smoke`'s "login link renders from ..." cases. | Check each: if the redirect isn't what the test is about, open the canonical path. Small. | None |
+| TD-41 | Duplication | Counting a Template's items is written about seven times: `src/features/profile/profileSummary.ts`, `src/features/dashboard-templates/useDashboardTemplatesModel.ts`, `src/features/template-detail/templateDetailMappers.ts`, `src/views/Index.tsx`, `src/components/checklist-library/discovery-utils.ts`, and inline in `TemplateCard.tsx` and `TemplateListItem.tsx`. | Export one `countTemplateItems` from `src/lib/templates` and use it everywhere. Small. | None |
+| TD-42 | Duplication | `persistAcceptedWorkspace` (`src/features/teams/acceptTeamInvite.ts`) writes `serplists.activeWorkspaceId` through its own copy of the key, and `TeamSettingsSection.tsx` calls it just before `selectWorkspace`, which writes the same value. | Remove the function, its call and the copied key, so WorkspaceContext is the only writer. Small. | None |
