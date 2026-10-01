@@ -4,7 +4,11 @@ import { cache } from 'react';
 
 import { loadPublicTemplate } from '@functions/seo/public-template-lookup';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
-import { resolveTemplatePageText, TEMPLATE_NOT_FOUND_PAGE_TEXT } from '@/lib/publicPageMeta';
+import {
+  resolveTemplatePageText,
+  TEMPLATE_NOT_FOUND_PAGE_TEXT,
+  type TemplatePageSource,
+} from '@/lib/publicPageMeta';
 import {
   findPublicTemplateByIdentifier,
   repoTemplates,
@@ -20,19 +24,13 @@ export type TemplatePageSeo =
   | { kind: 'not_found'; seo: PageSeo }
   | { kind: 'unavailable' };
 
-interface TemplatePageSource {
-  id: string;
-  slug?: string | null | undefined;
-  title: string;
-  description?: string | null | undefined;
-  seoTitle?: string | null | undefined;
-  seoDescription?: string | null | undefined;
+type FoundTemplatePage = TemplatePageSource & {
   createdAt?: string | null;
   categories?: string[];
   canonicalPath: string | null;
-}
+};
 
-const toFoundSeo = (template: TemplatePageSource): TemplatePageSeo => {
+const toFoundSeo = (template: FoundTemplatePage): TemplatePageSeo => {
   const text = resolveTemplatePageText(template);
   return {
     kind: 'found',
