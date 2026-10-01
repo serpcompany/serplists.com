@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SqliteD1 } from "../../../support/sqlite-d1";
+import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
 
 const sessionMocks = vi.hoisted(() => ({
   userId: "owner-user" as string | null,
@@ -12,7 +12,7 @@ vi.mock("@functions/api/utils/session", () => ({
 import { handleTeams } from "@functions/api/handlers/teams";
 
 const createdAt = "2026-01-01T00:00:00.000Z";
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 
 function env() {
   return { DB: d1.binding, BETTER_AUTH_SECRET: "test-better-auth-secret-32-chars-minimum!!" };
@@ -83,7 +83,7 @@ function activeOwners() {
 
 describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(() => {
-    d1 = new SqliteD1();
+    d1 = new MigratedSqliteD1();
     seedOrganization();
   });
 

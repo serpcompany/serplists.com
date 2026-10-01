@@ -3,19 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateMetadata } from '@/app/(site)/categories/[categorySlug]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { loadCategoryPageSeo } from '@/server/pageMeta/categoryPage';
-import { API_SECRET, createEdgeCache, failingD1, serverContext } from '../../../support/nextServerContext';
-import { SqliteD1 } from '../../../support/sqlite-d1';
+import { SECRET_THE_API_ROUTER_VALIDATES, createEdgeCache, unreachableD1, serverContext } from '../../../support/nextServerContext';
+import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
 vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
 
-// /categories/<slug> names the category and its template count in its <head>, counted from
-// the same public catalog the page counts in the browser (GET /api/templates?scope=public,
-// through the API router in this Worker, plus the bundled library). A category the server
-// cannot name keeps the site's defaults, and the page decides in the browser.
-
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 
 const addPublicTemplate = (id: string, categories: string[], ownerUsername: string | null = 'alice') => {
   d1.run(
@@ -39,8 +34,8 @@ const addPublicTemplate = (id: string, categories: string[], ownerUsername: stri
 const params = (categorySlug: string) => ({ params: Promise.resolve({ categorySlug }) });
 
 beforeEach(() => {
-  d1 = new SqliteD1();
-  serverContext.env = { DB: d1.binding, BETTER_AUTH_SECRET: API_SECRET };
+  d1 = new MigratedSqliteD1();
+  serverContext.env = { DB: d1.binding, BETTER_AUTH_SECRET: SECRET_THE_API_ROUTER_VALIDATES };
   serverContext.host = 'serplists.com';
   vi.spyOn(console, 'info').mockImplementation(() => undefined);
 });
@@ -109,7 +104,7 @@ describe('category page metadata', () => {
 
 describe('category page metadata when the catalog cannot be read', () => {
   beforeEach(() => {
-    serverContext.env = { DB: failingD1, BETTER_AUTH_SECRET: API_SECRET };
+    serverContext.env = { DB: unreachableD1, BETTER_AUTH_SECRET: SECRET_THE_API_ROUTER_VALIDATES };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
   });
 

@@ -4,22 +4,16 @@ import { generateMetadata } from '@/app/(site)/profile/[username]/[templateSlug]
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildPageJsonLd } from '@/lib/seo/pageMetadata';
 import { loadTemplatePageSeo } from '@/server/pageMeta/templatePage';
-import { createEdgeCache, failingD1, serverContext } from '../../../support/nextServerContext';
-import { SqliteD1 } from '../../../support/sqlite-d1';
+import { createEdgeCache, unreachableD1, serverContext } from '../../../support/nextServerContext';
+import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
 vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
 
-// /profile/<username>/<identifier> renders its own title, description, canonical URL, link
-// preview and robots rule on the server, finding the template the way the page does: a
-// bundled library template first, then a public template in D1 whose owner has that
-// username. A missing template is kept out of search; a failed lookup, which may be brief,
-// keeps the site's defaults and stays indexable.
-
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
 
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 
 const insertTemplate = (overrides: Partial<Record<string, unknown>> = {}) => {
   const row = {
@@ -52,7 +46,7 @@ const params = (username: string, templateSlug: string) => ({
 });
 
 beforeEach(() => {
-  d1 = new SqliteD1();
+  d1 = new MigratedSqliteD1();
   d1.run(
     `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
      VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,
@@ -88,10 +82,7 @@ describe('template page metadata', () => {
     expect(metadata.description).toBe('Persisted Clipy summary.');
   });
 
-  // Canonical links, og:url and JSON-LD name one URL per template: the stored username and
-  // the slug on the production site, whatever the visit looked like. The server never sees
-  // the visit's query or hash.
-  it('points the canonical at the production slug URL from a visit by id, in another letter case', async () => {
+  it('points the canonical URL, og:url and JSON-LD at the one production slug URL from a visit by id, in another letter case', async () => {
     insertTemplate();
 
     const result = await loadTemplatePageSeo('ALICE', TEMPLATE_ID);
@@ -124,7 +115,7 @@ describe('template page metadata', () => {
   });
 
   it('finds a bundled library template under the official owner, without reading D1', async () => {
-    serverContext.env = { DB: failingD1 };
+    serverContext.env = { DB: unreachableD1 };
 
     const metadata = await generateMetadata(params('SERP', 'ultimate-camping-checklist'));
 
@@ -134,13 +125,12 @@ describe('template page metadata', () => {
   });
 });
 
-describe('template page metadata for a template that is not there', () => {
+describe('template page metadata for a template that is not there, an address that is not a page and so names no canonical URL', () => {
   const expectNotFound = async (username: string, identifier: string) => {
     const metadata = await generateMetadata(params(username, identifier));
 
     expect(metadata.robots).toBe('noindex, nofollow');
     expect(metadata.title).toEqual({ absolute: `Template not found | ${APP_BRAND_NAME}` });
-    // The address is not a page, so it names no canonical URL.
     expect(metadata.alternates?.canonical).toBeUndefined();
     expect(metadata.openGraph?.url).toBeUndefined();
   };
@@ -159,7 +149,7 @@ describe('template page metadata for a template that is not there', () => {
     insertTemplate({ is_public: 0 });
     await expectNotFound('alice', 'reviewed-clipy-checklist');
 
-    d1 = new SqliteD1();
+    d1 = new MigratedSqliteD1();
     d1.run(
       `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
        VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,
@@ -170,7 +160,7 @@ describe('template page metadata for a template that is not there', () => {
   });
 
   it('keeps the site defaults, indexable, when the lookup fails', async () => {
-    serverContext.env = { DB: failingD1 };
+    serverContext.env = { DB: unreachableD1 };
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     expect(await loadTemplatePageSeo('alice', 'reviewed-clipy-checklist')).toEqual({ kind: 'unavailable' });
@@ -179,11 +169,8 @@ describe('template page metadata for a template that is not there', () => {
   });
 });
 
-// Humans and crawlers both open template pages, so a found template is cached in the data
-// center for 5 minutes (docs/design-docs/d1-cost.md), per host: staging and production share
-// the zone's cache and must never read each other's entries.
 describe('template page metadata cache', () => {
-  it('reads D1 once per template, host and 5 minutes', async () => {
+  it('reads D1 once per template and 5 minutes', async () => {
     insertTemplate();
     const edgeCache = createEdgeCache();
     vi.stubGlobal('caches', { default: edgeCache.cache });
@@ -197,10 +184,23 @@ describe('template page metadata cache', () => {
     const [[key, stored]] = [...edgeCache.entries];
     expect(key).toBe('https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist');
     expect(stored.headers.get('Cache-Control')).toBe('public, s-maxage=300');
+  });
+
+  it("keys the cache by host, since staging and production share the zone's cache and must never read each other's entries", async () => {
+    insertTemplate();
+    const edgeCache = createEdgeCache();
+    vi.stubGlobal('caches', { default: edgeCache.cache });
+    await loadTemplatePageSeo('alice', 'reviewed-clipy-checklist');
+    const queries = d1.queries.length;
 
     serverContext.host = 'staging.serplists.com';
     await loadTemplatePageSeo('alice', 'reviewed-clipy-checklist');
+
     expect(d1.queries.length).toBeGreaterThan(queries);
+    expect([...edgeCache.entries.keys()]).toEqual([
+      'https://serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist',
+      'https://staging.serplists.com/__page-meta/v2/templates/reviewed-clipy-checklist',
+    ]);
   });
 
   it('never caches a template that is not there', async () => {

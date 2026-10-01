@@ -3,18 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateMetadata } from '@/app/share/[shareToken]/page';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { loadSharedRunPageSeo } from '@/server/pageMeta/sharedRunPage';
-import { failingD1, serverContext } from '../../../support/nextServerContext';
-import { SqliteD1 } from '../../../support/sqlite-d1';
+import { unreachableD1, serverContext } from '../../../support/nextServerContext';
+import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
 vi.mock('next/headers', async () => (await import('../../../support/nextServerContext')).headersMock);
 
-// A share link names its run in the page's <head>, as the page does, and is never indexed.
-// Holding the link is the only credential, so a link that was turned off, or a run that was
-// deleted, names nothing.
-
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 
 const addRun = ({ title = 'Launch prep', shared = true, deleted = false } = {}) =>
   d1.run(
@@ -28,7 +24,7 @@ const addRun = ({ title = 'Launch prep', shared = true, deleted = false } = {}) 
 const params = (shareToken: string) => ({ params: Promise.resolve({ shareToken }) });
 
 beforeEach(() => {
-  d1 = new SqliteD1();
+  d1 = new MigratedSqliteD1();
   d1.run(
     `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
      VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,
@@ -55,7 +51,7 @@ describe('shared run page metadata', () => {
   it.each([
     ['a link that was turned off', { shared: false }],
     ['a deleted run', { deleted: true }],
-  ])('names nothing for %s, and stays out of search', async (_label, run) => {
+  ])('names nothing for %s, since holding the link is the only credential, and stays out of search', async (_label, run) => {
     addRun(run);
 
     expect(await loadSharedRunPageSeo('share-token-1')).toBeNull();
@@ -70,7 +66,7 @@ describe('shared run page metadata', () => {
   });
 
   it('stays out of search when the lookup fails', async () => {
-    serverContext.env = { DB: failingD1 };
+    serverContext.env = { DB: unreachableD1 };
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     expect(await generateMetadata(params('share-token-1'))).toEqual({ robots: 'noindex, nofollow' });

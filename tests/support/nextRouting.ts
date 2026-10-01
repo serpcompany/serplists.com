@@ -1,11 +1,3 @@
-// Runs next.config.ts's redirects and headers the two ways the app is served:
-// - `nextServerRedirect`: Next.js's own server (`next dev`, `next start`), with the matcher,
-//   has/missing check and destination compiler it uses (resolve-routes.js).
-// - `workerRedirect`: the Worker, where OpenNext's routing (the real handleRedirects from
-//   @opennextjs/aws) applies the build's routes manifest. tests/unit/config/nextRouting.mock.ts
-//   gives it the config OpenNext would read from the build.
-// Both load the rules the way `next build` does (loadCustomRoutes validates them, then each
-// becomes a manifest entry with its regex), for a build made with the given SITE_ENV.
 import { format } from 'node:url';
 
 import { PHASE_PRODUCTION_SERVER } from 'next/constants';
@@ -28,7 +20,6 @@ export interface RedirectResult {
 }
 
 export interface RequestOptions {
-  /** Request headers other than Host (which comes from the URL). */
   headers?: Record<string, string>;
 }
 
@@ -41,10 +32,6 @@ type HeaderRule = Awaited<ReturnType<NonNullable<NextConfig['headers']>>>[number
 
 export const nextConfig = (): NextConfig => nextConfigFor(PHASE_PRODUCTION_SERVER);
 
-/**
- * What OpenNext's routing reads from a build (@opennextjs/aws/adapters/config), for a test that
- * mocks that module: the Next.js config and empty manifests (redirects are passed in).
- */
 export const openNextBuildConfig = () => ({
   NextConfig: nextConfig(),
   BuildId: 'test-build',
@@ -66,7 +53,6 @@ export const openNextBuildConfig = () => ({
   FunctionsConfigManifest: { functions: {} },
 });
 
-/** The redirects and headers a build made with this SITE_ENV has, as its routes manifest lists them. */
 export async function loadBuiltRoutes(siteEnv: string | undefined) {
   return withSiteEnv(siteEnv, async () => {
     const config = nextConfig();
@@ -86,7 +72,6 @@ const splitUrl = (url: string) => {
   return { parsed, query: Object.fromEntries(parsed.searchParams) };
 };
 
-/** What `next dev` and `next start` answer: a redirect, or null when the request is served. */
 export function nextServerRedirect(
   redirects: ManifestRedirect[],
   url: string,
@@ -120,7 +105,6 @@ export function nextServerRedirect(
   return null;
 }
 
-/** What the Worker answers: OpenNext's routing, before anything renders. */
 export async function workerRedirect(
   redirects: ManifestRedirect[],
   url: string,
@@ -141,14 +125,10 @@ export async function workerRedirect(
   };
   const result = handleRedirects(event as never, redirects as never);
   if (!result) return null;
-  return {
-    status: result.statusCode,
-    // routingHandler writes the Location this way (relative on the same origin).
-    location: normalizeLocationHeader(String(result.headers.Location), parsed.href, true),
-  };
+  const locationAsRoutingHandlerWritesIt = normalizeLocationHeader(String(result.headers.Location), parsed.href, true);
+  return { status: result.statusCode, location: locationAsRoutingHandlerWritesIt };
 }
 
-/** The headers a response gets from next.config.ts, as the routes manifest applies them. */
 export function headersFor(rules: HeaderRule[], url: string): Map<string, string[]> {
   const { parsed, query } = splitUrl(url);
   const req = { headers: { host: parsed.host } };

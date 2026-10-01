@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SqliteD1 } from "../../../support/sqlite-d1";
+import { MigratedSqliteD1 } from "../../../support/sqlite-d1";
 
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
@@ -28,7 +28,7 @@ const NOW = "2026-09-30T00:00:00.000Z";
 const CREATE_TEMPLATE_MAX_SECTIONS = 100;
 const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 let calls = 0;
 
 async function call(name: string, args: JsonRecord): Promise<JsonRecord> {
@@ -223,7 +223,7 @@ describe("the largest result of every MCP tool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new SqliteD1();
+    d1 = new MigratedSqliteD1();
     d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'user-1@example.test', 'User', 1, ?)", NOW);
     liftTheTemplateAndActiveRunLimits();
   });

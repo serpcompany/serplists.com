@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Env } from '../../../functions/api/types';
 import { loadPublicTemplate } from '../../../functions/seo/public-template-lookup';
-import { SqliteD1 } from '../../support/sqlite-d1';
+import { MigratedSqliteD1 } from '../../support/sqlite-d1';
 
 const UUID_SLUG = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 const TEMPLATE_ID = '9b2d7c1e-0f3a-4e5b-8c6d-7a8b9c0d1e2f';
 
-let d1: SqliteD1;
+let d1: MigratedSqliteD1;
 
 const insertTemplate = (id: string, slug: string, isPublic = true) =>
   d1.run(
@@ -23,7 +23,7 @@ const lookup = (identifier: string) =>
   loadPublicTemplate({ DB: d1.binding } as unknown as Env, 'https://serplists.com', identifier);
 
 beforeEach(() => {
-  d1 = new SqliteD1();
+  d1 = new MigratedSqliteD1();
   d1.run(
     `INSERT INTO users (id, email, name, username, email_verified, created_at, updated_at)
      VALUES ('user-1', 'alice@example.test', 'Alice', 'alice', 1, '2026-01-01', '2026-01-01')`,

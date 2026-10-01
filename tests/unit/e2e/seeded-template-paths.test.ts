@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import * as schema from '../../../db/schema/index';
 import { seedLocalTestData } from '../../../db/seeds/local';
 import type { LocalDb } from '../../../scripts/data/local-d1';
-import { SqliteD1 } from '../../support/sqlite-d1';
+import { MigratedSqliteD1 } from '../../support/sqlite-d1';
 import { repoTemplates, resolvePublicTemplateOwnerSlug } from '@/lib/repoTemplateCatalog';
 
 const E2E_DIR = path.join('tests', 'e2e');
@@ -46,7 +46,7 @@ let openableOwnersAndSlugs = new Set<string>();
 let slugsTheApiAnswers = new Set<string>();
 
 beforeAll(async () => {
-  const d1 = new SqliteD1();
+  const d1 = new MigratedSqliteD1();
   await seedLocalTestData(drizzle(d1.binding as Parameters<typeof drizzle>[0], { schema }) as unknown as LocalDb);
   const seeded = d1.rows<{ username: string; slug: string }>(
     'SELECT users.username AS username, templates.slug AS slug FROM templates ' +

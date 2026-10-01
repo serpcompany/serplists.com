@@ -1,8 +1,3 @@
-// A D1Database backed by node:sqlite with every migration in db/migrations applied.
-// Handler tests use it to run real SQL (guards, EXISTS subqueries, partial unique
-// indexes, query plans) without wrangler. `beforeNextBatch` runs a competing write
-// just before the handler's next db.batch(), which makes check-then-write races
-// deterministic. Batches run in one transaction and roll back on error, like D1.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +6,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
 type Row = Record<string, unknown>;
-type BatchHook = () => void | Promise<void>;
+type CompetingWrite = () => void | Promise<void>;
 
 export type RecordedQuery = { sql: string; params: unknown[] };
 
@@ -29,7 +24,7 @@ function toSqliteValue(value: unknown): SQLInputValue {
 
 class SqliteD1Statement {
   constructor(
-    private readonly harness: SqliteD1,
+    private readonly harness: MigratedSqliteD1,
     readonly sql: string,
     readonly params: unknown[] = [],
   ) {}
@@ -57,10 +52,10 @@ class SqliteD1Statement {
   }
 }
 
-export class SqliteD1 {
+export class MigratedSqliteD1 {
   readonly sqlite = new DatabaseSync(":memory:");
   readonly queries: RecordedQuery[] = [];
-  private readonly batchHooks: BatchHook[] = [];
+  private readonly competingWritesBeforeNextBatch: CompetingWrite[] = [];
 
   constructor() {
     this.sqlite.exec("PRAGMA foreign_keys = ON");
@@ -70,7 +65,6 @@ export class SqliteD1 {
     }
   }
 
-  /** The object to pass as `env.DB`. */
   get binding(): D1Database {
     return this as unknown as D1Database;
   }
@@ -80,8 +74,8 @@ export class SqliteD1 {
   }
 
   async batch(statements: SqliteD1Statement[]): Promise<D1Result[]> {
-    const hook = this.batchHooks.shift();
-    if (hook) await hook();
+    const competingWrite = this.competingWritesBeforeNextBatch.shift();
+    if (competingWrite) await competingWrite();
 
     this.sqlite.exec("BEGIN");
     try {
@@ -94,12 +88,10 @@ export class SqliteD1 {
     }
   }
 
-  /** Runs `hook` right before the next db.batch() call, as if another request committed first. */
-  beforeNextBatch(hook: BatchHook) {
-    this.batchHooks.push(hook);
+  beforeNextBatch(competingWrite: CompetingWrite) {
+    this.competingWritesBeforeNextBatch.push(competingWrite);
   }
 
-  /** Runs a plain SQL write or read against the database, outside any handler. */
   run(sql: string, ...params: unknown[]) {
     this.sqlite.prepare(sql).run(...params.map(toSqliteValue));
   }
@@ -108,7 +100,6 @@ export class SqliteD1 {
     return this.sqlite.prepare(sql).all(...params.map(toSqliteValue)).map((row) => ({ ...row }) as T);
   }
 
-  /** EXPLAIN QUERY PLAN details for a recorded statement. */
   queryPlan(query: RecordedQuery): string[] {
     return this.rows<{ detail: string }>(`EXPLAIN QUERY PLAN ${query.sql}`, ...query.params)
       .map(({ detail }) => detail);

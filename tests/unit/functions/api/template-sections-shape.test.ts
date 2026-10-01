@@ -6,7 +6,7 @@ import {
   reconcileRunSections,
 } from '@functions/api/utils/template-reconciliation';
 import { isSectionsShape } from '@/lib/utils/checklistSections';
-import { SqliteD1 } from '../../../support/sqlite-d1';
+import { MigratedSqliteD1 } from '../../../support/sqlite-d1';
 
 const session = vi.hoisted(() => ({ userId: 'user-1' as string | null }));
 vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn(async () => session.userId) }));
@@ -69,7 +69,7 @@ describe('a first section with items: null, which every reader takes as sections
 
 describe('saving a Template whose first section has items: null', () => {
   const createdAt = '2026-01-01T00:00:00.000Z';
-  let d1: SqliteD1;
+  let d1: MigratedSqliteD1;
 
   const env = () => ({ DB: d1.binding, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' }) as never;
   const call = async (method: string, path: string, body?: unknown) => {
@@ -82,7 +82,7 @@ describe('saving a Template whose first section has items: null', () => {
   };
 
   beforeEach(() => {
-    d1 = new SqliteD1();
+    d1 = new MigratedSqliteD1();
     session.userId = 'user-1';
     d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'one@example.test', 'One', 1, ?)", createdAt);
   });

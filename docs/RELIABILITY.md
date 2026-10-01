@@ -386,12 +386,15 @@ Common failures:
   themselves are tested in `audit-guards.test.ts` and the local D1 tests
   (`pnpm run test:local-d1`).
 
-- To test SQL guards or races, run the real handler against `SqliteD1` from
+- To test SQL guards or races, run the real handler against `MigratedSqliteD1` from
   `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that
-  implements the D1 calls Drizzle makes. `beforeNextBatch()` commits a competing write
-  just before the handler's next `db.batch()`, and `queryPlan()` returns
-  `EXPLAIN QUERY PLAN` for a recorded statement. See
-  `tests/unit/functions/api/teams-sqlite.test.ts`.
+  implements the D1 calls Drizzle makes, whose batches are transactions as on D1. Pass its
+  `binding` as `env.DB`. `beforeNextBatch()` commits a competing write just before the
+  handler's next `db.batch()`, `queries` records every statement, and `queryPlan()` returns
+  `EXPLAIN QUERY PLAN` for one. See `tests/unit/functions/api/teams-sqlite.test.ts`.
+  `createMigratedD1()` (`tests/fixtures/sqliteD1.ts`) has the same tables behind only the
+  calls Drizzle and Better Auth's Drizzle adapter make: it records nothing, and its batches
+  are not transactions. TD-46 merges the SQLite stand-ins.
 - `pnpm run test:local-d1` runs the API on real local D1 through wrangler's
   `getPlatformProxy`, with no dev server. `startLocalD1()`
   (`tests/integration/local-d1-handler-env.ts`) applies every migration to a throwaway
@@ -419,6 +422,10 @@ Common failures:
   `tests/support/agentMcp.ts`. A test that makes more calls than one Run Key may make in a
   minute (`RUN_KEY_REQUESTS_PER_MINUTE`, counted per key in the process) gives each call a
   key of its own with `authenticateWithAFreshRunKey()`, or the limit answers `429`.
+  `readTemplateInFull()` (`tests/support/templatePages.ts`) and `readRunInFull()`
+  (`tests/support/runPages.ts`) read a template or run the way an agent does, whole when it
+  fits, otherwise its outline, each section by id and a run's retired work a page at a time,
+  joining the parts of anything too large for one result, to show it can be read in full.
 - A test that reads values from the deployed configuration (the CORS allowlists, the auth
   policy) takes them from `wrangler.toml` with `varFromWranglerToml()` from
   `tests/support/wranglerToml.ts`, so a change to that file is tested too.
@@ -442,7 +449,12 @@ Common failures:
     template editor a real react-hook-form control.
   - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
     (`installFakeDomGlobals`, `createFakeContainer`) and drive it with `act()`, `click()` and
-    `dispatch()`, when the test needs effects, focus or clicks. A hook that needs React's own
+    `dispatch()`, when the test needs effects, focus or clicks. `installFakeDomGlobals()`, in
+    `beforeAll` with its returned undo in `afterAll`, gives React DOM a window while it commits
+    and turns on `act()`; a page that navigates gets the window of the Next.js stand-in
+    (below). `click()` and `dispatch()` deliver an event to the container's capture
+    listeners, then its bubbling ones, where React DOM listens; a click's `detail` is its click
+    count, 2 for the second click of a double click. A hook that needs React's own
     effects or TanStack Query runs the same way, in a probe component that renders nothing.
     React DOM loaded without a DOM listens for the old IE input events, so a test types into a
     field by calling the `onChange` in the props React keeps on the node (`__reactProps$...`).
@@ -453,7 +465,59 @@ Common failures:
 
   Base UI's overlays render nothing until they open, and their portals render nothing without
   a DOM, so component tests replace dialogs, alert dialogs, menus and select popups with the
-  in-place versions in `tests/support/overlaysInPlace.tsx`.
+  in-place versions in `tests/support/overlaysInPlace.tsx`. A test that renders a failed query
+  statically seeds the failure with `seedQueryError()` on `createTestQueryClient()`
+  (`tests/fixtures/queryClient.ts`), which does not retry on mount, so the error shows instead
+  of the fetching state of a query about to retry; `data` makes it a refresh that failed after
+  a successful load.
+- The App Router exists only in a Next.js app, so `tests/support/` stands in for what the
+  app imports from Next.js:
+  - `nextNavigation.tsx` replaces `next/navigation` and `next/link` with an in-memory
+    browser (`inMemoryBrowser.ts`), so the app's `Link`, `useAppRouter` and leave guard run
+    for real:
+
+    ```ts
+    vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
+    vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
+    ```
+
+    `navigation.reset(url, options)` starts each test (after any `vi.resetAllMocks()`) from
+    one entry at a path, or at an absolute URL for another origin. `params` fixes the route's
+    params for every URL, enough for static rendering; `routes` lists App Router patterns
+    (`/categories/[categorySlug]`) whose params then follow each URL; `before` lists earlier
+    entries, oldest first; `state` is the current entry's history state. The stand-in `Link`
+    handles a click as `next/link` does (`next/dist/client/app-dir/link.js`): its own
+    `onClick` first, a modified click, a download or another origin left to the browser, and
+    an `onNavigate` that may cancel; `data-prefetch` shows the `prefetch` prop Next.js would
+    get (`unset` for its default). The router's `push` and `replace` add or replace an entry,
+    and a navigation to the URL already open replaces it, as in Next.js. `usePathname`,
+    `useSearchParams` and `useParams` follow the current entry, including one written with
+    `pushState` or `replaceState`. `navigation.router` is what `useRouter()` returns, with
+    `vi.fn` methods; `navigation.log` lists each navigation and whether a `Link` or the
+    router sent it, and `navigation.documentLoads` each full page load. A test that mounts
+    with React DOM installs `navigation.window` (its history and location, events, storage
+    and a `confirm()` answering true) with `navigation.installWindow()` or
+    `installFakeDomGlobals(navigation.window)`. Back, Forward and `go()` fire `popstate` on a
+    later task, as a browser does: `navigation.settle()` lets one run, so a Back the page
+    answers with a traversal of its own needs two. `<RoutedPages>` renders the page whose
+    pattern matches, remounted for another pattern or other params and kept for the same
+    URL or another query, as the App Router does; `renderPageAt()` returns a URL's server
+    HTML, with no effects.
+  - `nextRouting.ts` loads `next.config.ts`'s redirects and headers as `next build` does for
+    a build's `SITE_ENV` (`loadBuiltRoutes()`; `withSiteEnv()` from `siteEnv.ts` sets the
+    variable, or leaves it unset for `undefined`) and answers a URL the two ways the app is
+    served: `nextServerRedirect()` as `next dev` and `next start` do, and `workerRedirect()`
+    through OpenNext's routing in the Worker, for which the test mocks
+    `@opennextjs/aws/adapters/config/index.js` with `openNextBuildConfig()`. A request's
+    `Host` comes from its URL. `headersFor()` gives the headers a response gets.
+  - `nextServerContext.ts` is what `src/server` reads from Next.js and OpenNext: mock
+    `@opennextjs/cloudflare` with `cloudflareMock`, `next/headers` with `headersMock` and
+    `server-only` with an empty module, then set `serverContext.env` and the host.
+    `createEdgeCache()` is a data center's Cache API
+    (`vi.stubGlobal('caches', { default: edgeCache.cache })`) and `unreachableD1` fails every
+    query.
+  - `next/font/google` is compiled by the Next.js build, so `vitest.config.ts` resolves it
+    to `nextFontGoogle.ts`, which returns the shape the root layout reads.
 - Coverage settings live under `test.coverage` in `vitest.config.ts`
   (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
   If you override `test.exclude`, keep `node_modules`, `dist`,

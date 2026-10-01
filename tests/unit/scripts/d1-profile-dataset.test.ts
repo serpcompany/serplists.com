@@ -11,7 +11,7 @@ import {
   UPDATE_TEMPLATE,
 } from "../../../scripts/d1-profile-lib";
 import type { LocalDb } from "../../../scripts/data/local-d1";
-import { SqliteD1 } from "../../support/sqlite-d1";
+import { MigratedSqliteD1 } from "../../support/sqlite-d1";
 
 const session = vi.hoisted(() => ({ userId: null as string | null }));
 vi.mock("@functions/api/utils/session", () => ({ getSessionUserId: vi.fn(async () => session.userId) }));
@@ -36,7 +36,7 @@ const small: DatasetCounts = {
 };
 
 async function buildDataset(counts: DatasetCounts) {
-  const d1 = new SqliteD1();
+  const d1 = new MigratedSqliteD1();
   await seedLocalTestData(drizzle(d1.binding, { schema }) as unknown as LocalDb);
   d1.sqlite.exec(buildSyntheticSql(counts));
   return d1;
