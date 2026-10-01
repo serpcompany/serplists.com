@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-54.**
+then you raise it. **Next ID: TD-58.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -47,6 +47,10 @@ then you raise it. **Next ID: TD-54.**
 | TD-48 | Duplication | The `.env` file parser is written three times: `parseEnvFile` in `scripts/check-env.mjs`, `scripts/dev-auto-lib.mjs` and `scripts/stripe/_env.mjs`. | Export one from `scripts/lib/` and import it in all three. Small. | None |
 | TD-49 | Tests | `tests/integration/local-d1-handler-env.ts` repeats the `.local-d1-env-disabled` literal that `NO_DEV_VARS_OR_DOTENV_FILES` names. | Import the constant. Small. | None |
 | TD-50 | Tests | 42 response reads in tests still cast instead of parsing with `readJson()`: the `agent-mcp-handler.*.test.ts` files (31, through `toolBody` in `tests/support/agentMcpHandler.ts`), `agent-mcp-lists`, `agent-mcp-result-bounds`, `asUser` in `tests/support/teamsSqlite.ts`, `templateHistoryTimeline.contract.test.ts` (needs TD-2's history schema), and 11 `response.json()` reads in browser specs, typed `any`. | Read them with `readJson()` and a schema. Medium. | None |
-| TD-51 | Dependencies | Two `postcss` versions (8.5.6 at the root, 8.5.23 under `@tailwindcss/postcss`) have types that don't match, so `tests/unit/styles/tailwindTypography.test.ts` narrows the plugin at runtime. | Dedupe `postcss`, then drop the runtime check. Small. | None |
+| TD-51 | Dependencies | Two `postcss` versions (8.5.6 at the root, 8.5.23 under `@tailwindcss/postcss`) have types that don't match, so `tests/support/appStylesheet.ts` narrows the plugin at runtime before compiling the app's stylesheet. | Dedupe `postcss`, then drop the runtime check. Small. | None |
 | TD-52 | Dependencies | `@types/node` 22.17 lacks `node:sqlite`'s `setReturnArrays()`, so `tests/support/sqliteRowArrays.ts` declares it. | Bump `@types/node` to 22.20 or newer and delete the declaration. Small. | None |
 | TD-53 | Types | `scripts/check-production-d1-schema-lib.mjs`, `scripts/lib/d1-schema-pragmas.mjs` and `scripts/lib/d1-schema-drift.mjs` have no `.d.mts`, so the tests that import them get types TypeScript infers from the JavaScript. | Add the declaration files, as RELIABILITY's convention asks. Small. | None |
+| TD-54 | Tests | No test notices an audit action that is registered in `AUDIT_ACTIONS` but that no handler writes. The check that did ("lists only actions some handler writes") read the handlers' source and went with the other source-reading tests; every registered action is still expected by at least one handler or integration test. | Drive every audit-writing route on `SqliteD1` (`tests/support/sqlite-d1.ts`) and compare the actions written with `AUDIT_ACTIONS` in `tests/unit/lib/schemas/auditActions.test.ts`. Medium. | None |
+| TD-55 | Tests | The `serplists/navigate-while-visit-is-current` lint rule (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) does not follow sign-in or checkout redirects made inside `.then()` callbacks, which the source scan it replaced did. | Follow `.then()` callbacks too, with RuleTester cases. Small. | None |
+| TD-56 | Tests | No TOML parser is a dependency, so `tests/support/wranglerToml.ts` and `tests/unit/scripts/origin-list-parity.test.ts` read `wrangler.toml` with regular expressions. | Add a TOML parser as a devDependency and parse the file. Small. | None |
+| TD-57 | Tests | `tests/unit/e2e/e2e-setup-requests.test.ts` and `tests/unit/e2e/seeded-template-paths.test.ts` read the browser specs' text to check how they set up data and which seeded paths they open. | Make them ESLint rules over `tests/e2e`, with messages saying what to do instead. Small. | None |

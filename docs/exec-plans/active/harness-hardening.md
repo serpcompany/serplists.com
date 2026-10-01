@@ -260,6 +260,26 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, test side of round 4 done (65759f04..240dd819).
+  - Rows-read budgets: `tests/integration/rows-read-budgets-local-d1.test.ts` runs in
+    `test:local-d1`, so CI's D1 integration step enforces it.
+    - It covers 37 hot requests over 400 templates and 800 runs.
+    - A bounded request gets a constant budget. A request that is unbounded by design today
+      gets a budget that grows with the rows it must read.
+    - Dropping an index or a LIMIT on a scratch copy failed the matching tests.
+  - Tests check behavior, not source text. 53 reads of `src/` and `functions/` in 38 test
+    files are gone, and `serplists/no-source-text-reads` refuses new ones.
+    - The properties those tests scanned for became lint rules: `serplists/restricted-code`,
+      with its table in `scripts/eslint-rules/code-conventions.mjs`, and
+      `serplists/navigate-while-visit-is-current`.
+    - The rest became tests that render, call or request the code.
+  - Rate limiting is deny-by-default (e60aa426). A route family added to the router is
+    limited from its first request.
+  - New tracker rows: TD-54 to TD-57. They cover what the new rules don't yet:
+    - a registered audit action that nothing writes;
+    - redirects inside `.then()`;
+    - `wrangler.toml` read with regular expressions;
+    - two checks that still read browser specs' text.
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
@@ -324,6 +344,17 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   (`jscpd tests`), not as a `path` in `.jscpd.json`. jscpd resolves a configured path to an
   absolute one and globs it, and on Windows that glob matches no file, so the check passed
   while reading nothing. The guard test refuses a `path` setting.
+- 2026-10-01: a convention the tests used to scan the source for is a lint rule entry in
+  `scripts/eslint-rules/code-conventions.mjs`. An entry may name `owners`, the modules
+  that implement the convention (the clipboard helper may touch the clipboard), as
+  ESLint's `ignores` already did for `browserStorage.ts` and the logger. That is the
+  rule's definition, not an exception.
+  - The `useTemplateLibrary` entry's owners are the pages that have loading and failure
+    tests. A new page joins once it has them.
+- 2026-10-01: `routeRateLimitBucket` counts every state-changing request as a write unless
+  its route is exempt. Before, the router's source was read by a test to check that each
+  family was listed. Existing routes are limited as before, and a write to a path no
+  handler serves now counts too.
 - 2026-09-30: the Node clone hazard is TD-29, not TD-27. TD-27 and TD-28 were the MCP result
   bounds, closed earlier. The tracker now keeps a next-ID line, so a closed ID is never
   reused.
