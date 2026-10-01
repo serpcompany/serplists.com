@@ -71,10 +71,7 @@ describe('Profiles Handlers', () => {
     expect(data.username).toBe('test');
   });
 
-  // An id taken from a public response must not turn into the name and avatar of someone
-  // who never chose a public username (for example an Organization member who edited a
-  // public template).
-  it('GET /api/profiles/by-id only resolves users with a public username', async () => {
+  it('GET /api/profiles/by-id only resolves users with a public username, so an id from a public response names no one else', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
     const request = new Request('http://localhost/api/profiles/by-id?userId=member-2');

@@ -1,30 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBetterAuth } from '@functions/api/better-auth';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 import { answeringPwnedPasswords } from '../../../fixtures/pwnedPasswords';
+import { postToBetterAuth } from '../../../support/betterAuth';
 
-// Runs the app's real Better Auth configuration and Drizzle adapter against a
-// migrated SQLite database; only the email provider (fetch) is faked.
-const BASE_URL = 'http://localhost:8788';
 const EMAIL = 'new-user@example.com';
 const START = Date.parse('2026-01-01T00:00:00Z');
 
-describe('sign-up when the verification email cannot be sent', { timeout: 30_000 }, () => {
+describe('sign-up when the verification email cannot be sent, through the app\'s Better Auth on the migrated tables with only the email provider faked', { timeout: 30_000 }, () => {
   let database: ReturnType<typeof createMigratedD1>;
   let env: any;
-  let provider: ReturnType<typeof vi.fn>;
+  let emailProvider: ReturnType<typeof vi.fn>;
   let logged: string[];
 
-  function authRequest(path: string, body: unknown) {
-    const request = new Request(`${BASE_URL}/api/auth/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Origin: BASE_URL },
-      body: JSON.stringify(body),
-    });
-    return createBetterAuth(env, request).handler(request);
-  }
-
-  const signUp = () => authRequest('sign-up/email', { email: EMAIL, password: 'original-password-1', name: 'New User' });
+  const signUp = () => postToBetterAuth(env, 'sign-up/email', { body: { email: EMAIL, password: 'original-password-1', name: 'New User' } });
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });
@@ -36,8 +24,8 @@ describe('sign-up when the verification email cannot be sent', { timeout: 30_000
       AUTH_EMAIL_VERIFICATION_REQUIRED: 'true',
       RESEND_API_KEY: 're_test_123',
     };
-    provider = vi.fn(async () => new Response(`rate limited for ${EMAIL}`, { status: 429 }));
-    vi.stubGlobal('fetch', answeringPwnedPasswords(provider));
+    emailProvider = vi.fn(async () => new Response(`rate limited for ${EMAIL}`, { status: 429 }));
+    vi.stubGlobal('fetch', answeringPwnedPasswords(emailProvider));
     logged = [];
     for (const level of ['info', 'warn', 'error'] as const) {
       vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
@@ -63,7 +51,7 @@ describe('sign-up when the verification email cannot be sent', { timeout: 30_000
       },
     ],
   ])('reports the new account as created when the provider %s', async (_label, reply) => {
-    provider.mockImplementation(async () => reply());
+    emailProvider.mockImplementation(async () => reply());
 
     const response = await signUp();
 
@@ -72,29 +60,29 @@ describe('sign-up when the verification email cannot be sent', { timeout: 30_000
     expect(database.sqlite.prepare('SELECT email, email_verified FROM users').all()).toEqual([
       { email: EMAIL, email_verified: 0 },
     ]);
-    expect(provider).toHaveBeenCalledTimes(1);
+    expect(emailProvider).toHaveBeenCalledTimes(1);
     expect(logged.some((line) => line.includes('auth_email_send_failed'))).toBe(true);
     expect(logged.join('\n')).not.toContain(EMAIL);
   });
 
   it('lets the new user resend the verification email right away', async () => {
     expect((await signUp()).status).toBe(200);
-    provider.mockImplementation(async () => new Response('{}', { status: 200 }));
+    emailProvider.mockImplementation(async () => new Response('{}', { status: 200 }));
 
     vi.setSystemTime(START + 5_000);
-    const resend = await authRequest('send-verification-email', { email: EMAIL });
+    const resend = await postToBetterAuth(env, 'send-verification-email', { body: { email: EMAIL } });
 
     expect(resend.status).toBe(200);
-    expect(provider).toHaveBeenCalledTimes(2);
+    expect(emailProvider).toHaveBeenCalledTimes(2);
   });
 
   it('still fails an explicit resend when the provider is down', async () => {
-    provider.mockImplementation(async () => new Response('{}', { status: 200 }));
+    emailProvider.mockImplementation(async () => new Response('{}', { status: 200 }));
     expect((await signUp()).status).toBe(200);
-    provider.mockImplementation(async () => new Response('provider outage', { status: 503 }));
+    emailProvider.mockImplementation(async () => new Response('provider outage', { status: 503 }));
 
     vi.setSystemTime(START + 120_000);
-    const resend = await authRequest('send-verification-email', { email: EMAIL });
+    const resend = await postToBetterAuth(env, 'send-verification-email', { body: { email: EMAIL } });
 
     expect(resend.status).toBeGreaterThanOrEqual(500);
   });

@@ -5,14 +5,13 @@ import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { APIError } from 'better-auth/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sessionCookieFrom } from '../../../support/betterAuth';
 
 const BASE_URL = 'http://localhost:8788';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const env = { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 
-// A real Better Auth instance (default 7-day sessions, refreshed after 1 day)
-// backed by an in-memory database, so the test exercises the actual refresh logic.
-function createMemoryAuth() {
+function realBetterAuthWithDefaultSessionsOnAnInMemoryDatabase() {
   const db: Record<string, any[]> = { user: [], session: [], account: [], verification: [] };
   const auth = betterAuth({
     baseURL: BASE_URL,
@@ -22,13 +21,6 @@ function createMemoryAuth() {
     emailAndPassword: { enabled: true, requireEmailVerification: false },
   });
   return { auth, db };
-}
-
-function sessionCookieFrom(response: Response): string {
-  const setCookie = response.headers.get('set-cookie') ?? '';
-  const match = setCookie.match(/better-auth\.session_token=[^;]+/);
-  if (!match) throw new Error(`No session cookie in: ${setCookie}`);
-  return match[0];
 }
 
 async function loadSessionHelper(auth: unknown) {
@@ -44,8 +36,8 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     vi.resetModules();
   });
 
-  it('does not extend a session it cannot send a new cookie for', async () => {
-    const { auth, db } = createMemoryAuth();
+  it('does not extend a session it cannot send a new cookie for, leaving the refresh to get-session', async () => {
+    const { auth, db } = realBetterAuthWithDefaultSessionsOnAnInMemoryDatabase();
     const signUp = await auth.handler(
       new Request(`${BASE_URL}/api/auth/sign-up/email`, {
         method: 'POST',
@@ -56,10 +48,10 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     expect(signUp.status).toBe(200);
     const cookie = sessionCookieFrom(signUp);
 
-    // Two days after sign-in: the session is due for its daily refresh.
-    const dueExpiry = new Date(Date.now() + 5 * DAY_MS);
-    db.session[0].expiresAt = dueExpiry;
-    db.session[0].updatedAt = new Date(Date.now() - 2 * DAY_MS);
+    const expiryDueForItsDailyRefresh = new Date(Date.now() + 5 * DAY_MS);
+    const twoDaysAfterSignIn = new Date(Date.now() - 2 * DAY_MS);
+    db.session[0].expiresAt = expiryDueForItsDailyRefresh;
+    db.session[0].updatedAt = twoDaysAfterSignIn;
 
     const { getSessionUserId } = await loadSessionHelper(auth);
     const userId = await getSessionUserId(
@@ -68,9 +60,7 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     );
 
     expect(userId).toBe(db.user[0].id);
-    // Handler lookups must leave the refresh to GET /api/auth/get-session,
-    // the only route whose Set-Cookie reaches the browser.
-    expect(new Date(db.session[0].expiresAt).getTime()).toBe(dueExpiry.getTime());
+    expect(new Date(db.session[0].expiresAt).getTime()).toBe(expiryDueForItsDailyRefresh.getTime());
 
     const sessionCheck = await auth.handler(
       new Request(`${BASE_URL}/api/auth/get-session`, { headers: { Cookie: cookie } }),
@@ -98,8 +88,6 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     }
   });
 
-  // A failed lookup is an outage, not a signed-out user: answering 401 would
-  // send a signed-in user to the sign-in page and hide the failure in the logs.
   it('rethrows and logs a failed lookup instead of treating the user as signed out', async () => {
     const errorLines: string[] = [];
     vi.spyOn(console, 'error').mockImplementation((line: unknown) => {

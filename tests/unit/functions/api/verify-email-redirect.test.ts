@@ -11,11 +11,6 @@ import {
 } from "@/lib/auth/loginNotice";
 import { getReturnPath } from "@/lib/auth/returnPath";
 
-// Pins the Better Auth redirect contract that Login's notice parsing relies on.
-// A failed verification link must land on the callback with `error=<code>`
-// appended; if an upgrade changes that shape, this fails instead of Login
-// silently showing "Email verified" again.
-
 const SECRET = "better-auth-secret-with-32-characters!!";
 
 function buildEnv() {
@@ -28,15 +23,14 @@ function buildEnv() {
 }
 
 async function visitVerificationLink(token: string) {
-  // Better Auth 1.3.4 builds the email link without encoding callbackURL.
-  const url = `http://localhost:3000/api/auth/verify-email?token=${token}&callbackURL=${EMAIL_VERIFIED_CALLBACK_URL}`;
-  const request = new Request(url);
+  const emailLinkWithTheCallbackUnencoded = `http://localhost:3000/api/auth/verify-email?token=${token}&callbackURL=${EMAIL_VERIFIED_CALLBACK_URL}`;
+  const request = new Request(emailLinkWithTheCallbackUnencoded);
   const auth = createBetterAuth(buildEnv(), request);
   const response = await auth.handler(request);
   return { status: response.status, location: response.headers.get("location") };
 }
 
-describe("verify-email failure redirect", () => {
+describe("verify-email failure redirect, in the shape Login reads its notice from, so a Better Auth upgrade that changes it fails here", () => {
   it("appends error=token_expired to the callback for an expired link", async () => {
     const token = await signJWT({ email: "person@example.com" }, SECRET, -60);
 
@@ -61,11 +55,7 @@ describe("verify-email failure redirect", () => {
   });
 });
 
-// A new invitee who signs up from an invite link must come back to it after
-// verifying their email. The return path rides in the callback as `next`,
-// which only survives Better Auth's unencoded email link because
-// buildEmailVerifiedCallbackURL encodes it one extra time.
-describe("verification return path round trip", () => {
+describe("verification return path round trip, which brings an invitee who signs up from an invite link back to it", () => {
   async function signUpAndOpenVerificationLink(returnPath: string) {
     const sentLinks: string[] = [];
     const auth = betterAuth({

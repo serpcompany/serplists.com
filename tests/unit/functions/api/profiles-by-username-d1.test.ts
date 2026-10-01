@@ -3,11 +3,7 @@ import { handleProfileByUsername } from '@functions/api/handlers/auth';
 import { buildProfilePreviewPath } from '@/lib/routes';
 import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 
-// Better Auth's username plugin stores usernames lowercased, and SQLite compares
-// TEXT case-sensitively, so the lookup must not depend on the casing of a
-// typed or shared /profile/<username> URL. Runs against a migrated SQLite
-// database so the real collation and index are used.
-describe('GET /api/profiles/by-username casing', () => {
+describe('GET /api/profiles/by-username casing, on the migrated tables with their real collation and index', () => {
   let database: ReturnType<typeof createMigratedD1>;
   let executed: Array<{ query: string; params: unknown[] }>;
 
@@ -73,14 +69,12 @@ describe('GET /api/profiles/by-username casing', () => {
     expect(await (await lookUp('JANEDOE')).json()).toMatchObject({ id: 'newer' });
   });
 
-  // The Settings preview must link a saved username in a form this lookup resolves to its owner.
   it('resolves the Settings preview of an unedited legacy username to that user', async () => {
     addUser('legacy', 'JaneDoe');
     addUser('newer', 'janedoe');
 
     const previewPath = buildProfilePreviewPath('JaneDoe', 'JaneDoe');
-    // /profile/<username>/
-    const previewUsername = decodeURIComponent(previewPath!.split('/')[2]!);
+    const previewUsername = decodeURIComponent(/^\/profile\/([^/]+)\/$/.exec(previewPath!)![1]!);
 
     expect(await (await lookUp(previewUsername)).json()).toMatchObject({ id: 'legacy' });
   });
