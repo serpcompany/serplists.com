@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { SecuritySection } from '@/components/account/SecuritySection';
 
@@ -16,7 +16,9 @@ const renderSignOutOtherSessionsSwitch = () => {
   const html = renderToStaticMarkup(<SecuritySection />);
   const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? [];
   expect(switches).toHaveLength(1);
-  return { html, switchTag: switches[0] };
+  const [switchTag] = switches;
+  assert.exists(switchTag);
+  return { html, switchTag };
 };
 
 describe('SecuritySection', () => {

@@ -7,11 +7,11 @@ import type { TemplateEditorSection } from '@/lib/forms/templateEditorForm';
 import { findAllElements } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
-const harness = vi.hoisted(() => ({
-  sections: [] as Array<{ id: string; title: string; items: unknown[] }>,
-  fields: [] as Array<Record<string, unknown>>,
-  nextFieldId: 0,
-}));
+const harness = vi.hoisted(() => {
+  const sections: TemplateEditorSection[] = [];
+  const fields: Array<Record<string, unknown>> = [];
+  return { sections, fields, nextFieldId: 0 };
+});
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();

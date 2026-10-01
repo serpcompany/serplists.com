@@ -12,7 +12,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
-function ContentHarness(): JSX.Element {
+function ContentHarness(): React.JSX.Element {
   const form = useForm<TemplateEditorFormValues>({
     defaultValues: buildTemplateEditorFormValues({
       sections: [

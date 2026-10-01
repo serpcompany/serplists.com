@@ -23,6 +23,7 @@ describe('ProfileSection', () => {
     const html = renderToStaticMarkup(
       <ProfileSection
         profileData={{ email: 'john@test.com', fullName: 'John', username: 'john', avatar_url: '' }}
+        savedUsername={undefined}
         loading={false}
         onProfileDataChange={vi.fn()}
         onProfileUpdate={vi.fn()}

@@ -1,6 +1,5 @@
-import React from 'react';
 import { get } from 'react-hook-form';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { ContentEditor } from '@/components/template-editor/ContentEditor';
@@ -12,8 +11,9 @@ import {
 } from '@/features/template-editor/pendingUploads';
 import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
+import { deferred } from '../../../support/deferred';
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
-import { findElement } from '../../../support/elementTree';
+import { findElement, findElementOf } from '../../../support/elementTree';
 
 const harness = vi.hoisted(() => ({
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
@@ -87,23 +87,30 @@ function createForm(contents: Array<Partial<TemplateEditorContent>>): void {
   harness.editorSetValueSpy = vi.fn((...args: unknown[]) => setValue(...args));
 }
 
-function renderEditorFileUploadFromCurrentForm(): React.ReactNode {
+function renderEditorFileUploadFromCurrentForm() {
   const editorTree = ContentEditor({ itemIndex: 0, sectionIndex: 0 });
-  const media = findElement(editorTree, (element) => element.type === MediaContentEditor);
-  expect(media).not.toBeNull();
-  const mediaTree = MediaContentEditor(media!.props as Parameters<typeof MediaContentEditor>[0]);
-  const upload = findElement(mediaTree, (element) => element.type === FileUpload);
-  expect(upload).not.toBeNull();
-  return FileUpload(upload!.props as Parameters<typeof FileUpload>[0]);
+  const media = findElementOf(editorTree, MediaContentEditor);
+  assert.exists(media);
+  const upload = findElementOf(MediaContentEditor(media.props), FileUpload);
+  assert.exists(upload);
+  return FileUpload(upload.props);
 }
 
-function selectFile(tree: React.ReactNode): Promise<void> {
+function selectFile(tree: unknown): Promise<void> {
   const input = findElement(tree, (element) => element.props.type === 'file');
   expect(input).not.toBeNull();
   const file = new File(['png'], 'photo.png', { type: 'image/png' });
   return (input!.props.onChange as (event: unknown) => Promise<void>)({
     target: { files: [file] },
   });
+}
+
+type UploadedFile = Awaited<ReturnType<typeof api.uploadToR2>>;
+
+function holdTheUpload(): (uploaded: UploadedFile) => void {
+  const upload = deferred<UploadedFile>();
+  vi.mocked(api.uploadToR2).mockReturnValue(upload.promise);
+  return upload.resolve;
 }
 
 function contentAt(index: number): TemplateEditorContent | undefined {
@@ -165,12 +172,7 @@ describe('ContentEditor media uploads', () => {
 
   it('writes a finished upload to its own block after a block was inserted above it during the upload', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    let finishUpload: (value: unknown) => void = () => undefined;
-    vi.mocked(api.uploadToR2).mockReturnValue(
-      new Promise((resolve) => {
-        finishUpload = resolve;
-      }) as ReturnType<typeof api.uploadToR2>,
-    );
+    const finishUpload = holdTheUpload();
     const textBlockInsertedAbove = { id: 'c0', type: 'text', value: 'Intro' };
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
@@ -189,12 +191,7 @@ describe('ContentEditor media uploads', () => {
 
   it('does not bring back a block removed while its upload was running', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
-    let finishUpload: (value: unknown) => void = () => undefined;
-    vi.mocked(api.uploadToR2).mockReturnValue(
-      new Promise((resolve) => {
-        finishUpload = resolve;
-      }) as ReturnType<typeof api.uploadToR2>,
-    );
+    const finishUpload = holdTheUpload();
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     harness.form.setValue(CONTENT_PATH as `sections.0.items.0.contents`, []);
@@ -207,12 +204,7 @@ describe('ContentEditor media uploads', () => {
   it('counts the upload as pending for the editor until it finishes, which keeps Save disabled and guards leaving', async () => {
     createForm([{ id: 'c1', type: 'image', value: '' }]);
     const uploads = harness.pendingUploadsFromContext as PendingUploads;
-    let finishUpload: (value: unknown) => void = () => undefined;
-    vi.mocked(api.uploadToR2).mockReturnValue(
-      new Promise((resolve) => {
-        finishUpload = resolve;
-      }) as ReturnType<typeof api.uploadToR2>,
-    );
+    const finishUpload = holdTheUpload();
 
     const pending = selectFile(renderEditorFileUploadFromCurrentForm());
     await Promise.resolve();
@@ -248,7 +240,7 @@ describe('ContentEditor media URL typed over an upload', () => {
     harness.pendingUploadsFromContext = createPendingUploads();
   });
 
-  function typeUrl(tree: React.ReactNode, value: string): void {
+  function typeUrl(tree: unknown, value: string): void {
     const input = findElement(
       tree,
       (element) => element.props.id === 'content-editor-test' && typeof element.props.onChange === 'function',

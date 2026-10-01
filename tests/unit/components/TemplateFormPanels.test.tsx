@@ -23,7 +23,7 @@ import {
 function TemplateFormHarness(props: {
   children: React.ReactNode;
   tags?: string[];
-}): JSX.Element {
+}): React.JSX.Element {
   const form = useForm<TemplateEditorDetailsFormValues>({
     defaultValues: { ...buildTemplateEditorDetailsFormValues(), tags: props.tags ?? [] },
   });
@@ -31,7 +31,7 @@ function TemplateFormHarness(props: {
   return <FormProvider {...form}>{props.children}</FormProvider>;
 }
 
-function SectionFormHarness(props: { children: React.ReactNode }): JSX.Element {
+function SectionFormHarness(props: { children: React.ReactNode }): React.JSX.Element {
   const form = useForm<TemplateEditorFormValues>({
     defaultValues: buildTemplateEditorFormValues({
       sections: [
@@ -79,7 +79,7 @@ describe('Search & SEO preview URL', () => {
   function SeoHarness(props: {
     children: React.ReactNode;
     values: Partial<TemplateEditorDetailsFormValues>;
-  }): JSX.Element {
+  }): React.JSX.Element {
     const form = useForm<TemplateEditorDetailsFormValues>({
       defaultValues: { ...buildTemplateEditorDetailsFormValues(), ...props.values },
     });

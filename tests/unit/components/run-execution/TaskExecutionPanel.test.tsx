@@ -44,6 +44,7 @@ const renderPanel = (
     onToggleTask,
     primaryAction,
     section: { id: 'section-1', title: 'Checklist', items: [task] },
+    sectionIndex: 0,
     task,
     taskIndex: 0,
     totalTasks: 1,

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
+import { findElement } from '../../support/elementTree';
 
 const SRC = path.resolve(__dirname, '../../../src');
 
@@ -18,23 +19,12 @@ const sourceFiles = (dir: string): string[] =>
 
 const relative = (file: string) => path.relative(SRC, file).split(path.sep).join('/');
 
-const findElement = (node: React.ReactNode, type: string): React.ReactElement | null => {
-  if (!React.isValidElement(node)) return null;
-  if (node.type === type) return node;
-  const children = (node.props as { children?: React.ReactNode }).children;
-  for (const child of React.Children.toArray(children)) {
-    const found = findElement(child, type);
-    if (found) return found;
-  }
-  return null;
-};
-
 describe('TaskImageView', () => {
   it('reports a failed load without touching the img src, however often the error fires', () => {
     const onFail = vi.fn();
     const img = findElement(
       TaskImageView({ alt: 'Task content', onFail, src: 'https://cdn.example.com/missing.png' }),
-      'img',
+      (element) => element.type === 'img',
     );
     expect(img).not.toBeNull();
 

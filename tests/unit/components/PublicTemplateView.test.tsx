@@ -29,6 +29,7 @@ const renderView = (overrides: Partial<ViewProps> = {}) => {
       isSaving={false}
       isTeamWorkspace={false}
       isWorkspaceLoading={false}
+      workspaceError={null}
       onStartRun={() => undefined}
       onSaveTemplate={async () => false}
       {...overrides}
@@ -114,6 +115,7 @@ describe('PublicTemplateView', () => {
         isSaving={false}
         isTeamWorkspace={false}
         isWorkspaceLoading={false}
+        workspaceError={null}
         onStartRun={() => undefined}
         onSaveTemplate={async () => false}
       />,
@@ -169,6 +171,7 @@ describe('PublicTemplateView', () => {
         isSaving={false}
         isTeamWorkspace={false}
         isWorkspaceLoading={false}
+        workspaceError={null}
         onStartRun={() => undefined}
         onSaveTemplate={async () => false}
       />,
@@ -190,12 +193,18 @@ describe('PublicTemplateView', () => {
         ownerSlug="devinschumacher"
         ownerPath="/profile/devinschumacher/"
         isAuthenticated={false}
+        canSaveTemplate={false}
+        canStartRun={false}
+        isBillingError={false}
         isBillingLoading={false}
         isProUser={false}
         isCreatingRun={false}
         isSaving={false}
+        isTeamWorkspace={false}
+        isWorkspaceLoading={false}
+        workspaceError={null}
         onStartRun={() => undefined}
-        onSaveTemplate={() => undefined}
+        onSaveTemplate={async () => false}
       />,
     );
 

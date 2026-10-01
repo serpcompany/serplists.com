@@ -8,7 +8,7 @@ import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/
 
 import { findControls } from './accessibleMarkup';
 
-function SidebarHarness(): JSX.Element {
+function SidebarHarness(): React.JSX.Element {
   const form = useForm<TemplateEditorFormValues>({
     defaultValues: buildTemplateEditorFormValues({
       sections: [

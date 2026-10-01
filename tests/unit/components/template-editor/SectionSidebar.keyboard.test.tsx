@@ -1,6 +1,6 @@
 import React from 'react';
 import { get } from 'react-hook-form';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
@@ -107,7 +107,7 @@ function findDomElementNamed(tree: React.ReactNode, name: string): AnyElement | 
 
 function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
   const handle = findDomElementNamed(tree, name);
-  expect(handle).toBeDefined();
+  assert.exists(handle);
   const event = {
     key,
     altKey: false,

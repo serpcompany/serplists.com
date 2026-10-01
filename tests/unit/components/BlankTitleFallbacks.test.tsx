@@ -41,6 +41,7 @@ describe('blank section and sub-task titles saved before the editor defaulted th
     const html = renderToStaticMarkup(
       <RunProgressPanel
         sections={sectionsWithLegacyBlankTitles}
+        progress={0}
         currentSectionId={null}
         currentTaskId={null}
         onSelectTask={noop}
@@ -112,12 +113,18 @@ describe('blank section and sub-task titles saved before the editor defaulted th
         ownerSlug="owner"
         ownerPath="/profile/owner"
         isAuthenticated={false}
+        canSaveTemplate={false}
+        canStartRun={false}
+        isBillingError={false}
         isBillingLoading={false}
         isProUser={false}
         isCreatingRun={false}
         isSaving={false}
+        isTeamWorkspace={false}
+        isWorkspaceLoading={false}
+        workspaceError={null}
         onStartRun={noop}
-        onSaveTemplate={noop}
+        onSaveTemplate={async () => true}
       />,
     );
 
