@@ -1,7 +1,7 @@
 # D1 Cost
 
 - **Status:** active
-- **Last updated:** 2026-09-30
+- **Last updated:** 2026-10-01
 - **Goal:** keep D1 rows read per request bounded by what the request returns, not by
   table size, and cut write amplification. Findings and rules are in
   [D1 cost](../../design-docs/d1-cost.md).
@@ -90,8 +90,14 @@ Verify each step with `pnpm run d1:profile` (report numbers are at 20k templates
 
 - [ ] Re-test `PRAGMA optimize` (statistics made the pre-step-1 sitemap plans worse) and
   run it after migrations if it no longer regresses any request.
-- [ ] Add a rows-read budget to `d1:profile` (fail when a request exceeds its budget)
-  and run it in the weekly maintenance workflow.
+- [x] **Rows-read budgets in CI** (2026-10-01): `tests/integration/rows-read-budgets-local-d1.test.ts`
+  holds a budget for each hot request, bounded or unbounded by design, on the synthetic
+  dataset at a small scale, and fails when one reads more. It runs in `pnpm run test:local-d1`,
+  so CI's D1 integration step enforces it ([measuring](../../design-docs/d1-cost.md#measuring)).
+- [ ] Rows-read budgets at full scale: fail `d1:profile` when a request exceeds a budget at
+  20k templates, and run it in the weekly maintenance workflow. The CI budgets read a few
+  hundred rows per table, so a cost that only shows at scale (a planner choice that changes
+  with table size) still needs this run.
 - [ ] Add production `wrangler d1 insights` output to the weekly maintenance report
   (needs a Cloudflare token with analytics read in CI).
 

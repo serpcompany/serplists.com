@@ -20,7 +20,7 @@ migrations, backups, and R2 storage are in
 | Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
 | `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
-| CI Quality Gate | `verify` steps plus local D1 fixture tests, the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
+| CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
 | Before a release | `pnpm run verify:release` locally; `pnpm run verify:staging` or `pnpm run verify:prod:d1` for remote D1 readiness (needs Cloudflare credentials) |
@@ -634,6 +634,11 @@ Common failures:
   from the repository root and open a proxy on a database a test built itself. Each file
   starts its own D1 and takes about 20 seconds, so run a changed one alone:
   `pnpm exec vitest run <file> --testTimeout=20000 --maxWorkers=1`.
+- `tests/integration/rows-read-budgets-local-d1.test.ts` (in `test:local-d1`) holds the
+  rows-read budget of every hot request, in one table with each budget's reason, and fails
+  when a request reads more: a lost `LIMIT` or index shows as a failed budget, not a slow
+  test. It takes about 45 seconds. How it measures, and how to update a budget when a route
+  is meant to read more, is in [D1 cost](design-docs/d1-cost.md#measuring).
 - Billing tests on SQLite build their tables with `billingSchemaSql()` (the users, Stripe and
   entitlement override tables), send checkout and portal requests with `postToBilling()` and
   seed users, customers and subscriptions with the helpers in

@@ -15,7 +15,7 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Data persistence](data-persistence.md) | current | 2026-09-19 | D1 tables, JSON columns, resource ownership, import/export |
 | [Client data](client-data.md) | current | 2026-09-30 | How screens call the API, key and refresh what they cache, load the Template and run lists, handle stale copies, and read API errors |
 | [Database operations](database-operations.md) | current | 2026-09-27 | Environments, migrations, seeds, release checklists, backups, R2 |
-| [D1 cost](d1-cost.md) | current | 2026-09-27 | How D1 bills, how to profile rows read and written, query rules, current hotspots |
+| [D1 cost](d1-cost.md) | current | 2026-10-01 | How D1 bills, how to profile rows read and written, the rows-read budgets CI enforces, query rules, current hotspots |
 | [Authentication and accounts](authentication.md) | current | 2026-09-27 | Better Auth integration, auth contract, verification, troubleshooting |
 | [Organizations](organizations.md) | current | 2026-09-19 | Roles, data model, API routes, invites, audit history |
 | [Billing](billing.md) | current | 2026-09-25 | Stripe setup, portal, webhooks, local and production verification |

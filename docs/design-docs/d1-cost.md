@@ -52,6 +52,32 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
     Free-plan run count) never carry over into the next run. It rebuilds when the snapshot
     is missing or was built at another scale or from other migrations, local seed
     (`db/seeds/local.ts` and `db/seeds/local-test-data/`) or synthetic data.
+- **Budgets, in CI:** `tests/integration/rows-read-budgets-local-d1.test.ts` fails when a
+  hot request reads more rows than its budget. It runs in `pnpm run test:local-d1`, which CI
+  runs in its D1 integration step.
+  - It starts local D1 with `startLocalD1()`, applies the local seed and the synthetic dataset
+    at a small scale (`buildSyntheticSql(datasetCounts(0.02))`: 400 templates, 800 runs and a
+    few hundred rows in each other table), and signs in the seeded users. It sends each
+    request through the API router, and the sitemaps and page lookups through their
+    functions, and sums `rowsRead` with `withD1Profiling()` wrapped around the env's `DB`.
+    Outside the Workers runtime there is no edge cache, so a cached request measures its miss.
+  - One table in the test holds every budget with its reason. A bounded request (an index
+    lookup, a `LIMIT`) gets a constant budget: the rows it read plus 10% or 2 rows, whichever
+    is more. A request that is unbounded by design today (the hotspots below) gets a budget
+    that grows with the seeded rows it must read (every public Template, the user's runs, an
+    Organization's runs), plus the same margin on what it reads beyond them, and its test name
+    says it is unbounded until the [D1 cost plan](../exec-plans/active/d1-cost.md) bounds it.
+  - The budgets bite: dropping `idx_templates_public_created_at` fails the catalog, the lists
+    without a scope and both sitemaps; reading every template version instead of the newest
+    50 fails the template history; dropping `idx_checklist_runs_template_owner` fails both
+    template updates.
+  - **Updating a budget.** When a change is meant to read more rows (or fewer), check its plan
+    with `pnpm run d1:profile`, run the file alone
+    (`pnpm exec vitest run tests/integration/rows-read-budgets-local-d1.test.ts --testTimeout=20000 --maxWorkers=1`),
+    and set the route's `bounded()` value, or its `unbounded()` rows and the rows it reads
+    beyond them, to the measured rows the failure names, with the reason. Only a request whose
+    plan reads rows in proportion to a table belongs in `unbounded()`. A new hot request gets a
+    row in the same table.
 - **Production:** `pnpm exec wrangler d1 insights serp-checklists-db --sort-by reads
   --time-period 31d --limit 25` (Cloudflare login required; analytics only).
 
