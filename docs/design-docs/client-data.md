@@ -74,9 +74,10 @@ one module:
   user's and context's. A session change never reuses another user's plan, and the UI shows a
   neutral loading state until the current user's plan is known.
 
-Every key under `['templates']` refreshes with a Template list invalidation: the lists, the
-detail pages and the Template Changelogs. Share, the visibility switch, a restore and a
-context switch therefore also refresh an open detail page and its Changelog.
+A Template list invalidation reaches every key under `['templates']`: the lists, the detail
+pages and the Template Changelogs. Share, the visibility switch and a restore therefore
+refresh an open detail page and its Changelog too; a context switch and an editor save only
+mark them stale, so they load when a page next shows them.
 
 ## Refreshing after a write
 
