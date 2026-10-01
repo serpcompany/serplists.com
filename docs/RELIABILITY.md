@@ -291,6 +291,9 @@ Common failures:
   `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
   any other. `trackApiRequests()` in the same file waits for the page's own requests,
   such as the several that Account Settings sends when signing in lands there.
+- Playwright tries a page's routes newest first, so a mock that must answer before a
+  catch-all route (`serveLocalAppAsProduction`, a spec's `**/api/**` mock) is registered
+  after it, and calls `route.fallback()` for the requests it leaves to the earlier routes.
 - A route handler that passes a request on with `route.fetch()` fails the test when the
   page closes before the answer arrives, so a spec with one unroutes in `afterEach`:
   `page.unrouteAll({ behavior: 'wait' })` lets the request finish (the billing status

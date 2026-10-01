@@ -163,11 +163,13 @@ page, so a page's sticky parts stick to the window.
 - Every field shows its label, on phones too: a `FieldLabel` bound to the field, never only
   a placeholder or an `aria-label` (a hero's search too: "Search categories", "Search
   templates").
-- A page has one `h1` and its headings never skip a level. A card, grid or section right
-  under the `h1` titles itself with an `h2` (`CardTitle as="h2"`, `titleAs="h2"` on
-  `MediaCard`, `ListCard` and `CtaBanner`), and the headings inside it follow one level
-  down. `tests/e2e/heading-outline.spec.ts` reads the outline of the public and console
-  pages.
+- A page has one `h1` and its headings never skip a level: someone who moves through a page
+  by its headings loses where its sections start when an `h3` follows the `h1`. A card, grid
+  or section right under the `h1` titles itself with an `h2` (`CardTitle as="h2"`,
+  `titleAs="h2"` on `MediaCard`, `ListCard` and `CtaBanner`), and the headings inside it
+  follow one level down. `tests/e2e/heading-outline.spec.ts` reads the outline of the public
+  and console pages from the headings a screen reader reads: rendered, and outside
+  `aria-hidden`.
 - A control revealed on hover (`opacity-0 group-hover:opacity-100`) must also show on
   keyboard focus (`group-focus-within:opacity-100`) and on touch screens: use
   `HOVER_REVEAL_CLASS` (`src/components/ui/hover-reveal.ts`; the template editor's

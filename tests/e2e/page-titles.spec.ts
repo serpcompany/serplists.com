@@ -1,9 +1,10 @@
-import { expect, test } from '@playwright/test';
-
-// Page titles carry the product brand, and a page without its own title falls back to the
-// brand instead of keeping the previous page's title after client-side navigation.
+import { expect, test, type Page } from '@playwright/test';
 
 test.use({ viewport: { width: 1280, height: 800 } });
+
+async function openPricingFromHeader(page: Page) {
+  await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
+}
 
 test('titles discovery pages with the brand', async ({ page }) => {
   await page.goto('/templates/');
@@ -11,13 +12,11 @@ test('titles discovery pages with the brand', async ({ page }) => {
   await expect(page).toHaveTitle('Template Library | SERP Lists');
 });
 
-test('resets the title when navigating to a page without its own title', async ({ page }) => {
+test('resets the title on a client-side navigation to a page without its own title', async ({ page }) => {
   await page.goto('/templates/');
   await expect(page).toHaveTitle('Template Library | SERP Lists');
 
-  // A header link navigates client-side; page.goto would load the page from the server and
-  // hide the bug.
-  await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
+  await openPricingFromHeader(page);
 
   await expect(page).toHaveURL(/\/pricing\/$/);
   await expect(page).toHaveTitle('SERP Lists');
@@ -30,7 +29,7 @@ test('drops a public template title when leaving the template page', async ({ pa
   await expect(page).toHaveTitle(/\| SERP Lists$/);
   await expect(page).toHaveTitle(/Camping/);
 
-  await page.getByRole('banner').getByRole('link', { name: 'Pricing', exact: true }).click();
+  await openPricingFromHeader(page);
 
   await expect(page).toHaveURL(/\/pricing\/$/);
   await expect(page).toHaveTitle('SERP Lists');

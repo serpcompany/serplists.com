@@ -2,15 +2,12 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { fillSignInForm } from './support/sign-in';
 
-// Every page has one h1, and its headings never skip a level: an h3 right under the h1 hid
-// where the page's sections start from anyone who moves through it by headings. Card titles
-// take the level of where the card sits (CardTitle's `as`, docs/DESIGN.md). Only headings a
-// screen reader reads count: rendered, and not inside aria-hidden.
-
 async function outlineProblems(page: Page): Promise<string[]> {
   return page.evaluate(() => {
+    const isReadByScreenReaders = (heading: Element) =>
+      heading.getClientRects().length > 0 && !heading.closest('[aria-hidden="true"]');
     const headings = [...document.querySelectorAll('h1, h2, h3, h4, h5, h6')]
-      .filter((heading) => heading.getClientRects().length > 0 && !heading.closest('[aria-hidden="true"]'))
+      .filter(isReadByScreenReaders)
       .map((heading) => ({ level: Number(heading.tagName[1]), text: (heading.textContent ?? '').trim().slice(0, 60) }));
     const problems: string[] = [];
     const h1Count = headings.filter((heading) => heading.level === 1).length;
@@ -24,7 +21,6 @@ async function outlineProblems(page: Page): Promise<string[]> {
   });
 }
 
-// Opens the page, waits for its h1 and for its data, then reads the outline.
 async function expectOutline(page: Page, path: string, h1: string) {
   await page.goto(path);
   await expect(page.getByRole('heading', { level: 1, name: h1, exact: true })).toBeVisible({ timeout: 30_000 });
@@ -61,8 +57,7 @@ test('public pages keep one h1 and never skip a heading level', async ({ page })
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  // Below lg the sign-in pages hide the aside and its h2, so the footer's headings follow the h1.
-  test('the sign-in pages keep one h1 and never skip a heading level', async ({ page }) => {
+  test('the sign-in pages, which hide their aside and its h2 below lg, keep one h1 and never skip a heading level', async ({ page }) => {
     for (const [path, h1] of [
       ['/login/', 'Welcome back'],
       ['/register/', 'Create your account'],

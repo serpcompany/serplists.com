@@ -4,8 +4,7 @@ import { apiJson } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { fillSignInForm } from './support/sign-in';
 
-// The public template page must show the server's copy, not the catalog another page
-// loaded earlier in the same tab (docs/FRONTEND.md).
+const NEW_TEMPLATE_VERSION = 1;
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -16,6 +15,11 @@ async function loginAsAdmin(page: Page) {
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
   return apiJson<Record<string, unknown>>(page, path, { method, body });
+}
+
+async function loadPublicCatalogIntoMemory(page: Page) {
+  await page.goto('/templates/');
+  await expect(page.getByRole('heading', { name: 'Template Library' })).toBeVisible();
 }
 
 test('shows edits and unpublishing on a public template page after the catalog loaded', async ({ page }) => {
@@ -31,12 +35,12 @@ test('shows edits and unpublishing on a public template page after the catalog l
   const publicPath = `/profile/admin/${String(created.slug)}/`;
 
   try {
-    // Loads the public catalog into memory for the rest of the tab session.
-    await page.goto('/templates/');
-    await expect(page.getByRole('heading', { name: 'Template Library' })).toBeVisible();
+    await loadPublicCatalogIntoMemory(page);
 
-    // A content edit names the version it was based on; a new template is version 1.
-    await callApi(page, 'PUT', `/templates/${templateId}`, { title: `Freshness Edited ${stamp}`, expected_version: 1 });
+    await callApi(page, 'PUT', `/templates/${templateId}`, {
+      title: `Freshness Edited ${stamp}`,
+      expected_version: NEW_TEMPLATE_VERSION,
+    });
     await navigateInApp(page, publicPath);
     await expect(page.getByRole('heading', { level: 1, name: `Freshness Edited ${stamp}` })).toBeVisible();
 

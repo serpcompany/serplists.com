@@ -1,7 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-// Below the md breakpoint the public header hides its nav links and Log in; the menu
-// button is how phone visitors reach them. The header's menus are groups in the sheet.
 const MENU_GROUPS = {
   Templates: ['Template Library', 'Categories'],
   Features: ['Template Builder', 'Checklist Runs', 'Public Sharing', 'Import + Export'],

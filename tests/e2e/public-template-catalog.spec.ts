@@ -49,19 +49,18 @@ test('repo-backed public templates render in the checklist library', async ({
   ).toBeVisible();
   await expect(page.getByText('Pack the tent setup')).toBeVisible();
 
-  // The breadcrumb's Template Library link goes back to the library.
-  const backToTemplatesLink = page
+  const breadcrumbLibraryLink = page
     .getByRole('navigation', { name: 'breadcrumb' })
     .getByRole('link', { name: 'Template Library', exact: true });
-  await expect(backToTemplatesLink).toHaveAttribute('href', '/templates/');
+  await expect(breadcrumbLibraryLink).toHaveAttribute('href', '/templates/');
   const shareButton = page.getByRole('button', { name: 'Share' });
   const ctaPanel = page
     .getByRole('heading', { name: 'Ready to use this template?' })
     .locator('..');
   const actionRail = shareButton.locator('..');
 
-  const backLinkRadius = Number.parseFloat(
-    await backToTemplatesLink.evaluate(
+  const breadcrumbLinkRadius = Number.parseFloat(
+    await breadcrumbLibraryLink.evaluate(
       (element) => getComputedStyle(element).borderRadius,
     ),
   );
@@ -79,7 +78,7 @@ test('repo-backed public templates render in the checklist library', async ({
 
   expect(actionRailBox).not.toBeNull();
   expect(actionRailBox?.width ?? 999).toBeLessThan(340);
-  expect(backLinkRadius).toBeLessThan(16);
+  expect(breadcrumbLinkRadius).toBeLessThan(16);
   expect(shareButtonRadius).toBeLessThan(16);
   expect(ctaPanelRadius).toBeLessThan(16);
 });
@@ -90,8 +89,6 @@ test('public creator profile page stays available under /profile/:username', asy
   await page.setViewportSize({ width: 1440, height: 1600 });
   await page.goto('/profile/serp/');
 
-  // Each Template is a card (MediaCard): its title links to the Template and the link covers
-  // the card; the categories sit over the title and the icon in the card's muted media.
   const firstTemplateLink = page.getByRole('link', {
     name: /Complete Wedding Planning Checklist/i,
   });
@@ -118,7 +115,6 @@ test('public creator profile page stays available under /profile/:username', asy
   await expect(page.getByText('Checklist Items')).toBeVisible();
   await expect(firstTemplateLink).toBeVisible();
 
-  // The cards sit inside the page's width, several to a row: never full width, never tall.
   const pageBox = await page.locator('[data-slot="detail-page"]').boundingBox();
   const templateCardBox = await firstTemplateCard.boundingBox();
   const templateMediaRadius = Number.parseFloat(
@@ -137,52 +133,61 @@ test('public creator profile page stays available under /profile/:username', asy
   await expect(firstTemplateChip).toBeVisible();
 });
 
-test('library filters follow the URL and clearing the search keeps the page', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1440, height: 1200 });
-  const searchBox = page.getByPlaceholder('Search templates...');
-  const campingCard = page.getByRole('heading', {
-    name: 'Ultimate Camping Checklist',
+test.describe('library filters follow the URL', () => {
+  test.use({ viewport: { width: 1440, height: 1200 } });
+
+  test('the header link to the plain library resets a typed search, and Back returns to it', async ({
+    page,
+  }) => {
+    const searchBox = page.getByPlaceholder('Search templates...');
+    const campingCard = page.getByRole('heading', {
+      name: 'Ultimate Camping Checklist',
+    });
+
+    await page.goto('/templates/');
+    await expect(campingCard).toBeVisible();
+    await searchBox.fill('zzzz-no-such-template');
+    await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
+    await expect(campingCard).toHaveCount(0);
+    await page.getByRole('banner').getByRole('button', { name: 'Templates', exact: true }).click();
+    await page
+      .locator('[data-slot="navigation-menu-content"][data-open]')
+      .getByRole('link', { name: 'Template Library', exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/templates\/$/);
+    await expect(searchBox).toHaveValue('');
+    await expect(campingCard).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
+    await expect(searchBox).toHaveValue('zzzz-no-such-template');
+    await expect(campingCard).toHaveCount(0);
   });
 
-  // The header's link to a plain /templates resets a search typed on the page.
-  await page.goto('/templates/');
-  await expect(campingCard).toBeVisible();
-  await searchBox.fill('zzzz-no-such-template');
-  await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
-  await expect(campingCard).toHaveCount(0);
-  await page.getByRole('banner').getByRole('button', { name: 'Templates', exact: true }).click();
-  await page
-    .locator('[data-slot="navigation-menu-content"][data-open]')
-    .getByRole('link', { name: 'Template Library', exact: true })
-    .click();
-  await expect(page).toHaveURL(/\/templates\/$/);
-  await expect(searchBox).toHaveValue('');
-  await expect(campingCard).toBeVisible();
+  test('clearing the search on a legacy category link keeps the user on the library', async ({
+    page,
+  }) => {
+    const searchBox = page.getByPlaceholder('Search templates...');
 
-  // Back returns to the search, and the box and results follow it.
-  await page.goBack();
-  await expect(page).toHaveURL(/\/templates\/\?search=zzzz-no-such-template$/);
-  await expect(searchBox).toHaveValue('zzzz-no-such-template');
-  await expect(campingCard).toHaveCount(0);
+    await page.goto('/templates/?category=outdoor&search=camping');
+    await expect(searchBox).toHaveValue('camping');
+    await searchBox.fill('');
+    await expect(page).toHaveURL(/\/templates\/\?category=outdoor$/);
+    await expect(
+      page.getByRole('heading', { name: 'Template Library' }),
+    ).toBeVisible();
+    await expect(searchBox).toBeFocused();
+    await expect(
+      page.getByRole('heading', { name: 'Ultimate Camping Checklist' }),
+    ).toBeVisible();
+  });
 
-  // Clearing the search on a legacy category link leaves the user on the library.
-  await page.goto('/templates/?category=outdoor&search=camping');
-  await expect(searchBox).toHaveValue('camping');
-  await searchBox.fill('');
-  await expect(page).toHaveURL(/\/templates\/\?category=outdoor$/);
-  await expect(
-    page.getByRole('heading', { name: 'Template Library' }),
-  ).toBeVisible();
-  await expect(searchBox).toBeFocused();
-  await expect(campingCard).toBeVisible();
-
-  // A category-only link from elsewhere still goes to the category page. Leave first:
-  // opening the URL the tab already shows reloads the library's own entry, marker included.
-  await page.goto('/');
-  await page.goto('/templates/?category=outdoor');
-  await expect(page).toHaveURL(/\/categories\/outdoor\/$/);
+  test('a legacy category-only library link opened from elsewhere goes to the category page', async ({
+    page,
+  }) => {
+    await page.goto('/templates/?category=outdoor');
+    await expect(page).toHaveURL(/\/categories\/outdoor\/$/);
+  });
 });
 
 test('a related category opens with no search or sort from the previous one', async ({

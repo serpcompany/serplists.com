@@ -4,14 +4,11 @@ import { API_BASE_URL, apiJson } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
 const PRODUCTION_ORIGIN = 'https://serplists.com';
+const CONSOLE_HOME_URL = /\/dashboard\/templates\/$/;
+const MISSING_PROFILE_PATH = '/profile/no-such-user-route-structure/';
+const MISSING_TEMPLATE_PATH = `${MISSING_PROFILE_PATH}no-such-template/`;
+const SEEDED_PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist/';
 
-/**
- * Loads pages as https://serplists.com, the way a crawler reads the live site: this serves
- * the local preview (the production build, its pages and the API, all on one origin like
- * production) under that origin, and aborts every other request (analytics, fonts), so
- * nothing reaches the real site or reports a visit to it. Register page mocks after this, so
- * they answer first.
- */
 async function serveLocalAppAsProduction(page: Page) {
   const pagesOrigin = new URL(API_BASE_URL).origin;
   await page.routeWebSocket(/.*/, (webSocket) => webSocket.close());
@@ -26,11 +23,6 @@ async function serveLocalAppAsProduction(page: Page) {
   });
 }
 
-/**
- * Expects every robots tag on the page to say `expected`, and at least one. A page can carry
- * two: its server metadata's and the one it adds in the browser once it knows it has nothing
- * to show (NoIndexMeta). Search engines apply every tag.
- */
 async function expectRobots(page: Page, expected: string | RegExp) {
   const tags = page.locator('meta[name="robots"]');
   await expect(tags.first()).toHaveAttribute('content', expected);
@@ -104,13 +96,37 @@ async function signInAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: /^sign in$/i }).click();
-  // With no return path, signing in opens the console home, My Templates.
-  await expect(page).toHaveURL(/\/dashboard\/templates\/$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(CONSOLE_HOME_URL, { timeout: 30_000 });
+}
+
+async function reportFreeThenProBillingStatus(page: Page) {
+  let statusReads = 0;
+  await page.route('**/api/billing/status**', async (route) => {
+    statusReads += 1;
+    await fulfillJson(route, {
+      billingEnabled: true,
+      plan: statusReads >= 2 ? 'pro' : 'free',
+      subscriptionStatus: statusReads >= 2 ? 'active' : null,
+      canManageBilling: true,
+      managedBySupport: false,
+    });
+  });
+}
+
+async function failBrowserTemplateReads(page: Page) {
+  await page.route('**/api/templates/slug/**', (route) =>
+    fulfillJson(route, { error: 'Service unavailable' }, 503),
+  );
+}
+
+async function expectLoadedPage(page: Page, heading: string, content: string) {
+  await expect(
+    page.getByRole('heading', { exact: true, name: heading }).first(),
+  ).toBeVisible();
+  await expect(page.getByText(content, { exact: true }).first()).toBeVisible();
 }
 
 test.describe('route structure', () => {
-  // serveLocalAppAsProduction answers the page's requests itself; let any still in
-  // flight go when the page closes.
   test.afterEach(async ({ page }) => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
@@ -155,7 +171,7 @@ test.describe('route structure', () => {
     await mockAuthenticatedRouteApi(page);
 
     await page.goto('/console');
-    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+    await expect(page).toHaveURL(CONSOLE_HOME_URL);
 
     await page.goto('/account');
     await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
@@ -164,7 +180,6 @@ test.describe('route structure', () => {
     await expect(page).toHaveURL(/\/dashboard\/settings\/$/);
   });
 
-  // A Run's page answered at /run/<id>/ as well; /dashboard/runs/<id>/ is its one URL.
   test("a Run's old address answers one 308 with its one URL, keeping the query", async ({ request }) => {
     for (const path of ['/run/run-1?from=email', '/run/run-1/?from=email']) {
       const response = await request.get(path, { maxRedirects: 0 });
@@ -187,18 +202,7 @@ test.describe('route structure', () => {
 
   test('returning from Checkout through /account confirms Pro once it activates', async ({ page }) => {
     await mockAuthenticatedRouteApi(page);
-    let statusReads = 0;
-    // Registered last, so it answers before the generic mock: Free first, then Pro.
-    await page.route('**/api/billing/status**', async (route) => {
-      statusReads += 1;
-      await fulfillJson(route, {
-        billingEnabled: true,
-        plan: statusReads >= 2 ? 'pro' : 'free',
-        subscriptionStatus: statusReads >= 2 ? 'active' : null,
-        canManageBilling: true,
-        managedBySupport: false,
-      });
-    });
+    await reportFreeThenProBillingStatus(page);
 
     await page.goto('/account?billing=success');
     await expect(page.getByText('Welcome to Pro!')).toBeVisible({ timeout: 20_000 });
@@ -211,7 +215,7 @@ test.describe('route structure', () => {
     await mockAuthenticatedRouteApi(page);
 
     await page.goto('/dashboard');
-    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+    await expect(page).toHaveURL(CONSOLE_HOME_URL);
   });
 
   test('removed mixed-surface routes still return not found', async ({ page }) => {
@@ -231,10 +235,7 @@ test.describe('route structure', () => {
     ).toBeVisible();
   });
 
-  // Next.js serves one prerendered 404 for every missing path, in the public shell; a signed-in
-  // user on a missing console path moves to the console shell once the session check answers
-  // (src/components/NotFoundLayout.tsx), with no hydration error either way.
-  test('a missing console page is a public 404 for a visitor and a console 404 once signed in', async ({ page }) => {
+  test('a missing console page is a public 404 for a visitor and a console 404 once signed in, without a hydration error', async ({ page }) => {
     const hydrationErrors: string[] = [];
     page.on('console', (message) => {
       if (message.type() === 'error' && /hydrat|#418|#423|#425/i.test(message.text())) {
@@ -259,10 +260,7 @@ test.describe('route structure', () => {
     expect(hydrationErrors).toEqual([]);
   });
 
-  test('not-found pages are noindexed and real pages are not', async ({ page }) => {
-    // Some missing URLs (an unknown category or feature) render the not-found view from a
-    // page that exists, with a 200, so the robots tag is what keeps them out of search
-    // results.
+  test('missing pages are noindexed, unknown categories and features included', async ({ page }) => {
     await serveLocalAppAsProduction(page);
     for (const path of [
       '/definitely-missing/',
@@ -275,18 +273,17 @@ test.describe('route structure', () => {
       ).toBeVisible();
       await expectRobots(page, /noindex/);
     }
+  });
 
-    // Each page's own content shows it finished loading before its robots tag is read.
+  test('real category and feature pages stay indexable once loaded', async ({ page }) => {
+    await serveLocalAppAsProduction(page);
     for (const [path, heading, content] of [
       ['/categories/outdoor/', 'outdoor', 'Ultimate Camping Checklist'],
       ['/categories/seo/', 'SEO', 'Technical SEO Audit Checklist'],
       ['/features/template-builder/', 'Template Builder', 'Build reusable SOPs with sections and tasks.'],
     ] as const) {
       await page.goto(`${PRODUCTION_ORIGIN}${path}`);
-      await expect(
-        page.getByRole('heading', { exact: true, name: heading }).first(),
-      ).toBeVisible();
-      await expect(page.getByText(content, { exact: true }).first()).toBeVisible();
+      await expectLoadedPage(page, heading, content);
       await expect(
         page.getByRole('heading', { name: 'That page does not exist' }),
       ).toHaveCount(0);
@@ -294,9 +291,10 @@ test.describe('route structure', () => {
         page.locator('meta[name="robots"][content*="noindex"]'),
       ).toHaveCount(0);
     }
+  });
 
-    // A registry category no public Template uses yet is a real page, but it stays out
-    // of the index (and the sitemap) until a Template uses it.
+  test('a registry category no public Template uses yet stays out of the index', async ({ page }) => {
+    await serveLocalAppAsProduction(page);
     await page.goto(`${PRODUCTION_ORIGIN}/categories/business/`);
     await expect(
       page.getByRole('heading', { exact: true, name: 'Business & Operations' }),
@@ -353,15 +351,14 @@ test.describe('route structure', () => {
       fulfillJson(route, { error: 'Template not found' }, 404),
     );
 
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/`);
+    await page.goto(`${PRODUCTION_ORIGIN}${MISSING_PROFILE_PATH}`);
     await expect(
       page.getByRole('heading', { name: 'User not found' }),
     ).toBeVisible();
     await expectRobots(page, 'noindex, nofollow');
     await expect(page).toHaveTitle(/Profile not found/);
 
-    // e2e-unseeded-template: the page for a Template that does not exist.
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/no-such-user-route-structure/no-such-template/`);
+    await page.goto(`${PRODUCTION_ORIGIN}${MISSING_TEMPLATE_PATH}`);
     await expect(
       page.getByRole('heading', { name: 'Template not found' }),
     ).toBeVisible();
@@ -373,13 +370,9 @@ test.describe('route structure', () => {
     page,
   }) => {
     await serveLocalAppAsProduction(page);
-    await page.route('**/api/templates/slug/**', (route) =>
-      fulfillJson(route, { error: 'Service unavailable' }, 503),
-    );
+    await failBrowserTemplateReads(page);
 
-    // A seeded public Template, so the server's metadata finds it; the page's own read of
-    // it in the browser is answered with the 503 above.
-    await page.goto(`${PRODUCTION_ORIGIN}/profile/admin/sample-technical-seo-audit-checklist/`);
+    await page.goto(`${PRODUCTION_ORIGIN}${SEEDED_PUBLIC_TEMPLATE_PATH}`);
     await expect(
       page.getByRole('heading', { name: 'Unable to load template' }),
     ).toBeVisible();

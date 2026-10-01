@@ -1,8 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Tags in the Google Tag Manager container read location.href, so pages whose URL carries
-// a share or invite token, a reset token or an email address must not load it at all.
-
 const TAG_HOSTS = /(^|\.)(googletagmanager\.com|google-analytics\.com|analytics\.google\.com|doubleclick\.net)$/;
 
 async function recordTagRequests(page: Page): Promise<string[]> {
@@ -18,10 +15,7 @@ async function recordTagRequests(page: Page): Promise<string[]> {
   return requests;
 }
 
-// The root layout runs the Tag Manager bootstrap while the browser parses the page, so the
-// page has had every chance to load the container once it has loaded and its requests have
-// settled.
-async function waitForApp(page: Page) {
+async function waitUntilTagManagerCouldHaveLoaded(page: Page) {
   await page.waitForLoadState('load');
   await page.waitForLoadState('networkidle');
 }
@@ -34,15 +28,13 @@ const SENSITIVE_PAGES = [
     path: '/login/?verify_email=1&email=analytics-e2e%40example.com',
     secret: 'analytics-e2e',
   },
-  // Where the verification email returns a new invitee.
   {
     path: '/login/?verified=1&next=%2Fteam-invites%2Fe2e-analytics-next-token',
     secret: 'e2e-analytics-next-token',
   },
 ];
 
-// The path and query parameter names, without the values that carry the secrets.
-const describePage = (path: string): string => {
+const pathWithoutSecretValues = (path: string): string => {
   const [pathname, query = ''] = path.split('?');
   const keys = [...new URLSearchParams(query).keys()];
   return keys.length > 0 ? `${pathname}?${keys.join('&')}` : pathname;
@@ -50,11 +42,11 @@ const describePage = (path: string): string => {
 
 test.describe('analytics privacy', () => {
   for (const { path, secret } of SENSITIVE_PAGES) {
-    test(`does not load Google Tag Manager on ${describePage(path)}`, async ({ page }) => {
+    test(`does not load Google Tag Manager on ${pathWithoutSecretValues(path)}`, async ({ page }) => {
       const requests = await recordTagRequests(page);
 
       await page.goto(path);
-      await waitForApp(page);
+      await waitUntilTagManagerCouldHaveLoaded(page);
 
       expect(requests).toEqual([]);
       expect(requests.join('\n')).not.toContain(secret);
@@ -69,12 +61,11 @@ test.describe('analytics privacy', () => {
     await expect(page).toHaveURL(/\/reset-password\/$/);
   });
 
-  test('moves an email address in an old login link out of the URL', async ({ page }) => {
+  test('moves an email address in an old login link out of the URL, with its one-shot notice parameter', async ({ page }) => {
     await page.goto('/login/?verify_email=1&email=analytics-e2e%40example.com');
 
     await expect(page.getByLabel('Email')).toHaveValue('analytics-e2e@example.com');
     await expect(page).not.toHaveURL(/email=analytics/);
-    // The one-shot verify_email notice parameter goes too, so a reload does not replay it.
     await expect(page).toHaveURL(/\/login\/$/);
   });
 
@@ -82,7 +73,7 @@ test.describe('analytics privacy', () => {
     const requests = await recordTagRequests(page);
 
     await page.goto('/');
-    await waitForApp(page);
+    await waitUntilTagManagerCouldHaveLoaded(page);
 
     await expect.poll(() => requests.some((entry) => entry.includes('gtm.js?id=GTM-PZZFQBGG'))).toBe(true);
   });
