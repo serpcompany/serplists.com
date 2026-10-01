@@ -166,14 +166,25 @@ pnpm run test:coverage
 The browser tests run the production build: `test:smoke` and `test:e2e:full` build it
 with OpenNext and `SITE_ENV=production`, wipe, migrate and seed their own D1 in
 `.wrangler/smoke-state`, and serve the build with `opennextjs-cloudflare preview` (workerd)
-on a free port from `4173` (`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`). Pass
-`-- --skip-build` to reuse the build in `.open-next/`, made with
-`SITE_ENV=production pnpm run build:worker` (the runner refuses one made for another
-environment). `pnpm run preview` and `next dev` run without `SITE_ENV`, as a non-production
-site: noindex, crawlers disallowed, no Tag Manager
-([RELIABILITY.md](../RELIABILITY.md#environments-and-hosts)). They run on one Playwright
-worker: one workerd process renders every page and prefetch. `pnpm exec playwright test`
-serves the existing build on your own local D1.
+on a free port from `4173` (`tests/e2e/run-smoke.mjs`, `tests/e2e/preview-server.mjs`).
+`test:e2e:full` passes `--all`, which drops the `@smoke` filter, and the runner hands every
+argument it does not know to Playwright, so `pnpm run test:e2e:full --skip-build
+tests/e2e/<name>.spec.ts` runs one spec file. Leave out pnpm's `--`: pnpm passes it on, and
+Playwright reads everything after it as a file filter. `--skip-build` reuses the build in
+`.open-next/`, made with `SITE_ENV=production pnpm run build:worker`. The runner refuses one
+made for another environment, which it tells from the `.open-next/assets/_headers` the build
+ships: a build that is not production marks every file noindex there. `pnpm run preview` and
+`next dev` run without `SITE_ENV`, as a non-production site: noindex, crawlers disallowed, no
+Tag Manager ([RELIABILITY.md](../RELIABILITY.md#environments-and-hosts)). The browser tests
+run on one Playwright worker: one workerd process renders every page and prefetch.
+`pnpm exec playwright test` serves the existing build on your own local D1.
+
+The preview gets the Worker vars that name its origin (`FRONTEND_URL`,
+`CORS_ALLOWED_ORIGINS`), `SITE_ENV` and the auth secret (the shell's `BETTER_AUTH_SECRET` or
+legacy `JWT_SECRET`, else a fixed test secret) as `--var` arguments, which override `.dev.vars`
+(`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`). When Playwright stops the preview at
+the end of a run, `preview-server.mjs` kills its whole process tree: on Windows, workerd would
+otherwise keep the port.
 
 Browser failures keep a trace, video, and screenshot under `tests/test-results/`;
 open a trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure

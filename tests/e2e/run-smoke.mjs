@@ -1,12 +1,3 @@
-// Runs the browser tests on an isolated local stack: builds the app with OpenNext, wipes,
-// migrates and seeds a D1 of its own, and starts Playwright, whose web server serves that
-// build with `opennextjs-cloudflare preview` on a free port (tests/e2e/preview-server.mjs).
-//   pnpm run test:smoke                  # the @smoke tests
-//   pnpm run test:e2e:full               # every test, one worker
-//   ... -- --skip-build                  # reuse a production build in .open-next (see below)
-// The tests run the production configuration (E2E_SITE_ENV): the runner builds with
-// SITE_ENV=production and the preview gets the same var. A build it reuses must be one too:
-// `SITE_ENV=production pnpm run build:worker`, as CI builds it.
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,9 +27,7 @@ function run(tool, args, options = {}) {
   });
 }
 
-// Wipes, migrates and seeds the D1 that the preview runs on (PLAYWRIGHT_WRANGLER_PERSIST_TO,
-// set by resolveSmokeEnv to this same path).
-function prepareSmokeD1(smokePersistPath) {
+function resetAndSeedSmokeD1(smokePersistPath) {
   rmSync(assertSmokePersistPath(smokePersistPath, repoRoot), { recursive: true, force: true });
   run(
     "wrangler",
@@ -69,8 +58,6 @@ function prepareSmokeD1(smokePersistPath) {
   );
 }
 
-// SITE_ENV decides headers, redirects and static pages at build time, so the preview's var
-// alone cannot make a staging build production.
 function assertProductionBuild() {
   const headersPath = path.join(repoRoot, ".open-next", "assets", "_headers");
   const builtFor = describeBuiltSiteEnv(existsSync(headersPath) ? readFileSync(headersPath, "utf8") : null);
@@ -84,8 +71,7 @@ function assertProductionBuild() {
 }
 
 const RUNNER_FLAGS = new Set(["--all", "--skip-build"]);
-// `--all` runs the full e2e suite through the same isolated local stack.
-const runAll = process.argv.includes("--all");
+const smokeTestsOnly = !process.argv.includes("--all");
 const skipBuild = process.argv.includes("--skip-build");
 const playwrightArgs = process.argv.slice(2).filter((arg) => !RUNNER_FLAGS.has(arg));
 
@@ -94,15 +80,14 @@ const { env, seedPath, notes } = resolveSmokeEnv(process.env, { openPort, repoRo
 notes.forEach((note) => console.log(note));
 
 if (seedPath) {
-  // The build bundles the pages and the API, so an older one would test older code.
   if (!skipBuild) run("opennextjs-cloudflare", ["build"], { env: { SITE_ENV: E2E_SITE_ENV } });
   assertProductionBuild();
-  prepareSmokeD1(seedPath);
+  resetAndSeedSmokeD1(seedPath);
 }
 
 const child = spawnTool(
   "playwright",
-  ["test", ...(runAll ? [] : ["--grep", "@smoke"]), ...playwrightArgs],
+  ["test", ...(smokeTestsOnly ? ["--grep", "@smoke"] : []), ...playwrightArgs],
   {
     cwd: repoRoot,
     env,

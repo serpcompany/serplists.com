@@ -215,7 +215,7 @@ Common failures:
   yet is fixed or deleted, never skipped.
 - Smoke and e2e suites run against the production build on a local worker, or dedicated
   staging, never production. `tests/e2e/run-smoke.mjs` builds the app with OpenNext
-  (skip with `-- --skip-build`), and Playwright's web server
+  (skip with `--skip-build`), and Playwright's web server
   (`tests/e2e/preview-server.mjs`) serves it with `opennextjs-cloudflare preview`
   (workerd) on one origin for the pages and the API: `localhost:4173`, or the next free
   port, with D1 state in `.wrangler/smoke-state`. Keep the `localhost` host name;
