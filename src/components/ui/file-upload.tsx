@@ -105,7 +105,6 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       await uploadSelectedFile({
         file,
         type,
-        userId,
         onUploadStart,
         onUploaded: (uploaded) => {
           onFileChange({ value: uploaded.url, fileName: uploaded.fileName, fileSize: uploaded.fileSize });

@@ -24,7 +24,7 @@ describe('uploadFile image handling', () => {
   it('uploads an image attached to a File block as the original bytes', async () => {
     const png = new File([new Uint8Array(10)], 'screenshot.png', { type: 'image/png' });
 
-    await uploadFile(png, 'template-files', 'user-1');
+    await uploadFile(png, 'template-files');
 
     expect(optimizeImage).not.toHaveBeenCalled();
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-files', file: png });
@@ -35,7 +35,7 @@ describe('uploadFile image handling', () => {
     const converted = new File([new Uint8Array(5)], 'logo.png', { type: 'image/png' });
     vi.mocked(optimizeImage).mockResolvedValue(converted);
 
-    const result = await uploadFile(original, 'template-images', 'user-1');
+    const result = await uploadFile(original, 'template-images');
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-images', file: converted });
     expect(result).toMatchObject({ success: true, fileName: 'logo.png', fileSize: 5 });
@@ -45,7 +45,7 @@ describe('uploadFile image handling', () => {
     const png = new File([new Uint8Array(10)], 'logo.png', { type: 'image/png' });
     vi.mocked(optimizeImage).mockRejectedValue(new Error('Failed to load image'));
 
-    await uploadFile(png, 'template-images', 'user-1');
+    await uploadFile(png, 'template-images');
 
     expect(api.uploadToR2).toHaveBeenCalledWith({ bucket: 'template-images', file: png });
   });
@@ -74,7 +74,7 @@ describe('upload type checks', () => {
     const heic = new File([new Uint8Array(10)], 'photo.heic', { type: 'image/heic' });
     vi.mocked(optimizeImage).mockRejectedValue(new Error('Failed to load image'));
 
-    const result = await uploadFile(heic, 'template-images', 'user-1');
+    const result = await uploadFile(heic, 'template-images');
 
     expect(api.uploadToR2).not.toHaveBeenCalled();
     expect(result).toEqual({

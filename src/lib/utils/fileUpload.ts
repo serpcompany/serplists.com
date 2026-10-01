@@ -27,7 +27,6 @@ export type UploadResult = {
 export const uploadFile = async (
   file: File,
   bucket: TemplateUploadBucket,
-  userId: string
 ): Promise<UploadResult> => {
   try {
     let fileToUpload = file;
@@ -50,9 +49,6 @@ export const uploadFile = async (
     if (!isAllowedUpload(bucket, fileToUpload)) {
       return { success: false, error: unsupportedUploadMessage(bucket) };
     }
-
-    // API handles key naming; userId is kept for callsite compatibility.
-    void userId;
 
     const result = await api.uploadToR2({ bucket, file: fileToUpload });
 

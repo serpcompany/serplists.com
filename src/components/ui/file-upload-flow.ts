@@ -22,13 +22,11 @@ export type UploadedFileInfo = { url: string; fileName?: string; fileSize?: numb
 export const uploadSelectedFile = async ({
   file,
   type,
-  userId,
   onUploadStart,
   onUploaded,
 }: {
   file: File;
   type: FileUploadType;
-  userId: string;
   // Receives the upload as it starts, so a page can wait for it before saving or leaving.
   onUploadStart?: (upload: Promise<UploadResult>) => void;
   onUploaded: (info: UploadedFileInfo) => void;
@@ -40,7 +38,7 @@ export const uploadSelectedFile = async ({
   }
 
   try {
-    const upload = uploadFile(file, BUCKET_BY_TYPE[type], userId);
+    const upload = uploadFile(file, BUCKET_BY_TYPE[type]);
     onUploadStart?.(upload);
     const result = await upload;
     if (!result.success || !result.url) {

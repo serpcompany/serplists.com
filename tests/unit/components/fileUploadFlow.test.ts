@@ -36,12 +36,11 @@ describe('uploadSelectedFile', () => {
     const uploaded = await uploadSelectedFile({
       file: fileOf('data.csv', 'text/csv'),
       type: 'file',
-      userId: 'user-1',
       onUploaded,
     });
 
     expect(uploaded).toBe(false);
-    expect(uploadMocks.uploadFile).toHaveBeenCalledWith(expect.any(File), 'template-files', 'user-1');
+    expect(uploadMocks.uploadFile).toHaveBeenCalledWith(expect.any(File), 'template-files');
     expect(toastMock.error).toHaveBeenCalledWith('Upload failed', {
       description: 'Unsupported file type for bucket',
     });
@@ -52,7 +51,6 @@ describe('uploadSelectedFile', () => {
     const uploaded = await uploadSelectedFile({
       file: fileOf('clip.mp4', 'video/mp4', 60 * 1024 * 1024),
       type: 'video',
-      userId: 'user-1',
       onUploaded: vi.fn(),
     });
 
@@ -69,7 +67,6 @@ describe('uploadSelectedFile', () => {
     await uploadSelectedFile({
       file: fileOf('guide.pdf', 'application/pdf'),
       type: 'file',
-      userId: 'user-1',
       onUploaded: vi.fn(),
     });
 
@@ -92,7 +89,6 @@ describe('uploadSelectedFile', () => {
     const uploaded = await uploadSelectedFile({
       file: fileOf('guide.pdf', 'application/pdf'),
       type: 'file',
-      userId: 'user-1',
       onUploadStart,
       onUploaded,
     });
