@@ -1,4 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
+import { z } from 'zod';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 
@@ -8,24 +9,32 @@ type AuditActorRow = { actor_user_id: string | null; metadata_json: string | nul
 
 export const HIDDEN_ACTOR = { userId: null, email: null, name: null, username: null } as const;
 
+const shareLinkMetadataSchema = z.object({ source: z.literal('public_share') });
+
 function isShareLinkEvent(metadataJson: string | null): boolean {
   if (!metadataJson) return false;
   try {
-    const metadata = JSON.parse(metadataJson) as unknown;
-    return typeof metadata === 'object' && metadata !== null && (metadata as { source?: unknown }).source === 'public_share';
+    const metadata: unknown = JSON.parse(metadataJson);
+    return shareLinkMetadataSchema.safeParse(metadata).success;
   } catch {
     return false;
   }
 }
+
+type ShareLinkActorRow = AuditActorRow & { actor_user_id: string };
+
+const isShareLinkActorRow = (row: AuditActorRow): row is ShareLinkActorRow =>
+  Boolean(row.actor_user_id) && isShareLinkEvent(row.metadata_json);
 
 export async function findHiddenShareLinkActors(
   env: Env,
   owner: RunOwnerScope,
   rows: AuditActorRow[],
 ): Promise<(row: AuditActorRow) => boolean> {
-  const shareLinkRows = new Set(rows.filter((row) => row.actor_user_id && isShareLinkEvent(row.metadata_json)));
-  const outsiders = await findOutsiders(env, owner, [...new Set([...shareLinkRows].map((row) => row.actor_user_id as string))]);
-  return (row) => shareLinkRows.has(row) && outsiders.has(row.actor_user_id as string);
+  const shareLinkRows = rows.filter(isShareLinkActorRow);
+  const outsiders = await findOutsiders(env, owner, [...new Set(shareLinkRows.map((row) => row.actor_user_id))]);
+  const hiddenRows = new Set<AuditActorRow>(shareLinkRows.filter((row) => outsiders.has(row.actor_user_id)));
+  return (row) => hiddenRows.has(row);
 }
 
 async function findOutsiders(env: Env, owner: RunOwnerScope, actors: string[]): Promise<Set<string>> {
