@@ -9,10 +9,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// Base UI's Select.Icon renders "▼" when it has no children, and the lucide icon it renders
-// as put that text inside its <svg>: the trigger read "Name A-Z▼" instead of its value.
 describe('SelectTrigger', () => {
-  it('holds no text besides the selected value', () => {
+  it("holds no text besides the selected value, not even the ▼ that Base UI's Select.Icon renders without children", () => {
     const markup = renderToStaticMarkup(
       <Select value="name">
         <SelectTrigger>

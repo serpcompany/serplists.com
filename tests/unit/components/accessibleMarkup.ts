@@ -1,9 +1,3 @@
-// Unit tests render with renderToStaticMarkup in node (no DOM, no testing-library), so
-// these helpers read accessible names from the markup. A control is named by
-// aria-labelledby, aria-label or a <label for> pointing at its id, and a button also by
-// its text. A placeholder is deliberately not a name: it disappears once the field has a
-// value, and 'my-template-slug' reads as a value, not a label.
-
 export type MarkupElement = {
   tag: string;
   attrs: Record<string, string>;
@@ -11,6 +5,23 @@ export type MarkupElement = {
 };
 
 const ATTRIBUTE = /([^\s=/>]+)(?:="([^"]*)")?/g;
+
+const WIDGET_ROLES = [
+  'checkbox',
+  'combobox',
+  'listbox',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'option',
+  'radio',
+  'searchbox',
+  'slider',
+  'spinbutton',
+  'switch',
+  'tab',
+  'textbox',
+];
 
 const decode = (text: string): string =>
   text
@@ -46,15 +57,26 @@ const findButtons = (html: string): MarkupElement[] =>
 const findFields = (html: string): MarkupElement[] =>
   collect(html, /<(input|textarea|select)\b([^>]*?)\/?>()/g, (match) => match[1]);
 
+const findOtherElementsWithWidgetRole = (html: string): MarkupElement[] =>
+  collect(
+    html,
+    new RegExp(
+      `<((?!(?:button|input|textarea|select)\\b)[a-zA-Z][\\w-]*)\\b([^>]*\\brole="(?:${WIDGET_ROLES.join('|')})"[^>]*)>()`,
+      'g',
+    ),
+    (match) => match[1],
+  );
+
 const isHidden = ({ attrs }: MarkupElement): boolean =>
   attrs['aria-hidden'] === 'true' ||
   attrs.type === 'hidden' ||
   'hidden' in attrs ||
   /(^|\s)hidden(\s|$)/.test(attrs.class ?? '');
 
-// Elements a user can operate: fields, buttons, and whatever claims a widget role.
 export const findControls = (html: string): MarkupElement[] =>
-  [...findFields(html), ...findButtons(html)].filter((element) => !isHidden(element));
+  [...findFields(html), ...findButtons(html), ...findOtherElementsWithWidgetRole(html)].filter(
+    (element) => !isHidden(element),
+  );
 
 const textOfId = (html: string, id: string): string => {
   const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -93,8 +115,7 @@ export const findUnnamedControls = (html: string): string[] =>
     .filter((element) => !accessibleName(html, element))
     .map(describe);
 
-// Labels that name nothing: no for= at all, or a for= that matches no id or more than one.
-export const findDanglingLabels = (html: string): string[] =>
+export const findLabelsNotBoundToOneElement = (html: string): string[] =>
   findLabels(html)
     .filter((label) => {
       const target = label.attrs.for;
@@ -103,7 +124,6 @@ export const findDanglingLabels = (html: string): string[] =>
     })
     .map((label) => label.text);
 
-// Like testing-library's getByLabelText / getByRole(…, { name }).
 export const getByAccessibleName = (html: string, name: string): MarkupElement | undefined =>
   findControls(html).find((element) => accessibleName(html, element) === name);
 

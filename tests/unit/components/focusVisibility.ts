@@ -1,8 +1,3 @@
-// Unit tests render with renderToStaticMarkup in node (no DOM), so this reads focus
-// visibility from the markup. docs/DESIGN.md: a control shown only on hover must also
-// show on focus, or, as a pointer-only duplicate, leave the tab order (tabIndex -1 inside
-// an aria-hidden wrapper). Otherwise keyboard focus lands on something invisible.
-
 export type MarkupNode = {
   attrs: Record<string, string>;
   children: MarkupNode[];
@@ -13,7 +8,6 @@ export type MarkupNode = {
 
 const VOID_TAGS = new Set(['br', 'hr', 'img', 'input', 'meta', 'link']);
 
-// Enough of an HTML parser for React's static markup to walk ancestors and read attributes.
 export function parseMarkup(html: string): MarkupNode {
   const root: MarkupNode = { attrs: {}, children: [], parent: null, tag: '#root', text: '' };
   const tokens = /<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>|([^<]+)/g;
@@ -70,8 +64,7 @@ const HIDDEN_UNTIL_HOVER = [
   { hidden: 'translate-y-full', shown: /^(group-)?focus-(within|visible):translate-y-0$/ },
 ];
 
-// Why a focusable node is hidden while it has focus, or null when it shows.
-const hiddenFocusReason = (node: MarkupNode): string | null => {
+const whyHiddenWhileFocused = (node: MarkupNode): string | null => {
   for (const ancestor of selfAndAncestors(node)) {
     if (ancestor.attrs['aria-hidden'] === 'true') return 'inside aria-hidden';
     const tokens = classTokens(ancestor);
@@ -84,10 +77,9 @@ const hiddenFocusReason = (node: MarkupNode): string | null => {
   return null;
 };
 
-/** Keyboard-reachable elements that would be invisible, or hidden from assistive tech, when focused. */
 export function findHiddenFocusables(html: string): string[] {
   return findAll(parseMarkup(html), isFocusable).flatMap((node) => {
-    const reason = hiddenFocusReason(node);
+    const reason = whyHiddenWhileFocused(node);
     return reason ? [`<${node.tag}> "${textOf(node).trim()}" ${reason}`] : [];
   });
 }

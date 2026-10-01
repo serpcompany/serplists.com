@@ -14,7 +14,7 @@ import { buildTemplateEditorFormValues, type TemplateEditorFormValues } from '@/
 
 import {
   accessibleDescription,
-  findDanglingLabels,
+  findLabelsNotBoundToOneElement,
   findDuplicateIds,
   findUnnamedControls,
   getByAccessibleName,
@@ -147,7 +147,7 @@ describe('Template form panels name every control', () => {
     );
 
     expect(findUnnamedControls(html)).toEqual([]);
-    expect(findDanglingLabels(html)).toEqual([]);
+    expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     expect(getByAccessibleName(html, 'Template Name')?.tag).toBe('input');
     expect(getByAccessibleName(html, 'Goal / Summary')?.tag).toBe('textarea');
     expect(getByAccessibleName(html, 'Template Type')?.attrs.role).toBe('combobox');
@@ -178,7 +178,7 @@ describe('Template form panels name every control', () => {
     );
 
     expect(findUnnamedControls(html)).toEqual([]);
-    expect(findDanglingLabels(html)).toEqual([]);
+    expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     const searchTitle = getByAccessibleName(html, 'Search Title');
     const slug = getByAccessibleName(html, 'URL Slug');
     expect(searchTitle?.tag).toBe('input');
@@ -199,7 +199,7 @@ describe('Template form panels name every control', () => {
     );
 
     expect(findUnnamedControls(html)).toEqual([]);
-    expect(findDanglingLabels(html)).toEqual([]);
+    expect(findLabelsNotBoundToOneElement(html)).toEqual([]);
     expect(findDuplicateIds(html)).toEqual([]);
     expect(getByAccessibleName(html, 'Section Title')?.attrs.value).toBe('Prep');
   });

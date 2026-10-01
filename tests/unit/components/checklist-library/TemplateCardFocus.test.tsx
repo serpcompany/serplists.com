@@ -17,9 +17,6 @@ import { navigation } from '../../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
 
-// The discovery card on /templates and the category pages shows a 'View Template' button
-// over its icon on hover only. Keyboard focus must never land on it while it is invisible.
-
 const template: ChecklistTemplate = {
   id: 'website-launch',
   title: 'Website Launch Checklist',
@@ -40,7 +37,7 @@ const renderCard = () => {
   );
 };
 
-describe('TemplateCard (discovery) keyboard focus', () => {
+describe('TemplateCard (discovery) keyboard focus, with its View Template overlay shown only on hover', () => {
   it('never lets a keyboard-reachable link take focus while hidden', () => {
     expect(findHiddenFocusables(renderCard())).toEqual([]);
   });

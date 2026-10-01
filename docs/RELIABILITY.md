@@ -310,6 +310,22 @@ Common failures:
   just before the handler's next `db.batch()`, and `queryPlan()` returns
   `EXPLAIN QUERY PLAN` for a recorded statement. See
   `tests/unit/functions/api/teams-sqlite.test.ts`.
+- Unit tests run in Vitest's node environment, with no DOM, jsdom or testing-library, so a
+  component test takes one of three routes:
+  - Render the component to HTML with `renderToStaticMarkup` and read the markup.
+    `tests/unit/components/accessibleMarkup.ts` finds its controls (fields, buttons and any
+    element with a widget role) and names them as a screen reader does: `aria-labelledby`,
+    `aria-label`, a `<label for>`, or a button's text, never a placeholder.
+    `tests/unit/components/focusVisibility.ts` finds a focusable element that is invisible,
+    or hidden from assistive tech, while it has focus.
+  - Call the component as a function, with React's hooks replaced in `vi.mock('react')`, and
+    search the element tree it returns for handlers and the next component's props.
+  - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
+    (`installFakeDomGlobals`, `createFakeContainer`) and drive it with `act()`, `click()` and
+    `dispatch()`, when the test needs effects, focus or clicks. React DOM loaded without a
+    DOM listens for the old IE input events, so a test types into a field by calling the
+    `onChange` in the props React keeps on the node (`__reactProps$...`). React DOM sets an
+    input's `type` and `value` as properties, so read them from the node, not its attributes.
 - Coverage settings live under `test.coverage` in `vitest.config.ts`
   (`pnpm run test:coverage`); `@vitest/coverage-v8` must match the Vitest version.
   If you override `test.exclude`, keep `node_modules`, `dist`,

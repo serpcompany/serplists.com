@@ -17,24 +17,22 @@ vi.mock('next/link', async () => (await import('../../../support/nextNavigation'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-// docs/DESIGN.md: a control revealed on hover must also show on keyboard focus and on touch
-// screens, which cannot hover. My Templates (grid and list) and the Runs list hid their only
-// Start Run, Edit and Delete controls until hover, so phones and tablets never showed them.
-// The one exception is a hover-only duplicate of an action reachable elsewhere, which touch
-// screens never show at all ([@media(hover:none)]:hidden).
-
 const HIDE = /(^|\s)(\S+:)?opacity-0(\s|$)/;
 const HOVER_REVEAL = /group-hover:opacity-100/;
 const KEYBOARD_REVEAL = /focus-within:opacity-100|focus-visible:opacity-100/;
-// Revealed on touch screens, or hidden only on devices that can hover.
-const TOUCH_REVEAL = /\[@media\(hover:none\)\]:opacity-100|\[@media\(hover:hover\)\]:opacity-0/;
+const REVEALED_ON_TOUCH_SCREENS = /\[@media\(hover:none\)\]:opacity-100/;
+const HIDDEN_ONLY_WHERE_THE_DEVICE_CAN_HOVER = /\[@media\(hover:hover\)\]:opacity-0/;
 const HOVER_ONLY_DUPLICATE = '[@media(hover:none)]:hidden';
 
 const isHoverRevealed = (value: string) => HIDE.test(value) && HOVER_REVEAL.test(value);
+const showsOnTouchScreens = (value: string) =>
+  REVEALED_ON_TOUCH_SCREENS.test(value) || HIDDEN_ONLY_WHERE_THE_DEVICE_CAN_HOVER.test(value);
 const breaksRevealRule = (value: string) =>
   isHoverRevealed(value) &&
   !value.includes(HOVER_ONLY_DUPLICATE) &&
-  (!KEYBOARD_REVEAL.test(value) || !TOUCH_REVEAL.test(value));
+  (!KEYBOARD_REVEAL.test(value) || !showsOnTouchScreens(value));
+const pointerOnlyStartRunWrapperClass = (html: string) =>
+  html.match(/<div aria-hidden="true" class="([^"]*)"><button/)?.[1];
 
 const classLists = (html: string) =>
   [...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]);
@@ -97,18 +95,14 @@ describe('dashboard hover-revealed controls', () => {
   });
 
   it('keeps the Start Run overlay a hover-only duplicate that touch screens never show', () => {
-    // The overlay is the aria-hidden wrapper of the card's pointer-only Start Run button.
-    const overlay = rendered['the My Templates grid card']().match(
-      /<div aria-hidden="true" class="([^"]*)"><button/,
-    )?.[1];
+    const overlay = pointerOnlyStartRunWrapperClass(rendered['the My Templates grid card']());
 
     expect(overlay).toBeDefined();
     expect(isHoverRevealed(overlay!)).toBe(true);
     expect(overlay).toContain(HOVER_ONLY_DUPLICATE);
   });
 
-  // Catches a new dashboard component that hides a control until hover.
-  it('has no hover-only class string in src/components/dashboard', () => {
+  it('has no hover-only class string in src/components/dashboard, so no new component hides a control until hover', () => {
     const dir = path.resolve(__dirname, '../../../../src/components/dashboard');
     const offenders = readdirSync(dir)
       .filter((entry) => /\.(ts|tsx)$/.test(entry))

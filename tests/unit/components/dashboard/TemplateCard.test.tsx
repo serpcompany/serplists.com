@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { navigation } from '../../../support/nextNavigation';
+import { findAll, findHiddenFocusables, parseMarkup, type MarkupNode } from '../focusVisibility';
 
 vi.mock('next/navigation', async () => (await import('../../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../../support/nextNavigation')).nextLinkMock);
@@ -23,57 +24,7 @@ const template: ChecklistTemplate = {
   tags: [],
 };
 
-type MarkupNode = {
-  attrs: Record<string, string>;
-  children: MarkupNode[];
-  parent: MarkupNode | null;
-  tag: string;
-  text: string;
-};
-
-// A tiny parser for React's static markup: enough to walk ancestors and read attributes.
-function parseMarkup(html: string): MarkupNode {
-  const root: MarkupNode = { attrs: {}, children: [], parent: null, tag: '#root', text: '' };
-  const voidTags = new Set(['br', 'hr', 'img', 'input', 'meta', 'link']);
-  const tokens = /<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>|([^<]+)/g;
-  let current = root;
-  for (const match of html.matchAll(tokens)) {
-    const [, closing, tag, rawAttrs, selfClosing, text] = match;
-    if (text !== undefined) {
-      current.children.push({ attrs: {}, children: [], parent: current, tag: '#text', text });
-      continue;
-    }
-    if (closing) {
-      current = current.parent ?? root;
-      continue;
-    }
-    const attrs: Record<string, string> = {};
-    for (const attr of rawAttrs.matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
-      attrs[attr[1]] = attr[2] ?? '';
-    }
-    const node: MarkupNode = { attrs, children: [], parent: current, tag, text: '' };
-    current.children.push(node);
-    if (!selfClosing && !voidTags.has(tag)) current = node;
-  }
-  return root;
-}
-
-function findAll(node: MarkupNode, tag: string): MarkupNode[] {
-  return node.children.flatMap((child) => [
-    ...(child.tag === tag ? [child] : []),
-    ...findAll(child, tag),
-  ]);
-}
-
-function selfAndAncestors(node: MarkupNode): MarkupNode[] {
-  const chain: MarkupNode[] = [];
-  for (let current: MarkupNode | null = node; current; current = current.parent) chain.push(current);
-  return chain;
-}
-
-function classTokens(node: MarkupNode): string[] {
-  return (node.attrs.class ?? '').split(/\s+/).filter(Boolean);
-}
+const findTags = (root: MarkupNode, tag: string): MarkupNode[] => findAll(root, (node) => node.tag === tag);
 
 function accessibleName(node: MarkupNode): string {
   if (node.attrs['aria-label']) return node.attrs['aria-label'].trim();
@@ -86,20 +37,21 @@ function accessibleName(node: MarkupNode): string {
   return text(node).trim();
 }
 
-function renderCard(overrides: Partial<ChecklistTemplate> = {}) {
+function renderCardMarkup(overrides: Partial<ChecklistTemplate> = {}) {
   navigation.reset('/dashboard/templates');
-  const html = renderToStaticMarkup(
+  return renderToStaticMarkup(
     <TemplateCard
       onDelete={vi.fn()}
       onStartRun={vi.fn()}
       template={{ ...template, ...overrides }}
     />,
   );
-  return parseMarkup(html);
 }
 
+const renderCard = (overrides: Partial<ChecklistTemplate> = {}) => parseMarkup(renderCardMarkup(overrides));
+
 function keyboardButtons(root: MarkupNode) {
-  return findAll(root, 'button').filter(
+  return findTags(root, 'button').filter(
     (button) => button.attrs.tabindex !== '-1' && !('disabled' in button.attrs),
   );
 }
@@ -107,7 +59,7 @@ function keyboardButtons(root: MarkupNode) {
 describe('TemplateCard (My Templates grid)', () => {
   it('names the actions menu button after the template', () => {
     const root = renderCard();
-    const trigger = findAll(root, 'button').find((button) => button.attrs['aria-haspopup'] === 'menu');
+    const trigger = findTags(root, 'button').find((button) => button.attrs['aria-haspopup'] === 'menu');
 
     expect(trigger).toBeDefined();
     expect(trigger?.attrs['aria-label']).toBe('Actions for Website Launch Checklist');
@@ -115,7 +67,7 @@ describe('TemplateCard (My Templates grid)', () => {
 
   it('falls back to a generic actions name when the title is blank', () => {
     const root = renderCard({ title: '   ' });
-    const trigger = findAll(root, 'button').find((button) => button.attrs['aria-haspopup'] === 'menu');
+    const trigger = findTags(root, 'button').find((button) => button.attrs['aria-haspopup'] === 'menu');
 
     expect(trigger?.attrs['aria-label']).toBe('Template actions');
   });
@@ -129,29 +81,14 @@ describe('TemplateCard (My Templates grid)', () => {
     }
   });
 
-  it('never lets a keyboard-reachable button take focus while hidden', () => {
-    for (const button of keyboardButtons(renderCard())) {
-      for (const node of selfAndAncestors(button)) {
-        const tokens = classTokens(node);
-        // A focusable control must not sit inside content hidden from assistive tech.
-        expect(node.attrs['aria-hidden']).not.toBe('true');
-        if (tokens.includes('opacity-0')) {
-          expect(
-            tokens.some((token) => /^(group-)?focus-(within|visible):opacity-100$/.test(token)),
-          ).toBe(true);
-        }
-        if (tokens.includes('translate-y-full')) {
-          expect(
-            tokens.some((token) => /^(group-)?focus-(within|visible):translate-y-0$/.test(token)),
-          ).toBe(true);
-        }
-      }
-    }
+  it('never lets a keyboard-reachable control take focus while invisible or inside content hidden from assistive tech', () => {
+    expect(keyboardButtons(renderCard()).length).toBeGreaterThan(0);
+    expect(findHiddenFocusables(renderCardMarkup())).toEqual([]);
   });
 
   it('keeps the hover Start Run shortcut for pointers but out of the keyboard and screen reader order', () => {
     const root = renderCard();
-    const overlayButton = findAll(root, 'button').find(
+    const overlayButton = findTags(root, 'button').find(
       (button) => accessibleName(button) === 'Start Run',
     );
 
@@ -161,9 +98,8 @@ describe('TemplateCard (My Templates grid)', () => {
   });
 });
 
-// Counts read "1 sections" and "1 tasks" (TD-24).
 describe('TemplateCard counts', () => {
-  it('counts one section and one task in the singular', () => {
+  it('counts one section and one task in the singular, never "1 sections" or "1 tasks"', () => {
     navigation.reset('/dashboard/templates');
     const html = renderToStaticMarkup(
       <TemplateCard
