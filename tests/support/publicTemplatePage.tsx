@@ -120,6 +120,19 @@ export {
   workspaceState,
 };
 
+export function resetToASignedInUserInPersonal() {
+  mockToastError.mockReset();
+  mockUseTemplateDetailModel.mockReset();
+  mockViewProps.mockReset();
+  authState.isAuthenticated = true;
+  authState.user = { id: 'user-1' };
+  workspaceState.activeTeamId = undefined;
+  workspaceState.canEditTemplates = true;
+  workspaceState.canRunTemplates = true;
+  workspaceState.isTeamWorkspace = false;
+  workspaceState.isWorkspaceLoading = false;
+}
+
 export const publishedClipyTemplate: ChecklistTemplate = {
   id: 'clipy-template-1',
   slug: 'reviewed-clipy-checklist',

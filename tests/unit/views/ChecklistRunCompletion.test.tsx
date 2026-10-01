@@ -1,4 +1,5 @@
 import { navigation, renderPageAt } from '../../support/mockedNextNavigation';
+import { mockUseRunExecutionModel } from '../../support/checklistRunPage';
 import React from 'react';
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,33 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ChecklistRunPage from '@/views/ChecklistRun';
 import type { ChecklistRun } from '@/types/checklist';
 
-const mockUseRunExecutionModel = vi.fn();
-vi.mock('@/features/run-execution/useRunExecutionModel', () => ({
-  useRunExecutionModel: (...args: unknown[]) => mockUseRunExecutionModel(...args),
-}));
-
 vi.mock('@/hooks/usePageVisit', async () => (await import('../../support/pageVisitMock')).pageVisitOfAUserStillOnThePage);
-
-vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({ user: { id: 'user-1', email: 'jane@test.com' } }),
-}));
-
-vi.mock('@/contexts/TemplatesContext', () => ({
-  useTemplates: () => ({ getRun: vi.fn(), updateRun: vi.fn() }),
-}));
-
-vi.mock('@/contexts/WorkspaceContext', async () => {
-  const { getResourcePermissions } = await import('@/lib/organizationPermissions');
-  return {
-    useWorkspace: () => ({
-      getPermissions: (teamId?: string) => getResourcePermissions(teamId, () => undefined),
-      isRoleUnavailable: () => false,
-      retryWorkspace: vi.fn(),
-    }),
-  };
-});
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 const completeDialog = vi.hoisted(() => ({ props: null as null | { onComplete: () => void } }));
 vi.mock('@/components/run-execution/RunCompleteDialog', () => ({

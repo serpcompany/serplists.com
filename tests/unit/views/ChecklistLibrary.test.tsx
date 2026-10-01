@@ -1,4 +1,11 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import {
+  baseTemplate,
+  bundledTemplate,
+  libraryState,
+  mockUseTemplateLibrary,
+  movingTemplate,
+} from '../../support/mockedTemplateLibrary';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -21,12 +28,6 @@ import {
 import type { ChecklistTemplate } from '@/types/checklist';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
-
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
@@ -37,15 +38,24 @@ const renderCategoryPage = (location: string) => {
   return { markup, robots: markup.match(/<meta name="robots"[^>]*>/)?.[0] ?? '' };
 };
 
-const baseTemplate: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Template',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-03-24T00:00:00.000Z',
-  updatedAt: '2026-03-24T00:00:00.000Z',
-  isPublic: true,
-};
+const businessAndLaunchLibrary = () => ({
+  templates: [
+    {
+      ...baseTemplate,
+      id: 'business-ops',
+      title: 'Business Ops Checklist',
+      categories: ['Business & Operations'],
+    },
+    {
+      ...baseTemplate,
+      id: 'launch-plan',
+      title: 'Launch Plan',
+      categories: ['Launch'],
+    },
+  ],
+  loading: false,
+  allCategories: ['Business & Operations', 'Launch'],
+});
 
 describe('ChecklistLibrary route behavior', () => {
   it('renders the v0 /templates discovery page sections instead of the generic library shell', () => {
@@ -136,24 +146,7 @@ describe('ChecklistLibrary route behavior', () => {
   });
 
   it('renders the categories route with the v0 sections and CTA treatment', () => {
-    mockUseTemplateLibrary.mockReturnValue({
-      templates: [
-        {
-          ...baseTemplate,
-          id: 'business-ops',
-          title: 'Business Ops Checklist',
-          categories: ['Business & Operations'],
-        },
-        {
-          ...baseTemplate,
-          id: 'launch-plan',
-          title: 'Launch Plan',
-          categories: ['Launch'],
-        },
-      ],
-      loading: false,
-      allCategories: ['Business & Operations', 'Launch'],
-    });
+    mockUseTemplateLibrary.mockReturnValue(businessAndLaunchLibrary());
 
     navigation.reset('/categories');
     const markup = renderToStaticMarkup(
@@ -169,24 +162,7 @@ describe('ChecklistLibrary route behavior', () => {
   });
 
   it('renders the business operations category route with the v0 breadcrumb, stats, and related categories', () => {
-    mockUseTemplateLibrary.mockReturnValue({
-      templates: [
-        {
-          ...baseTemplate,
-          id: 'business-ops',
-          title: 'Business Ops Checklist',
-          categories: ['Business & Operations'],
-        },
-        {
-          ...baseTemplate,
-          id: 'launch-plan',
-          title: 'Launch Plan',
-          categories: ['Launch'],
-        },
-      ],
-      loading: false,
-      allCategories: ['Business & Operations', 'Launch'],
-    });
+    mockUseTemplateLibrary.mockReturnValue(businessAndLaunchLibrary());
 
     const { markup } = renderCategoryPage('/categories/business-operations');
 
@@ -223,30 +199,6 @@ describe('ChecklistLibrary route behavior', () => {
 });
 
 describe('Discovery pages while the catalog loads', () => {
-  const bundledTemplate: ChecklistTemplate = {
-    ...baseTemplate,
-    id: 'repo:camping',
-    slug: 'camping',
-    title: 'Camping Checklist',
-    categories: ['outdoor'],
-    userId: REPO_TEMPLATE_USER_ID,
-  };
-  const movingTemplate: ChecklistTemplate = {
-    ...baseTemplate,
-    id: 'db-moving',
-    slug: 'moving-day',
-    title: 'Moving Day',
-    categories: ['moving'],
-    ownerProfile: { username: 'alice' },
-  };
-  const libraryState = (overrides: Record<string, unknown>) => ({
-    templates: [bundledTemplate],
-    loading: false,
-    catalogError: false,
-    retryCatalog: vi.fn(),
-    allCategories: ['moving', 'outdoor'],
-    ...overrides,
-  });
   const renderCategory = (location: string) => renderCategoryPage(location).markup;
   const renderLibrary = (location: string) => {
     navigation.reset(location);

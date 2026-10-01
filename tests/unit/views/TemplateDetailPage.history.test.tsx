@@ -11,6 +11,20 @@ import { buildV0DemoPrivateTemplate } from '../../fixtures/v0DemoFixtures';
 
 beforeEach(resetTemplateDetailPageMocks);
 
+const historyOf = ({ events, versions }: { events: object[]; versions: object[] }) => ({
+  data: { events, subject: { id: 'user-1', type: 'user' }, templateId: 'tpl-1', versions },
+  isError: false,
+  isLoading: false,
+});
+
+const createdByJohn = (id: string, extra: object = {}) => ({
+  action: 'template.created',
+  actor: { name: 'John Example' },
+  createdAt: '2026-07-03T12:00:00.000Z',
+  id,
+  ...extra,
+});
+
 const ZONE_FAR_FROM_UTC = 'Asia/Tokyo';
 const STORED_AT_8_30_PM_UTC_ON_JULY_5 = '2026-07-05 20:30:00';
 const withNarrowNoBreakSpacesAsSpaces = (text: string) => text.replace(/\u202f/g, ' ');
@@ -27,24 +41,10 @@ describe('TemplateDetail dates', () => {
   it('reads zoneless timestamps as UTC and never shows Invalid Date', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      history: {
-        data: {
-          events: [],
-          subject: { id: 'user-1', type: 'user' },
-          templateId: 'tpl-1',
-          versions: [
-            {
-              action: 'template.created',
-              actor: { name: 'John Example' },
-              createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5,
-              id: 'version-1',
-              version: 1,
-            },
-          ],
-        },
-        isError: false,
-        isLoading: false,
-      },
+      history: historyOf({
+        events: [],
+        versions: [createdByJohn('version-1', { createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5, version: 1 })],
+      }),
       template: {
         ...buildV0DemoPrivateTemplate(),
         createdAt: STORED_AT_8_30_PM_UTC_ON_JULY_5,
@@ -65,44 +65,25 @@ describe('TemplateDetail Changelog', () => {
   it('shows a restore and a Share next to the versions, without repeating a version', () => {
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      history: {
-        data: {
-          events: [
-            {
-              action: 'template.restored',
-              actor: { name: 'Bob Editor' },
-              createdAt: '2026-07-05T12:00:00.000Z',
-              id: 'event-3',
-            },
-            {
-              action: 'template.updated',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-04T12:00:00.000Z',
-              metadata: { visibility: 'public' },
-              id: 'event-2',
-            },
-            {
-              action: 'template.created',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-03T12:00:00.000Z',
-              id: 'event-1',
-            },
-          ],
-          subject: { id: 'user-1', type: 'user' },
-          templateId: 'tpl-1',
-          versions: [
-            {
-              action: 'template.created',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-03T12:00:00.000Z',
-              id: 'version-1',
-              version: 1,
-            },
-          ],
-        },
-        isError: false,
-        isLoading: false,
-      },
+      history: historyOf({
+        events: [
+          {
+            action: 'template.restored',
+            actor: { name: 'Bob Editor' },
+            createdAt: '2026-07-05T12:00:00.000Z',
+            id: 'event-3',
+          },
+          {
+            action: 'template.updated',
+            actor: { name: 'John Example' },
+            createdAt: '2026-07-04T12:00:00.000Z',
+            metadata: { visibility: 'public' },
+            id: 'event-2',
+          },
+          createdByJohn('event-1'),
+        ],
+        versions: [createdByJohn('version-1', { version: 1 })],
+      }),
     });
 
     const html = renderTemplateDetail();
@@ -120,47 +101,29 @@ describe('TemplateDetail Changelog', () => {
     const agent = { source: 'mcp', personalRunKeyId: 'key-1', personalRunKeyName: 'Codex SOP Writer' };
     mockUseTemplateDetailModel.mockReturnValue({
       ...baseModel(),
-      history: {
-        data: {
-          events: [
-            {
-              action: 'template.updated',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-04T12:00:00.000Z',
-              id: 'event-2',
-              metadata: agent,
-            },
-            {
-              action: 'template.created',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-03T12:00:00.000Z',
-              id: 'event-1',
-            },
-          ],
-          subject: { id: 'user-1', type: 'user' },
-          templateId: 'tpl-1',
-          versions: [
-            {
-              action: 'template.updated',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-04T12:00:00.000Z',
-              id: 'version-2',
-              metadata: agent,
-              version: 2,
-            },
-            {
-              action: 'template.created',
-              actor: { name: 'John Example' },
-              createdAt: '2026-07-03T12:00:00.000Z',
-              id: 'version-1',
-              metadata: null,
-              version: 1,
-            },
-          ],
-        },
-        isError: false,
-        isLoading: false,
-      },
+      history: historyOf({
+        events: [
+          {
+            action: 'template.updated',
+            actor: { name: 'John Example' },
+            createdAt: '2026-07-04T12:00:00.000Z',
+            id: 'event-2',
+            metadata: agent,
+          },
+          createdByJohn('event-1'),
+        ],
+        versions: [
+          {
+            action: 'template.updated',
+            actor: { name: 'John Example' },
+            createdAt: '2026-07-04T12:00:00.000Z',
+            id: 'version-2',
+            metadata: agent,
+            version: 2,
+          },
+          createdByJohn('version-1', { metadata: null, version: 1 }),
+        ],
+      }),
     });
 
     const html = renderTemplateDetail();

@@ -23,19 +23,10 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 vi.mock('@/contexts/WorkspaceContext', () => ({
   useWorkspace: () => workspace,
 }));
-vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
-  useTemplateEditorAccess: () => ({
-    draft: null,
-    discardDraft: vi.fn(),
-    handleSaveResult: vi.fn(() => false),
-    isStartingCheckout: false,
-    notice: null,
-    restoreDraft: vi.fn(),
-    settleDraft: vi.fn(),
-    signIn: vi.fn(),
-    startUpgrade: vi.fn(),
-  }),
-}));
+vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
+  const { editorAccess } = await import('../../fixtures/templateEditorHooks');
+  return { useTemplateEditorAccess: () => editorAccess() };
+});
 
 const loadedModel = (ownership: Record<string, unknown> | undefined) => ({
   initialValues: buildTemplateEditorFormValues({ title: 'Launch checklist' }),

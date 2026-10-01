@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
 import { appShell } from '../../support/appShellInPlace';
 import React from 'react';
 import { existsSync, readFileSync } from 'node:fs';
@@ -8,12 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
 vi.mock('@/server/pageMeta/categoryPage', () => ({ loadCategoryPageSeo: async () => null }));
-
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
 
 import SiteLayout from '@/app/(site)/layout';
 import CategoryPage from '@/app/(site)/categories/[categorySlug]/page';
@@ -71,6 +66,12 @@ const renderInsideTheSiteLayoutAt = (pathname: string, page: React.ReactNode, pa
   return renderToStaticMarkup(<SiteLayout>{page}</SiteLayout>);
 };
 
+const expectThePublicShellWithOneHeaderAndAFooter = (html: string) => {
+  expect(html).toContain('data-app-shell="public"');
+  expect(html).toContain('<footer');
+  expect((html.match(/<header/g) ?? []).length).toBe(1);
+};
+
 const appFile = (route: string) => new URL(`../../../src/app/${route}`, import.meta.url);
 
 describe('App public route parity', () => {
@@ -112,9 +113,7 @@ describe('App public route parity', () => {
     expect(html).toContain('href="/pricing/"');
     expect(html).toContain('href="/profile/designops/website-launch-checklist/"');
     expect(html).not.toContain('href="/dashboard/runs/');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('renders /categories inside the shared public shell with one global header and footer', async () => {
@@ -123,9 +122,7 @@ describe('App public route parity', () => {
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
     expect(html).toContain('All Categories');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('renders /categories/business inside the shared public shell with one global header and footer', async () => {
@@ -138,9 +135,7 @@ describe('App public route parity', () => {
     expect(html).toContain('Business &amp; Operations');
     expect(html).toContain('All Categories');
     expect(html).toContain('Related Categories');
-    expect(html).toContain('data-app-shell="public"');
-    expect(html).toContain('<footer');
-    expect((html.match(/<header/g) ?? []).length).toBe(1);
+    expectThePublicShellWithOneHeaderAndAFooter(html);
   });
 
   it('keeps a private Run at its one URL behind RequireAuth in the console layout, and shared runs public outside both layouts', () => {

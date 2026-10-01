@@ -7,24 +7,13 @@ import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { createPendingUploads } from '@/features/template-editor/pendingUploads';
 
+import { editorAccess as buildAccess, editorState } from '../../fixtures/templateEditorHooks';
+
 const mockUseTemplateEditorModel = vi.fn();
 const mockUseTemplateEditorState = vi.fn();
 const mockUseTemplateEditorAccess = vi.fn();
 const mockUsePendingTemplateEditorUploads = vi.fn();
 const useFormCalls = vi.fn();
-
-const buildAccess = (overrides: Record<string, unknown> = {}) => ({
-  draft: null,
-  discardDraft: vi.fn(),
-  handleSaveResult: vi.fn(() => false),
-  isStartingCheckout: false,
-  notice: null,
-  restoreDraft: vi.fn(),
-  settleDraft: vi.fn(),
-  signIn: vi.fn(),
-  startUpgrade: vi.fn(),
-  ...overrides,
-});
 
 vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
@@ -80,18 +69,24 @@ beforeEach(() => {
 const renderEditorAt = (location: string, appRouterPattern: string): string =>
   renderPageAt(location, { [appRouterPattern]: <TemplateEditor /> });
 
-const editorState = () => ({
-  selectedSectionIndex: 0,
-  selectedItemIndex: null,
-  showingSEO: false,
-  showingTemplateInfo: true,
-  errors: [],
-  setErrors: vi.fn(),
-  handleSelectSection: vi.fn(),
-  handleSelectItem: vi.fn(),
-  handleSelectSEO: vi.fn(),
-  handleSelectTemplateInfo: vi.fn(),
+const keptDraft = () => ({
+  savedAt: '2026-09-28T10:00:00.000Z',
+  values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
 });
+
+const renderTheExistingTemplateEditor = () => {
+  mockUseTemplateEditorModel.mockReturnValue({
+    initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
+    isSaving: false,
+    loading: false,
+    loadError: null,
+    save: vi.fn(),
+    templateSlug: 'existing-template',
+  });
+  mockUseTemplateEditorState.mockReturnValue(editorState());
+
+  return renderEditorAt('/dashboard/templates/template-1/edit', '/dashboard/templates/[id]/edit');
+};
 
 describe('TemplateEditor page', () => {
   it('uses the v0-style split editor shell, with the outline beside the form from lg, instead of the old wide content canvas', async () => {
@@ -135,20 +130,7 @@ describe('TemplateEditor page', () => {
   });
 
   it('does not show Clipy import controls while editing an existing template', async () => {
-    mockUseTemplateEditorModel.mockReturnValue({
-      initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
-      isSaving: false,
-      loading: false,
-      loadError: null,
-      save: vi.fn(),
-      templateSlug: 'existing-template',
-    });
-    mockUseTemplateEditorState.mockReturnValue(editorState());
-
-    const html = await renderEditorAt(
-      '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/[id]/edit',
-    );
+    const html = await renderTheExistingTemplateEditor();
 
     expect(html).not.toContain('Generate from Clipy');
   });
@@ -201,12 +183,7 @@ describe('TemplateEditor page', () => {
 
   it('offers to restore a draft kept while the user upgraded', async () => {
     mockUseTemplateEditorAccess.mockReturnValue(
-      buildAccess({
-        draft: {
-          savedAt: '2026-09-28T10:00:00.000Z',
-          values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
-        },
-      }),
+      buildAccess({ draft: keptDraft() }),
     );
 
     const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
@@ -218,12 +195,7 @@ describe('TemplateEditor page', () => {
 
   it('disables Restore draft and Discard while a new template is being created, whose finish clears the kept draft and leaves the page', async () => {
     mockUseTemplateEditorAccess.mockReturnValue(
-      buildAccess({
-        draft: {
-          savedAt: '2026-09-28T10:00:00.000Z',
-          values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
-        },
-      }),
+      buildAccess({ draft: keptDraft() }),
     );
 
     const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
@@ -238,10 +210,7 @@ describe('TemplateEditor page', () => {
         otherContextDraft: {
           teamId: 'org-1',
           name: 'Acme',
-          draft: {
-            savedAt: '2026-09-28T10:00:00.000Z',
-            values: buildTemplateEditorFormValues({ title: 'Launch checklist' }),
-          },
+          draft: keptDraft(),
         },
       }),
     );
@@ -259,20 +228,7 @@ describe('TemplateEditor page', () => {
       uploads: createPendingUploads(),
       pendingCount: 1,
     }));
-    mockUseTemplateEditorModel.mockReturnValue({
-      initialValues: buildTemplateEditorFormValues({ title: 'Existing template' }),
-      isSaving: false,
-      loading: false,
-      loadError: null,
-      save: vi.fn(),
-      templateSlug: 'existing-template',
-    });
-    mockUseTemplateEditorState.mockReturnValue(editorState());
-
-    const html = await renderEditorAt(
-      '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/[id]/edit',
-    );
+    const html = await renderTheExistingTemplateEditor();
 
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Uploading\.\.\.<\/button>/);
   });

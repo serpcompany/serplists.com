@@ -40,33 +40,12 @@ vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOrigin
 vi.mock('@/features/template-editor/useTemplateEditPermission', () => ({
   useTemplateEditPermission: () => 'editable',
 }));
-vi.mock('@/features/template-editor/useTemplateEditorAccess', () => ({
-  useTemplateEditorAccess: () => ({
-    draft: null,
-    discardDraft: vi.fn(),
-    handleSaveResult: () => false,
-    isStartingCheckout: false,
-    keepDraft: () => false,
-    notice: null,
-    restoreDraft: vi.fn(),
-    settleDraft: mocks.settleDraft,
-    signIn: vi.fn(),
-    startUpgrade: vi.fn(),
-  }),
-}));
-vi.mock('@/hooks/useTemplateEditorState', () => ({
-  useTemplateEditorState: () => ({
-    selectedSectionIndex: 0,
-    selectedItemIndex: null,
-    showingSEO: false,
-    showingTemplateInfo: true,
-    errors: [],
-    setErrors: vi.fn(),
-    handleSelectSection: vi.fn(),
-    handleSelectItem: vi.fn(),
-    handleSelectSEO: vi.fn(),
-    handleSelectTemplateInfo: vi.fn(),
-  }),
+vi.mock('@/features/template-editor/useTemplateEditorAccess', async () => {
+  const { editorAccess } = await import('../../fixtures/templateEditorHooks');
+  return { useTemplateEditorAccess: () => editorAccess({ keepDraft: () => false, settleDraft: mocks.settleDraft }) };
+});
+vi.mock('@/hooks/useTemplateEditorState', async () => ({
+  useTemplateEditorState: (await import('../../fixtures/templateEditorHooks')).editorState,
 }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1', username: 'jane' } }),
@@ -127,15 +106,20 @@ async function renderNewTemplateEditor() {
   );
 }
 
+async function startSavingTheNewTemplate() {
+  const request = deferred<TemplateEditorSaveResult>();
+  mocks.save.mockReturnValueOnce(request.promise);
+  const { container } = await renderNewTemplateEditor();
+
+  await act(async () => {
+    click(container, findByText(container, 'BUTTON', 'Save'));
+  });
+  return { container, request };
+}
+
 describe('TemplateEditor create after a same-path navigation', () => {
   it('still goes to My Templates when New Template is clicked while the create saves', async () => {
-    const request = deferred<TemplateEditorSaveResult>();
-    mocks.save.mockReturnValueOnce(request.promise);
-    const { container } = await renderNewTemplateEditor();
-
-    await act(async () => {
-      click(container, findByText(container, 'BUTTON', 'Save'));
-    });
+    const { container, request } = await startSavingTheNewTemplate();
     await act(async () => {
       click(container, findByText(container, 'A', 'New Template'));
     });
@@ -153,13 +137,7 @@ describe('TemplateEditor create after a same-path navigation', () => {
   });
 
   it('settles the draft but does not pull the user back when they went to another page while it saved', async () => {
-    const request = deferred<TemplateEditorSaveResult>();
-    mocks.save.mockReturnValueOnce(request.promise);
-    const { container } = await renderNewTemplateEditor();
-
-    await act(async () => {
-      click(container, findByText(container, 'BUTTON', 'Save'));
-    });
+    const { container, request } = await startSavingTheNewTemplate();
     await act(async () => {
       click(container, findByText(container, 'A', 'Runs'));
     });

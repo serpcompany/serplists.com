@@ -10,13 +10,11 @@ import {
   lastViewProps,
   mockCreateBillingCheckout,
   mockDialogProps,
-  mockToastError,
   mockUseTemplateDetailModel,
-  mockViewProps,
   publishedClipyTemplate,
   renderPublishedRoute,
+  resetToASignedInUserInPersonal,
   restoreNavigationWindow,
-  workspaceState,
 } from '../../support/publicTemplatePage';
 import PublicTemplate from '@/views/PublicTemplate';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
@@ -28,16 +26,7 @@ afterAll(restoreNavigationWindow);
 
 describe('PublicTemplate Start Run', () => {
   beforeEach(() => {
-    mockToastError.mockReset();
-    mockUseTemplateDetailModel.mockReset();
-    mockViewProps.mockReset();
-    authState.isAuthenticated = true;
-    authState.user = { id: 'user-1' };
-    workspaceState.activeTeamId = undefined;
-    workspaceState.canEditTemplates = true;
-    workspaceState.canRunTemplates = true;
-    workspaceState.isTeamWorkspace = false;
-    workspaceState.isWorkspaceLoading = false;
+    resetToASignedInUserInPersonal();
   });
 
   it('creates one run when the dialog is confirmed twice before the first finishes', async () => {
@@ -82,16 +71,7 @@ describe('PublicTemplate Save', () => {
   beforeEach(() => {
     mockCreateBillingCheckout.mockReset();
     mockCreateBillingCheckout.mockResolvedValue({ url: 'https://checkout.stripe.com/c/pay/test' });
-    mockToastError.mockReset();
-    mockUseTemplateDetailModel.mockReset();
-    mockViewProps.mockReset();
-    authState.isAuthenticated = true;
-    authState.user = { id: 'user-1' };
-    workspaceState.activeTeamId = undefined;
-    workspaceState.canEditTemplates = true;
-    workspaceState.canRunTemplates = true;
-    workspaceState.isTeamWorkspace = false;
-    workspaceState.isWorkspaceLoading = false;
+    resetToASignedInUserInPersonal();
   });
 
   it.each([
@@ -135,15 +115,8 @@ describe('PublicTemplate Save', () => {
 
 describe('PublicTemplate Start a Run dialog', () => {
   beforeEach(() => {
-    mockUseTemplateDetailModel.mockReset();
-    mockViewProps.mockReset();
+    resetToASignedInUserInPersonal();
     mockDialogProps.mockReset();
-    authState.isAuthenticated = true;
-    authState.user = { id: 'user-1' };
-    workspaceState.activeTeamId = undefined;
-    workspaceState.canRunTemplates = true;
-    workspaceState.isTeamWorkspace = false;
-    workspaceState.isWorkspaceLoading = false;
   });
 
   it('gives the dialog the template title for its default name, closed until Start Run', () => {

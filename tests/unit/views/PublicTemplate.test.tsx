@@ -19,65 +19,40 @@ import type { ChecklistTemplate } from '@/types/checklist';
 beforeAll(installNavigationWindow);
 afterAll(restoreNavigationWindow);
 
+const templateOfAlice = (fields: Partial<ChecklistTemplate>): ChecklistTemplate => ({
+  id: 'template-1',
+  title: 'Template',
+  isPublic: true,
+  sections: [],
+  userId: 'user-1',
+  ownerProfile: { username: 'alice' },
+  createdAt: '2026-03-24T00:00:00.000Z',
+  description: '',
+  categories: [],
+  tags: [],
+  updatedAt: '2026-03-24T00:00:00.000Z',
+  version: 1,
+  ...fields,
+});
+
+const { ownerProfile: _noOwnerProfile, ...bundledTemplate } = templateOfAlice({
+  id: 'repo:ultimate-camping-checklist',
+  slug: 'ultimate-camping-checklist',
+  title: 'Ultimate Camping Checklist',
+  userId: REPO_TEMPLATE_USER_ID,
+});
+
 const mockTemplates: ChecklistTemplate[] = [
-  {
-    id: 'template-1',
-    slug: 'camping-checklist',
-    title: 'Camping Checklist',
-    isPublic: true,
-    sections: [],
-    userId: 'user-1',
-    ownerProfile: { username: 'alice' },
-    createdAt: '2026-03-24T00:00:00.000Z',
-    description: '',
-    categories: [],
-    tags: [],
-    updatedAt: '2026-03-24T00:00:00.000Z',
-    version: 1,
-  },
-  {
-    id: 'legacy-template',
-    title: 'Legacy Template',
-    isPublic: true,
-    sections: [],
-    userId: 'user-1',
-    ownerProfile: { username: 'alice' },
-    createdAt: '2026-03-24T00:00:00.000Z',
-    description: '',
-    categories: [],
-    tags: [],
-    updatedAt: '2026-03-24T00:00:00.000Z',
-    version: 1,
-  },
-  {
-    id: 'repo:ultimate-camping-checklist',
-    slug: 'ultimate-camping-checklist',
-    title: 'Ultimate Camping Checklist',
-    isPublic: true,
-    sections: [],
-    userId: REPO_TEMPLATE_USER_ID,
-    createdAt: '2026-03-24T00:00:00.000Z',
-    description: '',
-    categories: [],
-    tags: [],
-    updatedAt: '2026-03-24T00:00:00.000Z',
-    version: 1,
-  },
-  {
+  templateOfAlice({ id: 'template-1', slug: 'camping-checklist', title: 'Camping Checklist' }),
+  templateOfAlice({ id: 'legacy-template', title: 'Legacy Template' }),
+  bundledTemplate,
+  templateOfAlice({
     id: 'template-4',
     slug: 'private-checklist',
     title: 'Private Template',
     isPublic: false,
-    sections: [],
     userId: 'user-4',
-    ownerProfile: { username: 'alice' },
-    createdAt: '2026-03-24T00:00:00.000Z',
-    description: '',
-    categories: [],
-    tags: [],
-    updatedAt: '2026-03-24T00:00:00.000Z',
-    version: 1,
-  },
+  }),
 ];
 
 const resolveTemplateForRoute = (username: string, templateSlug: string) =>

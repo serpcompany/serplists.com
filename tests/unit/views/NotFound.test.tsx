@@ -8,7 +8,7 @@ import FeaturePage, { generateMetadata as generateFeatureMetadata } from '@/app/
 import NotFoundPage, { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import NotFound from '@/views/NotFound';
-import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { createFakeContainer, installFakeDomGlobals, type FakeElement } from '../../fixtures/fakeDom';
 
 vi.mock('server-only', () => ({}));
 
@@ -30,6 +30,21 @@ afterEach(() => {
 
 const params = (featureSlug: string) => ({ params: Promise.resolve({ featureSlug }) });
 
+async function inTheBrowserAtAMissingAddress(check: (page: { container: FakeElement; unmount: () => void }) => void) {
+  const restoreGlobals = installFakeDomGlobals(navigation.window);
+  try {
+    navigation.reset('/definitely-missing');
+    const container = createFakeContainer();
+    const root = createRoot(container as unknown as HTMLElement);
+    await act(async () => {
+      root.render(<NotFound />);
+    });
+    check({ container, unmount: () => act(() => root.unmount()) });
+  } finally {
+    restoreGlobals();
+  }
+}
+
 describe('NotFound page head, which tells crawlers itself not to index a missing page', () => {
   it('tells crawlers not to index an unknown route', () => {
     navigation.reset('/definitely-missing');
@@ -49,38 +64,19 @@ describe('NotFound page head, which tells crawlers itself not to index a missing
   });
 
   it('names the missing address once the page runs in the browser', async () => {
-    const restoreGlobals = installFakeDomGlobals(navigation.window);
-    try {
-      navigation.reset('/definitely-missing');
-      const container = createFakeContainer();
-      const root = createRoot(container as unknown as HTMLElement);
-      await act(async () => {
-        root.render(<NotFound />);
-      });
-
+    await inTheBrowserAtAMissingAddress(({ container, unmount }) => {
       expect(container.textContent).toContain('The route /definitely-missing could not be found.');
-      act(() => root.unmount());
-    } finally {
-      restoreGlobals();
-    }
+      unmount();
+    });
   });
 
   it('logs no error for a missing address, which is not an error in the app', async () => {
-    const restoreGlobals = installFakeDomGlobals(navigation.window);
-    try {
-      navigation.reset('/definitely-missing');
-      const container = createFakeContainer();
-      const root = createRoot(container as unknown as HTMLElement);
-      await act(async () => {
-        root.render(<NotFound />);
-      });
-      act(() => root.unmount());
+    await inTheBrowserAtAMissingAddress(({ container, unmount }) => {
+      unmount();
 
       expect(container.textContent).toBe('');
       expect(console.error).not.toHaveBeenCalled();
-    } finally {
-      restoreGlobals();
-    }
+    });
   });
 
   it('declares no canonical URL for the missing address', () => {

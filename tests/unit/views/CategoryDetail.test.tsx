@@ -1,4 +1,5 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import { mockUseTemplateLibrary } from '../../support/mockedTemplateLibrary';
 import { FileText } from 'lucide-react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -10,12 +11,6 @@ import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import { buildPublicCategoryPath } from '@/lib/routes';
 import CategoryDetail from '@/views/CategoryDetail';
 import type { ChecklistTemplate } from '@/types/checklist';
-
-const mockUseTemplateLibrary = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: null }),

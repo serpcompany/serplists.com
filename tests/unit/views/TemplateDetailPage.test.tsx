@@ -124,13 +124,8 @@ describe('TemplateDetail page', () => {
 
   it('renders the v0 private template detail structure with stats, structure, and metadata cards', () => {
     mockUseTemplateDetailModel.mockReturnValue({
-      billingState: {
-        billingEnabled: false,
-        isLoading: false,
-        isPro: true,
-      },
-      loading: false,
-      notFound: false,
+      ...baseModel(),
+      billingState: { billingEnabled: false, isLoading: false, isPro: true },
       history: {
         data: {
           events: [],
@@ -150,16 +145,9 @@ describe('TemplateDetail page', () => {
         isError: false,
         isLoading: false,
       },
-      saveTemplate: vi.fn(),
-      shareTemplate: vi.fn(),
-      startRun: vi.fn(),
-      template: buildV0DemoPrivateTemplate(),
     });
 
-    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
-    const html = renderToStaticMarkup(
-      <TemplateDetail />,
-    );
+    const html = renderTemplateDetail();
 
     expect(html).toContain('Product Launch Checklist');
     expect(html).toContain('data-slot="detail-page"');
@@ -182,25 +170,12 @@ describe('TemplateDetail page', () => {
 
   it('does not offer an upgrade to copy when the plan could not be checked', () => {
     mockUseTemplateDetailModel.mockReturnValue({
-      billingState: {
-        billingEnabled: true,
-        isError: true,
-        isLoading: false,
-        isPro: false,
-      },
-      loading: false,
-      notFound: false,
-      history: { data: null, isError: false, isLoading: false },
-      saveTemplate: vi.fn(),
-      shareTemplate: vi.fn(),
-      startRun: vi.fn(),
+      ...baseModel(),
+      billingState: { billingEnabled: true, isError: true, isLoading: false, isPro: false },
       template: { ...buildV0DemoPrivateTemplate(), userId: 'someone-else' },
     });
 
-    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
-    const html = renderToStaticMarkup(
-      <TemplateDetail />,
-    );
+    const html = renderTemplateDetail();
 
     expect(html).not.toContain('Upgrade to copy template');
     expect(html).toContain('Copy to My Templates');
@@ -212,20 +187,12 @@ describe('TemplateDetail page', () => {
     workspaceState.isTeamWorkspace = true;
     workspaceState.roles = { acme: role };
     mockUseTemplateDetailModel.mockReturnValue({
+      ...baseModel(),
       billingState: { billingEnabled: false, isLoading: false, isPro: true },
-      loading: false,
-      notFound: false,
-      history: { data: null, isError: false, isLoading: false },
-      saveTemplate: vi.fn(),
-      shareTemplate: vi.fn(),
-      startRun: vi.fn(),
       template: { ...buildV0DemoPrivateTemplate(), ...templateOverrides },
     });
 
-    navigation.reset('/dashboard/templates/tpl-1/', { routes: ['/dashboard/templates/[id]'] });
-    return renderToStaticMarkup(
-      <TemplateDetail />,
-    );
+    return renderTemplateDetail();
   };
 
   it('offers an Organization viewer no Start Run, Copy or Edit on a private Organization Template', () => {

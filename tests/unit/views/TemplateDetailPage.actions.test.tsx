@@ -50,6 +50,11 @@ describe('TemplateDetail Duplicate', () => {
   });
 });
 
+const chooseExportJson = async () => {
+  const exportItem = moreMenuItemProps.find((props) => [props.children].flat(Infinity).includes('Export JSON'));
+  await (exportItem?.onClick as () => Promise<void>)();
+};
+
 describe('TemplateDetail export after a failed plan check', () => {
   it('offers Export JSON, not an upgrade, and checks the plan again on click', async () => {
     vi.mocked(handleUpgradeRequiredForContext).mockClear();
@@ -61,10 +66,7 @@ describe('TemplateDetail export after a failed plan check', () => {
     });
 
     const html = renderTemplateDetail();
-    const exportItem = moreMenuItemProps.find((props) =>
-      [props.children].flat(Infinity).includes('Export JSON'),
-    );
-    await (exportItem?.onClick as () => Promise<void>)();
+    await chooseExportJson();
 
     expect(html).not.toContain('Upgrade to export');
     expect(refetchBilling).toHaveBeenCalledTimes(1);
@@ -82,10 +84,7 @@ describe('TemplateDetail export of a template the portable format cannot hold', 
     });
 
     renderTemplateDetail();
-    const exportItem = moreMenuItemProps.find((props) =>
-      [props.children].flat(Infinity).includes('Export JSON'),
-    );
-    await (exportItem?.onClick as () => Promise<void>)();
+    await chooseExportJson();
 
     expect(toast.error).toHaveBeenCalledWith(
       'No templates exported. Not exported: Launch plan (Template has no sections with tasks)',

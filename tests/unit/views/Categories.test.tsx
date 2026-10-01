@@ -1,20 +1,19 @@
 import { navigation } from '../../support/mockedNextNavigation';
+import {
+  bundledTemplate,
+  libraryState,
+  mockUseTemplateLibrary,
+  movingTemplate,
+} from '../../support/mockedTemplateLibrary';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Categories from '@/views/Categories';
-import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
-import type { ChecklistTemplate } from '@/types/checklist';
 import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
 
-const mockUseTemplateLibrary = vi.fn();
 const catalogErrorProps = vi.fn();
-
-vi.mock('@/hooks/useTemplateLibrary', () => ({
-  useTemplateLibrary: (...args: unknown[]) => mockUseTemplateLibrary(...args),
-}));
 
 vi.mock('@/components/shared/SEOHead', () => ({
   SEOHead: (props: Record<string, unknown>) => <div data-seo-head={String(props.url)} />,
@@ -29,41 +28,6 @@ vi.mock('@/components/checklist-library/CatalogLoadError', async (importOriginal
       return <actual.CatalogLoadError {...props} />;
     },
   };
-});
-
-const baseTemplate: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Template',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-03-24T00:00:00.000Z',
-  updatedAt: '2026-03-24T00:00:00.000Z',
-  isPublic: true,
-};
-const bundledTemplate: ChecklistTemplate = {
-  ...baseTemplate,
-  id: 'repo:camping',
-  slug: 'camping',
-  title: 'Camping Checklist',
-  categories: ['outdoor'],
-  userId: REPO_TEMPLATE_USER_ID,
-};
-const movingTemplate: ChecklistTemplate = {
-  ...baseTemplate,
-  id: 'db-moving',
-  slug: 'moving-day',
-  title: 'Moving Day',
-  categories: ['moving'],
-  ownerProfile: { username: 'alice' },
-};
-
-const libraryState = (overrides: Record<string, unknown>) => ({
-  templates: [bundledTemplate],
-  loading: false,
-  catalogError: false,
-  retryCatalog: vi.fn(),
-  allCategories: ['moving', 'outdoor'],
-  ...overrides,
 });
 
 const renderCategories = () => {

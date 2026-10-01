@@ -1,8 +1,13 @@
 import { navigation, RoutedPages } from '../../support/mockedNextNavigation';
+import {
+  apiMocks,
+  inviteeAuth as auth,
+  PENDING_INVITE_PREVIEW as preview,
+} from '../../support/teamInvitePage';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { ApiError } from '@/lib/api-errors';
 import TeamInviteAccept from '@/views/TeamInviteAccept';
@@ -11,69 +16,6 @@ import { click, createFakeContainer, findByText, installFakeDomGlobals } from '.
 import { createQueryClientWithAppDefaults } from '../../support/appQueryClient';
 import { deferred } from '../../support/deferred';
 import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
-
-type AuthState = {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  logout: () => Promise<{ ok: boolean }>;
-  user: { id: string; email: string } | null;
-};
-
-const auth = vi.hoisted(() => {
-  const listeners = new Set<() => void>();
-  const initial = (): AuthState => ({
-    isAuthenticated: true,
-    isLoading: false,
-    logout: async () => ({ ok: true }),
-    user: { id: 'user-1', email: 'invitee@example.com' },
-  });
-  let state = initial();
-  return {
-    get: () => state,
-    set: (next: Partial<AuthState>) => {
-      state = { ...state, ...next };
-      listeners.forEach((listener) => listener());
-    },
-    reset: () => {
-      state = initial();
-    },
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-  };
-});
-const workspaceMocks = vi.hoisted(() => ({
-  refreshTeams: vi.fn(async () => []),
-  rememberTeam: vi.fn(),
-  selectWorkspace: vi.fn(),
-}));
-const apiMocks = vi.hoisted(() => ({
-  acceptTeamInvite: vi.fn(),
-  declineTeamInvite: vi.fn(),
-  getTeamInvitePreview: vi.fn(),
-}));
-
-vi.mock('@/contexts/CloudflareAuthContext', async () => {
-  const { useSyncExternalStore } = await import('react');
-  return { useAuth: () => useSyncExternalStore(auth.subscribe, auth.get, auth.get) };
-});
-vi.mock('@/contexts/WorkspaceContext', () => ({ useWorkspace: () => workspaceMocks }));
-vi.mock('@/lib/api', () => ({ api: apiMocks }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-
-const preview = {
-  status: 'pending' as const,
-  teamId: 'team-1',
-  teamName: 'Acme Corp',
-  teamSlug: 'acme-corp',
-  role: 'editor' as const,
-  expiresAt: '2026-10-05T00:00:00.000Z',
-  inviterName: 'Owner User',
-  inviterEmail: 'owner@example.com',
-};
 
 const inviteRevoked = () =>
   new ApiError({ status: 404, message: 'Invite not found', code: 'invite_not_found' });
