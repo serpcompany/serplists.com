@@ -2,16 +2,10 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import { APP_URL } from './support/stack';
 
-// Link-preview crawlers do not run JavaScript, so they read only the HTML the server sends.
-// Every public page renders its own title, description, og:type and canonical URL on the
-// server (Next.js's Metadata API, with the lookups in src/server/pageMeta), for crawlers and
-// people alike: there is no separate preview route or bot rewrite.
-
 const SLACKBOT = 'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)';
 const BROWSER = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 
-async function fetchHead(request: APIRequestContext, path: string, userAgent = SLACKBOT) {
-  // A crawler follows no redirect to read a page's tags: each path is the page's own URL.
+async function fetchHeadWithoutRedirect(request: APIRequestContext, path: string, userAgent = SLACKBOT) {
   const response = await request.get(`${APP_URL}${path}`, { headers: { 'User-Agent': userAgent }, maxRedirects: 0 });
   expect(response.status(), path).toBe(200);
   const html = await response.text();
@@ -29,7 +23,7 @@ async function fetchHead(request: APIRequestContext, path: string, userAgent = S
 }
 
 test('a shared public template unfurls with its own title and a PNG card', async ({ request }) => {
-  const head = await fetchHead(request, '/profile/serp/ultimate-camping-checklist/?utm_source=slack');
+  const head = await fetchHeadWithoutRedirect(request, '/profile/serp/ultimate-camping-checklist/?utm_source=slack');
 
   expect(head.title).toBe('Ultimate Camping Checklist | SERP Lists');
   expect(head.meta('og:title')).toEqual(['Ultimate Camping Checklist | SERP Lists']);
@@ -46,17 +40,14 @@ test('a shared public template unfurls with its own title and a PNG card', async
 });
 
 test('category and library links unfurl with their own titles', async ({ request }) => {
-  expect((await fetchHead(request, '/categories/outdoor/')).title).toBe('outdoor Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories/business/')).title).toBe('Business &amp; Operations Templates | SERP Lists');
-  expect((await fetchHead(request, '/categories/')).title).toBe('Browse Template Categories | SERP Lists');
-  expect((await fetchHead(request, '/templates/')).title).toBe('Template Library | SERP Lists');
+  expect((await fetchHeadWithoutRedirect(request, '/categories/outdoor/')).title).toBe('outdoor Templates | SERP Lists');
+  expect((await fetchHeadWithoutRedirect(request, '/categories/business/')).title).toBe('Business &amp; Operations Templates | SERP Lists');
+  expect((await fetchHeadWithoutRedirect(request, '/categories/')).title).toBe('Browse Template Categories | SERP Lists');
+  expect((await fetchHeadWithoutRedirect(request, '/templates/')).title).toBe('Template Library | SERP Lists');
 });
 
-// The server answers what the page shows: not found, out of search, and no canonical URL,
-// since the address is not a page.
-test('an unknown template unfurls as not found', async ({ request }) => {
-  // e2e-unseeded-template: no Template has this slug.
-  const head = await fetchHead(request, '/profile/serp/no-such-template-anywhere/');
+test('an unknown template unfurls as not found, out of search and without a canonical URL', async ({ request }) => {
+  const head = await fetchHeadWithoutRedirect(request, '/profile/serp/no-such-template-anywhere/');
 
   expect(head.title).toBe('Template not found | SERP Lists');
   expect(head.meta('robots')).toEqual(['noindex, nofollow']);
@@ -65,8 +56,8 @@ test('an unknown template unfurls as not found', async ({ request }) => {
 
 test('people get the same tags as link-preview crawlers', async ({ request }) => {
   for (const path of ['/profile/serp/ultimate-camping-checklist/', '/categories/outdoor/', '/categories/', '/templates/']) {
-    const forPeople = await fetchHead(request, path, BROWSER);
-    const forCrawlers = await fetchHead(request, path);
+    const forPeople = await fetchHeadWithoutRedirect(request, path, BROWSER);
+    const forCrawlers = await fetchHeadWithoutRedirect(request, path);
     expect(forPeople.title, path).toBe(forCrawlers.title);
     expect(forPeople.title, path).not.toBe('SERP Lists');
     expect(forPeople.canonical, path).toEqual(forCrawlers.canonical);

@@ -262,8 +262,9 @@ Common failures:
 - That database holds only what `seed-test` creates (`db/seeds/local.ts`), plus the
   Templates bundled in `src/data`. A spec that opens `/profile/<user>/<slug>` uses one
   of those or creates its own Template; `tests/unit/e2e/seeded-template-paths.test.ts`
-  fails on any other literal path unless an `e2e-unseeded-template:` comment says it
-  is missing on purpose.
+  fails on any other literal path. A path that must be missing names its user or Template
+  with the `no-such-` prefix (`/profile/serp/no-such-template/`), which the check skips
+  and no seeded or bundled name may start with.
 - The local app runs on workerd (wrangler's dev server, under the preview), which closes a keep-alive
   connection that has been idle for 5 seconds; a request sent on it at that moment is
   lost. Playwright's request client (`page.request`, the `request` fixture,
@@ -290,11 +291,16 @@ Common failures:
   version with `pnpm patch wrangler@<version>`.
 - Specs set up and read their data with `apiRequest()` or `apiJson()` from
   `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
-  client with the page's cookies. A fetch inside `page.evaluate()`
-  stays only where the page's own request is what the test checks, marked with an
-  `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
-  any other. `trackApiRequests()` in the same file waits for the page's own requests,
-  such as the several that My Templates sends when signing in lands there.
+  client with the page's cookies, so no CORS preflight runs, no `page.route()` stub catches
+  the call, and a failure names the request instead of `TypeError: Failed to fetch`. When
+  how the browser itself sends a request is what the test checks (a CORS preflight, say),
+  the spec sends it with `fetchFromThePageUnderTest()` from the same file, the one fetch
+  inside `page.evaluate()` that `tests/unit/e2e/e2e-setup-requests.test.ts` allows.
+- `trackApiRequests()` in the same file waits for the page's own requests to finish: the
+  several that My Templates sends when signing in lands there, or those before a step that
+  must be the page's only request (a save meant to meet an ended session). A page often
+  sends its next request only once an earlier one answered, so `settled()` also waits until
+  none has started or ended for 300 ms.
 - Playwright tries a page's routes newest first, so a mock that must answer before a
   catch-all route (`serveLocalAppAsProduction`, a spec's `**/api/**` mock) is registered
   after it, and calls `route.fallback()` for the requests it leaves to the earlier routes.
