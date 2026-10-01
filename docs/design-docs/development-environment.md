@@ -89,7 +89,9 @@ pnpm run logs:query lines --event mcp_tool_error --path /^mcp/
 pnpm run logs:query d1                    # D1 statements by rows read (D1_PROFILE=true)
 ```
 
-Every command takes `--json` for scripts. `--file` reads another log, or the newest `.log`
+Every line the API logs while handling a request carries that request's id, `d1_query` lines
+included, so with `D1_PROFILE=true` a request's timeline ends with its D1 totals and `routes`
+adds the rows each request read. Every command takes `--json` for scripts. `--file` reads another log, or the newest `.log`
 file in a folder. `pnpm run logs:query --help` lists the filters (level, event, request,
 path, status, field values and time).
 

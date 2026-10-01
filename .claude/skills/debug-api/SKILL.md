@@ -61,7 +61,9 @@ D1 bills rows scanned, not rows returned (`docs/design-docs/d1-cost.md`):
 - **Per statement:** add `D1_PROFILE=true` to `.dev.vars` (without printing the file) and
   restart `pnpm run dev:all`. Each statement then logs a `d1_query` line with `rowsRead`,
   `rowsWritten`, `rowsReturned`, and `durationMs`; `pnpm run logs:query d1` adds them up per
-  statement, most rows read first. Remove the line when done.
+  statement, most rows read first. Every line carries its request's id, so
+  `pnpm run logs:query request <id>` ends with that request's D1 totals, and `routes` adds the
+  rows each request read (p95 and max) per route. Remove the line when done.
 - **Per endpoint, at scale:** `pnpm run d1:profile` builds the app, seeds about 150k rows into an
   isolated D1, replays requests, and writes `tmp/d1-profile/report.md`. It is a full build and
   stack of its own: run it alone, and add `-- --reuse` to skip the rebuild next time.
