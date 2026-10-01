@@ -1,42 +1,18 @@
-# Required auth/session secrets (32+ chars)
 BETTER_AUTH_SECRET=replace-with-32-char-secret
-# Legacy fallback only (optional)
 JWT_SECRET=replace-with-32-char-secret
 
-# Optional frontend/CORS config. The app and its API share one origin.
-# `pnpm dev` (next dev on port 3000) reads these. `pnpm run dev:all` sets both for the
-# port it picks (3000, or the next free one) and keeps any other origins listed here.
 FRONTEND_URL=http://localhost:3000
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 
-# Personal Run Key + MCP is enabled automatically on localhost and disabled by
-# default on remote hosts. Uncomment both flags for an intentional remote trial.
-# NEXT_PUBLIC_* values reach the pages through `pnpm run dev:all` or the build's environment.
-# PERSONAL_RUN_MCP_ENABLED=true
-# NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED=true
-
-# Optional uploads config
 R2_PUBLIC_BASE_URL=https://files.example.com
 
-# Email delivery (required for password reset + email verification emails)
-# Configure at least one provider key:
 RESEND_API_KEY=re_xxx
 USESEND_API_KEY=us_xxx
-# Optional sender override (defaults to noreply@mail.auth.serp.co)
 EMAIL_FROM=SERP Lists <support@example.com>
 
-# Optional local Stripe/billing config (test mode only; never use sk_live_ here)
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 STRIPE_PRO_PRICE_ID=price_xxx
-# Earlier Pro prices that still grant Pro after a price change (comma-separated)
-# STRIPE_PRO_LEGACY_PRICE_IDS=price_old
 STRIPE_PORTAL_CONFIGURATION_ID=bpc_xxx
 
-# Optional admin/ops. Use a long random value (openssl rand -base64 32), never a word.
 ENTITLEMENTS_ADMIN_SECRET=replace-with-admin-secret
-
-# Optional client API override. Pages call the API on their own origin (/api) in
-# development and in every deployment, so this is only for pointing pages at another
-# API. A build refuses a localhost value, so a deploy cannot ship one.
-# NEXT_PUBLIC_API_URL=https://api.example.com

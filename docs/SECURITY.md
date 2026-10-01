@@ -174,6 +174,7 @@ Workers, each environment's Worker has its own secrets:
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
 | `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
+| `NEXT_PUBLIC_API_URL` | Optional; points the pages at another API instead of `/api` on their own origin. A build refuses a loopback value ([development environment](design-docs/development-environment.md#set-up)) |
 
 Rules:
 

@@ -529,7 +529,7 @@ local build or `next dev`):
 
 - sends `X-Robots-Tag: noindex, nofollow` with every page and API response (`next.config.ts`)
   and every static file (`public/_headers`, which `scripts/generate-static-headers.ts` writes
-  for each build from `src/lib/http/securityHeaders.ts`);
+  for each build from `src/lib/http/securityHeaders.ts`, so git ignores it);
 - answers `/robots.txt` with `Disallow: /` and no sitemap (`src/app/robots.ts`; production
   allows crawling and lists `https://serplists.com/sitemap.xml`);
 - loads no Google Tag Manager (the root layout renders its bootstrap only on production).

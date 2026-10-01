@@ -16,6 +16,12 @@ pnpm install        # also installs git hooks
 pnpm run setup      # safe to re-run
 ```
 
+`pnpm install` lays out `node_modules` flat, as npm does (`node-linker=hoisted` in
+`.npmrc`): on Windows pnpm otherwise links packages with absolute junctions, and the
+OpenNext build copies those links, so its Worker bundle would pick up the unpatched
+originals of patched packages. A flat `node_modules` has no links to copy and builds the
+same on Windows, macOS, Linux and CI.
+
 `setup` creates `.dev.vars` from `.dev.vars.example` with a generated
 `BETTER_AUTH_SECRET` and optional integrations commented out (never overwriting an
 existing file), creates local D1 if the checkout has none (otherwise applies pending
@@ -32,7 +38,9 @@ without printing the sign-in hint, if a seed stage fails (the error names the st
 and how to recover) or seed data is still missing afterwards.
 
 `.dev.vars` is the only local env file; variables are listed in
-[SECURITY.md](../SECURITY.md#secrets-and-environment). The server reads it as Worker
+[SECURITY.md](../SECURITY.md#secrets-and-environment), including the optional ones
+`.dev.vars.example` leaves out: the Run Key and MCP flags for a remote trial,
+`STRIPE_PRO_LEGACY_PRICE_IDS` and `NEXT_PUBLIC_API_URL`. The server reads it as Worker
 vars: `next dev` through `initOpenNextCloudflareForDev()` in `next.config.ts`, the preview
 through `wrangler dev`. The pages read `NEXT_PUBLIC_*` variables through `src/env.ts`,
 which Next.js inlines when it builds or serves them: `pnpm run dev:all` hands `.dev.vars`
