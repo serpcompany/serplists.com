@@ -7,15 +7,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execTool } from '../../../scripts/lib/run-tool.mjs';
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
 
-// Runs the real generator in a throwaway git repository whose commits have known dates.
-
 const generator = path.join(process.cwd(), 'scripts', 'generate-sitemap-catalog.ts');
 const repo = mkdtempSync(path.join(tmpdir(), 'sitemap-catalog-'));
 const hooks = mkdtempSync(path.join(tmpdir(), 'sitemap-catalog-hooks-'));
 const packPath = 'src/data/public-template-packs/foundational.json';
 const catalogPath = 'functions/sitemap/bundled-catalog.generated.json';
-// Every file the generator reads a git date from.
-const sourceFiles = [
+const filesTheGeneratorReadsGitDatesFrom = [
   'src/views/Index.tsx',
   'src/views/Features.tsx',
   'src/views/Pricing.tsx',
@@ -69,7 +66,7 @@ beforeAll(() => {
   git(['init', '-q']);
   git(['config', 'user.name', 'Sitemap Test']);
   git(['config', 'user.email', 'sitemap-test@example.com']);
-  for (const file of sourceFiles) write(file, `// ${file}\n`);
+  for (const file of filesTheGeneratorReadsGitDatesFrom) write(file, `// ${file}\n`);
   writePack([template('alpha', 'First task'), template('beta', 'Beta task')]);
   commitAll('Add templates', '2026-01-01T00:00:00Z');
 });
@@ -79,26 +76,24 @@ afterAll(() => {
   rmSync(hooks, { recursive: true, force: true });
 });
 
-describe('generate-sitemap-catalog', { timeout: 120_000 }, () => {
+describe('generate-sitemap-catalog in a throwaway git repository with known commit dates', { timeout: 120_000 }, () => {
   it('dates each template by the commit that last changed it, even after a local build of an uncommitted edit', () => {
     const initial = generate();
     expect(lastmodOf(initial, 'alpha')).toBe('2026-01-01T00:00:00.000Z');
     expect(initial.inventory.templatesLastmod).toBe('2026-01-01T00:00:00.000Z');
     commitAll('Generate catalog', '2026-01-02T00:00:00Z');
 
-    // Edit alpha and build before committing, as test:smoke or build:dev do.
     const editStartedAt = Date.now();
     writePack([template('alpha', 'Edited task'), template('beta', 'Beta task')]);
-    const dirty = generate();
-    expect(Date.parse(lastmodOf(dirty, 'alpha') ?? '')).toBeGreaterThanOrEqual(editStartedAt - 1_000);
-    expect(lastmodOf(dirty, 'beta')).toBe('2026-01-01T00:00:00.000Z');
+    const localBuildBeforeTheCommit = generate();
+    expect(Date.parse(lastmodOf(localBuildBeforeTheCommit, 'alpha') ?? '')).toBeGreaterThanOrEqual(editStartedAt - 1_000);
+    expect(lastmodOf(localBuildBeforeTheCommit, 'beta')).toBe('2026-01-01T00:00:00.000Z');
 
-    // The regenerated catalog is committed with the edit; CI then rebuilds from a clean tree.
-    commitAll('Edit alpha', '2026-02-01T00:00:00Z');
-    const clean = generate();
-    expect(lastmodOf(clean, 'alpha')).toBe('2026-02-01T00:00:00.000Z');
-    expect(lastmodOf(clean, 'beta')).toBe('2026-01-01T00:00:00.000Z');
-    expect(clean.inventory.templatesLastmod).toBe('2026-02-01T00:00:00.000Z');
+    commitAll('Edit alpha with the catalog that build regenerated', '2026-02-01T00:00:00Z');
+    const ciBuildFromTheCleanTree = generate();
+    expect(lastmodOf(ciBuildFromTheCleanTree, 'alpha')).toBe('2026-02-01T00:00:00.000Z');
+    expect(lastmodOf(ciBuildFromTheCleanTree, 'beta')).toBe('2026-01-01T00:00:00.000Z');
+    expect(ciBuildFromTheCleanTree.inventory.templatesLastmod).toBe('2026-02-01T00:00:00.000Z');
   });
 
   it('dates a new pack by its commit, not its exportedAt', () => {

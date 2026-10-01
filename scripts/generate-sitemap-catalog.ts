@@ -50,8 +50,6 @@ const normalizeDate = (value: unknown): string | null => {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 };
 
-// The previous output is only a fallback: for static pages when git has no date, and
-// for template content that is not committed yet (see resolveLastmod).
 const previousCatalogSchema = z
   .object({
     templates: z.array(z.object({ slug: z.string(), contentHash: z.string(), lastmod: z.string() })),
@@ -66,13 +64,16 @@ const previousCatalogSchema = z
   })
   .partial();
 
-let previousCatalog: z.infer<typeof previousCatalogSchema> = {};
-try {
-  const parsed = previousCatalogSchema.safeParse(JSON.parse(await readFile(outputPath, 'utf8')));
-  if (parsed.success) previousCatalog = parsed.data;
-} catch {
-  // The first generation has no previous artifact to fall back to.
+async function readPreviousCatalogIfAny(): Promise<z.infer<typeof previousCatalogSchema>> {
+  try {
+    const parsed = previousCatalogSchema.safeParse(JSON.parse(await readFile(outputPath, 'utf8')));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
 }
+
+const previousCatalog = await readPreviousCatalogIfAny();
 
 const git = async (args: string[]): Promise<string | null> => {
   try {
@@ -86,15 +87,14 @@ const git = async (args: string[]): Promise<string | null> => {
 const gitLastmod = async (sources: readonly string[]): Promise<string | null> =>
   normalizeDate((await git(['log', '-1', '--format=%aI', '--', ...sources]))?.trim());
 
-// A shallow clone has no history before its tip, so every template would get the tip's date.
-if ((await git(['rev-parse', '--is-shallow-repository']))?.trim() === 'true') {
+const isShallowClone = (await git(['rev-parse', '--is-shallow-repository']))?.trim() === 'true';
+if (isShallowClone) {
   const message = 'Sitemap lastmod dates need full git history; this clone is shallow (use fetch-depth: 0).';
   if (process.env.CI) throw new Error(message);
   console.warn(`Warning: ${message}`);
 }
 
-// The packs and category list at every commit on this branch that changed them, oldest first.
-async function readCommittedSnapshots(): Promise<SourceSnapshot[]> {
+async function readEachFirstParentCommitOfThePacksOrCategoriesOldestFirst(): Promise<SourceSnapshot[]> {
   const log = await git([
     'log', '--first-parent', '--reverse', '--format=%H%x09%aI', '--', packsSource, categoriesSourcePath,
   ]);
@@ -136,7 +136,7 @@ for (const fileName of files) {
   currentPacks.push(pack);
 }
 
-const committed = deriveCommittedDates(await readCommittedSnapshots());
+const committed = deriveCommittedDates(await readEachFirstParentCommitOfThePacksOrCategoriesOldestFirst());
 const now = new Date().toISOString();
 const templates = listPublicTemplates(currentPacks).map((template) => {
   const previous = previousCatalog.templates?.find((entry) => entry.slug === template.slug);

@@ -1,9 +1,7 @@
-// How the bundled sitemap catalog dates public templates. Dates come from the git
-// history of the template packs, never from the committed catalog: a catalog built
-// while a pack edit was uncommitted holds the previous commit's date, and trusting it
-// would keep that stale date after the edit is committed.
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
+
+import { normalizeEol } from './line-endings.mjs';
 
 export const templatePackSchema = z
   .object({
@@ -15,10 +13,8 @@ export type TemplatePack = z.infer<typeof templatePackSchema>;
 
 export type PublicTemplate = { slug: string; categories: string[]; contentHash: string };
 
-/** One commit that touched the packs or the category list, with the content at that commit. */
 export type SourceSnapshot = { date: string; packs: TemplatePack[]; categoriesSource: string };
 
-/** A content hash and when content with that hash was committed. */
 export type DatedHash = { hash: string; lastmod: string };
 
 export type CommittedDates = {
@@ -29,7 +25,6 @@ export type CommittedDates = {
 
 export const hashJson = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
-/** Parses a pack file; null when it is not valid JSON or not a pack. */
 export function parseTemplatePack(text: string | null): TemplatePack | null {
   if (text == null) return null;
   try {
@@ -40,7 +35,6 @@ export function parseTemplatePack(text: string | null): TemplatePack | null {
   }
 }
 
-/** The public templates in the packs, sorted by slug, with a hash of each template's content. */
 export function listPublicTemplates(packs: TemplatePack[]): PublicTemplate[] {
   const templates: PublicTemplate[] = [];
   for (const pack of packs) {
@@ -59,24 +53,16 @@ export function listPublicTemplates(packs: TemplatePack[]): PublicTemplate[] {
   return templates.sort((left, right) => left.slug.localeCompare(right.slug));
 }
 
-/** Hashes for the /templates and /categories inventories. */
 export function inventoryHashes(templates: PublicTemplate[], categoriesSource: string) {
   return {
     templatesHash: hashJson(templates.map(({ slug, contentHash }) => ({ slug, contentHash }))),
     categoriesHash: hashJson({
-      // Line endings depend on the checkout, not the content.
-      categoriesSource: categoriesSource.replace(/\r\n/g, '\n'),
+      categoriesSource: normalizeEol(categoriesSource),
       templateCategories: templates.map(({ slug, categories }) => ({ slug, categories })),
     }),
   };
 }
 
-/**
- * Walks the snapshots from oldest to newest and records, for the newest committed
- * content, the date of the commit that last changed it: per template (so editing one
- * template leaves its siblings' dates alone), and for each inventory. A template that
- * is removed or made private and later returns counts as changed.
- */
 export function deriveCommittedDates(snapshots: SourceSnapshot[]): CommittedDates {
   const templates = new Map<string, DatedHash>();
   let templatesInventory = null as DatedHash | null;
@@ -106,12 +92,6 @@ export function deriveCommittedDates(snapshots: SourceSnapshot[]): CommittedDate
   return { templates, templatesInventory, categoriesInventory };
 }
 
-/**
- * The lastmod for content with `hash`. Committed content gets the date of the commit
- * that last changed it. Uncommitted content (a local edit or a new pack) gets the time
- * it was first generated, kept while the content stays the same, and never an older
- * commit's date; the first build after the commit replaces it with the commit date.
- */
 export function resolveLastmod({
   hash,
   committed,
@@ -128,15 +108,7 @@ export function resolveLastmod({
   return now;
 }
 
-/**
- * The code that shapes sitemap output. The newest commit to any of these files is the
- * catalog's `implementationLastmod`, which is part of every sitemap cache key and
- * family revision, so a deploy that changes one misses the cache and advances lastmod.
- * tests/unit/scripts/sitemap-implementation-sources.test.ts walks the sitemap imports
- * and fails when a module they reach is missing here.
- */
-export const SITEMAP_IMPLEMENTATION_SOURCES = [
-  // The route handlers, and what they hand the sitemap code.
+const SITEMAP_ROUTE_HANDLERS_AND_WHAT_THEY_HAND_THE_SITEMAP_CODE = [
   'src/app/sitemap.xml/route.ts',
   'src/app/sitemaps/pages/[page]/route.ts',
   'src/app/sitemaps/categories/[page]/route.ts',
@@ -146,10 +118,16 @@ export const SITEMAP_IMPLEMENTATION_SOURCES = [
   'functions/sitemap/routes.ts',
   'functions/sitemap/shared.ts',
   'functions/sitemap/cache.ts',
-  // Category slugs (/categories/<slug>) and the origin every <loc> starts with.
+] as const;
+const CATEGORY_SLUGS_AND_THE_ORIGIN_EVERY_LOC_STARTS_WITH = [
   'src/lib/categorySlug.ts',
   'src/lib/utils/slug.ts',
   'src/lib/seo/siteOrigin.ts',
-  // The canonical form of every <loc> (a page's trailing slash).
-  'src/lib/http/urlStandard.ts',
+] as const;
+const THE_CANONICAL_FORM_OF_EVERY_LOC = ['src/lib/http/urlStandard.ts'] as const;
+
+export const SITEMAP_IMPLEMENTATION_SOURCES = [
+  ...SITEMAP_ROUTE_HANDLERS_AND_WHAT_THEY_HAND_THE_SITEMAP_CODE,
+  ...CATEGORY_SLUGS_AND_THE_ORIGIN_EVERY_LOC_STARTS_WITH,
+  ...THE_CANONICAL_FORM_OF_EVERY_LOC,
 ] as const;

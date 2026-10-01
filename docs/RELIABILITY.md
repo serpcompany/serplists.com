@@ -101,7 +101,9 @@ its release checks. Until then, the Pages deploy workflow did this:
    content, read from the pack history (`scripts/lib/sitemapLastmod.ts`). The
    committed `functions/sitemap/bundled-catalog.generated.json` is never trusted
    for those dates, so a copy generated before an edit was committed cannot keep an
-   old date. Content that is not committed yet gets the local build time.
+   old date. Content that is not committed yet gets the local build time, kept while it
+   stays the same; the previous catalog is read only for that, and for a static page
+   git has no date for.
 4. runs `wrangler pages deploy ./dist --branch <branch>`
 5. probes the new deployment's `/api/health` (the Worker boots) and
    `/api/templates` (D1 is bound) with `scripts/verify-deployment.mjs`, up to six
