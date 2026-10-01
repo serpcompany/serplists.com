@@ -240,9 +240,11 @@ purely presentational: no app state, features or API calls (enforced by `deps:ch
 - Controls used again and again keep their place. The run page's task footer (Previous,
   Mark Complete, Next) is sticky at the bottom of the window until the end of the task
   panel scrolls into view, so content that grows under the panel (the Changelog, after
-  every save) never moves it under the pointer. A sticky element needs every box around it
-  to clip (`overflow-clip`), not scroll: an `overflow-auto` or `overflow-hidden` ancestor
-  holds it instead of the window (`src/components/run-execution/TaskExecutionPanel.tsx`).
+  every save) never moves it under the pointer. The panel is at least the window's height
+  under the top bar, so the footer starts at the bottom of the window even on a short task.
+  A sticky element needs every box around it to clip (`overflow-clip`), not scroll: an
+  `overflow-auto` or `overflow-hidden` ancestor holds it instead of the window
+  (`src/components/run-execution/TaskExecutionPanel.tsx`).
 - A double click acts once. Its second click lands on whatever is under the pointer by
   then, and a click's `detail` counts the clicks (0 for the keyboard and for programmatic
   clicks), so the helpers in `src/lib/utils/repeatClick.ts` tell the repeat apart. A

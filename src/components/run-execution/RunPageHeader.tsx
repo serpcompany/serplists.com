@@ -13,12 +13,9 @@ import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
 import { onSingleClick } from '@/lib/utils/repeatClick';
 
 type RunPageHeaderProps = {
-  // False for a role that can only read the run: no Rename, no sharing.
   canUpdateRun: boolean;
   description: string;
-  // The title typed while renaming.
   editTitle: string;
-  // Complete run, when every task is done while the run is in progress.
   finishRunButton: ReactNode;
   isCompleted: boolean;
   isCreatingShare: boolean;
@@ -32,16 +29,11 @@ type RunPageHeaderProps = {
   onStartRename: () => void;
   onStopSharing: () => Promise<RunExecutionActionResult>;
   progress: number;
-  // The role is unknown (the Organizations failed to load): no "View only" badge.
   roleUnavailable: boolean;
   title: string;
-  // The typed title differs from the saved one, so Save title can save it.
   titleChanged: boolean;
 };
 
-// The run page's header: the Run's title (a labelled field while renaming), how many tasks are
-// finished, its status badges and progress, and its actions: Runs, Rename, Complete run and
-// sharing.
 export function RunPageHeader({
   canUpdateRun,
   description,
@@ -108,8 +100,6 @@ export function RunPageHeader({
             <ArrowLeft data-icon="inline-start" />
             Runs
           </Button>
-          {/* Save title and Cancel take Rename's place, so the second click of a double
-              click on any of them is ignored. */}
           {!canUpdateRun ? null : !isEditingTitle ? (
             <Button variant="outline" onClick={onSingleClick(onStartRename)}>
               <Edit2 data-icon="inline-start" />

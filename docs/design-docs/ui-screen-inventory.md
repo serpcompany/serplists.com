@@ -2172,7 +2172,8 @@ replaced.
   the task list by section ("Run tasks"), the current task marked.
 - **PRIMARY ACTION:** pick a task (the sheet closes).
 - **SECONDARY ACTIONS:** close.
-- **STATES:** focus starts on the current task and returns to "Tasks" on close.
+- **STATES:** focus starts on the current task and returns to "Tasks" on close; the sheet
+  closes when the window grows to `xl`, where the task column shows.
 - **NAVIGATION TYPE:** sheet.
 - **PATTERN CHOICE (built):** shadcn Sheet holding the same list as the `xl` column.
 - **REFERENCE IMAGES:** none.

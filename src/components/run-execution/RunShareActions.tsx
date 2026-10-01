@@ -9,14 +9,12 @@ import type { RunExecutionActionResult } from '@/features/run-execution/useRunEx
 type RunShareActionsProps = {
   isCreatingShare: boolean;
   isPublic: boolean;
-  // Creates the link and shows it in the page's share dialog.
   onShare: () => void;
   onStopSharing: () => Promise<RunExecutionActionResult>;
 };
 
 const STOP_FAILED = 'Unable to stop sharing this run.';
 
-/** Share and Stop sharing on the run page. A shared run shows its state and a way to revoke the link. */
 export function RunShareActions({ isCreatingShare, isPublic, onShare, onStopSharing }: RunShareActionsProps) {
   const [isStopping, setIsStopping] = useState(false);
   const busy = isCreatingShare || isStopping;

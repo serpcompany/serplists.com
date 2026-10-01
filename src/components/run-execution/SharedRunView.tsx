@@ -28,7 +28,6 @@ type SectionProgress = {
 
 type SharedRunViewProps = {
   completedTasks: number;
-  // Complete run, when every task is done while the Run is in progress.
   finishRunButton: ReactNode;
   isRunCompleted: boolean;
   noteDrafts: Record<string, string | undefined>;
@@ -43,10 +42,6 @@ type SharedRunViewProps = {
   totalTasks: number;
 };
 
-// A Run opened from its share link (/share/<token>/): its own sticky header with Copy Link,
-// then one narrow column: the Run's summary and progress, a card per section whose tasks a
-// guest can tick and annotate, and a call to browse the Template Library. No site shell: a
-// guest may have no account.
 export function SharedRunView({
   completedTasks,
   finishRunButton,

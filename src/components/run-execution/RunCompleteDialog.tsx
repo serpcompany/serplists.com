@@ -12,20 +12,12 @@ import {
 import { createJustOpenedGuard, onSingleClick } from '@/lib/utils/repeatClick';
 
 interface RunCompleteDialogProps {
-  // The completion is saving: both buttons wait.
   completing?: boolean;
   onComplete: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
 }
 
-// Asks before completing a Run whose tasks are all done: completing freezes its tasks (the run
-// page and share links refuse to tick or untick them). "Not yet" keeps the Run in progress, and
-// the page keeps offering Complete run.
-//
-// Opens when the last task is ticked, often by a click whose double click is not over yet.
-// The rest of that double click lands on the overlay or on one of this dialog's buttons, so it
-// neither closes the dialog nor completes the run (see repeatClick.ts).
 export function RunCompleteDialog({ completing = false, onComplete, onOpenChange, open }: RunCompleteDialogProps) {
   const [{ markOpened, onOutsidePress }] = useState(() => createJustOpenedGuard());
 

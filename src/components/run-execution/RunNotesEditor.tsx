@@ -7,20 +7,15 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
-// The draft lives in the run model (see noteDrafts.ts), not here, so it survives moving
-// between tasks, and a save that returns while the user is still typing never replaces it.
 interface RunNotesEditorProps {
   draft?: string;
   label: string;
   onDraftChange: (notes: string) => void;
   onSave: (notes: string) => Promise<boolean>;
-  // For members whose Organization role cannot update the run.
   readOnly?: boolean;
   savedValue?: string;
 }
 
-// A task's notes: a labelled textarea, and a line that says where they are saved with the
-// Save notes button.
 export function RunNotesEditor({
   draft,
   label,

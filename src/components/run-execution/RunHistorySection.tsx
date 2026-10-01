@@ -16,7 +16,6 @@ const formatRunHistoryTime = (value?: string): string => {
   });
 };
 
-// The run page's Changelog, in the Changelog's rows.
 export function RunHistorySection({ history }: { history?: RunExecutionHistoryState }) {
   const runHistoryEntries = selectRunHistoryPreview(history?.data);
 

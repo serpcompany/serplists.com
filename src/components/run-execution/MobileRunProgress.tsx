@@ -16,23 +16,19 @@ import {
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistSection } from '@/types/checklist';
 
-// Tailwind's xl breakpoint, where the desktop progress panel (RunProgressPanel) takes over.
-const DESKTOP_QUERY = '(min-width: 1280px)';
+const TASK_COLUMN_SHOWN_QUERY = '(min-width: 1280px)';
 
 interface MobileRunProgressProps {
   completedTasks: number;
   currentSectionId: string | null;
   currentTaskId: string | null;
   onSelectTask: (sectionId: string, taskId: string) => void;
-  // The selected task's place in the run, or null when none is selected.
   position: { index: number; total: number } | null;
   progress: number;
   sections: ChecklistSection[];
   totalTasks: number;
 }
 
-// Run progress below xl, where the desktop panel is hidden: the summary, and a Tasks button
-// that opens every task in a sheet so any task can be opened directly.
 export function MobileRunProgress({
   completedTasks,
   currentSectionId,
@@ -46,18 +42,17 @@ export function MobileRunProgress({
   const [isTaskListOpen, setIsTaskListOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // A sheet left open while the window grows to xl would sit over the desktop panel.
   useEffect(() => {
     if (!isTaskListOpen || typeof window === 'undefined' || !window.matchMedia) {
       return undefined;
     }
-    const desktop = window.matchMedia(DESKTOP_QUERY);
-    const closeOnDesktop = () => {
-      if (desktop.matches) setIsTaskListOpen(false);
+    const taskColumnShown = window.matchMedia(TASK_COLUMN_SHOWN_QUERY);
+    const closeOnceTaskColumnShows = () => {
+      if (taskColumnShown.matches) setIsTaskListOpen(false);
     };
-    closeOnDesktop();
-    desktop.addEventListener('change', closeOnDesktop);
-    return () => desktop.removeEventListener('change', closeOnDesktop);
+    closeOnceTaskColumnShows();
+    taskColumnShown.addEventListener('change', closeOnceTaskColumnShows);
+    return () => taskColumnShown.removeEventListener('change', closeOnceTaskColumnShows);
   }, [isTaskListOpen]);
 
   return (
@@ -87,7 +82,6 @@ export function MobileRunProgress({
             </SheetTrigger>
             <SheetContent
               className="flex max-h-[85dvh] flex-col gap-0 p-0"
-              // Start on the current task rather than the top of a long run.
               initialFocus={() =>
                 contentRef.current?.querySelector<HTMLElement>('[aria-current="step"]') ?? true
               }

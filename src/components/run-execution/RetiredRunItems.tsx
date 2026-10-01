@@ -3,9 +3,6 @@ import { Archive, CheckCircle2, Circle } from 'lucide-react';
 
 import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
 
-// Work a Template change removed from this Run, shown read-only with the completion and
-// notes it had. It never counts toward progress.
-
 function CompletionState({ isCompleted }: { isCompleted: boolean }): JSX.Element {
   return isCompleted ? (
     <span className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground">

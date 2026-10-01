@@ -233,3 +233,17 @@ describe("TaskExecutionPanel gives every task its own content blocks, so a video
     expect(new Set(keys).size).toBe(keys.length);
   });
 });
+
+describe('TaskExecutionPanel keeps its footer pinned to the bottom of the window', () => {
+  const panelClasses = () =>
+    String((renderPanel(openTask, { kind: 'complete_task' }).tree as AnyElement).props.className).split(' ');
+
+  it("is at least the window's height under the 3.5rem top bar, so the footer starts at the bottom of the window even on a short task", () => {
+    expect(panelClasses()).toContain('min-h-[calc(100dvh-3.5rem)]');
+  });
+
+  it('clips its overflow instead of scrolling or hiding it, since a scroll container would hold the sticky footer to itself', () => {
+    expect(panelClasses()).toContain('overflow-clip');
+    expect(panelClasses().filter((name) => /^overflow-(auto|hidden|scroll)$/.test(name))).toEqual([]);
+  });
+});

@@ -7,7 +7,6 @@ import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistSection, ChecklistItem } from '@/types/checklist';
 
 interface RunProgressPanelProps {
-  // The run's overall progress (tasks and sub-tasks), the same percentage as the header.
   progress: number;
   sections: ChecklistSection[];
   currentSectionId: string | null;
@@ -16,7 +15,6 @@ interface RunProgressPanelProps {
 }
 
 interface RunTaskListProps extends RunProgressPanelProps {
-  // Names the task list landmark (the desktop panel and the mobile sheet each have one).
   label: string;
 }
 
@@ -27,10 +25,6 @@ const getSectionProgress = (section: ChecklistSection) => {
 
 const isTaskCompleted = (item: ChecklistItem) => item.isCompleted === true;
 
-// Every task of the run, grouped by section, with overall progress: a vertical list like the
-// console sidebar's, the current task highlighted. It has no visibility classes: the desktop
-// panel shows it as a column and, below xl, the run page shows it in a sheet
-// (MobileRunProgress), so both widths can jump to any task.
 export function RunTaskList({
   sections,
   currentSectionId,
@@ -39,7 +33,6 @@ export function RunTaskList({
   onSelectTask,
   progress,
 }: RunTaskListProps) {
-  // Counts tasks only, like "Task N of M"; the bar shows the overall progress.
   const { tasksCompleted: completedTasks, tasksTotal: totalTasks } = countRunTasks(sections);
 
   return (
@@ -138,7 +131,6 @@ export function RunTaskList({
   );
 }
 
-// The run page's right-hand column at xl and wider: it stays in view while the task scrolls.
 export function RunProgressPanel(props: RunProgressPanelProps) {
   return (
     <section
