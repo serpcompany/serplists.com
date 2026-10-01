@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-46.**
+then you raise it. **Next ID: TD-48.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -45,3 +45,5 @@ then you raise it. **Next ID: TD-46.**
 | TD-43 | Client data | `SESSION_RECHECK_INTERVAL_MS` (`src/contexts/sessionSync.ts`) and the Organizations list's `staleTime` (`src/contexts/WorkspaceContext.tsx`) must stay equal (60s, as authentication.md explains) but are two separate literals. | Share one constant. Small. | None |
 | TD-44 | Tests | `assertWorkspaceReady` (`src/contexts/workspaceSelection.ts`) accepts an `undefined` status only so mocked contexts in tests can leave it out. | Make the status required and give the mocks one. Small. | None |
 | TD-45 | Public site | The footer's "Network" column is left out because its "SERP DR" link pointed at `https://serp.dr`, which does not resolve. | Once the owner confirms the address, add the column back in `src/components/layout/publicSiteLinks.ts` as an external https link, and add its domain to the allowlist in `tests/unit/components/publicSiteLinks.test.ts`. Small; needs the owner. | None |
+| TD-46 | Tests | Three SQLite stand-ins for D1: `tests/support/sqlite-d1.ts`, `tests/fixtures/sqliteD1.ts` and `tests/unit/functions/api/support/sqlite-d1.ts`. | Merge them into one module with options, and update the tests that use them. Medium. | None |
+| TD-47 | Tests | `tests/unit/db/officialTemplatesSeed.test.ts` and `tests/unit/db/seeds/official-templates.test.ts` both check the official seed's line breaks. | Keep one check. Small. | None |
