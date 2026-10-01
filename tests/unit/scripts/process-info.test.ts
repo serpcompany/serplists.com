@@ -1,3 +1,4 @@
+import { ChildProcess } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -51,12 +52,9 @@ describe('readProcessInfo', { timeout: 30_000 }, () => {
 
   it('returns null for an invalid pid or a failed query', async () => {
     expect(await readProcessInfo(0)).toBeNull();
-    expect(
-      await readProcessInfo(1234, {
-        run: async () => {
-          throw new Error('powershell.exe not found');
-        },
-      }),
-    ).toBeNull();
+    const failedQuery = () =>
+      Object.assign(Promise.reject(new Error('powershell.exe not found')), { child: new ChildProcess() });
+
+    expect(await readProcessInfo(1234, { run: failedQuery })).toBeNull();
   });
 });

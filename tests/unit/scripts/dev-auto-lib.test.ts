@@ -79,8 +79,7 @@ describe("buildDevServerCommand", () => {
   it("hands next dev .dev.vars and the Worker vars for its port, values unchanged", () => {
     const { env } = buildDevServerCommand({ config, baseEnv, execPath: "node-bin" });
 
-    expect(env.NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED).toBe("true");
-    expect(env.PORT).toBe("3002");
+    expect(env).toMatchObject({ NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED: "true", PORT: "3002" });
     expect(parseDevBindings(env[DEV_BINDINGS_VARIABLE])).toEqual({
       FRONTEND_URL: "http://localhost:3002",
       CORS_ALLOWED_ORIGINS: "http://localhost:3002",

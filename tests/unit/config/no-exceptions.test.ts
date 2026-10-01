@@ -23,7 +23,7 @@ const workflowFiles = readdirSync(path.join(repoRoot, '.github/workflows'))
 const commandSources = [
   ...Object.entries(packageScripts).map(([name, script]) => ({ where: `package.json "${name}"`, text: script })),
   ...['lefthook.yml', ...workflowFiles].map((file) => ({ where: file, text: readText(file) })),
-  ...walkFiles(repoRoot, 'scripts', (file) => /\.(mjs|cjs|js|ts)$/.test(file)).map((file) => ({
+  ...walkFiles(repoRoot, 'scripts', (file: string) => /\.(mjs|cjs|js|ts)$/.test(file)).map((file: string) => ({
     where: file,
     text: readText(file),
   })),
@@ -33,8 +33,8 @@ const commandsMatching = (pattern: RegExp) =>
   commandSources.filter(({ text }) => pattern.test(text)).map(({ where }) => where);
 
 const sourceFiles = [
-  ...walkFiles(repoRoot, 'src', (file) => /\.(ts|tsx)$/.test(file) && !file.endsWith('.d.ts')),
-  ...walkFiles(repoRoot, 'functions', (file) => file.endsWith('.ts') && !file.endsWith('.d.ts')),
+  ...walkFiles(repoRoot, 'src', (file: string) => /\.(ts|tsx)$/.test(file) && !file.endsWith('.d.ts')),
+  ...walkFiles(repoRoot, 'functions', (file: string) => file.endsWith('.ts') && !file.endsWith('.d.ts')),
 ];
 
 const dependencyRules = z
