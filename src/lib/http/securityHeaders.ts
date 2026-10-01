@@ -1,7 +1,3 @@
-// Response headers for every page and API response, set in next.config.ts. The Worker renders
-// pages, so Cloudflare's public/_headers file (which only covers static assets) cannot set them;
-// renderStaticHeaders() writes that file from the same values at build time.
-
 const CONTENT_SECURITY_POLICY_DIRECTIVES = [
   "default-src 'self'",
   "base-uri 'self'",
@@ -17,21 +13,12 @@ const CONTENT_SECURITY_POLICY_DIRECTIVES = [
   "media-src 'self' blob: https:",
 ];
 
-/** The policy for the deployed hosts, the same as public/_headers gives static files. */
 export const CONTENT_SECURITY_POLICY = [...CONTENT_SECURITY_POLICY_DIRECTIVES, 'upgrade-insecure-requests'].join('; ');
 
-/**
- * The policy for a server on http://localhost (next dev, `pnpm preview`, the browser tests),
- * without upgrade-insecure-requests: the browser applies it to the redirects the app's own
- * navigations follow (/dashboard to /dashboard/templates) and asks for https://localhost,
- * which nothing serves.
- */
 export const LOCAL_CONTENT_SECURITY_POLICY = CONTENT_SECURITY_POLICY_DIRECTIVES.join('; ');
 
-/** Hostnames of local servers, as an anchored next.config.ts `has` host pattern. */
-export const LOCAL_HOSTS = 'localhost|127\\.0\\.0\\.1';
+export const LOCAL_HOST_PATTERN = 'localhost|127\\.0\\.0\\.1';
 
-/** Every header but the Content-Security-Policy, which depends on the host (next.config.ts). */
 export const SECURITY_HEADERS = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -40,13 +27,6 @@ export const SECURITY_HEADERS = [
   { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
 ];
 
-/**
- * public/_headers: the headers Workers Static Assets gives the static files it serves without
- * running the Worker (the build's /_next/static files, fonts, images), so they match what
- * next.config.ts sends with pages. A build that is not production (`production: false`) also
- * marks them noindex, as next.config.ts does its pages. scripts/generate-static-headers.ts
- * writes it before `next build`, from the build's SITE_ENV.
- */
 export function renderStaticHeaders({ production }: { production: boolean }): string {
   const headers = [
     ...SECURITY_HEADERS,

@@ -98,6 +98,15 @@ and agents (MCP) call them directly and do not follow redirects.
   Run's old second address) straight to their page's canonical URL.
   `tests/unit/config/urlStandard.test.ts` runs every rule through Next.js's server and
   OpenNext's routing, and `tests/e2e/site-standards.spec.ts` checks them in workerd.
+- The rules in `src/lib/http/urlStandard.ts` have to suit both. Next.js matches a source with
+  an optional trailing slash (and never under `/_next`), so a page rule's last segment may not
+  be followed by a slash, or `/about/` would match `/:page` again. OpenNext fills a
+  destination with path-to-regexp and checks each value against its parameter's pattern, so a
+  parameter that spans segments is a repeated one (`:dir+`), and it cannot fill an empty
+  parameter: each form takes one rule per number of segments, and the homepage has its own
+  rule. In `canonicalHostRedirects` the profile page and file rules come before `/:path+`,
+  which would match them too. The module states Next.js's redirect shape itself, since the
+  API imports it and must not import Next.js.
 - `/dashboard/` is not a page: typed or bookmarked, it answers 307 with the dashboard's home,
   My Templates for now. Links use `buildConsoleHomePath()`, which returns the home itself.
 - `sanitizeReturnPath` returns a `next` return path in canonical form, so an older link opens

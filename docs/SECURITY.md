@@ -242,8 +242,10 @@ tags read the full page URL (GA4 sends it as `page_location`). So:
 ## Response headers
 
 `next.config.ts` sets HSTS, `X-Frame-Options`, and the Content-Security-Policy on every
-page and API response (`src/lib/http/securityHeaders.ts`). Static files are served without
-running the Worker, so each build writes `public/_headers` from the same values
+page and API response (`src/lib/http/securityHeaders.ts`), with the policy chosen by host
+(below). Static files (the build's `/_next/static` files, fonts and images) are served by
+Workers Static Assets without running the Worker, so each build writes `public/_headers` from
+the same values
 (`scripts/generate-static-headers.ts`, run by `pnpm run build`; the file is not committed).
 `next dev` applies only `next.config.ts`, so check asset headers on `pnpm run preview` or a
 deployed host. A build that is not production also marks every response and file

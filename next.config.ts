@@ -7,7 +7,7 @@ import { applyDevBindings } from './scripts/lib/dev-bindings.mjs';
 import {
   CONTENT_SECURITY_POLICY,
   LOCAL_CONTENT_SECURITY_POLICY,
-  LOCAL_HOSTS,
+  LOCAL_HOST_PATTERN,
   SECURITY_HEADERS,
 } from './src/lib/http/securityHeaders';
 import { canonicalHostRedirects, trailingSlashRedirects } from './src/lib/http/urlStandard';
@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
     root: process.cwd(),
   },
   async headers() {
-    const localHost = { type: 'host' as const, value: LOCAL_HOSTS };
+    const localHost = { type: 'host' as const, value: LOCAL_HOST_PATTERN };
     return [
       { source: '/:path*', headers: SECURITY_HEADERS },
       {
