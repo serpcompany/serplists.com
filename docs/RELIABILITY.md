@@ -138,12 +138,18 @@ explicitly per environment, never inferred from the host.
   text is kept in `detail` with email addresses replaced by `[email]`, objects it
   passes are dropped, and an error keeps only its name and message, cut before
   Drizzle's bound `params:`. Routine user mistakes (unknown email, wrong password,
-  repeat sign-up) are logged as `info`, not `error`.
+  repeat sign-up) are logged as `info`, not `error`. Its config leaves Better Auth's
+  logger `level` unset: in 1.3.4 an explicit `error`, `warn` or `debug` also prints
+  every API error through the default console logger, and the default already
+  publishes `info`, `warn` and `error`.
 - The router logs each request's path through `sanitizeLogPath()`
   (`functions/api/utils/log-path.ts`), which replaces the secrets some routes carry
   in the URL with `:token`: `auth/reset-password/<token>`,
   `checklists/shared/<shareToken>` and `teams/invites/<token>/accept`. Add any new
-  route with a secret in its path there. Cloudflare's own request metadata still
+  route with a secret in its path there. It splits the path as the handlers do,
+  dropping empty segments, and compares them in any letter case, so extra slashes or
+  odd casing cannot move a token past it; `teams/invites/pending/...` carries invite
+  ids, not secrets, and is logged as it is. Cloudflare's own request metadata still
   records the full URL, so limit who can read the runtime logs.
 - Handlers that catch their own errors must log them: the router's `api_error`
   line only sees errors that reach it. Log errors with `...describeErrorForLog(error)`
