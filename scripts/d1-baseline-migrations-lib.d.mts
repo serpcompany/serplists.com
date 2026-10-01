@@ -7,6 +7,7 @@ export interface D1DatabaseEntry {
 
 export interface WranglerD1Databases {
   topLevel: D1DatabaseEntry[];
+  preview: D1DatabaseEntry[];
   production: D1DatabaseEntry[];
 }
 

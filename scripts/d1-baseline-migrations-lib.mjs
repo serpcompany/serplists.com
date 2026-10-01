@@ -9,14 +9,19 @@ const d1DatabaseSchema = z.object({
 });
 
 const d1DatabasesSchema = z.array(d1DatabaseSchema).default([]);
+const environmentD1Schema = z.object({ d1_databases: d1DatabasesSchema }).default({});
 const wranglerD1Schema = z.object({
   d1_databases: d1DatabasesSchema,
-  env: z.object({ production: z.object({ d1_databases: d1DatabasesSchema }).default({}) }).default({}),
+  env: z.object({ preview: environmentD1Schema, production: environmentD1Schema }).default({}),
 });
 
 export function readD1Databases(toml) {
   const config = wranglerD1Schema.parse(parse(toml));
-  return { topLevel: config.d1_databases, production: config.env.production.d1_databases };
+  return {
+    topLevel: config.d1_databases,
+    preview: config.env.preview.d1_databases,
+    production: config.env.production.d1_databases,
+  };
 }
 
 function readArg(argv, name) {
