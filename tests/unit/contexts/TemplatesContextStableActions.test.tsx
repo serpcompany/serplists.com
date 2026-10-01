@@ -5,10 +5,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 
 import type { ChecklistRun, TemplatesContextProps } from '@/types/checklist';
 
-// Pages key effects on the context's actions: the run page reloads its run when updateRun
-// changes. The actions must keep their identity when the cached lists change (a share marks
-// the run public in them) or the active context switches, or an open run reloads and loses
-// its unsaved task notes.
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { settle } from '../../support/queryHookProbe';
 
 const workspace = vi.hoisted(() => ({ activeTeamId: undefined as string | undefined, scope: 'personal' }));
 
@@ -29,30 +27,11 @@ vi.mock('@/contexts/WorkspaceContext', () => ({
 import { TemplatesProvider, useTemplates } from '@/contexts/TemplatesContext';
 import { markRunShared, queryKeys } from '@/lib/queryCache';
 
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals();
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 afterEach(() => {
@@ -101,7 +80,7 @@ function mountProvider(queryClient: QueryClient) {
       </TemplatesProvider>
     </QueryClientProvider>
   );
-  root = createRoot(fakeContainer as unknown as Element);
+  root = createRoot(createFakeContainer() as unknown as Element);
   act(() => root?.render(tree()));
   return {
     context: () => {
@@ -112,7 +91,7 @@ function mountProvider(queryClient: QueryClient) {
   };
 }
 
-describe('TemplatesProvider actions', () => {
+describe('TemplatesProvider actions, which pages key effects on, so a new identity would reload an open run and lose its unsaved task notes', () => {
   it('keep their identity when a share marks the run public in the cached runs list', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['runs', 'user-1', 'personal'], [privateRun]);
@@ -123,8 +102,7 @@ describe('TemplatesProvider actions', () => {
 
     await act(async () => {
       await markRunShared(queryClient, 'run-1');
-      // Query updates reach observers on the next tick.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await settle();
     });
 
     expect(context().runs).not.toBe(runsBefore);
@@ -153,7 +131,7 @@ describe('TemplatesProvider actions', () => {
 });
 
 describe('TemplatesProvider markRunShared (the runs list Share)', () => {
-  it("marks the run shared and refreshes that run's Changelog, which the share wrote to", async () => {
+  it("marks the run shared and refreshes that run's Changelog, which the share wrote to, so a run page reopened within 60 seconds shows it", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(['runs', 'user-1', 'personal'], [privateRun]);
     const history = [...queryKeys.runHistory('run-1'), { limit: 8 }];
@@ -164,11 +142,10 @@ describe('TemplatesProvider markRunShared (the runs list Share)', () => {
 
     await act(async () => {
       context().markRunShared?.('run-1');
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await settle();
     });
 
     expect(context().runs[0].isPublic).toBe(true);
-    // Otherwise the run page, reopened within 60s, shows the Changelog without "Created share link".
     expect(queryClient.getQueryState(history)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(otherHistory)?.isInvalidated).toBe(false);
   });

@@ -40,12 +40,11 @@ const readTemplateListKeys = (): string[] => {
 };
 
 describe('useTemplateLists', () => {
-  it('exposes the lists through templates and allTemplates only', () => {
-    const keys = readTemplateListKeys();
+  it('exposes the lists through templates and allTemplates', () => {
+    expect(readTemplateListKeys()).toEqual(expect.arrayContaining(['templates', 'allTemplates', 'templatesLoading']));
+  });
 
-    expect(keys).toEqual(expect.arrayContaining(['templates', 'allTemplates', 'templatesLoading']));
-    // A raw workspace list invites using it as a lookup cache for one template, which
-    // serves stale copies; the detail page loads a template by id instead.
-    expect(keys).not.toContain('workspaceTemplates');
+  it('offers no raw workspace list, whose copy of one template could be stale, to look a template up in', () => {
+    expect(readTemplateListKeys()).not.toContain('workspaceTemplates');
   });
 });

@@ -18,19 +18,18 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-const { announceProfileChange } = vi.hoisted(() => ({ announceProfileChange: vi.fn() }));
+const { observedProfileAnnouncement } = vi.hoisted(() => ({ observedProfileAnnouncement: vi.fn() }));
 
-// The real session sync, with its profile-change announcement observed.
 vi.mock('@/contexts/sessionSync', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/contexts/sessionSync')>();
+  const realSessionSync = await importOriginal<typeof import('@/contexts/sessionSync')>();
   return {
-    ...actual,
-    createSessionSync: (...args: Parameters<typeof actual.createSessionSync>) => {
-      const sync = actual.createSessionSync(...args);
+    ...realSessionSync,
+    createSessionSync: (...args: Parameters<typeof realSessionSync.createSessionSync>) => {
+      const sync = realSessionSync.createSessionSync(...args);
       return {
         ...sync,
         announceProfileChange: (userId: string) => {
-          announceProfileChange(userId);
+          observedProfileAnnouncement(userId);
           sync.announceProfileChange(userId);
         },
       };
@@ -42,9 +41,7 @@ import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
 
 type AuthContextValue = ReturnType<typeof useAuth>;
 
-// Renders the provider once and hands back its actions; effects do not run in
-// a static render, so only the action being tested talks to the auth client.
-function renderAuth(): AuthContextValue {
+function authActionsFromAStaticRenderWithoutEffects(): AuthContextValue {
   let captured: AuthContextValue | undefined;
   function Capture() {
     captured = useAuth();
@@ -61,8 +58,7 @@ function renderAuth(): AuthContextValue {
   return captured;
 }
 
-// @better-fetch/fetch resolves a failed call as { data: null, error: { ...body, status, statusText } }.
-const routerRateLimit = {
+const rateLimitedByTheRouter = {
   data: null,
   error: { error: 'Too many requests', status: 429, statusText: '' },
 };
@@ -72,34 +68,32 @@ describe('AuthProvider actions', () => {
     signInEmail.mockReset();
     signUpEmail.mockReset();
     getSession.mockReset();
-    announceProfileChange.mockReset();
+    observedProfileAnnouncement.mockReset();
   });
 
-  // Other tabs of the same user re-read the session, so they show the new name or username
-  // instead of building links to a profile that no longer exists.
-  it('tells the other tabs after a profile refresh that found the user', async () => {
+  it('tells the other tabs after a profile refresh that found the user, so they re-read the session instead of linking to the old username', async () => {
     getSession.mockResolvedValue({
       data: { user: { id: 'user-1', email: 'person@example.com', username: 'person2' }, session: {} },
       error: null,
     });
 
-    await expect(renderAuth().refreshProfile()).resolves.toBe(true);
+    await expect(authActionsFromAStaticRenderWithoutEffects().refreshProfile()).resolves.toBe(true);
 
-    expect(announceProfileChange).toHaveBeenCalledWith('user-1');
+    expect(observedProfileAnnouncement).toHaveBeenCalledWith('user-1');
   });
 
   it('announces nothing when the profile refresh could not read the session', async () => {
     getSession.mockResolvedValue({ data: null, error: { status: 503 } });
 
-    await expect(renderAuth().refreshProfile()).resolves.toBe(false);
+    await expect(authActionsFromAStaticRenderWithoutEffects().refreshProfile()).resolves.toBe(false);
 
-    expect(announceProfileChange).not.toHaveBeenCalled();
+    expect(observedProfileAnnouncement).not.toHaveBeenCalled();
   });
 
   it('tells a rate-limited sign-in to wait instead of reporting a failed login', async () => {
-    signInEmail.mockResolvedValue(routerRateLimit);
+    signInEmail.mockResolvedValue(rateLimitedByTheRouter);
 
-    const result = await renderAuth().login('person@example.com', 'a-long-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().login('person@example.com', 'a-long-password-1');
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Too many attempts. Please wait a few minutes and try again.');
@@ -112,7 +106,7 @@ describe('AuthProvider actions', () => {
       error: { message: 'Too many requests', error: 'Too many requests', status: 429, retryAfterSeconds: 180 },
     });
 
-    const result = await renderAuth().login('person@example.com', 'a-long-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().login('person@example.com', 'a-long-password-1');
 
     expect(result.error).toBe('Too many attempts. Please try again in 3 minutes.');
   });
@@ -128,7 +122,7 @@ describe('AuthProvider actions', () => {
       },
     });
 
-    const result = await renderAuth().register('Person', 'person@example.com', 'a-long-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().register('Person', 'person@example.com', 'a-long-password-1');
 
     expect(result).toMatchObject({
       ok: false,
@@ -137,9 +131,9 @@ describe('AuthProvider actions', () => {
   });
 
   it('tells a rate-limited sign-up to wait', async () => {
-    signUpEmail.mockResolvedValue(routerRateLimit);
+    signUpEmail.mockResolvedValue(rateLimitedByTheRouter);
 
-    const result = await renderAuth().register('Person', 'person@example.com', 'a-long-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().register('Person', 'person@example.com', 'a-long-password-1');
 
     expect(result.error).toBe('Too many attempts. Please wait a few minutes and try again.');
   });
@@ -150,7 +144,7 @@ describe('AuthProvider actions', () => {
       error: { code: 'EMAIL_NOT_VERIFIED', message: 'Please verify your email', status: 403 },
     });
 
-    const result = await renderAuth().login('person@example.com', 'a-long-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().login('person@example.com', 'a-long-password-1');
 
     expect(result.errorCode).toBe('EMAIL_NOT_VERIFIED');
   });
@@ -161,7 +155,7 @@ describe('AuthProvider actions', () => {
       error: { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password', status: 401 },
     });
 
-    const result = await renderAuth().login('person@example.com', 'wrong-password-1');
+    const result = await authActionsFromAStaticRenderWithoutEffects().login('person@example.com', 'wrong-password-1');
 
     expect(result).toEqual({ ok: false, error: 'Invalid email or password', errorCode: 'UNKNOWN' });
   });

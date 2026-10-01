@@ -13,8 +13,7 @@ afterEach(() => {
   clients.splice(0).forEach((client) => client.clear());
 });
 
-// A page observing one key; resolves once its first load has landed.
-const observe = async (client: QueryClient, queryKey: QueryKey, data: unknown) => {
+const observeOnceLoaded = async (client: QueryClient, queryKey: QueryKey, data: unknown) => {
   const queryFn = vi.fn(async () => data);
   const observer = new QueryObserver(client, { queryKey, queryFn, retry: false });
   unsubscribers.push(observer.subscribe(() => {}));
@@ -23,28 +22,23 @@ const observe = async (client: QueryClient, queryKey: QueryKey, data: unknown) =
   return queryFn;
 };
 
-// Deleting from the detail page ran while that page still observed the template, so the
-// ['templates'] invalidation refetched it: a GET that can only 404, whose null answer then
-// stayed cached and made the template read "not found" right after a restore.
 describe('refreshAfterTemplateDelete', () => {
-  it('does not refetch the archived template the page still shows, but reloads the lists', async () => {
+  it('does not refetch the archived template the page still shows, whose 404 would read as not found after a restore, leaves it stale for the next visit, and reloads the lists', async () => {
     const client = new QueryClient();
     clients.push(client);
-    const detail = await observe(client, getTemplateDetailQueryKey('t1', 'u1'), { id: 't1' });
-    // The page opened by slug: the key holds the slug, the data holds the id.
-    const bySlug = await observe(client, getTemplateDetailQueryKey('launch-qa', 'u1'), { id: 't1' });
-    const history = await observe(client, queryKeys.templateHistoryFor('t1', 'u1'), []);
-    const otherDetail = await observe(client, getTemplateDetailQueryKey('t2', 'u1'), { id: 't2' });
-    const list = await observe(client, ['templates', 'u1', 'personal'], []);
+    const detail = await observeOnceLoaded(client, getTemplateDetailQueryKey('t1', 'u1'), { id: 't1' });
+    const openedBySlug = await observeOnceLoaded(client, getTemplateDetailQueryKey('launch-qa', 'u1'), { id: 't1' });
+    const history = await observeOnceLoaded(client, queryKeys.templateHistoryFor('t1', 'u1'), []);
+    const otherDetail = await observeOnceLoaded(client, getTemplateDetailQueryKey('t2', 'u1'), { id: 't2' });
+    const list = await observeOnceLoaded(client, ['templates', 'u1', 'personal'], []);
 
     refreshAfterTemplateDelete(client, 't1');
 
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(otherDetail).toHaveBeenCalledTimes(1));
     expect(detail).not.toHaveBeenCalled();
-    expect(bySlug).not.toHaveBeenCalled();
+    expect(openedBySlug).not.toHaveBeenCalled();
     expect(history).not.toHaveBeenCalled();
-    // Still stale, so a later visit (after a restore) loads them again.
     expect(client.getQueryState(getTemplateDetailQueryKey('t1', 'u1'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(getTemplateDetailQueryKey('launch-qa', 'u1'))?.isInvalidated).toBe(true);
     expect(client.getQueryState(queryKeys.templateHistoryFor('t1', 'u1'))?.isInvalidated).toBe(true);

@@ -44,9 +44,7 @@ describe('delete refreshes', () => {
     client.clear();
   });
 
-  // The edge cache can still answer with the pre-delete catalog for 5 minutes, so the
-  // patched copy must stay fresh: a refetch would put the deleted Template back.
-  it('keeps the patched catalog fresh when a Template is deleted, and still marks the other lists stale', () => {
+  it('keeps the patched catalog fresh when a Template is deleted, since the edge cache can still answer with the pre-delete catalog, and still marks the other lists stale', () => {
     const client = new QueryClient();
     client.setQueryData(['templates', 'catalog'], [{ id: 'deleted' }, { id: 'kept' }]);
     client.setQueryData(['templates', 'user-1', 'personal'], [{ id: 'deleted' }]);
@@ -62,11 +60,10 @@ describe('delete refreshes', () => {
   it('does not refetch a catalog a page is showing when a Template is deleted', async () => {
     const client = new QueryClient();
     client.setQueryData(['templates', 'catalog'], [{ id: 'deleted' }, { id: 'kept' }]);
-    // What the edge cache answers until its copy expires.
-    const queryFn = vi.fn().mockResolvedValue([{ id: 'deleted' }, { id: 'kept' }]);
+    const edgeCopyStillListingTheDeletedTemplate = vi.fn().mockResolvedValue([{ id: 'deleted' }, { id: 'kept' }]);
     const observer = new QueryObserver(client, {
       queryKey: ['templates', 'catalog'],
-      queryFn,
+      queryFn: edgeCopyStillListingTheDeletedTemplate,
       staleTime: 5 * 60 * 1000,
     });
     const unsubscribe = observer.subscribe(() => undefined);
@@ -74,7 +71,7 @@ describe('delete refreshes', () => {
     refreshAfterTemplateDelete(client, 'deleted');
     await vi.waitFor(() => expect(client.isFetching()).toBe(0));
 
-    expect(queryFn).not.toHaveBeenCalled();
+    expect(edgeCopyStillListingTheDeletedTemplate).not.toHaveBeenCalled();
     expect(client.getQueryData(['templates', 'catalog'])).toEqual([{ id: 'kept' }]);
     unsubscribe();
     client.clear();

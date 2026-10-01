@@ -6,30 +6,28 @@ import {
   type SessionCheck,
 } from '@/contexts/authSession';
 
-// Better Auth 1.3.4's /sign-in/email answers with a partial user: id, email, name, image,
-// emailVerified and dates, but no username. Only /get-session returns the full user.
-const signInData = {
+const signInResponseWithoutUsername = {
   redirect: false,
   token: 'session-token',
   user: { id: 'user-john', email: 'john@test.com', name: 'John' },
 };
-const fullUser = { id: 'user-john', email: 'john@test.com', name: 'John', username: 'john' };
-const fullSession: SessionCheck = {
+const sessionUserWithUsername = { id: 'user-john', email: 'john@test.com', name: 'John', username: 'john' };
+const sessionReadWithUsername: SessionCheck = {
   kind: 'authenticated',
-  user: fullUser,
-  session: { user: fullUser, session: { id: 'session-1' } },
+  user: sessionUserWithUsername,
+  session: { user: sessionUserWithUsername, session: { id: 'session-1' } },
 };
 
 describe('resolveSignInSession', () => {
   it('stores the session user, which has the username the sign-in response leaves out', async () => {
-    const readSession = vi.fn(async () => fullSession);
+    const readSession = vi.fn(async () => sessionReadWithUsername);
 
-    const outcome = await resolveSignInSession(signInData, readSession);
+    const outcome = await resolveSignInSession(signInResponseWithoutUsername, readSession);
 
     expect(readSession).toHaveBeenCalledTimes(1);
     expect(outcome.result).toEqual({ ok: true });
     expect(outcome.sessionToStore).toMatchObject({ kind: 'authenticated', user: { username: 'john' } });
-    expect(outcome.sessionToStore).toEqual(fullSession);
+    expect(outcome.sessionToStore).toEqual(sessionReadWithUsername);
   });
 
   it.each([
@@ -37,7 +35,7 @@ describe('resolveSignInSession', () => {
     ['throws', async (): Promise<SessionCheck> => { throw new Error('offline'); }],
     ['has no user yet', async (): Promise<SessionCheck> => ({ kind: 'unauthenticated' })],
   ])('keeps the sign-in user when the session %s, since the sign-in itself worked', async (_name, readSession) => {
-    const outcome = await resolveSignInSession(signInData, readSession);
+    const outcome = await resolveSignInSession(signInResponseWithoutUsername, readSession);
 
     expect(outcome.result).toEqual({ ok: true });
     expect(outcome.sessionToStore).toMatchObject({ kind: 'authenticated', user: { id: 'user-john', email: 'john@test.com' } });

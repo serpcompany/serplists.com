@@ -13,16 +13,12 @@ import {
   type SessionSyncEnvironment,
 } from '@/contexts/sessionSync';
 
-// Every tab of the browser sends the same session cookie. When another tab signs in as someone
-// else, or signs out, this tab must find out before it shows or writes anything as the old user.
-
 const alice = { id: 'user-alice', email: 'alice@example.com' };
 const bob = { id: 'user-bob', email: 'bob@example.com' };
 const signedInAs = (user: typeof alice): SessionState => ({ user, session: { user }, status: 'authenticated' });
 const signedInCheck = (user: typeof alice): SessionCheck => ({ kind: 'authenticated', user, session: { user } });
 
-// BroadcastChannel delivers a message to every other channel with the same name, never the sender.
-function createChannelHub() {
+function createBroadcastChannelHub() {
   const channels = new Map<SessionSyncChannel, (data: unknown) => void>();
   const open = (): SessionSyncChannel => {
     const channel: SessionSyncChannel = {
@@ -40,8 +36,7 @@ function createChannelHub() {
   return { open, channels };
 }
 
-// localStorage fires a storage event in every other tab when a value is written.
-function createStorageHub() {
+function createStorageEventHub() {
   const listeners = new Set<(key: string | null, value: string | null) => void>();
   return {
     listeners,
@@ -76,15 +71,15 @@ function createTab(options: {
   const sync = createSessionSync({
     readSession,
     initialState: state,
-    setState: (update) => {
-      state = update(state);
-      // As AuthProvider does once React shows the new state.
-      sync.observe(state);
-    },
+    setState: (update) => showAndObserveAsAuthProviderDoes(update(state)),
     notify,
     now: options.now,
     beforeSessionLost: options.beforeSessionLost && (() => options.beforeSessionLost?.(state)),
   });
+  function showAndObserveAsAuthProviderDoes(next: SessionState) {
+    state = next;
+    sync.observe(next);
+  }
   const environment = (overrides: Partial<SessionSyncEnvironment> = {}): SessionSyncEnvironment => ({
     openChannel: () => null,
     writeStorage: () => {},
@@ -111,16 +106,15 @@ function createTab(options: {
     state: () => state,
     showTab: () => visible.forEach((listener) => listener()),
     restoreFromCache: () => restored.forEach((listener) => listener()),
-    // An API request came back 401.
-    receive401: () => unauthorized.forEach((listener) => listener()),
+    answerAnApiRequestWith401: () => unauthorized.forEach((listener) => listener()),
   };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-describe('session sync across tabs', () => {
-  it('switches a tab signed in as Alice to Bob when another tab signs in as Bob', async () => {
-    const hub = createChannelHub();
+describe('session sync across tabs, which share one session cookie', () => {
+  it('switches a tab signed in as Alice to Bob when another tab signs in as Bob, while the announcing tab reads nothing', async () => {
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
     const tab2 = createTab({ state: signedInAs(bob) });
     tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
@@ -132,12 +126,11 @@ describe('session sync across tabs', () => {
     expect(tab1.readSession).toHaveBeenCalledTimes(1);
     expect(tab1.state()).toMatchObject({ user: bob, status: 'authenticated' });
     expect(tab1.notify).toHaveBeenCalledWith(expect.stringContaining(bob.email));
-    // The report is only a hint: the tab that announced does not re-read its own session.
     expect(tab2.readSession).not.toHaveBeenCalled();
   });
 
   it('signs a tab out when another tab signs out', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }] });
     const tab2 = createTab({ state: signedInAs(alice) });
     tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
@@ -151,7 +144,7 @@ describe('session sync across tabs', () => {
   });
 
   it('ignores a report naming the user it already has, and reports while it is still loading', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice) });
     const loading = createTab({ state: { user: null, session: null, status: 'loading' } });
     const tab2 = createTab({ state: signedInAs(alice) });
@@ -165,7 +158,7 @@ describe('session sync across tabs', () => {
   });
 
   it('keeps the current user, and the same state object, when the check fails or finds the same user', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unknown', status: 503 }, signedInCheck(alice)] });
     const tab2 = createTab({ state: signedInAs(bob) });
     tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
@@ -183,7 +176,7 @@ describe('session sync across tabs', () => {
   });
 
   it('checks once more after a running check, since that one may have read the old session', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const pending: Array<(check: SessionCheck) => void> = [];
     const tab1 = createTab({
       state: signedInAs(alice),
@@ -209,23 +202,22 @@ describe('session sync across tabs', () => {
   });
 
   it('drops a session answer that started before a newer one was applied', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
     const tab2 = createTab({ state: signedInAs(bob) });
     tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
     tab2.sync.connect(tab2.environment({ openChannel: hub.open }));
 
-    // The first page-load check is still out when the other tab's sign-in arrives.
-    const initialLoad = tab1.sync.beginRead();
+    const pageLoadCheckStillOut = tab1.sync.beginRead();
     tab2.sync.announce(bob.id);
     await flush();
 
     expect(tab1.state().user).toEqual(bob);
-    expect(tab1.sync.acceptRead(initialLoad)).toBe(false);
+    expect(tab1.sync.acceptRead(pageLoadCheckStillOut)).toBe(false);
   });
 
   it('does not let a failed re-check drop an older answer that is still coming', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: { user: null, session: null, status: 'unavailable' }, answers: [{ kind: 'unknown' }] });
     const tab2 = createTab({ state: signedInAs(bob) });
     tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
@@ -241,7 +233,7 @@ describe('session sync across tabs', () => {
 
   it('lets a sign-in or sign-out in this tab win over a check still in flight', async () => {
     let resolveCheck: (check: SessionCheck) => void = () => {};
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({
       state: signedInAs(alice),
       readSession: () => new Promise<SessionCheck>((resolve) => { resolveCheck = resolve; }),
@@ -259,7 +251,7 @@ describe('session sync across tabs', () => {
   });
 
   it('falls back to storage events when BroadcastChannel is missing, and ignores malformed values', async () => {
-    const storage = createStorageHub();
+    const storage = createStorageEventHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
     const tab2 = createTab({ state: signedInAs(bob) });
     tab1.sync.connect(tab1.environment(storage.environment()));
@@ -308,7 +300,7 @@ describe('session sync across tabs', () => {
   });
 
   it('stops listening and closes its channel when disconnected', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)] });
     const tab2 = createTab({ state: signedInAs(bob) });
     const disconnect = tab1.sync.connect(tab1.environment({ openChannel: hub.open }));
@@ -324,14 +316,12 @@ describe('session sync across tabs', () => {
   });
 });
 
-// The session can also end on the server: it expires, or the user signs out other sessions or
-// changes their password on another device. Every request then gets a 401.
-describe('session sync after a 401', () => {
+describe('session sync after a 401, which every request gets once the server ended the session on its own', () => {
   it('signs the tab out when the server confirms the session is gone', async () => {
     const tab = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }] });
     tab.sync.connect(tab.environment());
 
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
     await flush();
 
     expect(tab.state()).toEqual({ user: null, session: null, status: 'unauthenticated' });
@@ -343,9 +333,9 @@ describe('session sync after a 401', () => {
     tab.sync.connect(tab.environment());
     const before = tab.state();
 
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
     await flush();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flush();
 
     expect(tab.state()).toBe(before);
     expect(tab.notify).not.toHaveBeenCalled();
@@ -361,17 +351,17 @@ describe('session sync after a 401', () => {
     });
     tab.sync.connect(tab.environment());
 
-    tab.receive401();
-    tab.receive401();
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
+    tab.answerAnApiRequestWith401();
+    tab.answerAnApiRequestWith401();
     resolveCheck(signedInCheck(alice));
     await flush();
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
     await flush();
     expect(tab.readSession).toHaveBeenCalledTimes(1);
 
     now += SESSION_UNAUTHORIZED_RECHECK_INTERVAL_MS;
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
     expect(tab.readSession).toHaveBeenCalledTimes(2);
   });
 
@@ -380,7 +370,7 @@ describe('session sync after a 401', () => {
     tab.sync.connect(tab.environment());
     tab.sync.claim();
 
-    tab.receive401();
+    tab.answerAnApiRequestWith401();
     await flush();
 
     expect(tab.state().status).toBe('unauthenticated');
@@ -391,8 +381,8 @@ describe('session sync after a 401', () => {
     const loading = createTab({ state: { user: null, session: null, status: 'loading' } });
     [signedOut, loading].forEach((tab) => tab.sync.connect(tab.environment()));
 
-    signedOut.receive401();
-    loading.receive401();
+    signedOut.answerAnApiRequestWith401();
+    loading.answerAnApiRequestWith401();
     await flush();
 
     expect(signedOut.readSession).not.toHaveBeenCalled();
@@ -400,9 +390,7 @@ describe('session sync after a 401', () => {
   });
 });
 
-// Only get-session extends a session and resends its cookie, so an open tab must read it now
-// and then. Focus and a timer ask keepAlive(), which reads at most once per interval.
-describe('session keep-alive', () => {
+describe('session keep-alive, the only read that extends the session and resends its cookie', () => {
   it('reads the session once per interval, however often the tab regains focus', async () => {
     let now = 1_000_000;
     const tab = createTab({
@@ -473,12 +461,9 @@ describe('session keep-alive', () => {
   });
 });
 
-// A background sign-out (another tab signed out, the session expired or was revoked) unmounts
-// every signed-in page without asking. Pages with unsaved work keep it first, while the tab
-// still shows the user who typed it (src/lib/navigation/leaveGuard.ts).
-describe('keeping unsaved work before a background session change', () => {
+describe('keeping unsaved work before a background session change, while the tab still shows the user who typed it', () => {
   it("runs before another tab's sign-out signs this tab out", async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
     const tab1 = createTab({ state: signedInAs(alice), answers: [{ kind: 'unauthenticated' }], beforeSessionLost });
     const tab2 = createTab({ state: signedInAs(alice) });
@@ -497,7 +482,7 @@ describe('keeping unsaved work before a background session change', () => {
     let now = 1_000_000;
     const beforeSessionLost = vi.fn();
     const signOuts = [
-      (tab: ReturnType<typeof createTab>) => tab.receive401(),
+      (tab: ReturnType<typeof createTab>) => tab.answerAnApiRequestWith401(),
       (tab: ReturnType<typeof createTab>) => tab.showTab(),
       (tab: ReturnType<typeof createTab>) => tab.restoreFromCache(),
       (tab: ReturnType<typeof createTab>) => {
@@ -523,7 +508,7 @@ describe('keeping unsaved work before a background session change', () => {
   });
 
   it('runs before the tab switches to a user another tab signed in as', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
     const tab1 = createTab({ state: signedInAs(alice), answers: [signedInCheck(bob)], beforeSessionLost });
     const tab2 = createTab({ state: signedInAs(bob) });
@@ -538,7 +523,7 @@ describe('keeping unsaved work before a background session change', () => {
   });
 
   it('does not run when the check fails, finds the same user, or the tab is already signed out', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
     const signedIn = createTab({
       state: signedInAs(alice),
@@ -565,7 +550,7 @@ describe('keeping unsaved work before a background session change', () => {
 
   it('does not run for an answer that a sign-in or sign-out in this tab replaced', async () => {
     let resolveCheck: (check: SessionCheck) => void = () => {};
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const beforeSessionLost = vi.fn();
     const tab1 = createTab({
       state: signedInAs(alice),
@@ -585,10 +570,7 @@ describe('keeping unsaved work before a background session change', () => {
   });
 });
 
-// A profile change (a rename, a new avatar) made in another tab reaches this tab through its
-// session re-checks. The share links and the account menu's Profile link are built from the
-// session's username, so a stale one points at a profile that no longer exists.
-describe('profile changes made in another tab', () => {
+describe('profile changes made in another tab, which reach this tab through its session re-checks', () => {
   const aliceProfile = { id: 'user-alice', email: 'alice@example.com', name: 'Alice', username: 'alice', image: null };
 
   it('replaces the user when the same account comes back with a changed profile', () => {
@@ -617,9 +599,7 @@ describe('profile changes made in another tab', () => {
     ).toBe(current);
   });
 
-  // After a sign-in whose session read failed, the tab holds the sign-in response's user,
-  // which has no username; the next check completes it.
-  it('completes a partial sign-in user', () => {
+  it('completes the username-less user a sign-in kept when its session read failed', () => {
     const partial = { id: 'user-alice', email: 'alice@example.com', name: 'Alice' };
     const current: SessionState = { user: partial, session: {}, status: 'authenticated' };
 
@@ -642,7 +622,7 @@ describe('profile changes made in another tab', () => {
   });
 
   it('re-reads the session when another tab of the same user announces a profile change', async () => {
-    const hub = createChannelHub();
+    const hub = createBroadcastChannelHub();
     const renamed = { ...aliceProfile, username: 'alice2' };
     const tab1 = createTab({
       state: { user: aliceProfile, session: {}, status: 'authenticated' },
@@ -661,7 +641,7 @@ describe('profile changes made in another tab', () => {
   });
 
   it('carries the profile change over the storage fallback too', async () => {
-    const storage = createStorageHub();
+    const storage = createStorageEventHub();
     const tab1 = createTab({
       state: { user: aliceProfile, session: {}, status: 'authenticated' },
       answers: [{ kind: 'authenticated', user: { ...aliceProfile, name: 'Alice Smith' }, session: {} }],
@@ -677,8 +657,6 @@ describe('profile changes made in another tab', () => {
   });
 });
 
-// The keep-alive only works if something asks it: a signed-in tab asks when it regains focus
-// and on a timer while it stays visible (AuthProvider starts this while signed in).
 describe('starting the session keep-alive', () => {
   afterEach(() => {
     vi.useRealTimers();

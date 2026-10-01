@@ -10,19 +10,21 @@ import {
   type SessionState,
 } from '@/contexts/authSession';
 
-// Better Auth's getSession resolves every failure as { data: null, error } (status 0 when the
-// network failed), and a signed-out visitor as a 200 with a null body: { data: null, error: null }.
 const user = { id: 'user-1', email: 'user@example.com', name: 'User One' };
 const signedIn: SessionState = { user, session: { user }, status: 'authenticated' };
-const signedOut: SessionState = { user: null, session: null, status: 'loading' };
+const beforeTheFirstCheck: SessionState = { user: null, session: null, status: 'loading' };
+
+const DROPPED_CONNECTION_STATUS = 0;
+const failedGetSession = (status: number): AuthClientResult => ({ data: null, error: { status } });
+const getSessionWithNoSession: AuthClientResult = { data: null, error: null };
 
 describe('classifySessionResult', () => {
   it.each([
     ['a server error', 503],
     ['the auth rate limit', 429],
-    ['a dropped connection', 0],
+    ['a dropped connection', DROPPED_CONNECTION_STATUS],
   ])('does not read %s as signed out', (_name, status) => {
-    expect(classifySessionResult({ data: null, error: { status } })).toEqual({ kind: 'unknown', status });
+    expect(classifySessionResult(failedGetSession(status))).toEqual({ kind: 'unknown', status });
   });
 
   it('reads a missing result as unknown', () => {
@@ -30,8 +32,8 @@ describe('classifySessionResult', () => {
   });
 
   it.each([
-    ['no session', { data: null, error: null }],
-    ['a rejected session refresh', { data: null, error: { status: 401 } }],
+    ['no session', getSessionWithNoSession],
+    ['a rejected session refresh', failedGetSession(401)],
   ])('reads %s as signed out', (_name, result) => {
     expect(classifySessionResult(result)).toEqual({ kind: 'unauthenticated' });
   });
@@ -50,7 +52,7 @@ describe('applySessionCheck', () => {
   });
 
   it('reports the session as unavailable, not signed out, when the first check fails', () => {
-    expect(applySessionCheck({ kind: 'unknown', status: 503 }, signedOut)).toEqual({
+    expect(applySessionCheck({ kind: 'unknown', status: 503 }, beforeTheFirstCheck)).toEqual({
       user: null,
       session: null,
       status: 'unavailable',
@@ -71,8 +73,8 @@ describe('checkSessionWithRetry', () => {
 
   it('retries an unknown answer and returns the session once the server answers', async () => {
     const answers: AuthClientResult[] = [
-      { data: null, error: { status: 503 } },
-      { data: null, error: { status: 0 } },
+      failedGetSession(503),
+      failedGetSession(DROPPED_CONNECTION_STATUS),
       { data: { user, session: {} }, error: null },
     ];
     const getSession = vi.fn(async () => answers.shift());
@@ -86,7 +88,7 @@ describe('checkSessionWithRetry', () => {
   it('retries a rate-limited check and a failed request, and keeps the user signed in', async () => {
     const getSession = vi
       .fn<() => Promise<AuthClientResult>>()
-      .mockResolvedValueOnce({ data: null, error: { status: 429 } })
+      .mockResolvedValueOnce(failedGetSession(429))
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce({ data: { user, session: {} }, error: null });
 
@@ -97,7 +99,7 @@ describe('checkSessionWithRetry', () => {
   });
 
   it('reports the last failure as unknown after waiting out each retry delay', async () => {
-    const getSession = vi.fn(async (): Promise<AuthClientResult> => ({ data: null, error: { status: 503 } }));
+    const getSession = vi.fn(async (): Promise<AuthClientResult> => failedGetSession(503));
     const delays = vi.fn(async (_ms: number) => {});
 
     await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait: delays })).resolves.toEqual({
@@ -117,7 +119,7 @@ describe('checkSessionWithRetry', () => {
   });
 
   it('does not retry a confirmed signed-out answer', async () => {
-    const getSession = vi.fn(async () => ({ data: null, error: null }));
+    const getSession = vi.fn(async () => getSessionWithNoSession);
 
     await expect(checkSessionWithRetry(getSession, { retryDelaysMs: [10, 20], wait })).resolves.toEqual({
       kind: 'unauthenticated',

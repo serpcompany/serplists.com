@@ -5,10 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
 
-// A template save must not wait for (or cause) a reload of the whole workspace list: the PUT
-// answer carries the version the next save needs, and pages that show the list reload it
-// when they mount.
-
 const apiMock = vi.hoisted(() => ({ updateTemplate: vi.fn() }));
 
 vi.mock('@/lib/api', () => ({ api: apiMock }));
@@ -66,22 +62,20 @@ describe('updateTemplate', () => {
     apiMock.updateTemplate.mockReset();
   });
 
-  it('resolves with the stored version without reloading the workspace list', async () => {
+  it('resolves with the stored version without reloading the workspace list, leaving it stale for the pages that show it', async () => {
     apiMock.updateTemplate.mockResolvedValue({ version: 4, slug: 'launch-checklist' });
     const { client, context } = renderProvider();
-    // A page is showing the workspace list; the list request never answers.
-    const listFetch = vi.fn(() => new Promise<ChecklistTemplate[]>(() => {}));
+    const listRequestThatNeverAnswers = vi.fn(() => new Promise<ChecklistTemplate[]>(() => {}));
     const unsubscribe = new QueryObserver(client, {
       queryKey: ['templates', 'user-1', 'personal'],
-      queryFn: listFetch,
+      queryFn: listRequestThatNeverAnswers,
       staleTime: 5 * 60 * 1000,
     }).subscribe(() => {});
 
     const outcome = await settledWithin(context.updateTemplate({ ...template, title: 'Launch Checklist v2' }), 200);
 
     expect(outcome).toEqual({ value: { version: 4, slug: 'launch-checklist' } });
-    expect(listFetch).not.toHaveBeenCalled();
-    // Pages that show the list reload it when they mount.
+    expect(listRequestThatNeverAnswers).not.toHaveBeenCalled();
     expect(client.getQueryState(['templates', 'user-1', 'personal'])?.isInvalidated).toBe(true);
     unsubscribe();
   });

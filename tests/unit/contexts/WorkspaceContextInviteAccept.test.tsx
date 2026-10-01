@@ -5,10 +5,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type { TeamSummary } from '@/lib/api';
 
-// Accepting an invite link adds the joined Organization to the teams cache. When the teams
-// request had failed (no list yet), that write invented a one-team list, which read as a
-// settled server list without the stored Organization, and the tab dropped to Personal:
-// only a settled, successful list may rule out the stored Organization.
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 
 const apiMocks = vi.hoisted(() => ({ createTeam: vi.fn(), getTeams: vi.fn() }));
 
@@ -33,30 +31,11 @@ const team = (id: string, name: string): TeamSummary => ({
 const joined = team('team-x', 'Joined Org');
 const stored = team('team-y', 'Stored Org');
 
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals();
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 
@@ -71,14 +50,6 @@ afterEach(() => {
   safeLocalStorage.removeItem(STORAGE_KEY);
 });
 
-// React Query notifies observers on a timer; let every pending update land.
-const settle = () =>
-  act(async () => {
-    for (let tick = 0; tick < 5; tick += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  });
-
 async function mountWorkspace() {
   let value: ReturnType<typeof useWorkspace> | undefined;
   const Probe = () => {
@@ -86,7 +57,7 @@ async function mountWorkspace() {
     return null;
   };
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  root = createRoot(fakeContainer as unknown as Element);
+  root = createRoot(createFakeContainer() as unknown as Element);
   act(() =>
     root?.render(
       <QueryClientProvider client={queryClient}>
@@ -96,7 +67,7 @@ async function mountWorkspace() {
       </QueryClientProvider>,
     ),
   );
-  await settle();
+  await letQueryUpdatesReachObservers();
   return {
     queryClient,
     workspace: () => {
@@ -114,26 +85,32 @@ const acceptInvite = async (workspace: ReturnType<typeof useWorkspace>) => {
       rememberTeam: workspace.rememberTeam,
     });
   });
-  await settle();
+  await letQueryUpdatesReachObservers();
 };
 
-describe('accepting an invite link after the teams request failed', () => {
-  it('keeps the stored Organization unconfirmed, not Personal, when the refresh fails too', async () => {
+describe('accepting an invite link after the teams request failed, when only a settled server list may rule out the stored Organization', () => {
+  const acceptWhileTheTeamsRequestKeepsFailing = async () => {
     apiMocks.getTeams.mockRejectedValue(new Error('Teams unavailable'));
-    const { queryClient, workspace } = await mountWorkspace();
-    expect(workspace().workspaceStatus).toBe('error');
+    const tab = await mountWorkspace();
+    expect(tab.workspace().workspaceStatus).toBe('error');
+    await acceptInvite(tab.workspace());
+    return tab;
+  };
 
-    await acceptInvite(workspace());
+  it('keeps the stored Organization unconfirmed, not Personal, and caches no list the server never sent, when the refresh fails too', async () => {
+    const { queryClient, workspace } = await acceptWhileTheTeamsRequestKeepsFailing();
 
     expect(workspace().workspaceStatus).toBe('error');
     expect(workspace().teams.map(({ id }) => id)).toEqual([joined.id]);
-    // No list was read from the server, so none is cached.
     expect(queryClient.getQueryData(['teams', 'user-1'])).toBeUndefined();
+  });
 
-    // Once the teams request works, the tab is in its stored Organization.
+  it('opens the stored Organization once the teams request works again', async () => {
+    const { workspace } = await acceptWhileTheTeamsRequestKeepsFailing();
+
     apiMocks.getTeams.mockResolvedValue([joined, stored]);
     act(() => workspace().retryWorkspace());
-    await settle();
+    await letQueryUpdatesReachObservers();
 
     expect(workspace().workspaceStatus).toBe('ready');
     expect(workspace().activeWorkspaceId).toBe(stored.id);

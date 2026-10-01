@@ -6,6 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { TeamSummary } from '@/lib/api';
 
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { letQueryUpdatesReachObservers } from '../../support/queryNotifications';
 
 const { getTeams } = vi.hoisted(() => ({ getTeams: vi.fn() }));
 const signedIn = vi.hoisted(() => ({ userId: 'user-1' }));
@@ -24,11 +25,6 @@ const organization = (id: string): TeamSummary => ({
   name: `Organization ${id}`,
   role: 'owner',
 });
-
-const settleQueries = () =>
-  act(async () => {
-    for (let tick = 0; tick < 5; tick += 1) await new Promise((resolve) => setTimeout(resolve, 0));
-  });
 
 let restoreGlobals: () => void = () => undefined;
 
@@ -65,7 +61,7 @@ async function withWorkspace(
       ),
     );
   rerender();
-  await settleQueries();
+  await letQueryUpdatesReachObservers();
   try {
     await test({
       rerender,
@@ -89,7 +85,7 @@ describe('Organizations remembered in this tab', () => {
 
       getTeams.mockResolvedValue([organization('listed')]);
       act(() => workspace().retryWorkspace());
-      await settleQueries();
+      await letQueryUpdatesReachObservers();
 
       expect(teamIdsOf(workspace())).toEqual(['listed']);
     }));
@@ -101,7 +97,7 @@ describe('Organizations remembered in this tab', () => {
 
       signedIn.userId = 'user-2';
       rerender();
-      await settleQueries();
+      await letQueryUpdatesReachObservers();
 
       expect(teamIdsOf(workspace())).toEqual([]);
     }));

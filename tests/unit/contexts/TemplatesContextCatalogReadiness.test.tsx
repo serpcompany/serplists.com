@@ -5,11 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistTemplate } from '@/types/checklist';
 
-// The public library, category and search pages read only the catalog. Its key has no user or
-// context, so a failed teams request (workspaceStatus 'error') must not keep it from loading:
-// those pages sit outside the console's WorkspaceGate and would silently show only the bundled
-// starters.
-
 const state = vi.hoisted(() => ({
   isAuthLoading: false,
   workspaceStatus: 'error' as 'ready' | 'loading' | 'error',
@@ -68,7 +63,7 @@ function renderLibraryLists() {
   return lists;
 }
 
-describe('catalog-only pages while the Organizations are unresolved', () => {
+describe('catalog-only pages (the public library, categories and search) while the Organizations are unresolved', () => {
   beforeEach(() => {
     state.isAuthLoading = false;
     state.workspaceStatus = 'error';
@@ -78,7 +73,7 @@ describe('catalog-only pages while the Organizations are unresolved', () => {
     clients.splice(0).forEach((client) => client.clear());
   });
 
-  it.each(['error', 'loading'] as const)('shows the catalog when workspaceStatus is %s', (status) => {
+  it.each(['error', 'loading'] as const)('shows the catalog when workspaceStatus is %s, since its key names no user or context', (status) => {
     state.workspaceStatus = status;
     const lists = renderLibraryLists();
 

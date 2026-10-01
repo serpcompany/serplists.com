@@ -3,16 +3,23 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// Only GET /api/auth/get-session extends a session, so a signed-in tab left open must keep
-// asking the keep-alive (sessionSync.ts). AuthProvider starts it once signed in and stops it
-// on sign-out; without that wiring the session expires while the user is still active.
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { settle } from '../../support/queryHookProbe';
 
-const { getSession, keepAlive, signOut, startSessionKeepAlive, stopKeepAlive } = vi.hoisted(() => ({
+const { getSession, keepAlive, signOut, startSessionKeepAlive, stopKeepAlive, withoutBrowserListeners } = vi.hoisted(() => ({
   getSession: vi.fn(),
   keepAlive: vi.fn(),
   signOut: vi.fn(),
   startSessionKeepAlive: vi.fn(),
   stopKeepAlive: vi.fn(),
+  withoutBrowserListeners: {
+    openChannel: () => null,
+    writeStorage: () => {},
+    onStorage: () => () => {},
+    onVisible: () => () => {},
+    onRestored: () => () => {},
+    onUnauthorized: () => () => {},
+  },
 }));
 
 vi.mock('@/lib/auth-client', () => ({
@@ -24,54 +31,26 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-// The real session sync, without the browser listeners (there is no DOM here), with its
-// keepAlive replaced by a spy and the keep-alive starter observed.
 vi.mock('@/contexts/sessionSync', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/contexts/sessionSync')>();
+  const realSessionSync = await importOriginal<typeof import('@/contexts/sessionSync')>();
   return {
-    ...actual,
-    createSessionSync: (...args: Parameters<typeof actual.createSessionSync>) => ({
-      ...actual.createSessionSync(...args),
+    ...realSessionSync,
+    createSessionSync: (...args: Parameters<typeof realSessionSync.createSessionSync>) => ({
+      ...realSessionSync.createSessionSync(...args),
       keepAlive,
     }),
-    browserSessionSyncEnvironment: () => ({
-      openChannel: () => null,
-      writeStorage: () => {},
-      onStorage: () => () => {},
-      onVisible: () => () => {},
-      onRestored: () => () => {},
-      onUnauthorized: () => () => {},
-    }),
+    browserSessionSyncEnvironment: () => withoutBrowserListeners,
     startSessionKeepAlive,
   };
 });
 
 import { AuthProvider, useAuth } from '@/contexts/CloudflareAuthContext';
 
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void = () => {};
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals();
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 afterEach(() => {
@@ -80,15 +59,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
 async function mountAuth() {
   let auth: ReturnType<typeof useAuth> | undefined;
   function Probe() {
     auth = useAuth();
     return null;
   }
-  root = createRoot(fakeContainer as unknown as Element);
+  root = createRoot(createFakeContainer() as unknown as Element);
   await act(async () => {
     root?.render(
       <QueryClientProvider client={new QueryClient()}>
@@ -97,7 +74,7 @@ async function mountAuth() {
         </AuthProvider>
       </QueryClientProvider>,
     );
-    await flush();
+    await settle();
   });
   return () => {
     if (!auth) throw new Error('AuthProvider did not render');
@@ -105,8 +82,8 @@ async function mountAuth() {
   };
 }
 
-describe('AuthProvider session keep-alive', () => {
-  it('starts the keep-alive once signed in and stops it on sign-out', async () => {
+describe('AuthProvider session keep-alive, without which a session expires while the user is still active', () => {
+  it("starts the session sync's own keepAlive once signed in and stops it on sign-out", async () => {
     startSessionKeepAlive.mockReturnValue(stopKeepAlive);
     getSession.mockResolvedValue({
       data: { user: { id: 'user-1', email: 'person@example.com', username: 'person' }, session: {} },
@@ -117,7 +94,6 @@ describe('AuthProvider session keep-alive', () => {
     const auth = await mountAuth();
     expect(auth().isAuthenticated).toBe(true);
     expect(startSessionKeepAlive).toHaveBeenCalledTimes(1);
-    // It is started with the session sync's own keepAlive, which reads the session.
     expect(startSessionKeepAlive).toHaveBeenCalledWith(keepAlive);
     const [startedWith] = startSessionKeepAlive.mock.calls[0] as [() => unknown];
     startedWith();

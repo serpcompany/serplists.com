@@ -12,19 +12,16 @@ import {
   type WorkspaceSelectionInput,
 } from '@/contexts/workspaceSelection';
 
-// Drives the selection the way WorkspaceProvider's effect does: once per render, with the
-// tab's current context, the teams query state, and localStorage (shared by every tab).
-function createTab(options: { stored: string; userId?: string }) {
-  const storage = { value: options.stored };
+function createTabAsWorkspaceProviderDrivesIt(options: { stored: string; userId?: string }) {
+  const storageSharedByEveryTab = { value: options.stored };
   const memory = createWorkspaceSelectionMemory();
   const tab = {
-    storage,
-    // A new tab starts from the stored context.
+    storage: storageSharedByEveryTab,
     active: options.stored,
     render(overrides: Partial<WorkspaceSelectionInput> = {}) {
       tab.active = reconcileWorkspaceSelection(memory, {
         activeWorkspaceId: tab.active,
-        readStoredWorkspaceId: () => storage.value,
+        readStoredWorkspaceId: () => storageSharedByEveryTab.value,
         userId: options.userId ?? 'user-1',
         teamIds: ['acme'],
         teamsSettled: true,
@@ -33,10 +30,16 @@ function createTab(options: { stored: string; userId?: string }) {
       });
       return tab.active;
     },
+    renderWhileTheTeamsRefetchOnFocus() {
+      return tab.render({ teamsSettled: false });
+    },
+    storeFromAnotherTab(workspaceId: string) {
+      storageSharedByEveryTab.value = workspaceId;
+    },
     select(workspaceId: string) {
       recordWorkspaceSelection(memory, workspaceId);
       tab.active = workspaceId;
-      storage.value = workspaceId;
+      storageSharedByEveryTab.value = workspaceId;
     },
     signOut() {
       resetWorkspaceSelection(memory);
@@ -48,29 +51,26 @@ function createTab(options: { stored: string; userId?: string }) {
 
 describe('workspace selection', () => {
   it('keeps a Personal tab Personal when another tab stores an Organization and teams refetch', () => {
-    const tab = createTab({ stored: PERSONAL_WORKSPACE_ID });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: PERSONAL_WORKSPACE_ID });
     expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
 
-    // Another tab selects Acme; this tab refetches teams when it gets focus again.
-    tab.storage.value = 'acme';
-    tab.render({ teamsSettled: false });
+    tab.storeFromAnotherTab('acme');
+    tab.renderWhileTheTeamsRefetchOnFocus();
     expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
   });
 
   it('keeps an explicit Personal choice after the stored Organization was restored', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
     expect(tab.render()).toBe('acme');
 
     tab.select(PERSONAL_WORKSPACE_ID);
-    tab.storage.value = 'acme';
-    tab.render({ teamsSettled: false });
+    tab.storeFromAnotherTab('acme');
+    tab.renderWhileTheTeamsRefetchOnFocus();
     expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
   });
 
-  // A failed teams request says nothing about membership. Falling back to Personal made
-  // Organization users create Templates and Runs in Personal, then jump back later.
-  it('keeps the stored Organization when the first teams load fails, until a load succeeds', () => {
-    const tab = createTab({ stored: 'acme' });
+  it('keeps the stored Organization when the first teams load fails, which says nothing about membership, until a load succeeds', () => {
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
     expect(tab.render({ teamIds: [], teamsLoaded: false })).toBe('acme');
     expect(tab.render({ teamIds: [], teamsLoaded: false })).toBe('acme');
 
@@ -78,52 +78,55 @@ describe('workspace selection', () => {
   });
 
   it('keeps the stored Organization while the teams request is paused offline', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
 
     expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: false })).toBe('acme');
   });
 
   it('keeps the stored Organization while a refetch runs over a list that lacks it', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
 
     expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: true })).toBe('acme');
     expect(tab.render({ teamIds: ['acme'] })).toBe('acme');
   });
 
   it('starts a tab that signs in from the stored Organization, not from Personal', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
     tab.active = PERSONAL_WORKSPACE_ID;
 
     expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: false })).toBe('acme');
     expect(tab.render()).toBe('acme');
   });
 
-  // A failed request leaves its older list in place (or one the app wrote itself), so that
-  // list cannot rule the stored Organization out.
-  it('keeps the stored Organization when the last teams request failed over a list that lacks it', () => {
-    const tab = createTab({ stored: 'acme' });
+  it('keeps the stored Organization when the last teams request failed over an older list that lacks it, which cannot rule it out', () => {
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
 
     expect(tab.render({ teamIds: ['joined'], teamsFailed: true })).toBe('acme');
     expect(tab.render({ teamIds: ['joined', 'acme'] })).toBe('acme');
   });
 
   it('keeps the stored Organization while teams are still loading', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
 
     expect(tab.render({ teamIds: [], teamsSettled: false, teamsLoaded: false })).toBe('acme');
     expect(tab.render()).toBe('acme');
   });
 
-  it('falls back to Personal for good when the stored Organization is not one of the user\'s', () => {
-    const tab = createTab({ stored: 'gone' });
-    expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
+  it('falls back to Personal when the stored Organization is not one of the user\'s', () => {
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'gone' });
 
-    // A later refetch that lists it (for example after an invite in another tab) does not move the tab.
+    expect(tab.render()).toBe(PERSONAL_WORKSPACE_ID);
+  });
+
+  it('stays in Personal when a later refetch lists that Organization, such as after an invite accepted in another tab', () => {
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'gone' });
+    tab.render();
+
     expect(tab.render({ teamIds: ['acme', 'gone'] })).toBe(PERSONAL_WORKSPACE_ID);
   });
 
   it('keeps a team this tab just created until the teams query lists it', () => {
-    const tab = createTab({ stored: PERSONAL_WORKSPACE_ID });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: PERSONAL_WORKSPACE_ID });
     tab.render();
 
     tab.select('new-team');
@@ -132,18 +135,18 @@ describe('workspace selection', () => {
   });
 
   it('falls back to Personal when this tab loses its Organization membership', () => {
-    const tab = createTab({ stored: 'acme' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme' });
     tab.render();
 
     expect(tab.render({ teamIds: [] })).toBe(PERSONAL_WORKSPACE_ID);
   });
 
   it('restores the stored Organization for the next user who signs in on the tab', () => {
-    const tab = createTab({ stored: 'acme', userId: 'user-1' });
+    const tab = createTabAsWorkspaceProviderDrivesIt({ stored: 'acme', userId: 'user-1' });
     tab.render();
     tab.select(PERSONAL_WORKSPACE_ID);
     tab.signOut();
-    tab.storage.value = 'bravo';
+    tab.storeFromAnotherTab('bravo');
 
     const next = reconcileWorkspaceSelection(createWorkspaceSelectionMemory(), {
       activeWorkspaceId: tab.active,
@@ -164,7 +167,9 @@ describe('getWorkspaceStatus', () => {
     expect(getWorkspaceStatus({ ...base, activeWorkspaceId: PERSONAL_WORKSPACE_ID })).toBe('ready');
     expect(getWorkspaceStatus({ ...base, teamIds: ['acme'] })).toBe('ready');
     expect(getWorkspaceStatus({ ...base, hasUser: false, teamsFailed: true })).toBe('ready');
-    // A Personal user never waits on, or fails with, the teams request.
+  });
+
+  it('is ready in Personal even when the teams request failed, since Personal never waits on it', () => {
     expect(getWorkspaceStatus({ ...base, activeWorkspaceId: PERSONAL_WORKSPACE_ID, teamsFailed: true })).toBe('ready');
   });
 
@@ -174,7 +179,9 @@ describe('getWorkspaceStatus', () => {
 
   it('is an error when the teams request failed before the Organization was confirmed', () => {
     expect(getWorkspaceStatus({ ...base, teamsFailed: true })).toBe('error');
-    // A failed background refetch over a list that has it changes nothing.
+  });
+
+  it('stays ready when a background refetch fails over a list that has the Organization', () => {
     expect(getWorkspaceStatus({ ...base, teamIds: ['acme'], teamsFailed: true })).toBe('ready');
   });
 });
@@ -204,9 +211,8 @@ describe('describeTeamsQuery', () => {
 });
 
 describe('isConfirmedSignOut', () => {
-  it('forgets the stored Organization only when the server confirmed there is no session', () => {
+  it('forgets the stored Organization only when the server confirmed there is no session, never while get-session is unavailable and the user may still be signed in', () => {
     expect(isConfirmedSignOut('unauthenticated')).toBe(true);
-    // A 503, 429 or dropped connection on get-session: the user may still be signed in.
     expect(isConfirmedSignOut('unavailable')).toBe(false);
     expect(isConfirmedSignOut('loading')).toBe(false);
   });

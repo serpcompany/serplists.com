@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { markListsStaleForWorkspaceSwitch } from '@/contexts/templateListCache';
 
+import { settle } from '../../support/queryHookProbe';
+
 const STALE_TIME = 5 * 60 * 1000;
 const clients: QueryClient[] = [];
 
-// selectWorkspace runs inside the click handler, before React re-renders: the page's list
-// observers are still on the old context's keys, with queryFns that name the old context.
-function setup() {
+function pageObservingTheOrganizationListsAsTheSwitchClickRuns() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   const fetchers = {
@@ -42,17 +42,19 @@ function setup() {
   };
   const clearCalls = () => Object.values(fetchers).forEach((fetcher) => fetcher.mockClear());
   const totalCalls = () => Object.values(fetchers).reduce((sum, fetcher) => sum + fetcher.mock.calls.length, 0);
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  return { client, fetchers, moveTo, clearCalls, totalCalls, settle, unsubscribe };
+  return { client, fetchers, moveTo, clearCalls, totalCalls, unsubscribe };
 }
 
+const cachePersonalListsStillInsideTheirStaleTime = (client: QueryClient) => {
+  client.setQueryData(['templates', 'user-1', 'personal'], [{ id: 'old-personal-template' }]);
+  client.setQueryData(['runs', 'user-1', 'personal'], [{ id: 'old-personal-run' }]);
+};
+
 async function loadedOnOrganization() {
-  const context = setup();
-  // Personal lists were loaded a minute ago and are still inside their staleTime.
-  context.client.setQueryData(['templates', 'user-1', 'personal'], [{ id: 'old-personal-template' }]);
-  context.client.setQueryData(['runs', 'user-1', 'personal'], [{ id: 'old-personal-run' }]);
+  const context = pageObservingTheOrganizationListsAsTheSwitchClickRuns();
+  cachePersonalListsStillInsideTheirStaleTime(context.client);
   await vi.waitFor(() => expect(context.totalCalls()).toBe(3));
-  await context.settle();
+  await settle();
   context.clearCalls();
   return context;
 }
@@ -63,7 +65,7 @@ describe('markListsStaleForWorkspaceSwitch', () => {
   });
 
   it('does not refetch the lists of the context being left, or the catalog', async () => {
-    const { fetchers, settle, unsubscribe } = await loadedOnOrganization();
+    const { fetchers, unsubscribe } = await loadedOnOrganization();
 
     markListsStaleForWorkspaceSwitch(clients[0], { fromWorkspaceId: 'team-a', toWorkspaceId: 'personal' });
     await settle();
@@ -74,8 +76,8 @@ describe('markListsStaleForWorkspaceSwitch', () => {
     unsubscribe.forEach((stop) => stop());
   });
 
-  it('loads the new context once when the page moves to it, even from a fresh cache', async () => {
-    const { client, fetchers, moveTo, settle, unsubscribe } = await loadedOnOrganization();
+  it('loads the new context once when the page moves to it, even from a fresh cache, and the Organization again when switching back inside its stale time', async () => {
+    const { client, fetchers, moveTo, unsubscribe } = await loadedOnOrganization();
 
     markListsStaleForWorkspaceSwitch(client, { fromWorkspaceId: 'team-a', toWorkspaceId: 'personal' });
     moveTo('personal');
@@ -88,7 +90,6 @@ describe('markListsStaleForWorkspaceSwitch', () => {
     expect(fetchers.runsA).not.toHaveBeenCalled();
     expect(fetchers.catalog).not.toHaveBeenCalled();
 
-    // Switching back inside the staleTime still loads the Organization's lists again.
     markListsStaleForWorkspaceSwitch(client, { fromWorkspaceId: 'personal', toWorkspaceId: 'team-a' });
     moveTo('team-a');
     await vi.waitFor(() => expect(fetchers.runsA).toHaveBeenCalledTimes(1));
@@ -98,7 +99,7 @@ describe('markListsStaleForWorkspaceSwitch', () => {
   });
 
   it('fetches nothing when the context already selected is selected again', async () => {
-    const { client, settle, totalCalls, unsubscribe } = await loadedOnOrganization();
+    const { client, totalCalls, unsubscribe } = await loadedOnOrganization();
 
     markListsStaleForWorkspaceSwitch(client, { fromWorkspaceId: 'team-a', toWorkspaceId: 'team-a' });
     await settle();

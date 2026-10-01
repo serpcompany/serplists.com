@@ -5,10 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
 
-// While the stored Organization is unconfirmed (teams still loading, or the request failed),
-// the context falls back to Personal only for display. A write that would go to the active
-// context must not land in Personal: it is refused until the Organization is known.
-
 const apiMock = vi.hoisted(() => ({
   createTemplate: vi.fn(),
   createChecklist: vi.fn(),
@@ -69,7 +65,7 @@ function renderProvider() {
   return context;
 }
 
-describe.each(['loading', 'error'] as const)('writes while the Organization is unconfirmed (%s)', (status) => {
+describe.each(['loading', 'error'] as const)('writes while the stored Organization is unconfirmed (%s) and the context shows Personal only for display', (status) => {
   beforeEach(() => {
     workspaceState.status = status;
     apiMock.createTemplate.mockReset().mockResolvedValue({ id: 'template-2' });

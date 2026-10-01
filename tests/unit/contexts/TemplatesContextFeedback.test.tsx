@@ -7,10 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
 
-// Pages own the feedback for template and run actions. The shared mutations used to toast
-// too, so every action showed two toasts (or two different errors), and a visibility
-// toggle claimed that checklist changes were reconciled into runs.
-
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const apiMock = vi.hoisted(() => ({
   createTemplate: vi.fn(),
@@ -117,7 +113,14 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
 
     expectNoToasts();
     expect(isInvalidated(client, ['templates', 'user-1', 'personal'])).toBe(true);
-    // A metadata-only save reconciles no runs, so the run lists stay as they are.
+  });
+
+  it('leaves the run lists as they are after a metadata-only save, which reconciles no runs', async () => {
+    apiMock.updateTemplate.mockResolvedValue({ id: 'template-1', version: 4 });
+    const { client, context } = renderProvider();
+
+    await context.updateTemplate({ ...template, isPublic: true });
+
     expect(isInvalidated(client, ['runs', 'user-1', 'personal'])).toBe(false);
   });
 
@@ -165,8 +168,7 @@ describe('TemplatesProvider mutations leave feedback to the page', () => {
 });
 
 describe('template editor save feedback', () => {
-  // The editor relied on the context toast for success; failures show inline instead.
-  it('toasts once for a successful create or update, and never for a failed save', () => {
+  it('toasts once for a successful create or update, and never for a failed save, which the editor shows inline', () => {
     const ok = { success: true, errors: [] };
     const failed = { success: false, errors: [{ type: 'save', message: 'Version conflict' }] };
 

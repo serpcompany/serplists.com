@@ -2,9 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createSignOutRunner, type AuthClientResult } from '@/contexts/authSession';
 
-// logout() in AuthProvider is createSignOutRunner(authClient.signOut, clear local session).
-// better-fetch resolves a non-2xx response as { data: null, error } instead of throwing.
-function setup(signOut: () => Promise<AuthClientResult>) {
+function logoutAsAuthProviderBuildsIt(signOut: () => Promise<AuthClientResult>) {
   const session = { signedIn: true };
   const signOutMock = vi.fn(signOut);
   const logout = createSignOutRunner(signOutMock, () => {
@@ -15,7 +13,7 @@ function setup(signOut: () => Promise<AuthClientResult>) {
 
 describe('sign out', () => {
   it('clears the session when the server signed the user out', async () => {
-    const { logout, session } = setup(async () => ({ data: { success: true }, error: null }));
+    const { logout, session } = logoutAsAuthProviderBuildsIt(async () => ({ data: { success: true }, error: null }));
 
     await expect(logout()).resolves.toEqual({ ok: true });
     expect(session.signedIn).toBe(false);
@@ -27,7 +25,7 @@ describe('sign out', () => {
     ['an origin check', 403],
     ['a dropped connection', 0],
   ])('keeps the user signed in when the request was %s', async (_name, status) => {
-    const { logout, session } = setup(async () => ({ data: null, error: { status, message: 'Too many requests' } }));
+    const { logout, session } = logoutAsAuthProviderBuildsIt(async () => ({ data: null, error: { status, message: 'Too many requests' } }));
 
     const result = await logout();
 
@@ -37,7 +35,7 @@ describe('sign out', () => {
   });
 
   it('keeps the user signed in, without an unhandled rejection, when the request throws', async () => {
-    const { logout, session } = setup(async () => {
+    const { logout, session } = logoutAsAuthProviderBuildsIt(async () => {
       throw new TypeError('Failed to fetch');
     });
 
@@ -49,7 +47,7 @@ describe('sign out', () => {
     ['no session cookie', { status: 400, code: 'FAILED_TO_GET_SESSION', message: 'Failed to get session' }],
     ['an expired session', { status: 401, message: 'Unauthorized' }],
   ])('treats %s as already signed out', async (_name, error) => {
-    const { logout, session } = setup(async () => ({ data: null, error }));
+    const { logout, session } = logoutAsAuthProviderBuildsIt(async () => ({ data: null, error }));
 
     await expect(logout()).resolves.toEqual({ ok: true });
     expect(session.signedIn).toBe(false);
@@ -57,7 +55,7 @@ describe('sign out', () => {
 
   it('sends one request for a double click', async () => {
     let finish: () => void = () => {};
-    const { logout, signOut } = setup(
+    const { logout, signOut } = logoutAsAuthProviderBuildsIt(
       () => new Promise((resolve) => { finish = () => resolve({ data: { success: true }, error: null }); }),
     );
 

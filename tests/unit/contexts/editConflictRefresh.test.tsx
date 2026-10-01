@@ -6,10 +6,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApiError } from '@/lib/api-errors';
 import type { ChecklistRun, ChecklistTemplate, TemplatesContextProps } from '@/types/checklist';
 
-// Revalidate and the visibility switch send the revision or version of a cached copy. When
-// the record changed elsewhere the server answers 409 edit_conflict. Unless the cache is
-// refreshed, every retry sends the same stale value and fails the same way.
-
 const apiMock = vi.hoisted(() => ({
   createChecklist: vi.fn(),
   deleteChecklist: vi.fn(),
@@ -76,8 +72,7 @@ function renderProvider() {
   return { client, context };
 }
 
-// The runs page: an active observer on the runs list, which the server now has at revision 5.
-async function showRunsList(client: QueryClient) {
+async function showRunsPageWhileTheServerHoldsRevision5(client: QueryClient) {
   const listFetch = vi.fn(async () => [run(4)]);
   const observer = new QueryObserver(client, {
     queryKey: ['runs', 'user-1', 'personal'],
@@ -93,7 +88,7 @@ async function showRunsList(client: QueryClient) {
 
 const conflict = (code: string) => createApiError(409, { error: 'Checklist run changed since it was loaded.', code });
 
-describe('conflict refresh', () => {
+describe('refresh after a conflict, so a retry sends the current revision or version instead of failing the same way', () => {
   afterEach(() => {
     clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -101,12 +96,11 @@ describe('conflict refresh', () => {
 
   it('refreshes the runs list before Revalidate rejects, so the next click sends the new revision', async () => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showRunsList(client);
+    const { listFetch, unsubscribe } = await showRunsPageWhileTheServerHoldsRevision5(client);
     apiMock.revalidateChecklist.mockRejectedValueOnce(conflict('edit_conflict')).mockResolvedValueOnce(undefined);
 
     await expect(context.revalidateRun(run(4))).rejects.toMatchObject({ status: 409 });
 
-    // The refetch finished before the rejection, so the button re-enables on fresh data.
     expect(listFetch).toHaveBeenCalledTimes(1);
     const [refreshed] = client.getQueryData<ChecklistRun[]>(['runs', 'user-1', 'personal']) ?? [];
     expect(refreshed.revision).toBe(5);
@@ -120,7 +114,7 @@ describe('conflict refresh', () => {
     ['a run archived elsewhere', createApiError(404, { error: 'Checklist not found' })],
   ])('also refreshes the runs list for %s', async (_name, error) => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showRunsList(client);
+    const { listFetch, unsubscribe } = await showRunsPageWhileTheServerHoldsRevision5(client);
     apiMock.revalidateChecklist.mockRejectedValueOnce(error);
 
     await expect(context.revalidateRun(run(4))).rejects.toBe(error);
@@ -131,7 +125,7 @@ describe('conflict refresh', () => {
 
   it('does not reload the runs list for a failure a refresh cannot fix', async () => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showRunsList(client);
+    const { listFetch, unsubscribe } = await showRunsPageWhileTheServerHoldsRevision5(client);
     apiMock.revalidateChecklist.mockRejectedValueOnce(createApiError(500, { error: 'Internal error' }));
 
     await expect(context.revalidateRun(run(4))).rejects.toMatchObject({ status: 500 });
@@ -153,9 +147,7 @@ describe('conflict refresh', () => {
   });
 });
 
-// My Templates, the template page: an active observer on the Template list, and the
-// catalog as a page last loaded it.
-async function showTemplateList(client: QueryClient) {
+async function showTemplateListWithTheCatalogCached(client: QueryClient) {
   const listFetch = vi.fn(async () => [template]);
   const observer = new QueryObserver(client, {
     queryKey: ['templates', 'user-1', 'personal'],
@@ -174,10 +166,17 @@ const archivedTemplate = () => createApiError(404, { error: 'Template not found 
 const archivedRun = () => createApiError(404, { error: 'Checklist not found or unauthorized' });
 const serverError = () => createApiError(500, { error: 'Internal error' });
 
-// An item archived in another tab, by a teammate or over MCP stays in the cached lists for
-// up to 5 minutes (their staleTime). Deleting it or starting a run from it answers 404, and
-// without a refresh every retry fails the same way while the item stays listed.
-describe('refresh after an action on an item archived elsewhere', () => {
+async function openTemplatePageThatWillFindItGone(client: QueryClient) {
+  const detailKey = ['templates', 'detail', 'template-1', 'user-1'];
+  const detailFetch = vi.fn<() => Promise<ChecklistTemplate | null>>(async () => template);
+  const detail = new QueryObserver(client, { queryKey: detailKey, queryFn: detailFetch, staleTime: 60_000 });
+  const close = detail.subscribe(() => {});
+  await vi.waitFor(() => expect(client.getQueryData(detailKey)).toEqual(template));
+  detailFetch.mockResolvedValue(null);
+  return { detailKey, close };
+}
+
+describe('refresh after an action on an item archived elsewhere, which the cached lists can show for up to 5 minutes', () => {
   afterEach(() => {
     clients.splice(0).forEach((client) => client.clear());
     Object.values(apiMock).forEach((mock) => mock.mockReset());
@@ -185,7 +184,7 @@ describe('refresh after an action on an item archived elsewhere', () => {
 
   it('reloads the runs list before Archive on a run rejects', async () => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showRunsList(client);
+    const { listFetch, unsubscribe } = await showRunsPageWhileTheServerHoldsRevision5(client);
     listFetch.mockResolvedValue([]);
     const error = archivedRun();
     apiMock.deleteChecklist.mockRejectedValueOnce(error);
@@ -197,16 +196,10 @@ describe('refresh after an action on an item archived elsewhere', () => {
     unsubscribe();
   });
 
-  it('reloads the Template list before Archive on a template rejects, and drops it from the catalog', async () => {
+  it('reloads the Template list before Archive on a template rejects, and drops it from the cached catalog without refetching the edge copy, which can still list it', async () => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showTemplateList(client);
-    // The template's own page is open too; its read now finds the Template gone.
-    const detailKey = ['templates', 'detail', 'template-1', 'user-1'];
-    const detailFetch = vi.fn<() => Promise<ChecklistTemplate | null>>(async () => template);
-    const detail = new QueryObserver(client, { queryKey: detailKey, queryFn: detailFetch, staleTime: 60_000 });
-    const stopDetail = detail.subscribe(() => {});
-    await vi.waitFor(() => expect(client.getQueryData(detailKey)).toEqual(template));
-    detailFetch.mockResolvedValue(null);
+    const { listFetch, unsubscribe } = await showTemplateListWithTheCatalogCached(client);
+    const templatePage = await openTemplatePageThatWillFindItGone(client);
     const error = archivedTemplate();
     apiMock.deleteTemplate.mockRejectedValueOnce(error);
 
@@ -214,9 +207,8 @@ describe('refresh after an action on an item archived elsewhere', () => {
 
     expect(listFetch).toHaveBeenCalledTimes(1);
     expect(client.getQueryData(['templates', 'user-1', 'personal'])).toEqual([]);
-    expect(client.getQueryData(detailKey)).toBeNull();
-    stopDetail();
-    // Patched, not refetched: the edge copy of the catalog can still list it.
+    expect(client.getQueryData(templatePage.detailKey)).toBeNull();
+    templatePage.close();
     expect(client.getQueryData<ChecklistTemplate[]>(['templates', 'catalog'])?.map((item) => item.id)).toEqual([
       'template-2',
     ]);
@@ -226,7 +218,7 @@ describe('refresh after an action on an item archived elsewhere', () => {
 
   it('reloads the Template list before Start Run on an archived template rejects', async () => {
     const { client, context } = renderProvider();
-    const { listFetch, unsubscribe } = await showTemplateList(client);
+    const { listFetch, unsubscribe } = await showTemplateListWithTheCatalogCached(client);
     const error = createApiError(404, { error: 'Template not found' });
     apiMock.createChecklist.mockRejectedValueOnce(error);
 
@@ -239,8 +231,8 @@ describe('refresh after an action on an item archived elsewhere', () => {
 
   it('does not reload the lists for a failure a refresh cannot fix', async () => {
     const { client, context } = renderProvider();
-    const runs = await showRunsList(client);
-    const templates = await showTemplateList(client);
+    const runs = await showRunsPageWhileTheServerHoldsRevision5(client);
+    const templates = await showTemplateListWithTheCatalogCached(client);
     apiMock.deleteChecklist.mockRejectedValueOnce(serverError());
     apiMock.deleteTemplate.mockRejectedValueOnce(serverError());
     apiMock.createChecklist.mockRejectedValueOnce(

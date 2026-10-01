@@ -9,20 +9,28 @@ type Run = { id: string; owner: string };
 
 const clients: QueryClient[] = [];
 
-// The provider builds its runs queryFn from the render's `user`, while the server answers for
-// whoever holds the session cookie. This mirrors that: the closure names a user, the "server"
-// returns the runs of the current session.
-function setup() {
+function tabSharingOneSessionCookie() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
-  const session = { userId: 'user-a' };
-  const getChecklists = vi.fn(async (): Promise<Run[]> => [{ id: `${session.userId}-run`, owner: session.userId }]);
-  const runsQuery = (userId: string) => ({
+  const sessionCookie = { userId: 'user-a' };
+  const serverAnsweringForTheCookie = vi.fn(async (): Promise<Run[]> => [
+    { id: `${sessionCookie.userId}-run`, owner: sessionCookie.userId },
+  ]);
+  const runsQueryAsTheProviderRendersItFor = (userId: string) => ({
     queryKey: ['runs', userId, 'personal'],
-    queryFn: async () => (userId ? getChecklists() : []),
+    queryFn: async () => (userId ? serverAnsweringForTheCookie() : []),
     staleTime: 5 * 60 * 1000,
   });
-  return { client, session, getChecklists, runsQuery };
+  const openRunsPageAs = async (userId: string) => {
+    const page = new QueryObserver(client, runsQueryAsTheProviderRendersItFor(userId));
+    const leave = page.subscribe(() => {});
+    await vi.waitFor(() => expect(client.getQueryData(['runs', userId, 'personal'])).toBeDefined());
+    return leave;
+  };
+  const signInOnTheSameTabAs = (userId: string) => {
+    sessionCookie.userId = userId;
+  };
+  return { client, serverAnsweringForTheCookie, openRunsPageAs, signInOnTheSameTabAs };
 }
 
 describe('runs cache isolation across a user switch', () => {
@@ -30,31 +38,21 @@ describe('runs cache isolation across a user switch', () => {
     clients.splice(0).forEach((client) => client.clear());
   });
 
-  it('never refetches the previous user\'s unobserved runs list with the new session', async () => {
-    const { client, session, getChecklists, runsQuery } = setup();
+  it("never refetches the previous user's unobserved runs list with the new session, and leaves it stale to refetch under its own user", async () => {
+    const tab = tabSharingOneSessionCookie();
+    const leaveRunsPageAndSignOut = await tab.openRunsPageAs('user-a');
+    leaveRunsPageAndSignOut();
+    tab.signInOnTheSameTabAs('user-b');
+    const leaveRunsPageOfUserB = await tab.openRunsPageAs('user-b');
+    tab.serverAnsweringForTheCookie.mockClear();
 
-    // User A opens the runs page, then signs out: the key stays cached with no observers.
-    const pageA = new QueryObserver(client, runsQuery('user-a'));
-    const unsubscribeA = pageA.subscribe(() => {});
-    await vi.waitFor(() => expect(client.getQueryData(['runs', 'user-a', 'personal'])).toBeDefined());
-    unsubscribeA();
+    await refreshRunLists(tab.client);
 
-    // User B signs in on the same tab and has the runs page open.
-    session.userId = 'user-b';
-    const pageB = new QueryObserver(client, runsQuery('user-b'));
-    const unsubscribeB = pageB.subscribe(() => {});
-    await vi.waitFor(() => expect(client.getQueryData(['runs', 'user-b', 'personal'])).toBeDefined());
-    getChecklists.mockClear();
-
-    // B starts or revalidates a run.
-    await refreshRunLists(client);
-
-    expect(client.getQueryData(['runs', 'user-a', 'personal'])).toEqual([{ id: 'user-a-run', owner: 'user-a' }]);
-    expect(getChecklists).toHaveBeenCalledTimes(1);
-    expect(client.getQueryData(['runs', 'user-b', 'personal'])).toEqual([{ id: 'user-b-run', owner: 'user-b' }]);
-    // The inactive key is only marked stale, so it refetches under its own user when mounted again.
-    expect(client.getQueryState(['runs', 'user-a', 'personal'])?.isInvalidated).toBe(true);
-    unsubscribeB();
+    expect(tab.client.getQueryData(['runs', 'user-a', 'personal'])).toEqual([{ id: 'user-a-run', owner: 'user-a' }]);
+    expect(tab.serverAnsweringForTheCookie).toHaveBeenCalledTimes(1);
+    expect(tab.client.getQueryData(['runs', 'user-b', 'personal'])).toEqual([{ id: 'user-b-run', owner: 'user-b' }]);
+    expect(tab.client.getQueryState(['runs', 'user-a', 'personal'])?.isInvalidated).toBe(true);
+    leaveRunsPageOfUserB();
   });
 });
 
@@ -68,8 +66,7 @@ function listSourceFiles(dir: string): string[] {
   });
 }
 
-// Returns the argument text of each call, balancing parentheses.
-function callArguments(source: string, callee: string): string[] {
+function argumentTextOfEachCall(source: string, callee: string): string[] {
   const calls: string[] = [];
   let index = source.indexOf(`${callee}(`);
   while (index !== -1) {
@@ -90,7 +87,7 @@ function callArguments(source: string, callee: string): string[] {
 describe('query refetch guard', () => {
   it('only refetches active queries, because inactive keys may belong to a signed-out user', () => {
     const offenders = listSourceFiles(SRC_ROOT).flatMap((file) =>
-      callArguments(readFileSync(file, 'utf8'), 'refetchQueries')
+      argumentTextOfEachCall(readFileSync(file, 'utf8'), 'refetchQueries')
         .filter((args) => !/type:\s*['"]active['"]/.test(args))
         .map((args) => `${path.relative(SRC_ROOT, file)}: refetchQueries(${args.trim()})`),
     );

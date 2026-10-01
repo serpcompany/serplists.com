@@ -7,6 +7,8 @@ import { useWorkspace, WorkspaceProvider } from '@/contexts/WorkspaceContext';
 import { acceptTeamInviteForWorkspace } from '@/features/teams/acceptTeamInvite';
 import type { TeamSummary } from '@/lib/api';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
+import { deferred } from '../../support/deferred';
+import { settle } from '../../support/queryHookProbe';
 
 const apiMocks = vi.hoisted(() => ({
   createTeam: vi.fn(),
@@ -29,18 +31,7 @@ const joinedTeam: TeamSummary = {
   role: 'editor',
 };
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
-};
-
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
-// Renders the provider once and returns its callbacks, which work outside render.
-const renderWorkspace = (queryClient: QueryClient) => {
+const workspaceFromOneRender = (queryClient: QueryClient) => {
   let value: ReturnType<typeof useWorkspace> | undefined;
   const Capture = () => {
     value = useWorkspace();
@@ -57,8 +48,7 @@ const renderWorkspace = (queryClient: QueryClient) => {
   return value;
 };
 
-// The app's first teams request, still in flight; it read the server before the write.
-const startStaleTeamsLoad = (queryClient: QueryClient) => {
+const startTeamsRequestThatReadTheServerBeforeTheWrite = (queryClient: QueryClient) => {
   const staleTeams = deferred<TeamSummary[]>();
   void queryClient.prefetchQuery({ queryKey: teamsKey, queryFn: () => staleTeams.promise });
   return staleTeams;
@@ -71,8 +61,8 @@ describe('WorkspaceProvider teams cache', () => {
 
   it('refreshTeams fetches again instead of joining a teams request that predates the write', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const workspace = renderWorkspace(queryClient);
-    const staleTeams = startStaleTeamsLoad(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
+    const staleTeams = startTeamsRequestThatReadTheServerBeforeTheWrite(queryClient);
     apiMocks.getTeams.mockResolvedValue([joinedTeam]);
 
     workspace.rememberTeam(joinedTeam);
@@ -83,19 +73,15 @@ describe('WorkspaceProvider teams cache', () => {
     expect(queryClient.getQueryData(teamsKey)).toEqual([joinedTeam]);
   });
 
-  // The provider shows the remembered Organization from its own state
-  // (WorkspaceContextInviteAccept.test.tsx); the cache holds only lists the server sent.
-  it('drops an older teams response that lands after a remembered Organization', async () => {
+  it('drops an older teams response that lands after a remembered Organization, inventing no list the server never sent', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const workspace = renderWorkspace(queryClient);
-    const staleTeams = startStaleTeamsLoad(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
+    const staleTeams = startTeamsRequestThatReadTheServerBeforeTheWrite(queryClient);
 
     workspace.rememberTeam(joinedTeam);
     staleTeams.resolve([]);
-    await flush();
+    await settle();
 
-    // Not [], which would drop the team, and not an invented [joinedTeam], which would read
-    // as a server list without the stored Organization.
     expect(queryClient.getQueryData(teamsKey)).toBeUndefined();
   });
 
@@ -103,7 +89,7 @@ describe('WorkspaceProvider teams cache', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const otherTeam = { ...joinedTeam, id: 'team-2', name: 'Bravo' };
     queryClient.setQueryData(teamsKey, [otherTeam]);
-    const workspace = renderWorkspace(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
 
     workspace.rememberTeam(joinedTeam);
 
@@ -112,8 +98,8 @@ describe('WorkspaceProvider teams cache', () => {
 
   it('accepting an invite without team details waits for a teams list read after the accept', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const workspace = renderWorkspace(queryClient);
-    const staleTeams = startStaleTeamsLoad(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
+    const staleTeams = startTeamsRequestThatReadTheServerBeforeTheWrite(queryClient);
     apiMocks.getTeams.mockResolvedValue([joinedTeam]);
 
     const accepted = acceptTeamInviteForWorkspace('invite-token', {
@@ -122,7 +108,7 @@ describe('WorkspaceProvider teams cache', () => {
       rememberTeam: workspace.rememberTeam,
       selectWorkspace: vi.fn(),
     });
-    await flush();
+    await settle();
     staleTeams.resolve([]);
     await accepted;
 
@@ -132,7 +118,7 @@ describe('WorkspaceProvider teams cache', () => {
 
   it('refreshTeams still reports a failed request to its caller', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const workspace = renderWorkspace(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
     queryClient.setQueryData(teamsKey, [joinedTeam]);
     apiMocks.getTeams.mockRejectedValue(new Error('Network down'));
 
@@ -141,19 +127,22 @@ describe('WorkspaceProvider teams cache', () => {
   });
 });
 
-// A Personal context never waits on the teams request, but a failed request must not look
-// like "no Organizations": pages that show Organizations, or act on an Organization's
-// resource, say it failed and offer Retry.
-describe('WorkspaceProvider after the teams request failed', () => {
+describe('WorkspaceProvider after the teams request failed, which must not read as no Organizations', () => {
   it('reports the teams list as unavailable in Personal, without blocking Personal', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, teamsKey);
-    const workspace = renderWorkspace(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
 
     expect(workspace.activeWorkspaceId).toBe('personal');
     expect(workspace.workspaceStatus).toBe('ready');
     expect(workspace.teamsUnavailable).toBe(true);
-    // The role in an Organization is unknown because the list failed, not because the user left.
+  });
+
+  it("calls an Organization's role unavailable, not gone, when the list failed", () => {
+    const queryClient = createTestQueryClient();
+    seedQueryError(queryClient, teamsKey);
+    const workspace = workspaceFromOneRender(queryClient);
+
     expect(workspace.isRoleUnavailable('acme')).toBe(true);
     expect(workspace.isRoleUnavailable(undefined)).toBe(false);
   });
@@ -161,7 +150,7 @@ describe('WorkspaceProvider after the teams request failed', () => {
   it('keeps the last loaded list after a failed refresh, where a missing Organization means no role', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, teamsKey, [joinedTeam]);
-    const workspace = renderWorkspace(queryClient);
+    const workspace = workspaceFromOneRender(queryClient);
 
     expect(workspace.teamsUnavailable).toBe(false);
     expect(workspace.isRoleUnavailable('team-1')).toBe(false);
