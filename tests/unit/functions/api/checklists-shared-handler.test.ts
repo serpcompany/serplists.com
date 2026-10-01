@@ -1,5 +1,5 @@
 import { assert, describe, it, expect, beforeEach, vi } from 'vitest';
-import { elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
+import { contentAt, elementAt, firstOf, subTaskAt, taskIn } from '../../../support/elements';
 import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, PRO_PLAN, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -7,6 +7,7 @@ import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { withoutKeys } from '../../../support/guestState';
 import { jsonObject, readJson } from '../../../support/readJson';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 const storedSections = [
   {
@@ -144,10 +145,10 @@ describe('shared run updates, which take only completion and notes from a guest 
     expect(response.status).toBe(200);
     const update = storedUpdate();
     expect(update).not.toHaveProperty('title');
-    const saved = JSON.parse(update.items as string);
+    const saved = storedSectionsIn(update.items);
     expect(stripGuestState(saved)).toEqual(stripGuestState(storedSections));
-    expect(saved[0].items[0].isCompleted).toBe(true);
-    expect(saved[0].items[1].isCompleted).toBe(false);
+    expect(taskIn(saved, 0, 0).isCompleted).toBe(true);
+    expect(taskIn(saved, 0, 1).isCompleted).toBe(false);
     expect(JSON.stringify(saved)).not.toContain('attacker.example');
   });
 
@@ -279,7 +280,7 @@ describe('shared run updates, which take only completion and notes from a guest 
     const { response } = await putShared({ sections, status: 'completed', expected_revision: 3 });
 
     expect(response.status).toBe(200);
-    expect(JSON.parse(storedUpdate().items as string)[0].items[1].notes).toBe('Shipped anyway');
+    expect(taskIn(storedSectionsIn(storedUpdate().items), 0, 1).notes).toBe('Shipped anyway');
   });
 
   it('leaves the completion stamps alone on later saves of a completed run', async () => {
@@ -331,9 +332,9 @@ describe('shared run updates, which take only completion and notes from a guest 
     const { response } = await putShared({ sections, expected_revision: 3 });
 
     expect(response.status).toBe(200);
-    const saved = JSON.parse(storedUpdate().items as string);
-    expect(saved[0].items[0].notes).toBe('Guest note');
-    expect(saved[0].items[0].contents[1].subItems).toEqual([
+    const savedTask = taskIn(storedSectionsIn(storedUpdate().items), 0, 0);
+    expect(savedTask.notes).toBe('Guest note');
+    expect(contentAt(savedTask, 1).subItems).toEqual([
       expect.objectContaining({ id: 'sub-1', isCompleted: false }),
       expect.objectContaining({ id: 'sub-2', isCompleted: true }),
     ]);
@@ -358,8 +359,8 @@ describe('shared run updates, which take only completion and notes from a guest 
     });
 
     expect(response.status).toBe(200);
-    const saved = JSON.parse(storedUpdate().items as string);
-    expect(saved[0].items).toEqual([
+    const saved = storedSectionsIn(storedUpdate().items);
+    expect(firstOf(saved).items).toEqual([
       { title: 'First', isCompleted: false },
       { title: 'Second', isCompleted: true },
     ]);

@@ -4,6 +4,7 @@ import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../suppo
 import { jsonObject, readJson } from '../../../support/readJson';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const membership = { id: 'member-1', team_id: 'team-1', user_id: 'member-b', role: 'runner', status: 'active' };
 const sections = [{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }];
@@ -55,10 +56,10 @@ function savedUpdates(): Record<string, unknown> {
 
 function auditDiff(): Record<string, unknown> {
   const auditRow = dbMocks.insertChain.values.mock.calls
-    .map(([row]) => row as Record<string, unknown>)
+    .map(([row]) => row)
     .find((row) => typeof row.diff_json === 'string');
   assert.exists(auditRow);
-  return JSON.parse(auditRow.diff_json as string);
+  return jsonRecordIn(auditRow.diff_json);
 }
 
 describe('run completion stamps on PUT /api/checklists/:id, which only a transition into completed writes', () => {

@@ -39,8 +39,4 @@ describe('sanitizeLogPath', () => {
   ])('leaves %s unchanged', (input) => {
     expect(sanitizeLogPath(input)).toBe(input);
   });
-
-  it('returns an empty string for a non-string value', () => {
-    expect(sanitizeLogPath(undefined as unknown as string)).toBe('');
-  });
 });

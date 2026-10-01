@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { elementAt, firstOf } from '../../../support/elements';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
 import { runWithRequestId } from '@functions/api/utils/request-context';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 describe('log', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -33,7 +34,7 @@ describe('log', () => {
     });
     log('info', 'outside_a_request');
 
-    expect(lines.map((line) => JSON.parse(line).requestId)).toEqual(['req-ctx', 'req-ctx', undefined]);
+    expect(lines.map((line) => jsonRecordIn(line).requestId)).toEqual(['req-ctx', 'req-ctx', undefined]);
   });
 
   it('keeps a request id passed as a field', () => {
@@ -41,7 +42,7 @@ describe('log', () => {
 
     runWithRequestId('req-ctx', () => log('info', 'api_request', { requestId: 'req-explicit' }));
 
-    expect(JSON.parse(firstOf(lines)).requestId).toBe('req-explicit');
+    expect(jsonRecordIn(firstOf(lines)).requestId).toBe('req-explicit');
   });
 
   it('redacts personal data and secrets whatever the key casing', () => {
@@ -80,8 +81,8 @@ describe('log', () => {
       expect(line).not.toContain('alice@example.com');
       expect(line).not.toContain('params:');
     }
-    expect(JSON.parse(firstOf(lines)).error).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: overloaded' });
-    expect(JSON.parse(elementAt(lines, 1)).error).toBe('Failed query: select "id" from "users" where lower("email") = ?');
+    expect(jsonRecordIn(firstOf(lines)).error).toEqual({ errorName: 'DrizzleQueryError', errorMessage: 'D1_ERROR: overloaded' });
+    expect(jsonRecordIn(elementAt(lines, 1)).error).toBe('Failed query: select "id" from "users" where lower("email") = ?');
     expect(JSON.parse(elementAt(lines, 2))).toMatchObject({ userId: 'user-1' });
   });
 
@@ -91,7 +92,7 @@ describe('log', () => {
     log('error', 'env_validation_error', { message: 'bad FRONTEND_URL', level: 'info', timestamp: 'x' });
 
     expect(JSON.parse(firstOf(lines))).toMatchObject({ level: 'error', message: 'env_validation_error' });
-    expect(JSON.parse(firstOf(lines)).timestamp).not.toBe('x');
+    expect(jsonRecordIn(firstOf(lines)).timestamp).not.toBe('x');
   });
 });
 

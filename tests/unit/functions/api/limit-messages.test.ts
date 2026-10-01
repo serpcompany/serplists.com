@@ -35,8 +35,9 @@ import { handleChecklists } from '@functions/api/handlers/checklists';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
+const env = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
 const pro = { plan: 'pro' as const, limits: { maxTemplates: null, maxActiveRuns: null } };
 const sections = [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'Task' }] }];

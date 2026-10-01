@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { firstOf, taskIn } from '../../../support/elements';
 import { dbMocks, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -11,6 +11,7 @@ import {
 } from '../../../fixtures/malformedSections';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 describe('Checklists Handlers', () => {
   beforeEach(resetChecklistsHandlerMocks);
@@ -62,7 +63,7 @@ describe('Checklists Handlers', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)).toEqual(storedSections);
+      expect(storedSectionsIn(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)).toEqual(storedSections);
     });
 
     it('starts a run from a Template stored before the check with the content made safe', async () => {
@@ -81,8 +82,8 @@ describe('Checklists Handlers', () => {
       const response = await handleChecklists(apiRequest('checklists', 'POST', { template_id: 'template-1', title: 'Run' }), mockEnv);
 
       expect(response.status).toBe(200);
-      const stored = JSON.parse(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
-      expect(stored[0].items[0].contents).toEqual(THE_SAME_CONTENTS_MADE_SAFE);
+      const stored = storedSectionsIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
+      expect(taskIn(stored, 0, 0).contents).toEqual(THE_SAME_CONTENTS_MADE_SAFE);
     });
   });
 });

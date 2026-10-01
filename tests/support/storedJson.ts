@@ -4,7 +4,10 @@ import type { ResponseSchema } from '@/lib/api/request';
 const jsonRecords = z.array(z.record(z.unknown()));
 
 export const storedTask = z
-  .object({ contents: z.array(z.object({ subItems: jsonRecords.optional() }).passthrough()).optional() })
+  .object({
+    contents: z.array(z.object({ subItems: jsonRecords.optional() }).passthrough()).optional(),
+    subItems: jsonRecords.optional(),
+  })
   .passthrough();
 
 export const storedSections = z.array(z.object({ items: z.array(storedTask) }).passthrough());

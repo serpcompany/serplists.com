@@ -6,6 +6,7 @@ import { handleChecklists } from '@functions/api/handlers/checklists';
 import { apiRequest } from '../../../support/apiRequest';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn } from '../../../support/storedJson';
 
 const ROW_BUDGET_BYTES = 300 * 1024;
 const encoder = new TextEncoder();
@@ -47,19 +48,19 @@ const send = (path: string, method: string, body: unknown) =>
   handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
 
 function expectCompactAudit(toggledId: string) {
-  const audit = firstOf(dbMocks.insertChain.values.mock.calls)[0] as Record<string, unknown>;
+  const audit = firstOf(dbMocks.insertChain.values.mock.calls)[0];
   const total = Object.values(audit).reduce<number>(
     (sum, value) => sum + (typeof value === 'string' ? encoder.encode(value).byteLength : 8),
     0,
   );
   expect(total).toBeLessThan(ROW_BUDGET_BYTES);
   for (const column of ['before_json', 'after_json'] as const) {
-    const snapshot = JSON.parse(audit[column] as string);
+    const snapshot = jsonRecordIn(audit[column]);
     expect(snapshot).not.toHaveProperty('items');
     expect(snapshot).not.toHaveProperty('retired_items');
     expect(snapshot).not.toHaveProperty('share_token');
   }
-  const diff = JSON.parse(audit.diff_json as string);
+  const diff = jsonRecordIn(audit.diff_json);
   expect(diff.items).toEqual(objectContaining({ completed: [toggledId] }));
 }
 
@@ -109,7 +110,7 @@ describe('run audit rows stay small, since an oversized one would fail every sav
       .passthrough()
       .parse(firstOf(dbMocks.insertChain.values.mock.calls)[0]);
     expect(encoder.encode(audit.before_json + audit.after_json + audit.diff_json).byteLength).toBeLessThan(ROW_BUDGET_BYTES);
-    expect(JSON.parse(audit.diff_json).retired_items).toEqual({ count: 0 });
+    expect(jsonRecordIn(audit.diff_json).retired_items).toEqual({ count: 0 });
   });
 
   it('and history responses never return the full copies that older rows still hold', async () => {
@@ -125,10 +126,10 @@ describe('run audit rows stay small, since an oversized one would fail every sav
 
     const response = await send('run-1/history', 'GET', undefined);
     const text = await response.text();
-    const data = JSON.parse(text) as { events: Array<Record<string, unknown>> };
+    const data = z.object({ events: z.array(z.record(z.unknown())) }).passthrough().parse(JSON.parse(text));
 
     expect(response.status).toBe(200);
-    expect(data.events[0]).not.toHaveProperty('diff');
+    expect(firstOf(data.events)).not.toHaveProperty('diff');
     expect(text).not.toContain('old-token');
     expect(text).not.toContain('section-1');
   });

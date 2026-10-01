@@ -15,6 +15,7 @@ import {
 import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
 import { anyInstanceOf, objectContaining } from '../../../support/asymmetricMatchers';
+import { jsonRecordIn, storedSectionsIn } from '../../../support/storedJson';
 
 const ONE_UNTICKED_ITEM = '[{"id":"item-1","title":"Item 1","isCompleted":false}]';
 
@@ -152,7 +153,7 @@ describe('Checklists Handlers', () => {
 
     const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/shared-run'), mockEnv);
     const text = await response.text();
-    const data = JSON.parse(text);
+    const data = jsonRecordIn(text);
 
     expect(response.status).toBe(200);
     expect(Object.keys(data).sort()).toEqual(sharedRunKeys);
@@ -178,7 +179,7 @@ describe('Checklists Handlers', () => {
     expect(data.success).toBe(true);
     expect(data.revision).toBe(4);
     const update = firstOf(dbMocks.updateChain.set.mock.calls)[0];
-    expect(JSON.parse(update.items)).toEqual([
+    expect(storedSectionsIn(update.items)).toEqual([
       { id: '1', title: 'Checklist', items: [{ id: 'item-1', title: 'Item 1', isCompleted: true }] },
     ]);
     expect(update).toEqual(objectContaining({ status: 'completed', progress: 100 }));

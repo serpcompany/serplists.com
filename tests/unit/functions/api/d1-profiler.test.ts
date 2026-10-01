@@ -1,35 +1,80 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { withD1Profiling, type D1QueryRecord } from "../../../../functions/api/utils/d1-profiler";
 
+type Row = Record<string, unknown>;
+type Calls = { all: number; raw: number; run: number; batch: number };
+
+const resultOf = (results: Row[], rowsRead: number, rowsWritten: number): D1Result<Row> => ({
+  success: true,
+  results,
+  meta: { rows_read: rowsRead, rows_written: rowsWritten, changes: rowsWritten, duration: 0, size_after: 0, last_row_id: 0, changed_db: rowsWritten > 0 },
+});
+
+class CountingStatement implements D1PreparedStatement {
+  constructor(
+    readonly sql: string,
+    private readonly calls: Calls,
+  ) {}
+
+  bind(): CountingStatement {
+    return this;
+  }
+
+  all<T = Row>(): Promise<D1Result<T>>;
+  async all(): Promise<D1Result<Row>> {
+    this.calls.all += 1;
+    return resultOf([{ id: "a", title: "A" }], 7, this.sql.startsWith("insert") ? 3 : 0);
+  }
+
+  run<T = Row>(): Promise<D1Result<T>>;
+  async run(): Promise<D1Result<Row>> {
+    this.calls.run += 1;
+    return resultOf([], 1, 2);
+  }
+
+  raw<T = unknown[]>(options: { columnNames: true }): Promise<[string[], ...T[]]>;
+  raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
+  async raw(): Promise<unknown[][]> {
+    this.calls.raw += 1;
+    return [["a", "A"]];
+  }
+
+  first<T = unknown>(column: string): Promise<T | null>;
+  first<T = Row>(): Promise<T | null>;
+  async first(): Promise<null> {
+    throw new Error("The profiler tests read no first()");
+  }
+}
+
+class CountingDatabase implements D1Database {
+  readonly calls: Calls = { all: 0, raw: 0, run: 0, batch: 0 };
+
+  prepare(sql: string): CountingStatement {
+    return new CountingStatement(sql, this.calls);
+  }
+
+  batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  async batch(statements: D1PreparedStatement[]): Promise<D1Result<Row>[]> {
+    this.calls.batch += 1;
+    return Promise.all(statements.map((statement) => statement.all()));
+  }
+
+  exec(): Promise<D1ExecResult> {
+    throw new Error("The profiler tests run no exec()");
+  }
+
+  withSession(): D1DatabaseSession {
+    throw new Error("The profiler tests open no session");
+  }
+
+  dump(): Promise<ArrayBuffer> {
+    throw new Error("The profiler tests take no dump");
+  }
+}
+
 function fakeDatabase() {
-  const calls = { all: 0, raw: 0, run: 0, batch: 0 };
-  const statement = (sql: string) => {
-    const self = {
-      sql,
-      bind: vi.fn(() => self),
-      all: vi.fn(async () => {
-        calls.all += 1;
-        return { results: [{ id: "a", title: "A" }], success: true, meta: { rows_read: 7, rows_written: sql.startsWith("insert") ? 3 : 0 } };
-      }),
-      raw: vi.fn(async () => {
-        calls.raw += 1;
-        return [["a", "A"]];
-      }),
-      run: vi.fn(async () => {
-        calls.run += 1;
-        return { results: [], success: true, meta: { rows_read: 1, rows_written: 2 } };
-      }),
-    };
-    return self;
-  };
-  const db = {
-    prepare: vi.fn((sql: string) => statement(sql)),
-    batch: vi.fn(async (statements: { all: () => Promise<unknown> }[]) => {
-      calls.batch += 1;
-      return Promise.all(statements.map((s) => s.all()));
-    }),
-  };
-  return { db: db as unknown as D1Database, calls };
+  const db = new CountingDatabase();
+  return { db, calls: db.calls };
 }
 
 describe("withD1Profiling", () => {

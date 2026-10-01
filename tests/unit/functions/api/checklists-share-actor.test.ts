@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { elementAt, firstOf } from '../../../support/elements';
+import { elementAt, firstOf, taskIn } from '../../../support/elements';
 import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetToASignedOutVisitorOnTheFreePlan } from '../../../support/apiHandlerMocks';
 import { guardedInserts } from '../../../support/recordedGuardedInserts';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { storedSectionsIn } from '../../../support/storedJson';
+import { runHistorySchema } from '@/lib/schemas/historyResponses';
 
 const items = JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: false }] }]);
 
@@ -31,8 +33,8 @@ const member = (userId: string, role = 'viewer') => ({ id: `m-${userId}`, team_i
 
 async function guestTicksTask(sessionUserId: string | null) {
   vi.mocked(getSessionUserId).mockResolvedValue(sessionUserId);
-  const sections = JSON.parse(items);
-  sections[0].items[0].isCompleted = true;
+  const sections = storedSectionsIn(items);
+  taskIn(sections, 0, 0).isCompleted = true;
   const response = await handleChecklists(new Request('http://localhost/api/checklists/shared/token-1', {
     method: 'PUT',
     body: JSON.stringify({ sections, expected_revision: 2 }),
@@ -41,7 +43,7 @@ async function guestTicksTask(sessionUserId: string | null) {
   const audits = [...dbMocks.insertChain.values.mock.calls.map(([values]) => values), ...guardedInserts.map(({ values }) => values)]
     .filter((values) => values.action === 'checklist_run.shared_updated');
   expect(audits).toHaveLength(1);
-  return audits[0] as Record<string, unknown>;
+  return firstOf(audits);
 }
 
 function shareEvent(actorUserId: string | null, extra: Record<string, unknown> = {}) {
@@ -64,7 +66,7 @@ async function history(sessionUserId: string) {
   const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1/history'), mockEnv);
   const text = await response.text();
   expect(response.status).toBe(200);
-  return { text, events: (JSON.parse(text) as { events: Array<{ id: string; actor: Record<string, unknown> }> }).events };
+  return { text, events: runHistorySchema.parse(JSON.parse(text)).events };
 }
 
 const hidden = { userId: null, email: null, name: null, username: null };

@@ -3,6 +3,7 @@ import { dbMocks } from "../../../support/mockedDrizzleD1";
 import { chainSelectsUpdatesAndDeletes } from "../../../support/drizzleChainMocks";
 
 import { getEntitlementsForContext, getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { apiEnv } from "../../../support/apiEnv";
 
 function theOverrideLookupFinds(row: Record<string, unknown>) {
   dbMocks.selectChain.limit.mockResolvedValueOnce([row]);
@@ -18,7 +19,7 @@ describe("getEntitlementsForUser", () => {
   it("returns pro when an override exists", async () => {
     theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 
-    const env: any = { DB: {} };
+    const env = apiEnv();
     const entitlements = await getEntitlementsForUser(env, "user-1");
     expect(entitlements.plan).toBe("pro");
     expect(entitlements.source).toBe("user_override");
@@ -26,7 +27,7 @@ describe("getEntitlementsForUser", () => {
   });
 
   it("defaults to free when no Stripe config and no override", async () => {
-    const env: any = { DB: {} };
+    const env = apiEnv();
     const entitlements = await getEntitlementsForUser(env, "user-1");
     expect(entitlements.plan).toBe("free");
     expect(entitlements.source).toBe("free");
@@ -39,7 +40,7 @@ describe("getEntitlementsForUser", () => {
       new Error("D1_ERROR: no such table: entitlement_overrides"),
     );
 
-    const env: any = { DB: {} };
+    const env = apiEnv();
     const entitlements = await getEntitlementsForUser(env, "user-1");
 
     expect(entitlements.plan).toBe("free");
@@ -49,7 +50,7 @@ describe("getEntitlementsForUser", () => {
   it("resolves user context through the existing user entitlement path", async () => {
     theOverrideLookupFinds({ user_id: "user-1", plan: "pro", expires_at: null, created_at: "now" });
 
-    const env: any = { DB: {} };
+    const env = apiEnv();
     const entitlements = await getEntitlementsForContext(env, { type: "user", userId: "user-1" });
 
     expect(entitlements.plan).toBe("pro");
@@ -59,7 +60,7 @@ describe("getEntitlementsForUser", () => {
   it("resolves premium team context from a team override without upgrading the user", async () => {
     theOverrideLookupFinds({ team_id: "team-1", plan: "team", expires_at: null, created_at: "now" });
 
-    const env: any = { DB: {} };
+    const env = apiEnv();
     const entitlements = await getEntitlementsForContext(env, { type: "team", teamId: "team-1", userId: "user-1" });
 
     expect(entitlements.plan).toBe("team");

@@ -18,7 +18,6 @@ const subscriptionMocks = vi.hoisted(() => ({
 const teamAccessMocks = vi.hoisted(() => ({
   canViewTeam: vi.fn(),
   getActiveTeamMembership: vi.fn(),
-  normalizeTeamRole: vi.fn(),
 }));
 
 type CustomerRow = { user_id: string; stripe_customer_id: string; created_at?: string; updated_at?: string };
@@ -91,10 +90,10 @@ vi.mock("@functions/api/utils/stripe-subscriptions", async (importOriginal) => (
   listOpenStoredSubscriptions: subscriptionMocks.listOpenStoredSubscriptions,
 }));
 
-vi.mock("@functions/api/utils/team-access", () => ({
+vi.mock("@functions/api/utils/team-access", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@functions/api/utils/team-access")>()),
   canViewTeam: teamAccessMocks.canViewTeam,
   getActiveTeamMembership: teamAccessMocks.getActiveTeamMembership,
-  normalizeTeamRole: teamAccessMocks.normalizeTeamRole,
 }));
 
 import { handleBilling } from "@functions/api/handlers/billing";
@@ -188,7 +187,6 @@ describe("Billing handler", () => {
       role: "viewer",
       status: "active",
     });
-    teamAccessMocks.normalizeTeamRole.mockImplementation((role) => role);
     teamAccessMocks.canViewTeam.mockReturnValue(true);
   });
 

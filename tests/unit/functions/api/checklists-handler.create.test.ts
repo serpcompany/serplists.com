@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { firstOf } from '../../../support/elements';
+import { firstOf, subTaskAt, taskIn } from '../../../support/elements';
 import {
   dbMocks,
   expectTheOrganizationPlanChecked,
@@ -21,6 +21,7 @@ import { getEntitlementsForContext } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { storedSectionsIn } from '../../../support/storedJson';
 
 const RUN_OF_LEGACY_ITEMS = { title: 'Run', items: [{ id: 'item-1', title: 'Item 1' }] };
 
@@ -59,8 +60,8 @@ describe('Checklists Handlers', () => {
 
     const inserted = await insertedRunOf(await post(RUN_OF_LEGACY_ITEMS));
 
-    const storedItems = JSON.parse(inserted.items);
-    expect(storedItems[0].items).toHaveLength(1);
+    const storedItems = storedSectionsIn(inserted.items);
+    expect(firstOf(storedItems).items).toHaveLength(1);
   });
 
   it('should create checklist runs from the server-side template snapshot', async () => {
@@ -95,13 +96,14 @@ describe('Checklists Handlers', () => {
       sections: [{ id: 'tampered', title: 'Tampered', items: [] }],
     }));
 
-    const storedItems = JSON.parse(inserted.items);
+    const storedItems = storedSectionsIn(inserted.items);
+    const storedTask = taskIn(storedItems, 0, 0);
     expect(inserted.title).toBe('Client Run Name');
-    expect(storedItems[0].id).toBe('section-1');
-    expect(storedItems[0].title).toBe('Stored section');
-    expect(storedItems[0].items[0].title).toBe('Stored item');
-    expect(storedItems[0].items[0].isCompleted).toBe(false);
-    expect(storedItems[0].items[0].subItems[0].isCompleted).toBe(false);
+    expect(firstOf(storedItems).id).toBe('section-1');
+    expect(firstOf(storedItems).title).toBe('Stored section');
+    expect(storedTask.title).toBe('Stored item');
+    expect(storedTask.isCompleted).toBe(false);
+    expect(subTaskAt(storedTask, 0).isCompleted).toBe(false);
     expect(inserted.template_version).toBe(7);
     expect(inserted.revision).toBe(1);
   });
@@ -120,7 +122,7 @@ describe('Checklists Handlers', () => {
     const response = await post({ template_id: 'template-1' });
 
     expect(response.status).toBe(200);
-    const storedItems = JSON.parse(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
+    const storedItems = storedSectionsIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].items);
     expect(storedItems).toEqual(runSections);
     const progressTheRunPageShows = calculateSectionsProgress(normalizeSections(storedItems));
     expect(progressTheRunPageShows).toBe(0);
