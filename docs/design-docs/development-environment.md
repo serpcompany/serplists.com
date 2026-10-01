@@ -235,6 +235,11 @@ arguments to `wrangler dev` through a shell without quoting them, so the smoke r
 (`buildPreviewArgs` in `tests/e2e/run-smoke-lib.mjs`) and `d1:profile` pass it only plain
 values, with no spaces or shell characters.
 
+A script that opens local D1 with Wrangler's `getPlatformProxy()` passes `envFiles` a file
+that does not exist (`NO_DEV_VARS_OR_DOTENV_FILES` in `scripts/data/local-d1.ts`): Wrangler
+reads an empty list as leave to load `.dev.vars`, and a list of missing files loads neither
+`.dev.vars` nor `.env` files.
+
 ## Line endings
 
 `.gitattributes` checks every text file out with LF (`* text=auto eol=lf`) and marks

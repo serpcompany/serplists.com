@@ -15,7 +15,7 @@ const example = readFileSync(path.join(process.cwd(), '.dev.vars.example'), 'utf
 const SECRET = 'a'.repeat(48);
 
 describe('renderDevVars', () => {
-  it('fills in the auth secret and comments out placeholder integrations', () => {
+  it('fills in the auth secret and comments out placeholder integrations, so they stay off until someone sets real test values', () => {
     const lines = renderDevVars(example, SECRET).split('\n');
 
     expect(lines).toContain(`BETTER_AUTH_SECRET=${SECRET}`);
@@ -32,16 +32,11 @@ describe('renderDevVars', () => {
   });
 });
 
-// `pnpm run setup` used to seed only when .wrangler/state/v3/d1/miniflare-D1DatabaseObject
-// was missing. d1-reset-local creates that directory by migrating before it seeds, so
-// after a failed or interrupted seed (or once dev:api had created the database) every
-// later setup only migrated and still printed the john@test.com sign-in.
 describe('runLocalD1Setup', () => {
   const seeded = { testData: true, officialTemplates: true, officialLogin: true, legacyTestSlugs: false };
   const empty = { testData: false, officialTemplates: false, officialLogin: false, legacyTestSlugs: false };
 
-  // A fake local D1: seed steps flip the status the way the real ones do.
-  function fakeDatabase(initial: typeof seeded, { failOn }: { failOn?: string } = {}) {
+  function fakeLocalD1(initial: typeof seeded, { failOn }: { failOn?: string } = {}) {
     const status = { ...initial };
     const steps: string[] = [];
     const run = (step: string) => {
@@ -51,8 +46,8 @@ describe('runLocalD1Setup', () => {
       if (step === 'seed-test') Object.assign(status, { testData: true, legacyTestSlugs: false });
       if (step === 'repair-test-slugs') status.legacyTestSlugs = false;
       if (step === 'official-templates') {
-        // The official slugs are still held by the test Templates.
-        if (status.legacyTestSlugs) throw new Error('UNIQUE constraint failed: templates.slug');
+        const testTemplatesHoldTheOfficialSlugs = status.legacyTestSlugs;
+        if (testTemplatesHoldTheOfficialSlugs) throw new Error('UNIQUE constraint failed: templates.slug');
         status.officialTemplates = true;
       }
       if (step === 'official-login') status.officialLogin = status.officialTemplates;
@@ -61,39 +56,39 @@ describe('runLocalD1Setup', () => {
   }
 
   it('creates and seeds local D1 when there is none', () => {
-    const db = fakeDatabase(empty);
+    const db = fakeLocalD1(empty);
     expect(runLocalD1Setup({ stateDirExists: false, ...db })).toEqual(seeded);
     expect(db.steps).toEqual(['reset']);
   });
 
   it('only migrates a database that is already seeded', () => {
-    const db = fakeDatabase(seeded);
+    const db = fakeLocalD1(seeded);
     runLocalD1Setup({ stateDirExists: true, ...db });
     expect(db.steps).toEqual(['migrate']);
   });
 
   it('seeds a database whose directory exists but whose seed never ran or failed', () => {
-    const db = fakeDatabase(empty);
+    const db = fakeLocalD1(empty);
     expect(runLocalD1Setup({ stateDirExists: true, ...db })).toEqual(seeded);
     expect(db.steps).toEqual(['migrate', 'seed-test', 'official-templates', 'official-login']);
   });
 
   it('runs only the stages that are missing, never resetting existing test data', () => {
-    const noOfficial = fakeDatabase({ ...seeded, officialTemplates: false, officialLogin: false });
+    const noOfficial = fakeLocalD1({ ...seeded, officialTemplates: false, officialLogin: false });
     runLocalD1Setup({ stateDirExists: true, ...noOfficial });
     expect(noOfficial.steps).toEqual(['migrate', 'official-templates', 'official-login']);
 
-    const noLogin = fakeDatabase({ ...seeded, officialLogin: false });
+    const noLogin = fakeLocalD1({ ...seeded, officialLogin: false });
     runLocalD1Setup({ stateDirExists: true, ...noLogin });
     expect(noLogin.steps).toEqual(['migrate', 'official-login']);
 
-    const noTestData = fakeDatabase({ ...seeded, testData: false });
+    const noTestData = fakeLocalD1({ ...seeded, testData: false });
     runLocalD1Setup({ stateDirExists: true, ...noTestData });
     expect(noTestData.steps).toEqual(['migrate', 'seed-test']);
   });
 
   it('fails, so no sign-in hint is printed, when a seed step fails or data is still missing', () => {
-    const failing = fakeDatabase(empty, { failOn: 'seed-test' });
+    const failing = fakeLocalD1(empty, { failOn: 'seed-test' });
     expect(() => runLocalD1Setup({ stateDirExists: true, ...failing })).toThrow('seed-test failed');
 
     const stillEmpty = { steps: [] as string[], run: () => undefined, readSeedStatus: () => empty };
@@ -102,10 +97,8 @@ describe('runLocalD1Setup', () => {
     );
   });
 
-  // A database seeded before the test Templates got sample- slugs: those Templates hold four
-  // official slugs, so the official Templates were skipped and their seed now fails.
-  it('renames the old test slugs before seeding the official Templates, without reseeding test data', () => {
-    const db = fakeDatabase({ ...seeded, officialTemplates: false, legacyTestSlugs: true });
+  it('renames the test Templates holding official slugs from an older seed before seeding the official Templates, without reseeding test data', () => {
+    const db = fakeLocalD1({ ...seeded, officialTemplates: false, legacyTestSlugs: true });
 
     expect(runLocalD1Setup({ stateDirExists: true, ...db })).toEqual(seeded);
     expect(db.steps).toEqual(['migrate', 'repair-test-slugs', 'official-templates', 'official-login']);
@@ -115,7 +108,7 @@ describe('runLocalD1Setup', () => {
   });
 
   it('names the seed stage that failed and how to recover', () => {
-    const db = fakeDatabase({ ...seeded, officialTemplates: false, officialLogin: false }, { failOn: 'official-templates' });
+    const db = fakeLocalD1({ ...seeded, officialTemplates: false, officialLogin: false }, { failOn: 'official-templates' });
 
     expect(() => runLocalD1Setup({ stateDirExists: true, ...db })).toThrow(
       /^Seed stage official-templates failed: .*pnpm run db:seed.*pnpm run db:reset/s,
@@ -125,7 +118,7 @@ describe('runLocalD1Setup', () => {
 });
 
 describe('local D1 seed status', () => {
-  it('reads the status line from the seed-status output', () => {
+  it('reads the status line from the seed-status output, among the lines Wrangler logs around it', () => {
     const output = ['wrangler: using local persistence', `${SEED_STATUS_PREFIX}{"testData":true,"officialTemplates":false,"officialLogin":false,"legacyTestSlugs":true}`, ''].join('\r\n');
     expect(parseSeedStatus(output)).toEqual({ testData: true, officialTemplates: false, officialLogin: false, legacyTestSlugs: true });
     expect(parseSeedStatus(`${SEED_STATUS_PREFIX}{"testData":true,"officialTemplates":true,"officialLogin":true}`)).toEqual({
@@ -138,13 +131,18 @@ describe('local D1 seed status', () => {
     expect(() => parseSeedStatus(`${SEED_STATUS_PREFIX}{"testData":"yes"}`)).toThrow();
   });
 
-  it('keeps the seed stages in the order db:reset runs them', () => {
+  it('keeps the seed stages in the order they run', () => {
     expect(LOCAL_SEED_STEPS.map((step) => step.id)).toEqual(['seed-test', 'repair-test-slugs', 'official-templates', 'official-login']);
-    // A fresh seed-test writes today's slugs, so db:reset skips the repair.
+  });
+
+  it('leaves the slug repair out of db:reset and a fresh seed, since seed-test writes today\'s slugs', () => {
     expect(RESET_SEED_STEPS.map((step) => step.id)).toEqual(['seed-test', 'official-templates', 'official-login']);
     expect(planSeedSteps({ testData: false, officialTemplates: false, officialLogin: false, legacyTestSlugs: true })).toEqual(
       RESET_SEED_STEPS.map((step) => step.id),
     );
+  });
+
+  it('seeds the official login again after the official Templates, since it needs their SERP User', () => {
     expect(planSeedSteps({ testData: true, officialTemplates: false, officialLogin: true, legacyTestSlugs: true })).toEqual(
       ['repair-test-slugs', 'official-templates', 'official-login'],
     );

@@ -6,6 +6,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import * as schema from "../../db/schema/index";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+export const NO_DEV_VARS_OR_DOTENV_FILES = [".local-d1-env-disabled"];
 
 function createLocalDb(binding: D1Database) {
   return drizzle(binding, { schema });
@@ -19,9 +20,7 @@ export async function withLocalD1<T>(
 ): Promise<T> {
   const platform = await getPlatformProxy<{ DB: D1Database }>({
     configPath: path.join(repoRoot, "wrangler.toml"),
-    // Wrangler 4.54 treats [] as permission to load .dev.vars, so use an
-    // explicit missing file to disable both .dev.vars and default .env files.
-    envFiles: [".local-d1-env-disabled"],
+    envFiles: NO_DEV_VARS_OR_DOTENV_FILES,
     persist: persistPath ? { path: path.resolve(repoRoot, persistPath, "v3") } : true,
     remoteBindings: false,
   });

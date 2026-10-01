@@ -150,7 +150,9 @@ baseline.
   existing local database still holds, add a local-only stage that fixes it in place
   (like `repair-test-slugs`, which gives test Templates seeded with official slugs
   their `sample-` slugs): setup never reruns seed-test on existing data, and
-  `db/seeds/official-templates.sql` also runs against staging and production.
+  `db/seeds/official-templates.sql` also runs against staging and production. The
+  official login needs the `serp` User that the official Template seed writes, so setup
+  seeds it again whenever that seed runs.
 - Staging: `pnpm run db:seed:official:staging` for official templates only, unless
   there is a deliberate test-data plan.
 - Production: never seed test Users or Organization fixtures.

@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// One-command, re-runnable local setup for a fresh clone or git worktree:
-//   pnpm install && pnpm run setup && pnpm run dev:all
-// - creates .dev.vars from .dev.vars.example with a generated auth secret (never overwrites)
-// - creates local D1 if this checkout has none, otherwise applies pending migrations,
-//   then seeds whatever seed data is missing (never resetting data that is there)
-// - installs the Playwright browser used by e2e tests and `pnpm run ui:snap`
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -18,7 +12,6 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const devVarsPath = path.join(repoRoot, ".dev.vars");
 const localD1Path = path.join(repoRoot, ".wrangler/state/v3/d1/miniflare-D1DatabaseObject");
 
-// No shell: tools run as `node <bin script>` (see scripts/lib/run-tool.mjs).
 function run(label, { command, args, options = {} }) {
   console.log(`\n> ${label}`);
   execFileSync(command, args, { ...options, cwd: repoRoot, stdio: "inherit" });

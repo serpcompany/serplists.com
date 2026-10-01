@@ -25,6 +25,7 @@ import {
   UPDATE_TEMPLATE,
 } from "./d1-profile-lib";
 import { buildSyntheticSql, datasetCounts } from "./d1-profile-dataset";
+import { NO_DEV_VARS_OR_DOTENV_FILES } from "./data/local-d1";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const persistPath = ".wrangler/d1-profile-state";
@@ -125,7 +126,7 @@ const shortSql = (sql: string) => sql.replace(/\s+/g, " ").replace(/"/g, "").rep
 async function explainPlans(sqls: string[]): Promise<Map<string, string>> {
   const platform = await getPlatformProxy<{ DB: D1Database }>({
     configPath: path.join(repoRoot, "wrangler.toml"),
-    envFiles: [".d1-profile-no-env"],
+    envFiles: NO_DEV_VARS_OR_DOTENV_FILES,
     persist: { path: path.resolve(repoRoot, persistPath, "v3") },
   });
   const plans = new Map<string, string>();

@@ -22,7 +22,6 @@ const operations = {
   "repair-test-slugs": repairLegacyTestTemplateSlugs,
   cleanup: cleanupLocalTestData,
   "reset-passwords": resetLocalTestUserPasswords,
-  // Read-only: prints which seed stages have completed, for scripts/setup-local.mjs.
   "seed-status": async (db: LocalDb) => {
     console.log(`${SEED_STATUS_PREFIX}${JSON.stringify(await readLocalSeedStatus(db))}`);
   },
