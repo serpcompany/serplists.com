@@ -1,6 +1,8 @@
 # Frontend
 
-A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`), running on
+A Next.js 16 app (App Router, React 19) in `src/`, in TypeScript (`strict`, with
+`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride` and
+`noFallthroughCasesInSwitch`; see [quality gates](RELIABILITY.md#quality-gates)), running on
 Cloudflare Workers through OpenNext ([ARCHITECTURE.md](../ARCHITECTURE.md)). Server state
 goes through TanStack Query and UI through shadcn/ui on Tailwind ([DESIGN.md](DESIGN.md)).
 Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
