@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// The server keeps only an invite's token hash, so a link that was lost before
-// it was copied cannot be shown again. Managers replace it with a new link.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -110,10 +107,17 @@ function collectSqlColumnNames(value: unknown, seen = new Set<unknown>()): strin
   return [...names, ...chunks.flatMap((chunk) => collectSqlColumnNames(chunk, seen))];
 }
 
-describe("POST /api/teams/:teamId/invites/:inviteId/link", () => {
+async function replaceTheLinkAsAnAdmin() {
+  dbMocks.selectChain.limit
+    .mockResolvedValueOnce([membership("admin")])
+    .mockResolvedValueOnce([pendingInvite()]);
+  const response = await handleTeams(newLinkRequest(), mockEnv);
+  return { response, data: await response.json(), storedChanges: () => dbMocks.updateChain.set.mock.calls[0][0] };
+}
+
+describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost link since only its token hash is kept", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Drop queued rows a short-circuited request left unread.
     dbMocks.selectChain.limit.mockReset();
     dbMocks.db.batch.mockReset();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
@@ -130,12 +134,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link", () => {
   });
 
   it("replaces the pending invite's token and returns a new link", async () => {
-    dbMocks.selectChain.limit
-      .mockResolvedValueOnce([membership("admin")])
-      .mockResolvedValueOnce([pendingInvite()]);
-
-    const response = await handleTeams(newLinkRequest(), mockEnv);
-    const data = await response.json();
+    const { response, data } = await replaceTheLinkAsAnAdmin();
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
@@ -155,21 +154,31 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link", () => {
       invitePath: data.invitePath,
       inviteUrl: data.inviteUrl,
     });
+  });
 
-    // Only the new token's hash is stored, so the old link stops working.
-    const updates = dbMocks.updateChain.set.mock.calls[0][0];
+  it("stores only the new token's hash, so the old link stops working", async () => {
+    const { data, storedChanges } = await replaceTheLinkAsAnAdmin();
+
+    const updates = storedChanges();
     expect(updates.token_hash).toBe(await sha256Hex(data.inviteToken));
     expect(updates.token_hash).not.toBe(data.inviteToken);
     expect(Date.parse(updates.expires_at)).toBeGreaterThan(Date.now() + 6 * 24 * 60 * 60 * 1000);
     expect(updates.role).toBe("viewer");
+  });
 
-    // The write repeats the pending checks and is scoped to this Organization.
+  it("repeats the pending checks in the write, scoped to this Organization", async () => {
+    await replaceTheLinkAsAnAdmin();
+
     const whereColumns = collectSqlColumnNames(dbMocks.updateChain.where.mock.calls[0][0]);
     expect(whereColumns).toEqual(
       expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
+  });
 
-    // The audit row is written only when the token was replaced, and never holds the token.
+  it("writes the audit row only when the token was replaced, and never with the token", async () => {
+    const { data, storedChanges } = await replaceTheLinkAsAnAdmin();
+
+    const updates = storedChanges();
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
     expect(dbMocks.insertChain.select).toHaveBeenCalledTimes(1);
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledTimes(1);
@@ -220,9 +229,9 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link", () => {
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
-  it("returns 404 for an invite that is not pending in this Organization", async () => {
-    // Revoked, accepted, expired, or another Organization's invite: the scoped lookup finds nothing.
-    dbMocks.selectChain.limit.mockResolvedValueOnce([membership("admin")]).mockResolvedValueOnce([]);
+  it("returns 404 for a revoked, accepted, expired or other Organization's invite, which the scoped lookup cannot find", async () => {
+    const pendingInvitesTheScopedLookupFinds: never[] = [];
+    dbMocks.selectChain.limit.mockResolvedValueOnce([membership("admin")]).mockResolvedValueOnce(pendingInvitesTheScopedLookupFinds);
 
     const response = await handleTeams(newLinkRequest(undefined, "invite-other-team"), mockEnv);
 

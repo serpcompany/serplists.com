@@ -308,7 +308,8 @@ describe("Teams handler", () => {
         ])
         .mockResolvedValueOnce([{ id: "team-1", name: "Old Team", slug: "old-team", archived_at: null }]);
       if (body.slug) {
-        dbMocks.selectChain.limit.mockResolvedValueOnce([]); // the slug looks free when checked
+        const organizationsWithTheSlugWhenChecked: never[] = [];
+        dbMocks.selectChain.limit.mockResolvedValueOnce(organizationsWithTheSlugWhenChecked);
       }
       return new Request("http://localhost/api/teams/team-1", { method: "PUT", body: JSON.stringify(body) });
     }

@@ -81,14 +81,13 @@ function activeOwners() {
   ).map(({ id }) => id);
 }
 
-describe("Organization membership writes against SQLite", () => {
+describe("Organization membership writes against SQLite, which leave every Organization one active owner whatever interleaving ran", () => {
   beforeEach(() => {
     d1 = new SqliteD1();
     seedOrganization();
   });
 
   afterEach(() => {
-    // Every Organization keeps exactly one active owner, whatever interleaving ran.
     expect(activeOwners()).toHaveLength(1);
     d1.sqlite.close();
   });
@@ -287,9 +286,8 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
-  describe("invites for someone who is already an active member", () => {
+  describe("invites left over for someone who is already an active member, from before re-enabling revoked invites or a race with a re-enable", () => {
     function insertInvite(id: string, email: string, role: string) {
-      // A leftover from before re-enabling revoked invites, or from a race with a re-enable.
       d1.run(
         `INSERT INTO team_invites (id, team_id, email, role, token_hash, invited_by_user_id, expires_at, created_at)
          VALUES (?, 'team-1', ?, ?, ?, 'admin-user', ?, ?)`,
@@ -454,8 +452,6 @@ describe("Organization membership writes against SQLite", () => {
     });
   });
 
-  // A manager's new link replaces the old one and can change the role. An accept that read
-  // the invite before the new link was made must not apply the old role or the old link.
   describe("an invite whose link is reissued while it is being accepted", () => {
     async function inviteNewUser(role = "admin") {
       const created = await asUser("admin-user", "POST", "/team-1/invites", { email: "new@example.test", role });
@@ -484,7 +480,7 @@ describe("Organization membership writes against SQLite", () => {
     it.each([
       ["the old link", (invite: { token: string }) => `/invites/${invite.token}/accept`],
       ["the incoming list", (invite: { id: string }) => `/invites/pending/${invite.id}/accept`],
-    ])("never grants the old role through %s", async (_label, acceptPath) => {
+    ])("never grants the old role through %s, while the new link grants the new one", async (_label, acceptPath) => {
       const invite = await inviteNewUser("admin");
       const newToken = reissueBeforeTheAccept(invite.id, "viewer");
 
@@ -496,9 +492,10 @@ describe("Organization membership writes against SQLite", () => {
       expect(newUserMembership()).toEqual([]);
       expect(auditActions("team_invite.accepted")).toHaveLength(0);
 
-      // The old link stays dead; the new one, or the refreshed incoming list, grants the new role.
-      expect((await asUser("new-user", "POST", `/invites/${invite.token}/accept`)).status).toBe(404);
-      expect((await asUser("new-user", "POST", `/invites/${newToken()}/accept`)).status).toBe(200);
+      const acceptThroughTheOldLink = await asUser("new-user", "POST", `/invites/${invite.token}/accept`);
+      expect(acceptThroughTheOldLink.status).toBe(404);
+      const acceptThroughTheNewLink = await asUser("new-user", "POST", `/invites/${newToken()}/accept`);
+      expect(acceptThroughTheNewLink.status).toBe(200);
       expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
     });
 
@@ -797,9 +794,9 @@ describe("Organization membership writes against SQLite", () => {
       const plan = d1.queryPlan(inviteQuery!).join(" | ");
       expect(plan).toContain("USING INDEX idx_team_invites_email");
       expect(plan).not.toContain("SCAN team_invites");
-      // The inviter and existing-member checks are lookups on the (team_id, user_id) unique index.
       expect(plan).not.toMatch(/SCAN (team_members|active_manager|active_member)\b/);
-      expect(plan.match(/idx_team_members_team_user_unique/g)).toHaveLength(2);
+      const inviterAndExistingMemberLookups = plan.match(/idx_team_members_team_user_unique/g);
+      expect(inviterAndExistingMemberLookups).toHaveLength(2);
     });
   });
 });
