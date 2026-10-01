@@ -291,6 +291,16 @@ Common failures:
   `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
   any other. `trackApiRequests()` in the same file waits for the page's own requests,
   such as the several that Account Settings sends when signing in lands there.
+- A route handler that passes a request on with `route.fetch()` fails the test when the
+  page closes before the answer arrives, so a spec with one unroutes in `afterEach`:
+  `page.unrouteAll({ behavior: 'wait' })` lets the request finish (the billing status
+  stubs), and `{ behavior: 'ignoreErrors' }` drops it (`serveLocalAppAsProduction`).
+- Chromium does not always keep a page in the back/forward cache under test, so a spec
+  about what Back restores keeps the page and sends the restore itself: the stubbed
+  checkout answers with a same-page hash link, and the spec dispatches the `pageshow` event
+  with `persisted: true` that a restore fires (`billing-back-from-checkout.spec.ts`).
+- `toBeVisible()` passes for an element at opacity 0, so a spec checks a control that fades
+  in on focus or hover by its computed opacity.
 - To trace a failed request to the local API, open wrangler's debug log for that run:
   every session writes one, with timestamps and the API's own `api_request` lines, to
   `.wrangler/logs` in your home folder (`%APPDATA%\xdg.config\.wrangler\logs` on

@@ -3,9 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// Pages that await a request and then navigate (Start Run to the new run, Save to the
-// template list) must not pull a user who already left back to that destination: React
-// Router still runs a navigate() from a page that is gone.
+const LATE_NAVIGATION_WINDOW_MS = 500;
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -34,8 +32,11 @@ async function createTemplateViaApi(page: Page, title: string): Promise<string> 
   return template.id;
 }
 
-// Holds the next run creation until release() and records the created run's id.
-async function holdRunCreation(page: Page) {
+async function allowTimeForALateNavigation(page: Page) {
+  await page.waitForTimeout(LATE_NAVIGATION_WINDOW_MS);
+}
+
+async function holdRunCreationUntilReleased(page: Page) {
   let release: () => void = () => {};
   const held = new Promise<void>((resolve) => {
     release = resolve;
@@ -60,7 +61,7 @@ async function holdRunCreation(page: Page) {
 
 test('stays on the page the user went Back to when a public Start Run finishes', async ({ page }) => {
   await loginAsAdmin(page);
-  const { created, release } = await holdRunCreation(page);
+  const { created, release } = await holdRunCreationUntilReleased(page);
 
   await page.goto('/templates/');
   await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
@@ -73,8 +74,7 @@ test('stays on the page the user went Back to when a public Start Run finishes',
 
   release();
   await expect.poll(() => created.runId).toBeTruthy();
-  // Give a late navigation the chance to happen before checking it did not.
-  await page.waitForTimeout(500);
+  await allowTimeForALateNavigation(page);
   await expect(page).toHaveURL(/\/templates\/$/);
 
   await deleteRun(page, created.runId ?? '');
@@ -83,7 +83,7 @@ test('stays on the page the user went Back to when a public Start Run finishes',
 test('stays on the page the user went Back to when a template Start Run finishes', async ({ page }) => {
   await loginAsAdmin(page);
   const templateId = await createTemplateViaApi(page, `QA slow run ${Date.now()}`);
-  const { created, release } = await holdRunCreation(page);
+  const { created, release } = await holdRunCreationUntilReleased(page);
 
   await page.goto('/dashboard/templates/');
   await page.goto(`/dashboard/templates/${templateId}/`);
@@ -96,7 +96,7 @@ test('stays on the page the user went Back to when a template Start Run finishes
 
   release();
   await expect.poll(() => created.runId).toBeTruthy();
-  await page.waitForTimeout(500);
+  await allowTimeForALateNavigation(page);
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
 
   await deleteRun(page, created.runId ?? '');
@@ -116,8 +116,6 @@ test('opens the new run when the user waits on the template page', async ({ page
   await deleteTemplate(page, templateId);
 });
 
-// A Start Run from My Templates that fails after the user has left must not send them
-// to Stripe Checkout (or sign-in) from the page they moved to.
 test('does not start checkout from the page the user went Back to when a My Templates run hits the limit', async ({ page }) => {
   await loginAsAdmin(page);
   let release: () => void = () => {};
@@ -163,8 +161,7 @@ test('does not start checkout from the page the user went Back to when a My Temp
 
   release();
   await expect.poll(() => answered).toBe(true);
-  // Give a late checkout the chance to start before checking it did not.
-  await page.waitForTimeout(500);
+  await allowTimeForALateNavigation(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(checkoutRequests).toBe(0);
 });

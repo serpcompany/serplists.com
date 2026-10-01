@@ -1,9 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// A failed billing-status request must not be read as the Free plan: paid users keep
-// their features and are never sent to a checkout (docs/product-specs/pricing-and-entitlements.md).
-
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');

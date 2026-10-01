@@ -1,9 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
-
-// My Templates is the main place runs start (the dashboard's "Start a new run" links here).
 
 const RUN_LIMIT_MESSAGE =
   'Active run limit reached. Upgrade to Pro to create more checklist runs.';
@@ -15,17 +13,7 @@ async function loginAsAdmin(page: Page) {
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
-async function openStartRunDialog(page: Page) {
-  await page.goto('/dashboard/templates/');
-  await page.getByRole('button', { name: 'Show templates in list view' }).click();
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  return page.getByRole('dialog', { name: 'Start a Run' });
-}
-
-test('Start Run at the run limit opens checkout instead of only toasting', async ({ page }) => {
-  await loginAsAdmin(page);
-
-  // Answer the run start the way a Free context at its active-run limit is answered.
+async function answerRunStartsAtActiveRunLimit(page: Page) {
   await page.route('**/api/checklists', async (route) => {
     if (route.request().method() !== 'POST') {
       await route.fallback();
@@ -37,6 +25,22 @@ test('Start Run at the run limit opens checkout instead of only toasting', async
       status: 403,
     });
   });
+}
+
+async function expectFullyOpaque(locator: Locator) {
+  await expect.poll(() => locator.evaluate((node) => getComputedStyle(node).opacity)).toBe('1');
+}
+
+async function openStartRunDialog(page: Page) {
+  await page.goto('/dashboard/templates/');
+  await page.getByRole('button', { name: 'Show templates in list view' }).click();
+  await page.getByRole('button', { name: 'Start Run' }).first().click();
+  return page.getByRole('dialog', { name: 'Start a Run' });
+}
+
+test('Start Run at the run limit opens checkout instead of only toasting', async ({ page }) => {
+  await loginAsAdmin(page);
+  await answerRunStartsAtActiveRunLimit(page);
   let checkoutRequests = 0;
   await page.route('**/api/billing/checkout', async (route) => {
     checkoutRequests += 1;
@@ -65,8 +69,6 @@ test('Start Run with a blank name uses the timestamped default the field shows',
 
   await dialog.getByRole('button', { name: 'Start Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
-
-  // Before the fix a blank name saved the bare template title.
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${templateTitle} - `);
 
   const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
@@ -85,10 +87,8 @@ test('grid cards name the actions menu and never focus the hidden Start Run shor
   await card.getByRole('link').first().focus();
   await page.keyboard.press('Tab');
   await expect(trigger).toBeFocused();
-  // toBeVisible ignores opacity, so check the faded trigger actually appeared.
-  await expect.poll(() => trigger.evaluate((node) => getComputedStyle(node).opacity)).toBe('1');
+  await expectFullyOpaque(trigger);
 
-  // The next Tab leaves the card instead of landing on the invisible, clipped overlay button.
   await page.keyboard.press('Tab');
   expect(await card.evaluate((node) => node.contains(document.activeElement))).toBe(false);
 });
