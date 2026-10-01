@@ -1,12 +1,11 @@
-import React, { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { AcceptedTeamInvite } from '@/lib/api';
 
-import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+import { installFakeDomGlobals } from '../../../fixtures/fakeDom';
 import { deferred } from '../../../support/deferred';
+import { mountQueryHook, settle } from '../../../support/queryHookProbe';
 
 const apiMocks = vi.hoisted(() => ({
   acceptTeamInvite: vi.fn(),
@@ -29,16 +28,9 @@ beforeAll(() => {
 });
 afterAll(() => restoreGlobals());
 
-let root: Root | null = null;
-let queryClient: QueryClient | null = null;
-
-const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-
+const unmounts: Array<() => void> = [];
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-  queryClient?.clear();
-  queryClient = null;
+  unmounts.splice(0).forEach((unmount) => unmount());
 });
 
 async function openInvite() {
@@ -49,25 +41,9 @@ async function openInvite() {
     role: 'viewer',
     expiresAt: '2026-10-07T00:00:00.000Z',
   });
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient = client;
-  let state: ReturnType<typeof useTeamInviteLink> | undefined;
-  function Probe() {
-    state = useTeamInviteLink('invite-token', 'user-1');
-    return null;
-  }
-  root = createRoot(createFakeContainer() as unknown as Element);
-  await act(async () => {
-    root?.render(
-      <QueryClientProvider client={client}>
-        <Probe />
-      </QueryClientProvider>,
-    );
-  });
-  return () => {
-    if (!state) throw new Error('The hook did not render');
-    return state;
-  };
+  const page = await mountQueryHook(() => useTeamInviteLink('invite-token', 'user-1'));
+  unmounts.push(page.unmount);
+  return page.current;
 }
 
 describe('useTeamInviteLink', () => {
