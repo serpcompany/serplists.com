@@ -53,7 +53,8 @@ allow no code comments: code is structured, named and documented so that it need
    budgets; audit the rule overrides; fix what each finds, then enforce it.
 5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback, each tried in
    the sandbox repository first.
-6. [ ] Observability: the log query tool and its skill.
+6. [x] Observability: the log query tool and its skill. Follow-up: `d1_query` lines carry
+   their request id, so a request's timeline and the route table show rows read.
 7. [ ] Docs, `pnpm run verify`, and the full browser suite.
 
 ## Sizing (2026-09-30)
@@ -177,7 +178,24 @@ Scheduling:
     (8ecb8a20), described in the [core beliefs](../../design-docs/core-beliefs.md#no-exceptions).
 - 2026-09-30: phase 2 done. The no-comments ESLint rule (18e4dcd2) and the check for YAML,
   TOML, SQL, CSS, JSON and patches (64516b84) have 34 tests. The sizing is above.
-- 2026-09-30: phase 5 started in the sandbox repository.
+- 2026-09-30: phase 5 proven in the sandbox repository (PRs #9 to #12 there).
+  - The loops: `@claude` fixes a review finding and the next review marks it fixed, a
+    weekly code gardener opens one small debt fix, and the doc gardener re-grades stale
+    QUALITY_SCORE rows.
+  - Fixes it found for the existing workflows: the review must allow `claude[bot]` and edit
+    its summary by id, and the attribution setting takes strings, so `false` was ignored.
+  - The port into this repository waits for the owner's approval of the workflow changes.
+- 2026-09-30: phase 6 done.
+  - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
+    log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
+    of a browser test run.
+  - It answers grouped errors, requests per route with 4xx and 5xx counts and p50, p95 and
+    max latency, the slowest requests, one request's timeline, and D1 statements by rows
+    read, with `--json` for agents.
+  - The debug-api skill, AGENTS.md, RELIABILITY and the development environment point to
+    it (6a169adb).
+  - Checked on a real browser test run: 15 smoke tests, and the log's route table read
+    back from it.
 
 ## Decision log
 
