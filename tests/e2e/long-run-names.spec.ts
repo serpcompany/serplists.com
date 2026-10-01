@@ -3,8 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// A template title may use the whole 160-character limit that run titles share, so the
-// default run name shortens the title instead of failing (src/lib/runs/runName.ts).
+const TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES = 160;
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -17,10 +16,10 @@ async function callApi(page: Page, method: string, path: string, body?: unknown)
   return apiJson<Record<string, unknown>>(page, path, { method, body });
 }
 
-test('Start Run on a public template with a 160-character title creates the run', async ({ page }) => {
+test('Start Run on a public template with a 160-character title creates the run under a shortened default name', async ({ page }) => {
   await loginAsAdmin(page);
   const stamp = String(Date.now());
-  const title = `Long ${stamp} `.padEnd(160, 'x');
+  const title = `Long ${stamp} `.padEnd(TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES, 'x');
   const created = await callApi(page, 'POST', '/templates', {
     title,
     slug: `long-run-name-${stamp}`,
@@ -33,13 +32,12 @@ test('Start Run on a public template with a 160-character title creates the run'
   try {
     await page.goto(`/profile/admin/${String(created.slug)}/`);
     await page.getByRole('button', { name: 'Start Run' }).first().click();
-    // A blank name gets the default, which shortens the title to fit the limit.
     await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
     await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
     runId = new URL(page.url()).pathname.split('/').filter(Boolean).pop();
 
     const run = await callApi(page, 'GET', `/checklists/${runId}`);
-    expect(String(run.title).length).toBeLessThanOrEqual(160);
+    expect(String(run.title).length).toBeLessThanOrEqual(TITLE_LIMIT_SHARED_BY_RUNS_AND_TEMPLATES);
     expect(String(run.title).startsWith(`Long ${stamp}`)).toBe(true);
   } finally {
     if (runId) await callApi(page, 'DELETE', `/checklists/${runId}`);

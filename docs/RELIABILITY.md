@@ -290,7 +290,7 @@ Common failures:
   stays only where the page's own request is what the test checks, marked with an
   `e2e-in-page-fetch:` comment; `tests/unit/e2e/e2e-setup-requests.test.ts` fails on
   any other. `trackApiRequests()` in the same file waits for the page's own requests,
-  such as the several that Account Settings sends when signing in lands there.
+  such as the several that My Templates sends when signing in lands there.
 - Playwright tries a page's routes newest first, so a mock that must answer before a
   catch-all route (`serveLocalAppAsProduction`, a spec's `**/api/**` mock) is registered
   after it, and calls `route.fallback()` for the requests it leaves to the earlier routes.
@@ -304,6 +304,19 @@ Common failures:
   with `persisted: true` that a restore fires (`billing-back-from-checkout.spec.ts`).
 - `toBeVisible()` passes for an element at opacity 0, so a spec checks a control that fades
   in on focus or hover by its computed opacity.
+- A double click whose second click must land on what the first one changed (the next
+  task's button, a dialog that opened) is two `page.mouse` clicks with `clickCount` 1 and 2,
+  the `event.detail` the browser reports (`run-saves.spec.ts`). `page.mouse` does not
+  scroll, so the spec first scrolls the button into view with
+  `scrollIntoView({ block: 'nearest' })`, as a person would: `scrollIntoViewIfNeeded()`
+  centres it, which pushes the task title out of view, so moving on to the next task scrolls
+  the page from under the pointer. The second click must follow within the 500 ms
+  double-click interval, so between the two the spec waits only for an element to exist,
+  polled per animation frame: waiting for it to be visible and measuring it took over
+  500 ms on a busy machine.
+- Sign in at the default desktop width and set a phone viewport afterwards: below `md` the
+  Switch context button that the specs' sign-in helpers wait for sits in the closed sidebar
+  sheet.
 - To trace a failed request to the local API, open wrangler's debug log for that run:
   every session writes one, with timestamps and the API's own `api_request` lines, to
   `.wrangler/logs` in your home folder (`%APPDATA%\xdg.config\.wrangler\logs` on

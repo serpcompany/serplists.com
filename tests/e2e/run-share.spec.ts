@@ -1,11 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
-
-// Creating a run share link and copying it are separate steps: the link is always shown
-// in a dialog, and a refused clipboard write (Safari after an awaited request, denied
-// permission) is not reported as a failed share (src/lib/shareLink.ts).
 
 const SHARE_URL = /\/share\/[0-9a-f-]{36}\/$/;
 
@@ -15,8 +11,6 @@ async function loginAsAdmin(page: Page) {
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  // Signing in lands on My Templates: let its requests finish before the test calls
-  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
   await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
   await apiRequests.settled();
 }
@@ -48,7 +42,35 @@ async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
-test('the run page shows the share link when the clipboard refuses the copy', async ({ page, context }) => {
+function footerCloseButton(dialog: Locator) {
+  return dialog.getByRole('button', { name: 'Close' }).first();
+}
+
+async function openRunFromRunsList(page: Page, title: string) {
+  await page.goto('/dashboard/runs/');
+  await page.getByRole('link', { name: title }).click();
+}
+
+async function createStaleCompletedRun(page: Page, title: string) {
+  const sections = (done: boolean, ids: string[]) =>
+    [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
+  const template = await send(page, '/templates', 'POST', { title, sections: sections(false, ['stale-a']), is_public: false });
+  const run = await send(page, '/checklists', 'POST', { template_id: template.id, title, status: 'in_progress' });
+  await send(page, `/checklists/${run.id}`, 'PUT', {
+    expected_revision: 1,
+    progress: 100,
+    sections: sections(true, ['stale-a']),
+    status: 'completed',
+  });
+  await send(page, `/templates/${template.id}`, 'PUT', {
+    title,
+    sections: sections(false, ['stale-a', 'stale-b']),
+    expected_version: 1,
+  });
+  return { runId: run.id, templateId: template.id };
+}
+
+test('the run page shows the share link when the clipboard refuses the copy, and the same link when reopened', async ({ page, context }) => {
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
   const runId = await createRun(page, `Share QA ${Date.now()}`);
@@ -65,10 +87,8 @@ test('the run page shows the share link when the clipboard refuses the copy', as
   await expect(link).toHaveValue(SHARE_URL);
   await expect(page.getByText(/Failed to create share link|not allowed/)).toHaveCount(0);
 
-  // Reopening shows the same link instead of replacing the token.
   const shareUrl = await link.inputValue();
-  // The footer Close button; the dialog's corner X is also named Close.
-  await dialog.getByRole('button', { name: 'Close' }).first().click();
+  await footerCloseButton(dialog).click();
   await expect(dialog).toHaveCount(0);
   await page.getByRole('button', { name: 'Share' }).click();
   await expect(page.getByRole('textbox', { name: 'Share link' })).toHaveValue(shareUrl);
@@ -100,30 +120,10 @@ test('the runs list shows the share link when the clipboard refuses the copy', a
   await deleteRun(page, runId);
 });
 
-// Sharing makes a run public, and the API refuses to revalidate a public run. The runs
-// list is cached for 5 minutes, so it must drop Revalidate as soon as the share exists.
 test('sharing a stale run from the runs list stops offering Revalidate', async ({ page }) => {
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
-  const title = `Stale share QA ${Date.now()}`;
-  const sections = (done: boolean, ids: string[]) =>
-    [{ id: 'stale', title: 'Section', items: ids.map((id) => ({ id, title: id, isCompleted: done })) }];
-  const template = await send(page, '/templates', 'POST', { title, sections: sections(false, ['stale-a']), is_public: false });
-  const run = await send(page, '/checklists', 'POST', { template_id: template.id, title, status: 'in_progress' });
-  // A completed run is frozen when its Template changes, so it goes stale.
-  await send(page, `/checklists/${run.id}`, 'PUT', {
-    expected_revision: 1,
-    progress: 100,
-    sections: sections(true, ['stale-a']),
-    status: 'completed',
-  });
-  await send(page, `/templates/${template.id}`, 'PUT', {
-    title,
-    sections: sections(false, ['stale-a', 'stale-b']),
-    expected_version: 1,
-  });
-  const { id: runId } = run;
-  const { id: templateId } = template;
+  const { runId, templateId } = await createStaleCompletedRun(page, `Stale share QA ${Date.now()}`);
 
   await page.goto('/dashboard/runs/');
   const actions = page.locator('[data-run-actions="true"]').filter({ has: page.locator(`a[href="/dashboard/runs/${runId}/"]`) });
@@ -144,8 +144,6 @@ test('sharing a stale run from the runs list stops offering Revalidate', async (
   await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
 });
 
-// Sharing marks the run public in the cached runs list. That must not reload the open run
-// page, which would clear unsaved task notes and move the selection back to the first task.
 test('sharing from the run page keeps unsaved task notes and the open task', async ({ page }) => {
   await refuseClipboardWrites(page);
   await loginAsAdmin(page);
@@ -166,9 +164,7 @@ test('sharing from the run page keeps unsaved task notes and the open task', asy
   });
   const notes = page.getByRole('textbox', { name: 'Task notes' });
 
-  // Opened from the runs list, so the list is cached when the share marks the run public.
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
+  await openRunFromRunsList(page, title);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Checked the redirects');
   await page.getByRole('button', { name: 'Next', exact: true }).click();
@@ -177,7 +173,7 @@ test('sharing from the run page keeps unsaved task notes and the open task', asy
   await page.getByRole('button', { name: 'Share' }).click();
   const dialog = page.getByRole('dialog', { name: 'Share run' });
   await expect(dialog.getByRole('textbox', { name: 'Share link' })).toHaveValue(SHARE_URL);
-  await dialog.getByRole('button', { name: 'Close' }).first().click();
+  await footerCloseButton(dialog).click();
 
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await page.getByRole('button', { name: 'Previous' }).click();

@@ -3,9 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// Below xl (1280px) the run page hides its task column, so the progress block opens the
-// same task list in a sheet (src/components/run-execution/MobileRunProgress.tsx).
-
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');

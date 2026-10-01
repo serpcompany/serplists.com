@@ -3,8 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { API_BASE_URL, apiJson, apiRequest, trackApiRequests } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// Saves on the run page run one at a time, and a double click counts as one click
-// (src/features/run-execution/saveQueue.ts).
+const STRAY_SAVE_WINDOW_MS = 500;
+const DIALOG_CLOSE_ANIMATION_MS = 400;
+const RUN_TITLE_LIMIT = 160;
 
 async function loginAsAdmin(page: Page) {
   const apiRequests = trackApiRequests(page, API_BASE_URL);
@@ -12,8 +13,6 @@ async function loginAsAdmin(page: Page) {
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-  // Signing in lands on My Templates: let its requests finish before the test calls
-  // the API, which the local dev proxy can drop in a burst (see support/api-requests.ts).
   await expect(page.getByRole('heading', { level: 1, name: 'My Templates' })).toBeVisible();
   await apiRequests.settled();
 }
@@ -36,15 +35,34 @@ async function deleteRun(page: Page, runId: string) {
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
-// The stored run, with its sections parsed.
-async function getRun<Task>(page: Page, runId: string) {
+async function fetchRunWithSections<Task>(page: Page, runId: string) {
   const run = await apiJson<{ status: string; title: string; items: unknown }>(page, `/checklists/${runId}`);
   const sections = (typeof run.items === 'string' ? JSON.parse(run.items) : run.items) as Array<{ items: Task[] }>;
   return { ...run, sections };
 }
 
+async function tickEveryTaskWithoutCompleting(page: Page, runId: string) {
+  await apiJson(page, `/checklists/${runId}`, {
+    method: 'PUT',
+    body: {
+      expected_revision: 1,
+      progress: 100,
+      sections: [{ id: 'fin', title: 'Section', items: [
+        { id: 'fin-a', title: 'Task A', isCompleted: true },
+        { id: 'fin-b', title: 'Task B', isCompleted: true },
+      ] }],
+      status: 'in_progress',
+    },
+  });
+}
+
+async function openRunFromRunsList(page: Page, title: string) {
+  await page.goto('/dashboard/runs/');
+  await page.getByRole('link', { name: title }).click();
+}
+
 async function readRun(page: Page, runId: string) {
-  const { status, sections } = await getRun<{ isCompleted?: boolean }>(page, runId);
+  const { status, sections } = await fetchRunWithSections<{ isCompleted?: boolean }>(page, runId);
   return { status, completed: sections.flatMap((section) => section.items.map((item) => item.isCompleted === true)) };
 }
 
@@ -83,7 +101,7 @@ test('a double click saves once and never reports a conflict', async ({ page }) 
   await deleteRun(page, runId);
 });
 
-test('a dismissed completion dialog can be reopened with Finish Run', async ({ page }) => {
+test('a dismissed completion dialog can be reopened with Finish Run, and Not yet keeps the run in progress', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Finish run QA ${Date.now()}`);
 
@@ -98,7 +116,6 @@ test('a dismissed completion dialog can be reopened with Finish Run', async ({ p
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  // "Not yet" keeps the Run in progress, and the page keeps offering Complete run.
   await page.getByRole('button', { name: 'Finish Run' }).click();
   await dialog.getByRole('button', { name: 'Not yet' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -116,19 +133,7 @@ test('a dismissed completion dialog can be reopened with Finish Run', async ({ p
 test('a fully ticked run that is still in progress can be completed after a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Ticked elsewhere QA ${Date.now()}`);
-  // Tick every task without completing the run, as an MCP client can.
-  await apiJson(page, `/checklists/${runId}`, {
-    method: 'PUT',
-    body: {
-      expected_revision: 1,
-      progress: 100,
-      sections: [{ id: 'fin', title: 'Section', items: [
-        { id: 'fin-a', title: 'Task A', isCompleted: true },
-        { id: 'fin-b', title: 'Task B', isCompleted: true },
-      ] }],
-      status: 'in_progress',
-    },
-  });
+  await tickEveryTaskWithoutCompleting(page, runId);
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await page.getByRole('button', { name: 'Complete run' }).click();
@@ -195,10 +200,6 @@ test('text typed while a notes save is in flight is kept', async ({ page }) => {
   await deleteRun(page, runId);
 });
 
-
-// Another session (a teammate, a second tab, or an MCP agent) saves the run while this
-// page has it open. The page reloads the run on the 409 and retries once
-// (src/features/run-execution/runSaver.ts), so it never gets stuck on a stale revision.
 async function tickElsewhere(page: Page, runId: string, ticked: { a: boolean; b: boolean }) {
   await apiJson(page, `/checklists/${runId}`, {
     method: 'PUT',
@@ -253,8 +254,6 @@ test('ticking a task another session already ticked does not untick it', async (
   await deleteRun(page, runId);
 });
 
-// A click made while an earlier save is still in flight sets the value the user saw and
-// chose; it is not a flip of whatever the earlier save left behind.
 async function createRunWithSubTasks(page: Page, title: string, stepTwoDone: boolean) {
   return postRun(page, {
     title,
@@ -270,7 +269,7 @@ async function createRunWithSubTasks(page: Page, title: string, stepTwoDone: boo
 
 async function readTaskA(page: Page, runId: string) {
   type Task = { isCompleted?: boolean; contents?: Array<{ subItems?: Array<{ isCompleted?: boolean }> }> };
-  const { sections } = await getRun<Task>(page, runId);
+  const { sections } = await fetchRunWithSections<Task>(page, runId);
   const task = sections[0].items[0];
   return [task.isCompleted === true, ...(task.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted === true)];
 }
@@ -328,10 +327,6 @@ test('Mark Complete, then ticking a sub-task that still looks unticked, keeps it
   await deleteRun(page, runId);
 });
 
-// Controls that change what they do under the pointer act once on a double click: Next Task
-// shows the open next task (Mark Complete in the same spot), a completed task moves on to
-// the next one, the last task opens the completion dialog over the button, and Rename
-// becomes Save title (src/lib/utils/repeatClick.ts).
 function recordSaves(page: Page, runId: string) {
   const saves: number[] = [];
   page.on('response', (response) => {
@@ -348,11 +343,7 @@ type Box = { x: number; y: number; width: number; height: number } | null;
 const isInside = (box: Box, point: Point) =>
   box !== null && point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
 
-// The window scrolls on the run page and the footer buttons start below the fold, and
-// page.mouse clicks where it is told without scrolling. Scroll just far enough to show the
-// button, as a person does (scrollIntoViewIfNeeded would centre it and push the task title
-// out of view, so moving on would scroll the page away from under the pointer).
-async function pointAt(page: Page, name: string): Promise<Point> {
+async function scrollToAndPointAt(page: Page, name: string): Promise<Point> {
   const button = page.getByRole('button', { name });
   await button.evaluate((element) => element.scrollIntoView({ block: 'nearest' }));
   const box = await button.boundingBox();
@@ -362,10 +353,29 @@ async function pointAt(page: Page, name: string): Promise<Point> {
   return point;
 }
 
-// One click of a double click, with the click count the browser reports as event.detail.
-async function clickHere(page: Page, clickCount: number) {
+async function clickAtPointer(page: Page, clickCount: number) {
   await page.mouse.down({ clickCount });
   await page.mouse.up({ clickCount });
+}
+
+async function allowTimeForAStraySave(page: Page) {
+  await page.waitForTimeout(STRAY_SAVE_WINDOW_MS);
+}
+
+async function flushSaveQueueWithANotesSave(page: Page, notes: string) {
+  await page.getByRole('textbox', { name: 'Task notes' }).fill(notes);
+  await page.getByRole('button', { name: 'Save notes' }).click();
+  await expect(page.getByText('Saved to this run')).toBeVisible();
+}
+
+async function waitForDialogNodeWithinDoubleClickInterval(page: Page) {
+  await page.waitForFunction(() => document.querySelector('[role="dialog"]') !== null, undefined, {
+    polling: 'raf',
+  });
+}
+
+async function allowTimeForADialogToClose(page: Page) {
+  await page.waitForTimeout(DIALOG_CLOSE_ANIMATION_MS);
 }
 
 test('a double click on Next Task moves on without completing the next task', async ({ page }) => {
@@ -379,8 +389,7 @@ test('a double click on Next Task moves on without completing the next task', as
   await page.getByRole('button', { name: 'Previous' }).click();
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await page.getByRole('button', { name: 'Next Task' }).dblclick();
-  // A wrongly sent save would land within this time; the checks below are for its absence.
-  await page.waitForTimeout(500);
+  await allowTimeForAStraySave(page);
 
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark Complete' })).toBeVisible();
@@ -397,20 +406,13 @@ test('the second click of a double click after a fast save does not complete the
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
-  await pointAt(page, 'Mark Complete');
-  await clickHere(page, 1);
+  await scrollToAndPointAt(page, 'Mark Complete');
+  await clickAtPointer(page, 1);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
-  // The rest of the double click lands on Task B's Mark Complete. It is in the same spot
-  // unless the Changelog below the task has already grown with the save and pushed it down,
-  // so point at it again.
-  await pointAt(page, 'Mark Complete');
-  await clickHere(page, 2);
+  await scrollToAndPointAt(page, 'Mark Complete');
+  await clickAtPointer(page, 2);
 
-  // Saves run one at a time in order, so once a later save has landed, a save the second
-  // click wrongly queued before it has landed too.
-  await page.getByRole('textbox', { name: 'Task notes' }).fill('Checked after the double click');
-  await page.getByRole('button', { name: 'Save notes' }).click();
-  await expect(page.getByText('Saved to this run')).toBeVisible();
+  await flushSaveQueueWithANotesSave(page, 'Checked after the double click');
 
   expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, false] });
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
@@ -426,22 +428,15 @@ test('the rest of the double click that completes the last task keeps the comple
 
   await page.goto(`/dashboard/runs/${runId}/`);
   await expect(page.getByRole('heading', { name: 'Task B' })).toBeVisible();
-  const point = await pointAt(page, 'Mark Complete');
-  await clickHere(page, 1);
-  // The rest of a double click follows the first click within the double-click interval,
-  // and the dialog ignores an outside press only within DOUBLE_CLICK_MS of opening. So the
-  // second click goes as soon as the dialog is in the page: waiting for it to be visible and
-  // measuring it first took over 500 ms on a busy machine, which is no longer a double click.
-  await page.waitForFunction(() => document.querySelector('[role="dialog"]') !== null, undefined, {
-    polling: 'raf',
-  });
-  await clickHere(page, 2);
+  const doubleClickPoint = await scrollToAndPointAt(page, 'Mark Complete');
+  await clickAtPointer(page, 1);
+  await waitForDialogNodeWithinDoubleClickInterval(page);
+  await clickAtPointer(page, 2);
   const dialog = page.getByRole('dialog', { name: 'Complete this Run?' });
-  // The rest of the double click landed on the overlay, outside the dialog.
-  expect(isInside(await dialog.boundingBox(), point)).toBe(false);
+  const secondClickLandedInDialog = isInside(await dialog.boundingBox(), doubleClickPoint);
+  expect(secondClickLandedInDialog).toBe(false);
 
-  // A dismissed dialog animates out; give it time before checking it stayed.
-  await page.waitForTimeout(400);
+  await allowTimeForADialogToClose(page);
   await expect(dialog).toBeVisible();
   expect(await readRun(page, runId)).toEqual({ status: 'in_progress', completed: [true, true] });
 
@@ -467,7 +462,6 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
     await expect(titleInput).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save title' })).toBeDisabled();
 
-    // Enter on the untouched title closes the editor without a save.
     await titleInput.press('Enter');
     await expect(titleInput).toHaveCount(0);
     await expect(page.getByText('Run title updated')).toHaveCount(0);
@@ -477,9 +471,7 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 
   });
 }
 
-// Completed runs are frozen: unticking a task used to leave the run labelled Completed
-// with open tasks. Notes stay editable.
-test('a completed run cannot be unticked, privately or through its share link', async ({ page, browser }) => {
+test('a completed run cannot be unticked, privately or through its share link, and its notes stay editable', async ({ page, browser }) => {
   await loginAsAdmin(page);
   const runId = await createRunWithSubTasks(page, `Frozen run QA ${Date.now()}`, true);
   await apiJson(page, `/checklists/${runId}`, {
@@ -523,7 +515,6 @@ test('a completed run cannot be unticked, privately or through its share link', 
   await deleteRun(page, runId);
 });
 
-// Every save writes an audit event; the Changelog used to keep its first fetch for 60s.
 test('the run Changelog shows a save without a reload', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Changelog QA ${Date.now()}`);
@@ -541,8 +532,6 @@ test('the run Changelog shows a save without a reload', async ({ page }) => {
   await deleteRun(page, runId);
 });
 
-// Completing a task moves on from it only if it is still selected when the save lands, so a
-// task opened while the save was in flight stays open (getSelectionAfterToggle).
 async function createFourTaskRun(page: Page, title: string) {
   return postRun(page, {
     title,
@@ -553,7 +542,6 @@ async function createFourTaskRun(page: Page, title: string) {
   });
 }
 
-// Holds every save of the run until it is released, one at a time and in order.
 async function holdEverySave(page: Page, runId: string) {
   const held: Array<() => void> = [];
   await page.route(`**/api/checklists/${runId}`, async (route) => {
@@ -613,8 +601,6 @@ test('queued Mark Complete saves never move back to an earlier task', async ({ p
   await deleteRun(page, runId);
 });
 
-// Once a task is done its footer button moves on, so the task checkbox is the only way to
-// untick it: it must be found and read by its role, name and checked state.
 test('a completed task can be found and unticked by its named checkbox', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Task checkbox QA ${Date.now()}`);
@@ -636,8 +622,6 @@ test('a completed task can be found and unticked by its named checkbox', async (
   await deleteRun(page, runId);
 });
 
-// The API caps run titles at 160 characters. A longer rename used to come back as a raw
-// schema error ("String must contain at most 160 character(s)") with the editor still open.
 test('the run title editor stops at the length the API accepts, and the save goes through', async ({ page }) => {
   await loginAsAdmin(page);
   const runId = await createRun(page, `Title limit QA ${Date.now()}`);
@@ -647,27 +631,24 @@ test('the run title editor stops at the length the API accepts, and the save goe
   await page.getByRole('button', { name: 'Rename' }).click();
   const titleInput = page.getByRole('textbox', { name: 'Run title' });
   await titleInput.clear();
-  await titleInput.pressSequentially(longTitle.slice(0, 170));
-  await expect(titleInput).toHaveValue(longTitle.slice(0, 160));
+  await titleInput.pressSequentially(longTitle.slice(0, RUN_TITLE_LIMIT + 10));
+  await expect(titleInput).toHaveValue(longTitle.slice(0, RUN_TITLE_LIMIT));
   await page.getByRole('button', { name: 'Save title' }).click();
   await expect(page.getByText('Run title updated')).toBeVisible();
   await expect(page.getByText(/String must contain/)).toHaveCount(0);
 
-  const { title } = await getRun(page, runId);
-  expect(title).toBe(longTitle.slice(0, 160).trim());
+  const { title } = await fetchRunWithSections(page, runId);
+  expect(title).toBe(longTitle.slice(0, RUN_TITLE_LIMIT).trim());
 
   await deleteRun(page, runId);
 });
 
-// Unsaved task notes live only on the page: every way out of it asks first, and only once
-// (src/lib/navigation/useUnsavedChangesGuard.ts).
 const NOTES_LEAVE_MESSAGE = 'You have unsaved task notes. Leave without saving?';
 
 test('asks before unsaved task notes are lost through the app shell, Back or Sign out', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Notes leave guard QA ${Date.now()}`;
   const runId = await createRun(page, title);
-  // The runs list opens a run at its one URL.
   const runUrl = new RegExp(`/dashboard/runs/${runId}/$`);
   const notes = page.getByRole('textbox', { name: 'Task notes' });
   const accountMenu = page.getByRole('button', { name: 'Account menu' });
@@ -679,9 +660,7 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
     await (acceptDialogs ? dialog.accept() : dialog.dismiss());
   });
 
-  // Arrive through the app so browser Back stays inside the single-page app.
-  await page.goto('/dashboard/runs/');
-  await page.getByRole('link', { name: title }).click();
+  await openRunFromRunsList(page, title);
   await expect(page).toHaveURL(runUrl);
   await expect(page.getByRole('heading', { name: 'Task A' })).toBeVisible();
   await notes.fill('Deployed build 42');
@@ -708,7 +687,6 @@ test('asks before unsaved task notes are lost through the app shell, Back or Sig
   await expectStillOnRun(4);
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible();
 
-  // The page's own Runs button asks once, not twice.
   await page.getByRole('button', { name: 'Runs', exact: true }).click();
   await expectStillOnRun(5);
 
@@ -744,7 +722,7 @@ test('completing a run saves an unsaved note and leaves without asking', async (
   await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   expect(dialogs).toEqual([]);
 
-  const { status, sections } = await getRun<{ notes?: string }>(page, runId);
+  const { status, sections } = await fetchRunWithSections<{ notes?: string }>(page, runId);
   const stored = { status, notes: sections.flatMap((section) => section.items.map((item) => item.notes ?? '')) };
   expect(stored).toEqual({ status: 'completed', notes: ['', 'Signed off by QA'] });
 
@@ -788,14 +766,8 @@ test('a share-link guest is asked before unsaved task notes are lost', async ({ 
   await deleteRun(page, runId);
 });
 
-// The task footer (Previous, Mark Complete, Next) stays at the bottom of the window: it is in
-// view without scrolling on a short task, and the Changelog, which grows by an entry after
-// every save, never moves it under the pointer. No bar covers the bottom of the window on
-// phones: the console's navigation opens as a sidebar sheet.
 for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
   test(`at ${viewport.width}px Mark Complete stays in view and in place while the Changelog grows`, async ({ page }) => {
-    // Sign in at the default width: below md the context switcher that loginAsAdmin waits
-    // for sits in the closed sidebar sheet.
     await loginAsAdmin(page);
     await page.setViewportSize(viewport);
     const tasks = ['Check DNS', 'Check TLS', 'Check redirects', 'Check sitemap'];

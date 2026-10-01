@@ -1,10 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
 import { API_BASE_URL as apiBaseUrl } from './support/stack';
 import { fillSignInForm } from './support/sign-in';
 
 const protocolVersion = '2025-06-18';
+const MCP_RESULT_BYTE_LIMIT = 32 * 1024;
+const ROOT_SCHEMA_COMBINATORS = ['oneOf', 'anyOf', 'allOf', 'not', '$ref'];
 
 test.use({ screenshot: 'off', trace: 'off', video: 'off' });
 
@@ -37,12 +39,51 @@ async function mcpRequest(
   return { body, response };
 }
 
-// Every MCP tool result stays within 32KB, what MCP clients take from one call whole
-// (MAX_RESULT_BYTES in functions/api/handlers/agentMcpPages.ts).
-function boundedResult(body: JsonRecord): JsonRecord {
+function structuredContentWithinResultLimit(body: JsonRecord): JsonRecord {
   const structuredContent = (body.result as JsonRecord).structuredContent as JsonRecord;
-  expect(new TextEncoder().encode(JSON.stringify(structuredContent)).byteLength).toBeLessThanOrEqual(32 * 1024);
+  expect(new TextEncoder().encode(JSON.stringify(structuredContent)).byteLength).toBeLessThanOrEqual(MCP_RESULT_BYTE_LIMIT);
   return structuredContent;
+}
+
+function expectFlatObjectInputSchema(tool: JsonRecord) {
+  const inputSchema = tool.inputSchema as JsonRecord;
+  expect(inputSchema.type).toBe('object');
+  expect(typeof inputSchema.properties).toBe('object');
+  for (const keyword of ROOT_SCHEMA_COMBINATORS) {
+    expect(inputSchema).not.toHaveProperty(keyword);
+  }
+}
+
+async function holdFirstRunKeyListUntilReleased(page: Page) {
+  let releaseFirstList: () => void = () => undefined;
+  const firstListReleased = new Promise<void>((resolve) => {
+    releaseFirstList = resolve;
+  });
+  let heldFirstList = false;
+  await page.route('**/api/agent-keys', async (route) => {
+    if (route.request().method() !== 'GET' || heldFirstList) {
+      await route.continue();
+      return;
+    }
+    heldFirstList = true;
+    const response = await route.fetch();
+    await firstListReleased;
+    await route.fulfill({ response });
+  });
+  return () => releaseFirstList();
+}
+
+async function expectCheckboxesInTabOrderAfter(page: Page, field: Locator, names: string[]) {
+  await field.focus();
+  for (const name of names) {
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('checkbox', { name })).toBeFocused();
+  }
+}
+
+async function toggleWithSpace(page: Page, checkbox: Locator) {
+  await checkbox.focus();
+  await page.keyboard.press('Space');
 }
 
 test('@smoke personal Run Key drives a persistent run and revokes access', async ({ page }) => {
@@ -75,25 +116,17 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
   expect(initialized.response.status).toBe(200);
   expect((initialized.body.result as JsonRecord).protocolVersion).toBe(protocolVersion);
 
-  // The endpoint the page shows must be one the MCP host check accepts.
   const shownEndpoint = await page.getByLabel('SERP Lists MCP endpoint').inputValue();
-  const shownInitialized = await mcpRequest(secret, 'initialize', {
+  const initializedAtShownEndpoint = await mcpRequest(secret, 'initialize', {
     protocolVersion,
     capabilities: {},
     clientInfo: { name: 'serplists-playwright', version: '1.0.0' },
   }, 2, shownEndpoint);
-  expect(shownInitialized.response.status).toBe(200);
+  expect(initializedAtShownEndpoint.response.status).toBe(200);
 
-  // Model APIs reject a tool list whose schemas have a combinator at the root, so every
-  // tool must advertise a plain object schema with top-level properties.
   const listed = await mcpRequest(secret, 'tools/list', undefined, 10);
   for (const tool of (listed.body.result as JsonRecord).tools as JsonRecord[]) {
-    const inputSchema = tool.inputSchema as JsonRecord;
-    expect(inputSchema.type).toBe('object');
-    expect(typeof inputSchema.properties).toBe('object');
-    for (const keyword of ['oneOf', 'anyOf', 'allOf', 'not', '$ref']) {
-      expect(inputSchema).not.toHaveProperty(keyword);
-    }
+    expectFlatObjectInputSchema(tool);
   }
 
   const templateResult = await mcpRequest(secret, 'tools/call', {
@@ -101,7 +134,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     arguments: {},
   }, 2);
   expect(templateResult.response.status).toBe(200);
-  const templateContent = boundedResult(templateResult.body);
+  const templateContent = structuredContentWithinResultLimit(templateResult.body);
   const templates = templateContent.templates as JsonRecord[];
   expect(templates.length).toBeGreaterThan(0);
 
@@ -112,7 +145,7 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     arguments: { templateId: template.id, title: runTitle },
   }, 3);
   expect(started.response.status).toBe(200);
-  const startedContent = boundedResult(started.body);
+  const startedContent = structuredContentWithinResultLimit(started.body);
   const startedRun = startedContent.run as JsonRecord;
   const sections = startedRun.sections as JsonRecord[];
   const firstTask = (sections[0].items as JsonRecord[])[0];
@@ -145,24 +178,23 @@ test('@smoke personal Run Key drives a persistent run and revokes access', async
     },
   }, 5);
   expect(completed.response.status).toBe(200);
-  const completedContent = boundedResult(completed.body);
+  const completedContent = structuredContentWithinResultLimit(completed.body);
   const completedRun = completedContent.run as JsonRecord;
   expect(completedContent).toMatchObject({ taskId, task: { id: taskId, isCompleted: true, notes: note } });
 
-  // The run reads back whole, or one task at a time, and leads the list of runs.
   const read = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId } }, 6);
-  const readRun = boundedResult(read.body).run as JsonRecord;
+  const readRun = structuredContentWithinResultLimit(read.body).run as JsonRecord;
   expect(readRun).toMatchObject({ id: runId, revision: completedRun.revision, progress: completedRun.progress });
   const readTask = ((readRun.sections as JsonRecord[])[0].items as JsonRecord[])[0];
   expect(readTask).toMatchObject({ id: taskId, isCompleted: true, notes: note });
   const oneTask = await mcpRequest(secret, 'tools/call', { name: 'get_run', arguments: { runId, taskId } }, 7);
-  expect(boundedResult(oneTask.body)).toEqual({
+  expect(structuredContentWithinResultLimit(oneTask.body)).toEqual({
     run: { id: runId, revision: completedRun.revision },
     sectionId: (sections[0] as JsonRecord).id,
     task: readTask,
   });
   const runList = await mcpRequest(secret, 'tools/call', { name: 'list_runs', arguments: { status: 'in_progress' } }, 8);
-  const [newest] = boundedResult(runList.body).runs as JsonRecord[];
+  const [newest] = structuredContentWithinResultLimit(runList.body).runs as JsonRecord[];
   expect(newest).toMatchObject({ id: runId, title: runTitle, revision: completedRun.revision });
   expect(newest).not.toHaveProperty('sections');
 
@@ -192,23 +224,7 @@ test('a Run Key created while the key list is still loading shows in the list', 
     timeout: 30_000,
   });
 
-  // Hold the first key list response until the create has returned, so the list the
-  // page first requested predates the new key.
-  let releaseFirstList: () => void = () => undefined;
-  const firstListReleased = new Promise<void>((resolve) => {
-    releaseFirstList = resolve;
-  });
-  let heldFirstList = false;
-  await page.route('**/api/agent-keys', async (route) => {
-    if (route.request().method() !== 'GET' || heldFirstList) {
-      await route.continue();
-      return;
-    }
-    heldFirstList = true;
-    const response = await route.fetch();
-    await firstListReleased;
-    await route.fulfill({ response });
-  });
+  const releaseFirstList = await holdFirstRunKeyListUntilReleased(page);
 
   await page.goto('/dashboard/settings/');
   await expect(page.getByRole('heading', { name: 'Agent Access' })).toBeVisible();
@@ -247,22 +263,14 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   const nameField = page.getByLabel('Key name');
   await nameField.fill(keyName);
 
-  // Every permission is reached from the keyboard, in order, and Space ticks or unticks it.
-  await nameField.focus();
-  for (const name of ['Read templates', 'Write templates', 'Read runs', 'Write runs']) {
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('checkbox', { name })).toBeFocused();
-  }
+  await expectCheckboxesInTabOrderAfter(page, nameField, ['Read templates', 'Write templates', 'Read runs', 'Write runs']);
   const writeTemplates = page.getByRole('checkbox', { name: 'Write templates' });
   const writeRuns = page.getByRole('checkbox', { name: 'Write runs' });
-  // A new key starts without template writes.
   await expect(writeTemplates).not.toBeChecked();
   await expect(writeRuns).toBeChecked();
-  await writeTemplates.focus();
-  await page.keyboard.press('Space');
+  await toggleWithSpace(page, writeTemplates);
   await expect(writeTemplates).toBeChecked();
-  await writeRuns.focus();
-  await page.keyboard.press('Space');
+  await toggleWithSpace(page, writeRuns);
   await expect(writeRuns).not.toBeChecked();
 
   await page.getByRole('button', { name: 'Create Run Key' }).click();
@@ -275,7 +283,6 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   await expect(keyRow.getByRole('list', { name: `Permissions for ${keyName}` }).getByRole('listitem'))
     .toHaveText(['Read templates', 'Write templates', 'Read runs']);
 
-  // The MCP offers only the tools those permissions cover and refuses the rest.
   const listed = await mcpRequest(secret, 'tools/list', undefined, 20);
   expect(((listed.body.result as JsonRecord).tools as JsonRecord[]).map(({ name }) => name)).toEqual([
     'list_templates',
@@ -294,7 +301,6 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     details: { permission: 'runs:write' },
   });
 
-  // A template the key creates is private and Personal, and an edit names the version it read.
   const title = `Playwright agent template ${Date.now()}`;
   const created = await mcpRequest(secret, 'tools/call', {
     name: 'create_template',
@@ -324,7 +330,6 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
     version: 2,
   });
 
-  // Its history records the key behind both writes.
   const history = await apiJson<{ events: Array<{ action: string; metadata: JsonRecord | null }> }>(
     page,
     `/templates/${encodeURIComponent(templateId)}/history`,
@@ -332,7 +337,6 @@ test('the permissions chosen for a Run Key decide what it can do over MCP', asyn
   expect(history.events.filter((event) => event.metadata?.personalRunKeyName === keyName).map(({ action }) => action).sort())
     .toEqual(['template.created', 'template.updated']);
 
-  // The template's Changelog names the key behind each write, as a run's Changelog does.
   await page.goto(`/dashboard/templates/${encodeURIComponent(templateId)}/`);
   await expect(page.getByText('Updated template v2')).toBeVisible();
   await expect(page.getByText('Created template v1')).toBeVisible();
