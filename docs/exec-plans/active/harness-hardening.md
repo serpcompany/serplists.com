@@ -99,6 +99,39 @@ Measured in report mode, with nothing enforced. Phases 3 and 4 work from these n
   The last flag's errors are mostly dot access on `Record<string, unknown>` rows. Typing
   those rows fixes them and the double casts together.
 
+## Phase 3 method
+
+For each comment, its knowledge goes to exactly one place:
+- **nowhere**, when it restates the code;
+- **a name**: a rename, an extracted function or a type;
+- **a test** named for the behavior and its reason;
+- **the doc that owns the area**, written by topic;
+- **the tech debt tracker**.
+
+Rules for the agents:
+- Never move comment text into strings, constants or log lines.
+- Behavior does not change, and external contracts (HTTP API, D1, MCP, URLs, stored JSON) keep
+  their names.
+
+Scheduling:
+- Two agents work at a time, in disjoint areas. Each pair is one app area beside one test area, so
+  they never edit the same docs or tests.
+- `pnpm run verify` runs between pairs.
+- The ESLint rule and `comments:check` are enforced once every area is clean.
+
+| Pair | App area | Test area |
+| --- | --- | --- |
+| 1 | `functions/api/handlers` and top-level `functions/api` files | `tests/unit/components` |
+| 2 | `functions/api/utils`, `functions/sitemap`, `functions/seo` | `tests/unit/features`, `tests/unit/hooks` |
+| 3 | top-level `src/lib` files and `src/lib/{schemas,http,api,forms}` | first half of `tests/e2e` |
+| 4 | the rest of `src/lib`, `src/types`, `src/utils`, `src/data`, `src/server` | second half of `tests/e2e`, `tests/unit/e2e` |
+| 5 | `src/features`, `src/hooks` | first half of `tests/unit/functions` |
+| 6 | `src/contexts`, `src/views`, `src/app` | second half of `tests/unit/functions`, `tests/integration`, `tests/unit/{db,server,seo,security}` |
+| 7 | `src/components/{layout,template-editor,run-execution,ui}` | `tests/unit/views`, `tests/unit/contexts` |
+| 8 | the rest of `src/components` | `tests/unit/lib`, `tests/support`, `tests/fixtures`, the rest of `tests/` |
+| 9 | `scripts`, `tests/unit/{scripts,config,workflows}` | none |
+| 10 | root config, `db`, `.github`, Lefthook, Wrangler, tsconfig JSON, CSS, patches, and dotfiles; the check covers every tracked format | none |
+
 ## Exceptions allowed
 
 - **Generated files:** `cloudflare-env.d.ts`, `next-env.d.ts`, `pnpm-lock.yaml`,
