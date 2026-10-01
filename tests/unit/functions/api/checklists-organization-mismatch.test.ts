@@ -37,10 +37,6 @@ import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 
-// A private template of Organization B requested for a Run in Organization A. B's private
-// content must never land in A, but a member of B who can open the template must be told where
-// it belongs, not that it does not exist.
-
 const mockEnv = {
   DB: {},
   BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
@@ -56,16 +52,14 @@ const privateTeamBTemplate = {
   is_public: false,
 };
 
-// Starting a run is the only route that makes one from a template (the old
-// POST /api/checklists/:templateId/share route is gone).
-const routes = [
+const routesThatStartARunFromATemplate = [
   ['POST /api/checklists', 'http://localhost/api/checklists', { template_id: 'template-b', teamId: 'team-a' }],
 ] as const;
 
 const post = (url: string, body: unknown) =>
   handleChecklists(new Request(url, { method: 'POST', body: JSON.stringify(body) }), mockEnv as never);
 
-describe('runs from a private template of another Organization', () => {
+describe('runs from a private template of another Organization, whose content never lands in the requested one', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -85,7 +79,7 @@ describe('runs from a private template of another Organization', () => {
     vi.mocked(getEntitlementsForContext).mockResolvedValue(team);
   });
 
-  it.each(routes)('%s tells a member of the owning Organization where the template belongs', async (_name, url, body) => {
+  it.each(routesThatStartARunFromATemplate)('%s tells a member of the owning Organization where the template belongs', async (_name, url, body) => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([privateTeamBTemplate])
       .mockResolvedValueOnce([{ id: 'member-1', team_id: 'team-b', user_id: 'user-123', role: 'runner', status: 'active' }]);
@@ -101,7 +95,7 @@ describe('runs from a private template of another Organization', () => {
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
-  it.each(routes)('%s still answers 404 to someone outside the owning Organization', async (_name, url, body) => {
+  it.each(routesThatStartARunFromATemplate)('%s still answers 404 to someone outside the owning Organization', async (_name, url, body) => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([privateTeamBTemplate]).mockResolvedValueOnce([]);
 
     const response = await post(url, body);

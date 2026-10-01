@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// The run page sends the run's current status with every save, so a rename, tick or note
-// on a completed run arrives as status 'completed' again. Only a real transition into
-// completed may stamp completed_at and completed_by_user_id; later saves keep the original
-// completer and time. Reopening keeps both stamps too (revalidation is what clears them).
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -38,14 +33,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded inserts go through the plain insert mock so tests can inspect the row.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -78,12 +67,14 @@ function organizationRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Member B saves an Organization run: run lookup, then canViewRun and canUpdateRun memberships. */
-function mockOrganizationRun(overrides: Record<string, unknown> = {}) {
+function mockMemberBSavingOrganizationRun(overrides: Record<string, unknown> = {}) {
+  const runLookup = [organizationRun(overrides)];
+  const canViewRunMembership = [membership];
+  const canUpdateRunMembership = [membership];
   dbMocks.selectChain.limit
-    .mockResolvedValueOnce([organizationRun(overrides)])
-    .mockResolvedValueOnce([membership])
-    .mockResolvedValueOnce([membership]);
+    .mockResolvedValueOnce(runLookup)
+    .mockResolvedValueOnce(canViewRunMembership)
+    .mockResolvedValueOnce(canUpdateRunMembership);
 }
 
 async function put(body: Record<string, unknown>) {
@@ -107,7 +98,7 @@ function auditDiff(): Record<string, unknown> {
   return JSON.parse(auditRow!.diff_json as string);
 }
 
-describe('run completion stamps on PUT /api/checklists/:id', () => {
+describe('run completion stamps on PUT /api/checklists/:id, which only a transition into completed writes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -125,7 +116,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('keeps the original completer and time when another member renames a completed run', async () => {
-    mockOrganizationRun();
+    mockMemberBSavingOrganizationRun();
 
     const { response } = await put({
       title: 'Renamed',
@@ -144,7 +135,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('ignores a different completed_at sent for a run that is already completed', async () => {
-    mockOrganizationRun();
+    mockMemberBSavingOrganizationRun();
 
     await put({ status: 'completed', completed_at: '2026-05-05T00:00:00.000Z', sections });
 
@@ -154,7 +145,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('dates a legacy completed run once, then leaves the date alone', async () => {
-    mockOrganizationRun({ completed_at: null });
+    mockMemberBSavingOrganizationRun({ completed_at: null });
     await put({ status: 'completed', title: 'Renamed' });
 
     const first = savedUpdates();
@@ -164,15 +155,15 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
     vi.clearAllMocks();
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
     dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
-    // The client still holds no completedAt (null maps to undefined), so the key is absent again.
-    mockOrganizationRun({ completed_at: first.completed_at, revision: 4 });
-    await put({ status: 'completed', title: 'Renamed again' });
+    mockMemberBSavingOrganizationRun({ completed_at: first.completed_at, revision: 4 });
+    const saveFromAClientStillHoldingNoCompletedAt = { status: 'completed', title: 'Renamed again' };
+    await put(saveFromAClientStillHoldingNoCompletedAt);
 
     expect(savedUpdates()).not.toHaveProperty('completed_at');
   });
 
   it('stamps the completer and time when the run becomes completed', async () => {
-    mockOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
+    mockMemberBSavingOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
     const before = Date.now();
 
     await put({ status: 'completed', sections });
@@ -184,7 +175,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('keeps the completion time the client sends when the run becomes completed', async () => {
-    mockOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
+    mockMemberBSavingOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
 
     await put({ status: 'completed', completed_at: '2026-02-02T10:00:00.000Z' });
 
@@ -195,7 +186,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('never completes a run with a null completion time', async () => {
-    mockOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
+    mockMemberBSavingOrganizationRun({ status: 'in_progress', completed_at: null, completed_by_user_id: null });
 
     await put({ status: 'completed', completed_at: null });
 
@@ -203,7 +194,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('keeps the completion stamps when a completed run is reopened', async () => {
-    mockOrganizationRun();
+    mockMemberBSavingOrganizationRun();
 
     await put({ status: 'in_progress', completed_at: COMPLETED_AT });
 
@@ -214,7 +205,7 @@ describe('run completion stamps on PUT /api/checklists/:id', () => {
   });
 
   it('ignores completed_at on saves of a run that is in progress', async () => {
-    mockOrganizationRun({ status: 'in_progress', completed_at: COMPLETED_AT });
+    mockMemberBSavingOrganizationRun({ status: 'in_progress', completed_at: COMPLETED_AT });
 
     await put({ status: 'in_progress', completed_at: '2026-05-05T00:00:00.000Z', sections });
 

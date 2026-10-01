@@ -2,9 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
-// DELETE /api/checklists/run/:id/share turns a run's share link off: the run becomes private,
-// the old link stops working, and a stale shared run can be revalidated again.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -91,7 +88,7 @@ function sqlText(condition: unknown): string {
   return dialect.sqlToQuery(condition as SQL).sql;
 }
 
-describe('stopping a run share', () => {
+describe('stopping a run share, which makes the run private and ends its old link', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     guardedInserts.length = 0;
@@ -109,7 +106,7 @@ describe('stopping a run share', () => {
     vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } });
   });
 
-  it('makes the owner\'s run private and clears every share field', async () => {
+  it('makes the owner\'s run private and clears every share field, leaving the revision so open run pages keep saving', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
     const { response, data } = await stopSharing();
@@ -122,7 +119,6 @@ describe('stopping a run share', () => {
       share_expires_at: null,
       share_used_at: null,
     }));
-    // Share state is not run content: open run pages keep saving at their revision.
     expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('revision');
     const updateWhere = sqlText(dbMocks.updateChain.where.mock.calls[0][0]);
     expect(updateWhere).toContain('"is_public" = ?');
@@ -130,7 +126,7 @@ describe('stopping a run share', () => {
     expect(updateWhere).toContain('"user_id" = ?');
   });
 
-  it('writes a share_revoked audit event only while the run is still shared', async () => {
+  it('writes a share_revoked audit event only while the run is still shared, before the update so its guard sees the shared row', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
     await stopSharing();
@@ -144,9 +140,8 @@ describe('stopping a run share', () => {
     }));
     expect(JSON.stringify(guardedInserts[0].values)).not.toContain('leaked-token');
     expect(sqlText(guardedInserts[0].condition)).toContain('"is_public" = ?');
-    // The audit insert runs before the update, so its guard sees the shared row.
-    const statements = dbMocks.db.batch.mock.calls[0][0] as unknown[];
-    expect(statements[0]).toEqual({ guardedInsert: 'checklist_run.share_revoked' });
+    const [firstStatement] = dbMocks.db.batch.mock.calls[0][0] as unknown[];
+    expect(firstStatement).toEqual({ guardedInsert: 'checklist_run.share_revoked' });
   });
 
   it('lets an Organization runner stop sharing an Organization run', async () => {

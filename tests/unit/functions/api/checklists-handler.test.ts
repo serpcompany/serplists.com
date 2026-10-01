@@ -43,15 +43,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Limit-guarded inserts go through the plain insert mock so tests can inspect the row;
-    // the guard itself is covered in tests/integration/plan-limits-concurrency-local-d1.test.ts.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -217,9 +210,7 @@ describe('Checklists Handlers', () => {
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
-    // A share-link guest changes only completion and notes, so the shared-run PUT takes the
-    // task structure from the stored run and never stores the payload's content.
-    it('the shared-run PUT never stores it', async () => {
+    it('the shared-run PUT never stores it, taking the structure from the stored run since a guest changes only completion and notes', async () => {
       vi.mocked(getSessionUserId).mockResolvedValue(null);
       const storedSections = [{
         id: 's1',
@@ -282,14 +273,10 @@ describe('Checklists Handlers', () => {
     });
   });
 
-  // The web reset skipped Sub-tasks blocks (contents[].subItems) and the legacy `completed`
-  // key, so a template carrying ticked state started web runs part done while MCP
-  // start_run started the same template unticked.
-  // A template stored without accepted ids starts runs with the ids its editor saves.
   it.each([
     ['', TICKED_TEMPLATE_SECTIONS, UNTICKED_RUN_SECTIONS],
     [' and the ids its next save stores', LEGACY_ID_TEMPLATE_SECTIONS, LEGACY_ID_RUN_SECTIONS],
-  ])('starts web runs from a template with every task and Sub-task unticked%s', async (_ids, templateSections, runSections) => {
+  ])('starts web runs from a template with every task and Sub-task unticked%s, as MCP start_run does', async (_ids, templateSections, runSections) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([{
@@ -312,8 +299,8 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     const storedItems = JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items);
     expect(storedItems).toEqual(runSections);
-    // What the run page shows: nothing done yet.
-    expect(calculateSectionsProgress(normalizeSections(storedItems))).toBe(0);
+    const progressTheRunPageShows = calculateSectionsProgress(normalizeSections(storedItems));
+    expect(progressTheRunPageShows).toBe(0);
   });
 
   it('should reject checklist runs from inaccessible private templates', async () => {
@@ -513,7 +500,7 @@ describe('Checklists Handlers', () => {
     );
   });
 
-  it('should return checklist run history for active team members', async () => {
+  it('should return checklist run history for active team members, without the diffs that hold whole runs', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
     dbMocks.selectChain.limit
@@ -562,18 +549,16 @@ describe('Checklists Handlers', () => {
         metadata: { source: 'test' },
       }),
     );
-    // Run update diffs hold the whole run; the history list never ships them.
     expect(data.events[0]).not.toHaveProperty('diff');
   });
 
-  // The run page asks for ?limit=8; the server keeps its 50 default and 1..100 clamp.
   it.each([
     ['?limit=8', 8],
     ['', 50],
     ['?limit=0', 1],
     ['?limit=1000', 100],
     ['?limit=abc', 50],
-  ])('reads at most the requested number of run history events (%s)', async (query, expected) => {
+  ])('reads at most the requested number of run history events, 50 by default and 1 to 100 (%s)', async (query, expected) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.orderBy.mockReturnValueOnce(dbMocks.selectChain);
     dbMocks.selectChain.limit
@@ -750,12 +735,10 @@ describe('Checklists Handlers', () => {
     );
   });
 
-  // The legacy template-share route created public runs its active-run count ignored, so a
-  // Free user could hold unlimited active runs. Runs are shared with /run/:id/share instead.
   it.each([
     ['a Personal run', { runName: 'Shared Run' }],
     ['an Organization run', { teamId: 'team-1' }],
-  ])('no longer creates %s from a template share link', async (_label, body) => {
+  ])('no longer creates %s from a template share link, whose runs escaped the active-run count', async (_label, body) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     dbMocks.selectChain.limit.mockResolvedValue([
       { id: 'template-2', title: 'Template 2', items: '[]', is_public: 1, user_id: 'user-123', count: 0, role: 'owner', status: 'active' },
@@ -966,10 +949,7 @@ describe('Checklists Handlers', () => {
     expect(JSON.stringify(data)).not.toContain('vault X');
   });
 
-  // Anyone holding a share link could read the owner's and members' user ids (which
-  // /api/profiles/by-id turns into names and avatars), the Organization id, and notes on
-  // retired tasks. Guests get only what the share page shows and needs to save.
-  it('gives share-link guests only the run fields the share page needs', async () => {
+  it('gives share-link guests exactly the run fields the share page needs, so a column added later stays private', async () => {
     const sharedRunKeys = [
       'completed_at', 'current_template_version', 'id', 'is_public', 'is_stale', 'items', 'progress',
       'revision', 'started_at', 'status', 'template_version', 'title',
@@ -1007,14 +987,12 @@ describe('Checklists Handlers', () => {
     const data = JSON.parse(text);
 
     expect(response.status).toBe(200);
-    // An exact key set, so a column added to checklist_runs later stays private until someone allows it.
     expect(Object.keys(data).sort()).toEqual(sharedRunKeys);
     for (const value of Object.values(privateValues)) expect(text).not.toContain(value);
     expect(text).not.toContain('retired-secret-note');
     expect(data).toMatchObject({ revision: 4, template_version: 1, current_template_version: 2, is_stale: true, is_public: true });
-    // The private columns are not even read from D1.
-    const selected = Object.keys((dbMocks.db.select.mock.calls[0] as unknown[])[0] as object);
-    expect(selected.sort()).toEqual(sharedRunKeys.filter((key) => key !== 'is_stale' && key !== 'is_public'));
+    const columnsReadFromD1 = Object.keys((dbMocks.db.select.mock.calls[0] as unknown[])[0] as object);
+    expect(columnsReadFromD1.sort()).toEqual(sharedRunKeys.filter((key) => key !== 'is_stale' && key !== 'is_public'));
   });
 
   it('should update completion on shared checklist runs without changing their tasks', async () => {
@@ -1058,8 +1036,8 @@ describe('Checklists Handlers', () => {
     expect(update).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
     const batchStatements = dbMocks.db.batch.mock.calls[0][0];
     expect(batchStatements).toHaveLength(2);
-    // The audit row is written first, guarded on the run's state; then the run update.
-    expect(batchStatements[1]).toBe(dbMocks.updateChain);
+    const [, runUpdateAfterTheGuardedAudit] = batchStatements;
+    expect(runUpdateAfterTheGuardedAudit).toBe(dbMocks.updateChain);
     expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'checklist_run.shared_updated',
@@ -1161,8 +1139,8 @@ describe('Checklists Handlers', () => {
         created_at: new Date().toISOString(),
       },
     ]);
-    // The guarded audit insert and the update both miss: nothing was written.
-    dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
+    const guardedAuditInsertAndUpdateBothMiss = [{ meta: { changes: 0 } }, { meta: { changes: 0 } }];
+    dbMocks.db.batch.mockResolvedValueOnce(guardedAuditInsertAndUpdateBothMiss);
 
     const response = await handleChecklists(new Request('http://localhost/api/checklists/run-1', {
       method: 'PUT',

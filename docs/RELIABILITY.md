@@ -381,6 +381,12 @@ Common failures:
   vi.mock("drizzle-orm/d1", () => ({ drizzle: vi.fn(() => dbMocks.db) }));
   ```
 
+  A test that inspects the rows guarded inserts write (audit events, a new run) mocks
+  `@functions/api/utils/guarded-insert` with `guardedInsertsThroughThePlainInsertMock()`
+  from `tests/support/guardedInserts.ts`, so they reach the plain insert mock. The guards
+  themselves are tested in `audit-guards.test.ts` and the local D1 tests
+  (`pnpm run test:local-d1`).
+
 - To test SQL guards or races, run the real handler against `SqliteD1` from
   `tests/support/sqlite-d1.ts`: a node:sqlite database with every migration applied that
   implements the D1 calls Drizzle makes. `beforeNextBatch()` commits a competing write

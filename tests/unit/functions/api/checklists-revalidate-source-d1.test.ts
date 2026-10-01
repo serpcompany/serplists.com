@@ -1,12 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedD1 } from "../../../fixtures/sqliteD1";
 
-// POST /api/checklists/:id/revalidate refuses two different things with a 404: the run is
-// gone, or the run is there but its source template was archived, made private, or is not
-// usable in the run's context. The page must tell them apart: after a refresh the run is
-// still listed, just no longer stale, so "This run is no longer available" would be wrong.
-// Runs the real handler and SQL against a migrated SQLite database.
-
 const sessionMocks = vi.hoisted(() => ({ getSessionUserId: vi.fn() }));
 vi.mock("@functions/api/utils/session", () => sessionMocks);
 
@@ -16,7 +10,7 @@ const NOW = "2026-09-28T00:00:00.000Z";
 const RUN_ITEMS = JSON.stringify([{ id: "s1", title: "Public", items: [{ id: "i1", title: "Public step", isCompleted: true }] }]);
 const TEMPLATE_ITEMS = JSON.stringify([{ id: "s1", title: "Private", items: [{ id: "i1", title: "Confidential step" }] }]);
 
-describe("revalidate refusals", () => {
+describe("revalidate refusals on the migrated tables, which tell a gone run from a source the caller may no longer use", () => {
   let database: ReturnType<typeof createMigratedD1>;
 
   const exec = (query: string, ...params: Array<string | number | null>) =>

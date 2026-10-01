@@ -2,10 +2,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
-// POST /api/checklists/:id/revalidate copies the source template's current content into a
-// run, so it must apply the same source rule as run creation: public, the caller's own
-// Personal template, or a template of the run's own Organization.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -39,15 +35,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
-    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -100,7 +89,7 @@ function expectNothingWritten() {
   expect(dbMocks.db.batch).not.toHaveBeenCalled();
 }
 
-describe('run revalidation source access', () => {
+describe('run revalidation source access, under the same source rule as run creation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();

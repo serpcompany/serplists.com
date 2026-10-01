@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Moving a run back to in_progress adds an active run, so every reopen path (revalidate,
-// PUT status, the share-link PUT) must respect the owner context's active-run limit, the
-// same way create and restore do. Saves on runs that are already in_progress never check it.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -37,15 +33,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
-    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -105,7 +94,7 @@ function expectLimitReached(
   expect(dbMocks.db.batch).not.toHaveBeenCalled();
 }
 
-describe('reopening a run respects the active-run limit', () => {
+describe('reopening a run respects the active-run limit, since it adds an active run', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();

@@ -1,8 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// PUT /api/checklists/shared/:token needs no login, so a share-link guest may change only
-// completion state and task notes. The stored run structure is never taken from the payload.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -36,15 +33,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
-    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -98,14 +88,12 @@ function sharedRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-// What the share page sends: the full sections it rendered, plus client-computed fields.
-function clientSections() {
+function sectionsTheSharePageRendered() {
   return JSON.parse(JSON.stringify(storedSections)) as typeof storedSections;
 }
 
-// The sections with every task and Sub-task ticked.
-function doneSections() {
-  const sections = clientSections();
+function sectionsWithEveryTaskAndSubTaskTicked() {
+  const sections = sectionsTheSharePageRendered();
   for (const item of sections[0].items) {
     item.isCompleted = true;
     for (const content of item.contents ?? []) {
@@ -128,6 +116,10 @@ function storedUpdate(): Record<string, unknown> {
   return dbMocks.updateChain.set.mock.calls[0][0];
 }
 
+function dropLookupsALastTestLeftQueued() {
+  dbMocks.selectChain.limit.mockReset();
+}
+
 function stripGuestState(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripGuestState);
   if (typeof value !== 'object' || value === null) return value;
@@ -138,11 +130,10 @@ function stripGuestState(value: unknown): unknown {
   );
 }
 
-describe('shared run updates', () => {
+describe('shared run updates, which take only completion and notes from a guest onto the stored structure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Drop queued lookups a test left unused (for example after an early 400).
-    dbMocks.selectChain.limit.mockReset();
+    dropLookupsALastTestLeftQueued();
     dbMocks.selectChain.from.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.where.mockReturnValue(dbMocks.selectChain);
     dbMocks.selectChain.limit.mockResolvedValue([]);
@@ -176,7 +167,7 @@ describe('shared run updates', () => {
 
   it('applies only completion from a payload that also rewrites titles, contents, and adds tasks', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = clientSections();
+    const sections = sectionsTheSharePageRendered();
     sections[0].title = 'Hacked section';
     sections[0].items[0].title = 'Log in here';
     sections[0].items[0].description = 'Visit https://attacker.example';
@@ -202,7 +193,7 @@ describe('shared run updates', () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
     const { response, data } = await putShared({
-      sections: clientSections(),
+      sections: sectionsTheSharePageRendered(),
       progress: 100,
       completed_at: '2020-01-01T00:00:00.000Z',
       expected_revision: 3,
@@ -219,7 +210,7 @@ describe('shared run updates', () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
     const { response } = await putShared({
-      sections: doneSections(),
+      sections: sectionsWithEveryTaskAndSubTaskTicked(),
       status: 'completed',
       completed_at: '2020-01-01T00:00:00.000Z',
       expected_revision: 3,
@@ -251,9 +242,9 @@ describe('shared run updates', () => {
     expect(update).not.toHaveProperty('completed_by_user_id');
   });
 
-  it('restamps a reopened run on the next completion and does not keep the previous completer', async () => {
+  it('restamps a reopened run on the next completion and does not keep the previous completer, naming nobody for an anonymous guest', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
-      items: JSON.stringify(doneSections()),
+      items: JSON.stringify(sectionsWithEveryTaskAndSubTaskTicked()),
       status: 'in_progress',
       completed_at: '2026-02-01T00:00:00.000Z',
       completed_by_user_id: 'owner-123',
@@ -266,7 +257,6 @@ describe('shared run updates', () => {
     expect(update.status).toBe('completed');
     expect(update.completed_at).not.toBe('2026-02-01T00:00:00.000Z');
     expect(typeof update.completed_at).toBe('string');
-    // An anonymous guest completed it this time, so nobody is named.
     expect(update).toHaveProperty('completed_by_user_id', null);
   });
 
@@ -274,7 +264,7 @@ describe('shared run updates', () => {
     vi.mocked(getSessionUserId).mockResolvedValue('owner-123');
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
       completed_by_user_id: 'someone-else',
-      items: JSON.stringify(doneSections()),
+      items: JSON.stringify(sectionsWithEveryTaskAndSubTaskTicked()),
     })]);
 
     const { response } = await putShared({ status: 'completed', expected_revision: 3 });
@@ -297,7 +287,7 @@ describe('shared run updates', () => {
 
   it('refuses to complete a run whose ticked task still has an open Sub-task', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = doneSections();
+    const sections = sectionsWithEveryTaskAndSubTaskTicked();
     sections[0].items[0].contents[1].subItems![1].isCompleted = false;
 
     const { response, data } = await putShared({ sections, status: 'completed', expected_revision: 3 });
@@ -319,13 +309,13 @@ describe('shared run updates', () => {
 
   it('completes a run when the same save ticks its last open task', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({
-      items: JSON.stringify(doneSections().map((section) => ({
+      items: JSON.stringify(sectionsWithEveryTaskAndSubTaskTicked().map((section) => ({
         ...section,
         items: section.items.map((item) => (item.id === 'item-2' ? { ...item, isCompleted: false } : item)),
       }))),
     })]);
 
-    const { response } = await putShared({ sections: doneSections(), status: 'completed', expected_revision: 3 });
+    const { response } = await putShared({ sections: sectionsWithEveryTaskAndSubTaskTicked(), status: 'completed', expected_revision: 3 });
 
     expect(response.status).toBe(200);
     expect(storedUpdate()).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
@@ -333,7 +323,7 @@ describe('shared run updates', () => {
 
   it('keeps saving notes on a run completed before the rule, open tasks and all', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ status: 'completed', completed_at: '2026-02-01T00:00:00.000Z' })]);
-    const sections = clientSections();
+    const sections = sectionsTheSharePageRendered();
     (sections[0].items[1] as Record<string, unknown>).notes = 'Shipped anyway';
 
     const { response } = await putShared({ sections, status: 'completed', expected_revision: 3 });
@@ -349,7 +339,7 @@ describe('shared run updates', () => {
       completed_by_user_id: 'owner-123',
     })]);
 
-    const { response } = await putShared({ sections: clientSections(), status: 'completed', expected_revision: 3 });
+    const { response } = await putShared({ sections: sectionsTheSharePageRendered(), status: 'completed', expected_revision: 3 });
 
     expect(response.status).toBe(200);
     const update = storedUpdate();
@@ -360,7 +350,7 @@ describe('shared run updates', () => {
   it('requires expected_revision', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
-    const { response } = await putShared({ sections: clientSections() });
+    const { response } = await putShared({ sections: sectionsTheSharePageRendered() });
 
     expect(response.status).toBe(400);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
@@ -369,7 +359,7 @@ describe('shared run updates', () => {
 
   it('rejects oversized notes', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = clientSections();
+    const sections = sectionsTheSharePageRendered();
     (sections[0].items[0] as Record<string, unknown>).notes = 'x'.repeat(5001);
 
     const { response } = await putShared({ sections, expected_revision: 3 });
@@ -380,10 +370,11 @@ describe('shared run updates', () => {
 
   it('saves guest notes and sub-item completion matched by id', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = clientSections();
+    const sections = sectionsTheSharePageRendered();
     (sections[0].items[0] as Record<string, unknown>).notes = 'Guest note';
     sections[0].items[0].contents[1].subItems!.reverse();
-    sections[0].items[0].contents[1].subItems![0].isCompleted = true; // sub-2 after the reverse
+    const [sub2AfterTheReverse] = sections[0].items[0].contents[1].subItems!;
+    sub2AfterTheReverse.isCompleted = true;
 
     const { response } = await putShared({ sections, expected_revision: 3 });
 
@@ -424,7 +415,7 @@ describe('shared run updates', () => {
 
   it('records the merged state, not the raw payload, in the audit event', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
-    const sections = clientSections();
+    const sections = sectionsTheSharePageRendered();
     sections[0].items[0].title = 'Log in here';
 
     await putShared({ sections, expected_revision: 3 });

@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { getTableColumns } from 'drizzle-orm';
 
-// A share token is a write credential for the run (PUT /api/checklists/shared/:token), so
-// run reads must never return it. Otherwise a read-only Organization viewer could read the
-// token from the runs list and edit a run they may not update directly.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -38,15 +34,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
-    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { schema } from '@functions/api/db';
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -100,7 +89,7 @@ function expectSelectOmitsShareColumns() {
   }
 }
 
-describe('run reads never return share tokens', () => {
+describe('run reads never return share tokens, which let anyone holding one edit the run', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();

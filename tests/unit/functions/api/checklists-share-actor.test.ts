@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Share-link visitors are guests. A visitor who happens to be signed in must not be named
-// (with their email) in the run owner's history: the edit is attributed only when the
-// visitor already belongs to the run's owner context.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -198,7 +194,7 @@ describe('run history of share-link edits', () => {
     expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'owner-123', email: 'owner-123@example.com' }));
   });
 
-  it('hides an Organization run\'s share-link actors who are not active members', async () => {
+  it('hides an Organization run\'s share-link actors who are not active members, checking only share-link events', async () => {
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([sharedRun({ team_id: 'team-1' })])
       .mockResolvedValueOnce([member('viewer-9')])
@@ -214,7 +210,6 @@ describe('run history of share-link edits', () => {
     expect(events[0].actor).toEqual(hidden);
     expect(text).not.toContain('visitor-1@example.com');
     expect(events[1].actor).toEqual(expect.objectContaining({ userId: 'member-1' }));
-    // Only share-link events are checked; a member's own edits keep their name.
     expect(events[2].actor).toEqual(expect.objectContaining({ userId: 'former-1' }));
   });
 

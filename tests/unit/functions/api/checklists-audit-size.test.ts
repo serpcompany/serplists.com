@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Run saves must write a small audit row even for a large run: D1 rejects rows over
-// 2,000,000 bytes, and the audit insert shares a batch with the save, so an oversized row
-// would fail every save of that run.
-
 const dbMocks = vi.hoisted(() => {
   const selectChain = {
     from: vi.fn(),
@@ -37,15 +33,8 @@ vi.mock('@functions/api/utils/entitlements', () => ({
   getEntitlementsForContext: vi.fn(),
 }));
 
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    // Guarded audit inserts go through the plain insert mock so tests can inspect the row;
-    // the guards themselves are covered in audit-guards.test.ts and the local D1 tests.
-    insertRowWhere: vi.fn((db: any, table: unknown, values: unknown) => db.insert(table).values(values)),
-  };
-});
+vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) =>
+  (await import('../../../support/guardedInserts')).guardedInsertsThroughThePlainInsertMock(importOriginal));
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
@@ -113,7 +102,7 @@ function expectCompactAudit(toggledId: string) {
   expect(diff.items).toEqual(expect.objectContaining({ completed: [toggledId] }));
 }
 
-describe('run audit rows stay small', () => {
+describe('run audit rows stay small, since an oversized one would fail every save of the run it shares a D1 batch with', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMocks.selectChain.limit.mockReset();
@@ -186,7 +175,6 @@ describe('run audit rows stay small', () => {
     const data = JSON.parse(text) as { events: Array<Record<string, unknown>> };
 
     expect(response.status).toBe(200);
-    // History lists do not return diffs at all (see history-queries.ts).
     expect(data.events[0]).not.toHaveProperty('diff');
     expect(text).not.toContain('old-token');
     expect(text).not.toContain('section-1');
