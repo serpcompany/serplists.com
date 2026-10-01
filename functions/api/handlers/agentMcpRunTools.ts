@@ -100,7 +100,7 @@ async function assertActiveRunCapacity(env: Env, owner: RunOwnerContext): Promis
   return limit;
 }
 
-async function getOwnedRun(env: Env, userId: string, runId: string): Promise<JsonRecord> {
+async function getOwnedRun(env: Env, userId: string, runId: string) {
   const [run] = await createDb(env)
     .select()
     .from(schema.checklist_runs)
@@ -114,7 +114,7 @@ async function getOwnedRun(env: Env, userId: string, runId: string): Promise<Jso
   if (!run || run.user_id !== userId || run.team_id !== null || run.deleted_at !== null) {
     throw new ToolError("Run not found", "run_not_found");
   }
-  return run as unknown as JsonRecord;
+  return run;
 }
 
 export async function getRun(

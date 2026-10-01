@@ -25,10 +25,10 @@ export async function shareChecklistRun(
     .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
     .limit(1);
 
-  if (!run || !(await canViewRun(env, run as unknown as Record<string, unknown>, userId))) {
+  if (!run || !(await canViewRun(env, run, userId))) {
     return jsonError('Checklist run not found', 404);
   }
-  if (!(await canUpdateRun(env, run as unknown as Record<string, unknown>, userId))) {
+  if (!(await canUpdateRun(env, run, userId))) {
     return jsonError('Forbidden', 403);
   }
 
@@ -43,11 +43,11 @@ export async function shareChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(run as unknown as Record<string, unknown>, userId),
+    subject: getRunSubject(run, userId),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_created',
-    before: run as unknown as Record<string, unknown>,
-    after: { ...(run as unknown as Record<string, unknown>), ...shareUpdates },
+    before: run,
+    after: { ...run, ...shareUpdates },
     diff: shareUpdates,
     request,
     createdAt: now,
@@ -81,12 +81,11 @@ export async function stopSharingChecklistRun(
     .from(checklist_runs)
     .where(and(eq(checklist_runs.id, runId), isNull(checklist_runs.deleted_at)))
     .limit(1);
-  const runRecord = run as unknown as Record<string, unknown>;
 
-  if (!run || !(await canViewRun(env, runRecord, userId))) {
+  if (!run || !(await canViewRun(env, run, userId))) {
     return jsonError('Checklist run not found', 404);
   }
-  if (!(await canUpdateRun(env, runRecord, userId))) {
+  if (!(await canUpdateRun(env, run, userId))) {
     return jsonError('Forbidden', 403);
   }
   if (!run.is_public) {
@@ -102,11 +101,11 @@ export async function stopSharingChecklistRun(
   );
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(runRecord, userId),
+    subject: getRunSubject(run, userId),
     resource: { type: 'checklist_run', id: runId },
     action: 'checklist_run.share_revoked',
-    before: runRecord,
-    after: { ...runRecord, ...revokeUpdates },
+    before: run,
+    after: { ...run, ...revokeUpdates },
     diff: revokeUpdates,
     request,
     createdAt: now,

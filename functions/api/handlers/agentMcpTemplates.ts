@@ -68,9 +68,9 @@ async function loadWrittenTemplate(
   written: JsonRecord & { id: string },
   changed: SectionAndTaskIds = {},
 ): Promise<JsonRecord> {
-  let row: JsonRecord;
+  let row: Awaited<ReturnType<typeof getOwnedTemplate>>;
   try {
-    row = await getOwnedTemplate(env, identity.userId, written.id) as unknown as JsonRecord;
+    row = await getOwnedTemplate(env, identity.userId, written.id);
   } catch (error) {
     log("warn", "mcp_template_reload_error", {
       requestId: request.headers.get("X-Request-Id") ?? undefined,
@@ -90,7 +90,7 @@ export async function getTemplate(
 ): Promise<JsonRecord> {
   const { templateId, ...read } = parseToolArguments(getTemplateArgs, rawArguments);
   const template = await getOwnedTemplate(env, identity.userId, templateId);
-  return readTemplate(templateView(template as unknown as JsonRecord), read);
+  return readTemplate(templateView(template), read);
 }
 
 export async function createTemplate(

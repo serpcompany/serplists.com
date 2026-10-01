@@ -171,7 +171,7 @@ describe('Templates Handlers', () => {
         category: '["seo"]',
         tags: '["content"]',
         user_id: 'user-1',
-        is_public: 1,
+        is_public: true,
         slug: 'seo-template',
         seo_title: 'Stored SEO Title',
         seo_description: 'Stored SEO description',

@@ -18,7 +18,7 @@ function valueAsDrizzleInsertFillsIt(column: Column, value: unknown): unknown {
 
 export function withoutColumns<TTable extends SQLiteTable>(table: TTable, omit: readonly string[]): TTable {
   if (omit.length === 0) return table;
-  if ((table as unknown as Record<symbol, unknown>)[DRIZZLE_TABLE_COLUMNS] !== getTableColumns(table)) {
+  if (!(DRIZZLE_TABLE_COLUMNS in table) || table[DRIZZLE_TABLE_COLUMNS] !== getTableColumns(table)) {
     throw new Error('withoutColumns: unsupported Drizzle table layout');
   }
   const columns = Object.fromEntries(

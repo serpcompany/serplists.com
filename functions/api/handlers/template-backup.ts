@@ -120,7 +120,7 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
   const [userRow] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
 
   const exportedTemplates = rows.map((row) => {
-    const parsed = parseTemplateRow(row as unknown as Record<string, unknown>);
+    const parsed = parseTemplateRow(row);
     return {
       id: parsed.id,
       title: parsed.title,

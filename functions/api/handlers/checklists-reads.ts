@@ -29,10 +29,10 @@ async function readRunHistory(env: Env, db: Db, url: URL, userId: string, checkl
     .where(eq(checklist_runs.id, checklistId))
     .limit(1);
 
-  if (!checklist || !(await canViewRunHistory(env, checklist as unknown as Record<string, unknown>, userId))) {
+  if (!checklist || !(await canViewRunHistory(env, checklist, userId))) {
     return jsonError('Checklist not found', 404);
   }
-  const subject = getRunSubject(checklist as unknown as Record<string, unknown>, userId);
+  const subject = getRunSubject(checklist, userId);
 
   try {
     const eventRows = await selectAuditEventHistory(db, 'checklist_run', checklistId, historyLimit);
@@ -66,11 +66,11 @@ async function readRun(env: Env, db: Db, userId: string, checklistId: string): P
     .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
     .limit(1);
 
-  if (!checklist || !(await canViewRun(env, checklist as unknown as Record<string, unknown>, userId))) {
+  if (!checklist || !(await canViewRun(env, checklist, userId))) {
     return jsonError('Checklist not found', 404);
   }
 
-  return json(serializeChecklistRun(checklist as unknown as Record<string, unknown>));
+  return json(serializeChecklistRun(checklist));
 }
 
 async function listRuns(env: Env, db: Db, url: URL, userId: string, archived: boolean): Promise<Response> {
@@ -89,7 +89,7 @@ async function listRuns(env: Env, db: Db, url: URL, userId: string, archived: bo
     .where(and(ownedByContext, archived ? isNotNull(checklist_runs.deleted_at) : isNull(checklist_runs.deleted_at)))
     .orderBy(archived ? desc(checklist_runs.updated_at) : desc(checklist_runs.created_at));
 
-  return json(checklists.map((run) => serializeChecklistRun(run as unknown as Record<string, unknown>)));
+  return json(checklists.map((run) => serializeChecklistRun(run)));
 }
 
 export async function handleChecklistReads(

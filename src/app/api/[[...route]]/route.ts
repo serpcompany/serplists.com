@@ -1,7 +1,6 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 import api from '@functions/api/[[route]]';
-import type { Env } from '@functions/api/types';
 
 const toApiRequest = (request: Request): Request =>
   new Request(request.url, {
@@ -15,7 +14,7 @@ const toApiRequest = (request: Request): Request =>
 
 async function handle(request: Request): Promise<Response> {
   const { env } = await getCloudflareContext({ async: true });
-  return api.fetch(toApiRequest(request), env as unknown as Env);
+  return api.fetch(toApiRequest(request), env);
 }
 
 export { handle as DELETE, handle as GET, handle as HEAD, handle as OPTIONS, handle as PATCH, handle as POST, handle as PUT };

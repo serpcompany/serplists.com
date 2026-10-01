@@ -202,7 +202,7 @@ describe('Templates Handlers', () => {
 
   it('decodes percent-encoded slugs before looking them up', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { ...templateWithASlugTheMigrationBackfillsLeftUnstripped(), is_public: 1, owner_username: 'owner' },
+      { ...templateWithASlugTheMigrationBackfillsLeftUnstripped(), is_public: true, owner_username: 'owner' },
     ]);
 
     const request = new Request(

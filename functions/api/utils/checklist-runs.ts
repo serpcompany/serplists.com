@@ -6,6 +6,15 @@ import { runSourceTemplateUsableSql } from './template-access';
 
 const SHARE_SECRET_COLUMNS = ['share_token', 'share_expires_at', 'share_used_at'] as const;
 
+type RunRow = typeof schema.checklist_runs.$inferSelect;
+type ShareSecretColumn = (typeof SHARE_SECRET_COLUMNS)[number];
+type TemplateVersionFields = { template_version: number; current_template_version: number | null };
+export type RunResponseRow = Omit<RunRow, ShareSecretColumn> & TemplateVersionFields;
+export type SharedRunRow = Pick<
+  RunRow,
+  'id' | 'title' | 'items' | 'status' | 'progress' | 'started_at' | 'completed_at' | 'revision'
+> & TemplateVersionFields;
+
 function runResponseColumns() {
   const {
     share_token: _token,
@@ -30,11 +39,9 @@ export function checklistRunSelectFor(callerUserId: string | null) {
   };
 }
 
-function templateVersions(row: Record<string, unknown>) {
-  const templateVersion = typeof row.template_version === 'number' ? row.template_version : 1;
-  const currentTemplateVersion = typeof row.current_template_version === 'number'
-    ? row.current_template_version
-    : templateVersion;
+function templateVersions(row: TemplateVersionFields) {
+  const templateVersion = row.template_version;
+  const currentTemplateVersion = row.current_template_version ?? templateVersion;
 
   return {
     template_version: templateVersion,
@@ -43,8 +50,8 @@ function templateVersions(row: Record<string, unknown>) {
   };
 }
 
-export function serializeChecklistRun(row: Record<string, unknown>) {
-  const run = { ...row };
+export function serializeChecklistRun(row: RunResponseRow) {
+  const run: RunResponseRow & Partial<Record<ShareSecretColumn, unknown>> = { ...row };
   for (const column of SHARE_SECRET_COLUMNS) delete run[column];
   const { current_template_version, is_stale } = templateVersions(run);
 
@@ -67,7 +74,7 @@ export function sharedChecklistRunSelect() {
   };
 }
 
-export function serializeSharedChecklistRun(row: Record<string, unknown>) {
+export function serializeSharedChecklistRun(row: SharedRunRow) {
   return {
     id: row.id,
     title: row.title,
@@ -76,7 +83,7 @@ export function serializeSharedChecklistRun(row: Record<string, unknown>) {
     progress: row.progress,
     started_at: row.started_at,
     completed_at: row.completed_at ?? null,
-    revision: typeof row.revision === 'number' ? row.revision : 1,
+    revision: row.revision,
     ...templateVersions(row),
     is_public: true,
   };
@@ -106,13 +113,10 @@ export function auditedRunUpdate(
   ] as const;
 }
 
-export function getRunSubject(run: Record<string, unknown>, fallbackUserId: string): AuditSubject {
-  if (typeof run.team_id === 'string' && run.team_id) {
+export function getRunSubject(run: Pick<RunRow, 'team_id' | 'user_id'>, fallbackUserId: string): AuditSubject {
+  if (run.team_id) {
     return { type: 'team', id: run.team_id };
   }
 
-  return {
-    type: 'user',
-    id: typeof run.user_id === 'string' && run.user_id ? run.user_id : fallbackUserId,
-  };
+  return { type: 'user', id: run.user_id || fallbackUserId };
 }

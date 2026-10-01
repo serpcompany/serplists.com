@@ -30,21 +30,20 @@ export async function restoreChecklistRun(
     .from(checklist_runs)
     .where(eq(checklist_runs.id, checklistId))
     .limit(1);
-  const runRecord = existingRun as unknown as Record<string, unknown>;
 
-  if (!existingRun || !(await canViewRunHistory(env, runRecord, userId))) {
+  if (!existingRun || !(await canViewRunHistory(env, existingRun, userId))) {
     return jsonError('Checklist not found', 404);
   }
-  if (!(await canRestoreRun(env, runRecord, userId))) {
+  if (!(await canRestoreRun(env, existingRun, userId))) {
     return jsonError('Forbidden', 403);
   }
-  if (!(typeof runRecord.deleted_at === 'string' && runRecord.deleted_at)) {
+  if (!existingRun.deleted_at) {
     return jsonError('Checklist is not archived', 400, { code: 'not_archived' });
   }
 
-  const teamId = typeof runRecord.team_id === 'string' && runRecord.team_id ? runRecord.team_id : null;
+  const teamId = existingRun.team_id || null;
   const owner = { userId, teamId };
-  const capacity = runRecord.status === 'in_progress'
+  const capacity = existingRun.status === 'in_progress'
     ? await checkActiveRunCapacity(env, owner, userId)
     : { limit: null, hit: null };
   if (capacity.hit) return activeRunLimitResponse(owner, capacity.hit, 'restore');
@@ -61,11 +60,11 @@ export async function restoreChecklistRun(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(runRecord, userId),
+    subject: getRunSubject(existingRun, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.restored',
-    before: runRecord,
-    after: { ...runRecord, ...restoreUpdates },
+    before: existingRun,
+    after: { ...existingRun, ...restoreUpdates },
     diff: restoreUpdates,
     request,
     createdAt: now,
@@ -103,10 +102,10 @@ export async function archiveChecklistRun(
     .where(eq(checklist_runs.id, checklistId))
     .limit(1);
 
-  if (!existingChecklist || !(await canViewRun(env, existingChecklist as unknown as Record<string, unknown>, userId))) {
+  if (!existingChecklist || !(await canViewRun(env, existingChecklist, userId))) {
     return jsonError('Checklist not found or unauthorized', 404);
   }
-  if (!(await canDeleteRun(env, existingChecklist as unknown as Record<string, unknown>, userId))) {
+  if (!(await canDeleteRun(env, existingChecklist, userId))) {
     return jsonError('Forbidden', 403);
   }
 
@@ -121,16 +120,16 @@ export async function archiveChecklistRun(
   };
 
   const archivedChecklist = {
-    ...(existingChecklist as unknown as Record<string, unknown>),
+    ...existingChecklist,
     ...archiveUpdates,
   };
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingChecklist as unknown as Record<string, unknown>, userId),
+    subject: getRunSubject(existingChecklist, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.deleted',
-    before: existingChecklist as unknown as Record<string, unknown>,
+    before: existingChecklist,
     after: archivedChecklist,
     diff: archiveUpdates,
     request,

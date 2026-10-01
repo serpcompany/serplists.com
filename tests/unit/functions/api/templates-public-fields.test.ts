@@ -53,7 +53,7 @@ const organizationTemplateAnotherMemberEdited = (overrides: Record<string, unkno
   team_id: 'org-1',
   created_by_user_id: 'creator-1',
   updated_by_user_id: 'editor-2',
-  is_public: 1,
+  is_public: true,
   category: '["ops"]',
   tags: '["launch"]',
   slug: 'launch-plan',
@@ -163,7 +163,7 @@ describe('public template responses, which never say who in an Organization crea
 
   it('the signed-in unscoped list keeps full rows for the user\'s own templates only', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-9');
-    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow({ is_public: 0 }), organizationTemplateAnotherMemberEdited()]);
+    dbMocks.selectChain.orderBy.mockResolvedValueOnce([personalRow({ is_public: false }), organizationTemplateAnotherMemberEdited()]);
 
     const { body } = await get('/api/templates', templateRows);
 
@@ -202,7 +202,7 @@ describe('public template responses, which never say who in an Organization crea
 
   it('a private Organization template is still not found for a non-member', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('visitor-3');
-    dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited({ is_public: 0 })]).mockResolvedValueOnce([]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([organizationTemplateAnotherMemberEdited({ is_public: false })]).mockResolvedValueOnce([]);
 
     const { status } = await get('/api/templates/template-1', templateRow);
 

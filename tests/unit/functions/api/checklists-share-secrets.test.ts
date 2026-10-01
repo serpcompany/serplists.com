@@ -168,9 +168,35 @@ describe('run response shape', () => {
   });
 
   it('drops the share columns from a row that has every run column', () => {
-    const row = Object.fromEntries(Object.keys(getTableColumns(schema.checklist_runs)).map((key) => [key, `value-${key}`]));
+    const everyRunColumn: typeof schema.checklist_runs.$inferSelect = {
+      id: 'run-1',
+      user_id: 'user-1',
+      template_id: 'template-1',
+      title: 'Launch',
+      items: '[]',
+      status: 'in_progress',
+      started_at: '2026-01-01T00:00:00.000Z',
+      completed_at: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: null,
+      progress: 0,
+      is_public: true,
+      share_token: 'value-share_token',
+      share_expires_at: 'value-share_expires_at',
+      share_used_at: 'value-share_used_at',
+      team_id: null,
+      created_by_user_id: null,
+      assigned_to_user_id: null,
+      started_by_user_id: null,
+      completed_by_user_id: null,
+      deleted_at: null,
+      template_version: 1,
+      revision: 1,
+      retired_items: '[]',
+    };
+    expect(Object.keys(everyRunColumn).sort()).toEqual(Object.keys(getTableColumns(schema.checklist_runs)).sort());
 
-    const serialized = serializeChecklistRun(row);
+    const serialized = serializeChecklistRun({ ...everyRunColumn, current_template_version: null });
 
     for (const column of SHARE_COLUMNS) expect(serialized).not.toHaveProperty(column);
     expect(serialized).toHaveProperty('is_public');

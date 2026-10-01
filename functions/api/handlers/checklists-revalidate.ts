@@ -34,10 +34,10 @@ export async function revalidateChecklistRun(
     .from(checklist_runs)
     .where(and(eq(checklist_runs.id, checklistId), isNull(checklist_runs.deleted_at)))
     .limit(1);
-  if (!existingRun || !(await canViewRun(env, existingRun as unknown as Record<string, unknown>, userId))) {
+  if (!existingRun || !(await canViewRun(env, existingRun, userId))) {
     return jsonError('Checklist not found', 404);
   }
-  if (!(await canUpdateRun(env, existingRun as unknown as Record<string, unknown>, userId))) {
+  if (!(await canUpdateRun(env, existingRun, userId))) {
     return jsonError('Forbidden', 403);
   }
   if (existingRun.is_public) {
@@ -97,11 +97,11 @@ export async function revalidateChecklistRun(
   };
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getRunSubject(existingRun as unknown as Record<string, unknown>, userId),
+    subject: getRunSubject(existingRun, userId),
     resource: { type: 'checklist_run', id: checklistId },
     action: 'checklist_run.revalidated',
-    before: existingRun as unknown as Record<string, unknown>,
-    after: { ...(existingRun as unknown as Record<string, unknown>), ...updates },
+    before: existingRun,
+    after: { ...existingRun, ...updates },
     diff: updates,
     metadata: {
       templateId: sourceTemplate.id,

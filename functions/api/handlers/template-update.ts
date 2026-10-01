@@ -118,16 +118,16 @@ export async function updateTemplateForUser(
       .limit(1),
   );
 
-  if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+  if (!existingTemplate || !(await canViewTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found or unauthorized', 404);
   }
-  if (options.privatePersonalOnly && !isOwnPersonalTemplateRow(existingTemplate as unknown as Record<string, unknown>, userId)) {
+  if (options.privatePersonalOnly && !isOwnPersonalTemplateRow(existingTemplate, userId)) {
     return jsonError('Template not found or unauthorized', 404);
   }
   if (options.privatePersonalOnly && Boolean(existingTemplate.is_public)) {
     return jsonError('Public templates can only be edited in SERP Lists', 403, { code: 'template_is_public' });
   }
-  if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+  if (!(await canEditTemplate(env, existingTemplate, userId))) {
     return jsonError('Forbidden', 403);
   }
   if (incomingSections) {
@@ -172,7 +172,7 @@ export async function updateTemplateForUser(
     updates.slug = slug;
   }
 
-  const changes = omitUnchangedTemplateColumns(existingTemplate as unknown as Record<string, unknown>, updates);
+  const changes = omitUnchangedTemplateColumns(existingTemplate, updates);
   const invalidField = validateChangedTemplateFields(changes, parsed.data);
   if (invalidField) {
     return jsonError(invalidField.message, 400, { details: invalidField.details });
@@ -211,9 +211,9 @@ export async function updateTemplateForUser(
     ? and(sameVersionInOwnerScope, stillPrivate)
     : sameVersionInOwnerScope;
 
-  const subject = getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId);
+  const subject = getTemplateSubject(existingTemplate, userId);
   const updatedTemplate = {
-    ...(existingTemplate as unknown as Record<string, unknown>),
+    ...existingTemplate,
     ...templateValues,
   };
 
@@ -232,7 +232,7 @@ export async function updateTemplateForUser(
     subject,
     resource: { type: 'template', id: templateId },
     action: 'template.updated',
-    before: existingTemplate as unknown as Record<string, unknown>,
+    before: existingTemplate,
     after: updatedTemplate,
     diff: changes,
     metadata: visibilityChange || options.auditMetadata ? { ...visibilityChange, ...options.auditMetadata } : undefined,

@@ -38,7 +38,7 @@ export async function handleSharedChecklist(
       return jsonError('Shared run not found', 404);
     }
 
-    return json(serializeSharedChecklistRun(checklist as unknown as Record<string, unknown>));
+    return json(serializeSharedChecklistRun(checklist));
   }
 
   if (request.method !== 'PUT') {
@@ -87,8 +87,7 @@ export async function handleSharedChecklist(
     return jsonError('Shared run content could not be read', 500);
   }
 
-  const runRecord = existingSharedRun as unknown as Record<string, unknown>;
-  const actorUserId = userId && (await canViewRun(env, runRecord, userId)) ? userId : null;
+  const actorUserId = userId && (await canViewRun(env, existingSharedRun, userId)) ? userId : null;
 
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = {};
@@ -131,11 +130,11 @@ export async function handleSharedChecklist(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId,
-    subject: getRunSubject(runRecord, typeof existingSharedRun.user_id === 'string' ? existingSharedRun.user_id : 'unknown'),
+    subject: getRunSubject(existingSharedRun, existingSharedRun.user_id),
     resource: { type: 'checklist_run', id: existingSharedRun.id },
     action: 'checklist_run.shared_updated',
-    before: runRecord,
-    after: { ...runRecord, ...updates },
+    before: existingSharedRun,
+    after: { ...existingSharedRun, ...updates },
     diff: updates,
     metadata: { source: 'public_share' },
     request,

@@ -40,21 +40,18 @@ export async function restoreTemplate(
       .where(eq(templates.id, templateId))
       .limit(1),
   );
-  const templateRecord = existingTemplate as unknown as Record<string, unknown>;
 
-  if (!existingTemplate || !(await canViewPrivateTemplate(env, templateRecord, userId))) {
+  if (!existingTemplate || !(await canViewPrivateTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found', 404);
   }
-  if (!(await canEditTemplate(env, templateRecord, userId))) {
+  if (!(await canEditTemplate(env, existingTemplate, userId))) {
     return jsonError('Forbidden', 403);
   }
-  if (!(typeof templateRecord.deleted_at === 'string' && templateRecord.deleted_at)) {
+  if (!existingTemplate.deleted_at) {
     return jsonError('Template is not archived', 400, { code: 'not_archived' });
   }
 
-  const teamId = templateRecord.owner_type === 'team' && typeof templateRecord.team_id === 'string'
-    ? templateRecord.team_id
-    : null;
+  const teamId = existingTemplate.owner_type === 'team' ? existingTemplate.team_id : null;
   const entitlements = teamId
     ? await getEntitlementsForContext(env, { type: 'team', teamId, userId })
     : await getEntitlementsForUser(env, userId);
@@ -75,11 +72,11 @@ export async function restoreTemplate(
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(templateRecord, userId),
+    subject: getTemplateSubject(existingTemplate, userId),
     resource: { type: 'template', id: templateId },
     action: 'template.restored',
-    before: templateRecord,
-    after: { ...templateRecord, ...restoreUpdates },
+    before: existingTemplate,
+    after: { ...existingTemplate, ...restoreUpdates },
     diff: restoreUpdates as Record<string, unknown>,
     request,
     createdAt: now,
@@ -122,10 +119,10 @@ export async function archiveTemplate(
       .limit(1),
   );
 
-  if (!existingTemplate || !(await canViewTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+  if (!existingTemplate || !(await canViewTemplate(env, existingTemplate, userId))) {
     return jsonError('Template not found or unauthorized', 404);
   }
-  if (!(await canEditTemplate(env, existingTemplate as unknown as Record<string, unknown>, userId))) {
+  if (!(await canEditTemplate(env, existingTemplate, userId))) {
     return jsonError('Forbidden', 403);
   }
 
@@ -138,16 +135,16 @@ export async function archiveTemplate(
   };
 
   const archivedTemplate = {
-    ...(existingTemplate as unknown as Record<string, unknown>),
+    ...existingTemplate,
     ...archiveUpdates,
   };
 
   const auditEvent = await buildAuditEventValues({
     actorUserId: userId,
-    subject: getTemplateSubject(existingTemplate as unknown as Record<string, unknown>, userId),
+    subject: getTemplateSubject(existingTemplate, userId),
     resource: { type: 'template', id: templateId },
     action: 'template.deleted',
-    before: existingTemplate as unknown as Record<string, unknown>,
+    before: existingTemplate,
     after: archivedTemplate,
     diff: archiveUpdates as Record<string, unknown>,
     request,
