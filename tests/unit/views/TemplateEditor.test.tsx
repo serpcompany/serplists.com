@@ -80,12 +80,24 @@ beforeEach(() => {
   }));
 });
 
-// `path` is the route's pattern, React Router style (':id'), as the App Router names it ('[id]').
-const renderEditorAt = (location: string, path: string): string =>
-  renderPageAt(location, { [path.replace(/:(\w+)/g, '[$1]')]: <TemplateEditor /> });
+const renderEditorAt = (location: string, appRouterPattern: string): string =>
+  renderPageAt(location, { [appRouterPattern]: <TemplateEditor /> });
+
+const editorState = () => ({
+  selectedSectionIndex: 0,
+  selectedItemIndex: null,
+  showingSEO: false,
+  showingTemplateInfo: true,
+  errors: [],
+  setErrors: vi.fn(),
+  handleSelectSection: vi.fn(),
+  handleSelectItem: vi.fn(),
+  handleSelectSEO: vi.fn(),
+  handleSelectTemplateInfo: vi.fn(),
+});
 
 describe('TemplateEditor page', () => {
-  it('uses the v0-style split editor shell instead of the old wide content canvas', async () => {
+  it('uses the v0-style split editor shell, with the outline beside the form from lg, instead of the old wide content canvas', async () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({
         title: 'New Employee Onboarding',
@@ -111,25 +123,13 @@ describe('TemplateEditor page', () => {
       templateSlug: 'new-employee-onboarding',
     });
 
-    mockUseTemplateEditorState.mockReturnValue({
-      selectedSectionIndex: 0,
-      selectedItemIndex: null,
-      showingSEO: false,
-      showingTemplateInfo: true,
-      errors: [],
-      setErrors: vi.fn(),
-      handleSelectSection: vi.fn(),
-      handleSelectItem: vi.fn(),
-      handleSelectSEO: vi.fn(),
-      handleSelectTemplateInfo: vi.fn(),
-    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
 
     const html = await renderEditorAt('/dashboard/templates/new', '/dashboard/templates/new');
 
     expect(html).toContain('Template Settings');
     expect(html).toContain('Search &amp; SEO');
     expect(html).toContain('Sections');
-    // The outline beside the form panel (a sheet below lg; the server renders the wide layout).
     expect(html).toContain('data-slot="template-outline"');
     expect(html).toContain('lg:grid-cols-[18rem_minmax(0,1fr)]');
     expect(html).not.toContain('text-4xl');
@@ -146,22 +146,11 @@ describe('TemplateEditor page', () => {
       save: vi.fn(),
       templateSlug: 'existing-template',
     });
-    mockUseTemplateEditorState.mockReturnValue({
-      selectedSectionIndex: 0,
-      selectedItemIndex: null,
-      showingSEO: false,
-      showingTemplateInfo: true,
-      errors: [],
-      setErrors: vi.fn(),
-      handleSelectSection: vi.fn(),
-      handleSelectItem: vi.fn(),
-      handleSelectSEO: vi.fn(),
-      handleSelectTemplateInfo: vi.fn(),
-    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
 
     const html = await renderEditorAt(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(html).not.toContain('Generate from Clipy');
@@ -176,41 +165,27 @@ describe('TemplateEditor page', () => {
       save: vi.fn(),
       templateSlug: undefined,
     });
-    mockUseTemplateEditorState.mockReturnValue({
-      selectedSectionIndex: 0,
-      selectedItemIndex: null,
-      showingSEO: false,
-      showingTemplateInfo: true,
-      errors: [],
-      setErrors: vi.fn(),
-      handleSelectSection: vi.fn(),
-      handleSelectItem: vi.fn(),
-      handleSelectSEO: vi.fn(),
-      handleSelectTemplateInfo: vi.fn(),
-    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
 
     return renderEditorAt(location, path);
   };
 
-  // A create leaves the page when it finishes, so edits made meanwhile could not be kept.
-  it('locks the new-template editor while it is being created', async () => {
+  it('locks the new-template editor while it is being created, since the create leaves the page and could not keep edits made meanwhile', async () => {
     const html = await renderSavingEditor('/dashboard/templates/new', '/dashboard/templates/new');
 
     expect(html).toMatch(/<fieldset[^>]*disabled=""/);
   });
 
-  // An update stays on the page and keeps edits made during the save.
-  it('keeps an existing template editable while it saves', async () => {
+  it('keeps an existing template editable while it saves, since an update stays on the page and keeps edits made meanwhile', async () => {
     const html = await renderSavingEditor(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(html).not.toMatch(/<fieldset[^>]*disabled=""/);
   });
 
-  // Free Personal allows one template: the editor must offer the upgrade, not only text.
-  it('offers Upgrade to Pro when the plan cannot save the template', async () => {
+  it('offers an Upgrade to Pro button, not only text, when the plan cannot save the template', async () => {
     mockUseTemplateEditorAccess.mockReturnValue(
       buildAccess({
         notice: {
@@ -244,9 +219,7 @@ describe('TemplateEditor page', () => {
     expect(html).toMatch(/<button[^>]*>Discard<\/button>/);
   });
 
-  // A draft restored now would be wiped when the create finishes (the kept draft is
-  // cleared and the page moves on), so Restore and Discard wait for it.
-  it('disables Restore draft and Discard while a new template is being created', async () => {
+  it('disables Restore draft and Discard while a new template is being created, whose finish clears the kept draft and leaves the page', async () => {
     mockUseTemplateEditorAccess.mockReturnValue(
       buildAccess({
         draft: {
@@ -262,8 +235,6 @@ describe('TemplateEditor page', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Discard<\/button>/);
   });
 
-  // A confirmed sign-out returns the tab to Personal: a draft kept in an Organization is
-  // offered from there, with a switch back to its Organization.
   it('offers to switch to the Organization a kept draft belongs to', async () => {
     mockUseTemplateEditorAccess.mockReturnValue(
       buildAccess({
@@ -286,8 +257,7 @@ describe('TemplateEditor page', () => {
     expect(html).not.toMatch(/<button[^>]*>Restore draft<\/button>/);
   });
 
-  // Saving now would store the block without the file.
-  it('disables Save while a file is still uploading', async () => {
+  it('disables Save while a file is still uploading, which a save now would store without', async () => {
     mockUsePendingTemplateEditorUploads.mockImplementation(() => ({
       uploads: createPendingUploads(),
       pendingCount: 1,
@@ -300,43 +270,16 @@ describe('TemplateEditor page', () => {
       save: vi.fn(),
       templateSlug: 'existing-template',
     });
-    mockUseTemplateEditorState.mockReturnValue({
-      selectedSectionIndex: 0,
-      selectedItemIndex: null,
-      showingSEO: false,
-      showingTemplateInfo: true,
-      errors: [],
-      setErrors: vi.fn(),
-      handleSelectSection: vi.fn(),
-      handleSelectItem: vi.fn(),
-      handleSelectSEO: vi.fn(),
-      handleSelectTemplateInfo: vi.fn(),
-    });
+    mockUseTemplateEditorState.mockReturnValue(editorState());
 
     const html = await renderEditorAt(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Uploading\.\.\.<\/button>/);
   });
 
-  const editorState = () => ({
-    selectedSectionIndex: 0,
-    selectedItemIndex: null,
-    showingSEO: false,
-    showingTemplateInfo: true,
-    errors: [],
-    setErrors: vi.fn(),
-    handleSelectSection: vi.fn(),
-    handleSelectItem: vi.fn(),
-    handleSelectSEO: vi.fn(),
-    handleSelectTemplateInfo: vi.fn(),
-  });
-
-  // A form created while loading starts from the blank defaults and is reset later,
-  // after the outline has mounted: one frame of "New Template", and only the first
-  // loaded section expanded.
   it('creates the editor form only once the template has loaded', async () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues(),
@@ -350,7 +293,7 @@ describe('TemplateEditor page', () => {
 
     const html = await renderEditorAt(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(html).toContain('animate-spin');
@@ -376,7 +319,7 @@ describe('TemplateEditor page', () => {
 
     const html = await renderEditorAt(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(useFormCalls.mock.calls[0][0]).toEqual(
@@ -390,7 +333,7 @@ describe('TemplateEditor page', () => {
       expect(html).toContain(`${title} task`);
     }
   });
-  // The Search & SEO preview shows the public page: /profile/<creator>/<slug>.
+
   it("previews a new template's public URL under the signed-in user", async () => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({ title: 'Launch Checklist' }),
@@ -430,7 +373,7 @@ describe('TemplateEditor page', () => {
 
     const html = await renderEditorAt(
       '/dashboard/templates/template-1/edit',
-      '/dashboard/templates/:id/edit',
+      '/dashboard/templates/[id]/edit',
     );
 
     expect(html).toContain('/profile/teammate/launch');

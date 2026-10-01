@@ -8,10 +8,6 @@ vi.mock('next/link', async () => (await import('../../support/nextNavigation')).
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 
-// Opening an edit link the viewer cannot save (a teammate's link for an Organization
-// viewer, another user's public template) shows why instead of a form whose every save
-// ends in "Forbidden".
-
 const mockModel = vi.fn();
 const workspace = {
   activeTeamId: undefined as string | undefined,
@@ -66,7 +62,7 @@ beforeEach(() => {
   workspace.teams = [];
 });
 
-describe('TemplateEditor permissions', () => {
+describe('TemplateEditor permissions, which show why instead of a form whose every save the API would refuse', () => {
   it('shows an Organization viewer a read-only notice instead of the form', async () => {
     workspace.teams = [{ id: 'team-1', role: 'viewer' }];
     mockModel.mockReturnValue(loadedModel({ userId: 'creator-1', teamId: 'team-1', ownerType: 'team' }));
