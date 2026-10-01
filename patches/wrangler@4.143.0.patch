@@ -1,22 +1,19 @@
 diff --git a/wrangler-dist/cli.js b/wrangler-dist/cli.js
-index 9ea457eff14f2c0c6697219425f99e00a03e7625..4a3fbb44db90082505f7501a0f4c1cb727a6de45 100644
+index 9ea457eff14f2c0c6697219425f99e00a03e7625..242cb4b2cc7a974059549c3687f326476277c8c5 100644
 --- a/wrangler-dist/cli.js
 +++ b/wrangler-dist/cli.js
-@@ -207048,6 +207048,8 @@ var init_ProxyController = __esm({
+@@ -207048,6 +207048,7 @@ var init_ProxyController = __esm({
        latestConfig;
        latestBundle;
        secret = crypto2.randomUUID();
-+      // serplists patch (cloudflare/workers-sdk#14641): see serplists-user-worker-relay.js.
 +      userWorkerRelays = new (require("./serplists-user-worker-relay.js")).UserWorkerRelays();
        createProxyWorker() {
          if (this._torndown) {
            return;
-@@ -207260,11 +207262,14 @@ var init_ProxyController = __esm({
+@@ -207260,11 +207261,12 @@ var init_ProxyController = __esm({
              if (!ready) {
                return;
              }
-+            // serplists patch (cloudflare/workers-sdk#14641): a "play" message points the
-+            // ProxyWorker at a relay that sends each request to the worker over a new connection.
 +            const hostMetadata = await this.userWorkerRelays.relay(message);
              return proxyWorker.dispatchFetch(
                `http://dummy/cdn-cgi/ProxyWorker/${message.type}`,
@@ -27,7 +24,7 @@ index 9ea457eff14f2c0c6697219425f99e00a03e7625..4a3fbb44db90082505f7501a0f4c1cb7
                }
              );
            });
-@@ -207452,6 +207457,7 @@ var init_ProxyController = __esm({
+@@ -207452,6 +207454,7 @@ var init_ProxyController = __esm({
          this.proxyWorker = void 0;
          await Promise.all([
            proxyWorker?.dispose(),
@@ -37,81 +34,66 @@ index 9ea457eff14f2c0c6697219425f99e00a03e7625..4a3fbb44db90082505f7501a0f4c1cb7
          ]);
 diff --git a/wrangler-dist/serplists-user-worker-relay.js b/wrangler-dist/serplists-user-worker-relay.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..71b9dd14850af201ea50c993f9f4cacb5507a8a7
+index 0000000000000000000000000000000000000000..3ff916129c5d83c44080e7ac00da6c12724eb90f
 --- /dev/null
 +++ b/wrangler-dist/serplists-user-worker-relay.js
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,147 @@
 +"use strict";
-+// serplists patch (patches/wrangler@4.143.0.patch, cloudflare/workers-sdk#14641).
-+//
-+// wrangler dev's ProxyWorker forwards every request to the user worker over connections that
-+// workerd pools and reuses, and the user worker's workerd closes a connection 5 seconds after
-+// its last response. While the worker is busy (a page render, several API calls), workerd reads
-+// no new request and runs no timer; when it catches up, a request that reached an idle
-+// connection in the meantime can lose to that connection's timer, and the connection closes
-+// under it. The ProxyWorker's fetch then fails with "Network connection lost": it resends a GET
-+// or HEAD, and answers anything else with a 500.
-+//
-+// This relay sits between the two. ProxyController (cli.js) points the ProxyWorker at it, and
-+// closes it on teardown. It never closes an idle connection from the ProxyWorker (only the
-+// ProxyWorker's own pool does), and sends every request on to the worker over a new connection,
-+// where workerd's idle timer does not apply.
 +
 +const http = require("node:http");
 +const net = require("node:net");
 +
-+// These describe one connection, and each hop frames its own messages.
-+const HOP_BY_HOP = new Set(["connection", "keep-alive", "proxy-connection"]);
++const HOP_BY_HOP_HEADERS = new Set(["connection", "keep-alive", "proxy-connection"]);
++const NO_TIME_LIMITS_OF_ITS_OWN = { requestTimeout: 0, headersTimeout: 0 };
++const NEVER_CLOSE_AN_IDLE_CONNECTION = 0;
++const NEW_CONNECTION_FOR_EVERY_REQUEST = false;
 +
-+/** Raw headers ([name, value, ...]) without hop-by-hop ones, and with Host set when given. */
-+function forwardHeaders(rawHeaders, host) {
++function forwardedHeaders(rawHeaders, hostOverride) {
 +  const headers = [];
 +  for (let i = 0; i < rawHeaders.length; i += 2) {
 +    const name = rawHeaders[i];
 +    const lower = name.toLowerCase();
-+    if (HOP_BY_HOP.has(lower)) continue;
-+    headers.push(name, host !== undefined && lower === "host" ? host : rawHeaders[i + 1]);
++    if (HOP_BY_HOP_HEADERS.has(lower)) continue;
++    headers.push(name, hostOverride !== undefined && lower === "host" ? hostOverride : rawHeaders[i + 1]);
 +  }
 +  return headers;
 +}
 +
-+/** Starts a relay to one worker address: { server, tunnels }. */
-+function startRelay(target) {
++function failAsALostConnectionToTheWorker(req, res) {
++  if (res.headersSent) res.destroy();
++  else req.socket.destroy();
++}
++
++function relayToTheWorker(target, host) {
 +  const port = Number(target.port);
-+  const host = `${target.hostname}:${target.port}`;
-+  const tunnels = new Set();
-+  // No time limits of its own: the ProxyWorker and workerd keep theirs.
-+  const server = http.createServer({ requestTimeout: 0, headersTimeout: 0 }, (req, res) => {
++  return (req, res) => {
 +    const upstream = http.request(
 +      {
 +        host: target.hostname,
 +        port,
 +        method: req.method,
 +        path: req.url,
-+        headers: forwardHeaders(req.rawHeaders, host),
++        headers: forwardedHeaders(req.rawHeaders, host),
 +        setHost: false,
-+        // A new connection for every request: workerd's idle timer only closes reused ones.
-+        agent: false,
++        agent: NEW_CONNECTION_FOR_EVERY_REQUEST,
 +      },
 +      (upstreamRes) => {
-+        res.writeHead(upstreamRes.statusCode, upstreamRes.statusMessage, forwardHeaders(upstreamRes.rawHeaders));
++        res.writeHead(upstreamRes.statusCode, upstreamRes.statusMessage, forwardedHeaders(upstreamRes.rawHeaders));
 +        upstreamRes.pipe(res);
 +        upstreamRes.on("error", () => res.destroy());
 +      },
 +    );
-+    // Fail the ProxyWorker's request as a lost connection to the worker would, so its own
-+    // handling of that (a reload in progress, resending a GET) still applies.
-+    upstream.on("error", () => (res.headersSent ? res.destroy() : req.socket.destroy()));
++    upstream.on("error", () => failAsALostConnectionToTheWorker(req, res));
 +    res.on("close", () => {
 +      if (!res.writableFinished) upstream.destroy();
 +    });
 +    req.pipe(upstream);
-+  });
-+  // Never close an idle connection: the ProxyWorker could be sending a request on it, the race
-+  // this relay removes. Its pool closes a connection after 5 idle seconds.
-+  server.keepAliveTimeout = 0;
-+  // WebSockets and other upgrades: a plain tunnel to the worker over a new connection.
-+  server.on("upgrade", (req, socket, head) => {
++  };
++}
++
++function tunnelUpgradesToTheWorker(target, host, tunnels) {
++  const port = Number(target.port);
++  return (req, socket, head) => {
 +    const upstream = net.connect(port, target.hostname, () => {
 +      const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
 +      for (let i = 0; i < req.rawHeaders.length; i += 2) {
@@ -134,7 +116,15 @@ index 0000000000000000000000000000000000000000..71b9dd14850af201ea50c993f9f4cacb
 +      end.on("close", close);
 +      end.on("error", close);
 +    }
-+  });
++  };
++}
++
++function startRelay(target) {
++  const host = `${target.hostname}:${target.port}`;
++  const tunnels = new Set();
++  const server = http.createServer(NO_TIME_LIMITS_OF_ITS_OWN, relayToTheWorker(target, host));
++  server.keepAliveTimeout = NEVER_CLOSE_AN_IDLE_CONNECTION;
++  server.on("upgrade", tunnelUpgradesToTheWorker(target, host, tunnels));
 +  server.on("clientError", (_error, socket) => socket.destroy());
 +  server.unref();
 +  return new Promise((resolve, reject) => {
@@ -146,12 +136,12 @@ index 0000000000000000000000000000000000000000..71b9dd14850af201ea50c993f9f4cacb
 +  });
 +}
 +
-+function stopRelay(relay, { now }) {
++function stopRelay(relay, { dropOpenConnections }) {
 +  return relay.then(
 +    ({ server, tunnels }) =>
 +      new Promise((resolve) => {
 +        server.close(() => resolve());
-+        if (now) {
++        if (dropOpenConnections) {
 +          server.closeAllConnections();
 +          for (const { socket, upstream } of tunnels) {
 +            socket.destroy();
@@ -163,33 +153,34 @@ index 0000000000000000000000000000000000000000..71b9dd14850af201ea50c993f9f4cacb
 +  );
 +}
 +
-+/** The relays of one ProxyController: one for the worker it currently forwards to. */
++const playsALocalWorker = (message, target) => message.type === "play" && target?.protocol === "http:";
++
 +class UserWorkerRelays {
 +  #relays = new Map();
 +
-+  /** The message, with a "play" message's local userWorkerUrl pointing at its relay. */
 +  async relay(message) {
 +    const target = message.proxyData?.userWorkerUrl;
-+    // Remote mode (https to a preview host) goes out as before.
-+    if (message.type !== "play" || target?.protocol !== "http:") return message;
++    if (!playsALocalWorker(message, target)) return message;
 +    const key = `${target.hostname}:${target.port}`;
-+    // A reload that moved the worker: the old relay finishes what it has, then stops.
-+    for (const [otherKey, other] of this.#relays) {
-+      if (otherKey === key) continue;
-+      this.#relays.delete(otherKey);
-+      void stopRelay(other, { now: false });
-+    }
++    this.#retireRelaysToOtherWorkers(key);
 +    if (!this.#relays.has(key)) this.#relays.set(key, startRelay(target));
 +    const { server } = await this.#relays.get(key);
 +    const relayUrl = { protocol: "http:", hostname: "127.0.0.1", port: String(server.address().port) };
 +    return { ...message, proxyData: { ...message.proxyData, userWorkerUrl: relayUrl } };
 +  }
 +
-+  /** Stops every relay and drops its connections. */
 +  async close() {
 +    const relays = [...this.#relays.values()];
 +    this.#relays.clear();
-+    await Promise.all(relays.map((relay) => stopRelay(relay, { now: true })));
++    await Promise.all(relays.map((relay) => stopRelay(relay, { dropOpenConnections: true })));
++  }
++
++  #retireRelaysToOtherWorkers(key) {
++    for (const [otherKey, other] of this.#relays) {
++      if (otherKey === key) continue;
++      this.#relays.delete(otherKey);
++      void stopRelay(other, { dropOpenConnections: false });
++    }
 +  }
 +}
 +

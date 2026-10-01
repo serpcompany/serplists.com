@@ -136,6 +136,27 @@ describe('the relay between the dev proxy and the worker', () => {
     expect(after.json.body).toBe('late');
   });
 
+  it("drops the proxy's connection when the worker cannot take a request, as a lost connection to the worker would, so the proxy's own handling of that still applies", async () => {
+    const stopped = http.createServer();
+    await new Promise<void>((resolve) => stopped.listen(0, '127.0.0.1', resolve));
+    const stoppedWorkerUrl = { ...workerUrl, port: String((stopped.address() as AddressInfo).port) };
+    await new Promise((resolve) => stopped.close(resolve));
+    const { proxyData } = await relays.relay({ type: 'play', proxyData: { userWorkerUrl: stoppedWorkerUrl } });
+    const relay = proxyData!.userWorkerUrl;
+
+    const outcome = await new Promise<number | NodeJS.ErrnoException>((resolve) => {
+      const req = http.request({ host: relay.hostname, port: Number(relay.port), method: 'POST', path: '/invite', agent: proxyPool }, (res) => {
+        res.resume();
+        resolve(res.statusCode!);
+      });
+      req.on('error', resolve);
+      req.end('invite');
+    });
+
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as NodeJS.ErrnoException).code).toBe('ECONNRESET');
+  });
+
   it('reuses one relay per worker, and leaves remote mode and other messages alone', async () => {
     expect(await relayUrl()).toEqual(await relayUrl());
     const remote = { type: 'play', proxyData: { userWorkerUrl: { protocol: 'https:', hostname: 'preview.workers.dev', port: '443' } } };

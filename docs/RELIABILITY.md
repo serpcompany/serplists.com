@@ -353,10 +353,19 @@ Common failures:
   in `package.json`), puts a relay between the proxy and the worker, in wrangler's own process
   (`wrangler-dist/serplists-user-worker-relay.js`): it sends every request to the worker over a
   new connection, which that timer never applies to, and never closes an idle connection from
-  the proxy itself, so nothing is lost and nothing is sent twice.
+  the proxy itself, so nothing is lost and nothing is sent twice. Wrangler's
+  `ProxyController` (`wrangler-dist/cli.js`) points the proxy at the relay with each `play`
+  message and closes it on teardown, and when a reload moves the worker, the old relay
+  finishes the requests it holds and stops. The relay sets no time limits of its own (the
+  proxy and workerd keep theirs), tunnels WebSocket upgrades to the worker over a new
+  connection, and leaves remote mode (https to a preview host) as it was. When the worker
+  cannot take a request, the relay drops the proxy's connection, as a lost connection to the
+  worker would, so the proxy's own handling of that (waiting out a reload, resending a GET)
+  still applies.
   `tests/unit/e2e/wrangler-proxy-patch.test.ts` fails if a wrangler upgrade leaves the patch
   behind: check whether upstream fixed #14641, and if not, re-create the patch for the new
-  version with `pnpm patch wrangler@<version>`.
+  version with `pnpm patch wrangler@<version>`, edit the extracted package, and run
+  `pnpm patch-commit <dir>`, which also records the patch's new hash in `pnpm-lock.yaml`.
 - Specs set up and read their data with `apiRequest()` or `apiJson()` from
   `tests/e2e/support/api-requests.ts`: they call the API through Playwright's request
   client with the page's cookies, so no CORS preflight runs, no `page.route()` stub catches

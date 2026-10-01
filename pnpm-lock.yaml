@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   wrangler@4.143.0:
-    hash: y47lc744izva3tavlksw3wwc6e
+    hash: 4guoi262uyij5k3pqhicrvup3m
     path: patches/wrangler@4.143.0.patch
 
 importers:
@@ -21,7 +21,7 @@ importers:
         version: 3.10.0(react-hook-form@7.62.0(react@19.2.8))
       '@opennextjs/cloudflare':
         specifier: ^1.20.7
-        version: 1.20.7(next@16.3.6(@babel/core@7.29.7)(@playwright/test@1.57.0)(@types/node@22.17.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(wrangler@4.143.0(patch_hash=y47lc744izva3tavlksw3wwc6e)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2))
+        version: 1.20.7(next@16.3.6(@babel/core@7.29.7)(@playwright/test@1.57.0)(@types/node@22.17.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(wrangler@4.143.0(patch_hash=4guoi262uyij5k3pqhicrvup3m)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2))
       '@t3-oss/env-core':
         specifier: ^0.13.10
         version: 0.13.10(typescript@5.9.2)(zod@3.25.76)
@@ -193,7 +193,7 @@ importers:
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.17.2)(@vitest/ui@3.2.4)(lightningcss@1.32.0)(terser@5.16.9)
       wrangler:
         specifier: ^4.143.0
-        version: 4.143.0(patch_hash=y47lc744izva3tavlksw3wwc6e)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2)
+        version: 4.143.0(patch_hash=4guoi262uyij5k3pqhicrvup3m)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2)
       xmllint-wasm:
         specifier: 5.3.0
         version: 5.3.0(@types/node@22.17.2)
@@ -8966,7 +8966,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@opennextjs/cloudflare@1.20.7(next@16.3.6(@babel/core@7.29.7)(@playwright/test@1.57.0)(@types/node@22.17.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(wrangler@4.143.0(patch_hash=y47lc744izva3tavlksw3wwc6e)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2))':
+  '@opennextjs/cloudflare@1.20.7(next@16.3.6(@babel/core@7.29.7)(@playwright/test@1.57.0)(@types/node@22.17.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(wrangler@4.143.0(patch_hash=4guoi262uyij5k3pqhicrvup3m)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2))':
     dependencies:
       '@ast-grep/napi': 0.40.5
       '@dotenvx/dotenvx': 1.31.0
@@ -8978,7 +8978,7 @@ snapshots:
       glob: 12.0.0
       next: 16.3.6(@babel/core@7.29.7)(@playwright/test@1.57.0)(@types/node@22.17.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       ts-tqdm: 0.8.6
-      wrangler: 4.143.0(patch_hash=y47lc744izva3tavlksw3wwc6e)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2)
+      wrangler: 4.143.0(patch_hash=4guoi262uyij5k3pqhicrvup3m)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2)
       yargs: 18.2.0
     transitivePeerDependencies:
       - encoding
@@ -14653,7 +14653,7 @@ snapshots:
       '@cloudflare/workerd-linux-arm64': 1.20260926.1
       '@cloudflare/workerd-windows-64': 1.20260926.1
 
-  wrangler@4.143.0(patch_hash=y47lc744izva3tavlksw3wwc6e)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2):
+  wrangler@4.143.0(patch_hash=4guoi262uyij5k3pqhicrvup3m)(@cloudflare/workers-types@4.20250816.0)(@types/node@22.17.2):
     dependencies:
       '@cloudflare/kv-asset-handler': 0.5.0
       '@cloudflare/unenv-preset': 2.16.2(unenv@2.0.0-rc.24)(workerd@1.20260926.1)
