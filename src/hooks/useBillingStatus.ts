@@ -10,10 +10,6 @@ import {
 
 export type BillingStatus = BillingStatusState & { refetch: () => void };
 
-/**
- * The active context's plan as a loading/error/known state. Feature gates read
- * this instead of defaulting a missing plan to Free.
- */
 export const useBillingStatus = (options: {
   enabled: boolean;
   teamId?: string | null;

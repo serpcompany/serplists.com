@@ -7,10 +7,6 @@ export interface ValidationError {
   message: string;
 }
 
-// Placeholder task ids come from the section id, so saving the same empty section again
-// sends the same id: runs match tasks by id and would otherwise retire the placeholder
-// (with a runner's completion) and add a new one on every save. The id never repeats
-// a task id already in the template.
 const placeholderItemId = (sectionId: string, usedItemIds: Set<string>): string => {
   const base = `${sectionId}-first-task`;
   let id = base;
@@ -23,9 +19,6 @@ const placeholderItemId = (sectionId: string, usedItemIds: Set<string>): string 
 
 const trimmedTitle = (title: unknown): string => (typeof title === "string" ? title.trim() : "");
 
-// Runs show every sub-task as a checkbox that counts toward progress, and Enter or "Add
-// Sub-task" leaves a blank one behind, so blank sub-tasks are dropped (the others keep
-// their ids: runs match them by id), and so is a Sub-tasks block left with none.
 const withoutBlankSubItems = (contents: ChecklistItemContent[]): ChecklistItemContent[] =>
   contents.flatMap((content) => {
     if (content.type !== "subItems") {
@@ -45,10 +38,6 @@ const withItemDefaults = (item: ChecklistItem, itemIndex: number): ChecklistItem
   ...(item.contents ? { contents: withoutBlankSubItems(item.contents) } : {}),
 });
 
-// Fills what a saved template needs: a title, at least one section, a title for every
-// section ("Section N", the label the editor's outline showed), at least one titled task
-// per section, and no blank sub-tasks. Deterministic, so applying it to its own result
-// changes nothing; the editor shows the result after a save, since it is what was stored.
 export const applyTemplateSaveDefaults = (
   title: string,
   sections: ChecklistSection[],
@@ -102,14 +91,4 @@ export const applyTemplateSaveDefaults = (
   };
 };
 
-export const useTemplateValidation = () => {
-  const validate = (
-    _title: string,
-    _sections: ChecklistSection[]
-  ): ValidationError[] => {
-    // No longer return validation errors - instead we'll provide defaults
-    return [];
-  };
-
-  return { validate, applyDefaults: applyTemplateSaveDefaults };
-};
+export const useTemplateValidation = () => ({ applyDefaults: applyTemplateSaveDefaults });

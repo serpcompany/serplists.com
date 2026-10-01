@@ -15,16 +15,11 @@ type UseViewModePreferenceOptions = {
   userId?: string;
 };
 
-// Reading window.localStorage throws when site data is blocked; safeLocalStorage never does
-// (a choice it cannot persist is kept in memory for the session).
-const getBrowserStorage = () => safeLocalStorage;
-
-// A choice made here updates every component that shows the same preference.
-const listeners = new Set<() => void>();
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
+const preferenceReaders = new Set<() => void>();
+const subscribe = (reader: () => void) => {
+  preferenceReaders.add(reader);
   return () => {
-    listeners.delete(listener);
+    preferenceReaders.delete(reader);
   };
 };
 
@@ -34,18 +29,16 @@ export const useViewModePreference = ({
   userId,
 }: UseViewModePreferenceOptions): [ViewMode, (value: ViewMode) => void] => {
   const storageKey = buildViewModePreferenceKey(userId, surface);
-  // The server has no storage, so its render (and hydration) uses the default and the stored
-  // choice follows right after.
   const viewMode = useSyncExternalStore(
     subscribe,
-    () => readViewModePreference(getBrowserStorage(), storageKey, defaultValue),
+    () => readViewModePreference(safeLocalStorage, storageKey, defaultValue),
     () => defaultValue,
   );
 
   const setViewMode = useCallback(
     (value: ViewMode) => {
-      writeViewModePreference(getBrowserStorage(), storageKey, value);
-      listeners.forEach((listener) => listener());
+      writeViewModePreference(safeLocalStorage, storageKey, value);
+      preferenceReaders.forEach((reread) => reread());
     },
     [storageKey],
   );

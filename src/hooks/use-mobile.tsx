@@ -9,7 +9,6 @@ const subscribe = (onStoreChange: () => void) => {
   return () => mql.removeEventListener("change", onStoreChange)
 }
 const getSnapshot = () => window.innerWidth < MOBILE_BREAKPOINT
-// The server has no viewport: its render (and hydration) is the desktop layout.
 const getServerSnapshot = () => false
 
 export function useIsMobile() {

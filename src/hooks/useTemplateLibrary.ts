@@ -13,8 +13,6 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
-  // Only public templates with a public URL: a card for a template whose owner has no
-  // username would have nowhere to link, yet still count toward categories.
   const templates = useMemo(() => {
     const publicTemplates = contextTemplates.filter(
       (t) => t.isPublic === true && hasCanonicalPublicTemplatePath(t),
@@ -23,14 +21,11 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     return publicTemplates.filter(t => t.type === templateType);
   }, [contextTemplates, templateType]);
 
-  // The bundled repo templates are always listed, so loading comes from the catalog query
-  // itself. Pages must not treat a category or search as empty until it has loaded.
   const loading = catalogPending;
   const retryCatalog = () => {
     void refetchCatalog();
   };
 
-  // Predefined categories plus every template category, ready on the first render.
   const allCategories = useMemo(() => {
     const categories = new Set<string>(getPredefinedCategories());
     templates.forEach((template) => {
@@ -39,21 +34,15 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     return Array.from(categories).sort();
   }, [templates]);
 
-  const fetchTemplates = async () => {
-    // Templates are already loaded from context, no need to fetch
-  };
-
   const filteredTemplates = useMemo(() => {
     let filtered = templates;
 
-    // Filter by category if specified in URL
     if (category) {
       filtered = filtered.filter((template) =>
         template.categories?.some((templateCategory) => buildCategorySlug(templateCategory) === category),
       );
     }
 
-    // Filter by selected categories from multi-select
     if (selectedCategories.length > 0) {
       filtered = filtered.filter(template => 
         selectedCategories.some(selectedCat => 
@@ -62,7 +51,6 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
       );
     }
 
-    // Filter by search query
     if (searchQuery) {
       filtered = filtered.filter(template =>
         template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -85,6 +73,5 @@ export const useTemplateLibrary = (category?: string, templateType?: "checklist"
     selectedCategories,
     setSelectedCategories,
     allCategories,
-    fetchTemplates,
   };
 };
