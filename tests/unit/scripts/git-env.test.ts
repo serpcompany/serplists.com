@@ -58,7 +58,7 @@ describe('git repository overrides', () => {
   });
 
   it('forgets them in place, as the unit test setup does before any test runs', () => {
-    const env = { ...process.env, GIT_DIR: '/x/.git', GIT_COMMON_DIR: '/x/.git', HOME: '/home/test' };
+    const env: NodeJS.ProcessEnv = { ...process.env, GIT_DIR: '/x/.git', GIT_COMMON_DIR: '/x/.git', HOME: '/home/test' };
 
     forgetGitRepositoryOverrides(env);
 
