@@ -7,7 +7,6 @@ const backtickRunLength = (value: string, start: number): number => {
   return end - start;
 };
 
-// Start of the backtick run of exactly `length` that closes a code span, or -1.
 const findClosingBacktickRun = (value: string, from: number, length: number): number => {
   let index = value.indexOf(BACKTICK, from);
   while (index !== -1) {
@@ -18,15 +17,6 @@ const findClosingBacktickRun = (value: string, from: number, length: number): nu
   return -1;
 };
 
-/**
- * Text is shown exactly as saved, except for one legacy shape. Official templates seeded
- * before the seed was fixed store each text block as a single line with a literal
- * backslash-n where the line breaks belong, and those rows are still in the databases
- * (docs/exec-plans/tech-debt-tracker.md). For a text block with no real line break,
- * each literal backslash-n (or backslash-r backslash-n) becomes a line break, except
- * inside inline code and after an escaping backslash. Text with a real line break was
- * typed by a person and is returned unchanged, so code and Windows paths survive.
- */
 export const expandLegacyEscapedNewlines = (value: string): string => {
   if (/[\r\n]/.test(value) || !value.includes(`${BACKSLASH}n`)) return value;
 
@@ -55,8 +45,6 @@ export const expandLegacyEscapedNewlines = (value: string): string => {
         index += 4;
         continue;
       }
-      // Any other escape (an escaped backslash or backtick) is kept as a pair, so it
-      // neither turns into a line break nor opens a code span.
       result += value.slice(index, index + 2);
       index += 2;
       continue;

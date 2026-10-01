@@ -1,10 +1,3 @@
-// Markdown blocks render with `white-space: pre-line` so that a single newline an author
-// typed inside a paragraph shows as a line break. react-markdown also emits "\n" text
-// nodes between block elements (paragraphs, list items, nested lists), and pre-line would
-// show each of those as an extra blank line on top of the typography margins. This rehype
-// step removes the newlines that sit next to block elements and keeps the ones inside
-// inline content, which are the author's line breaks.
-
 interface HastNode {
   type: string;
   tagName?: string;
@@ -46,9 +39,12 @@ const isElement = (node: HastNode | undefined, tagNames: ReadonlySet<string>) =>
 const isBlock = (node: HastNode | undefined) => isElement(node, BLOCK_TAGS);
 const LINE_BREAK = new Set(['br']);
 
+const breaksLine = (node: HastNode | undefined) => isBlock(node) || isElement(node, LINE_BREAK);
+
+const isCodeBlock = (node: HastNode) => node.type === 'element' && node.tagName === 'pre';
+
 const trimChildren = (parent: HastNode): void => {
-  // Code blocks keep every character.
-  if (parent.type === 'element' && parent.tagName === 'pre') return;
+  if (isCodeBlock(parent)) return;
   const children = parent.children;
   if (!children) return;
 
@@ -64,8 +60,7 @@ const trimChildren = (parent: HastNode): void => {
     }
 
     let value = child.value;
-    // A newline right after a block or a hard break (<br>) would start an empty line.
-    if (isBlock(previous) || isElement(previous, LINE_BREAK)) value = value.replace(/^[^\S\n]*\n/, '');
+    if (breaksLine(previous)) value = value.replace(/^[^\S\n]*\n/, '');
     if (isBlock(next)) value = value.replace(/\n\s*$/, '');
 
     const betweenBlocks = (previous === undefined || isBlock(previous)) && (next === undefined || isBlock(next));
@@ -77,7 +72,6 @@ const trimChildren = (parent: HastNode): void => {
   parent.children = kept;
 };
 
-/** Rehype plugin: drops the newline text between block elements. */
 export function rehypeTrimBlockNewlines() {
   return (tree: HastNode) => {
     trimChildren(tree);
