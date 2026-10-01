@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { execTool } from '../../../scripts/lib/run-tool.mjs';
 import { SITEMAP_IMPLEMENTATION_SOURCES } from '../../../scripts/lib/sitemapLastmod';
+import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 
 const generator = path.join(process.cwd(), 'scripts', 'generate-sitemap-catalog.ts');
 const repo = mkdtempSync(path.join(tmpdir(), 'sitemap-catalog-'));
@@ -38,7 +39,7 @@ function git(args: string[], date?: string) {
   execFileSync('git', ['-c', `core.hooksPath=${hooks}`, '-c', 'commit.gpgsign=false', ...args], {
     cwd: repo,
     stdio: 'pipe',
-    env: date ? { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : process.env,
+    env: throwawayRepositoryEnvironment(date ? { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : {}),
   });
 }
 
@@ -56,7 +57,7 @@ function writePack(templates: unknown[], file = packPath) {
 }
 
 function generate(): Catalog {
-  execTool('tsx', [generator], { cwd: repo, stdio: 'pipe', env: { ...process.env, CI: '' } });
+  execTool('tsx', [generator], { cwd: repo, stdio: 'pipe', env: throwawayRepositoryEnvironment({ CI: '' }) });
   return JSON.parse(readFileSync(path.join(repo, catalogPath), 'utf8')) as Catalog;
 }
 

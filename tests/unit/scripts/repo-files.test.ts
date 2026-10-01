@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 import { directoriesAFreshCheckoutLacks, walkFiles } from '../../../scripts/lib/repo-files.mjs';
+import { throwawayRepositoryEnvironment } from '../../support/throwawayGitRepository';
 
 const repoRoot = process.cwd();
 const fixtureRoot = mkdtempSync(path.join(tmpdir(), 'repo-files-'));
@@ -19,7 +20,8 @@ function writeFixture(relativePath: string, content = '') {
   writeFileSync(absolutePath, content);
 }
 
-const git = (...args: string[]) => execFileSync('git', args, { cwd: fixtureRoot, encoding: 'utf8' });
+const git = (...args: string[]) =>
+  execFileSync('git', args, { cwd: fixtureRoot, encoding: 'utf8', env: throwawayRepositoryEnvironment() });
 
 git('init', '-q');
 writeFixture('.gitignore', 'ignored/\n*.log\n');
