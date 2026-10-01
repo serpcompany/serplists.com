@@ -37,6 +37,28 @@ generated into [generated/db-schema.md](../generated/db-schema.md).
 API responses stay snake_case to match the current frontend mapping, and JSON
 columns are stored as text and parsed in handlers.
 
+Handlers validate with a `SELECT` in an earlier round trip, and D1 runs each statement,
+and each batch, as one transaction, so a write that depends on what was read re-checks
+it in SQL, and a change that commits in between turns it into a no-op instead of a
+partial write. `insertRowWhere` (`functions/api/utils/guarded-insert.ts`) writes
+`INSERT INTO table (every column) SELECT values WHERE condition`: the row
+`db.insert(table).values(values)` would write, each missing value filled the way Drizzle
+fills it, but only while the condition holds. Plan limits put their count there, and a
+companion row (a version, an audit event) is guarded on the new row existing
+(`rowExistsSql`). `insertAuditEventWhere` and `insertAuditEventWhen` guard an audit row on
+the condition of the write it records, batched before it, or on that write's effect,
+batched after it (such as `updated_at` equal to this request's time), so a write that
+did not happen records nothing. A guarded statement whose condition is false writes
+nothing and the batch still commits; its result reports `meta.changes === 0`
+(`batchWriteMissed`, `batchUpdateMissed`).
+
+Drizzle names every column of a table in an `INSERT`, filling missing values with
+defaults or `NULL`, so leaving a value out does not help when the database lacks the
+column. Template reads and writes retry without `rules` when SQLite reports the column
+missing (before the migration that adds it): `no such column: rules` in reads and
+updates, `table templates has no column named rules` in an `INSERT` column list. The
+retried insert drops the column from the statement itself (`withoutColumns`).
+
 ## Core Tables
 
 - `users`: auth identity and profile data.
@@ -64,6 +86,13 @@ columns are stored as text and parsed in handlers.
 - `audit_events.before_json`, `after_json`, `diff_json`, `metadata_json`: structured audit payloads, kept small by `functions/api/utils/audit-compaction.ts`. Snapshots omit run and template content (`items`, `retired_items`) and share tokens; a diff's `items` records only the task ids that were completed, reopened, edited, added, or removed, or whose notes changed (never the notes text); each column is capped at 64 KB of UTF-8, with larger values replaced by a `{truncated, bytes, sha256}` marker. An audit row therefore can never push the write it shares a batch with past D1's 2,000,000-byte row limit. History lists never return `diff_json`, so the full copies that older rows still hold are never served. Run events written through MCP store only scalar run fields in `before`/`after` and an operation summary in `diff` (operation, task/subtask ids, progress and revision from/to, notes length), never copies of `items`, `retired_items`, or the share token.
 - Audit rows record only writes that happened. Run and template writes guard their `UPDATE` (revision or version, owner scope, archive state), and a guarded `UPDATE` that loses a race matches no row without failing the batch. So each write inserts its audit row first, as `INSERT ... SELECT ... WHERE EXISTS` on the same condition (`auditedRunUpdate` in `functions/api/utils/checklist-runs.ts`; the template handlers do the same, and a template's version row and reconciled runs also require that audit row). A write that loses returns `409 edit_conflict`, or the not-found / not-archived answer a later request would get, and leaves no history.
 - `template_versions.snapshot_json`: full template snapshot.
+- History lists return each audit event's `metadata_json`, which names the Run Key
+  behind an Agent's edit. A versioned template write records its audit event in the
+  same batch with the same action and `created_at`, so template history gives each
+  version the metadata of its event, found among the newest events read with the same
+  limit, which hold the event of every version the Changelog shows (an older version, or
+  one written before audit events, gets `null`). The template Changelog can then name the
+  Run Key and label a Share (`functions/api/utils/history-queries.ts`).
 
 ## Resource Ownership
 

@@ -17,7 +17,12 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
 
 - **Per statement:** set `D1_PROFILE=true` and every statement logs a `d1_query` line
   with `rowsRead`, `rowsWritten`, `rowsReturned`, and `durationMs`
-  (`functions/api/utils/d1-profiler.ts`, wired in `functions/api/db.ts`).
+  (`functions/api/utils/d1-profiler.ts`, wired in `functions/api/db.ts`). Never enable
+  it in production: Drizzle runs most selects through `.raw()`, which returns no
+  `meta`, so the profiler measures `.raw()` and `.first()` reads with an extra `.all()`
+  of the same statement, doubling their cost. A read still returns `.raw()`'s own rows,
+  which keep duplicate column names that `.all()` merges; a write runs once, its rows
+  converted from that one `.all()`.
 - **Per endpoint, at scale:** `pnpm run d1:profile` builds the app with OpenNext and an
   isolated local D1 with about 150k synthetic rows (20k templates, 40k runs, 40k audit
   events, 5k invites), serves the build with `opennextjs-cloudflare preview`, replays
@@ -93,8 +98,12 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      found template or profile is cached, so a new one is named at once. The share
      page's title is one indexed read (`functions/seo/shared-run-lookup.ts`), not cached.
 
-   Locally the cache persists in `.wrangler/state/v3/cache`; delete it to see
-   uncommitted changes to cached responses.
+   Either way, cache only a response that is identical for every visitor, and name its
+   key in code (`withEdgeCache(request, keyPath, ...)`, `cachedSitemap()`), never take it
+   from the request URL, so path and query-string variants of a resource cannot bypass
+   the cache. Outside the Workers runtime (`next dev`, unit tests) there is no cache, and
+   every request builds its response. Locally the cache persists in
+   `.wrangler/state/v3/cache`; delete it to see uncommitted changes to cached responses.
 6. **Check the plan after changing indexes.** Planner statistics (`PRAGMA optimize`) fix
    some plans and worsen others, so profile before and after.
 7. **Request data only where it is shown.** Rows are billed per request, so a provider
@@ -105,7 +114,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    run update diff holds the whole template or run), and template history reads the
    newest `LIMIT` versions and the newest `LIMIT` audit events (archive, restore and a
    Share's visibility are recorded only as events). Each read stops at `LIMIT` on its
-   index: versions order by `version` on the unique `(template_id, version)` index, and
+   index: versions order by `version` on the unique `(template_id, version)` index
+   (ordering by `created_at` would read and sort every version first), and
    events by `created_at` on `idx_audit_events_resource`
    (`functions/api/utils/history-queries.ts`, plans checked by
    `tests/unit/functions/api/history-query-plan.test.ts`).

@@ -1,17 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 
-// History lists for the template and run Changelog cards. Both read only LIMIT rows from an
-// index in sort order (see docs/design-docs/d1-cost.md); tests/unit/functions/api/
-// history-query-plan.test.ts checks the plans against the migrated schema.
-
 type Db = ReturnType<typeof createDb>;
 
-/**
- * A template's newest versions. Versions increase per template, so ordering by version walks
- * the unique (template_id, version) index backwards and stops at LIMIT; ordering by
- * created_at would read and sort every version first.
- */
 export function selectTemplateVersionHistory(db: Db, templateId: string, limit: number) {
   const { template_versions, users } = schema;
 
@@ -34,10 +25,6 @@ export function selectTemplateVersionHistory(db: Db, templateId: string, limit: 
     .limit(limit);
 }
 
-/**
- * A resource's newest audit events. diff_json is left out: a template or run update diff
- * holds the whole template or run, and no history list renders it.
- */
 export function selectAuditEventHistory(db: Db, resourceType: 'template' | 'checklist_run', resourceId: string, limit: number) {
   const { audit_events, users } = schema;
 
@@ -72,7 +59,6 @@ function parseMetadata(value: string | null): unknown {
   }
 }
 
-/** The API shape of one history event. Metadata is kept: it carries the Run Key (MCP) actor. */
 export function serializeHistoryEvent(row: AuditEventHistoryRow) {
   return {
     id: row.id,
@@ -89,21 +75,13 @@ export function serializeHistoryEvent(row: AuditEventHistoryRow) {
   };
 }
 
-// A versioned write records its audit event in the same batch, with the same action and time.
-const writeKey = (action: string, createdAt: string) => `${action}|${createdAt}`;
+const versionedWriteKey = (action: string, createdAt: string) => `${action}|${createdAt}`;
 
-/**
- * The API shape of a template's versions. Each carries the metadata of the audit event its
- * write recorded, the field run history events carry, so the Changelog names the Run Key
- * behind an Agent's edit and labels a Share. The event is looked up in `events`, the newest
- * events read with the same limit, which hold the event of every version the Changelog shows;
- * an older version, or one written before audit events, gets null.
- */
 export function serializeTemplateVersionHistory(
   rows: TemplateVersionHistoryRow[],
   events: ReturnType<typeof serializeHistoryEvent>[],
 ) {
-  const metadataByWrite = new Map(events.map((event) => [writeKey(event.action, event.createdAt), event.metadata]));
+  const metadataByWrite = new Map(events.map((event) => [versionedWriteKey(event.action, event.createdAt), event.metadata]));
   return rows.map((row) => {
     const action = row.change_summary ?? 'template.versioned';
     return {
@@ -112,7 +90,7 @@ export function serializeTemplateVersionHistory(
       action,
       contentHash: row.content_hash,
       createdAt: row.created_at,
-      metadata: metadataByWrite.get(writeKey(action, row.created_at)) ?? null,
+      metadata: metadataByWrite.get(versionedWriteKey(action, row.created_at)) ?? null,
       actor: {
         userId: row.changed_by_user_id,
         email: row.actor_email,
@@ -123,8 +101,12 @@ export function serializeTemplateVersionHistory(
   });
 }
 
-/** `?limit=` for history lists: 1..100, defaulting to 50 when missing, empty, or not a number. */
+const HISTORY_LIMIT_DEFAULT = 50;
+const HISTORY_LIMIT_MAX = 100;
+
 export function parseHistoryLimit(value: string | null): number {
   const requested = value?.trim() ? Number(value) : Number.NaN;
-  return Number.isFinite(requested) ? Math.min(Math.max(Math.trunc(requested), 1), 100) : 50;
+  return Number.isFinite(requested)
+    ? Math.min(Math.max(Math.trunc(requested), 1), HISTORY_LIMIT_MAX)
+    : HISTORY_LIMIT_DEFAULT;
 }

@@ -33,7 +33,7 @@ function fakeDatabase() {
 }
 
 describe("withD1Profiling", () => {
-  it("measures read-only raw() with a separate all() and returns the raw rows", async () => {
+  it("measures a read-only raw() with a separate all() and returns raw()'s own rows, which keep the duplicate column names all() merges", async () => {
     const { db, calls } = fakeDatabase();
     const records: D1QueryRecord[] = [];
     const rows = await withD1Profiling(db, (r) => records.push(r)).prepare("select id, title from templates").bind().raw();
