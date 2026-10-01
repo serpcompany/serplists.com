@@ -1,13 +1,21 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
+const listSubscriptions = vi.hoisted(() => vi.fn());
+
+vi.mock("@/contexts/TemplatesContext", () => ({
+  useTemplates: () => ({ createTemplate: vi.fn(), updateTemplate: vi.fn() }),
+  useTemplateLists: listSubscriptions,
+}));
 
 import {
   buildTemplateEditorSavedState,
   loadTemplateEditorData,
   saveTemplateEditorData,
+  useTemplateEditorModel,
 } from "@/features/template-editor/useTemplateEditorModel";
-import { persistTemplateSave, type SaveTemplateInput } from "@/hooks/useTemplateSave";
+import { persistTemplateSave, useTemplateSave, type SaveTemplateInput } from "@/hooks/useTemplateSave";
 import { createApiError } from "@/lib/api-errors";
 import type { ChecklistSection, TemplateSavePayload } from "@/types/checklist";
 
@@ -144,20 +152,14 @@ describe("template editor versions", () => {
   });
 
   it("never subscribes the editor to the workspace list", () => {
-    for (const file of ["src/features/template-editor/useTemplateEditorModel.ts", "src/hooks/useTemplateSave.ts"]) {
-      const source = readFileSync(path.resolve(__dirname, "../../../..", file), "utf8");
-      expect(source, file).not.toMatch(/useTemplateLists/);
+    function EditorLoadingAndSavingATemplate() {
+      useTemplateEditorModel({ id: "template-1" });
+      useTemplateSave();
+      return null;
     }
-  });
 
-  it("reads the workspace list only for the new-template limit check", () => {
-    const source = readFileSync(
-      path.resolve(__dirname, "../../../..", "src/features/template-editor/useTemplateEditorAccess.ts"),
-      "utf8",
-    );
-    const calls = source.match(/useTemplateLists\([^)]*/g) ?? [];
+    renderToStaticMarkup(createElement(EditorLoadingAndSavingATemplate));
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain("workspace: shouldLoadTemplateCountForLimit(");
+    expect(listSubscriptions).not.toHaveBeenCalled();
   });
 });

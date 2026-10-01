@@ -7,13 +7,15 @@ import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
 import { DevLoginBar } from '@/components/DevLoginBar';
 import { createFakeContainer } from '../../fixtures/fakeDom';
+import { aSignOutTheServerAnswersLater, expectTheControlToLeaveOnlyOnceSignedOut } from '../../support/signOutControl';
+
+const auth = vi.hoisted(() => ({
+  logout: (): Promise<{ ok: boolean }> => Promise.resolve({ ok: true }),
+  user: null as { email: string; name: string } | null,
+}));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
-  useAuth: () => ({
-    login: vi.fn(),
-    logout: vi.fn().mockResolvedValue({ ok: true }),
-    user: null,
-  }),
+  useAuth: () => ({ login: vi.fn(), logout: () => auth.logout(), user: auth.user }),
 }));
 
 let root: Root | null = null;
@@ -50,5 +52,20 @@ describe("DevLoginBar, which shows the page's port and so renders only after mou
     navigation.reset('/login/');
 
     expect(renderToStaticMarkup(<DevLoginBar />)).toBe('');
+  });
+
+  it('leaves the page on Logout only once the server signed the user out, through signOutAndLeave', async () => {
+    const signingOut = aSignOutTheServerAnswersLater();
+    auth.user = { email: 'admin@test.com', name: 'Admin' };
+    auth.logout = () => signingOut.promise;
+    try {
+      unmountThePreviousBar();
+      navigation.reset('/login/');
+      const { container } = await fakeDom.render(<DevLoginBar />);
+
+      await expectTheControlToLeaveOnlyOnceSignedOut(container, 'Logout', signingOut);
+    } finally {
+      auth.user = null;
+    }
   });
 });

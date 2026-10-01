@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { request } from '@playwright/test';
@@ -50,9 +49,13 @@ describe("Playwright's request client connections", () => {
     expect(await connectionsForTwoRequests()).toBe(2);
   });
 
-  it('is turned off by playwright.config.ts before any test runs', () => {
-    const config = readFileSync('playwright.config.ts', 'utf8');
-    expect(config).toMatch(/^import \{ disableRequestKeepAlive \} from "\.\/tests\/e2e\/support\/request-connections";$/m);
-    expect(config).toMatch(/^disableRequestKeepAlive\(\);$/m);
+  it('is turned off by playwright.config.ts before any test runs', async () => {
+    playwrightHttpAgent().keepAlive = true;
+
+    const { default: config } = await import('../../../playwright.config');
+
+    expect(config.testDir).toBe('./tests/e2e');
+    expect(playwrightHttpAgent().keepAlive).toBe(false);
+    expect(await connectionsForTwoRequests()).toBe(2);
   });
 });

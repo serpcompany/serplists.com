@@ -1,16 +1,20 @@
 import { navigation } from '../../support/mockedNextNavigation';
 import React, { act } from 'react';
-import { readFileSync } from 'node:fs';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
 
+import CategoryPage from '@/app/(site)/categories/[categorySlug]/page';
 import CategoryDetailRoute from '@/views/CategoryDetailRoute';
+import { findElementOf } from '../../support/elementTree';
 import { createFakeContainer } from '../../fixtures/fakeDom';
 
 type PageRender = { param: string | undefined; slugAtMount: string | undefined };
 
 const probe = vi.hoisted(() => ({ mounts: 0, renders: [] as PageRender[] }));
+
+vi.mock('server-only', () => ({}));
+vi.mock('@/server/pageMeta/categoryPage', () => ({ loadCategoryPageSeo: async () => null }));
 
 vi.mock('@/views/CategoryDetail', async () => {
   const { useEffect, useState } = await import('react');
@@ -45,12 +49,9 @@ const lastRender = () => probe.renders[probe.renders.length - 1];
 
 describe('category page route', () => {
   it('is the page the category route renders', () => {
-    const page = readFileSync(
-      new URL('../../../src/app/(site)/categories/[categorySlug]/page.tsx', import.meta.url),
-      'utf8',
-    );
+    const page = CategoryPage({ params: Promise.resolve({ categorySlug: 'business' }) });
 
-    expect(page).toContain('<CategoryDetailRoute />');
+    expect(findElementOf(page, CategoryDetailRoute)).not.toBeNull();
   });
 
   it('starts a fresh page, with no search or sort, for each category', async () => {

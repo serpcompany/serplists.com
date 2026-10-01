@@ -1,5 +1,4 @@
 import '../../support/mockedNextNavigation';
-import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { isValidElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -8,14 +7,13 @@ import RootLayout from '@/app/layout';
 import { TAG_MANAGER_BOOTSTRAP_SCRIPT, TAG_MANAGER_ID } from '@/lib/analytics/tagManagerBootstrap';
 import { isSensitiveAnalyticsLocation, isTagManagerLoaded } from '@/lib/analyticsUrl';
 
+import { elementsOfType, plainScriptsInTheHead, rootLayoutOn } from '../../support/rootLayout';
 import { withSiteEnv } from '../../support/siteEnv';
 
 import {
   SAFE_ANALYTICS_LOCATIONS,
   SENSITIVE_ANALYTICS_LOCATIONS,
 } from '../../fixtures/analyticsLocations';
-
-const layout = readFileSync('src/app/layout.tsx', 'utf8');
 
 interface BootstrapResult {
   insertedSources: string[];
@@ -73,14 +71,14 @@ describe('Google Tag Manager on each environment', () => {
 });
 
 describe('Google Tag Manager bootstrap, which no URL carrying a token or an email may load, since its tags read the full URL', () => {
-  it('runs from the root layout head on every page as a plain script, while the page is parsed, as Tag Manager\'s own snippet does', () => {
-    const head = /<head>([\s\S]*?)<\/head>/.exec(layout)?.[1] ?? '';
-
-    expect(head).toMatch(/<script dangerouslySetInnerHTML=\{\{ __html: TAG_MANAGER_BOOTSTRAP_SCRIPT \}\} \/>/);
+  it('runs from the root layout head on every page as a plain script, while the page is parsed, as Tag Manager\'s own snippet does', async () => {
+    expect(plainScriptsInTheHead(await rootLayoutOn('production'))).toContain(TAG_MANAGER_BOOTSTRAP_SCRIPT);
   });
 
-  it('names the same container in the script and the noscript fallback', () => {
-    expect(layout).toContain('https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}');
+  it('names the same container in the script and the noscript fallback', async () => {
+    const fallbackFrames = elementsOfType(await rootLayoutOn('production'), 'iframe').map((frame) => frame.props.src);
+
+    expect(fallbackFrames).toEqual([`https://www.googletagmanager.com/ns.html?id=${TAG_MANAGER_ID}`]);
     expect(TAG_MANAGER_BOOTSTRAP_SCRIPT).toContain(`'${TAG_MANAGER_ID}'`);
   });
 

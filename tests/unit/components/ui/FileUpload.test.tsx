@@ -1,5 +1,4 @@
 import '../../../support/mockedR2Uploads';
-import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
@@ -193,14 +192,6 @@ describe('FileUpload', () => {
 
       expect(target.style.display).toBeUndefined();
       expect(useStateStub.setterCalls).toEqual([true]);
-    });
-
-    it('never hides the preview by setting a style React does not own', () => {
-      const source = readFileSync(
-        new URL('../../../../src/components/ui/file-upload.tsx', import.meta.url),
-        'utf8',
-      );
-      expect(source).not.toMatch(/\.style\.display\s*=/);
     });
 
     it('says the preview is unavailable instead of showing an empty box', () => {

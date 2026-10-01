@@ -1,12 +1,14 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
+
+import EditTemplatePage from "@/app/(app)/dashboard/templates/[id]/edit/page";
+import NewTemplatePage from "@/app/(app)/dashboard/templates/new/page";
 
 import { templateEditorRouteKey } from "@/features/template-editor/navigationGuards";
 import {
   resolveTemplateSaveFeedback,
   shouldApplyTemplateEditorSaveResult,
 } from "@/features/template-editor/useTemplateEditorModel";
+import TemplateEditorRoute from "@/views/TemplateEditorRoute";
 
 describe("template editor route identity, so React never keeps one editor, with its errors, selection and save state, across templates or the new-template form", () => {
   it("gives every template, and the new-template form, its own key", () => {
@@ -17,15 +19,8 @@ describe("template editor route identity, so React never keeps one editor, with 
   });
 
   it("renders every editor route through the keyed route wrapper", () => {
-    const editorPages = [
-      "src/app/(app)/dashboard/templates/new/page.tsx",
-      "src/app/(app)/dashboard/templates/[id]/edit/page.tsx",
-    ];
-
-    for (const page of editorPages) {
-      const source = readFileSync(path.resolve(__dirname, "../../../..", page), "utf8");
-      expect(source, page).toContain("<TemplateEditorRoute />");
-      expect(source, page).not.toMatch(/<TemplateEditor\s*\/>/);
+    for (const Page of [NewTemplatePage, EditTemplatePage]) {
+      expect(Page().type, Page.name).toBe(TemplateEditorRoute);
     }
   });
 });

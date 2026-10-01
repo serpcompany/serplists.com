@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,6 +6,8 @@ import {
   toggleRunKeyPermission,
   withImpliedRunKeyPermissions,
 } from '@/lib/schemas/runKeyPermissions';
+
+import { SqliteD1 } from '../../../support/sqlite-d1';
 
 describe('Run Key permissions', () => {
   it('adds the read that each write implies and keeps a stable order', () => {
@@ -25,13 +24,18 @@ describe('Run Key permissions', () => {
   });
 
   it('defaults to the permissions column default that migration 0027 gave every earlier key', () => {
-    const migration = readFileSync(
-      path.resolve(__dirname, '../../../../db/migrations/0027_add_personal_run_key_permissions.sql'),
-      'utf8',
+    const database = new SqliteD1();
+    database.run(
+      `INSERT INTO users (id, email, name, email_verified, created_at, updated_at)
+        VALUES ('user-1', 'owner@example.test', 'Owner', 1, '2026-01-01', '2026-01-01')`,
     );
-    const columnDefault = /DEFAULT '([^']+)'/.exec(migration)?.[1] ?? 'null';
+    database.run(
+      `INSERT INTO personal_run_keys (id, user_id, name, key_prefix, key_hash)
+        VALUES ('key-1', 'user-1', 'Made before key permissions', 'slrk_example', 'stored-hash')`,
+    );
+    const [key] = database.rows<{ permissions: string }>("SELECT permissions FROM personal_run_keys WHERE id = 'key-1'");
 
-    expect(JSON.parse(columnDefault)).toEqual([...DEFAULT_RUN_KEY_PERMISSIONS]);
+    expect(JSON.parse(key?.permissions ?? 'null')).toEqual([...DEFAULT_RUN_KEY_PERMISSIONS]);
   });
 
   it('treats writing runs as reading templates, because a new run copies template content', () => {

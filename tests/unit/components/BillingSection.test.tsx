@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { BillingSection } from '@/components/account/BillingSection';
+import { api } from '@/lib/api';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
+import { expectOneCallOnlyAfterABackForwardRestore } from '../../support/pageRestore';
 
 const workspaceMock = vi.hoisted(() => ({
   value: {
@@ -243,5 +246,23 @@ describe('BillingSection', () => {
     expect(html).not.toContain('Checking...');
     expect(html).not.toContain('Upgrade to Pro');
     expect(html).not.toContain('Manage subscription');
+  });
+});
+
+describe('BillingSection after Back restores the page from the back/forward cache', () => {
+  const fakeDom = aFakeDomForEachTest(navigation.window);
+
+  it('refetches billing status, since the plan may have changed at Stripe or in another tab', async () => {
+    workspaceMock.value = { activeTeamId: undefined, isTeamWorkspace: false };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(['billing', 'status', 'user-1', 'personal'], { billingEnabled: true, plan: 'free' });
+    navigation.reset('/dashboard/settings/');
+    await fakeDom.render(
+      <QueryClientProvider client={queryClient}>
+        <BillingSection />
+      </QueryClientProvider>,
+    );
+
+    await expectOneCallOnlyAfterABackForwardRestore(navigation.window, vi.mocked(api.getBillingStatus));
   });
 });

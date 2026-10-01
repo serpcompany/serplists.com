@@ -4,9 +4,12 @@ import { QueryClient, QueryClientProvider, type UseQueryOptions } from '@tanstac
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { PLAN_UNKNOWN_MESSAGE, shouldRetryBillingStatus } from '@/lib/billing';
+import { api } from '@/lib/api';
+import { PLAN_UNKNOWN_MESSAGE, shouldRetryBillingStatus, type BillingStatus } from '@/lib/billing';
 import Pricing from '@/views/Pricing';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
+import { aFakeDomForEachTest } from '../../support/fakeDomRoots';
+import { expectOneCallOnlyAfterABackForwardRestore } from '../../support/pageRestore';
 
 const queryOptionsSeen = vi.fn();
 
@@ -152,5 +155,24 @@ describe('Pricing', () => {
       .map(([options]) => options as UseQueryOptions)
       .find((options) => JSON.stringify(options.queryKey) === JSON.stringify(BILLING_STATUS_KEY));
     expect(billingQuery?.retry).toBe(shouldRetryBillingStatus);
+  });
+});
+
+describe('Pricing after Back restores it from the back/forward cache', () => {
+  const fakeDom = aFakeDomForEachTest(navigation.window);
+
+  it('refetches billing status, since the plan may have changed at Stripe or in another tab', async () => {
+    const freePlan: BillingStatus = { plan: 'free', billingEnabled: true, subscriptionStatus: null };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    queryClient.setQueryData(BILLING_STATUS_KEY, freePlan);
+    vi.mocked(api.getBillingStatus).mockResolvedValue(freePlan);
+    navigation.reset('/pricing/');
+    await fakeDom.render(
+      <QueryClientProvider client={queryClient}>
+        <Pricing />
+      </QueryClientProvider>,
+    );
+
+    await expectOneCallOnlyAfterABackForwardRestore(navigation.window, vi.mocked(api.getBillingStatus));
   });
 });

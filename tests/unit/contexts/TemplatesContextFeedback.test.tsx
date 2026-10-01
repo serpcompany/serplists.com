@@ -1,20 +1,24 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 const apiMock = vi.hoisted(() => ({
   createTemplate: vi.fn(),
   updateTemplate: vi.fn(),
   createChecklist: vi.fn(),
+  deleteTemplate: vi.fn(),
+  updateChecklist: vi.fn(),
+  deleteChecklist: vi.fn(),
+  revalidateChecklist: vi.fn(),
+  importTemplateBackup: vi.fn(),
 }));
 
 vi.mock('sonner', () => ({ toast: toastMock }));
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 import { aTemplatesProviderForEachTest, launchChecklist } from '../../support/templatesProviderHarness';
 import { getTemplateSaveSuccessMessage } from '@/features/template-editor/useTemplateEditorModel';
+import type { TemplatesContextProps } from '@/types/checklist';
+import { buildRun } from '../../fixtures/runExecutionFixtures';
 
 const template = launchChecklist();
 
@@ -135,12 +139,31 @@ describe('template editor save feedback', () => {
   });
 });
 
-describe('TemplatesContext feedback guard', () => {
-  it('does not import toasts, so shared mutations cannot duplicate page feedback', () => {
-    const source = readFileSync(
-      path.resolve(__dirname, '../../../src/contexts/TemplatesContext.tsx'),
-      'utf8',
-    );
-    expect(source).not.toMatch(/from\s+['"]sonner['"]/);
+const run = buildRun({ id: 'run-1', revision: 2 });
+const importSummary = { total: 1, imported: 1, failed: [], successes: [] };
+
+const OTHER_MUTATIONS: Array<[string, keyof typeof apiMock, unknown, (context: TemplatesContextProps) => Promise<unknown>]> = [
+  ['deletes a template', 'deleteTemplate', undefined, (context) => context.deleteTemplate('template-1')],
+  ['saves run progress', 'updateChecklist', { revision: 3 }, (context) => context.updateRun(run)],
+  ['deletes a run', 'deleteChecklist', undefined, (context) => context.deleteRun('run-1')],
+  ['revalidates a run', 'revalidateChecklist', undefined, (context) => context.revalidateRun(run)],
+  ['imports templates', 'importTemplateBackup', importSummary, (context) => context.importTemplates([template])],
+];
+
+describe('every other TemplatesProvider mutation leaves feedback to the page too', () => {
+  beforeEach(() => {
+    toastMock.success.mockReset();
+    toastMock.error.mockReset();
+  });
+
+  it.each(OTHER_MUTATIONS)('%s without a toast, whether it succeeds or fails', async (_mutation, apiMethod, answer, mutate) => {
+    apiMock[apiMethod].mockReset();
+    apiMock[apiMethod].mockResolvedValueOnce(answer).mockRejectedValueOnce(new Error('Request failed'));
+    const { context } = renderProvider();
+
+    await mutate(context);
+    await expect(mutate(context)).rejects.toThrow('Request failed');
+    expect(apiMock[apiMethod]).toHaveBeenCalledTimes(2);
+    expectNoToasts();
   });
 });

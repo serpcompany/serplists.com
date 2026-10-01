@@ -6,6 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TemplateEditor from '@/views/TemplateEditor';
 import { buildTemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
 import { createPendingUploads } from '@/features/template-editor/pendingUploads';
+import {
+  EDITOR_UNSAVED_CHANGES_MESSAGE,
+  EDITOR_UPLOAD_IN_PROGRESS_MESSAGE,
+} from '@/features/template-editor/navigationGuards';
 
 import { editorAccess as buildAccess, editorState } from '../../fixtures/templateEditorHooks';
 
@@ -14,6 +18,17 @@ const mockUseTemplateEditorState = vi.fn();
 const mockUseTemplateEditorAccess = vi.fn();
 const mockUsePendingTemplateEditorUploads = vi.fn();
 const useFormCalls = vi.fn();
+const leaveGuardedWith = vi.fn();
+
+vi.mock('@/features/template-editor/useTemplateEditorLeaveGuard', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/template-editor/useTemplateEditorLeaveGuard')>();
+  return {
+    useTemplateEditorLeaveGuard: (...args: Parameters<typeof actual.useTemplateEditorLeaveGuard>) => {
+      leaveGuardedWith(...args);
+      return actual.useTemplateEditorLeaveGuard(...args);
+    },
+  };
+});
 
 vi.mock('@/features/template-editor/useTemplateEditorModel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/template-editor/useTemplateEditorModel')>()),
@@ -331,5 +346,16 @@ describe('TemplateEditor page', () => {
 
     expect(html).toContain('/profile/teammate/launch');
     expect(html).not.toContain('/profile/jane/');
+  });
+
+  it('guards every way out of the editor while it holds unsaved work, through the template editor leave guard', async () => {
+    mockUsePendingTemplateEditorUploads.mockImplementation(() => ({ uploads: createPendingUploads(), pendingCount: 1 }));
+    leaveGuardedWith.mockClear();
+    await renderTheExistingTemplateEditor();
+    expect(leaveGuardedWith).toHaveBeenLastCalledWith(true, EDITOR_UPLOAD_IN_PROGRESS_MESSAGE, expect.any(Function));
+
+    mockUsePendingTemplateEditorUploads.mockImplementation(() => ({ uploads: createPendingUploads(), pendingCount: 0 }));
+    await renderTheExistingTemplateEditor();
+    expect(leaveGuardedWith).toHaveBeenLastCalledWith(false, EDITOR_UNSAVED_CHANGES_MESSAGE, expect.any(Function));
   });
 });

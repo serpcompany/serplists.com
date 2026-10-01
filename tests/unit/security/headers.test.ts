@@ -1,7 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { templatePackModules } from '@/data/public-template-packs';
 import { renderStaticHeaders } from '@/lib/http/securityHeaders';
 import { EMBED_FRAME_ORIGINS } from '@/lib/utils/embedOrigins';
 import { getVideoEmbedSource } from '@/utils/urlHelpers';
@@ -22,7 +21,6 @@ const productionContentSecurityPolicy = (): Map<string, string[]> => {
 };
 
 const collectPackVideoValues = (): string[] => {
-  const packDir = 'src/data/public-template-packs';
   const values: string[] = [];
   const visit = (node: unknown) => {
     if (Array.isArray(node)) {
@@ -36,9 +34,7 @@ const collectPackVideoValues = (): string[] => {
     }
     Object.values(record).forEach(visit);
   };
-  for (const file of readdirSync(packDir).filter((name) => name.endsWith('.json'))) {
-    visit(JSON.parse(readFileSync(path.join(packDir, file), 'utf8')));
-  }
+  Object.values(templatePackModules).forEach(visit);
   return values;
 };
 

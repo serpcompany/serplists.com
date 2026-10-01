@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
 
@@ -16,6 +13,10 @@ import {
   prepareTemplatesForImport,
 } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
+import foundationalChecklists from '@/data/public-template-packs/foundational-checklists.json';
+
+import fullExample from '../../../../docs/product-specs/portable-templates/examples/full/template.json';
+import minimalExample from '../../../../docs/product-specs/portable-templates/examples/minimal/template.json';
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validateWithJsonSchema = ajv.compile(buildPortableTemplatePackJsonSchema());
@@ -81,16 +82,8 @@ describe('the published portable template JSON Schema accepts exactly what the i
   });
 
   it('agrees on the repo examples and public packs', () => {
-    const root = process.cwd();
-    const singleTemplates = ['minimal', 'full'].map((name) =>
-      JSON.parse(readFileSync(path.join(root, `docs/product-specs/portable-templates/examples/${name}/template.json`), 'utf8')),
-    );
-    const publicPack = JSON.parse(
-      readFileSync(path.join(root, 'src/data/public-template-packs/foundational-checklists.json'), 'utf8'),
-    );
-
-    expect(verdicts(pack(singleTemplates))).toEqual({ jsonSchema: true, importer: true });
-    expect(verdicts(publicPack)).toEqual({ jsonSchema: true, importer: true });
+    expect(verdicts(pack([minimalExample, fullExample]))).toEqual({ jsonSchema: true, importer: true });
+    expect(verdicts(foundationalChecklists)).toEqual({ jsonSchema: true, importer: true });
   });
 });
 
