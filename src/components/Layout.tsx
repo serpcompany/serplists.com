@@ -11,12 +11,9 @@ import { resolvePublicRouteTier, resolveRouteShell, type AppShell as Shell } fro
 
 interface LayoutProps {
   children?: ReactNode;
-  // The frame to use instead of the path's (the 404 page picks its own: NotFoundLayout).
   shell?: Shell;
 }
 
-// Every page's frame, picked from the path: the console shell (the sidebar) for signed-in
-// pages, and the public shell (site header and footer) for the rest.
 export const Layout = ({ children, shell: requestedShell }: LayoutProps) => {
   const pathname = usePathname();
   const shell = requestedShell ?? resolveRouteShell(pathname);

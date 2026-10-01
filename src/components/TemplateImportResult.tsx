@@ -7,8 +7,6 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "@/comp
 import { formatImportFailure } from "@/lib/templates/templateImportSummary";
 import type { TemplateImportSummary } from "@/types/checklist";
 
-// The last import on Import Templates: how many were attempted, imported and failed, the
-// Templates it created and why the others failed.
 export function TemplateImportResult({ summary }: { summary: TemplateImportSummary }) {
   const hasFailures = summary.failed.length > 0;
 

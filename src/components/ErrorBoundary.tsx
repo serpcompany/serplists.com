@@ -9,12 +9,7 @@ type FallbackRender = (props: { error?: Error; reset: () => void }) => ReactNode
 interface Props {
   children: ReactNode;
   fallback?: ReactNode | FallbackRender;
-  // A change clears a caught error, so leaving a page that crashed recovers. It never
-  // remounts a page that did not crash.
   resetKey?: unknown;
-  // For the last-resort boundary above the router: while it shows its fallback no page is
-  // mounted to react to history changes, so browser Back or Forward clears the error here and
-  // the router renders the new location.
   resetOnHistoryChange?: boolean;
 }
 
@@ -36,8 +31,6 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
-
-    // Log to console for debugging
     console.error('Error details:', {
       message: error.message,
       stack: error.stack,
@@ -50,8 +43,8 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidUpdate(prevProps: Props, prevState: State) {
-    // Only an error that was already showing: navigating to a page that crashes keeps it.
-    if (prevState.hasError && this.state.hasError && !Object.is(prevProps.resetKey, this.props.resetKey)) {
+    const errorWasShowing = prevState.hasError && this.state.hasError;
+    if (errorWasShowing && !Object.is(prevProps.resetKey, this.props.resetKey)) {
       this.handleReset();
       return;
     }
@@ -98,8 +91,6 @@ export class ErrorBoundary extends Component<Props, State> {
         return fallback;
       }
 
-      // Something outside the pages crashed (a provider or a layout). Try Again and Go to home
-      // mount the app again from fresh state; Refresh Page reloads the document.
       return (
         <div className="min-h-screen flex items-center justify-center p-4">
           <Card className="w-full max-w-md">

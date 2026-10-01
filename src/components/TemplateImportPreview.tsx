@@ -22,11 +22,9 @@ interface TemplateImportPreviewProps {
   onConfirm: () => void;
   oversizedAssetCount: number;
   preview: ImportPreview;
-  /** The selected override; the public count follows it, not the file's own flags. */
   visibility: ImportVisibility;
 }
 
-/** The parsed file waiting for Confirm Import on the Import Templates page. */
 export const TemplateImportPreview: React.FC<TemplateImportPreviewProps> = ({
   confirmDisabled,
   exceedsTemplateLimit,

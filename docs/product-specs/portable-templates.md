@@ -395,7 +395,11 @@ JSON exports **do not** include R2 assets. If a template references uploaded fil
 - Backup export is still available for compatibility.
 - Guardrails are enforced: at most 5 templates per import, and a template with an
   asset whose recorded `fileSize` is over the 50MB upload limit fails with
-  `oversized_asset` while the other templates in the file still import.
+  `oversized_asset` while the other templates in the file still import. The import
+  preview applies both before Confirm Import: a file over the template limit cannot be
+  confirmed, and oversized assets, counted with the API's own check
+  (`countOversizedTemplateAssets`), only raise a warning, since the rest of the file
+  still imports.
 - A file may be up to 2MB, but one template's content may be at most 768KB
   (`src/lib/schemas/contentLimits.ts`): what its editor save and its runs can send back
   under the 1MB request limit. A larger template fails with `content_too_large` while the

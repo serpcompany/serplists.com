@@ -16,7 +16,6 @@ type TemplateBackupPlanNoticeProps = {
   onUpgrade: () => void;
 };
 
-// A shadcn Alert with the notice's title, text and its one action.
 const Notice = ({ action, children, title }: { action?: ReactNode; children: ReactNode; title: string }) => (
   <Alert>
     <AlertCircle />
@@ -28,10 +27,6 @@ const Notice = ({ action, children, title }: { action?: ReactNode; children: Rea
   </Alert>
 );
 
-/**
- * Plan notice for import/export. An upgrade prompt appears only once the server has
- * said the plan is Free; a failed status check offers Retry and never an upgrade.
- */
 export const TemplateBackupPlanNotice = ({
   billing,
   isTeamWorkspace,

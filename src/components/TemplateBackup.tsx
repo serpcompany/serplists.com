@@ -44,14 +44,12 @@ interface TemplateBackupProps {
   className?: string;
 }
 
-// The same check the API applies per template; it only warns here.
 const countOversizedAssets = (templates: ChecklistTemplate[]): number =>
   templates.reduce((count, template) => count + countOversizedTemplateAssets(template.sections), 0);
 
 export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   className
 }) => {
-  // The export is built on the server, so this page never loads the public catalog.
   const {
     allTemplates,
     importTemplates,
@@ -70,20 +68,13 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
   } = useWorkspace();
   const billing = useBillingStatus({ enabled: !!user, teamId: activeTeamId, userId: user?.id });
   const loadPublicCatalog = usePublicCatalogLoader();
-  // Export and import await a request; a checkout for its failure starts only while the
-  // user is still on this page.
   const beginVisit = usePageVisit();
   const billingEnabled = billing.status === "known" ? billing.billingEnabled : true;
-  // Only a plan the server reported as Free is gated here. When the status check
-  // failed, actions go through and the server's 403 upgrade_required decides.
   const isKnownFreePlan = billing.status === "known" && !billing.isPaid;
   const hasBackupAccess = billing.status === "error" || (billing.status === "known" && billing.isPaid);
   const workspaceTemplateLabel = isTeamWorkspace ? "Organization Templates" : "My Templates";
-  // Until the list loads, the context may not be restored yet (an Organization reads as
-  // Personal while it loads), so export and import wait and the counts show a dash.
   const backupControlsOff = !user || templatesLoading || !hasBackupAccess || !canEditTemplates;
   const formatStatCount = (count: number) => (templatesLoading ? "–" : count);
-  // One export at a time: a second click would scan every Template again and download a copy.
   const exportFlight = useSingleFlight();
   const isExporting = exportFlight.isRunning;
   const [isImporting, setIsImporting] = useState(false);
@@ -154,7 +145,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
         },
         { download: (pack) => downloadBackupFile(pack), loadPublicCatalog },
       );
-      // Templates that cannot be made valid are left out (manifest.skippedTemplates): name them.
       const { kind, message } = formatExportSummaryMessage(summary);
       toast[kind](message, summary.skipped.length > 0 ? { duration: 15000 } : undefined);
     } catch (error) {
@@ -199,7 +189,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
     setLastImportSummary(null);
     setIsImporting(true);
     try {
-      // The importPreview has already been validated by parseTemplatesFromJSON
       const result = await importTemplates(importPreview.templates, {
         visibility: importVisibility
       });
@@ -208,12 +197,10 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
       toast[kind](message);
       setImportPreview(null);
     } catch (error) {
-      // When every template fails, the API still sends the per-template summary. Show it,
-      // and keep the preview so the file can be fixed and imported again.
-      const summary = getImportSummaryFromError(error);
-      if (summary) {
-        setLastImportSummary(summary);
-        toast.error(formatImportSummaryMessage(summary).message);
+      const summaryOfAllFailed = getImportSummaryFromError(error);
+      if (summaryOfAllFailed) {
+        setLastImportSummary(summaryOfAllFailed);
+        toast.error(formatImportSummaryMessage(summaryOfAllFailed).message);
       } else {
         await handleBackupFailure(error, "Failed to import templates", visit);
       }
@@ -263,8 +250,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
           </Alert>
         ) : null}
 
-        {/* Current Templates Stats; a failed list is not zero templates. Export still
-            works: the server's pack decides what this context owns. */}
         {templatesError ? (
           <ListLoadErrorState error={templatesError} listName="templates" onRetry={() => void refetchTemplates()} titleAs="h3" />
         ) : (
@@ -290,7 +275,6 @@ export const TemplateBackup: React.FC<TemplateBackupProps> = ({
             </FieldDescription>
           </FieldContent>
           <Switch
-            // A native button, so the Label's htmlFor names it.
             nativeButton
             render={<button type="button" />}
             id="include-public-templates"

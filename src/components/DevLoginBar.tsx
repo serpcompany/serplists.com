@@ -29,7 +29,6 @@ import { usePathname } from 'next/navigation';
 import { useIsClient } from '@/hooks/useIsClient';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
-// The app and its API share this origin.
 function resolveOrigin(): string {
   return typeof window === 'undefined' ? '' : window.location.origin;
 }
@@ -38,14 +37,11 @@ export function DevLoginBar(): JSX.Element | null {
   const { login, logout, user } = useAuth();
   const pathname = usePathname();
   const router = useAppRouter();
-  // Dev-only and browser-only (it shows the page's origin), so it renders after hydration: the
-  // server's HTML never differs from the first client render.
-  const mounted = useIsClient();
+  const hydrated = useIsClient();
   const [isVisible, setIsVisible] = React.useState(true);
   const [isLoading, setIsLoading] = React.useState(false);
 
-  // Only show in development
-  if (process.env.NODE_ENV === 'production' || !mounted) return null;
+  if (process.env.NODE_ENV === 'production' || !hydrated) return null;
 
   if (isBlankTemplateEditorRoute(pathname)) {
     return null;

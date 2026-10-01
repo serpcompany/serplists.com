@@ -39,6 +39,13 @@ function mountBoundaryDrivenLikeReact(props: Props) {
       (boundary as { props: Props }).props = next;
       boundary.componentDidUpdate(previousProps, boundary.state);
     },
+    updateAndCrash: (next: Props) => {
+      const previousProps = boundary.props;
+      const previousState = boundary.state;
+      (boundary as { props: Props }).props = next;
+      boundary.state = { ...boundary.state, ...ErrorBoundary.getDerivedStateFromError(new Error('render failed')) };
+      boundary.componentDidUpdate(previousProps, previousState);
+    },
     html: () => renderToStaticMarkup(<>{boundary.render()}</>),
   };
 }
@@ -69,6 +76,14 @@ describe('ErrorBoundary', () => {
     page.update({ children: <p>Page</p>, resetKey: '/b' });
 
     expect(setState).not.toHaveBeenCalled();
+  });
+
+  it('keeps the error of a page that crashes as it opens, since a new key clears only an error already showing', () => {
+    const page = mountBoundaryDrivenLikeReact({ children: <p>Page</p>, resetKey: '/templates' });
+
+    page.updateAndCrash({ children: <p>Page</p>, resetKey: '/categories/broken' });
+
+    expect(page.boundary.state.hasError).toBe(true);
   });
 
   it('recovers the whole app on browser Back when asked to, and stops listening afterwards', () => {

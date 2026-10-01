@@ -66,10 +66,14 @@ Every page renders inside `RouteErrorBoundary` (`src/components/RouteErrorBounda
 `Layout` wraps its content, and routes outside `Layout` (the shared run page) wrap their
 element. A page that throws while rendering shows a "Something went wrong" card with Try
 again, Go back and a home link, the header and navigation keep working, and opening another
-page clears it, and so do the card's own buttons (the boundary resets when the pathname
-changes, and only while it shows an error, so healthy pages are never remounted). The
-`ErrorBoundary` around the providers in `src/app/providers.tsx` is the last resort: its
-fallback uses plain links, and browser Back clears it.
+page clears it (the boundary resets when the pathname changes, and only while it shows an
+error, so healthy pages are never remounted, and a page that crashes as it opens keeps its
+card). So do the card's own buttons, even the home link on the home page itself, where the
+pathname does not change. The `ErrorBoundary` around the providers in
+`src/app/providers.tsx` is the last resort, for a provider or layout that crashed: Try Again
+and Go to home mount the app again from fresh state (the Next.js router sits above it and
+follows the link), Refresh Page reloads the document, and browser Back or Forward clears it
+too, since no page is mounted then to react to the history change (`resetOnHistoryChange`).
 
 Next.js gives each value of a dynamic segment its own page instance. `CategoryDetailRoute`
 also keys the category page by its normalized slug, so another category always starts with

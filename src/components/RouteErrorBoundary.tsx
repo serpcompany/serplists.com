@@ -12,11 +12,6 @@ import { buildConsoleTemplatesPath } from '@/lib/routes';
 import { Link } from '@/components/navigation/Link';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
-// Wraps one page, below the site header. A page that crashes shows this card in its place while
-// the header and navigation keep working. Opening another page clears it (the reset key is the
-// pathname), and so do the card's own buttons, even the home link when the page that crashed is
-// home (My Templates or '/'). ErrorBoundary resets only an error that is showing, so pages that
-// did not crash are never remounted.
 export function RouteErrorBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 

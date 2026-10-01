@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import RequireAuth from '@/components/RequireAuth';
 import type { SessionStatus } from '@/contexts/authSession';
+import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
@@ -45,5 +47,30 @@ describe('RequireAuth', () => {
     expect(html).toContain('animate-spin');
     expect(html).not.toContain('data-session-unavailable');
     expect(html).not.toContain('Protected page');
+  });
+
+  it('sends a signed-out visitor to Log in with the page, its query and its hash as the way back', async () => {
+    const restoreGlobals = installFakeDomGlobals(navigation.window);
+    authState.sessionStatus = 'unauthenticated';
+    navigation.reset('/dashboard/runs/?status=active#recent');
+    const root = createRoot(createFakeContainer() as unknown as HTMLElement);
+    try {
+      await act(async () => {
+        root.render(
+          <RequireAuth>
+            <div>Protected page</div>
+          </RequireAuth>,
+        );
+      });
+
+      expect(navigation.log[0]).toEqual({
+        kind: 'replace',
+        href: `/login/?next=${encodeURIComponent('/dashboard/runs/?status=active#recent')}`,
+        via: 'router',
+      });
+    } finally {
+      act(() => root.unmount());
+      restoreGlobals();
+    }
   });
 });

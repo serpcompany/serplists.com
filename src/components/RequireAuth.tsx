@@ -16,8 +16,6 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
   const { retrySession, sessionStatus } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
-  // Only a confirmed "no session" goes to /login. A failed session check keeps the page and
-  // offers a retry, because the user's session may still be valid.
   const action = resolveProtectedRouteAction(sessionStatus);
 
   useEffect(() => {
@@ -25,9 +23,9 @@ const RequireAuth = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Login sends the user back here after signing in (the `next` parameter, sanitized there).
     const { search, hash } = window.location;
-    router.replace(withReturnPath(buildLoginPath(), `${pathname}${search}${hash}`));
+    const thisPage = `${pathname}${search}${hash}`;
+    router.replace(withReturnPath(buildLoginPath(), thisPage));
   }, [action, pathname, router]);
 
   if (action === 'unavailable') {
