@@ -32,7 +32,6 @@ type Navigate = (path: string) => void;
 
 type DashboardTemplatesStateOptions = {
   allTemplates: ChecklistTemplate[];
-  // The user's role in the active Organization; ignored in Personal (no teamId).
   role?: OrganizationRole;
   templatesLoading?: boolean;
   teamId?: string;
@@ -41,7 +40,6 @@ type DashboardTemplatesStateOptions = {
 
 type DashboardTemplateRunOptions = {
   now?: Date;
-  /** What the user typed; blank means the default name the dialog shows. */
   runName?: string;
   templateId: string;
   templateTitle: string;
@@ -71,11 +69,12 @@ type DashboardTemplateRunFailure = Exclude<
   { kind: 'ok' }
 >;
 
+type CheckoutRedirectStarted = boolean;
+
 type DashboardTemplateRunFailureActions = {
   navigateToLogin: () => void;
   showError: (message: string) => void;
-  /** Resolves true when a checkout redirect has started. */
-  upgrade: () => Promise<boolean>;
+  upgrade: () => Promise<CheckoutRedirectStarted>;
 };
 
 type DeleteDashboardTemplateOptions = {
@@ -173,7 +172,6 @@ export const createDashboardTemplateRun = async (
       runId: run.id,
     };
   } catch (error) {
-    // Decide from the API status and code only, never from message text.
     const failure = getAccessFailure(error, 'Failed to create checklist run.');
 
     if (failure.kind === 'auth_required') {
@@ -188,18 +186,11 @@ export const createDashboardTemplateRun = async (
   }
 };
 
-/**
- * Reports a failed Start Run exactly once: login for an expired session, the
- * context's upgrade flow for a plan limit, and one error message otherwise.
- * Sign-in and the upgrade flow run only while the user is still on the page that
- * started the run (visit); an error is reported either way, as on the template pages
- * (followTemplateActionResult). Resolves true while a checkout redirect is starting.
- */
 export const reportDashboardTemplateRunFailure = async (
   result: DashboardTemplateRunFailure,
   visit: PageVisit,
   actions: DashboardTemplateRunFailureActions,
-): Promise<boolean> => {
+): Promise<CheckoutRedirectStarted> => {
   if (result.kind === 'error') {
     actions.showError(result.message);
     return false;
@@ -232,9 +223,6 @@ export const deleteDashboardTemplate = async (
   );
 };
 
-// Closes the launcher and opens the new run, but only if the user is still on the page
-// that started it: after Back or a link, a run that finishes late must not pull them
-// to it.
 export const finishDashboardTemplateRun = (
   result: DashboardTemplateRunResult,
   visit: PageVisit,
@@ -322,7 +310,6 @@ export const useDashboardTemplatesModel = (
     const visit = beginVisit();
     setIsCreatingRun(true);
     try {
-      // Name the run from the template selected at submit time.
       const result = await createDashboardTemplateRun(
         {
           templateId: selectedTemplate.id,
