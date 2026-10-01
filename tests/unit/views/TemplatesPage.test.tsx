@@ -21,8 +21,6 @@ vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (impo
 
 const viewModeState = vi.hoisted(() => ({ mode: 'grid' as 'grid' | 'list' }));
 
-// The shared Start a Run dialog (tests/unit/components/RunNameDialog.test.tsx): the page's
-// part is what it gives the dialog.
 const runDialog = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 vi.mock('@/components/ui/run-name-dialog', () => ({
   RunNameDialog: (props: Record<string, unknown>) => {
@@ -282,7 +280,7 @@ describe('Templates page', () => {
 });
 
 describe('Templates page Start Run', () => {
-  it('asks for the name in the Start a Run dialog the other pages use, for the chosen template', async () => {
+  it('asks for the name in the Start a Run dialog the other pages use, with no template picker since the card chose the template', async () => {
     const createRunFromTemplate = vi.fn().mockResolvedValue({ kind: 'ok', runId: 'run-1' });
     mockUseDashboardTemplatesModel.mockReturnValue({
       templates: [template(), template({ id: 'template-2', title: 'Vendor onboarding' })],
@@ -308,7 +306,6 @@ describe('Templates page Start Run', () => {
     navigation.reset('/dashboard/templates/');
     const html = renderToStaticMarkup(<Templates />);
 
-    // No template picker of its own: the card's Start Run chose the template.
     expect(html).not.toContain('Select a template');
     expect(runDialog.props).toEqual(
       expect.objectContaining({ loading: false, open: true, templateTitle: 'Vendor onboarding' }),
@@ -355,8 +352,7 @@ describe('Templates page count', () => {
     expect(renderWith({ templates: [], isEmpty: true })).toContain('0 templates in your library');
   });
 
-  // Not "0 templates" while the list is on its way, or after it failed to load.
-  it('shows no count until the list has loaded', () => {
+  it('shows no count, not even 0 templates, until the list has loaded', () => {
     expect(renderWith({ templates: [], loading: true })).not.toContain('in your library');
     expect(renderWith({ templates: [], loadError: new Error('HTTP 500') })).not.toContain('in your library');
   });

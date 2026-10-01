@@ -1,4 +1,4 @@
-import React, { act, type ReactNode } from 'react';
+import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
@@ -20,11 +20,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// The API's DELETE only archives a Template: /dashboard/archive lists it and restores it.
-// My Templates must say so, not that it "cannot be undone" or leaves "your library" (an
-// Organization's Template is not in anyone's library). Drives the real page in list view;
-// only the page model, toasts and the select and alert dialog portals are faked.
-
 const mockUseDashboardTemplatesModel = vi.fn();
 
 vi.mock('@/features/dashboard-templates/useDashboardTemplatesModel', async (importOriginal) => ({
@@ -35,29 +30,8 @@ vi.mock('@/hooks/useViewModePreference', () => ({
   useViewModePreference: () => ['list', vi.fn()],
 }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock('@/components/ui/alert-dialog', () => {
-  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
-  type ButtonProps = { children?: ReactNode; disabled?: boolean; onClick?: () => void };
-  return {
-    AlertDialog: ({ open, children }: { open?: boolean; children?: ReactNode }) =>
-      open ? <div role="dialog">{children}</div> : null,
-    AlertDialogAction: ({ children, disabled, onClick }: ButtonProps) => (
-      <button disabled={disabled} onClick={onClick} type="button">{children}</button>
-    ),
-    AlertDialogCancel: ({ children, disabled }: ButtonProps) => (
-      <button disabled={disabled} type="button">{children}</button>
-    ),
-    AlertDialogContent: Pass,
-    AlertDialogDescription: ({ children }: { children?: ReactNode }) => <p>{children}</p>,
-    AlertDialogFooter: Pass,
-    AlertDialogHeader: Pass,
-    AlertDialogTitle: ({ children }: { children?: ReactNode }) => <h2>{children}</h2>,
-  };
-});
-vi.mock('@/components/ui/select', () => {
-  const Pass = ({ children }: { children?: ReactNode }) => <>{children}</>;
-  return { Select: Pass, SelectContent: () => null, SelectItem: Pass, SelectTrigger: Pass, SelectValue: () => null };
-});
+vi.mock('@/components/ui/alert-dialog', async () => (await import('../../support/overlaysInPlace')).alertDialogInPlace);
+vi.mock('@/components/ui/select', async () => (await import('../../support/overlaysInPlace')).selectWithoutPopup);
 
 const template: ChecklistTemplate = {
   id: 'template-1',
@@ -136,9 +110,7 @@ const buttonIn = (node: FakeNode, label: string) => {
 };
 
 describe('My Templates delete', () => {
-  // Users see a delete; the API archives the Template and /dashboard/archive can restore it,
-  // so the confirmation must never claim the delete is permanent.
-  it('names the action Delete and never says it cannot be undone', async () => {
+  it('names the action Delete and never says it cannot be undone, since /dashboard/archive can restore what the API archives', async () => {
     const removeTemplate = vi.fn(async () => undefined);
     const container = await renderTemplates(removeTemplate);
     expect(dialogs(container)).toHaveLength(0);
@@ -179,10 +151,7 @@ describe('My Templates delete', () => {
     expect(dialogs(container)).toHaveLength(1);
   });
 
-  // Deleted by a teammate or in another tab: the Template lists reload (deleteTemplate's
-  // onError) and it leaves them, so its dialog closes instead of offering a retry that fails
-  // the same way.
-  it('closes the dialog when the Template was already deleted elsewhere', async () => {
+  it('closes the dialog when the Template was already deleted elsewhere, since the reloaded lists no longer hold it, instead of offering a retry that fails the same way', async () => {
     const error = createApiError(404, { error: 'Template not found or unauthorized' });
     const container = await renderTemplates(vi.fn(async () => Promise.reject(error)));
 

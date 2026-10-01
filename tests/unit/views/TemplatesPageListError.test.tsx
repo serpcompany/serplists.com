@@ -1,15 +1,11 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistTemplate } from '@/types/checklist';
 
-// In Personal, My Templates merges the cached public catalog with the user's own list. When
-// the Personal list fails on its first load, the merged list still holds the user's public
-// templates from the catalog (cached after a visit to Runs, Import or the Template Library),
-// so a check on the merged list's length hid the error and silently dropped the private
-// templates.
+import { createTestQueryClient } from '../../fixtures/queryClient';
 
 vi.mock('@/lib/api', () => ({ api: {} }));
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -56,9 +52,7 @@ const failure = () => Promise.reject(new Error('HTTP 500'));
 const clients: QueryClient[] = [];
 
 async function renderMyTemplates(seedPersonalList: (client: QueryClient) => Promise<void>) {
-  // retryOnMount: false stands in for this page's own load having failed: a server render
-  // would otherwise report the errored query as loading again.
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, retryOnMount: false } } });
+  const client = createTestQueryClient();
   clients.push(client);
   client.setQueryData(['templates', 'catalog'], [myPublicTemplate]);
   await seedPersonalList(client);
@@ -72,7 +66,7 @@ async function renderMyTemplates(seedPersonalList: (client: QueryClient) => Prom
   );
 }
 
-describe('My Templates when the Personal list fails', () => {
+describe('My Templates when the Personal list fails, while the cached catalog still holds the user\'s public templates', () => {
   afterEach(() => {
     clients.splice(0).forEach((client) => client.clear());
   });
