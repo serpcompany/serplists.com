@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button, buttonVariants } from './ui/button';
 import { Link } from './navigation/Link';
+import { buildHomePath } from '@/lib/routes';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 type FallbackRender = (props: { error?: Error; reset: () => void }) => ReactNode;
@@ -117,7 +118,7 @@ export class ErrorBoundary extends Component<Props, State> {
                     Go back
                   </Button>
                   <Link
-                    href="/"
+                    href={buildHomePath()}
                     onClick={this.handleReset}
                     className={buttonVariants({ variant: 'ghost' })}
                   >

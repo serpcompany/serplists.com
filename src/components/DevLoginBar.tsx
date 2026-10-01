@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 import { usePathname } from 'next/navigation';
 
 import { useIsClient } from '@/hooks/useIsClient';
+import { moveOnAfterAnAccountChange } from '@/lib/navigation/moveOnAfterAnAccountChange';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
 
 function resolveOrigin(): string {
@@ -77,7 +78,7 @@ export function DevLoginBar(): JSX.Element | null {
       const result = await login(testUser.email, testUser.password);
       if (result.ok) {
         toast.success(`Logged in as ${testUser.name}`);
-        router.push(buildConsoleHomePath());
+        moveOnAfterAnAccountChange(() => router.push(buildConsoleHomePath()));
       } else {
         toast.error(result.error ?? `Login failed. If this dev password was changed locally, run ${DEV_TEST_USER_PASSWORD_RESET_COMMAND}.`);
       }
@@ -95,7 +96,7 @@ export function DevLoginBar(): JSX.Element | null {
         logout,
         onSignedOut: () => {
           toast.success('Logged out');
-          router.push('/');
+          router.push(buildHomePath());
         },
         onError: (message) => toast.error(message),
       });

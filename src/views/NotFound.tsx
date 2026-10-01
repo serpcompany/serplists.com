@@ -8,6 +8,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { useIsClient } from '@/hooks/useIsClient';
 
 import { Link } from '@/components/navigation/Link';
+import { buildHomePath } from '@/lib/routes';
 
 const NotFound = () => {
   const pathname = usePathname();
@@ -17,7 +18,7 @@ const NotFound = () => {
     <PageSection spacing="hero">
       <PageHero
         actions={
-          <Link href="/" className={buttonVariants()}>
+          <Link href={buildHomePath()} className={buttonVariants()}>
             Return to home
           </Link>
         }

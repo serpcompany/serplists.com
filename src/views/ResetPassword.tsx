@@ -15,6 +15,7 @@ import { readResetPasswordLink } from "@/lib/auth/resetPasswordLink";
 import { submitPasswordReset } from "@/lib/auth/passwordReset";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { replaceCurrentUrl } from "@/lib/navigation/replaceCurrentUrl";
+import { moveOnAfterAnAccountChange } from "@/lib/navigation/moveOnAfterAnAccountChange";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildForgotPasswordPath, buildLoginPath } from "@/lib/routes";
 
@@ -72,7 +73,7 @@ const ResetPassword = () => {
         toast.error(result.message);
       } else {
         toast.success("Password updated. Please sign in again.");
-        router.replace(buildLoginPath());
+        moveOnAfterAnAccountChange(() => router.replace(buildLoginPath()));
       }
     } finally {
       setIsSubmitting(false);

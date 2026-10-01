@@ -25,6 +25,7 @@ import {
   buildConsoleRunsPath,
   buildConsoleSettingsPath,
   buildConsoleTemplatesPath,
+  buildHomePath,
   buildPublicProfilePath,
 } from '@/lib/routes';
 
@@ -45,7 +46,7 @@ function AccountMenuContent({
       try {
         return await signOutAndLeave({
           logout,
-          onSignedOut: () => router.push('/'),
+          onSignedOut: () => router.push(buildHomePath()),
           onError: (message) => toast.error(message),
         });
       } finally {

@@ -21,6 +21,7 @@ import {
   getReturnPath,
   withReturnPath,
 } from "@/lib/auth/returnPath";
+import { moveOnAfterAnAccountChange } from "@/lib/navigation/moveOnAfterAnAccountChange";
 import { useAppRouter } from "@/lib/navigation/useAppRouter";
 import { buildLoginPath } from "@/lib/routes";
 import { USER_NAME_MAX_LENGTH } from "@/lib/schemas/userProfileSchema";
@@ -72,7 +73,9 @@ const Register = () => {
         if (requiresEmailVerification) {
           handOffLoginEmail(email);
         }
-        router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath }));
+        moveOnAfterAnAccountChange(() =>
+          router.replace(getPostRegisterDestination({ requiresEmailVerification, returnPath })),
+        );
       } else {
         toast.error(result.error ?? "Registration failed.");
       }
