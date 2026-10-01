@@ -38,7 +38,7 @@ describe('queryKeys', () => {
   it('keeps every Template history key under the prefix that saves refresh', () => {
     expect(queryKeys.templateHistoryFor('t1', 'u1', undefined)).toEqual(['templates', 'history', 't1', 'u1', 'personal']);
     expect(queryKeys.templateHistoryFor('t1', undefined, 'org-1')).toEqual(['templates', 'history', 't1', 'guest', 'org-1']);
-    expect(queryKeys.templateHistoryFor('t1').slice(0, 3)).toEqual([...queryKeys.templateHistory('t1')]);
+    expect(queryKeys.templateHistoryFor('t1').slice(0, 3)).toEqual([...queryKeys.everyTemplateHistory('t1')]);
     expect(queryKeys.runHistory('r1')).toEqual(['checklist-run-history', 'r1']);
   });
 

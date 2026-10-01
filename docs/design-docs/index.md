@@ -12,8 +12,8 @@ force), **historical** (kept for context; superseded), **draft** (proposal).
 | [Core beliefs](core-beliefs.md) | current | 2026-09-27 | Operating beliefs and the enforced rules every change follows |
 | [Personal and Organization contexts](personal-and-organization-contexts.md) | accepted | 2026-09-19 | Why ownership is Personal or Organization, and how console routes follow context |
 | [System overview](system-overview.md) | current | 2026-09-19 | Components, request flow, UI and API routes, data model, authorization |
-| [Data persistence](data-persistence.md) | current | 2026-09-19 | D1 tables, JSON columns, resource ownership, caching, import/export |
-| [Client data](client-data.md) | current | 2026-09-30 | How screens call the API and read its errors |
+| [Data persistence](data-persistence.md) | current | 2026-09-19 | D1 tables, JSON columns, resource ownership, import/export |
+| [Client data](client-data.md) | current | 2026-09-30 | How screens call the API, key and refresh what they cache, handle stale copies, and read API errors |
 | [Database operations](database-operations.md) | current | 2026-09-27 | Environments, migrations, seeds, release checklists, backups, R2 |
 | [D1 cost](d1-cost.md) | current | 2026-09-27 | How D1 bills, how to profile rows read and written, query rules, current hotspots |
 | [Authentication and accounts](authentication.md) | current | 2026-09-27 | Better Auth integration, auth contract, verification, troubleshooting |

@@ -83,4 +83,17 @@ describe('reloadQuery', () => {
     expect(queryClient.getQueryData(queryKey)).toEqual(['key-old', 'key-new']);
     unsubscribe();
   });
+
+  it("marks a query no page shows stale instead of refetching it with the last page's query function", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryFn = vi.fn().mockResolvedValue(['key-old']);
+    const { unsubscribe } = startFirstLoad(queryClient, queryFn);
+    await vi.waitFor(() => expect(queryClient.getQueryData(queryKey)).toEqual(['key-old']));
+    unsubscribe();
+
+    await reloadQuery(queryClient, queryKey);
+
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryState(queryKey)?.isInvalidated).toBe(true);
+  });
 });

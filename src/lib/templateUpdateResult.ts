@@ -1,10 +1,5 @@
 import { z } from "zod";
 
-// PUT /api/templates/:id answers with the version and slug it stored. The next save sends
-// that version as expected_version (never a local +1: some edits keep the version), and the
-// slug may carry a -<id8> suffix when the requested one was taken.
-// structureChanged and reconciledRuns say whether the checklist structure changed and how
-// many active private runs were reconciled (only then do the run lists change).
 export type TemplateUpdateResult = {
   version: number;
   slug?: string;

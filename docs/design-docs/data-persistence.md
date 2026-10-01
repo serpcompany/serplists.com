@@ -131,25 +131,8 @@ Main server handlers:
 
 ## Caching And Invalidations
 
-`src/contexts/TemplatesContext.tsx` uses TanStack React Query for Templates and Runs. Query keys include ownership context so Personal and Organization data do not bleed together. Context switching invalidates Template and Run queries.
-
-History queries (the run and Template Changelogs) take their keys from `src/lib/queryCache.ts`, which also holds the history refreshes; the list refreshes that call them after each save are in `src/contexts/templateListCache.ts`. Every save writes an audit event:
-
-- The run page refreshes the run Changelog once its save queue is idle after a save, not once per click (each refetch reads D1). Revalidating a run, and Share or Stop sharing on the runs list, refresh it too.
-- A Template Changelog key sits under `['templates']`, so every Template list invalidation (Share, visibility, archive, restore, a context switch) refreshes it. Saving a Template in the editor also refreshes every cached Changelog of that Template, whatever user or Organization loaded it. Archiving a Template marks its Changelog and detail entries stale without refetching them, since the template is gone (`markArchivedTemplateStale`).
-- Sharing a run (from the runs list or the run page) marks it public in every cached runs list as soon as the API returns, before the link is copied, then reloads the lists. A shared run cannot be revalidated, so its row stops offering Revalidate. A revalidate refused because the cached copy is stale (`409 edit_conflict` or `shared_run_conflict`, or a `404`) reloads the runs lists too; a `404 source_template_unavailable` means the run is still there but its template is not usable any more, so the reloaded row stops offering Revalidate. A `404` on Archive, Share or Stop sharing for a run, or on Archive or Start Run for a template, means it was archived elsewhere while the cached list still showed it: the Run or Template lists reload before the error shows (`refreshRunsAfterConflict`, `refreshTemplatesAfterConflict` in `src/contexts/templateListCache.ts`), and the cached public catalog drops the template instead of refetching its edge copy.
-
-Organization lists are fetched by the legacy-named `WorkspaceContext` and keyed by current User ID.
-
-Billing query keys are also user-scoped. A session change must not reuse another
-user's cached entitlement response, and the UI should show a neutral loading
-state until the current user's plan is known.
-
-Invites, Organization members and activity, Run Keys, and archive lists use the
-user-scoped keys from `src/lib/queryKeys.ts`. When the signed-in user changes (sign-out,
-or a sign-in as someone else in the same tab), `AuthProvider` removes every cached query
-that no mounted page reads, except the shared public catalog, so nothing the previous
-user loaded is shown to or refetched for the next one.
+The app caches API reads with TanStack Query. Its keys, and how each write refreshes them,
+are in [client data](client-data.md#cache-keys).
 
 ## Stable ids and run reconciliation
 
