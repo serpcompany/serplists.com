@@ -1,9 +1,5 @@
 name: CI
 
-# One pipeline: every check must pass before anything deploys.
-# Nothing deploys from here while the app moves to Next.js on Workers: the Pages deploy
-# (cloudflare-pages-deploy.yml) has no caller, and the Workers deploy comes with the launch
-# (docs/exec-plans/active/nextjs-migration.md, phase 4).
 on:
   pull_request:
     branches:
@@ -34,7 +30,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # Full history: sitemap lastmod dates are derived from git log.
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -67,9 +62,6 @@ jobs:
       - name: Local D1 fixture integration
         run: pnpm run test:local-d1
 
-      # The OpenNext build (next build, then the Worker bundle) that the browser tests serve.
-      # They run the production configuration (tests/e2e/run-smoke-lib.mjs E2E_SITE_ENV), which
-      # the build bakes into its headers, redirects and static pages.
       - name: Build
         env:
           SITE_ENV: production
@@ -78,7 +70,6 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      # The build above, in workerd (opennextjs-cloudflare preview), on a D1 the runner seeds.
       - name: Smoke tests
         if: github.base_ref != 'main'
         run: pnpm run test:smoke -- --skip-build

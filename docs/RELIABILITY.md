@@ -27,7 +27,9 @@ migrations, backups, and R2 storage are in
 
 Lefthook hooks install with `pnpm install` (the `prepare` script); run
 `pnpm exec lefthook install` if they are missing. The commit hooks read only the staged
-files, so they stay fast; the push hook runs the full gate. When a CI failure looks flaky,
+files, so they stay fast; the push hook runs the full gate. The CI Quality Gate checks out
+the full git history (`fetch-depth: 0`), since the build dates sitemap entries from
+`git log`. When a CI failure looks flaky,
 re-run once. If it fails again, treat it as real, and record genuinely flaky tests
 in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
 
