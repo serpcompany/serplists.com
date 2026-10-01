@@ -1,9 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 
-// The UI offers only the actions the API allows for the member's Organization role
-// (src/lib/organizationPermissions.ts mirrors functions/api/utils/team-access.ts).
-// The API is mocked so each role sees the same Organization, Template, and run.
-
 type Role = 'viewer' | 'runner' | 'editor';
 
 const sections = [
@@ -39,7 +35,6 @@ const organizationRun = {
   started_at: '2026-07-02T00:00:00.000Z',
 };
 
-// Every member sees the archive; restoring needs editor (Templates) or admin (runs).
 const archivedTemplate = { ...organizationTemplate, id: 'tpl-archived', title: 'Archived Playbook', deleted_at: '2026-07-03T00:00:00.000Z' };
 const archivedRun = { ...organizationRun, id: 'run-archived', title: 'Archived Run', deleted_at: '2026-07-03T00:00:00.000Z' };
 
@@ -48,7 +43,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 }
 
 async function mockOrganizationApi(page: Page, role: Role) {
-  const forbidden: string[] = [];
+  const rejectedWrites: string[] = [];
   await page.addInitScript(() => {
     window.localStorage.setItem('serplists.activeWorkspaceId', 'team-1');
   });
@@ -78,8 +73,7 @@ async function mockOrganizationApi(page: Page, role: Role) {
       return;
     }
     if (method !== 'GET') {
-      // Every write a viewer could trigger would be rejected by the real API.
-      forbidden.push(`${method} ${path}`);
+      rejectedWrites.push(`${method} ${path}`);
       await fulfillJson(route, { error: 'Forbidden' }, 403);
       return;
     }
@@ -110,7 +104,7 @@ async function mockOrganizationApi(page: Page, role: Role) {
     await route.continue();
   });
 
-  return { forbidden };
+  return { rejectedWrites };
 }
 
 test('an Organization viewer sees no actions the API would reject', async ({ page }) => {
@@ -146,7 +140,7 @@ test('an Organization viewer sees no actions the API would reject', async ({ pag
   await expect(page.getByText('Archived Run', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Restore' })).toHaveCount(0);
 
-  expect(api.forbidden).toEqual([]);
+  expect(api.rejectedWrites).toEqual([]);
 });
 
 test('an Organization runner can run but not edit or delete', async ({ page }) => {
@@ -167,8 +161,6 @@ test('an Organization runner can run but not edit or delete', async ({ page }) =
   await expect(page.getByText('View only')).toHaveCount(0);
 });
 
-// An edit link reaches the editor with no Edit button on the way (a teammate's link, a
-// bookmark from before a demotion); the API would refuse every save from it.
 test('an Organization viewer opening an edit link gets a read-only notice, not the editor', async ({ page }) => {
   const api = await mockOrganizationApi(page, 'viewer');
 
@@ -181,7 +173,7 @@ test('an Organization viewer opening an edit link gets a read-only notice, not t
   );
   await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-  expect(api.forbidden).toEqual([]);
+  expect(api.rejectedWrites).toEqual([]);
 });
 
 test('an Organization runner opening New Template gets a read-only notice', async ({ page }) => {
@@ -192,7 +184,7 @@ test('an Organization runner opening New Template gets a read-only notice', asyn
   await expect(page.getByText("You can't create templates here")).toBeVisible();
   await expect(page.getByPlaceholder('Enter template name...')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
-  expect(api.forbidden).toEqual([]);
+  expect(api.rejectedWrites).toEqual([]);
 });
 
 test('an Organization editor can restore archived Templates but not runs', async ({ page }) => {

@@ -1,10 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { fillSignInForm } from './support/sign-in';
 
-// Markdown task text is wrapped in `prose prose-sm` (src/components/shared/MarkdownBlock.tsx).
-// Without the typography plugin, Preflight leaves lists without markers, headings at body
-// size and links indistinguishable from text.
-
 const MARKDOWN = [
   '# Launch steps',
   '',
@@ -37,7 +33,7 @@ async function openEditorPreview(page: Page) {
   return preview;
 }
 
-test('markdown preview shows list markers, heading sizes and link styling', async ({ page }) => {
+test('markdown preview shows list markers, heading sizes, link styling and single-newline line breaks', async ({ page }) => {
   const preview = await openEditorPreview(page);
 
   const styles = await preview.evaluate((root) => {
@@ -61,10 +57,8 @@ test('markdown preview shows list markers, heading sizes and link styling', asyn
   expect(styles.olMarker).toBe('decimal');
   expect(styles.headingSize).toBeGreaterThan(styles.paragraphSize);
   expect(styles.linkDecoration).toContain('underline');
-  // No blank line between list items from the newline text react-markdown emits.
   expect(styles.gapBetweenItems).toBeLessThan(styles.lineHeight);
 
-  // A single newline inside a paragraph still breaks the line.
   const paragraphLines = await preview.locator('p', { hasText: 'line two' }).evaluate((node) => {
     const lineHeight = parseFloat(getComputedStyle(node).lineHeight);
     return Math.round(node.getBoundingClientRect().height / lineHeight);

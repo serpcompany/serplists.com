@@ -4,8 +4,9 @@ import { apiRequest } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { fillSignInForm } from './support/sign-in';
 
-// Deleting a Template or Run archives it. The archive page, opened from the console
-// navigation, lists archived items and restores them (src/views/Archive.tsx).
+const LATE_READ_WINDOW_MS = 500;
+const DELAYED_READ_MS = 1_500;
+const CACHED_ANSWER_WINDOW_MS = 700;
 
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
@@ -14,9 +15,36 @@ async function loginAsAdmin(page: Page) {
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
 }
 
-// One archive row: each archived item is a list item of its kind's list.
 function archiveRow(page: Page, title: string) {
   return page.getByRole('listitem').filter({ hasText: title });
+}
+
+async function restoreTemplateElsewhere(page: Page, templateId: string) {
+  expect((await apiRequest(page, `/templates/${templateId}/restore`, { method: 'POST' })).status).toBe(200);
+}
+
+async function loadArchiveListsIntoCache(page: Page) {
+  await page.goto('/dashboard/archive/');
+  await expect(page.getByRole('heading', { name: 'Archived runs' })).toBeVisible();
+  await expect(page.getByText(/^\d+ archived$/)).toBeVisible();
+}
+
+async function expectDeleteDialogThatKeepsItRestorable(page: Page, kind: 'run' | 'template') {
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog.getByRole('heading', { name: `Delete ${kind}` })).toBeVisible();
+  await expect(dialog).toContainText(`Are you sure you want to delete this ${kind}?`);
+  await expect(dialog).not.toContainText('cannot be undone');
+  return dialog;
+}
+
+async function delayTemplateReads(page: Page, templateId: string) {
+  await page.route(
+    (url) => url.pathname.endsWith(`/api/templates/${templateId}`),
+    async (route) => {
+      if (route.request().method() === 'GET') await new Promise((resolve) => setTimeout(resolve, DELAYED_READ_MS));
+      await route.fallback();
+    },
+  );
 }
 
 test('an archived template and run can be restored from the archive page', async ({ page }) => {
@@ -60,8 +88,6 @@ test('an archived template and run can be restored from the archive page', async
   await expect(page.getByText(runTitle)).toBeVisible({ timeout: 15_000 });
 });
 
-// Another tab or a teammate restored the item while this page still listed it. Restore here
-// failed with "Template is not archived" on every click and the row stayed until a reload.
 test('an item restored elsewhere leaves the archive when Restore finds it already restored', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive restored elsewhere ${Date.now()}`;
@@ -77,8 +103,7 @@ test('an item restored elsewhere leaves the archive when Restore finds it alread
   const row = archiveRow(page, title);
   await expect(row).toHaveCount(1, { timeout: 15_000 });
 
-  // Restored elsewhere. The archive list is fresh for a minute, so this page still shows it.
-  expect((await apiRequest(page, `/templates/${templateId}/restore`, { method: 'POST' })).status).toBe(200);
+  await restoreTemplateElsewhere(page, templateId);
 
   const refused = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}/restore`) && response.request().method() === 'POST',
@@ -103,22 +128,13 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   });
   const runId = run.body?.id as string;
 
-  // Load the archive first so its lists are cached, then delete from the runs page.
-  await page.goto('/dashboard/archive/');
-  await expect(page.getByRole('heading', { name: 'Archived runs' })).toBeVisible();
-  // The count replaces "Loading" once both archive lists have loaded.
-  await expect(page.getByText(/^\d+ archived$/)).toBeVisible();
+  await loadArchiveListsIntoCache(page);
   await page.getByRole('link', { name: 'Runs', exact: true }).first().click();
   const runRow = page.locator('div').filter({ hasText: runTitle }).filter({ has: page.getByRole('button', { name: 'Run options' }) }).last();
   await expect(runRow).toBeVisible({ timeout: 15_000 });
   await runRow.getByRole('button', { name: 'Run options' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
-  // Users see a delete; the run stays restorable from the archive, so the dialog never says
-  // "cannot be undone".
-  const dialog = page.getByRole('alertdialog');
-  await expect(dialog.getByRole('heading', { name: 'Delete run' })).toBeVisible();
-  await expect(dialog).toContainText('Are you sure you want to delete this run?');
-  await expect(dialog).not.toContainText('cannot be undone');
+  const dialog = await expectDeleteDialogThatKeepsItRestorable(page, 'run');
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/checklists/${runId}`) && response.request().method() === 'DELETE',
   );
@@ -130,7 +146,6 @@ test('a deleted run appears in the archive without a reload', async ({ page }) =
   await expect(archiveRow(page, runTitle)).toHaveCount(1, { timeout: 15_000 });
 });
 
-// My Templates said a deleted template "cannot be undone", though it only moves to the archive.
 test('a template deleted from My Templates never says it cannot be undone and restores from the archive', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive from list template ${Date.now()}`;
@@ -149,10 +164,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
   await row.hover();
   await row.getByRole('button', { name: 'Delete' }).click();
 
-  const dialog = page.getByRole('alertdialog');
-  await expect(dialog.getByRole('heading', { name: 'Delete template' })).toBeVisible();
-  await expect(dialog).toContainText('Are you sure you want to delete this template?');
-  await expect(dialog).not.toContainText('cannot be undone');
+  const dialog = await expectDeleteDialogThatKeepsItRestorable(page, 'template');
   const deleted = page.waitForResponse(
     (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === 'DELETE',
   );
@@ -170,10 +182,7 @@ test('a template deleted from My Templates never says it cannot be undone and re
   expect((await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' })).status).toBe(200);
 });
 
-// Deleting from the template's own page refetched it while the page was still open: a
-// GET that could only 404, whose "gone" answer stayed cached, so the restored template
-// first opened as "Template Not Found".
-test('a template deleted from its page opens normally once restored', async ({ page }) => {
+test('a template deleted from its page is not read again and opens normally once restored', async ({ page }) => {
   await loginAsAdmin(page);
   const title = `Archive detail template ${Date.now()}`;
   const sections = [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }];
@@ -200,7 +209,7 @@ test('a template deleted from its page opens normally once restored', async ({ p
   await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
   expect((await deleted).status()).toBe(200);
   await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(LATE_READ_WINDOW_MS);
   expect(readsAfterArchive).toEqual([]);
 
   await page.getByRole('link', { name: 'Archive', exact: true }).first().click();
@@ -209,17 +218,9 @@ test('a template deleted from its page opens normally once restored', async ({ p
   await row.getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByText('Template restored')).toBeVisible();
 
-  // Hold the next read so a cached "gone" answer would show while it runs.
-  await page.route(
-    (url) => url.pathname.endsWith(`/api/templates/${templateId}`),
-    async (route) => {
-      if (route.request().method() === 'GET') await new Promise((resolve) => setTimeout(resolve, 1_500));
-      await route.fallback();
-    },
-  );
-  // In-app navigation keeps the query cache.
+  await delayTemplateReads(page, templateId);
   await navigateInApp(page, `/dashboard/templates/${templateId}/`);
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(CACHED_ANSWER_WINDOW_MS);
   await expect(page.getByText('Template Not Found')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: title }).first()).toBeVisible({ timeout: 15_000 });
 

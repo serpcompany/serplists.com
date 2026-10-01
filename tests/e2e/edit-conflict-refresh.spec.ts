@@ -3,15 +3,19 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiRequest } from './support/api-requests';
 import { fillSignInForm } from './support/sign-in';
 
-// The visibility switch sends the version of the template the page shows. When someone else
-// saved the template meanwhile, the server answers 409 edit_conflict. The page reloads the
-// template, so the next click succeeds without a page reload (docs/product-specs/features.md).
-
 async function loginAsAdmin(page: Page) {
   await page.goto('/login/');
   await fillSignInForm(page, 'admin');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+}
+
+async function renameTemplateElsewhere(page: Page, templateId: string, title: string) {
+  const renamed = await apiRequest(page, `/templates/${templateId}`, {
+    method: 'PUT',
+    body: { title, expected_version: 1 },
+  });
+  expect(renamed.status).toBe(200);
 }
 
 test('the visibility switch recovers from an edit conflict without a reload', async ({ page }) => {
@@ -31,12 +35,7 @@ test('the visibility switch recovers from an edit conflict without a reload', as
   const visibility = page.getByRole('switch');
   await expect(visibility).toBeEnabled({ timeout: 15_000 });
 
-  // Another tab or member saves the template: its version moves on.
-  const renamed = await apiRequest(page, `/templates/${templateId}`, {
-    method: 'PUT',
-    body: { title: `${title} renamed`, expected_version: 1 },
-  });
-  expect(renamed.status).toBe(200);
+  await renameTemplateElsewhere(page, templateId, `${title} renamed`);
 
   await visibility.click();
   await expect(page.getByText('This template changed elsewhere. It was reloaded; try again.')).toBeVisible();
