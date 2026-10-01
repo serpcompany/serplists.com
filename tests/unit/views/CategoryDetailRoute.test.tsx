@@ -10,25 +10,18 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Every category page is the same route, so an unkeyed page stayed mounted when a Related
-// Categories link (or Back) moved to another category, and its search text and sort kept
-// filtering the new category. The category route gives each category its own page, keyed by
-// the category, while another spelling of the same category keeps it.
-
-type PageRender = { param: string | undefined; state: string | undefined };
+type PageRender = { param: string | undefined; slugAtMount: string | undefined };
 
 const probe = vi.hoisted(() => ({ mounts: 0, renders: [] as PageRender[] }));
 
-// Stands in for the page: its state is set once per mounted instance, like the page's
-// search box and sort, and it renders nothing.
 vi.mock('@/views/CategoryDetail', async () => {
   const { useEffect, useState } = await import('react');
   const { useParams } = await import('next/navigation');
   return {
-    default: function CategoryDetailProbe() {
+    default: function CategoryPageWithStateSetOnMountLikeItsSearchAndSort() {
       const { categorySlug } = useParams<{ categorySlug: string }>();
-      const [mountedFor] = useState(categorySlug);
-      probe.renders.push({ param: categorySlug, state: mountedFor });
+      const [slugAtMount] = useState(categorySlug);
+      probe.renders.push({ param: categorySlug, slugAtMount });
       useEffect(() => {
         probe.mounts += 1;
       }, []);
@@ -53,7 +46,6 @@ afterEach(() => {
   root = null;
 });
 
-// The route component stays mounted while the params change, so its own key decides.
 const mountCategoryRoute = (initialPath: string) => {
   navigation.reset(initialPath, { routes: ['/categories/[categorySlug]'] });
   root = createRoot(createFakeContainer() as unknown as HTMLElement);
@@ -74,19 +66,19 @@ describe('category page route', () => {
 
   it('starts a fresh page, with no search or sort, for each category', async () => {
     mountCategoryRoute('/categories/business');
-    expect(lastRender()).toEqual({ param: 'business', state: 'business' });
+    expect(lastRender()).toEqual({ param: 'business', slugAtMount: 'business' });
 
     await act(async () => {
       navigation.router.push('/categories/hr');
     });
-    expect(lastRender()).toEqual({ param: 'hr', state: 'hr' });
+    expect(lastRender()).toEqual({ param: 'hr', slugAtMount: 'hr' });
     expect(probe.mounts).toBe(2);
 
     await act(async () => {
       navigation.router.back();
       await navigation.settle();
     });
-    expect(lastRender()).toEqual({ param: 'business', state: 'business' });
+    expect(lastRender()).toEqual({ param: 'business', slugAtMount: 'business' });
   });
 
   it('keeps the page for another spelling of the same category', async () => {
@@ -95,7 +87,7 @@ describe('category page route', () => {
     await act(async () => {
       navigation.router.push('/categories/HR');
     });
-    expect(lastRender()).toEqual({ param: 'HR', state: 'hr' });
+    expect(lastRender()).toEqual({ param: 'HR', slugAtMount: 'hr' });
     expect(probe.mounts).toBe(1);
   });
 });

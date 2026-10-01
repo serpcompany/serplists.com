@@ -552,10 +552,13 @@ the first bytes; for the crawlers Next.js lists as HTML-limited, it waits and pu
 A path no route matches answers 404 with `src/app/not-found.tsx`, titled "Page not found",
 with `noindex, follow` and no canonical URL. An unknown feature slug shows the same page.
 Next.js prerenders that page once, for `/_not-found/`, and serves the same HTML for every
-missing path, so the HTML and the browser's first render use the public shell. Once the
-session check answers, `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives a signed-in
-user on a missing console path the console shell; a signed-out visitor, or a failed check,
-keeps the public one.
+missing path, so the HTML and the browser's first render use the public shell, and the
+server's HTML never names the address: the page names it only once it runs in the browser.
+Once the session check answers, `NotFoundLayout` (`src/components/NotFoundLayout.tsx`) gives
+a signed-in user on a missing console path the console shell; a signed-out visitor, or a
+failed check, keeps the public one. The page logs nothing: a missing address is not an error
+in the app, and a `console.error` would count as an issue in Next.js's dev overlay and read as
+a failure to an agent watching the console.
 
 A template or profile that does not exist answers with its own not-found message, and the
 server's lookup gives it a not-found title and `noindex, nofollow`. Only a settled answer

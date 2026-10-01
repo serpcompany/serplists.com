@@ -15,7 +15,6 @@ import {
 import {
   buildCanonicalPublicTemplatePath,
   buildPublicCategoryPath,
-  buildPublicTemplatesPath,
   hasCanonicalPublicTemplatePath,
 } from '@/lib/routes';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -35,8 +34,6 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: null }),
 }));
 
-// A category page adds a robots tag to the server's metadata once it knows it has nothing to
-// index (NoIndexMeta); React hoists it into <head>.
 const renderCategoryPage = (location: string) => {
   navigation.reset(location, { routes: ['/categories/[categorySlug]'] });
   const markup = renderToStaticMarkup(<CategoryDetail />);
@@ -96,29 +93,24 @@ describe('ChecklistLibrary route behavior', () => {
     expect(markup).not.toContain('href="/templates?category=launch"');
     expect(markup).not.toContain('Template library');
     expect(markup).not.toContain('Browse all templates');
-    // The route's own title and canonical URL, rendered on the server.
+  });
+
+  it('gives /templates its own title and canonical URL in the metadata the server renders', () => {
     expect(libraryMetadata.title).toEqual({ absolute: 'Template Library | SERP Lists' });
     expect(libraryMetadata.alternates?.canonical).toBe('https://serplists.com/templates/');
   });
 
-  it('navigates to the owner/template path when the owner username is known', () => {
-    const mockNavigate = vi.fn();
+  it('links a template to its owner/template path when the owner username is known', () => {
     const template: ChecklistTemplate = {
       ...baseTemplate,
       slug: 'ultimate-camping-checklist',
       ownerProfile: { username: 'alice' },
     };
 
-    const path = buildCanonicalPublicTemplatePath(template);
-    mockNavigate(path ?? buildPublicTemplatesPath());
-
-    expect(mockNavigate).toHaveBeenCalledWith(
-      '/profile/alice/ultimate-camping-checklist/',
-    );
+    expect(buildCanonicalPublicTemplatePath(template)).toBe('/profile/alice/ultimate-camping-checklist/');
   });
 
   it('uses the official owner slug for repo-backed public templates', () => {
-    const mockNavigate = vi.fn();
     const template: ChecklistTemplate = {
       ...baseTemplate,
       id: 'repo:starter-template',
@@ -126,12 +118,7 @@ describe('ChecklistLibrary route behavior', () => {
       userId: REPO_TEMPLATE_USER_ID,
     };
 
-    const path = buildCanonicalPublicTemplatePath(template);
-    mockNavigate(path ?? buildPublicTemplatesPath());
-
-    expect(mockNavigate).toHaveBeenCalledWith(
-      `/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template/`,
-    );
+    expect(buildCanonicalPublicTemplatePath(template)).toBe(`/profile/${REPO_TEMPLATE_OWNER_SLUG}/starter-template/`);
   });
 
   it('gives a template whose owner has no username no public URL, so discovery leaves it out', () => {
@@ -204,8 +191,6 @@ describe('ChecklistLibrary route behavior', () => {
       allCategories: ['Business & Operations', 'Launch'],
     });
 
-    // The category's title and canonical URL come from its server metadata
-    // (tests/unit/server/pageMeta/categoryPage.test.ts).
     const { markup } = renderCategoryPage('/categories/business-operations');
 
     expect(markup).toContain('All Categories');
@@ -234,7 +219,6 @@ describe('ChecklistLibrary route behavior', () => {
     const { markup, robots } = renderCategoryPage('/categories/not-a-real-category');
 
     expect(markup).toContain('That page does not exist');
-    // The server's HTML never names the address (src/views/NotFound.tsx).
     expect(markup).toContain('This route could not be found.');
     expect(markup).not.toContain('0 templates');
     expect(robots).toMatch(/name="robots" content="noindex/);
@@ -274,15 +258,13 @@ describe('Discovery pages while the catalog loads', () => {
     );
   };
 
-  it('shows a loading category page, not the 404 page, for a database-only category', () => {
+  it('shows a loading category page, not the 404 page, for a database-only category, with no noindex a crawler could snapshot', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
 
     const { markup, robots } = renderCategoryPage('/categories/moving');
 
     expect(markup).not.toContain('That page does not exist');
     expect(markup).toContain('aria-busy="true"');
-    // The category is in the sitemap: a crawler that snapshots the loading page must not
-    // see noindex.
     expect(robots).not.toContain('noindex');
   });
 
@@ -323,9 +305,7 @@ describe('Discovery pages while the catalog loads', () => {
     expect(registry).toContain('aria-busy="true"');
   });
 
-  // Only the browser has the entry's state, so these mount the page as the browser does; the
-  // library is the page at /templates only.
-  const mountLibrary = async (location: string, state: unknown = null) => {
+  const mountLibraryWithItsHistoryEntryState = async (location: string, state: unknown = null) => {
     navigation.reset(location, { state });
     const restoreGlobals = installFakeDomGlobals(navigation.window);
     const container = createFakeContainer();
@@ -339,21 +319,29 @@ describe('Discovery pages while the catalog loads', () => {
     }
   };
 
-  it('stays on the library when its own edit leaves only a category in the URL', async () => {
+  it('stays on the library when its own edit, such as clearing the search, leaves only a category in the URL', async () => {
     mockUseTemplateLibrary.mockReturnValue(
       libraryState({ templates: [bundledTemplate, movingTemplate] }),
     );
 
-    // Clearing the search on ?category=moving&search=box writes ?category=moving, marking
-    // the entry as written here.
-    const selfWritten = await mountLibrary('/templates/?category=moving', LIBRARY_FILTER_UPDATE_STATE);
-    expect(selfWritten).toContain('Template Library');
-    expect(selfWritten).toContain('Moving Day');
-    expect(selfWritten).not.toContain('Camping Checklist');
-    expect(navigation.url()).toBe('/templates/?category=moving');
+    const leftByItsOwnSearchClear = await mountLibraryWithItsHistoryEntryState(
+      '/templates/?category=moving',
+      LIBRARY_FILTER_UPDATE_STATE,
+    );
 
-    // A link from elsewhere still lands on the category page.
-    const incoming = await mountLibrary('/templates/?category=moving');
+    expect(leftByItsOwnSearchClear).toContain('Template Library');
+    expect(leftByItsOwnSearchClear).toContain('Moving Day');
+    expect(leftByItsOwnSearchClear).not.toContain('Camping Checklist');
+    expect(navigation.url()).toBe('/templates/?category=moving');
+  });
+
+  it('sends a link from elsewhere with only a category to the category page', async () => {
+    mockUseTemplateLibrary.mockReturnValue(
+      libraryState({ templates: [bundledTemplate, movingTemplate] }),
+    );
+
+    const incoming = await mountLibraryWithItsHistoryEntryState('/templates/?category=moving');
+
     expect(incoming).not.toContain('Template Library');
     expect(navigation.url()).toBe('/categories/moving/');
   });

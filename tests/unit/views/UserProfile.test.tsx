@@ -9,10 +9,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// The profile's title and description come from the server
-// (tests/unit/server/pageMeta/profilePage.test.ts); the page adds a noindex tag only once it
-// learns in the browser that the profile does not exist.
-
 const renderProfile = (result: LoadUserProfileResult | null) => {
   navigation.reset('/profile/alice', { params: { username: 'alice' } });
   const html = renderToStaticMarkup(<UserProfileContent result={result} onRetry={vi.fn()} />);

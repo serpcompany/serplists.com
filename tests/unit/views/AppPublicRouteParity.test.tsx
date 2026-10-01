@@ -8,7 +8,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 vi.mock('server-only', () => ({}));
-// Server-only parts of the dynamic pages: their JSON-LD and metadata lookups.
 vi.mock('@/components/seo/PageJsonLd', () => ({ PageJsonLd: () => null }));
 vi.mock('@/server/pageMeta/categoryPage', () => ({ loadCategoryPageSeo: async () => null }));
 
@@ -130,9 +129,7 @@ const discoveryTemplate: ChecklistTemplate = {
   ownerProfile: { full_name: 'Design Ops', username: 'designops' },
 };
 
-// A public page as the App Router renders it: the site layout (src/app/(site)/layout.tsx)
-// around the route's page.
-const renderAppAt = (pathname: string, page: React.ReactNode, params?: Record<string, string>): string => {
+const renderInsideTheSiteLayoutAt = (pathname: string, page: React.ReactNode, params?: Record<string, string>): string => {
   mockUseTemplateLibrary.mockReturnValue({
     templates: [discoveryTemplate],
     loading: false,
@@ -146,7 +143,7 @@ const appFile = (route: string) => new URL(`../../../src/app/${route}`, import.m
 
 describe('App public route parity', () => {
   it('renders / inside the public marketing shell with the product workflow homepage', async () => {
-    const html = renderAppAt('/', <HomePage />);
+    const html = renderInsideTheSiteLayoutAt('/', <HomePage />);
 
     expect(html).toContain('Build the checklist once. Run it every time.');
     expect(html).toContain('Template Library');
@@ -159,14 +156,12 @@ describe('App public route parity', () => {
     expect(html).not.toContain('Checklist Product Prototype');
   });
 
-  it('treats the removed /docs prototype as a missing route', async () => {
-    // No route file: Next.js renders src/app/not-found.tsx, which brings the site layout.
+  it('treats the removed /docs prototype as a missing route, which Next.js renders with the not-found page and its site layout', async () => {
     expect(existsSync(appFile('(site)/docs'))).toBe(false);
     navigation.reset('/docs');
     const html = renderToStaticMarkup(<NotFoundPage />);
 
     expect(html).toContain('That page does not exist');
-    // The server's HTML never names the address (src/views/NotFound.tsx).
     expect(html).toContain('This route could not be found.');
     expect(html).toContain('data-app-shell="public"');
     expect(html).not.toContain('Checklist &amp; Template Experience');
@@ -175,7 +170,7 @@ describe('App public route parity', () => {
   });
 
   it('renders /templates inside the shared public shell with detail-card href semantics', async () => {
-    const html = renderAppAt('/templates/', <TemplatesPage />);
+    const html = renderInsideTheSiteLayoutAt('/templates/', <TemplatesPage />);
 
     expect(html).toContain('Template Library');
     expect(html).toContain('Browse by Category');
@@ -191,7 +186,7 @@ describe('App public route parity', () => {
   });
 
   it('renders /categories inside the shared public shell with one global header and footer', async () => {
-    const html = renderAppAt('/categories/', <CategoriesPage />);
+    const html = renderInsideTheSiteLayoutAt('/categories/', <CategoriesPage />);
 
     expect(html).toContain('Browse Categories');
     expect(html).toContain('Popular Categories');
@@ -202,7 +197,7 @@ describe('App public route parity', () => {
   });
 
   it('renders /categories/business inside the shared public shell with one global header and footer', async () => {
-    const html = renderAppAt(
+    const html = renderInsideTheSiteLayoutAt(
       '/categories/business/',
       <CategoryPage params={Promise.resolve({ categorySlug: 'business' })} />,
       { categorySlug: 'business' },
@@ -216,9 +211,7 @@ describe('App public route parity', () => {
     expect((html.match(/<header/g) ?? []).length).toBe(1);
   });
 
-  it('keeps a private Run at its one URL in the authenticated dashboard layout and shared runs public', () => {
-    // src/app/(app) renders its pages behind RequireAuth in the console Layout; src/app/share
-    // sits outside both layouts. /run/<id> only redirects to /dashboard/runs/<id>/ (next.config.ts).
+  it('keeps a private Run at its one URL behind RequireAuth in the console layout, and shared runs public outside both layouts', () => {
     const appLayout = readFileSync(appFile('(app)/layout.tsx'), 'utf8');
     expect(appLayout).toMatch(/<RequireAuth>\s*<Layout>\{children\}<\/Layout>\s*<\/RequireAuth>/);
 

@@ -29,9 +29,7 @@ const renderCategoryPage = (location: string) => {
   return renderToStaticMarkup(<CategoryDetail />);
 };
 
-// The robots tag the page adds to the server's metadata once it knows the category is
-// missing or empty (React hoists it into <head>).
-const robotsIn = (markup: string) => markup.match(/<meta name="robots" content="([^"]*)"/)?.[1];
+const robotsTagThePageAdds = (markup: string) => markup.match(/<meta name="robots" content="([^"]*)"/)?.[1];
 
 const template = (id: string, title: string, categories: string[]): ChecklistTemplate => ({
   categories,
@@ -54,9 +52,7 @@ const libraryState = (templates: ChecklistTemplate[]) => ({
   templates,
 });
 
-// Object.prototype members used to count as built-in categories, so the page
-// rendered an undefined icon and the whole app fell into its error boundary.
-const PROTOTYPE_KEYS = [
+const OBJECT_PROTOTYPE_KEYS = [
   'constructor',
   '__proto__',
   'toString',
@@ -74,13 +70,13 @@ describe('CategoryDetail with slugs that are Object.prototype keys', () => {
     mockUseTemplateLibrary.mockReset();
   });
 
-  it.each(PROTOTYPE_KEYS)('renders the 404 page for /categories/%s', (slug) => {
+  it.each(OBJECT_PROTOTYPE_KEYS)('renders the 404 page for /categories/%s, never a built-in category with an undefined icon', (slug) => {
     mockUseTemplateLibrary.mockReturnValue(libraryState([template('camping', 'Camping', ['Outdoor'])]));
 
     const markup = renderCategoryPage(`/categories/${slug}`);
 
     expect(markup).toContain('That page does not exist');
-    expect(robotsIn(markup)).toBe('noindex, follow');
+    expect(robotsTagThePageAdds(markup)).toBe('noindex, follow');
   });
 
   it('renders a real category named Constructor with a generic icon', () => {
@@ -108,7 +104,7 @@ describe('CategoryDetail with slugs that are Object.prototype keys', () => {
 });
 
 describe('resolveCategoryPresentation', () => {
-  it.each(PROTOTYPE_KEYS)('treats %s as unknown unless a template uses it', (slug) => {
+  it.each(OBJECT_PROTOTYPE_KEYS)('treats %s as unknown unless a template uses it', (slug) => {
     expect(resolveCategoryPresentation(slug, undefined)).toBeNull();
 
     const presentation = resolveCategoryPresentation(slug, { name: slug });
@@ -157,10 +153,9 @@ describe('CategoryDetail for categories in other scripts', () => {
   it('sends an old ASCII-only slug to the category instead of the 404 page', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState([template('guide', 'Guide Checklist', ['Café Culture'])]));
 
-    // The page moves to the current slug in an effect, which static rendering does not run.
-    const markup = renderCategoryPage('/categories/caf-culture');
+    const markupBeforeTheEffectMovesToTheCurrentSlug = renderCategoryPage('/categories/caf-culture');
 
-    expect(markup).not.toContain('That page does not exist');
+    expect(markupBeforeTheEffectMovesToTheCurrentSlug).not.toContain('That page does not exist');
     expect(findCategoryByLegacySlug([{ count: 1, name: 'Café Culture', slug: 'cafe-culture' }], 'caf-culture')?.slug).toBe(
       'cafe-culture',
     );
@@ -195,12 +190,10 @@ describe('CategoryDetail empty categories', () => {
     expect(markup).toContain('Engineering &amp; Development');
     expect(markup).toContain('No public templates in this category yet.');
     expect(markup).not.toContain('matching your search');
-    expect(robotsIn(markup)).toBe('noindex, follow');
+    expect(robotsTagThePageAdds(markup)).toBe('noindex, follow');
   });
 
-  it('does not mark a category empty or noindex while the catalog is loading', () => {
-    // Bundled Templates are always present, so a Template list is no sign that the catalog
-    // API answered; the hook's `loading` follows the catalog request itself.
+  it('does not mark a category empty or noindex while the catalog is loading, though the bundled Templates are listed', () => {
     mockUseTemplateLibrary.mockReturnValue({
       templates: [campingTemplate],
       loading: true,
@@ -213,7 +206,7 @@ describe('CategoryDetail empty categories', () => {
     expect(markup).not.toContain('No public templates in this category yet.');
     expect(markup).not.toContain('matching your search');
     expect(markup).not.toContain('0 templates');
-    expect(robotsIn(markup)).toBeUndefined();
+    expect(robotsTagThePageAdds(markup)).toBeUndefined();
   });
 
   it('waits for the catalog before treating an unregistered category as missing', () => {
@@ -241,6 +234,6 @@ describe('CategoryDetail empty categories', () => {
 
     expect(markup).toContain('Code Review Checklist');
     expect(markup).toMatch(/\b1 template\b/);
-    expect(robotsIn(markup)).toBeUndefined();
+    expect(robotsTagThePageAdds(markup)).toBeUndefined();
   });
 });

@@ -12,18 +12,12 @@ import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-// The route files read their params through src/server, which only the server may import.
 vi.mock('server-only', () => ({}));
-
-// A 404 must tell crawlers itself that it is not a page to index (a soft 404 otherwise):
-// unknown paths render src/app/not-found.tsx, and a feature page with an unknown slug shows
-// the same page with the same head.
 
 vi.mock('@/components/Layout', () => ({
   Layout: ({ children }: { children: React.ReactNode }) => <div data-layout="">{children}</div>,
 }));
 
-// The 404 picks its shell once the session check answers (tests/unit/components/NotFoundLayout.test.tsx).
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ sessionStatus: 'loading' }),
 }));
@@ -38,7 +32,7 @@ afterEach(() => {
 
 const params = (featureSlug: string) => ({ params: Promise.resolve({ featureSlug }) });
 
-describe('NotFound page head', () => {
+describe('NotFound page head, which tells crawlers itself not to index a missing page', () => {
   it('tells crawlers not to index an unknown route', () => {
     navigation.reset('/definitely-missing');
     const html = renderToStaticMarkup(<NotFoundPage />);
@@ -48,10 +42,7 @@ describe('NotFound page head', () => {
     expect(notFoundMetadata.title).toEqual({ absolute: `Page not found | ${APP_BRAND_NAME}` });
   });
 
-  // Next.js prerenders the 404 once, for its own /_not-found/ path, and serves that HTML for
-  // every missing address: an address in it would be the wrong one, and the browser's first
-  // render (with the real address) would not match it.
-  it('names no address in the server HTML', () => {
+  it('names no address in the server HTML, which Next.js prerenders once and serves for every missing address', () => {
     navigation.reset('/definitely-missing');
     const html = renderToStaticMarkup(<NotFoundPage />);
 
@@ -76,10 +67,7 @@ describe('NotFound page head', () => {
     }
   });
 
-  // A missing address is not an error in the app. The page logged one with console.error,
-  // which Next.js's dev overlay counts as an issue and agents reading the console take for a
-  // failure.
-  it('logs no error for a missing address', async () => {
+  it('logs no error for a missing address, which is not an error in the app', async () => {
     const restoreGlobals = installFakeDomGlobals(navigation.window);
     try {
       navigation.reset('/definitely-missing');

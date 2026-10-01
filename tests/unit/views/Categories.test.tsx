@@ -6,16 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Categories from '@/views/Categories';
 import { REPO_TEMPLATE_USER_ID } from '@/lib/repoTemplateCatalog';
 import type { ChecklistTemplate } from '@/types/checklist';
-import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals } from '../../fixtures/fakeDom';
+import { click, createFakeContainer, FakeElement, findAll, installFakeDomGlobals, type FakeNode } from '../../fixtures/fakeDom';
 import { navigation } from '../../support/nextNavigation';
 
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
-
-// /categories counts templates from useTemplateLibrary, whose list always holds the bundled
-// starter templates. Until the public catalog has loaded, and for as long as it failed, those
-// are all it has, so the page must not present bundled-only categories and counts as the
-// catalog: it shows skeletons while loading and a retry state after a failure.
 
 const mockUseTemplateLibrary = vi.fn();
 const catalogErrorProps = vi.fn();
@@ -86,7 +81,7 @@ beforeEach(() => {
   catalogErrorProps.mockReset();
 });
 
-describe('Categories page catalog states', () => {
+describe('Categories page catalog states, which never present the bundled starter templates as the whole catalog', () => {
   it('shows skeletons, not the bundled-only categories and counts, while the catalog loads', () => {
     mockUseTemplateLibrary.mockReturnValue(libraryState({ loading: true }));
 
@@ -97,8 +92,6 @@ describe('Categories page catalog states', () => {
     expect(markup).not.toContain('href="/categories/outdoor/"');
     expect(markup).not.toMatch(/\d+ templates/);
     expect(markup).not.toContain('Could not load templates');
-    // The call to action does not depend on the catalog.
-    expect(markup).toContain('Create Template');
   });
 
   it('shows one retry state instead of bundled-only categories when the catalog failed', () => {
@@ -113,12 +106,20 @@ describe('Categories page catalog states', () => {
     expect(markup).not.toContain('href="/categories/outdoor/"');
     expect(markup).not.toMatch(/\d+ templates/);
     expect(markup).not.toContain('aria-busy="true"');
-    expect(markup).toContain('Create Template');
 
     expect(catalogErrorProps).toHaveBeenCalledTimes(1);
     const [{ onRetry }] = catalogErrorProps.mock.calls[0] as [{ onRetry: () => void }];
     onRetry();
     expect(retryCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['loads', { loading: true }],
+    ['failed', { catalogError: true }],
+  ])('keeps the Create Template call to action, which does not depend on the catalog, while the catalog %s', (_state, catalogState) => {
+    mockUseTemplateLibrary.mockReturnValue(libraryState(catalogState));
+
+    expect(renderCategories()).toContain('Create Template');
   });
 
   it('lists every category with its count once the catalog has loaded', () => {
@@ -138,8 +139,24 @@ describe('Categories page catalog states', () => {
   });
 });
 
-// A search that matches no category says so with the shared empty state, and Clear search
-// brings the whole list back.
+const fieldNamedByItsLabel = (container: FakeNode, labelText: string) => {
+  const [label] = findAll(
+    container,
+    (node) => node instanceof FakeElement && node.nodeName === 'LABEL' && node.textContent === labelText,
+  ) as FakeElement[];
+  const [field] = findAll(
+    container,
+    (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
+  ) as FakeElement[];
+  return field;
+};
+
+const typeThroughTheFieldsOwnOnChange = async (field: FakeElement, value: string) => {
+  const propsKey = Object.keys(field).find((key) => key.startsWith('__reactProps$'));
+  const props = (field as unknown as Record<string, { onChange: (event: unknown) => void }>)[propsKey ?? ''];
+  await act(async () => props.onChange({ target: { value }, currentTarget: { value } }));
+};
+
 describe('Categories page search', () => {
   let root: Root | null = null;
   let restoreGlobals: () => void = () => {};
@@ -156,24 +173,9 @@ describe('Categories page search', () => {
     const container = createFakeContainer();
     root = createRoot(container as unknown as HTMLElement);
     await act(async () => root?.render(<Categories />));
-    // The field its visible label names.
-    const [label] = findAll(
-      container,
-      (node) => node instanceof FakeElement && node.nodeName === 'LABEL' && node.textContent === 'Search categories',
-    ) as FakeElement[];
-    const [search] = findAll(
-      container,
-      (node) => node instanceof FakeElement && node.nodeName === 'INPUT' && node.getAttribute('id') === label.getAttribute('for'),
-    ) as FakeElement[];
-    // React DOM loaded without a DOM listens for the old IE input events, so call the field's
-    // own onChange (the props React keeps on the node) with the typed value.
-    const type = async (value: string) => {
-      const propsKey = Object.keys(search).find((key) => key.startsWith('__reactProps$'));
-      const props = (search as unknown as Record<string, { onChange: (event: unknown) => void }>)[propsKey ?? ''];
-      await act(async () => props.onChange({ target: { value }, currentTarget: { value } }));
-    };
-    // The rows of "All Categories" (Popular Categories above it does not follow the search).
-    const categoryLinks = () => {
+    const search = fieldNamedByItsLabel(container, 'Search categories');
+    const type = (value: string) => typeThroughTheFieldsOwnOnChange(search, value);
+    const allCategoriesSectionLinks = () => {
       const [allCategories] = findAll(
         container,
         (node) =>
@@ -184,15 +186,15 @@ describe('Categories page search', () => {
         (node as FakeElement).getAttribute('href'),
       );
     };
-    return { container, categoryLinks, type };
+    return { container, allCategoriesSectionLinks, type };
   };
 
   it('says no category matches and offers Clear search, which lists every category again', async () => {
     const page = await mount();
-    expect(page.categoryLinks()).toContain('/categories/moving/');
+    expect(page.allCategoriesSectionLinks()).toContain('/categories/moving/');
 
     await page.type('  zzz no such category ');
-    expect(page.categoryLinks()).toEqual([]);
+    expect(page.allCategoriesSectionLinks()).toEqual([]);
     expect(page.container.textContent).toContain('No categories match "zzz no such category"');
     const [heading] = findAll(page.container, (node) => node.nodeName === 'H3' && node.textContent.startsWith('No categories match'));
     expect(heading).toBeDefined();
@@ -202,7 +204,7 @@ describe('Categories page search', () => {
     act(() => click(page.container, clear));
 
     expect(page.container.textContent).not.toContain('No categories match');
-    expect(page.categoryLinks()).toEqual(['/categories/moving/', '/categories/outdoor/']);
+    expect(page.allCategoriesSectionLinks()).toEqual(['/categories/moving/', '/categories/outdoor/']);
   });
 
   it('shows no empty state while the search matches a category', async () => {
@@ -211,6 +213,6 @@ describe('Categories page search', () => {
     await page.type('mov');
 
     expect(page.container.textContent).not.toContain('No categories match');
-    expect(page.categoryLinks()).toEqual(['/categories/moving/']);
+    expect(page.allCategoriesSectionLinks()).toEqual(['/categories/moving/']);
   });
 });

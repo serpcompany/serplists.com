@@ -7,8 +7,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Renders the real App Router pages in the signed-in layout, so this fails if no signed-in
-// route mounts the archive (it once lived only in a Dashboard branch that no route reached).
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   AuthProvider: ({ children }: { children: React.ReactNode }) => children,
   useAuth: () => ({
@@ -93,9 +91,7 @@ import ArchivePage from '@/app/(app)/dashboard/archive/page';
 import RunsPage from '@/app/(app)/dashboard/runs/page';
 import { Providers } from '@/app/providers';
 
-// A signed-in page as the root layout renders it: the app's providers, then the signed-in
-// layout (src/app/(app)/layout.tsx) around the route's page.
-const renderAppAt = (pathname: string, page: React.ReactNode): string => {
+const renderInTheSignedInLayoutAt = (pathname: string, page: React.ReactNode): string => {
   navigation.reset(pathname);
   return renderToStaticMarkup(
     <Providers>
@@ -104,25 +100,24 @@ const renderAppAt = (pathname: string, page: React.ReactNode): string => {
   );
 };
 
-// Assert on booleans: a failed toContain would print the whole page.
-const has = (html: string, text: string) => html.includes(text);
+const pageIncludes = (html: string, text: string) => html.includes(text);
 
 describe('archive route', () => {
   it('mounts the archive at /dashboard/archive in the signed-in console', async () => {
-    const html = renderAppAt('/dashboard/archive/', <ArchivePage />);
+    const html = renderInTheSignedInLayoutAt('/dashboard/archive/', <ArchivePage />);
 
-    expect(has(html, 'data-archive-recovery-section="true"')).toBe(true);
-    expect(has(html, 'data-app-shell="console"')).toBe(true);
-    expect(has(html, 'Archived templates')).toBe(true);
-    expect(has(html, 'Archived runs')).toBe(true);
-    expect(has(html, 'That page does not exist')).toBe(false);
+    expect(pageIncludes(html, 'data-archive-recovery-section="true"')).toBe(true);
+    expect(pageIncludes(html, 'data-app-shell="console"')).toBe(true);
+    expect(pageIncludes(html, 'Archived templates')).toBe(true);
+    expect(pageIncludes(html, 'Archived runs')).toBe(true);
+    expect(pageIncludes(html, 'That page does not exist')).toBe(false);
   });
 
   it('links the archive from the console navigation and keeps /dashboard/runs on the runs list', async () => {
-    const html = renderAppAt('/dashboard/runs/', <RunsPage />);
+    const html = renderInTheSignedInLayoutAt('/dashboard/runs/', <RunsPage />);
 
-    expect(has(html, 'href="/dashboard/archive/"')).toBe(true);
-    expect(has(html, 'My Runs')).toBe(true);
-    expect(has(html, 'data-archive-recovery-section')).toBe(false);
+    expect(pageIncludes(html, 'href="/dashboard/archive/"')).toBe(true);
+    expect(pageIncludes(html, 'My Runs')).toBe(true);
+    expect(pageIncludes(html, 'data-archive-recovery-section')).toBe(false);
   });
 });

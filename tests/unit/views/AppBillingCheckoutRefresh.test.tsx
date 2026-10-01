@@ -10,9 +10,6 @@ import { navigation } from '../../support/nextNavigation';
 vi.mock('next/navigation', async () => (await import('../../support/nextNavigation')).nextNavigationMock);
 vi.mock('next/link', async () => (await import('../../support/nextNavigation')).nextLinkMock);
 
-// Checkout can find a plan the cached billing status lacks (access-flow.ts). The app's own
-// QueryClient, the one every page reads, must be the one whose billing status is reloaded.
-
 const registered = vi.hoisted(() => ({ clients: [] as unknown[] }));
 
 vi.mock('@/lib/access-flow', async (importOriginal) => {
@@ -44,7 +41,6 @@ vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
 vi.mock('@/components/ui/tooltip', () => ({
   TooltipProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
-// The theme sync writes to the document, which this test has no need for.
 vi.mock('@/lib/theme', () => ({
   applyStoredTheme: vi.fn(),
   subscribeToThemeChanges: () => () => undefined,
@@ -56,7 +52,7 @@ beforeAll(() => {
 });
 afterAll(() => restoreGlobals());
 
-describe('App billing status refresh', () => {
+describe('App billing status refresh after checkout finds a plan the cached status lacks', () => {
   it("reloads billing status in the QueryClient the app's pages read", async () => {
     let pageClient: QueryClient | undefined;
     const Probe = () => {

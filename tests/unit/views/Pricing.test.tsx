@@ -111,9 +111,7 @@ describe('Pricing', () => {
     expect(html).toContain('Your plan is managed by support.');
   });
 
-  // A failed status is unknown, not Free: Pro, past-due and support-managed users must not
-  // be offered a checkout the server refuses.
-  it('offers a retry, not the upgrade, when the plan could not be checked', () => {
+  it('offers a retry, not the upgrade, when the plan could not be checked, since a failed status is unknown, not Free', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, BILLING_STATUS_KEY);
 
