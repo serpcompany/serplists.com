@@ -4,6 +4,8 @@ import type { PortableChecklistTemplate } from '@/lib/schemas/checklistSchema';
 import { normalizePortableTemplate } from '@/lib/templates/portableTemplateNormalization';
 import { parseTemplateMarkdown, renderTemplateMarkdown } from '@/lib/templates/templateMarkdown';
 
+import { seededRandom } from '../../../support/reproducibleRandom';
+
 const FENCE = '```';
 
 const withTask = (
@@ -24,8 +26,7 @@ const withTask = (
 const textTask = (value: string, description = 'Do X') =>
   withTask({ title: 'Install', description, contents: [{ type: 'text', value }] });
 
-// Text blocks are Markdown: headings and code fences are ordinary content.
-describe('templateMarkdown round-trip with Markdown inside blocks', () => {
+describe('templateMarkdown round-trip with Markdown inside blocks, where headings and code fences are ordinary text', () => {
   it.each([
     ['a fenced bash block and trailing prose', `Run:\n${FENCE}bash\nnpm i\n${FENCE}\nDone`],
     ['a line that is only a fence', `Before\n${FENCE}\nAfter`],
@@ -121,16 +122,12 @@ describe('templateMarkdown round-trip with Markdown inside blocks', () => {
     expect(() => parseTemplateMarkdown(markdown)).toThrow('Content block "text" is missing a closing fence');
   });
 
-  // A seeded generator over Markdown-like lines, since fast-check is not a dependency.
   it('round-trips generated Markdown-like text blocks and descriptions', () => {
     const pieces = ['#', '##', '## x', '### y', '#### z', FENCE, `${FENCE}js`, `${FENCE}\``, `${FENCE}serplists:text`, '~~~', 'plain', '\\## e', '\\\\### f', '`x`', ''];
-    let seed = 7;
-    const next = () => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      return seed;
-    };
+    const random = seededRandom(7);
+    const pick = (max: number) => Math.floor(random() * max);
     const randomText = () =>
-      Array.from({ length: 1 + (next() % 6) }, () => pieces[next() % pieces.length]).join('\n');
+      Array.from({ length: 1 + pick(6) }, () => pieces[pick(pieces.length)]).join('\n');
 
     for (let run = 0; run < 200; run += 1) {
       const template = withTask({

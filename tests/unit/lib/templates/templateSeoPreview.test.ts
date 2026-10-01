@@ -12,10 +12,7 @@ import { generateSlug } from '@/utils/urlHelpers';
 
 const ORIGIN = 'https://serplists.com';
 
-// The editor's Search & SEO preview showed example.com/templates/<slug> (a route the app
-// does not have) and "untitled" for a blank slug. Public templates are served at
-// /profile/<owner username>/<slug>, with the slug the server stores.
-describe('buildTemplateSeoPreview', () => {
+describe('buildTemplateSeoPreview, which previews the public template URL with the slug the server stores', () => {
   it('previews the public template route, not /templates/', () => {
     const preview = buildTemplateSeoPreview({
       seoUrl: 'launch-checklist',
@@ -45,14 +42,15 @@ describe('buildTemplateSeoPreview', () => {
     expect(resolveTemplatePreviewSlug({ seoUrl: '', title: 'Launch Checklist!' })).toBe(
       'launch-checklist',
     );
-    // A symbols-only slug cannot be saved, so the preview shows the slug from the name.
+  });
+
+  it('previews the slug from the name for a symbols-only slug, which cannot be saved', () => {
     expect(resolveTemplatePreviewSlug({ seoUrl: '!!!', title: 'Launch Checklist' })).toBe(
       'launch-checklist',
     );
   });
 
-  it('uses the saved default name when a new template has no name', () => {
-    // A blank name is saved as "Untitled Template".
+  it('uses the default name a blank name is saved as, "Untitled Template", when a new template has no name', () => {
     expect(resolveTemplatePreviewSlug({ seoUrl: '', title: '   ' })).toBe('untitled-template');
   });
 
@@ -60,8 +58,7 @@ describe('buildTemplateSeoPreview', () => {
     expect(resolveTemplatePreviewSlug({ seoUrl: '', title: '日本語' })).toBe('template');
   });
 
-  it('keeps the stored slug of an existing template when the field is cleared', () => {
-    // The API keeps the slug when none is sent; it never becomes "untitled".
+  it('keeps the stored slug of an existing template when the field is cleared, as the API does when no slug is sent', () => {
     expect(
       resolveTemplatePreviewSlug({ seoUrl: '', storedSlug: 'old-slug', title: 'New name' }),
     ).toBe('old-slug');
@@ -145,9 +142,7 @@ describe('buildTemplateSeoPreview', () => {
   });
 });
 
-// The preview builds a new template's slug with the client generateSlug; it must match
-// the one the API uses, or the preview drifts from what is stored.
-describe('client and server generateSlug', () => {
+describe("client and server generateSlug, which must agree so a new template's preview shows the slug it is stored with", () => {
   it.each([
     'Launch Checklist',
     'Launch Checklist!',
@@ -174,8 +169,7 @@ describe('resolveTemplateEditorOwnerSlug', () => {
     expect(resolveTemplateEditorOwnerSlug({ isNew: true })).toBeNull();
   });
 
-  it("uses a loaded template's creator, not the person editing it", () => {
-    // An Organization member editing a teammate's template sees the teammate's URL.
+  it("uses a loaded template's creator, not the person editing it, so a member editing a teammate's template sees the teammate's URL", () => {
     expect(
       resolveTemplateEditorOwnerSlug({ isNew: false, loadedOwnerSlug: 'teammate', viewerUsername: 'jane' }),
     ).toBe('teammate');

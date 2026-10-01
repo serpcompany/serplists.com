@@ -79,18 +79,17 @@ describe('export summary', () => {
   });
   const valid = [{ id: 's1', title: 'Launch', items: [{ id: 'i1', title: 'Check DNS' }] }];
   const noTasks = 'Template has no sections with tasks';
-  // The pack exactly as the API sends it, including a template the export had to leave out.
-  const serverPack = (templates: ReturnType<typeof source>[]) =>
+  const packAsTheApiSendsIt = (templates: ReturnType<typeof source>[]) =>
     JSON.parse(JSON.stringify(buildPortableTemplatePack(templates, 'me@example.com')));
 
   it('reads the templates written and those left out from the pack manifest', () => {
-    const pack = serverPack([source('a', 'Owned', valid), source('b', 'Launch plan', []), source('c', 'Other', valid)]);
+    const pack = packAsTheApiSendsIt([source('a', 'Owned', valid), source('b', 'Launch plan', []), source('c', 'Other', valid)]);
 
     expect(getExportSummary(pack)).toEqual({ exported: 2, skipped: [{ title: 'Launch plan', reason: noTasks }] });
   });
 
   it('warns and names each left-out template with its reason, so the backup is not silently incomplete', () => {
-    const summary = getExportSummary(serverPack([source('a', 'Owned', valid), source('b', 'Launch plan', [])]));
+    const summary = getExportSummary(packAsTheApiSendsIt([source('a', 'Owned', valid), source('b', 'Launch plan', [])]));
 
     expect(formatExportSummaryMessage(summary)).toEqual({
       kind: 'warning',
@@ -99,7 +98,7 @@ describe('export summary', () => {
   });
 
   it('also reports public templates the page added that could not be exported', () => {
-    const pack = addPublicTemplatesToPack(serverPack([source('a', 'Owned', valid)]), [{
+    const pack = addPublicTemplatesToPack(packAsTheApiSendsIt([source('a', 'Owned', valid)]), [{
       id: 'pub', title: 'Community', description: '', sections: [], userId: 'other', isPublic: true, slug: 'pub',
       createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', categories: [], tags: [],
     }]);
@@ -127,7 +126,7 @@ describe('export summary', () => {
   });
 
   it('keeps the success message only when nothing was left out', () => {
-    expect(formatExportSummaryMessage(getExportSummary(serverPack([source('a', 'A', valid), source('b', 'B', valid)]))))
+    expect(formatExportSummaryMessage(getExportSummary(packAsTheApiSendsIt([source('a', 'A', valid), source('b', 'B', valid)]))))
       .toEqual({ kind: 'success', message: 'Exported 2 templates successfully' });
   });
 

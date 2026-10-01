@@ -16,19 +16,17 @@ import {
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
 
-// Every content type the editor can add, so a new type fails here until export handles it.
-const contentTypes = templateEditorFormSchema.shape.sections.element.shape.items.element.shape.contents
+const everyContentTypeTheEditorCanAdd = templateEditorFormSchema.shape.sections.element.shape.items.element.shape.contents
   .unwrap().element.shape.type.options as TemplateEditorContentType[];
 
-// A template saved the way the editor saves one: the default untitled section, a task holding
-// every content type left blank, and a sub-tasks block with a trailing blank row.
-const buildEditorTemplate = (): ChecklistTemplate => {
+const templateTheEditorSavedWithEveryContentTypeBlank = (): ChecklistTemplate => {
   const form = buildTemplateEditorFormValues({ title: 'Launch plan' });
   const item = createTemplateEditorItem();
   item.title = 'Write copy';
-  item.contents = contentTypes.map((type) => createTemplateEditorContent(type));
+  item.contents = everyContentTypeTheEditorCanAdd.map((type) => createTemplateEditorContent(type));
   const subItems = item.contents.find((content) => content.type === 'subItems');
-  subItems!.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, createTemplateEditorSubItem()];
+  const trailingBlankSubTask = createTemplateEditorSubItem();
+  subItems!.subItems = [{ ...createTemplateEditorSubItem(), title: 'Short' }, trailingBlankSubTask];
   form.sections[0].items = [item];
   const { title, sections } = applyTemplateDefaults(form.title, form.sections as ChecklistSection[]);
 
@@ -51,8 +49,8 @@ const buildPack = (templates: unknown[]) => ({
 });
 
 describe('portable template round trip', () => {
-  it('exports editor-built templates as a pack its own importer accepts', () => {
-    const template = buildEditorTemplate();
+  it('exports editor-built templates with every content type the editor can add as a pack its own importer accepts', () => {
+    const template = templateTheEditorSavedWithEveryContentTypeBlank();
     const pack = exportPortableTemplatesToJSON([template]);
 
     expect(portableTemplatePackSchema.safeParse(pack).success).toBe(true);

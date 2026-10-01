@@ -21,9 +21,7 @@ const template = (id: string, overrides: Partial<ChecklistTemplate> = {}): Check
 });
 
 describe('adding public templates to an export', () => {
-  // Catalog rows carry owner_type but no team_id: the API leaves Organization ids out of
-  // public responses.
-  const catalog = [
+  const catalogRowsWithoutTeamIds = [
     template('community', { ownerType: 'user' }),
     template('mine-personal', { userId: 'user-1', ownerType: 'user' }),
     template('mine-in-org', { userId: 'user-1', ownerType: 'team' }),
@@ -34,12 +32,12 @@ describe('adding public templates to an export', () => {
   const ids = (templates: ChecklistTemplate[]) => templates.map((entry) => entry.id);
 
   it('in Personal, leaves out the user\'s own Personal templates, which the server already exported', () => {
-    expect(ids(selectPublicTemplatesForExport(catalog, { userId: 'user-1' })))
+    expect(ids(selectPublicTemplatesForExport(catalogRowsWithoutTeamIds, { userId: 'user-1' })))
       .toEqual(['community', 'mine-in-org', 'other-org']);
   });
 
   it('in an Organization, leaves out that Organization\'s templates and keeps the user\'s public Personal ones', () => {
-    expect(ids(selectPublicTemplatesForExport(catalog, { userId: 'user-1', teamId: 'org-1', ownedTemplateIds: ['mine-in-org'] })))
+    expect(ids(selectPublicTemplatesForExport(catalogRowsWithoutTeamIds, { userId: 'user-1', teamId: 'org-1', ownedTemplateIds: ['mine-in-org'] })))
       .toEqual(['community', 'mine-personal', 'other-org']);
   });
 
@@ -50,10 +48,7 @@ describe('adding public templates to an export', () => {
     expect(ids(selectPublicTemplatesForExport(withTeamIds, { userId: 'user-1' }))).toEqual(['mine-in-org', 'other-org']);
   });
 
-  // Catalog rows carry no team_id, and the page's list can miss Organization templates
-  // (its request failed, or a teammate published one since it loaded): the server's pack
-  // holds them, so its slugs recognise them too.
-  it('in an Organization, leaves out templates whose slug the server already exported', () => {
+  it('in an Organization, leaves out templates whose slug the server already exported, which the page\'s own list can miss', () => {
     const rows = [
       template('org-guide-id', { slug: 'org-guide', ownerType: 'team' }),
       template('community', { ownerType: 'user' }),
@@ -78,7 +73,7 @@ describe('adding public templates to an export', () => {
   });
 
   it('never adds the bundled library or a private template', () => {
-    const selected = ids(selectPublicTemplatesForExport(catalog, { userId: 'someone-else' }));
+    const selected = ids(selectPublicTemplatesForExport(catalogRowsWithoutTeamIds, { userId: 'someone-else' }));
     expect(selected).not.toContain('repo:library');
     expect(selected).not.toContain('private');
   });
