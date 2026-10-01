@@ -93,6 +93,32 @@ pages and the Template Changelogs. Share, the visibility switch and a restore th
 refresh an open detail page and its Changelog too; a context switch and an editor save only
 mark them stale, so they load when a page next shows them.
 
+## Template and run lists
+
+Which page loads which list, and how pages read them, is in
+[FRONTEND.md](../FRONTEND.md#data-and-state). `TemplatesProvider`
+(`src/contexts/TemplatesContext.tsx`) builds the list queries (`buildTemplateListQueries`) and
+watches them without fetching; a page's `useTemplateLists` turns on the lists it asked for.
+Its loading and error flags come from that page's own observers
+(`resolveTemplateListObservers` and `listLoadError` in `src/contexts/templateListObservers.ts`),
+since the provider's observers hear of a fetch a render later. `catalogPending` covers the
+wait for the session and the first request, never a background refetch of a cached catalog.
+
+- Lists stay fresh for 5 minutes. A failed load is retried once, like the app's default,
+  unless the server refused it with a `4xx` (signed out, no access, not found, rate
+  limited), which repeating at once cannot fix (`shouldRetryListFetch` in
+  `src/contexts/templateListFetchers.ts`).
+- The catalog's 5 minutes match the edge cache's. Deleting a Template drops it from the
+  cached catalog, which then stays fresh (`refreshAfterTemplateDelete` in
+  `src/contexts/templateListCache.ts`): a refetch before the edge copy expires could list it
+  again. The other lists of every user and context are marked stale, since the Template may
+  not belong to the active one.
+- A Template save marks the Template lists stale and refreshes its Changelogs, and refreshes
+  the run lists only when it changed the checklist structure (`describeTemplateUpdate`):
+  only then were the Template's in-progress runs reconciled.
+- A run whose content cannot be read stays listed with no tasks, so it can still be deleted
+  (`mapChecklistRuns`); a template that cannot be read is left out of its list.
+
 ## Refreshing after a write
 
 - **Mark stale; refetch only what a page shows.** `invalidateQueries` refetches the queries a

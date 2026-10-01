@@ -18,16 +18,6 @@ import {
   TemplatesContextProps 
 } from "@/types/checklist";
 
-// Re-export types for backwards compatibility
-export type {
-  ChecklistSubItem,
-  ChecklistItemContent,
-  ChecklistItem,
-  ChecklistSection,
-  ChecklistTemplate,
-  ChecklistRun
-} from "@/types/checklist";
-
 import { generateSlug } from "@/utils/urlHelpers";
 import { resetSectionsCompletion } from "@/lib/utils/checklistSections";
 import { resolveTemplateDestinationTeamId } from "@/lib/templateDestination";
@@ -69,7 +59,6 @@ import {
 
 const TemplatesContext = createContext<TemplatesContextProps | undefined>(undefined);
 const fetchTemplateList = createTemplateListFetcher(api);
-// Shared empty lists keep `templates`, `allTemplates` and `runs` stable before a list loads.
 const EMPTY_TEMPLATES: ChecklistTemplate[] = [];
 const EMPTY_RUNS: ChecklistRun[] = [];
 
@@ -79,12 +68,6 @@ const TemplateListQueriesContext = createContext<
   (TemplateListQueries & { runs: UseQueryOptions<ChecklistRun[]> }) | undefined
 >(undefined);
 
-// Lists load only on pages that call useTemplateLists(), because a catalog miss reads every
-// public Template from D1. The catalog (?scope=public) is identical for everyone and
-// edge-cached, so its key has no user. The workspace list is the user's own Personal
-// templates (?scope=personal) or the active Organization's. The workspace list waits until the
-// session and active workspace are known (`ready`), or a page would also fetch a list it does
-// not need. The catalog waits only for the session (`catalogReady`, see templateListObservers).
 export const buildTemplateListQueries = (params: TemplateListReadiness & {
   userId?: string;
   activeTeamId?: string;
@@ -127,7 +110,6 @@ export function buildCreateRunRequest(params: {
   templateId: string;
 }): CreateRunRequest {
   const runSections = resetSectionsCompletion(params.template.sections);
-  // Template titles can be longer than a run title may be (imports, older rows).
   const title = (params.runName || params.template.title).slice(0, RUN_TITLE_MAX).trimEnd();
   const teamId = resolveTemplateDestinationTeamId(params.template, params.activeTeamId);
 
@@ -164,8 +146,6 @@ export const useTemplates = () => {
   return context;
 };
 
-// Loads data for pages that read `templates` (the catalog), `allTemplates` (the active
-// workspace, merged with the catalog in Personal), or `runs`. See buildTemplateListQueries.
 export const useTemplateLists = (options: TemplateListOptions = {}) => {
   const queries = useContext(TemplateListQueriesContext);
   if (!queries) {
@@ -176,8 +156,6 @@ export const useTemplateLists = (options: TemplateListOptions = {}) => {
   const catalog = useQuery({ ...queries.catalog, enabled: catalogEnabled });
   const workspace = useQuery({ ...queries.workspace, enabled: workspaceEnabled });
   const runs = useQuery({ ...queries.runs, enabled: runsEnabled });
-  // Use this page's queries for loading and errors: the provider's observers hear of fetches a
-  // tick late. An error is reported only for a list with no data (see listLoadError).
   const context = useTemplates();
   return {
     ...context,
@@ -187,9 +165,6 @@ export const useTemplateLists = (options: TemplateListOptions = {}) => {
     runsError: listLoadError(runsEnabled, runs),
     refetchTemplates: () => Promise.all([workspaceEnabled && workspace.refetch(), catalogEnabled && catalog.refetch()]),
     refetchRuns: () => (runsEnabled ? runs.refetch() : Promise.resolve()),
-    // `templates` always holds the bundled repo templates, so a non-empty list does not mean
-    // the catalog loaded. isPending covers the wait for the session (query disabled) and the
-    // first request, but not a background refetch of a cached catalog.
     catalogPending: options.catalog === true && catalog.isPending,
     catalogError: options.catalog === true && listLoadError(catalogEnabled, catalog) !== null,
     refetchCatalog: catalog.refetch,
@@ -201,7 +176,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { activeTeamId, isWorkspaceLoading, workspaceScopeId, workspaceStatus } = useWorkspace();
   const queryClient = useQueryClient();
 
-  // These observers read whatever useTemplateLists() has loaded, without fetching.
   const { ready, catalogReady } = getTemplateListReadiness({ isAuthLoading: Boolean(isAuthLoading), isWorkspaceLoading });
   const listQueryContext = useMemo(() => {
     const lists = buildTemplateListQueries({
@@ -212,7 +186,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       workspaceScopeId,
       fetchList: fetchTemplateList,
     });
-    // Runs load on demand too: useTemplateLists({ runs: true }) on the runs page only.
     const runs: UseQueryOptions<ChecklistRun[]> = {
       queryKey: ['runs', user?.id, workspaceScopeId],
       queryFn: async (): Promise<ChecklistRun[]> => (user ? fetchRunList(api, activeTeamId) : []),
@@ -232,7 +205,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     [catalogApiTemplates],
   );
 
-  // Combine public templates with user's own templates (both public and private)
   const allTemplates = useMemo(
     () =>
       activeTeamId
@@ -242,15 +214,12 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
   const templatesLoading = catalogTemplatesLoading || workspaceTemplatesLoading;
 
-  // Mutations only do cache work and reject on failure. The page that calls one shows the
-  // result, so never toast here: it would duplicate (or contradict) the page's feedback.
   const createTemplateMutation = useMutation({
     mutationFn: async (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => {
       if (!user) throw new Error("User must be logged in to create a template");
       
       const finalIsPublic = templateData.isPublic ?? true;
 
-      // Until the stored Organization is confirmed, the active context reads as Personal.
       if (!templateData.teamId) assertWorkspaceReady(workspaceStatus);
       const teamId = templateData.teamId ?? activeTeamId;
       const result = await api.createTemplate({
@@ -298,13 +267,10 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async (template: TemplateSavePayload) => {
       if (!user) throw new Error("User must be logged in to update a template");
 
-      // Resolves with the stored version, which the caller keeps for its next save.
       return api.updateTemplate(template.id, buildTemplateUpdateRequest(template));
     },
-    // Only a checklist-structure change reconciles runs, so only then do the run lists reload.
     onSuccess: (result, template) =>
       refreshAfterTemplateSave(queryClient, template.id, { runs: describeTemplateUpdate(result).invalidateRuns }),
-    // A conflict means the cached copy is stale: lists reload when a page shows them again.
     onError: (error) => {
       if (isStaleRecordError(error)) void queryClient.invalidateQueries({ queryKey: ['templates'], refetchType: 'none' });
     },
@@ -325,7 +291,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string; template?: ChecklistTemplate }) => {
       if (!user) throw new Error("User must be logged in to create a run");
       
-      // Pages that loaded the template pass it, since lists load only on demand.
       const template = loadedTemplate ??
         allTemplates.find((t: { id: unknown }) => t.id === templateId) ??
         publicTemplates.find((t: { id: unknown }) => t.id === templateId);
@@ -410,9 +375,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         throw new Error(`Import limited to ${MAX_TEMPLATES_PER_IMPORT} templates per file for now`);
       }
 
-      // Asset sizes are checked per template by the API (oversized_asset), so one
-      // template never blocks the others in the file.
-      
       const templatesToImport = prepareTemplatesForImport(templatesData, user.id, options);
       return api.importTemplateBackup({
         teamId: activeTeamId,
@@ -425,15 +387,12 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   });
 
-  // Helpers and the context value keep their identity until the data they read changes, so
-  // consumers do not re-render on unrelated renders.
   const getTemplate = useCallback((id: string) => allTemplates.find((template) => template.id === id), [allTemplates]);
   const getTemplateBySlug = useCallback((slug: string) => allTemplates.find((template) => template.slug === slug), [allTemplates]);
   const getRun = useCallback((id: string) => runs.find((run) => run.id === id), [runs]);
   const getRunsForTemplate = useCallback((templateId: string) => runs.filter((run) => run.templateId === templateId), [runs]);
   const getAllPublicTemplates = useCallback(() => publicTemplates, [publicTemplates]);
 
-  // mutateAsync keeps its identity for the life of the provider.
   const { mutateAsync: createTemplate } = createTemplateMutation;
   const { mutateAsync: updateTemplate } = updateTemplateMutation;
   const { mutateAsync: deleteTemplateAsync } = deleteTemplateMutation;
@@ -442,8 +401,6 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { mutateAsync: revalidateRunAsync } = revalidateRunMutation;
   const { mutateAsync: deleteRunAsync } = deleteRunMutation;
   const { mutateAsync: importTemplatesAsync } = importTemplatesMutation;
-  // The actions built on them keep it too, whatever the lists hold: pages key effects on
-  // them (the run page reloads its run, and would lose unsaved notes, when updateRun changes).
   const deleteTemplate = useCallback(async (id: string) => { await deleteTemplateAsync(id); }, [deleteTemplateAsync]);
   const updateRun = useCallback((run: ChecklistRun, options?: RunUpdateOptions) => updateRunAsync({ run, options }), [updateRunAsync]);
   const revalidateRun = useCallback(async (run: ChecklistRun) => { await revalidateRunAsync(run); }, [revalidateRunAsync]);

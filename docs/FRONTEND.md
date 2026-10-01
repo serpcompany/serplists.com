@@ -223,8 +223,10 @@ write: [client data](design-docs/client-data.md).
   query-backed lists with `QueryListState` (`src/components/shared/QueryListState.tsx`):
   loading, a load error with Retry, the empty state only for a loaded empty list,
   and the last loaded list (with a Retry notice) when a refresh fails.
-- Template and run lists load on demand. `TemplatesProvider` wraps every route but
-  never fetches them. A page that reads `templates` (the public catalog) calls
+- Template and run lists load on demand
+  ([how the provider builds them](design-docs/client-data.md#template-and-run-lists)).
+  `TemplatesProvider` wraps every route but never fetches them. A page that reads
+  `templates` (the public catalog) calls
   `useTemplateLists({ catalog: true, workspace: false })`, one that reads `allTemplates`
   calls `useTemplateLists()`, and one that reads `runs` adds `runs: true`. The run page
   fetches its own run by id, and the template editor and the template detail page their

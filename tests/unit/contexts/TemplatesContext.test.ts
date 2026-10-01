@@ -405,4 +405,10 @@ describe('mapApiTemplate', () => {
     expect(mapApiTemplate({ ...base, owner_type: 'other' }).ownerType).toBeUndefined();
     expect(mapApiTemplate({ ...base, owner_type: 'team', team_id: 'org-1' }).teamId).toBe('org-1');
   });
+
+  it('dates a template that was never edited, whose updated_at is null, by its creation', () => {
+    const row = { id: 't1', title: 'Plan', sections: [], created_at: '2026-01-02 03:04:05', updated_at: null };
+
+    expect(mapApiTemplate(row).updatedAt).toBe('2026-01-02 03:04:05');
+  });
 });
