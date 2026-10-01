@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf } from '../../../support/elements';
-import { jsonObject, readJson } from '../../../support/readJson';
+import { jsonObject, readJson, readSuccessfulJson } from '../../../support/readJson';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -30,6 +30,7 @@ import {
 import { persistTemplateSave, type SaveTemplateInput } from '@/hooks/useTemplateSave';
 import { applyTemplateSaveDefaults } from '@/hooks/useTemplateValidation';
 import type { TemplateEditorFormValues } from '@/lib/forms/templateEditorForm';
+import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
 import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
 
@@ -121,8 +122,7 @@ function serveFromAndWriteBatchesTo(store: Store) {
 const apiClient = {
   getTemplateById: async (id: string) => {
     const response = await handleTemplates(new Request(`http://localhost/api/templates/${id}`), mockEnv as never);
-    expect(response.status).toBe(200);
-    return response.json();
+    return readSuccessfulJson(response, apiTemplateSchema);
   },
 };
 

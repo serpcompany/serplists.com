@@ -13,6 +13,7 @@ import {
   mapChecklistToRun,
 } from '@/features/run-execution/runExecutionMappers';
 import { serializeSharedChecklistRun } from '@functions/api/utils/checklist-runs';
+import { apiRunSchema } from '@/lib/schemas/apiRuns';
 import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
 
 const run = (completed: string[]): ChecklistRun =>
@@ -359,7 +360,7 @@ describe('mapChecklistRuns', () => {
   });
 
   it('keeps a run whose items column is not even JSON, with no tasks, so it can still be deleted', () => {
-    const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid, 'x']);
+    const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid]);
 
     expect(runs.map((run) => run.id)).toEqual(['run-broken', 'run-ok']);
     expect(runs[0]).toEqual(expect.objectContaining({ sections: [], progress: 0 }));
@@ -381,7 +382,7 @@ describe('mapChecklistToRun', () => {
       current_template_version: 2,
     });
 
-    const mapped = mapChecklistToRun(shared, 'share-token');
+    const mapped = mapChecklistToRun(apiRunSchema.parse(shared), 'share-token');
 
     expect(mapped).toMatchObject({
       id: 'run-1',

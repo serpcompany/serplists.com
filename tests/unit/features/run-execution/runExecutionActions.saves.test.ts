@@ -68,7 +68,10 @@ describe('unsaved task notes ride along with the save that would lose them', () 
   });
 
   it('saves the draft through a shared link when the task is already complete', async () => {
-    const client = { ...runExecutionApiClient(), updateSharedChecklist: vi.fn(async () => ({ revision: 2 })) };
+    const client = {
+      ...runExecutionApiClient(),
+      updateSharedChecklist: vi.fn(async () => ({ success: true as const, revision: 2, progress: 100 })),
+    };
 
     const result = await toggleRunItem(
       { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: runWhoseFirstTaskWasCompletedFirst(), shareToken: 'share-1' },
