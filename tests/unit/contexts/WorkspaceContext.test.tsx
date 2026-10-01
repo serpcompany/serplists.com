@@ -106,7 +106,6 @@ describe('WorkspaceProvider teams cache', () => {
       acceptTeamInvite: async () => ({ memberId: 'member-1', role: 'editor', teamId: 'team-1' }),
       refreshTeams: workspace.refreshTeams,
       rememberTeam: workspace.rememberTeam,
-      selectWorkspace: vi.fn(),
     });
     await settle();
     staleTeams.resolve([]);

@@ -156,7 +156,7 @@ describe('TemplateEditor page', () => {
     expect(html).not.toContain('Generate from Clipy');
   });
 
-  const renderSavingEditor = (location: string, path: string): Promise<string> => {
+  const renderSavingEditor = (location: string, appRouterPattern: string): string => {
     mockUseTemplateEditorModel.mockReturnValue({
       initialValues: buildTemplateEditorFormValues({ title: 'Draft template' }),
       isSaving: true,
@@ -167,7 +167,7 @@ describe('TemplateEditor page', () => {
     });
     mockUseTemplateEditorState.mockReturnValue(editorState());
 
-    return renderEditorAt(location, path);
+    return renderEditorAt(location, appRouterPattern);
   };
 
   it('locks the new-template editor while it is being created, since the create leaves the page and could not keep edits made meanwhile', async () => {
