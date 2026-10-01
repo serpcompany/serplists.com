@@ -62,6 +62,29 @@ const userWith = (fields: Partial<User> = {}): User => ({
   ...fields,
 });
 
+function stubFetchAnsweringOk() {
+  const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function expectOneEmailPostedTo(fetchMock: ReturnType<typeof stubFetchAnsweringOk>, url: string) {
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledWith(url, expect.objectContaining({ method: "POST" }));
+}
+
+async function sendAResetEmailWith(env: Parameters<typeof createBetterAuth>[0]) {
+  createBetterAuth(env, new Request("https://serplists.com/api/auth/request-password-reset"));
+  await defined(capturedOptions().emailAndPassword?.sendResetPassword)(
+    {
+      user: userWith({ email: "existing-user@example.com" }),
+      token: "reset-token",
+      url: "https://serplists.com/reset-password?token=abc",
+    },
+    new Request("https://serplists.com/api/auth/request-password-reset")
+  );
+}
+
 describe("createBetterAuth config", () => {
   beforeEach(() => {
     betterAuthMock.mockClear();
@@ -238,8 +261,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("sends verification emails through Resend", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
 
     createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/sign-up/email"));
     const options = capturedOptions();
@@ -253,43 +275,19 @@ describe("createBetterAuth config", () => {
       new Request("https://serplists.com/api/auth/sign-up/email")
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
-      expect.objectContaining({
-        method: "POST",
-      })
-    );
+    expectOneEmailPostedTo(fetchMock, "https://api.resend.com/emails");
   });
 
   it("sends password reset emails through Resend", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
 
-    createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/request-password-reset"));
-    const options = capturedOptions();
+    await sendAResetEmailWith(productionEnvWith());
 
-    await defined(options.emailAndPassword?.sendResetPassword)(
-      {
-        user: userWith({ email: "existing-user@example.com" }),
-        token: "reset-token",
-        url: "https://serplists.com/reset-password?token=abc",
-      },
-      new Request("https://serplists.com/api/auth/request-password-reset")
-    );
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.resend.com/emails",
-      expect.objectContaining({
-        method: "POST",
-      })
-    );
+    expectOneEmailPostedTo(fetchMock, "https://api.resend.com/emails");
   });
 
   it("skips a throttled reset email without failing and discards its unused token", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
     emailThrottle.shouldSend.mockResolvedValue(false);
     const env = productionEnvWith();
 
@@ -309,8 +307,7 @@ describe("createBetterAuth config", () => {
   });
 
   it("does not send verification email to a verified address or past the throttle", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
 
     createBetterAuth(productionEnvWith(), new Request("https://serplists.com/api/auth/send-verification-email"));
     const options = capturedOptions();
@@ -356,39 +353,15 @@ describe("createBetterAuth config", () => {
   });
 
   it("falls back to UseSend when RESEND_API_KEY is not configured", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
 
-    createBetterAuth(
-      productionEnvWith({
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: "us_test_123",
-      }),
-      new Request("https://serplists.com/api/auth/request-password-reset")
-    );
-    const options = capturedOptions();
+    await sendAResetEmailWith(productionEnvWith({ RESEND_API_KEY: undefined, USESEND_API_KEY: "us_test_123" }));
 
-    await defined(options.emailAndPassword?.sendResetPassword)(
-      {
-        user: userWith({ email: "existing-user@example.com" }),
-        token: "reset-token",
-        url: "https://serplists.com/reset-password?token=abc",
-      },
-      new Request("https://serplists.com/api/auth/request-password-reset")
-    );
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://app.usesend.com/api/v1/emails",
-      expect.objectContaining({
-        method: "POST",
-      })
-    );
+    expectOneEmailPostedTo(fetchMock, "https://app.usesend.com/api/v1/emails");
   });
 
   it("fails loudly when no auth email provider is configured", async () => {
-    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
+    const fetchMock = stubFetchAnsweringOk();
 
     createBetterAuth(
       productionEnvWith({

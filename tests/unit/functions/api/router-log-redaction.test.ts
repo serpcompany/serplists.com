@@ -1,6 +1,6 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 
 const SECRET = 'SECRETTOKEN123';
 const MODULES = {
@@ -25,7 +25,7 @@ describe('API router log path redaction', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
   };
 
   async function send(path: string, init: RequestInit = {}, env = buildEnv()) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     return apiWorker.fetch(new Request(`http://localhost/api/${path}`, init), env);
   }
 

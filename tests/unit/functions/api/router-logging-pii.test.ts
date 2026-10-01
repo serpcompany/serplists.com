@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 
 const TEMPLATES_MODULE = '../../../../functions/api/handlers/templates';
 const IP = '203.0.113.5';
@@ -17,7 +17,7 @@ describe('API router logs no personal data', { timeout: FRESH_ROUTER_IMPORT_TIME
   const handleTemplates = vi.fn(async () => Response.json({ ok: true }));
 
   async function send(request: Request, env = buildEnv()) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     return apiWorker.fetch(request, env);
   }
 

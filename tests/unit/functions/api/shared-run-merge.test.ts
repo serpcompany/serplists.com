@@ -4,6 +4,7 @@ import {
   mergeSharedRunState,
   sharedRunUpdateSchema,
 } from '@functions/api/utils/shared-run-merge';
+import { withoutKeys } from '../../../support/guestState';
 
 type Json = Record<string, unknown>;
 
@@ -49,15 +50,7 @@ function merge(sections: unknown, storedSections: unknown[] = stored) {
   return result.sections as Json[];
 }
 
-function stripGuestState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripGuestState);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => !['isCompleted', 'completed', 'notes'].includes(key))
-      .map(([key, entry]) => [key, stripGuestState(entry)]),
-  );
-}
+const stripGuestState = (value: unknown) => withoutKeys(value, ['isCompleted', 'completed', 'notes']);
 
 describe('mergeSharedRunState', () => {
   it.each([

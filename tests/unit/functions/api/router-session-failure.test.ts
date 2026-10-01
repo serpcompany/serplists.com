@@ -1,6 +1,6 @@
 import { APIError } from 'better-auth/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 
 const HOST = 'http://localhost:8788';
 const SESSION_COOKIE = 'better-auth.session_token=SECRET_TOKEN.SIGNATURE';
@@ -13,7 +13,7 @@ async function loadRouterWithBetterAuthGetSession(getSession: () => Promise<unkn
   vi.doMock('../../../../functions/api/better-auth', () => ({
     createBetterAuth: vi.fn(() => ({ api: { getSession: vi.fn(getSession) }, handler: vi.fn() })),
   }));
-  const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+  const apiWorker = await freshApiWorker();
   return (path: string, init?: RequestInit) =>
     apiWorker.fetch(
       new Request(`${HOST}/api/${path}`, { ...init, headers: { Cookie: SESSION_COOKIE, ...init?.headers } }),

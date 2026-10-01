@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const BILLING_LIMIT_PER_MINUTE = 10;
@@ -16,7 +16,7 @@ async function loadRouter() {
   vi.doMock('../../../../functions/api/handlers/billing', () => ({ handleBilling }));
   vi.doMock('../../../../functions/api/handlers/stripe', () => ({ handleStripe }));
   vi.doMock('../../../../functions/api/handlers/templates', () => ({ handleTemplates }));
-  const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+  const apiWorker = await freshApiWorker();
   const send = (ip: string, method: string, path: string, host?: string) =>
     apiWorker.fetch(requestFromIp(ip, method, path, host), buildEnv());
   return { send, handleBilling, handleStripe };

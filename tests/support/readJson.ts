@@ -1,3 +1,4 @@
+import { expect } from 'vitest';
 import { z } from 'zod';
 
 type JsonBody = { json(): Promise<unknown> };
@@ -21,3 +22,8 @@ export const apiErrorBody = z
     retryAfterSeconds: z.number().optional(),
   })
   .passthrough();
+
+export async function readSuccessfulJson<Schema extends z.ZodTypeAny>(response: Response, schema: Schema): Promise<z.output<Schema>> {
+  expect(response.status).toBe(200);
+  return readJson(response, schema);
+}

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dbMocks, FREE_PLAN, mockEnv, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans } from '../../../support/apiHandlerMocks';
 import { z } from 'zod';
+import { apiRequest } from '../../../support/apiRequest';
 import { jsonObject, readJson } from '../../../support/readJson';
 
 vi.mock('@functions/api/utils/personal-run-key', () => ({
@@ -20,6 +21,14 @@ const mcpToolCallResult = z
   .passthrough();
 const sections = [{ id: 's1', title: 'S', items: [{ id: 'i1', title: 'Task' }] }];
 
+async function expectThePersonalLimitReached(response: Response, details: Record<string, unknown>) {
+  const data = await readJson(response, jsonObject);
+
+  expect(response.status).toBe(403);
+  expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { ...details, context: 'personal' } }));
+  return data;
+}
+
 describe('limit-guarded writes that lose the race to another request answer 403 limit_reached, never success', () => {
   beforeEach(() => {
     resetToASignedOutVisitorOnTheFreePlan();
@@ -35,14 +44,9 @@ describe('limit-guarded writes that lose the race to another request answer 403 
     const activeRunsAfterTheLostRace = [{ count: 3 }];
     dbMocks.selectChain.limit.mockResolvedValueOnce(activeRunsAtThePreCheck).mockResolvedValueOnce(activeRunsAfterTheLostRace);
 
-    const response = await handleChecklists(new Request('http://localhost/api/checklists', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Run', sections }),
-    }), mockEnv);
-    const data = await readJson(response, jsonObject);
+    const response = await handleChecklists(apiRequest('checklists', 'POST', { title: 'Run', sections }), mockEnv);
 
-    expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 3, current: 3, resource: 'active_runs', context: 'personal' } }));
+    await expectThePersonalLimitReached(response, { limit: 3, current: 3, resource: 'active_runs' });
     expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
   });
@@ -69,14 +73,9 @@ describe('limit-guarded writes that lose the race to another request answer 403 
       .mockResolvedValueOnce(templatesWithTheSlug)
       .mockResolvedValueOnce(templatesAfterTheLostRace);
 
-    const response = await handleTemplates(new Request('http://localhost/api/templates', {
-      method: 'POST',
-      body: JSON.stringify({ title: 'Template', sections }),
-    }), mockEnv);
-    const data = await readJson(response, jsonObject);
+    const response = await handleTemplates(apiRequest('templates', 'POST', { title: 'Template', sections }), mockEnv);
 
-    expect(response.status).toBe(403);
-    expect(data).toEqual(expect.objectContaining({ code: 'limit_reached', details: { limit: 1, current: 1, resource: 'templates', context: 'personal' } }));
+    const data = await expectThePersonalLimitReached(response, { limit: 1, current: 1, resource: 'templates' });
     expect(data).not.toHaveProperty('id');
     expect(dbMocks.db.batch.mock.calls[0][0]).toEqual([{ kind: 'guarded-insert' }, { kind: 'guarded-insert' }, { kind: 'guarded-insert' }]);
   });

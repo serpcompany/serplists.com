@@ -4,6 +4,7 @@ import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, PRO_PLAN, resetChecklist
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { withoutKeys } from '../../../support/guestState';
 import { jsonObject, readJson } from '../../../support/readJson';
 
 const storedSections = [
@@ -88,14 +89,14 @@ function storedUpdate(): Record<string, unknown> {
   return dbMocks.updateChain.set.mock.calls[0][0];
 }
 
-function stripGuestState(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stripGuestState);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value)
-      .filter(([key]) => key !== 'isCompleted' && key !== 'notes')
-      .map(([key, entry]) => [key, stripGuestState(entry)]),
-  );
+const stripGuestState = (value: unknown) => withoutKeys(value, ['isCompleted', 'notes']);
+
+async function expectIncompleteAndRefused(sections: unknown, openTaskCount: number) {
+  const { response, data } = await putShared({ ...(sections === undefined ? {} : { sections }), status: 'completed', expected_revision: 3 });
+
+  expect(response.status).toBe(409);
+  expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount } }));
+  expect(dbMocks.db.batch).not.toHaveBeenCalled();
 }
 
 describe('shared run updates, which take only completion and notes from a guest onto the stored structure', () => {
@@ -236,13 +237,9 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('refuses to complete a run with open tasks and writes nothing', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
-    const { response, data } = await putShared({ status: 'completed', expected_revision: 3 });
-
-    expect(response.status).toBe(409);
-    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 2 } }));
+    await expectIncompleteAndRefused(undefined, 2);
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
-    expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it('refuses to complete a run whose ticked task still has an open Sub-task', async () => {
@@ -250,21 +247,13 @@ describe('shared run updates, which take only completion and notes from a guest 
     const sections = sectionsWithEveryTaskAndSubTaskTicked();
     contentsOfTheFirstTask(sections)[1].subItems![1].isCompleted = false;
 
-    const { response, data } = await putShared({ sections, status: 'completed', expected_revision: 3 });
-
-    expect(response.status).toBe(409);
-    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 1 } }));
-    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    await expectIncompleteAndRefused(sections, 1);
   });
 
   it('refuses to complete a run with no tasks', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ items: JSON.stringify([{ id: 'section-1', title: 'Launch', items: [] }]) })]);
 
-    const { response, data } = await putShared({ status: 'completed', expected_revision: 3 });
-
-    expect(response.status).toBe(409);
-    expect(data).toEqual(expect.objectContaining({ code: 'run_incomplete', details: { openTaskCount: 0 } }));
-    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    await expectIncompleteAndRefused(undefined, 0);
   });
 
   it('completes a run when the same save ticks its last open task', async () => {

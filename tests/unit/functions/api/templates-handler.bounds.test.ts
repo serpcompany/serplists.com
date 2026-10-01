@@ -6,7 +6,7 @@ import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { personalTemplateRow } from '../../../fixtures/handlerRows';
 import { sectionsWithContents } from '../../../fixtures/malformedSections';
 import { apiRequest } from '../../../support/apiRequest';
-import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -87,9 +87,8 @@ describe('Templates Handlers', () => {
         { title: 'Broken', sections: sectionsWithContents({ type: 'subItems', value: '', subItems: 'x' }) },
         { title: 'Fine', sections: sectionsWithContents({ type: 'subItems', value: '', subItems: [{ title: 'Short' }] }) },
       ] });
-      const data = await readJson(response, importBody);
+      const data = await readSuccessfulJson(response, importBody);
 
-      expect(response.status).toBe(200);
       expect(data.imported).toBe(1);
       expect(data.failed).toEqual([expect.objectContaining({
         title: 'Broken',
@@ -188,9 +187,8 @@ describe('Templates Handlers', () => {
           { title: '   ', sections },
         ],
       });
-      const data = await readJson(response, importBody);
+      const data = await readSuccessfulJson(response, importBody);
 
-      expect(response.status).toBe(200);
       expect(data.imported).toBe(1);
       expect(data.failed.map((failure: { index: number; code: string; reason: string }) => [failure.index, failure.code, failure.reason.split(':')[0]]))
         .toEqual([[1, 'invalid_fields', 'title'], [2, 'invalid_fields', 'description'], [3, 'invalid_fields', 'rules.0.id'], [4, 'invalid_fields', 'title']]);

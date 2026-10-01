@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbMocks, FREE_PLAN, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
+import { apiRequest } from '../../../support/apiRequest';
 import { jsonObject, readJson } from '../../../support/readJson';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
@@ -39,10 +40,7 @@ const ownTemplate = {
 };
 
 async function send(path: string, method: string, body: unknown) {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
-    method,
-    body: JSON.stringify(body),
-  }), mockEnv);
+  const response = await handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
   return { response, data: await readJson(response, jsonObject) };
 }
 

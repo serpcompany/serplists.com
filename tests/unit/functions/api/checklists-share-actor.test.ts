@@ -1,18 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetToASignedOutVisitorOnTheFreePlan } from '../../../support/apiHandlerMocks';
-
-const guardedInserts = vi.hoisted(() => [] as Array<Record<string, unknown>>);
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    insertRowWhere: vi.fn((_db: unknown, _table: unknown, values: Record<string, unknown>) => {
-      guardedInserts.push(values);
-      return {};
-    }),
-  };
-});
+import { guardedInserts } from '../../../support/recordedGuardedInserts';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
@@ -49,7 +37,7 @@ async function guestTicksTask(sessionUserId: string | null) {
     body: JSON.stringify({ sections, expected_revision: 2 }),
   }), mockEnv);
   expect(response.status).toBe(200);
-  const audits = [...dbMocks.insertChain.values.mock.calls.map(([values]) => values), ...guardedInserts]
+  const audits = [...dbMocks.insertChain.values.mock.calls.map(([values]) => values), ...guardedInserts.map(({ values }) => values)]
     .filter((values) => values.action === 'checklist_run.shared_updated');
   expect(audits).toHaveLength(1);
   return audits[0] as Record<string, unknown>;

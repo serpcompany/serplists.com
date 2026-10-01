@@ -18,6 +18,13 @@ describe("Organization membership writes against SQLite, which leave every Organ
   afterEach(expectOneActiveOwnerAndClose);
 
   describe("owner transfer", () => {
+    async function expectTheTransferToMemberMToConflict() {
+      const result = await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "member-m" });
+
+      expect(result.status).toBe(409);
+      expect(result.data?.code).toBe("owner_transfer_conflict");
+    }
+
     it("transfers ownership, moves the billing owner, and records one audit event", async () => {
       const result = await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "member-m" });
 
@@ -34,10 +41,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
     it("changes nothing and returns 409 when the target is disabled before the write", async () => {
       d1.beforeNextBatch(() => d1.run("UPDATE team_members SET status = 'disabled' WHERE id = 'member-m'"));
 
-      const result = await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "member-m" });
-
-      expect(result.status).toBe(409);
-      expect(result.data?.code).toBe("owner_transfer_conflict");
+      await expectTheTransferToMemberMToConflict();
       expect(member("owner-member")).toEqual({ role: "owner", status: "active" });
       expect(member("member-m")).toEqual({ role: "editor", status: "disabled" });
       expect(billingOwner()).toBe("owner-user");
@@ -50,10 +54,7 @@ describe("Organization membership writes against SQLite, which leave every Organ
         expect(first.status).toBe(200);
       });
 
-      const result = await asUser("owner-user", "PUT", "/team-1/owner", { memberId: "member-m" });
-
-      expect(result.status).toBe(409);
-      expect(result.data?.code).toBe("owner_transfer_conflict");
+      await expectTheTransferToMemberMToConflict();
       expect(member("member-x")).toEqual({ role: "owner", status: "active" });
       expect(member("member-m")).toEqual({ role: "editor", status: "active" });
       expect(billingOwner()).toBe("other-user");

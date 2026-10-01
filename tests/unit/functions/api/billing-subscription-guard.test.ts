@@ -96,6 +96,13 @@ afterEach(() => {
   d1.close();
 });
 
+async function aRefusedCheckout(code: string) {
+  const result = await checkout();
+
+  expect(result.status).toBe(409);
+  expect(result.body.code).toBe(code);
+}
+
 describe("POST /api/billing/checkout with an existing Stripe subscription, where Stripe's list for the stored customer decides", () => {
   it.each(["past_due", "unpaid", "paused"])(
     "returns 409 subscription_needs_attention for a %s subscription Stripe still lists",
@@ -103,10 +110,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription, where
       insertSubscription("sub_1", status);
       subscriptionListStripeReturns = { data: [stripeSubscription("sub_1", status)], has_more: false };
 
-      const result = await checkout();
-
-      expect(result.status).toBe(409);
-      expect(result.body.code).toBe("subscription_needs_attention");
+      await aRefusedCheckout("subscription_needs_attention");
       expect(stripeCalls()).toEqual([LIST_OPEN_SESSIONS, LIST_SUBSCRIPTIONS]);
     },
   );
@@ -162,10 +166,7 @@ describe("POST /api/billing/checkout with an existing Stripe subscription, where
       insertSubscription("sub_1", status, "price_other");
       subscriptionListStripeReturns = { data: [stripeSubscription("sub_1", status, "price_other")], has_more: false };
 
-      const result = await checkout();
-
-      expect(result.status).toBe(409);
-      expect(result.body.code).toBe("already_subscribed");
+      await aRefusedCheckout("already_subscribed");
       expect(stripeCalls()).not.toContain(CREATE_SESSION);
     },
   );
@@ -214,10 +215,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
   it.each(["trialing", "active"])("blocks a %s subscription on another price", async (status) => {
     subscriptionListStripeReturns = { data: [stripeSubscription("sub_other", status, "price_other")], has_more: false };
 
-    const result = await checkout();
-
-    expect(result.status).toBe(409);
-    expect(result.body.code).toBe("already_subscribed");
+    await aRefusedCheckout("already_subscribed");
     expect(stripeCalls()).not.toContain(CREATE_SESSION);
   });
 
@@ -237,10 +235,7 @@ describe("POST /api/billing/checkout when Stripe knows a subscription D1 does no
     async (status) => {
       subscriptionListStripeReturns = { data: [stripeSubscription("sub_open", status)], has_more: false };
 
-      const result = await checkout();
-
-      expect(result.status).toBe(409);
-      expect(result.body.code).toBe("subscription_needs_attention");
+      await aRefusedCheckout("subscription_needs_attention");
       expect(stripeCalls()).not.toContain(CREATE_SESSION);
       expect((await billingStatus()).subscriptionStatus).toBe(status);
     },

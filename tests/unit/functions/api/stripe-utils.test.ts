@@ -36,16 +36,17 @@ describe("verifyStripeWebhookSignature", () => {
     expect(result.ok).toBe(false);
   });
 
+  async function signedHeader(payload: string, timestamp: number) {
+    return `t=${timestamp},v1=${await hmacSha256Hex("whsec_test", `${timestamp}.${payload}`)}`;
+  }
+
   it("accepts valid signature", async () => {
     const payload = '{"id":"evt_123","type":"customer.subscription.updated"}';
-    const timestamp = Math.floor(Date.now() / 1000);
-    const secret = "whsec_test";
-    const sig = await hmacSha256Hex(secret, `${timestamp}.${payload}`);
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: `t=${timestamp},v1=${sig}`,
-      webhookSecret: secret,
+      signatureHeader: await signedHeader(payload, Math.floor(Date.now() / 1000)),
+      webhookSecret: "whsec_test",
     });
 
     expect(result.ok).toBe(true);
@@ -53,14 +54,11 @@ describe("verifyStripeWebhookSignature", () => {
 
   it("rejects when timestamp outside tolerance", async () => {
     const payload = '{"id":"evt_123"}';
-    const timestamp = Math.floor(Date.now() / 1000) - 1000;
-    const secret = "whsec_test";
-    const sig = await hmacSha256Hex(secret, `${timestamp}.${payload}`);
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: `t=${timestamp},v1=${sig}`,
-      webhookSecret: secret,
+      signatureHeader: await signedHeader(payload, Math.floor(Date.now() / 1000) - 1000),
+      webhookSecret: "whsec_test",
       toleranceSeconds: 10,
     });
 

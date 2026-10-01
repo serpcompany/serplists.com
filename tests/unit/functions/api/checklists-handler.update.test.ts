@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { dbMocks, mockEnv, resetChecklistsHandlerMocks, successBody } from '../../../support/checklistsHandler';
+import { dbMocks, expectSuccessUpdating, mockEnv, resetChecklistsHandlerMocks } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { activeMember, organizationRunRow, personalRunRow, startedJustNow } from '../../../fixtures/handlerRows';
@@ -49,17 +49,10 @@ describe('Checklists Handlers', () => {
       .mockResolvedValueOnce([activeMember('runner')])
       .mockResolvedValueOnce([activeMember('runner')]);
 
-    const response = await putRun({ status: 'completed' });
-    const data = await readJson(response, successBody);
-
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'completed',
-        completed_by_user_id: 'user-123',
-      }),
-    );
+    await expectSuccessUpdating(await putRun({ status: 'completed' }), {
+      status: 'completed',
+      completed_by_user_id: 'user-123',
+    });
   });
 
   it('rejects stale private run writes before they can discard template evolution', async () => {

@@ -1,36 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/apiHandlerMocks';
+import { guardedInserts } from '../../../support/recordedGuardedInserts';
+import { personalRunRow } from '../../../fixtures/handlerRows';
+import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
-
-const guardedInserts = vi.hoisted(() => [] as Array<{ values: Record<string, unknown>; condition: unknown }>);
-
-vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@functions/api/utils/guarded-insert')>();
-  return {
-    ...actual,
-    insertRowWhere: vi.fn((_db: unknown, _table: unknown, values: Record<string, unknown>, condition: unknown) => {
-      guardedInserts.push({ values, condition });
-      return { guardedInsert: values.action };
-    }),
-  };
-});
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 
 const dialect = new SQLiteSyncDialect();
 
 function sharedRun(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'run-1',
-    user_id: 'user-123',
-    team_id: null,
+  return personalRunRow({
     template_id: 'template-1',
-    title: 'Run',
     items: JSON.stringify([{ id: 'section-1', title: 'S', items: [{ id: 'item-1', title: 'Task', isCompleted: true }] }]),
     retired_items: '[]',
-    status: 'in_progress',
     progress: 100,
     template_version: 1,
     revision: 4,
@@ -40,14 +25,19 @@ function sharedRun(overrides: Record<string, unknown> = {}) {
     share_used_at: null,
     deleted_at: null,
     ...overrides,
-  };
+  });
 }
 
 async function stopSharing(runId = 'run-1') {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists/run/${runId}/share`, {
-    method: 'DELETE',
-  }), mockEnv);
+  const response = await handleChecklists(apiRequest(`checklists/run/${runId}/share`, 'DELETE'), mockEnv);
   return { response, data: await readJson(response, jsonObject) };
+}
+
+async function expectStoppedPrivately() {
+  const { response, data } = await stopSharing();
+
+  expect(response.status).toBe(200);
+  expect(data).toEqual({ id: 'run-1', isPublic: false });
 }
 
 function sqlText(condition: unknown): string {
@@ -63,10 +53,7 @@ describe('stopping a run share, which makes the run private and ends its old lin
   it('makes the owner\'s run private and clears every share field, leaving the revision so open run pages keep saving', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
 
-    const { response, data } = await stopSharing();
-
-    expect(response.status).toBe(200);
-    expect(data).toEqual({ id: 'run-1', isPublic: false });
+    await expectStoppedPrivately();
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
       is_public: false,
       share_token: null,
@@ -135,10 +122,7 @@ describe('stopping a run share, which makes the run private and ends its old lin
   it('is a no-op for a run that is not shared', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ is_public: false, share_token: null })]);
 
-    const { response, data } = await stopSharing();
-
-    expect(response.status).toBe(200);
-    expect(data).toEqual({ id: 'run-1', isPublic: false });
+    await expectStoppedPrivately();
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
@@ -146,10 +130,7 @@ describe('stopping a run share, which makes the run private and ends its old lin
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-    const { response, data } = await stopSharing();
-
-    expect(response.status).toBe(200);
-    expect(data).toEqual({ id: 'run-1', isPublic: false });
+    await expectStoppedPrivately();
   });
 
   it('points revalidation of a shared run at Stop sharing', async () => {

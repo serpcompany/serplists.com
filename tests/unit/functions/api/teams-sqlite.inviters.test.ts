@@ -104,6 +104,18 @@ describe("Organization membership writes against SQLite, which leave every Organ
     const inviteRow = (id: string) =>
       inviteColumns<{ revoked_at: string | null; invited_by_user_id: string }>(id, "revoked_at, invited_by_user_id");
 
+    async function expectTheInviteHiddenFromTheListAndItsLink(token: string) {
+      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
+      expect((await asUser("new-user", "GET", `/invites/${token}`)).status).toBe(404);
+    }
+
+    async function expectANewInviteTheNewUserAccepts(role: string) {
+      const replacement = await asUser("owner-user", "POST", "/team-1/invites", { email: "new@example.test", role });
+      expect(replacement.status).toBe(200);
+      expect((await asUser("new-user", "POST", `/invites/${replacement.data?.inviteToken}/accept`)).status).toBe(200);
+      expect(newUserMembership()).toEqual([{ role, status: "active" }]);
+    }
+
     it("revokes the pending invites an admin created when the admin leaves", async () => {
       const invite = await inviteNewUser();
 
@@ -113,13 +125,9 @@ describe("Organization membership writes against SQLite, which leave every Organ
       expect(revokedInviteAudits()).toEqual([
         { resource_id: invite.id, metadata_json: JSON.stringify({ reason: "inviter_left" }) },
       ]);
-      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
-      expect((await asUser("new-user", "GET", `/invites/${invite.token}`)).status).toBe(404);
+      await expectTheInviteHiddenFromTheListAndItsLink(invite.token);
 
-      const again = await asUser("owner-user", "POST", "/team-1/invites", { email: "new@example.test", role: "editor" });
-      expect(again.status).toBe(200);
-      expect((await asUser("new-user", "POST", `/invites/${again.data?.inviteToken}/accept`)).status).toBe(200);
-      expect(newUserMembership()).toEqual([{ role: "editor", status: "active" }]);
+      await expectANewInviteTheNewUserAccepts("editor");
     });
 
     it("does not bring the invites back when the admin rejoins as an admin", async () => {
@@ -152,13 +160,9 @@ describe("Organization membership writes against SQLite, which leave every Organ
       const invite = await inviteNewUser();
       d1.run("DELETE FROM team_members WHERE id = 'admin-member'");
 
-      expect((await asUser("owner-user", "GET", "/team-1/invites")).data).toEqual([]);
-      expect((await asUser("new-user", "GET", `/invites/${invite.token}`)).status).toBe(404);
+      await expectTheInviteHiddenFromTheListAndItsLink(invite.token);
 
-      const replaced = await asUser("owner-user", "POST", "/team-1/invites", { email: "new@example.test", role: "viewer" });
-      expect(replaced.status).toBe(200);
-      expect((await asUser("new-user", "POST", `/invites/${replaced.data?.inviteToken}/accept`)).status).toBe(200);
-      expect(newUserMembership()).toEqual([{ role: "viewer", status: "active" }]);
+      await expectANewInviteTheNewUserAccepts("viewer");
     });
 
     it("makes the manager who reissues a stranded invite's link its inviter", async () => {

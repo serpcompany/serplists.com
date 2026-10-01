@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../support/checklistsHandler';
 import { handleChecklists } from '@functions/api/handlers/checklists';
+import { apiRequest } from '../../../support/apiRequest';
 import { getSessionUserId } from '@functions/api/utils/session';
 
 const ROW_BUDGET_BYTES = 300 * 1024;
@@ -39,13 +40,8 @@ function largeRun(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function send(path: string, method: string, body: unknown) {
-  const response = await handleChecklists(new Request(`http://localhost/api/checklists/${path}`, {
-    method,
-    body: JSON.stringify(body),
-  }), mockEnv);
-  return response;
-}
+const send = (path: string, method: string, body: unknown) =>
+  handleChecklists(apiRequest(`checklists/${path}`, method, body), mockEnv);
 
 function expectCompactAudit(toggledId: string) {
   const audit = dbMocks.insertChain.values.mock.calls[0][0] as Record<string, unknown>;

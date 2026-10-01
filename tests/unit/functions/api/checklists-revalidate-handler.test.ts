@@ -1,41 +1,33 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser, TEAM_PLAN } from '../../../support/checklistsHandler';
+import { activeMember, personalRunRow, personalTemplateRow } from '../../../fixtures/handlerRows';
 import { jsonObject, readJson } from '../../../support/readJson';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
 import type { SQL } from 'drizzle-orm';
 
 import { handleChecklists } from '@functions/api/handlers/checklists';
 
-const membership = { id: 'member-1', team_id: 'team-1', user_id: 'user-123', role: 'runner', status: 'active' };
+const membership = activeMember('runner');
 
 function run(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'run-1',
-    user_id: 'user-123',
-    team_id: null,
+  return personalRunRow({
     template_id: 'template-1',
-    title: 'Run',
     items: JSON.stringify([{ id: 'section-1', title: 'Old', items: [{ id: 'item-1', title: 'Old', isCompleted: true }] }]),
     retired_items: '[]',
-    status: 'in_progress',
     template_version: 1,
     revision: 2,
     is_public: false,
     ...overrides,
-  };
+  });
 }
 
 function template(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'template-1',
+  return personalTemplateRow({
     version: 3,
     items: JSON.stringify([{ id: 'section-1', title: 'Private', items: [{ id: 'item-1', title: 'Confidential step' }] }]),
-    owner_type: 'user',
-    team_id: null,
-    user_id: 'user-123',
     is_public: false,
     ...overrides,
-  };
+  });
 }
 
 async function revalidate() {

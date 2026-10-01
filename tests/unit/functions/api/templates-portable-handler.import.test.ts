@@ -12,7 +12,7 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
 import { activeMember } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
-import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 
 const ONE_ITEM_CHECKLIST = [{ title: 'Checklist', items: [{ title: 'Item' }] }];
 
@@ -40,9 +40,8 @@ describe('portable template import/export API', () => {
         sections: ONE_ITEM_CHECKLIST,
       },
     ]);
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.total).toBe(1);
     expect(data.imported).toBe(1);
     expect(data.successes).toEqual([
@@ -69,9 +68,8 @@ describe('portable template import/export API', () => {
       [{ title: 'Imported Team Template', visibility: 'private', sections: ONE_ITEM_CHECKLIST }],
       { teamId: 'team-1' },
     );
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
 
     expect(dbMocks.db.batch).toHaveBeenCalled();
@@ -115,18 +113,16 @@ describe('portable template import/export API', () => {
 
   it('imports assets up to the upload limit, so an export holding a 50MB upload imports again', async () => {
     const response = await importPack([packWithAsset(8 * 1024 * 1024), packWithAsset(50 * 1024 * 1024)]);
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.imported).toBe(2);
     expect(data.failed).toEqual([]);
   });
 
   it('fails only the template whose asset is over the upload limit', async () => {
     const response = await importPack([packWithAsset(50 * 1024 * 1024 + 1), packWithAsset(1024)]);
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
     expect(data.failed).toEqual([
       expect.objectContaining({ index: 0, code: 'oversized_asset', reason: expect.stringContaining('50MB') }),
@@ -139,9 +135,8 @@ describe('portable template import/export API', () => {
       sections: [{ title: 'Guide', items: [{ title: 'Read it', contents: [{ type: 'text', value: 'x'.repeat(1_200_000) }] }] }],
     };
     const response = await importPack([textHeavy, packWithAsset(1024)]);
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.imported).toBe(1);
     expect(data.successes).toEqual([expect.objectContaining({ index: 1 })]);
     expect(data.failed).toEqual([
@@ -226,9 +221,8 @@ describe('portable template import/export API', () => {
       ]);
 
       const importResponse = await handleTemplates(apiRequest('templates/backup', 'POST', pack), mockEnv);
-      const summary = await readJson(importResponse, importBody);
+      const summary = await readSuccessfulJson(importResponse, importBody);
 
-      expect(importResponse.status).toBe(200);
       expect(summary.imported).toBe(1);
     });
 
@@ -240,9 +234,8 @@ describe('portable template import/export API', () => {
           sections: [{ title: '', items: [{ title: 'Pack', contents: [{ type: 'video', value: '' }] }] }],
         },
       ]);
-      const summary = await readJson(response, importBody);
+      const summary = await readSuccessfulJson(response, importBody);
 
-      expect(response.status).toBe(200);
       expect(summary.total).toBe(2);
       expect(summary.imported).toBe(1);
       expect(summary.successes).toEqual([expect.objectContaining({ index: 1, title: 'Old export' })]);

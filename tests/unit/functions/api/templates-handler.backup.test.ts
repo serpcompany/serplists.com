@@ -6,7 +6,7 @@ import { getSessionUserId } from '@functions/api/utils/session';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { ONE_SECTION_WITH_ONE_ITEM, templateRowToExport } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
-import { apiErrorBody, readJson } from '../../../support/readJson';
+import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
 
 const exportBody = z.object({ templates: z.array(z.record(z.unknown())) }).passthrough();
 const importFailedError = apiErrorBody.extend({
@@ -54,9 +54,8 @@ describe('Templates Handlers', () => {
     onTheProPlanWithNoTemplates();
 
     const response = await postBackup({ templates: [IMPORTED], options: { visibility: 'private' } });
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.total).toBe(1);
     expect(data.imported).toBe(1);
     expect(data.failed).toEqual([]);
@@ -89,9 +88,8 @@ describe('Templates Handlers', () => {
       templates: [IMPORTED, { title: 'Broken Template', sections: 'not-json', isPublic: false }],
       options: { visibility: 'private' },
     });
-    const data = await readJson(response, importBody);
+    const data = await readSuccessfulJson(response, importBody);
 
-    expect(response.status).toBe(200);
     expect(data.total).toBe(2);
     expect(data.imported).toBe(1);
     expect(data.successes).toHaveLength(1);

@@ -59,6 +59,13 @@ describe('Uploads Handler', () => {
   });
 });
 
+async function uploadAs(bucket: string, name: string, type: string) {
+  vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+  const env = uploadEnv();
+  const response = await handleUploads(uploadRequest(bucket, new File(['x'], name, { type })), env);
+  return { env, response };
+}
+
 describe('Uploads Handler file types', () => {
   it.each([
     ['template-files', 'report.zip', 'application/x-zip-compressed', 'application/x-zip-compressed'],
@@ -68,10 +75,7 @@ describe('Uploads Handler file types', () => {
     ['template-files', 'shot.png', 'image/png', 'image/png'],
     ['template-files', 'notes.md', 'application/octet-stream', 'text/markdown'],
   ])('stores %s %s sent as %s, as the shared type list accepts what browsers report', async (bucket, name, type, stored) => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = uploadEnv();
-
-    const response = await handleUploads(uploadRequest(bucket, new File(['x'], name, { type })), env);
+    const { env, response } = await uploadAs(bucket, name, type);
 
     expect(response.status).toBe(200);
     expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
@@ -88,10 +92,7 @@ describe('Uploads Handler file types', () => {
     ['template-files', 'mystery', ''],
     ['template-videos', 'movie.mkv', 'video/x-matroska'],
   ])('refuses %s %s sent as "%s"', async (bucket, name, type) => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = uploadEnv();
-
-    const response = await handleUploads(uploadRequest(bucket, new File(['x'], name, { type })), env);
+    const { env, response } = await uploadAs(bucket, name, type);
 
     expect(response.status).toBe(415);
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
@@ -284,6 +285,12 @@ function fileRequest(headers: Record<string, string> = {}, method = 'GET') {
   return new Request(`http://localhost/api/uploads/file?key=${encodeURIComponent(FILE_KEY)}`, { method, headers });
 }
 
+function expectTheWholeFileWithRangesAdvertised(response: Response) {
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Accept-Ranges')).toBe('bytes');
+  expect(response.headers.get('Content-Length')).toBe(String(FILE_SIZE));
+}
+
 async function bodyBytes(response: Response) {
   return Array.from(new Uint8Array(await response.arrayBuffer()));
 }
@@ -293,9 +300,7 @@ describe('Uploads Handler file downloads', () => {
     const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(fileRequest(), { R2_UPLOADS: bucket } as any);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Accept-Ranges')).toBe('bytes');
-    expect(response.headers.get('Content-Length')).toBe(String(FILE_SIZE));
+    expectTheWholeFileWithRangesAdvertised(response);
     expect(response.headers.get('Content-Type')).toBe('video/mp4');
     expect(response.headers.get('etag')).toBe(FILE_ETAG);
     expect(await bodyBytes(response)).toHaveLength(FILE_SIZE);
@@ -373,9 +378,7 @@ describe('Uploads Handler file downloads', () => {
     const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(fileRequest({}, 'HEAD'), { R2_UPLOADS: bucket } as any);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Accept-Ranges')).toBe('bytes');
-    expect(response.headers.get('Content-Length')).toBe(String(FILE_SIZE));
+    expectTheWholeFileWithRangesAdvertised(response);
     expect(bucket.get).not.toHaveBeenCalled();
   });
 

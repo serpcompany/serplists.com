@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker } from '../../../support/apiRouter';
 import { readJson } from '../../../support/readJson';
 
 const requestIdBody = z.object({ requestId: z.string() }).passthrough();
@@ -34,7 +34,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
     vi.spyOn(console, 'info').mockImplementation((line: unknown) => {
       lines.push(String(line));
     });
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
 
     const response = await apiWorker.fetch(new Request('http://localhost/api/templates'), buildEnv());
 
@@ -51,7 +51,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
       ),
     }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
 
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/templates', {
@@ -81,7 +81,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
       ),
     }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     const response = await apiWorker.fetch(
       new Request('http://localhost/api/templates', {
         headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-For': '203.0.113.7' },
@@ -96,7 +96,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
     const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
     vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     const response = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
       {} as any,
@@ -110,7 +110,7 @@ describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIM
     const handleAgentMcp = vi.fn(() => Response.json({ ok: true }));
     vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
 
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     const enabledResponse = await apiWorker.fetch(
       new Request('https://staging.serplists.com/api/mcp', { method: 'POST' }),
       buildEnv({ PERSONAL_RUN_MCP_ENABLED: 'true' }),

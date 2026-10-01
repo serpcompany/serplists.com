@@ -125,12 +125,8 @@ describe("Personal run key management handler", () => {
     }));
   });
 
-  it("rejects empty, unknown, and extra permission fields without minting a secret", async () => {
-    for (const payload of [
-      { name: "None", permissions: [] },
-      { name: "Unknown", permissions: ["templates:delete"] },
-      { name: "Admin", permissions: ["runs:read"], admin: true },
-    ]) {
+  async function expectEachRefusedWithoutMintingASecret(payloads: unknown[]) {
+    for (const payload of payloads) {
       const response = await handleAgentKeys(
         new Request("http://localhost/api/agent-keys", { method: "POST", body: JSON.stringify(payload) }),
         mockEnv,
@@ -140,22 +136,18 @@ describe("Personal run key management handler", () => {
 
     expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
     expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
+  }
+
+  it("rejects empty, unknown, and extra permission fields without minting a secret", async () => {
+    await expectEachRefusedWithoutMintingASecret([
+      { name: "None", permissions: [] },
+      { name: "Unknown", permissions: ["templates:delete"] },
+      { name: "Admin", permissions: ["runs:read"], admin: true },
+    ]);
   });
 
   it("rejects blank and oversized names without minting a secret", async () => {
-    for (const name of ["   ", "x".repeat(81)]) {
-      const response = await handleAgentKeys(
-        new Request("http://localhost/api/agent-keys", {
-          method: "POST",
-          body: JSON.stringify({ name }),
-        }),
-        mockEnv,
-      );
-      expect(response.status).toBe(400);
-    }
-
-    expect(keyMocks.createPersonalRunKeySecret).not.toHaveBeenCalled();
-    expect(keyMocks.insertPersonalRunKeyWithinCap).not.toHaveBeenCalled();
+    await expectEachRefusedWithoutMintingASecret(["   ", "x".repeat(81)].map((name) => ({ name })));
   });
 
   it("lists safe records and derives active or revoked status", async () => {

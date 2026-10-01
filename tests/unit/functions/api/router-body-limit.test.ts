@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, silenceRequestLog } from '../../../support/apiRouter';
 
 const MB = 1024 * 1024;
 const HANDLER_MODULES = {
@@ -53,7 +53,7 @@ describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT
   };
 
   async function send(req: Request) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     return apiWorker.fetch(req, buildEnv());
   }
 

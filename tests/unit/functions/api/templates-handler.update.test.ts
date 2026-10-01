@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { dbMocks, mockEnv, resetTemplatesHandlerMocks, successBody } from '../../../support/templatesHandler';
+import { dbMocks, expectSuccessUpdating, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { personalTemplateRow } from '../../../fixtures/handlerRows';
@@ -81,18 +81,13 @@ describe('Templates Handlers', () => {
       slug: 'updated-template-slug',
       expected_version: 1,
     });
-    const data = await readJson(response, successBody);
 
-    expect(response.status).toBe(200);
-    expect(data.success).toBe(true);
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        seo_title: 'Updated SEO Title',
-        seo_description: 'Updated SEO Description',
-        rules: expect.stringContaining('Updated rule'),
-        slug: 'updated-template-slug',
-      }),
-    );
+    await expectSuccessUpdating(response, {
+      seo_title: 'Updated SEO Title',
+      seo_description: 'Updated SEO Description',
+      rules: expect.stringContaining('Updated rule'),
+      slug: 'updated-template-slug',
+    });
     expect(dbMocks.updateChain.set.mock.calls[0][0]).not.toHaveProperty('content_version');
   });
 

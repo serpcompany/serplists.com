@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
-
-let ipCounter = 0;
+import { aFreshIp, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 
 function buildEnv() {
   return {
@@ -15,7 +13,7 @@ async function loadRouter() {
   vi.doMock('../../../../functions/api/better-auth', () => ({
     createBetterAuth: vi.fn(() => ({ handler })),
   }));
-  const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+  const apiWorker = await freshApiWorker();
   const send = (ip: string, method: string, path: string) =>
     apiWorker.fetch(requestFromIp(ip, method, path), buildEnv());
   return { send, handler };
@@ -46,10 +44,10 @@ describe('authRateLimitBucket', () => {
 
 describe('API router auth rate limits on a deployed host', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let ip: string;
+  let ipCounter: number;
 
   beforeEach(() => {
-    ipCounter += 1;
-    ip = `203.0.113.${ipCounter}`;
+    ({ ip, count: ipCounter } = aFreshIp());
     silenceRequestLog();
   });
 

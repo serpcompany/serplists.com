@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceLogs } from '../../../support/apiRouter';
+import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, freshApiWorker, silenceLogs } from '../../../support/apiRouter';
 import { apiErrorBody, betterAuthErrorBody, readJson } from '../../../support/readJson';
 
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
@@ -31,7 +31,7 @@ describe('auth errors the router sends before Better Auth runs, each with the me
   const betterAuthHandler = vi.fn(async () => Response.json({ ok: true }));
 
   async function send(request: Request, env = buildEnv()) {
-    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+    const apiWorker = await freshApiWorker();
     return apiWorker.fetch(request, env);
   }
 
