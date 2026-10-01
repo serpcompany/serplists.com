@@ -7,6 +7,7 @@ import { TemplatesProvider, useTemplateLists } from '@/contexts/TemplatesContext
 import { repoTemplates } from '@/lib/repoTemplateCatalog';
 
 import { createTestQueryClient } from '../../fixtures/queryClient';
+import type { TemplatesProviderWorkspace } from '../../support/templatesProviderHarness';
 
 const mockGetTemplates = vi.fn();
 const workspaceState = { isWorkspaceLoading: false };
@@ -20,10 +21,11 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 }));
 
 vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
+  useWorkspace: (): TemplatesProviderWorkspace => ({
     activeTeamId: undefined,
     isWorkspaceLoading: workspaceState.isWorkspaceLoading,
     workspaceScopeId: 'personal',
+    workspaceStatus: workspaceState.isWorkspaceLoading ? 'loading' : 'ready',
   }),
 }));
 

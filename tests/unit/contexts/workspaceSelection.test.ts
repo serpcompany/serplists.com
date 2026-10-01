@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PERSONAL_WORKSPACE_ID,
+  WORKSPACE_NOT_READY_MESSAGE,
+  assertWorkspaceReady,
   createWorkspaceSelectionMemory,
   describeTeamsQuery,
   getWorkspaceStatus,
@@ -183,6 +185,14 @@ describe('getWorkspaceStatus', () => {
 
   it('stays ready when a background refetch fails over a list that has the Organization', () => {
     expect(getWorkspaceStatus({ ...base, teamIds: ['acme'], teamsFailed: true })).toBe('ready');
+  });
+});
+
+describe('assertWorkspaceReady', () => {
+  it('lets a write through only once the context is ready', () => {
+    expect(() => assertWorkspaceReady('ready')).not.toThrow();
+    expect(() => assertWorkspaceReady('loading')).toThrow(WORKSPACE_NOT_READY_MESSAGE);
+    expect(() => assertWorkspaceReady('error')).toThrow(WORKSPACE_NOT_READY_MESSAGE);
   });
 });
 

@@ -3,16 +3,21 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, vi } from 'vitest';
 
-import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
+import type { useWorkspace } from '@/contexts/WorkspaceContext';
 import type { ChecklistTemplate, TemplateSavePayload, TemplatesContextProps } from '@/types/checklist';
 
 import { PERSONAL_WORKSPACE } from '../fixtures/workspaces';
 
-export const providerWorkspace = {
-  activeTeamId: undefined as string | undefined,
+export type TemplatesProviderWorkspace = Pick<
+  ReturnType<typeof useWorkspace>,
+  'activeTeamId' | 'isWorkspaceLoading' | 'workspaceScopeId' | 'workspaceStatus'
+>;
+
+export const providerWorkspace: TemplatesProviderWorkspace = {
+  activeTeamId: undefined,
   isWorkspaceLoading: false,
   workspaceScopeId: 'personal',
-  workspaceStatus: 'ready' as WorkspaceStatus,
+  workspaceStatus: 'ready',
 };
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
