@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { cn } from '@/lib/utils';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
@@ -45,10 +46,7 @@ export function TemplateCard({
 }: TemplateCardProps) {
   const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
-  const taskCount = template.sections.reduce(
-    (total, section) => total + section.items.length,
-    0,
-  );
+  const taskCount = countTemplateItems(template);
   const title = template.title.trim();
   const actionsLabel = title ? `Actions for ${title}` : 'Template actions';
   const categories = template.categories ?? [];

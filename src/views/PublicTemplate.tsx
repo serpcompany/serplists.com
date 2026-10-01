@@ -80,13 +80,6 @@ const PublicTemplate = () => {
     workspaceStatus,
   });
   const displayTemplate = template;
-  const displayTotalItems =
-    template && totalItems > 0
-      ? totalItems
-      : (displayTemplate?.sections ?? []).reduce(
-          (count, section) => count + section.items.length,
-          0,
-        );
 
   useEffect(() => {
     if (!displayTemplate) {
@@ -222,7 +215,7 @@ const PublicTemplate = () => {
       <PublicTemplateView
         key={displayTemplate.id}
         template={displayTemplate}
-        totalItems={displayTotalItems}
+        totalItems={totalItems}
         ownerSlug={ownerSlug}
         ownerPath={ownerPath}
         isAuthenticated={isAuthenticated}

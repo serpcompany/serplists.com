@@ -1,12 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { assert, describe, expect, it, vi } from 'vitest';
 
 import { createApiError } from '@/lib/api-errors';
-import type { ChecklistTemplate } from '@/types/checklist';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 
-import {
-  countTemplateItems,
-  mapApiTemplateToChecklistTemplate,
-} from '@/features/template-detail/templateDetailMappers';
+import { mapApiTemplateToChecklistTemplate } from '@/features/template-detail/templateDetailMappers';
 import { loadTemplateDetailData, type LoadTemplateDetailResult } from '@/features/template-detail/useTemplateDetailModel';
 
 import { templateDetailApiClient } from '../../../fixtures/templateDetailApiClient';
@@ -199,8 +196,10 @@ describe('loadTemplateDetailData', () => {
 
     expect(result.kind).toBe('ok');
     expect(loadedTemplate(result)?.sections).toHaveLength(1);
-    expect(loadedTemplate(result)?.sections[0]?.items).toHaveLength(2);
-    expect(countTemplateItems(loadedTemplate(result) as ChecklistTemplate)).toBe(2);
+    const template = loadedTemplate(result);
+    assert.exists(template);
+    expect(template.sections[0]?.items).toHaveLength(2);
+    expect(countTemplateItems(template)).toBe(2);
   });
 
   it('returns not_found when the owner segment does not match', async () => {

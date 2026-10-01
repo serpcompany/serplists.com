@@ -2,6 +2,7 @@ import type { ChecklistTemplate } from '@/types/checklist';
 
 import { uniqueCategoryNames } from '@/lib/categorySlug';
 import { buildCategorySlug, findCategoryNameByLegacySlug } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { getTemplateRecencyTime } from '@/lib/templates/templateRecency';
 
 export type DiscoverySort = 'popular' | 'trending' | 'recent';
@@ -18,9 +19,6 @@ export const getTemplateSectionCount = (
   template: ChecklistTemplate,
 ): number =>
   template.sections.length;
-
-export const getTemplateItemCount = (template: ChecklistTemplate): number =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);
 
 export const getTemplateOwnerLabel = (
   template: ChecklistTemplate,
@@ -50,8 +48,8 @@ const compareByPopularity = (
     return rightSectionCount - leftSectionCount;
   }
 
-  const leftItemCount = getTemplateItemCount(left);
-  const rightItemCount = getTemplateItemCount(right);
+  const leftItemCount = countTemplateItems(left);
+  const rightItemCount = countTemplateItems(right);
 
   if (rightItemCount !== leftItemCount) {
     return rightItemCount - leftItemCount;
@@ -67,8 +65,8 @@ const compareByTrending = (
   left: ChecklistTemplate,
   right: ChecklistTemplate,
 ): number => {
-  const leftItemCount = getTemplateItemCount(left);
-  const rightItemCount = getTemplateItemCount(right);
+  const leftItemCount = countTemplateItems(left);
+  const rightItemCount = countTemplateItems(right);
 
   if (rightItemCount !== leftItemCount) {
     return rightItemCount - leftItemCount;

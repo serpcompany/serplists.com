@@ -103,6 +103,7 @@ const TemplateDetail = () => {
     shareTemplate,
     startRun,
     template,
+    totalItems,
     history,
   } = useTemplateDetailModel({
     canEditTemplates,
@@ -138,10 +139,6 @@ const TemplateDetail = () => {
   });
   const startRunRoleUnavailable = Boolean(displayTemplate && !displayTemplate.isPublic) &&
     isRoleUnavailable(displayTemplate?.teamId);
-  const totalTasks = displayTemplate?.sections.reduce(
-    (count, section) => count + section.items.length,
-    0,
-  ) ?? 0;
   const createdDate = formatLocalDate(displayTemplate?.createdAt);
   const updatedDate = formatLocalDate(displayTemplate?.updatedAt ?? displayTemplate?.createdAt);
   const historyEntries = buildTemplateHistoryTimeline(history?.data);
@@ -404,7 +401,7 @@ const TemplateDetail = () => {
         }
         aside={
           <div className="grid grid-cols-2 gap-4">
-            <Stat icon={<ListChecks />} label="Total Tasks" value={totalTasks} />
+            <Stat icon={<ListChecks />} label="Total Tasks" value={totalItems} />
             <Stat icon={<Layers />} label="Sections" value={displayTemplate.sections.length} />
           </div>
         }

@@ -39,7 +39,6 @@ import {
 import {
   buildProfileSummary,
   calculateStats,
-  countTemplateItems,
   getProfileDisplayName,
 } from '@/features/profile/profileSummary';
 import { useAppRouter } from '@/lib/navigation/useAppRouter';
@@ -49,6 +48,7 @@ import {
   buildPublicTemplatesPath,
   getCanonicalProfilePath,
 } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatMonthYear } from '@/lib/utils/dbTimestamp';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';

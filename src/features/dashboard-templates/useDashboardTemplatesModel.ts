@@ -19,6 +19,7 @@ import {
   buildConsoleTemplateEditPath,
   buildPublicTemplatesPath,
 } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { isPersonalTemplateOf } from '@/lib/templates/templateOwnership';
 import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
@@ -86,12 +87,6 @@ type DeleteDashboardTemplateOptions = {
 type DeleteDashboardTemplateDependencies = {
   deleteTemplate: DeleteTemplate;
 };
-
-const countTemplateItems = (template: ChecklistTemplate): number =>
-  template.sections.reduce(
-    (total, section) => total + section.items.length,
-    0,
-  );
 
 export const getInitialDashboardTemplateId = (
   templates: ChecklistTemplate[],

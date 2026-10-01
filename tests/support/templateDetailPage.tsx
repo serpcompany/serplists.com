@@ -41,8 +41,9 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
   const { duplicateOwnedTemplate } = await import(
     '@/features/template-detail/templateActionOutcome'
   );
+  const { countTemplateItems } = await import('@/lib/templates/templateItemCount');
   return {
-    useTemplateDetailModel: function useModelWithTheRealPermissionsAndDuplicate(options: {
+    useTemplateDetailModel: function useModelWithTheRealPermissionsDuplicateAndTaskCount(options: {
       canEditTemplates: boolean;
       createTemplate: Parameters<typeof duplicateOwnedTemplate>[0]['createTemplate'];
       teamId?: string;
@@ -62,6 +63,7 @@ vi.mock('@/features/template-detail/useTemplateDetailModel', async () => {
           template: model.template,
           userId: options.userId,
         }),
+        totalItems: model.template ? countTemplateItems(model.template) : 0,
         ...model,
       };
     },

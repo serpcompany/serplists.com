@@ -142,6 +142,3 @@ export const buildTemplateCopyPayload = (
   title: buildDuplicateTemplateTitle(template.title),
   type: template.type ?? 'checklist',
 });
-
-export const countTemplateItems = (template: ChecklistTemplate): number =>
-  template.sections.reduce((total, section) => total + section.items.length, 0);

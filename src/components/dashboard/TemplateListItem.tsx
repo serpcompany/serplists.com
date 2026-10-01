@@ -13,6 +13,7 @@ import {
   buildConsoleTemplateEditPath,
   buildConsoleTemplatePath,
 } from '@/lib/routes';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
 
@@ -32,10 +33,7 @@ export function TemplateListItem({
   template,
 }: TemplateListItemProps) {
   const sectionCount = template.sections.length;
-  const taskCount = template.sections.reduce(
-    (count, section) => count + section.items.length,
-    0,
-  );
+  const taskCount = countTemplateItems(template);
   const TypeIcon = template.type === 'recipe' ? List : FileText;
   const hasActions = Boolean(onStartRun || canEdit || onDelete);
 

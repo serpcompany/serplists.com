@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
 import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 import { shareTemplateToPublic } from './shareTemplate';
@@ -15,7 +16,6 @@ import {
   type TemplateDetailActionResult,
   type TemplateDetailBillingState,
 } from './templateActionOutcome';
-import { countTemplateItems } from './templateDetailMappers';
 import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
 import { getTemplateDetailPermissions } from './templatePermissions';
 import { setTemplateVisibility } from './templateVisibility';

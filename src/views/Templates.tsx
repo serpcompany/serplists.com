@@ -37,6 +37,7 @@ import { usePageVisit } from '@/hooks/usePageVisit';
 import { useRedirectPending } from '@/hooks/useRedirectPending';
 import { useViewModePreference } from '@/hooks/useViewModePreference';
 import { isStaleRecordError } from '@/lib/editConflicts';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { compareTemplatesByRecent } from '@/lib/templates/templateRecency';
 import { formatCount } from '@/lib/utils/pluralize';
 import {
@@ -101,16 +102,7 @@ const Templates = () => {
         }
 
         if (sortBy === 'tasks') {
-          const leftTasks = left.sections.reduce(
-            (count, section) => count + section.items.length,
-            0,
-          );
-          const rightTasks = right.sections.reduce(
-            (count, section) => count + section.items.length,
-            0,
-          );
-
-          return rightTasks - leftTasks;
+          return countTemplateItems(right) - countTemplateItems(left);
         }
 
         return compareTemplatesByRecent(left, right);
