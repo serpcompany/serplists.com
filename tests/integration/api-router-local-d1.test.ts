@@ -194,7 +194,7 @@ describe.sequential("the API router against local D1", () => {
 
     it("creates a template and reads it back", async () => {
       const id = await createTemplate({
-        title: "Test Template",
+        title: "Launch Checklist",
         description: "A test template",
         categories: ["Test", "Demo"],
         tags: ["test", "automated"],
@@ -205,7 +205,7 @@ describe.sequential("the API router against local D1", () => {
       const template = await json(response);
 
       expect(response.status).toBe(200);
-      expect(template).toMatchObject({ id, title: "Test Template", categories: ["Test", "Demo"], tags: ["test", "automated"] });
+      expect(template).toMatchObject({ id, title: "Launch Checklist", categories: ["Test", "Demo"], tags: ["test", "automated"] });
       expect((await archiveTemplate(id)).status).toBe(200);
     });
 
@@ -215,7 +215,7 @@ describe.sequential("the API router against local D1", () => {
       const response = await asOwner(`templates/${id}`, {
         method: "PUT",
         body: {
-          title: "Updated Template Title",
+          title: "Launch Checklist, Revised",
           description: "Updated description",
           categories: ["Updated"],
           is_public: true,
@@ -226,7 +226,7 @@ describe.sequential("the API router against local D1", () => {
       expect(response.status).toBe(200);
       expect(await json(response)).toMatchObject({ success: true, id, version: 2 });
       expect(await json(await asOwner(`templates/${id}`))).toMatchObject({
-        title: "Updated Template Title",
+        title: "Launch Checklist, Revised",
         description: "Updated description",
         categories: ["Updated"],
       });
