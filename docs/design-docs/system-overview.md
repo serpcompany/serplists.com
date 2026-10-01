@@ -84,7 +84,11 @@ The route handler `src/app/api/[[...route]]/route.ts` exports the same handler f
 method Next.js routes, `HEAD`, `PATCH` and `OPTIONS` included, so every `/api/*` request
 reaches the API router (`functions/api/[[route]].ts`) instead of a page. A `HEAD` answer keeps
 the status and headers the route builds and drops the body; routes that only check
-for `GET` answer `HEAD` with their own `404` or `405`.
+for `GET` answer `HEAD` with their own `404` or `405`. The router gets a plain copy of the
+request (method, headers, body and abort signal), because it builds new requests from the
+one it gets and workerd's `Request` constructor does not take Next.js's `NextRequest` as its
+input. The copy sets `duplex: 'half'`, which Node.js (`next dev`) requires for a streamed
+body and workerd ignores.
 
 Run responses include `template_version`, `current_template_version`, `revision`,
 and derived `is_stale`. Send `expected_revision` when updating a run and

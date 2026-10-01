@@ -25,7 +25,8 @@ pattern it follows, and its proof pass (SERP's UI runbook).
 - **Markdown text:** `MarkdownBlock` (`src/components/shared/MarkdownBlock.tsx`) renders
   every Markdown block with `prose prose-sm`. `src/app/globals.css` points the prose colors
   at the theme tokens, so no `dark:prose-invert` is needed, and turns off the backticks
-  around inline code and the bullets on task lists. Single newlines stay line breaks
+  around inline code and the bullets on task lists. Those rules sit outside any `@layer`,
+  so they win over the typography plugin's own. Single newlines stay line breaks
   (`whitespace-pre-line`); `src/lib/utils/markdownWhitespace.ts` removes the newlines
   between blocks that would otherwise show as blank lines.
 - **Themes:** light (default) and dark, stored under `serplists-theme` and applied
@@ -35,7 +36,10 @@ pattern it follows, and its proof pass (SERP's UI runbook).
   never disagrees with the page; do not add your own `storage` listener. Before the page
   paints, an inline script the root layout renders (`src/lib/themeBootScript.ts`) sets the
   class from the same key, so a dark-theme page never starts white; keep it in step with
-  `src/lib/theme.ts`. The server cannot read the stored theme, so a component that shows
+  `src/lib/theme.ts`. It is a plain `<script>`, which the browser runs while it parses the
+  page (`next/script`'s `beforeInteractive` would wait for Next.js's runtime to load), and
+  `<html>` has `suppressHydrationWarning` because the class it sets is not in the server's
+  HTML. The server cannot read the stored theme, so a component that shows
   the theme (a toggle's label) renders light first and follows the stored theme on mount.
 - **Icons:** `lucide-react`.
 - **Feedback:** `sonner` toasts for results of user actions. The app's providers

@@ -1,6 +1,5 @@
-import { QueryClient } from '@tanstack/react-query';
+import { APP_QUERY_STALE_TIME_MS, createQueryClient } from '@/app/providers';
 
-export const APP_QUERY_STALE_TIME = 60 * 1000;
+export const APP_QUERY_STALE_TIME = APP_QUERY_STALE_TIME_MS;
 
-export const createQueryClientWithAppDefaults = () =>
-  new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: APP_QUERY_STALE_TIME } } });
+export const createQueryClientWithAppDefaults = createQueryClient;

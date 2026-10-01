@@ -12,8 +12,6 @@ type Props = { params: Promise<{ username: string }> };
 const loadSeo = async (params: Props['params']) =>
   loadProfilePageSeo(routeParam((await params).username));
 
-// The profile's name and summary, rendered on the server; a profile that does not exist is
-// kept out of search, and a failed lookup keeps the site's defaults.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const result = await loadSeo(params);
   return result.kind === 'unavailable' ? {} : buildPageMetadata(result.seo);

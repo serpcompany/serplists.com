@@ -36,7 +36,9 @@ The views are client components, and the server renders them too. A view must re
 same HTML on the server and in the browser's first render, or hydration fails: never read
 `window`, `document` or browser storage while rendering (read them in an effect, or with
 `useSyncExternalStore` and a server snapshot, like `useCurrentPath`), and never keep one
-visitor's data in module-level state, which the server would share with the next visitor.
+visitor's data in module-level state, which the server would share with the next visitor
+(so `Providers` creates the QueryClient in its state, one per tab, with the defaults
+`createQueryClient` in `src/app/providers.tsx` sets).
 A view that reads the query with `useSearchParams` on a statically rendered page is
 wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/`,
 `/reset-password/`): the server sends the fallback and the browser renders the rest.
@@ -486,7 +488,7 @@ the page says otherwise. The route also renders the same text as JSON-LD (`JsonL
 A site is not production unless `SITE_ENV=production` marks it (`isProductionSite` in
 `src/lib/seo/siteOrigin.ts`, the SERP environment configuration standard); nothing is inferred
 from the host. The value is read where it is used, never at module load, when a Worker's vars
-are not set yet: at build time for the static pages, the
+are not set yet: at build time for the static pages (`/robots.txt` among them), the
 `next.config.ts` headers and redirects and `public/_headers`, and from the Worker's vars for
 what renders on request, so each environment sets it in both (`wrangler.toml`,
 [RELIABILITY.md](RELIABILITY.md#environments-and-hosts)). Anything but production (staging, a
@@ -499,7 +501,8 @@ local build or `next dev`):
   allows crawling and lists `https://serplists.com/sitemap.xml`);
 - loads no Google Tag Manager (the root layout renders its bootstrap only on production).
 
-Share pages are noindex on every environment. `tests/unit/seo/siteEnvIndexing.test.ts` checks
+Share pages are noindex on every environment, in their metadata and in the `X-Robots-Tag`
+that `next.config.ts` sends for `/share/`. `tests/unit/seo/siteEnvIndexing.test.ts` checks
 both sides, and `scripts/check-site-standards.mjs` checks a running site.
 
 - Static pages export `metadata` (`/templates/`, `/categories/`, the 404 page).

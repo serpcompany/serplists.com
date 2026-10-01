@@ -4,7 +4,8 @@ How search engines and link previews find the public pages: the XML sitemaps
 (`functions/sitemap/`) and the lookups behind the public pages' server-rendered metadata
 (`src/server/pageMeta/` and `functions/seo/`). The route handlers in `src/app/sitemap.xml`
 and `src/app/sitemaps` only hand these modules the request, the Worker's bindings and
-`waitUntil` (`getSitemapContext` in `src/server/sitemapContext.ts`). Page titles,
+`waitUntil` (`getSitemapContext` in `src/server/sitemapContext.ts`); they export only `GET`,
+which Next.js also runs for `HEAD`, without the body. Page titles,
 robots rules and environments are in [FRONTEND.md](../FRONTEND.md#page-titles-and-meta-tags),
 and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries).
 

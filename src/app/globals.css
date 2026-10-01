@@ -130,10 +130,6 @@
   }
 }
 
-/* Markdown text blocks (src/components/shared/MarkdownBlock.tsx, `prose prose-sm`): the prose
-   colors come from the theme tokens, so the same classes work in light and dark mode without
-   dark:prose-invert. Inline code shows no backticks, and task lists show their checkboxes
-   without bullets. Unlayered, so it wins over the typography plugin's own rules. */
 .prose {
   --tw-prose-body: var(--foreground);
   --tw-prose-headings: var(--foreground);

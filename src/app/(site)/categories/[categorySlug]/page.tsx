@@ -12,8 +12,6 @@ type Props = { params: Promise<{ categorySlug: string }> };
 const loadSeo = async (params: Props['params']) =>
   loadCategoryPageSeo(routeParam((await params).categorySlug));
 
-// The category's name, template count and canonical URL, rendered on the server. A category
-// the server cannot name keeps the site's defaults, and the page decides in the browser.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const seo = await loadSeo(params);
   return seo ? buildPageMetadata(seo) : {};

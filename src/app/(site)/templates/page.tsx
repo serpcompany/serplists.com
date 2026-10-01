@@ -19,8 +19,6 @@ export default function Page() {
   return (
     <>
       <JsonLd data={buildPageJsonLd(seo)} />
-      {/* The library keeps its filters in the query, which a statically rendered page only
-          knows in the browser: the server sends the loading layout. */}
       <Suspense fallback={<ChecklistLibrarySkeleton />}>
         <ChecklistLibrary />
       </Suspense>

@@ -14,9 +14,6 @@ const loadSeo = async (params: Props['params']) => {
   return loadTemplatePageSeo(routeParam(username), routeParam(templateSlug));
 };
 
-// The template's own title, description, canonical URL and link preview, rendered on the
-// server; a template that is gone is kept out of search, and a failed lookup keeps the
-// site's defaults.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const result = await loadSeo(params);
   return result.kind === 'unavailable' ? {} : buildPageMetadata(result.seo);
