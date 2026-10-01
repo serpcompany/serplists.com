@@ -3,10 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { APP_BRAND_NAME } from '@/lib/brand';
 import { buildPageJsonLd, buildPageMetadata, type PageSeo } from '@/lib/seo/pageMetadata';
 
-// Every page's title, description, canonical URL, link preview and robots rule come from
-// buildPageMetadata, rendered on the server, and its JSON-LD from buildPageJsonLd. These are
-// the rules SEOHead applied in the browser before the pages moved to Next.js.
-
 const allText = (seo: PageSeo) => JSON.stringify([buildPageMetadata(seo), buildPageJsonLd(seo)]);
 
 describe('page metadata URL', () => {
@@ -85,9 +81,7 @@ describe('page metadata robots', () => {
     expect(buildPageMetadata({ title: 'Shared run', robots: 'noindex, nofollow' }).robots).toBe('noindex, nofollow');
   });
 
-  // The server builds the tags for whichever host was asked: staging and workers.dev hosts
-  // name production and are kept out of search by X-Robots-Tag (tests/unit/seo/hostIndexing.test.ts).
-  it('never names the host that served the page', () => {
+  it('never names the host that served the page, since every environment names the production URL', () => {
     const text = allText({ title: 'Camping', path: '/profile/a/b' });
 
     expect(text).not.toMatch(/staging\.serplists\.com|workers\.dev|pages\.dev|localhost/);
