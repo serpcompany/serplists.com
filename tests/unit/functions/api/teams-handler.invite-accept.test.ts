@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 import { auditMocks, dbMocks, inAMinute, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
+import { anyInstanceOf, anything, objectContaining } from "../../../support/asymmetricMatchers";
 
 const joinedTeamBody = z.object({ teamId: z.string(), memberId: z.string(), team: z.record(z.unknown()) }).passthrough();
 
@@ -56,7 +57,7 @@ describe("Teams handler", () => {
     expect(data.memberId).toBe("member-created");
     expect(data.role).toBe("editor");
     expect(data.team).toEqual(
-      expect.objectContaining({
+      objectContaining({
         id: "team-1",
         memberId: "member-created",
         membershipStatus: "active",
@@ -69,14 +70,14 @@ describe("Teams handler", () => {
     expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
     expect(dbMocks.insertChain.select).toHaveBeenCalled();
     expect(dbMocks.insertChain.onConflictDoNothing).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: expect.any(Array),
+      objectContaining({
+        target: anyInstanceOf(Array),
       }),
     );
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         accepted_by_user_id: "user-1",
-        accepted_at: expect.any(String),
+        accepted_at: anyInstanceOf(String),
       }),
     );
   });
@@ -89,11 +90,11 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
-      expect.objectContaining({
+      objectContaining({
         memberId: "member-created",
         role: "viewer",
         teamId: "team-1",
-        team: expect.objectContaining({
+        team: objectContaining({
           name: "Acme Team",
           role: "viewer",
         }),
@@ -112,7 +113,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(403);
     expect(JSON.parse(body)).toEqual(
-      expect.objectContaining({
+      objectContaining({
         error: "Invite is for a different email address",
         code: "invite_email_mismatch",
       }),
@@ -146,18 +147,18 @@ describe("Teams handler", () => {
     const data = await response.json();
 
     expect(response.status).toBe(409);
-    expect(data).toEqual(expect.objectContaining({
+    expect(data).toEqual(objectContaining({
       code: "team_member_exists",
       details: { teamId: "team-1", role: "admin" },
     }));
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ role: expect.anything() }));
-    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(expect.objectContaining({ accepted_at: expect.any(String) }));
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String), updated_at: expect.any(String) });
-    expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(expect.objectContaining({
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(objectContaining({ role: anything() }));
+    expect(dbMocks.updateChain.set).not.toHaveBeenCalledWith(objectContaining({ accepted_at: anyInstanceOf(String) }));
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: anyInstanceOf(String), updated_at: anyInstanceOf(String) });
+    expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(objectContaining({
       action: "team_invite.revoked",
       metadata: { reason: "invitee_already_member" },
     }));
-    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalledWith(objectContaining({
       action: "team_invite.accepted",
     }));
   });

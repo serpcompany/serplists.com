@@ -6,6 +6,7 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { columnNamesIn } from '../../../support/drizzleSql';
 import { readJson } from '../../../support/readJson';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const historyBody = z
   .object({
@@ -104,17 +105,17 @@ describe('Templates Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.subject).toEqual({ type: 'team', id: 'team-1' });
     expect(data.versions[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         action: 'template.updated',
         version: 2,
-        actor: expect.objectContaining({ name: 'Editor Example' }),
+        actor: objectContaining({ name: 'Editor Example' }),
         metadata: { visibility: 'public' },
       }),
     );
     expect(data.events).toEqual([
-      expect.objectContaining({ id: 'audit-4', action: 'template.restored', metadata: null }),
-      expect.objectContaining({ id: 'audit-3', action: 'template.deleted', metadata: null }),
-      expect.objectContaining({ id: 'audit-2', action: 'template.updated', metadata: { visibility: 'public' } }),
+      objectContaining({ id: 'audit-4', action: 'template.restored', metadata: null }),
+      objectContaining({ id: 'audit-3', action: 'template.deleted', metadata: null }),
+      objectContaining({ id: 'audit-2', action: 'template.updated', metadata: { visibility: 'public' } }),
     ]);
     for (const event of data.events) {
       expect(event).not.toHaveProperty('diff');
@@ -154,7 +155,7 @@ describe('Templates Handlers', () => {
     const data = historyBody.parse(JSON.parse(body));
 
     expect(response.status).toBe(200);
-    expect(data.events).toEqual([expect.objectContaining({ id: 'audit-1', metadata: { source: 'test' } })]);
+    expect(data.events).toEqual([objectContaining({ id: 'audit-1', metadata: { source: 'test' } })]);
     expect(data.events[0]).not.toHaveProperty('diff');
     expect(body.length).toBeLessThan(2_000);
     expect(dbMocks.selectChain.limit).toHaveBeenNthCalledWith(2, 50);
@@ -204,7 +205,7 @@ describe('Templates Handlers', () => {
       [3, agent],
       [2, null],
     ]);
-    expect(data.events[1]).toEqual(expect.objectContaining({ id: 'audit-3', metadata: agent }));
+    expect(data.events[1]).toEqual(objectContaining({ id: 'audit-3', metadata: agent }));
   });
 
   it('should not expose public template history to non-owners', async () => {

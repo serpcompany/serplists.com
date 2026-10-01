@@ -11,6 +11,7 @@ import {
 } from '@/lib/api-errors';
 import { getAuthStatus } from '@/lib/auth-client';
 import { TEMPLATE_UPDATE_RESPONSE_ERROR } from '@/lib/templateUpdateResult';
+import { anyInstanceOf, objectContaining } from '../../support/asymmetricMatchers';
 
 const serverAnswers = (body: unknown, status = 200) =>
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -47,8 +48,8 @@ describe('API client answers, each parsed with the schema its endpoint passes', 
       status: 200,
       code: UNREADABLE_RESPONSE_CODE,
       message: UNREADABLE_RESPONSE_MESSAGE,
-      details: { issues: [expect.objectContaining({ code: 'invalid_type' })] },
-      cause: expect.any(ZodError),
+      details: { issues: [objectContaining({ code: 'invalid_type' })] },
+      cause: anyInstanceOf(ZodError),
     });
     expect(getAccessFailure(error, 'Unable to load templates.')).toEqual({ kind: 'error', message: UNREADABLE_RESPONSE_MESSAGE });
   });

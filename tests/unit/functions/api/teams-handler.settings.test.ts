@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const updatedTeamBody = z.object({ team: z.record(z.unknown()) }).passthrough();
 
@@ -40,19 +41,19 @@ describe("Teams handler", () => {
     const data = await readJson(response, updatedTeamBody);
 
     expect(response.status).toBe(200);
-    expect(data.team).toEqual(expect.objectContaining({ name: "New Team", slug: "new-team" }));
+    expect(data.team).toEqual(objectContaining({ name: "New Team", slug: "new-team" }));
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         name: "New Team",
         slug: "new-team",
-        updated_at: expect.any(String),
+        updated_at: anyInstanceOf(String),
       }),
     );
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: "team.updated",
         before: team,
-        diff: expect.objectContaining({ name: "New Team", slug: "new-team" }),
+        diff: objectContaining({ name: "New Team", slug: "new-team" }),
       }),
     );
   });
@@ -120,7 +121,7 @@ describe("Teams handler", () => {
     const response = await updateTheTeam({ name: "New Team", slug: storedSlug });
 
     expect(response.status).toBe(200);
-    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(expect.objectContaining({ name: "New Team" }));
+    expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(objectContaining({ name: "New Team" }));
     expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).not.toHaveProperty("slug");
   });
 });

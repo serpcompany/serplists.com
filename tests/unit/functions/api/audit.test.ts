@@ -6,6 +6,7 @@ import { firstOf, valueAt } from '../../../support/elements';
 import { createDb, schema } from '@functions/api/db';
 import { buildAuditEventValues, insertAuditEventWhen, type AuditEventInput } from '@functions/api/utils/audit';
 import { SqliteD1 } from '../../../support/sqlite-d1';
+import { anyInstanceOf, objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 
 const drizzleThatOnlyBuildsSql = createDb({ DB: {} } as never);
 
@@ -63,7 +64,7 @@ describe('insertAuditEventWhen', () => {
     expect(runGeneratedSql(db, auditInsert)).toBe(1);
     expect(runGeneratedSql(db, runUpdate)).toBe(1);
     expect(events(db)).toEqual([
-      expect.objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
+      objectContaining({ action: 'checklist_run.reconciled', resource_id: 'run-1' }),
     ]);
     expect(JSON.parse(valueAt(firstOf(events(db)), 'metadata_json')).retired[0].id).toBe('item-dns');
   });
@@ -148,7 +149,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
       expect(snapshot).not.toHaveProperty('items');
       expect(snapshot).not.toHaveProperty('retired_items');
       expect(snapshot).not.toHaveProperty('share_token');
-      expect(snapshot).toEqual(expect.objectContaining({ id: 'run-1', status: 'in_progress' }));
+      expect(snapshot).toEqual(objectContaining({ id: 'run-1', status: 'in_progress' }));
     }
     const diff = JSON.parse(values.diff_json ?? '{}');
     expect(diff).toEqual({
@@ -205,7 +206,7 @@ describe('buildAuditEventValues keeps audit rows small, since an oversized one w
     const values = await buildAuditEventValues(input({ metadata: { note: threeByteText } }));
 
     const marker = JSON.parse(values.metadata_json ?? '{}');
-    expect(marker).toEqual({ truncated: true, bytes: expect.any(Number), sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(marker).toEqual({ truncated: true, bytes: anyInstanceOf(Number), sha256: stringMatching(/^[0-9a-f]{64}$/) });
     expect(marker.bytes).toBeGreaterThan(90_000);
     expect(bytes(values.metadata_json)).toBeLessThan(200);
   });

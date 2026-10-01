@@ -16,6 +16,7 @@ import {
 } from '@/lib/schemas/checklistSchema';
 import { exportPortableTemplatesToJSON, parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistSection, ChecklistTemplate } from '@/types/checklist';
+import { objectContaining, stringMatching } from '../../../support/asymmetricMatchers';
 
 const everyContentTypeTheEditorCanAdd = templateEditorFormSchema.shape.sections.element.shape.items.element.shape.contents
   .unwrap().element.shape.type.options as TemplateEditorContentType[];
@@ -102,7 +103,7 @@ describe('portable template round trip', () => {
 
     expect(parsed.templates.map((template) => template.title)).toEqual(['Valid']);
     expect(parsed.warnings).toEqual([
-      expect.objectContaining({ templateTitle: 'No tasks', message: expect.stringMatching(/skipped/i) }),
+      objectContaining({ templateTitle: 'No tasks', message: stringMatching(/skipped/i) }),
     ]);
   });
 

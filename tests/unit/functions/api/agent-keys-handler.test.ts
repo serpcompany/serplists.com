@@ -18,6 +18,7 @@ import { apiEnv } from "../../../support/apiEnv";
 import { apiErrorBody, readJson } from "../../../support/readJson";
 import { wranglerEnvVars } from "../../../support/wranglerToml";
 import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const mockEnv = apiEnv();
 
@@ -69,10 +70,10 @@ describe("Personal run key management handler", () => {
     expect(response.headers.get("Pragma")).toBe("no-cache");
     expect(body).toEqual({
       key: {
-        id: expect.any(String),
+        id: anyInstanceOf(String),
         name: "Codex release runner",
         prefix: "slrk_raw-secr",
-        createdAt: expect.any(String),
+        createdAt: anyInstanceOf(String),
         lastUsedAt: null,
         revokedAt: null,
         permissions: ["templates:read", "runs:read", "runs:write"],
@@ -80,7 +81,7 @@ describe("Personal run key management handler", () => {
       },
       secret: "slrk_raw-secret-only-returned-once",
     });
-    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, expect.objectContaining({
+    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, objectContaining({
       user_id: "user-1",
       name: "Codex release runner",
       key_prefix: "slrk_raw-secr",
@@ -120,7 +121,7 @@ describe("Personal run key management handler", () => {
 
     expect(response.status).toBe(201);
     expect(body.key.permissions).toEqual(["templates:read", "templates:write"]);
-    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, expect.objectContaining({
+    expect(keyMocks.insertPersonalRunKeyWithinCap).toHaveBeenCalledWith(mockEnv, objectContaining({
       permissions: ["templates:read", "templates:write"],
     }));
   });
@@ -256,7 +257,7 @@ describe("Personal run key management handler", () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({ id: "key-1", revokedAt: "2026-09-19T02:00:00.000Z" });
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String) });
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: anyInstanceOf(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
     expect(dbMocks.db.select).not.toHaveBeenCalled();
   });
@@ -282,7 +283,7 @@ describe("Personal run key management handler", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(expect.objectContaining({ error: "Personal run key not found" }));
+    expect(await response.json()).toEqual(objectContaining({ error: "Personal run key not found" }));
   });
 
   it("rejects lookalike paths instead of treating them as the collection", async () => {

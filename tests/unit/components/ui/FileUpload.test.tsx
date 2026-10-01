@@ -6,6 +6,7 @@ import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
 import { findByAriaLabel, findElement, findFileInput, type AnyElement } from '../../../support/elementTree';
+import { objectContaining, stringContaining } from '../../../support/asymmetricMatchers';
 
 const useStateStub = vi.hoisted(() => ({ valueForEveryState: undefined as unknown, setterCalls: [] as unknown[] }));
 vi.mock('react', async (importOriginal) =>
@@ -116,7 +117,7 @@ describe('FileUpload', () => {
     expect(api.uploadToR2).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
       'Invalid file',
-      expect.objectContaining({ description: expect.stringContaining('PDF, ZIP, CSV') }),
+      objectContaining({ description: stringContaining('PDF, ZIP, CSV') }),
     );
   });
 

@@ -6,6 +6,7 @@ import { auditMocks, dbMocks, EVERY_GUARDED_WRITE_APPLIED, mockEnv, resetTeamsHa
 
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, jsonObject, readJson } from "../../../support/readJson";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
 const inFuture = () => new Date(Date.now() + 60_000).toISOString();
 const inPast = () => new Date(Date.now() - 60_000).toISOString();
@@ -84,7 +85,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
       teamName: "Acme Corp",
       teamSlug: "acme-corp",
       role: "editor",
-      expiresAt: expect.any(String),
+      expiresAt: anyInstanceOf(String),
       inviterName: "Owner User",
       inviterEmail: "owner@example.com",
     });
@@ -169,7 +170,7 @@ describe("Organization invite preview, which writes nothing so opening a link jo
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).toEqual(expect.objectContaining({ status: "already_member", teamName: "Acme Corp", role: "viewer" }));
+    expect(data).toEqual(objectContaining({ status: "already_member", teamName: "Acme Corp", role: "viewer" }));
     expectNoWrites();
   });
 
@@ -202,10 +203,10 @@ describe("Organization invite decline", () => {
 
     expect(response.status).toBe(200);
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ revoked_at: expect.any(String) }),
+      objectContaining({ revoked_at: anyInstanceOf(String) }),
     );
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "team_invite.declined", actorUserId: "user-1" }),
+      objectContaining({ action: "team_invite.declined", actorUserId: "user-1" }),
     );
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
   });
@@ -224,7 +225,7 @@ describe("Organization invite decline", () => {
     expect(query.sql).toMatch(/exists \(\s*select 1\s+from "team_invites"/);
     expect(query.sql).toContain('"team_invites"."id" = ?');
     expect(query.sql).toContain('"team_invites"."revoked_at" = ?');
-    expect(query.params).toEqual(expect.arrayContaining(["invite-1", revokedAt]));
+    expect(query.params).toEqual(arrayContaining(["invite-1", revokedAt]));
   });
 
   it("returns 404, not success, when the invite is accepted in another tab during the decline", async () => {
@@ -285,7 +286,7 @@ describe("Leaving an Organization", () => {
     expect(response.status).toBe(200);
     expect(dbMocks.db.delete).toHaveBeenCalledTimes(1);
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: "team_member.left",
         actorUserId: "user-1",
         resource: { type: "team_member", id: "member-1" },
@@ -309,7 +310,7 @@ describe("Leaving an Organization", () => {
       expect(query.sql).toContain(`"team_members"."${column}" = ?`);
     }
     expect(query.sql).toContain('"team_members"."role" <> ?');
-    expect(query.params).toEqual(expect.arrayContaining(["member-1", "team-1", "user-1", "owner"]));
+    expect(query.params).toEqual(arrayContaining(["member-1", "team-1", "user-1", "owner"]));
   });
 
   it("returns 409, not success, when ownership moves to the member or they leave in another tab during the leave", async () => {

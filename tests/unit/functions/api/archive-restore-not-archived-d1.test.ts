@@ -5,6 +5,7 @@ import { SqliteD1 } from "../../../support/sqlite-d1";
 
 import { handleChecklists } from "@functions/api/handlers/checklists";
 import { handleTemplates } from "@functions/api/handlers/templates";
+import { objectContaining } from "../../../support/asymmetricMatchers";
 
 const NOW = "2026-09-28T00:00:00.000Z";
 const ITEMS = JSON.stringify([{ id: "s1", title: "Section", items: [{ id: "i1", title: "Task" }] }]);
@@ -49,7 +50,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
   it("answers a Template restored elsewhere with code not_archived and records nothing", async () => {
     await expect(post(handleTemplates, "templates/template-1/restore")).resolves.toEqual({
       status: 400,
-      body: expect.objectContaining({ error: "Template is not archived", code: "not_archived" }),
+      body: objectContaining({ error: "Template is not archived", code: "not_archived" }),
     });
     expect(auditCount("template.restored")).toBe(0);
   });
@@ -57,7 +58,7 @@ describe("restore of an item that is not archived, on the migrated tables", () =
   it("answers a Run restored elsewhere with code not_archived and records nothing", async () => {
     await expect(post(handleChecklists, "checklists/run-1/restore")).resolves.toEqual({
       status: 400,
-      body: expect.objectContaining({ error: "Checklist is not archived", code: "not_archived" }),
+      body: objectContaining({ error: "Checklist is not archived", code: "not_archived" }),
     });
     expect(auditCount("checklist_run.restored")).toBe(0);
   });

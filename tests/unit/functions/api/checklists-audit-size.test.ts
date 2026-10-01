@@ -5,6 +5,7 @@ import { dbMocks, mockEnv, PRO_PLAN, resetToASignedInUser } from '../../../suppo
 import { handleChecklists } from '@functions/api/handlers/checklists';
 import { apiRequest } from '../../../support/apiRequest';
 import { getSessionUserId } from '@functions/api/utils/session';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const ROW_BUDGET_BYTES = 300 * 1024;
 const encoder = new TextEncoder();
@@ -59,7 +60,7 @@ function expectCompactAudit(toggledId: string) {
     expect(snapshot).not.toHaveProperty('share_token');
   }
   const diff = JSON.parse(audit.diff_json as string);
-  expect(diff.items).toEqual(expect.objectContaining({ completed: [toggledId] }));
+  expect(diff.items).toEqual(objectContaining({ completed: [toggledId] }));
 }
 
 describe('run audit rows stay small, since an oversized one would fail every save of the run it shares a D1 batch with', () => {

@@ -7,6 +7,7 @@ import { handleTeams } from "@functions/api/handlers/teams";
 import { columnNamesIn } from "../../../support/drizzleSql";
 import { jsonObject, readJson } from "../../../support/readJson";
 import { sha256Hex } from "@functions/api/utils/crypto";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
 const inviteLinkBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
 const inviteBody = z.object({ role: z.string() }).passthrough();
@@ -54,11 +55,11 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
-      expect.objectContaining({
+      objectContaining({
         id: "invite-1",
         email: "newhire@example.com",
         role: "viewer",
-        expiresAt: expect.any(String),
+        expiresAt: anyInstanceOf(String),
       }),
     );
     expect(typeof data.inviteToken).toBe("string");
@@ -87,7 +88,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
 
     const whereColumns = columnNamesIn(firstOf(dbMocks.updateChain.where.mock.calls)[0]);
     expect(whereColumns).toEqual(
-      expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
+      arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
   });
 
@@ -118,9 +119,9 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     expect(data.role).toBe("editor");
     expect(firstOf(dbMocks.updateChain.set.mock.calls)[0].role).toBe("editor");
     expect(firstOf(auditMocks.buildAuditEventValues.mock.calls)[0]).toEqual(
-      expect.objectContaining({
-        before: expect.objectContaining({ role: "viewer" }),
-        after: expect.objectContaining({ role: "editor" }),
+      objectContaining({
+        before: objectContaining({ role: "viewer" }),
+        after: objectContaining({ role: "editor" }),
       }),
     );
   });
@@ -155,7 +156,7 @@ describe("POST /api/teams/:teamId/invites/:inviteId/link, which replaces a lost 
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
     const whereColumns = columnNamesIn(elementAt(dbMocks.selectChain.where.mock.calls, 1)[0]);
     expect(whereColumns).toEqual(
-      expect.arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
+      arrayContaining(["id", "team_id", "accepted_at", "revoked_at", "expires_at"]),
     );
   });
 

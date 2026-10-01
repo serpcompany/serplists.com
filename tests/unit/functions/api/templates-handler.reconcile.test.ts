@@ -10,6 +10,7 @@ import { getSessionUserId } from '@functions/api/utils/session';
 import { columnNamesIn } from '../../../support/drizzleSql';
 import { storedSections, storedSectionsAsTheEditorResendsThem } from '../../../fixtures/editorResentSections';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { arrayContaining, objectContaining } from '../../../support/asymmetricMatchers';
 
 const reconciledBody = z.object({ reconciledRuns: z.number() }).passthrough();
 
@@ -134,26 +135,26 @@ describe('Templates Handlers', () => {
     const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
     const reconciledItems = JSON.parse(runUpdate.items);
     expect(reconciledItems[0].items).toEqual([
-      expect.objectContaining({
+      objectContaining({
         id: 'item-1',
         title: 'Start with the renamed project',
         isCompleted: true,
         notes: 'Keep me',
       }),
-      expect.objectContaining({ id: 'item-2', isCompleted: false }),
+      objectContaining({ id: 'item-2', isCompleted: false }),
     ]);
-    expect(runUpdate).toEqual(expect.objectContaining({
+    expect(runUpdate).toEqual(objectContaining({
       progress: 50,
       template_version: 2,
       revision: 5,
     }));
     const secondRunUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 2)[0];
-    expect(secondRunUpdate).toEqual(expect.objectContaining({
+    expect(secondRunUpdate).toEqual(objectContaining({
       progress: 0,
       template_version: 2,
       revision: 9,
     }));
-    expect(JSON.parse(secondRunUpdate.items)[0].items[0]).toEqual(expect.objectContaining({
+    expect(JSON.parse(secondRunUpdate.items)[0].items[0]).toEqual(objectContaining({
       id: 'item-1',
       isCompleted: false,
       notes: 'Different progress',
@@ -198,7 +199,7 @@ describe('Templates Handlers', () => {
 
     expect(response.status).toBe(200);
     const runUpdate = elementAt(dbMocks.updateChain.set.mock.calls, 1)[0];
-    expect(JSON.parse(runUpdate.items)[1].items[1]).toEqual(expect.objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
+    expect(JSON.parse(runUpdate.items)[1].items[1]).toEqual(objectContaining({ id: 'x', isCompleted: true, notes: 'called vendor' }));
     expect(JSON.parse(runUpdate.retired_items)).toEqual([]);
     expect(runUpdate.progress).toBe(33);
   });
@@ -251,10 +252,10 @@ describe('Templates Handlers', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ success: true, structureChanged: false, reconciledRuns: 0, content_version: 2, version: 4 }));
+      expect(data).toEqual(objectContaining({ success: true, structureChanged: false, reconciledRuns: 0, content_version: 2, version: 4 }));
       expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
       const templateUpdate = firstOf(dbMocks.updateChain.set.mock.calls)[0];
-      expect(templateUpdate).toEqual(expect.objectContaining({ title: 'Launch plan v2', description: 'Ship it well', is_public: true, version: 4 }));
+      expect(templateUpdate).toEqual(objectContaining({ title: 'Launch plan v2', description: 'Ship it well', is_public: true, version: 4 }));
       expect(templateUpdate).not.toHaveProperty('content_version');
       expect(templateUpdate).not.toHaveProperty('items');
       expect(templateUpdate).not.toHaveProperty('slug');
@@ -267,12 +268,12 @@ describe('Templates Handlers', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ version: 4, content_version: 2, structureChanged: false, reconciledRuns: 0 }));
+      expect(data).toEqual(objectContaining({ version: 4, content_version: 2, structureChanged: false, reconciledRuns: 0 }));
       const templateUpdate = firstOf(dbMocks.updateChain.set.mock.calls)[0];
-      expect(templateUpdate).toEqual(expect.objectContaining({ is_public: true, version: 4 }));
+      expect(templateUpdate).toEqual(objectContaining({ is_public: true, version: 4 }));
       expect(templateUpdate).not.toHaveProperty('content_version');
       expect(versionInserts()).toHaveLength(1);
-      expect(firstOf(versionInserts())[0]).toEqual(expect.objectContaining({ version: 4 }));
+      expect(firstOf(versionInserts())[0]).toEqual(objectContaining({ version: 4 }));
       expect(dbMocks.selectChain.orderBy).not.toHaveBeenCalled();
     });
 
@@ -294,7 +295,7 @@ describe('Templates Handlers', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ version: 3 }));
+      expect(data).toEqual(objectContaining({ version: 3 }));
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
 
@@ -303,7 +304,7 @@ describe('Templates Handlers', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ success: true, version: 3, content_version: 2, structureChanged: false }));
+      expect(data).toEqual(objectContaining({ success: true, version: 3, content_version: 2, structureChanged: false }));
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
       expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     });
@@ -319,11 +320,11 @@ describe('Templates Handlers', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data).toEqual(expect.objectContaining({ structureChanged: true, reconciledRuns: 1, content_version: 3, version: 4 }));
-      expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(expect.objectContaining({ content_version: 3, version: 4 }));
+      expect(data).toEqual(objectContaining({ structureChanged: true, reconciledRuns: 1, content_version: 3, version: 4 }));
+      expect(firstOf(dbMocks.updateChain.set.mock.calls)[0]).toEqual(objectContaining({ content_version: 3, version: 4 }));
       expect(JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items)[0].items.map((item: { id: string }) => item.id))
         .toEqual(['item-2', 'item-1']);
-      expect(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0]).toEqual(expect.objectContaining({ template_version: 3, revision: 2 }));
+      expect(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0]).toEqual(objectContaining({ template_version: 3, revision: 2 }));
     });
     it('records a reconciled event on each run whose work changed, naming what it retired but never its notes, on the run update\'s own condition', async () => {
       const withoutPublish = storedSectionsAsTheEditorResendsThem.map((section) => ({
@@ -349,9 +350,9 @@ describe('Templates Handlers', () => {
       const guardedInserts = dbMocks.insertChain.select.mock.calls.map(([query]) => dialect.sqlToQuery(query as SQL));
       expect(guardedInserts).toHaveLength(1);
       const { sql: insertSql, params } = onlyElement(guardedInserts);
-      expect(params).toEqual(expect.arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
+      expect(params).toEqual(arrayContaining(['checklist_run.reconciled', 'run-1', 'user-123']));
       const metadata = JSON.parse(params.find((param) => typeof param === 'string' && param.includes('"retired"')) as string);
-      expect(metadata).toEqual(expect.objectContaining({
+      expect(metadata).toEqual(objectContaining({
         templateId: 'template-1',
         templateVersion: 3,
         fromRevision: 4,
@@ -366,7 +367,7 @@ describe('Templates Handlers', () => {
       expect(statements[3]).toEqual({ kind: 'conditional-insert' });
       expect(statements[4]).toBe(dbMocks.updateChain);
       expect(JSON.parse(elementAt(dbMocks.updateChain.set.mock.calls, 1)[0].retired_items)).toEqual([
-        expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),
+        objectContaining({ kind: 'item', item: objectContaining({ id: 'item-2', notes: 'Registrar login is in vault X' }) }),
       ]);
     });
   });

@@ -7,6 +7,7 @@ import {
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const originalRun = [
   {
@@ -93,10 +94,10 @@ describe('template run reconciliation', () => {
       { id: 'sub-short', title: 'Short copy', isCompleted: true },
     ]);
     expect(result.retired).toEqual([
-      expect.objectContaining({
+      objectContaining({
         kind: 'item',
         sectionId: 'section-content',
-        item: expect.objectContaining({ id: 'item-retired', notes: 'Kept for audit history' }),
+        item: objectContaining({ id: 'item-retired', notes: 'Kept for audit history' }),
       }),
     ]);
     expect(calculateRunProgress(result.sections)).toBe(20);
@@ -126,8 +127,8 @@ describe('template run reconciliation', () => {
     const result = reconcileRunSections(originalRun, evolvedTemplate, []);
 
     expect(result.retired).toEqual([
-      expect.objectContaining({ kind: 'subItem', subItem: expect.objectContaining({ id: 'sub-long' }) }),
-      expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-retired' }) }),
+      objectContaining({ kind: 'subItem', subItem: objectContaining({ id: 'sub-long' }) }),
+      objectContaining({ kind: 'item', item: objectContaining({ id: 'item-retired' }) }),
     ]);
     expect(calculateRunProgress(result.sections)).toBe(100);
   });
@@ -231,8 +232,8 @@ describe('template run reconciliation', () => {
       notes: 'Legacy note',
     });
     expect(contentAt(taskIn(sectionsOf(result), 0, 0), 0).subItems).toEqual([
-      expect.objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
-      expect.objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
+      objectContaining({ id: 'legacy-subitem-1-1-1', isCompleted: true }),
+      objectContaining({ id: 'legacy-subitem-1-1-2', isCompleted: false }),
     ]);
     expect(taskIn(sectionsOf(result), 0, 1)).toMatchObject({
       id: 'legacy-item-1-2',
@@ -263,16 +264,16 @@ describe('template run reconciliation', () => {
 
     expect(result.retired).toEqual([]);
     expect(result.sections).toEqual([
-      expect.objectContaining({
+      objectContaining({
         id: '1',
         items: [
-          expect.objectContaining({
+          objectContaining({
             id: 'legacy-item-1-1',
             title: 'Publish renamed listing',
             isCompleted: true,
             notes: 'Submitted copy is approved',
           }),
-          expect.objectContaining({
+          objectContaining({
             id: '1-2',
             title: 'Upload new screenshots',
             isCompleted: false,

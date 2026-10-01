@@ -15,6 +15,7 @@ import {
 import { serializeSharedChecklistRun } from '@functions/api/utils/checklist-runs';
 import { apiRunSchema } from '@/lib/schemas/apiRuns';
 import type { ChecklistItem, ChecklistRun } from '@/types/checklist';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const run = (completed: string[]): ChecklistRun =>
   ({
@@ -302,8 +303,8 @@ describe('mapChecklistToRun retired work', () => {
     };
     const [entry] = mapChecklistToRun(checklist([{ kind: 'item', sectionId: 's1', item }]), 'run-1').retiredItems ?? [];
 
-    expect(entry).toEqual(expect.objectContaining({
-      task: expect.objectContaining({ subTasks: [{ id: 'short', title: 'Short', isCompleted: true }] }),
+    expect(entry).toEqual(objectContaining({
+      task: objectContaining({ subTasks: [{ id: 'short', title: 'Short', isCompleted: true }] }),
     }));
   });
 
@@ -322,7 +323,7 @@ describe('mapChecklistToRun retired work', () => {
     const items = mapChecklistToRun(checklist([first, second]), 'run-1').retiredItems ?? [];
 
     expect(items).toHaveLength(1);
-    expect(items[0]).toEqual(expect.objectContaining({ task: expect.objectContaining({ notes: 'Second' }) }));
+    expect(items[0]).toEqual(objectContaining({ task: objectContaining({ notes: 'Second' }) }));
   });
 
   it('never counts retired work toward progress, completion or the next task', () => {
@@ -355,15 +356,15 @@ describe('mapChecklistRuns', () => {
     const runs = mapChecklistRuns([malformed, valid]);
 
     expect(runs.map((run) => run.id)).toEqual(['run-bad', 'run-ok']);
-    expect(runs[0]).toEqual(expect.objectContaining({ teamId: 'org-1', progress: 0 }));
-    expect(runs[1]).toEqual(expect.objectContaining({ progress: 100 }));
+    expect(runs[0]).toEqual(objectContaining({ teamId: 'org-1', progress: 0 }));
+    expect(runs[1]).toEqual(objectContaining({ progress: 100 }));
   });
 
   it('keeps a run whose items column is not even JSON, with no tasks, so it can still be deleted', () => {
     const runs = mapChecklistRuns([{ id: 'run-broken', title: 'Broken', items: '{not json' }, valid]);
 
     expect(runs.map((run) => run.id)).toEqual(['run-broken', 'run-ok']);
-    expect(runs[0]).toEqual(expect.objectContaining({ sections: [], progress: 0 }));
+    expect(runs[0]).toEqual(objectContaining({ sections: [], progress: 0 }));
   });
 });
 

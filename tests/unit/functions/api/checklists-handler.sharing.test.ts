@@ -14,6 +14,7 @@ import {
 } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
+import { anyInstanceOf, objectContaining } from '../../../support/asymmetricMatchers';
 
 const ONE_UNTICKED_ITEM = '[{"id":"item-1","title":"Item 1","isCompleted":false}]';
 
@@ -32,13 +33,13 @@ async function expectShareCreated(response: Response, audit: Record<string, unkn
   expect(response.status).toBe(200);
   expect(data.id).toBe('run-1');
   expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-    expect.objectContaining({
+    objectContaining({
       is_public: true,
-      share_token: expect.any(String),
+      share_token: anyInstanceOf(String),
     }),
   );
   expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-    expect.objectContaining({ action: 'checklist_run.share_created', ...audit }),
+    objectContaining({ action: 'checklist_run.share_created', ...audit }),
   );
   return data;
 }
@@ -180,13 +181,13 @@ describe('Checklists Handlers', () => {
     expect(JSON.parse(update.items)).toEqual([
       { id: '1', title: 'Checklist', items: [{ id: 'item-1', title: 'Item 1', isCompleted: true }] },
     ]);
-    expect(update).toEqual(expect.objectContaining({ status: 'completed', progress: 100 }));
+    expect(update).toEqual(objectContaining({ status: 'completed', progress: 100 }));
     const batchStatements = firstOf(dbMocks.db.batch.mock.calls)[0];
     expect(batchStatements).toHaveLength(2);
     const [, runUpdateAfterTheGuardedAudit] = batchStatements;
     expect(runUpdateAfterTheGuardedAudit).toBe(dbMocks.updateChain);
     expect(dbMocks.insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: 'checklist_run.shared_updated',
         actor_user_id: null,
         resource_type: 'checklist_run',

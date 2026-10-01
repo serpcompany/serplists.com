@@ -3,6 +3,7 @@ import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, teamMember } from
 import { handleTeams } from "@functions/api/handlers/teams";
 import { columnNamesIn } from "../../../support/drizzleSql";
 import { apiErrorBody, jsonObjects, readJson } from "../../../support/readJson";
+import { anyInstanceOf, anything, objectContaining } from "../../../support/asymmetricMatchers";
 
 const OWNER_USER = teamMember("owner", { id: "owner-member", user_id: "owner-user" });
 const ADMIN_USER_2 = teamMember("admin", { id: "member-2", user_id: "user-2" });
@@ -52,7 +53,7 @@ describe("Teams handler", () => {
     const data = await readJson(response, jsonObjects);
 
     expect(response.status).toBe(200);
-    expect(data[0]).toEqual(expect.objectContaining({ id: "team-1", role: "admin" }));
+    expect(data[0]).toEqual(objectContaining({ id: "team-1", role: "admin" }));
   });
 
   it("lists the full team roster for team admins", async () => {
@@ -72,7 +73,7 @@ describe("Teams handler", () => {
     const memberListPredicate = dbMocks.selectChain.where.mock.calls[1]?.[0];
 
     expect(response.status).toBe(200);
-    expect(data[0]).toEqual(expect.objectContaining({ id: "member-disabled" }));
+    expect(data[0]).toEqual(objectContaining({ id: "member-disabled" }));
     expect(columnNamesIn(memberListPredicate)).not.toContain("status");
   });
 
@@ -95,19 +96,19 @@ describe("Teams handler", () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ success: true, ownerMemberId: "member-2", ownerUserId: "user-2" });
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        role: expect.anything(),
-        updated_at: expect.any(String),
+      objectContaining({
+        role: anything(),
+        updated_at: anyInstanceOf(String),
       }),
     );
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         billing_owner_user_id: "user-2",
-        updated_at: expect.any(String),
+        updated_at: anyInstanceOf(String),
       }),
     );
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: "team.owner_transferred",
         before: {
           ownerMemberId: "owner-member",

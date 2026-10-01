@@ -6,6 +6,7 @@ import { getSessionUserId } from '@functions/api/utils/session';
 import { activeMember, organizationRunRow, personalRunRow, startedJustNow } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { readJson } from '../../../support/readJson';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 const runHistoryBody = z.object({ events: z.array(z.record(z.unknown())) }).passthrough();
 
@@ -47,9 +48,9 @@ describe('Checklists Handlers', () => {
     expect(response.status).toBe(200);
     expect(data.subject).toEqual({ type: 'team', id: 'team-1' });
     expect(data.events[0]).toEqual(
-      expect.objectContaining({
+      objectContaining({
         action: 'checklist_run.updated',
-        actor: expect.objectContaining({ name: 'Runner Example' }),
+        actor: objectContaining({ name: 'Runner Example' }),
         metadata: { source: 'test' },
       }),
     );

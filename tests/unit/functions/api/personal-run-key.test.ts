@@ -8,6 +8,7 @@ import {
   markPersonalRunKeyUsed,
 } from "@functions/api/utils/personal-run-key";
 import { apiEnv } from "../../../support/apiEnv";
+import { anyInstanceOf } from "../../../support/asymmetricMatchers";
 
 const mockEnv = apiEnv();
 
@@ -92,7 +93,7 @@ describe("personal run key utility", () => {
       lastUsedAt: null,
     });
 
-    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: expect.any(String) });
+    expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ last_used_at: anyInstanceOf(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
 
     vi.clearAllMocks();

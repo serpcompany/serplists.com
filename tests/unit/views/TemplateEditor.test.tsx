@@ -13,6 +13,7 @@ import {
 } from '@/features/template-editor/navigationGuards';
 
 import { editorAccess as buildAccess, editorState } from '../../fixtures/templateEditorHooks';
+import { anyInstanceOf, objectContaining } from '../../support/asymmetricMatchers';
 
 const mockUseTemplateEditorModel = vi.fn();
 const mockUseTemplateEditorState = vi.fn();
@@ -292,8 +293,8 @@ describe('TemplateEditor page', () => {
     );
 
     expect(firstOf(useFormCalls.mock.calls)[0]).toEqual(
-      expect.objectContaining({
-        defaultValues: expect.objectContaining({ title: 'Moving checklist' }),
+      objectContaining({
+        defaultValues: objectContaining({ title: 'Moving checklist' }),
       }),
     );
     expect(html).not.toContain('New Template');
@@ -353,10 +354,10 @@ describe('TemplateEditor page', () => {
     mockUsePendingTemplateEditorUploads.mockImplementation(() => ({ uploads: createPendingUploads(), pendingCount: 1 }));
     leaveGuardedWith.mockClear();
     await renderTheExistingTemplateEditor();
-    expect(leaveGuardedWith).toHaveBeenLastCalledWith(true, EDITOR_UPLOAD_IN_PROGRESS_MESSAGE, expect.any(Function));
+    expect(leaveGuardedWith).toHaveBeenLastCalledWith(true, EDITOR_UPLOAD_IN_PROGRESS_MESSAGE, anyInstanceOf(Function));
 
     mockUsePendingTemplateEditorUploads.mockImplementation(() => ({ uploads: createPendingUploads(), pendingCount: 0 }));
     await renderTheExistingTemplateEditor();
-    expect(leaveGuardedWith).toHaveBeenLastCalledWith(false, EDITOR_UNSAVED_CHANGES_MESSAGE, expect.any(Function));
+    expect(leaveGuardedWith).toHaveBeenLastCalledWith(false, EDITOR_UNSAVED_CHANGES_MESSAGE, anyInstanceOf(Function));
   });
 });

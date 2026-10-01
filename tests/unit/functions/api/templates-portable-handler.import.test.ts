@@ -14,6 +14,7 @@ import { portableTemplatePackSchema } from '@/lib/schemas/checklistSchema';
 import { activeMember } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson, readSuccessfulJson } from '../../../support/readJson';
+import { objectContaining, stringContaining } from '../../../support/asymmetricMatchers';
 
 const ONE_ITEM_CHECKLIST = [{ title: 'Checklist', items: [{ title: 'Item' }] }];
 
@@ -46,7 +47,7 @@ describe('portable template import/export API', () => {
     expect(data.total).toBe(1);
     expect(data.imported).toBe(1);
     expect(data.successes).toEqual([
-      expect.objectContaining({
+      objectContaining({
         index: 0,
         title: 'Imported Portable Template',
         visibility: 'public',
@@ -126,7 +127,7 @@ describe('portable template import/export API', () => {
 
     expect(data.imported).toBe(1);
     expect(data.failed).toEqual([
-      expect.objectContaining({ index: 0, code: 'oversized_asset', reason: expect.stringContaining('50MB') }),
+      objectContaining({ index: 0, code: 'oversized_asset', reason: stringContaining('50MB') }),
     ]);
   });
 
@@ -139,9 +140,9 @@ describe('portable template import/export API', () => {
     const data = await readSuccessfulJson(response, importBody);
 
     expect(data.imported).toBe(1);
-    expect(data.successes).toEqual([expect.objectContaining({ index: 1 })]);
+    expect(data.successes).toEqual([objectContaining({ index: 1 })]);
     expect(data.failed).toEqual([
-      expect.objectContaining({ index: 0, title: 'Long guide', code: 'content_too_large', reason: expect.stringContaining('KB') }),
+      objectContaining({ index: 0, title: 'Long guide', code: 'content_too_large', reason: stringContaining('KB') }),
     ]);
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
   });
@@ -210,7 +211,7 @@ describe('portable template import/export API', () => {
       expect(portableTemplatePackSchema.safeParse(pack).success).toBe(true);
       expect(pack.templates).toHaveLength(1);
       expect(pack.manifest.totalTemplates).toBe(1);
-      expect(pack.manifest.skippedTemplates).toEqual([expect.objectContaining({ title: 'Corrupt' })]);
+      expect(pack.manifest.skippedTemplates).toEqual([objectContaining({ title: 'Corrupt' })]);
       const template = firstOf(pack.templates);
       expect(template.type).toBe('checklist');
       expect(template.sections.map((section) => [section.id, section.title]))
@@ -239,10 +240,10 @@ describe('portable template import/export API', () => {
 
       expect(summary.total).toBe(2);
       expect(summary.imported).toBe(1);
-      expect(summary.successes).toEqual([expect.objectContaining({ index: 1, title: 'Old export' })]);
-      expect(summary.failed).toEqual([expect.objectContaining({ index: 0, title: 'No tasks', code: 'invalid_sections' })]);
+      expect(summary.successes).toEqual([objectContaining({ index: 1, title: 'Old export' })]);
+      expect(summary.failed).toEqual([objectContaining({ index: 0, title: 'No tasks', code: 'invalid_sections' })]);
       const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
-      expect(JSON.parse(inserted.items)[0]).toEqual(expect.objectContaining({ title: 'Section 1' }));
+      expect(JSON.parse(inserted.items)[0]).toEqual(objectContaining({ title: 'Section 1' }));
     });
   });
 });

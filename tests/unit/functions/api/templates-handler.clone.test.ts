@@ -7,6 +7,7 @@ import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { activeMember, publicTemplateSource } from '../../../fixtures/handlerRows';
 import { apiRequest } from '../../../support/apiRequest';
 import { apiErrorBody, readJson } from '../../../support/readJson';
+import { anyInstanceOf, objectContaining } from '../../../support/asymmetricMatchers';
 
 const publicSource = publicTemplateSource({ created_at: new Date().toISOString() });
 
@@ -54,7 +55,7 @@ describe('Templates Handlers', () => {
       expect(response.status).toBe(200);
       expect(data.id).toBeDefined();
       expect(vi.mocked(getEntitlementsForUser)).not.toHaveBeenCalled();
-      expect(firstOf(dbMocks.insertChain.values.mock.calls)[0]).toEqual(expect.objectContaining({ owner_type: 'team', team_id: 'team-1' }));
+      expect(firstOf(dbMocks.insertChain.values.mock.calls)[0]).toEqual(objectContaining({ owner_type: 'team', team_id: 'team-1' }));
     });
 
     it('stops a copy into a Free Organization at its template limit', async () => {
@@ -81,9 +82,9 @@ describe('Templates Handlers', () => {
       const templateRow = inserted.find((values) => 'owner_type' in values);
       const versionRow = inserted.find((values) => 'snapshot_json' in values);
       const auditRow = inserted.find((values) => values.action === 'template.cloned');
-      expect(templateRow).toEqual(expect.objectContaining({ version: 1, content_version: 1 }));
-      expect(versionRow).toEqual(expect.objectContaining({ version: 1, change_summary: 'template.cloned' }));
-      expect(JSON.parse(versionRow.snapshot_json)).toEqual(expect.objectContaining({ version: 1, content_version: 1 }));
+      expect(templateRow).toEqual(objectContaining({ version: 1, content_version: 1 }));
+      expect(versionRow).toEqual(objectContaining({ version: 1, change_summary: 'template.cloned' }));
+      expect(JSON.parse(versionRow.snapshot_json)).toEqual(objectContaining({ version: 1, content_version: 1 }));
       expect(JSON.parse(auditRow.metadata_json)).toEqual({ sourceTemplateId: 'template-1', sourceVersion: 37, sourceContentVersion: 12 });
     });
   });
@@ -102,7 +103,7 @@ describe('Templates Handlers', () => {
     const clonedTemplate = dbMocks.insertChain.values.mock.calls
       .map(([values]) => values)
       .find((values) => values?.id === data.id && 'slug' in values);
-    expect(clonedTemplate?.updated_at).toEqual(expect.any(String));
+    expect(clonedTemplate?.updated_at).toEqual(anyInstanceOf(String));
     expect(clonedTemplate?.updated_at).toBe(clonedTemplate?.created_at);
   });
 });

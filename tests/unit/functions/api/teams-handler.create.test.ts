@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, sessionMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const teamBody = z.object({ slug: z.string() }).passthrough();
 
@@ -37,8 +38,8 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data).toEqual(
-      expect.objectContaining({
-        memberId: expect.any(String),
+      objectContaining({
+        memberId: anyInstanceOf(String),
         membershipStatus: "active",
         name: "Acme Team",
       }),
@@ -53,7 +54,7 @@ describe("Teams handler", () => {
     expect(insertedMembership.role).toBe("owner");
     expect(insertedMembership.user_id).toBe("user-1");
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         actorUserId: "user-1",
         action: "team.created",
       }),

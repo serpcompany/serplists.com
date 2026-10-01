@@ -10,6 +10,7 @@ import {
   withoutRevokedLink,
 } from '@/features/teams/teamInviteLinks';
 import { ApiError } from '@/lib/api-errors';
+import { anyInstanceOf } from '../../../support/asymmetricMatchers';
 
 function createdInvite(overrides: Record<string, unknown> = {}) {
   return {
@@ -69,7 +70,7 @@ describe('createInviteLink', () => {
         teamId: 'team-1',
         email: 'newhire@example.com',
         url: 'https://serplists.com/team-invites/token-2',
-        issuedAt: expect.any(Number),
+        issuedAt: anyInstanceOf(Number),
       },
     });
   });
@@ -106,7 +107,7 @@ describe('reissueInviteLink', () => {
       teamId: 'team-1',
       email: 'newhire@example.com',
       url: 'https://serplists.com/team-invites/token-2',
-      issuedAt: expect.any(Number),
+      issuedAt: anyInstanceOf(Number),
     });
   });
 

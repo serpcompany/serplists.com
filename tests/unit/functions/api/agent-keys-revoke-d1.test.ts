@@ -5,6 +5,7 @@ import { apiEnv } from "../../../support/apiEnv";
 import { jsonObject, readJson } from "../../../support/readJson";
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const ORIGINAL_REVOKED_AT = "2026-09-19T02:00:00.000Z";
 
@@ -53,7 +54,7 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
     const { status, body } = await revoke("key-1");
 
     expect(status).toBe(200);
-    expect(body).toEqual({ id: "key-1", revokedAt: expect.any(String) });
+    expect(body).toEqual({ id: "key-1", revokedAt: anyInstanceOf(String) });
     expect(storedRevokedAt("key-1")).toBe(body.revokedAt);
   });
 
@@ -84,7 +85,7 @@ describe("DELETE /api/agent-keys/:id on the migrated tables", () => {
     for (const id of ["missing", "key-2", "key-3"]) {
       await expect(revoke(id)).resolves.toEqual({
         status: 404,
-        body: expect.objectContaining({ error: "Personal run key not found" }),
+        body: objectContaining({ error: "Personal run key not found" }),
       });
     }
     expect(storedRevokedAt("key-2")).toBeNull();

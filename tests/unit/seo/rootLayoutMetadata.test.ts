@@ -8,6 +8,7 @@ import { metadata as rootMetadata } from '@/app/layout';
 import { metadata as notFoundMetadata } from '@/app/not-found';
 import { APP_BRAND_NAME, SITE_DEFAULT_DESCRIPTION } from '@/lib/brand';
 import { buildPageMetadata } from '@/lib/seo/pageMetadata';
+import { stringMatching } from '../../support/asymmetricMatchers';
 
 const images = (value: unknown) => (Array.isArray(value) ? value : value ? [value] : []);
 
@@ -46,7 +47,7 @@ describe('page metadata', () => {
   it.each(pages)(
     '%s replaces the defaults with a complete set of its own, image included, since Next.js replaces openGraph and twitter whole',
     (_page, metadata) => {
-      expect(metadata.title).toEqual({ absolute: expect.stringMatching(new RegExp(` \\| ${APP_BRAND_NAME}$`)) });
+      expect(metadata.title).toEqual({ absolute: stringMatching(new RegExp(` \\| ${APP_BRAND_NAME}$`)) });
       expect(typeof metadata.description).toBe('string');
       expect(images(metadata.openGraph?.images)).toHaveLength(1);
       expect(images(metadata.twitter?.images)).toHaveLength(1);

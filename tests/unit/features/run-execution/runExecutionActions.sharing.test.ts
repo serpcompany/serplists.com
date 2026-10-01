@@ -5,6 +5,7 @@ import { createApiError } from '@/lib/api-errors';
 import { createRunExecutionShare, stopRunExecutionSharing } from '@/features/run-execution/runSharing';
 
 import { buildRun, runExecutionApiClient } from '../../../fixtures/runExecutionFixtures';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 describe('sharing from the run page tells the cached runs list, which would otherwise keep offering a Revalidate the API refuses for a shared run', () => {
   const apiClient = (createChecklistRunShare: ReturnType<typeof vi.fn>) => ({
@@ -55,7 +56,7 @@ describe('run page sharing', () => {
 
     expect(result).toEqual({
       kind: 'ok',
-      run: expect.objectContaining({ id: 'run-1', isPublic: true }),
+      run: objectContaining({ id: 'run-1', isPublic: true }),
       shareUrl: 'https://app.test/share/token-1/',
     });
     expect(markRunSharedInTheCachedLists).toHaveBeenCalledWith('run-1');

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auditMocks, dbMocks, inAMinute, mockEnv, resetTeamsHandlerMocks, teamMember } from "../../../support/teamsHandler";
 import { handleTeams } from "@functions/api/handlers/teams";
 import { apiErrorBody, readJson } from "../../../support/readJson";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const inviteBody = z.object({ inviteToken: z.string(), invitePath: z.string(), inviteUrl: z.string() }).passthrough();
 const pendingInviteError = apiErrorBody.extend({ details: z.object({ inviteId: z.string() }).passthrough() });
@@ -85,7 +86,7 @@ describe("Teams handler", () => {
     expect(insertedInvite.token_hash).not.toBe(data.inviteToken);
     expect(insertedInvite.email).toBe("new@example.com");
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "team_invite.created" }),
+      objectContaining({ action: "team_invite.created" }),
     );
   });
 
@@ -110,7 +111,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data).toEqual([
-      expect.objectContaining({
+      objectContaining({
         id: "invite-1",
         email: "new@example.com",
         role: "editor",
@@ -141,7 +142,7 @@ describe("Teams handler", () => {
 
     expect(response.status).toBe(200);
     expect(data).toEqual([
-      expect.objectContaining({
+      objectContaining({
         id: "invite-1",
         teamId: "team-1",
         teamName: "Acme Team",
@@ -197,13 +198,13 @@ describe("Teams handler", () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ success: true });
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({
-        revoked_at: expect.any(String),
-        updated_at: expect.any(String),
+      objectContaining({
+        revoked_at: anyInstanceOf(String),
+        updated_at: anyInstanceOf(String),
       }),
     );
     expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
-      expect.objectContaining({
+      objectContaining({
         action: "team_invite.revoked",
         before: pending,
       }),

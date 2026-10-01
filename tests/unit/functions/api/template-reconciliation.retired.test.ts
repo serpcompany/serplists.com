@@ -3,6 +3,7 @@ import { contentAt, firstOf, taskIn } from '../../../support/elements';
 
 import { reconcileRunSections } from '@functions/api/utils/template-reconciliation';
 import { sectionsOf } from '../../../support/reconciledSections';
+import { objectContaining } from '../../../support/asymmetricMatchers';
 
 describe('malformed Template content', () => {
   it('never copies a malformed Sub-task list or value into a run', () => {
@@ -32,7 +33,7 @@ describe('malformed Template content', () => {
       { type: 'text', value: '' },
     ]);
     expect(item.subItems).toEqual([]);
-    expect(item).toEqual(expect.objectContaining({ isCompleted: true, notes: 'Keep' }));
+    expect(item).toEqual(objectContaining({ isCompleted: true, notes: 'Keep' }));
   });
 });
 
@@ -46,7 +47,7 @@ describe('retired run work', () => {
     const result = reconcileRunSections(section([dns, copy]), section([{ id: 'item-copy', title: 'Write copy' }]), [earlier]);
 
     expect(result.newlyRetired).toEqual([
-      expect.objectContaining({ kind: 'item', item: expect.objectContaining({ id: 'item-dns', notes: 'TTL lowered to 300' }) }),
+      objectContaining({ kind: 'item', item: objectContaining({ id: 'item-dns', notes: 'TTL lowered to 300' }) }),
     ]);
     expect(result.retired).toEqual([earlier, ...result.newlyRetired]);
   });
@@ -59,7 +60,7 @@ describe('retired run work', () => {
       removed.retired,
     );
 
-    expect(taskIn(sectionsOf(restored), 0, 0)).toEqual(expect.objectContaining({
+    expect(taskIn(sectionsOf(restored), 0, 0)).toEqual(objectContaining({
       id: 'item-dns',
       isCompleted: true,
       notes: 'TTL lowered to 300',
@@ -97,7 +98,7 @@ describe('retired run work', () => {
       { id: 'sub-long', title: 'Long', isCompleted: true },
     ]);
     expect(taskIn(sectionsOf(result), 0, 0).isCompleted).toBe(true);
-    expect(taskIn(sectionsOf(result), 1, 0)).toEqual(expect.objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
+    expect(taskIn(sectionsOf(result), 1, 0)).toEqual(objectContaining({ id: 'item-qa', isCompleted: true, notes: 'Passed' }));
     expect(result.retired).toEqual([]);
   });
 
@@ -120,7 +121,7 @@ describe('retired run work', () => {
       'not an entry',
     ]);
 
-    expect(taskIn(sectionsOf(result), 0, 0)).toEqual(expect.objectContaining({ id: 'item-dns', isCompleted: false }));
+    expect(taskIn(sectionsOf(result), 0, 0)).toEqual(objectContaining({ id: 'item-dns', isCompleted: false }));
     expect(taskIn(sectionsOf(result), 0, 0)).not.toHaveProperty('notes');
     expect(result.retired.slice(0, unreadable.length)).toEqual(unreadable);
   });

@@ -11,6 +11,7 @@ import { LIST_PAGE_ROWS } from "@functions/api/handlers/agentMcpLists";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import { mcpRunsPage, mcpTemplatesPage, resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText } from "../../../support/jsonText";
+import { anyInstanceOf, arrayContaining, objectContaining } from "../../../support/asymmetricMatchers";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -118,8 +119,8 @@ describe("MCP list tools on the migrated tables", () => {
       const costliest = pages.flatMap((page) => page.templates).find(({ id }) => id === "t-000");
       expect(String(costliest?.title)).toHaveLength(160);
       expect(String(costliest?.description)).toHaveLength(500);
-      expect(firstOf(pages).templates).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: "checklist", contentVersion: 1, createdAt: expect.any(String) }),
+      expect(firstOf(pages).templates).toEqual(arrayContaining([
+        objectContaining({ type: "checklist", contentVersion: 1, createdAt: anyInstanceOf(String) }),
       ]));
     });
 
@@ -160,7 +161,7 @@ describe("MCP list tools on the migrated tables", () => {
 
       const pages = await everyPageWithinTheBound("list_templates", mcpTemplatesPage);
 
-      expect(pages).toEqual([{ templates: [expect.objectContaining({ id: "only", title: "SOP only" })] }]);
+      expect(pages).toEqual([{ templates: [objectContaining({ id: "only", title: "SOP only" })] }]);
     });
   });
 
@@ -195,7 +196,7 @@ describe("MCP list tools on the migrated tables", () => {
       expect(pages.length).toBeGreaterThan(3);
       expect(runs[0]).not.toHaveProperty("sections");
       expect(runs[0]).not.toHaveProperty("retiredItems");
-      expect(runs.find(({ id }) => id === "r-000")).toEqual(expect.objectContaining({ revision: 3, status: "completed", progress: 0 }));
+      expect(runs.find(({ id }) => id === "r-000")).toEqual(objectContaining({ revision: 3, status: "completed", progress: 0 }));
       expect(String(runs.find(({ id }) => id === "r-000")?.title)).toHaveLength(160);
     });
 
