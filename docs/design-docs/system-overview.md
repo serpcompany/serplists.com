@@ -151,7 +151,7 @@ JSON fields:
 
 - Better Auth session lookup is the only supported login state for normal user flows.
 - API handlers enforce authorization; UI gating is secondary.
-- User entitlements come from manual overrides, Stripe subscriptions, or the Free fallback (`functions/api/utils/entitlements.ts`). The local Pro personas get Pro from seeded override rows (`db/seeds/local.ts`), never from their email: anyone can register those addresses on a deployed environment.
+- User entitlements come from manual overrides, Stripe subscriptions, or the Free fallback (`functions/api/utils/entitlements.ts`). The local Pro personas get Pro from seeded override rows (`db/seeds/local-test-data/people.ts`), never from their email: anyone can register those addresses on a deployed environment.
 - Organization entitlements come from the legacy `team_entitlement_overrides` table.
 - Free limits are currently 1 Template and 3 active Runs. Paid Personal and Organization contexts have unlimited Templates and active Runs.
 - The Template limit is enforced the same way: create, clone and restore count first for a clear error, then repeat the count inside the insert (`templateCapacityAvailableSql` in `functions/api/utils/template-writes.ts`).

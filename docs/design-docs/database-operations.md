@@ -166,6 +166,10 @@ baseline.
   checks this for every seeded Template and saves the seeded Organization Template.
   The `d1:profile` synthetic data (`scripts/d1-profile-dataset.ts`) follows the same
   rule, checked by `tests/unit/scripts/d1-profile-dataset.test.ts`.
+  `db/seeds/local.ts` is the module the seed scripts and tests import. The test data it
+  writes lives in `db/seeds/local-test-data/`, one module per kind of row (people,
+  Organizations, Templates, Runs, then activity and history), which `seedLocalTestData`
+  inserts in that order with one clock, after `cleanup.ts` there deletes the old rows.
   The seed stages are listed once in `scripts/lib/local-d1-seed.mjs`.
   `readLocalSeedStatus` (`db/seeds/local.ts`) marks each stage complete by the row
   it writes last, so `pnpm run setup` seeds only the stages that are missing

@@ -61,11 +61,18 @@ function buildDatabase() {
   run("wrangler", ["d1", "execute", "serp-checklists-db", "--local", "--persist-to", persistPath, "--file", sqlFile]);
 }
 
+function filesWithTheirText(dir: string, extension: string) {
+  return readdirSync(dir).filter((file) => file.endsWith(extension)).sort()
+    .map((file) => `${file}\n${readFileSync(path.join(dir, file), "utf8")}`);
+}
+
 function hashOfEverythingTheDatasetIsBuiltFrom() {
-  const migrationsDir = path.join(repoRoot, "db", "migrations");
-  const migrations = readdirSync(migrationsDir).filter((file) => file.endsWith(".sql")).sort()
-    .map((file) => `${file}\n${readFileSync(path.join(migrationsDir, file), "utf8")}`);
-  return computeDatasetKey([...migrations, readFileSync(path.join(repoRoot, "db", "seeds", "local.ts"), "utf8"), syntheticSql]);
+  const migrations = filesWithTheirText(path.join(repoRoot, "db", "migrations"), ".sql");
+  const localSeed = [
+    readFileSync(path.join(repoRoot, "db", "seeds", "local.ts"), "utf8"),
+    ...filesWithTheirText(path.join(repoRoot, "db", "seeds", "local-test-data"), ".ts"),
+  ];
+  return computeDatasetKey([...migrations, ...localSeed, syntheticSql]);
 }
 
 async function answersHealthCheck(origin: string) {

@@ -50,8 +50,8 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
     copy's `meta.json` written last, so an interrupted copy is never restored. `--reuse`
     restores that copy, so the workload's writes (new Runs, the template updates, john's
     Free-plan run count) never carry over into the next run. It rebuilds when the snapshot
-    is missing or was built at another scale or from other migrations, seed or synthetic
-    data.
+    is missing or was built at another scale or from other migrations, local seed
+    (`db/seeds/local.ts` and `db/seeds/local-test-data/`) or synthetic data.
 - **Production:** `pnpm exec wrangler d1 insights serp-checklists-db --sort-by reads
   --time-period 31d --limit 25` (Cloudflare login required; analytics only).
 
