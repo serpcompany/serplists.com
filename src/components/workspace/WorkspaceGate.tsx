@@ -5,9 +5,6 @@ import { DashboardContentShell, DashboardEmptyState } from '@/components/dashboa
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/contexts/WorkspaceContext';
 
-// Console pages act on the active context. When the teams request failed before the stored
-// Organization was confirmed, show this instead of the page, so nothing is shown or created
-// in Personal while the user believes they are in their Organization.
 export function WorkspaceGate({ children }: { children: ReactNode }) {
   const { retryWorkspace, selectWorkspace, workspaceStatus } = useWorkspace();
 

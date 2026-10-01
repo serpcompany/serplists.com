@@ -8,11 +8,6 @@ export type WorkspaceErrorActions = {
   onRetry: () => void;
 };
 
-// The inline form of WorkspaceGate, for a page outside the console that acts in the
-// active context: the teams request failed before the stored Organization was confirmed,
-// so the page's actions wait, and this says why and offers the gate's way out. A page about
-// an Organization's own resource (a run or Template) leaves out Continue in Personal, which
-// would not change that resource's Organization.
 export function WorkspaceErrorNotice({
   className,
   id,

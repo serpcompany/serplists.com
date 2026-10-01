@@ -28,8 +28,6 @@ const getSwitcherLabel = (
   return { icon: activeWorkspace.type === 'team' ? Users : User, label: activeWorkspace.name };
 };
 
-// The Ownership Context switcher at the top of the console sidebar (the shadcn sidebar's
-// team switcher): Personal and each Organization, and a way back when Organizations fail.
 export function WorkspaceSwitcher() {
   const {
     activeWorkspace,
@@ -41,8 +39,6 @@ export function WorkspaceSwitcher() {
     workspaceStatus,
   } = useWorkspace();
   const { isMobile } = useSidebar();
-  // While the stored Organization is unconfirmed the context falls back to Personal only for
-  // display, so never label the tab "Personal" then.
   const isUnresolved = workspaceStatus === 'loading' || workspaceStatus === 'error';
   const active = getSwitcherLabel(workspaceStatus, activeWorkspace);
   const ActiveIcon = active.icon;
@@ -80,7 +76,6 @@ export function WorkspaceSwitcher() {
               <DropdownMenuItem
                 key={workspace.id}
                 className="gap-3"
-                // After a failed teams load, Personal stays available as a way out.
                 disabled={isWorkspaceLoading && workspaceStatus !== 'error'}
                 onClick={() => selectWorkspace(workspace.id)}
               >
@@ -96,7 +91,6 @@ export function WorkspaceSwitcher() {
             );
           })}
         </DropdownMenuGroup>
-        {/* The active context works on, but a failed list must not read as "no Organizations". */}
         {teamsUnavailable && workspaceStatus !== 'error' ? (
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex items-center gap-3 font-normal text-muted-foreground">
