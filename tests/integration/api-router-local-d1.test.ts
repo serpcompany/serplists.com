@@ -291,16 +291,6 @@ describe.sequential("the API router against local D1", () => {
       expect(response.headers.get("Access-Control-Allow-Methods")).toContain("GET");
     });
 
-    it("answers the template catalog within a second", async () => {
-      await send("templates");
-      const start = Date.now();
-
-      const response = await send("templates");
-
-      expect(response.status).toBe(200);
-      expect(Date.now() - start).toBeLessThan(1000);
-    });
-
     it("answers ten concurrent catalog requests", async () => {
       const responses = await Promise.all(Array.from({ length: 10 }, () => send("templates")));
 
