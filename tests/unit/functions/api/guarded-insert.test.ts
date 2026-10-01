@@ -5,11 +5,10 @@ import { schema } from '@functions/api/db';
 import { insertRowWhere, rowExistsSql, withoutColumns } from '@functions/api/utils/guarded-insert';
 import { activeRunCapacityAvailableSql } from '@functions/api/utils/active-run-limit';
 
-// Builds SQL only; nothing is executed.
-const db = drizzle({} as D1Database, { schema });
+const drizzleWithoutD1 = drizzle({} as D1Database, { schema });
 
 describe('insertRowWhere', () => {
-  it('writes the same columns and values as a plain insert, behind the condition', () => {
+  it('writes the same columns and values as a plain insert, booleans and defaults included, behind the condition', () => {
     const run = {
       id: 'run-1',
       user_id: 'user-1',
@@ -19,33 +18,32 @@ describe('insertRowWhere', () => {
       created_at: 'now',
       is_public: true,
     };
-    const plain = db.insert(schema.checklist_runs).values(run).toSQL();
-    const guarded = insertRowWhere(db as never, schema.checklist_runs, run, sql`1 = 1`).toSQL();
+    const plain = drizzleWithoutD1.insert(schema.checklist_runs).values(run).toSQL();
+    const guarded = insertRowWhere(drizzleWithoutD1 as never, schema.checklist_runs, run, sql`1 = 1`).toSQL();
 
     const plainColumns = plain.sql.slice(0, plain.sql.indexOf(' values '));
     expect(guarded.sql.startsWith(`${plainColumns} select `)).toBe(true);
     expect(guarded.sql.endsWith(' where 1 = 1')).toBe(true);
-    // Booleans are encoded through the column (true -> 1), and defaults match the plain insert.
     expect(guarded.params).toEqual(plain.params);
   });
 
   it('leaves omitted columns out of the statement, matching a plain insert of the rest', () => {
     const template = { id: 'template-1', user_id: 'user-1', title: 'T', items: '[]', created_at: 'now' };
-    const plain = db.insert(withoutColumns(schema.templates, ['rules'])).values(template).toSQL();
-    const guarded = insertRowWhere(db as never, schema.templates, template, sql`1 = 1`, { omitColumns: ['rules'] }).toSQL();
+    const plain = drizzleWithoutD1.insert(withoutColumns(schema.templates, ['rules'])).values(template).toSQL();
+    const guarded = insertRowWhere(drizzleWithoutD1 as never, schema.templates, template, sql`1 = 1`, { omitColumns: ['rules'] }).toSQL();
 
     expect(plain.sql).toMatch(/^insert into "templates" \(/);
     expect(plain.sql).not.toContain('"rules"');
     expect(guarded.sql).not.toContain('"rules"');
     expect(guarded.sql.startsWith(`${plain.sql.slice(0, plain.sql.indexOf(' values '))} select `)).toBe(true);
     expect(guarded.params).toEqual(plain.params);
-    // The table itself is untouched.
-    expect(db.insert(schema.templates).values(template).toSQL().sql).toContain('"rules"');
+    const plainInsertIntoTheUnchangedTable = drizzleWithoutD1.insert(schema.templates).values(template).toSQL().sql;
+    expect(plainInsertIntoTheUnchangedTable).toContain('"rules"');
   });
 
   it('guards a run insert on the active-run count for its context', () => {
     const condition = activeRunCapacityAvailableSql({ userId: 'user-1', teamId: null }, 3);
-    const query = insertRowWhere(db as never, schema.checklist_runs, {
+    const query = insertRowWhere(drizzleWithoutD1 as never, schema.checklist_runs, {
       id: 'run-1', user_id: 'user-1', title: 'Run', items: '[]', started_at: 'now', created_at: 'now',
     }, condition).toSQL();
 
@@ -54,7 +52,7 @@ describe('insertRowWhere', () => {
   });
 
   it('guards a companion row on the existence of the new row', () => {
-    const query = insertRowWhere(db as never, schema.audit_events, {
+    const query = insertRowWhere(drizzleWithoutD1 as never, schema.audit_events, {
       id: 'audit-1',
       subject_type: 'user',
       subject_id: 'user-1',

@@ -36,9 +36,7 @@ describe('resetRunCompletionState', () => {
 });
 
 describe('run start state has one implementation', () => {
-  // The web and MCP handlers each had their own reset and they drifted apart, so a template
-  // started differently depending on where the run was started.
-  it('is not reimplemented in any handler', () => {
+  it('is not reimplemented in any handler, since the web and MCP copies drifted apart and started runs differently', () => {
     const handlers = path.resolve(__dirname, '../../../../functions/api/handlers');
     const copies = readdirSync(handlers)
       .filter((file) => file.endsWith('.ts'))

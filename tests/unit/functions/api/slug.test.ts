@@ -7,9 +7,7 @@ import { TEAM_SLUG_MAX, TEMPLATE_SLUG_MAX } from '@/lib/schemas/templateLimits';
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const words = ['Launch', 'SEO!', 'checklist:', '2026', '(draft)', 'a-b', '--', 'x'];
 
-// Titles of every length up to 300, mixing punctuation, spaces, and hyphens so truncation
-// lands on hyphens, removed characters, and word boundaries.
-const titles = Array.from({ length: 300 }, (_, length) =>
+const titlesOfEveryLengthUpTo300 = Array.from({ length: 300 }, (_, length) =>
   Array.from({ length }, (_, index) => `${words[(index * 7 + length) % words.length]}${index % 3 ? ' ' : '-'}`)
     .join('')
     .slice(0, length),
@@ -19,8 +17,8 @@ describe('bounded slugs', () => {
   it.each([
     ['template', TEMPLATE_SLUG_MAX],
     ['Organization', TEAM_SLUG_MAX],
-  ])('keeps %s slugs within %i characters and the slug pattern', (_label, max) => {
-    for (const title of titles) {
+  ])('keeps %s slugs within %i characters and the slug pattern wherever truncation lands: a hyphen, a removed character or a word boundary', (_label, max) => {
+    for (const title of titlesOfEveryLengthUpTo300) {
       const base = truncateSlug(generateSlug(title), max) || 'template';
       for (const candidate of [base, withSlugSuffix(base, 'abcd1234', max), withSlugSuffix(base, '0f9e8d7c', max)]) {
         expect(candidate.length).toBeLessThanOrEqual(max);

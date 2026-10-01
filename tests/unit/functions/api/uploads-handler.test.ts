@@ -9,25 +9,46 @@ vi.mock('@functions/api/utils/session', () => ({
 
 import { getSessionUserId } from '@functions/api/utils/session';
 
+const MB = 1024 * 1024;
+
+function uploadEnv() {
+  return {
+    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
+    R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
+  } as any;
+}
+
+function uploadForm(bucket: string, file: File) {
+  const form = new FormData();
+  form.set('bucket', bucket);
+  form.set('file', file);
+  return form;
+}
+
+function uploadRequest(bucket: string, file: File) {
+  return new Request('http://localhost/api/uploads', { method: 'POST', body: uploadForm(bucket, file) });
+}
+
+function uploadOfTheFileObjectAsIs(bucket: string, file: File) {
+  const form = uploadForm(bucket, file);
+  return {
+    method: 'POST',
+    url: 'http://localhost/api/uploads',
+    headers: new Headers(),
+    formData: async () => form,
+  } as unknown as Request;
+}
+
+function deleteRequest(key: string) {
+  return new Request(`http://localhost/api/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+}
+
 describe('Uploads Handler', () => {
   it('rejects disallowed MIME types for avatars bucket', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
+    const env = uploadEnv();
 
-    const form = new FormData();
-    form.set('bucket', 'avatars');
-    form.set('file', new File(['hello'], 'hello.txt', { type: 'text/plain' }));
-
-    const request = new Request('http://localhost/api/uploads', {
-      method: 'POST',
-      body: form,
-    });
-
-    const env: any = {
-      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-    };
-
-    const response = await handleUploads(request, env);
+    const response = await handleUploads(uploadRequest('avatars', new File(['hello'], 'hello.txt', { type: 'text/plain' })), env);
     const data = await response.json();
 
     expect(response.status).toBe(415);
@@ -38,19 +59,6 @@ describe('Uploads Handler', () => {
 });
 
 describe('Uploads Handler file types', () => {
-  const buildEnv = (): any => ({
-    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-    R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-  });
-
-  const upload = (bucket: string, file: File): Request => {
-    const form = new FormData();
-    form.set('bucket', bucket);
-    form.set('file', file);
-    return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
-  };
-
-  // The same browser-reported cases as the shared list's test, through the handler.
   it.each([
     ['template-files', 'report.zip', 'application/x-zip-compressed', 'application/x-zip-compressed'],
     ['template-files', 'data.csv', 'text/csv', 'text/csv'],
@@ -58,11 +66,11 @@ describe('Uploads Handler file types', () => {
     ['template-files', 'letter.doc', 'application/msword', 'application/msword'],
     ['template-files', 'shot.png', 'image/png', 'image/png'],
     ['template-files', 'notes.md', 'application/octet-stream', 'text/markdown'],
-  ])('stores %s %s sent as %s', async (bucket, name, type, stored) => {
+  ])('stores %s %s sent as %s, as the shared type list accepts what browsers report', async (bucket, name, type, stored) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = buildEnv();
+    const env = uploadEnv();
 
-    const response = await handleUploads(upload(bucket, new File(['x'], name, { type })), env);
+    const response = await handleUploads(uploadRequest(bucket, new File(['x'], name, { type })), env);
 
     expect(response.status).toBe(200);
     expect(env.R2_UPLOADS.put).toHaveBeenCalledWith(
@@ -80,16 +88,16 @@ describe('Uploads Handler file types', () => {
     ['template-videos', 'movie.mkv', 'video/x-matroska'],
   ])('refuses %s %s sent as "%s"', async (bucket, name, type) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = buildEnv();
+    const env = uploadEnv();
 
-    const response = await handleUploads(upload(bucket, new File(['x'], name, { type })), env);
+    const response = await handleUploads(uploadRequest(bucket, new File(['x'], name, { type })), env);
 
     expect(response.status).toBe(415);
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 
   it('tells browsers not to guess the type of a stored file', async () => {
-    const env = buildEnv();
+    const env = uploadEnv();
     env.R2_UPLOADS.get.mockResolvedValue({
       body: 'x',
       httpEtag: '"etag"',
@@ -105,93 +113,22 @@ describe('Uploads Handler file types', () => {
   });
 });
 
-describe('Uploads Handler DELETE', () => {
-  function deleteRequest(key: string): Request {
-    return new Request(
-      `http://localhost/api/uploads/file?key=${encodeURIComponent(key)}`,
-      { method: 'DELETE' },
-    );
-  }
-
-  function buildEnv(): any {
-    return {
-      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-    };
-  }
-
-  it.each(['template-images', 'template-videos', 'template-files'])(
-    'refuses to delete the caller\'s own %s upload because templates, runs, and copies share it',
-    async (bucket) => {
-      vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-      const env = buildEnv();
-
-      const response = await handleUploads(
-        deleteRequest(`${bucket}/user-123/asset.bin`),
-        env,
-      );
-
-      expect(response.status).toBe(403);
-      expect(await response.json()).toMatchObject({ code: 'asset_referenced' });
-      expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
-    },
-  );
-
-  it('deletes the caller\'s own avatar', async () => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = buildEnv();
-
-    const response = await handleUploads(deleteRequest('avatars/user-123/a.png'), env);
-
-    expect(response.status).toBe(200);
-    expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith('avatars/user-123/a.png');
-  });
-
-  it.each([
-    'avatars/user-999/a.png',
-    'other-bucket/user-123/a.png',
-    'avatars/evil/user-123/a.png',
-    'template-images/evil/user-123/a.png',
-  ])('rejects deleting %s', async (key) => {
-    vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env = buildEnv();
-
-    const response = await handleUploads(deleteRequest(key), env);
-
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
-  });
-});
-
 describe('Uploads Handler avatar types', () => {
-  function uploadRequest(file: File): Request {
-    const form = new FormData();
-    form.set('bucket', 'avatars');
-    form.set('file', file);
-    return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
-  }
-
   it.each([...AVATAR_MIME_TYPES])('stores %s avatars, which the avatar picker offers', async (type) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env: any = {
-      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-    };
+    const env = uploadEnv();
 
-    const response = await handleUploads(uploadRequest(new File(['x'], 'a', { type })), env);
+    const response = await handleUploads(uploadRequest('avatars', new File(['x'], 'a', { type })), env);
 
     expect(response.status).toBe(200);
   });
 
   it('refuses SVG avatars, which the avatar picker does not offer', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
-    const env: any = {
-      BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-      R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-    };
+    const env = uploadEnv();
 
     const response = await handleUploads(
-      uploadRequest(new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' })),
+      uploadRequest('avatars', new File(['<svg/>'], 'a.svg', { type: 'image/svg+xml' })),
       env,
     );
 
@@ -199,35 +136,6 @@ describe('Uploads Handler avatar types', () => {
     expect(AVATAR_MIME_TYPES).not.toContain('image/svg+xml');
   });
 });
-
-const MB = 1024 * 1024;
-
-function uploadRequest(bucket: string, file: File) {
-  const form = new FormData();
-  form.set('bucket', bucket);
-  form.set('file', file);
-  return new Request('http://localhost/api/uploads', { method: 'POST', body: form });
-}
-
-/** Hands the handler the parsed form as-is, so a file keeps an empty content type. */
-function rawFormUpload(bucket: string, file: File) {
-  const form = new FormData();
-  form.set('bucket', bucket);
-  form.set('file', file);
-  return {
-    method: 'POST',
-    url: 'http://localhost/api/uploads',
-    headers: new Headers(),
-    formData: async () => form,
-  } as unknown as Request;
-}
-
-function uploadEnv() {
-  return {
-    BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-    R2_UPLOADS: { put: vi.fn(), get: vi.fn(), delete: vi.fn() },
-  } as any;
-}
 
 describe('Uploads Handler size and type limits', () => {
   it('rejects an avatar over 5MB without storing it', async () => {
@@ -263,18 +171,17 @@ describe('Uploads Handler size and type limits', () => {
   });
 
   it.each(Object.entries(UPLOAD_MAX_BYTES) as Array<[UploadBucket, number]>)(
-    'rejects a %s upload one byte over its %d-byte limit before storing it',
+    'rejects a %s upload one byte over its %d-byte limit before reading or storing it',
     async (bucket, limit) => {
       vi.mocked(getSessionUserId).mockResolvedValue('user-123');
       const env = uploadEnv();
-      // Reports the size without allocating it; the handler rejects before reading.
-      class OversizedFile extends File {
+      class FileReportingOneByteOverTheLimit extends File {
         get size() {
           return limit + 1;
         }
       }
 
-      const response = await handleUploads(rawFormUpload(bucket, new OversizedFile(['x'], 'big.bin')), env);
+      const response = await handleUploads(uploadOfTheFileObjectAsIs(bucket, new FileReportingOneByteOverTheLimit(['x'], 'big.bin')), env);
 
       expect(response.status).toBe(413);
       expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
@@ -292,14 +199,14 @@ describe('Uploads Handler size and type limits', () => {
     const file = new File(['<html></html>'], name);
     expect(file.type).toBe('');
 
-    const response = await handleUploads(rawFormUpload(bucket, file), env);
+    const response = await handleUploads(uploadOfTheFileObjectAsIs(bucket, file), env);
 
     expect(response.status).toBe(415);
     expect(env.R2_UPLOADS.put).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['no content type', rawFormUpload],
+    ['no content type', uploadOfTheFileObjectAsIs],
     ['the generic binary type browsers send for unknown files', uploadRequest],
   ])('stores a file with %s under the type its extension allows', async (_label, build) => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
@@ -318,15 +225,13 @@ describe('Uploads Handler size and type limits', () => {
 });
 
 describe('Uploads Handler storage', () => {
-  // formData() already holds the file; copying it into an ArrayBuffer would hold
-  // a 50MB upload twice, close to the isolate's 128MB memory limit.
   it('streams the parsed file to R2 without a second copy, which would hold a 50MB upload twice near the isolate\'s 128MB memory limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue('user-123');
     const env = uploadEnv();
     const file = new File([new Uint8Array(1024)], 'clip.mp4', { type: 'video/mp4' });
     const arrayBuffer = vi.spyOn(file, 'arrayBuffer');
 
-    const response = await handleUploads(rawFormUpload('template-videos', file), env);
+    const response = await handleUploads(uploadOfTheFileObjectAsIs('template-videos', file), env);
 
     expect(response.status).toBe(200);
     expect(arrayBuffer).not.toHaveBeenCalled();
@@ -342,9 +247,7 @@ const FILE_KEY = 'template-videos/user-123/clip.mp4';
 const FILE_SIZE = 100;
 const FILE_ETAG = '"etag-1"';
 
-// Models R2: a parsed range selects bytes, an offset past the end throws, and a
-// failed precondition returns the object's metadata without a body.
-function fakeR2Bucket() {
+function fakeR2BucketWithRangesAndPreconditions() {
   const bytes = Uint8Array.from({ length: FILE_SIZE }, (_, index) => index);
   const metadata = () => ({
     key: FILE_KEY,
@@ -386,7 +289,7 @@ async function bodyBytes(response: Response) {
 
 describe('Uploads Handler file downloads', () => {
   it('serves the whole file with range support advertised', async () => {
-    const bucket = fakeR2Bucket();
+    const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(fileRequest(), { R2_UPLOADS: bucket } as any);
 
     expect(response.status).toBe(200);
@@ -398,7 +301,7 @@ describe('Uploads Handler file downloads', () => {
   });
 
   it('answers the Safari byte-range probe with 206 and only the requested bytes', async () => {
-    const bucket = fakeR2Bucket();
+    const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(fileRequest({ Range: 'bytes=0-1' }), { R2_UPLOADS: bucket } as any);
 
     expect(response.status).toBe(206);
@@ -417,7 +320,7 @@ describe('Uploads Handler file downloads', () => {
     ['bytes=-3', 'bytes 97-99/100', [97, 98, 99]],
     ['bytes=98-500', 'bytes 98-99/100', [98, 99]],
   ])('serves %s as %s', async (range, contentRange, expected) => {
-    const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2Bucket() } as any);
+    const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2BucketWithRangesAndPreconditions() } as any);
 
     expect(response.status).toBe(206);
     expect(response.headers.get('Content-Range')).toBe(contentRange);
@@ -426,7 +329,7 @@ describe('Uploads Handler file downloads', () => {
   });
 
   it.each(['bytes=100-', 'bytes=-0'])('rejects the unsatisfiable range %s with 416', async (range) => {
-    const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2Bucket() } as any);
+    const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2BucketWithRangesAndPreconditions() } as any);
 
     expect(response.status).toBe(416);
     expect(response.headers.get('Content-Range')).toBe(`bytes */${FILE_SIZE}`);
@@ -435,7 +338,7 @@ describe('Uploads Handler file downloads', () => {
   it.each(['bytes=0-1,4-5', 'bytes=5-2', 'items=0-1', 'bytes=abc'])(
     'ignores the unsupported or invalid range %s and serves the whole file',
     async (range) => {
-      const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2Bucket() } as any);
+      const response = await handleUploads(fileRequest({ Range: range }), { R2_UPLOADS: fakeR2BucketWithRangesAndPreconditions() } as any);
 
       expect(response.status).toBe(200);
       expect(response.headers.get('Content-Range')).toBeNull();
@@ -444,7 +347,7 @@ describe('Uploads Handler file downloads', () => {
   );
 
   it('serves the whole file when If-Range no longer matches', async () => {
-    const bucket = fakeR2Bucket();
+    const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(
       fileRequest({ Range: 'bytes=0-1', 'If-Range': '"stale-etag"' }),
       { R2_UPLOADS: bucket } as any,
@@ -457,7 +360,7 @@ describe('Uploads Handler file downloads', () => {
   it('answers a matching If-None-Match with 304 and no body', async () => {
     const response = await handleUploads(
       fileRequest({ 'If-None-Match': FILE_ETAG }),
-      { R2_UPLOADS: fakeR2Bucket() } as any,
+      { R2_UPLOADS: fakeR2BucketWithRangesAndPreconditions() } as any,
     );
 
     expect(response.status).toBe(304);
@@ -466,7 +369,7 @@ describe('Uploads Handler file downloads', () => {
   });
 
   it('answers HEAD from metadata without reading the object', async () => {
-    const bucket = fakeR2Bucket();
+    const bucket = fakeR2BucketWithRangesAndPreconditions();
     const response = await handleUploads(fileRequest({}, 'HEAD'), { R2_UPLOADS: bucket } as any);
 
     expect(response.status).toBe(200);
@@ -476,7 +379,7 @@ describe('Uploads Handler file downloads', () => {
   });
 
   it('returns 404 for a missing file, with or without a range', async () => {
-    const bucket = fakeR2Bucket();
+    const bucket = fakeR2BucketWithRangesAndPreconditions();
     const missing = new Request('http://localhost/api/uploads/file?key=missing', { headers: { Range: 'bytes=0-1' } });
 
     expect((await handleUploads(missing, { R2_UPLOADS: bucket } as any)).status).toBe(404);
@@ -486,10 +389,6 @@ describe('Uploads Handler file downloads', () => {
 describe('Uploads Handler delete authorization', () => {
   const SELF = 'user-123';
   const OTHER = 'user-456';
-
-  function deleteRequest(key: string) {
-    return new Request(`http://localhost/api/uploads/file?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
-  }
 
   it('lets an account delete its own avatar', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(SELF);
@@ -501,12 +400,8 @@ describe('Uploads Handler delete authorization', () => {
     expect(env.R2_UPLOADS.delete).toHaveBeenCalledWith(`avatars/${SELF}/a.png`);
   });
 
-  // Template media is referenced by Templates (Personal and Organization),
-  // versions, Runs and public-template clones, and uploads record no owner, so
-  // the uploader, including a disabled or removed Organization member, must not
-  // be able to delete it.
   it.each(['template-files', 'template-images', 'template-videos'])(
-    'refuses to delete %s, even for the account that uploaded it',
+    'refuses to delete %s, even for the account that uploaded it, since Templates, versions, Runs and copies may use it',
     async (bucket) => {
       vi.mocked(getSessionUserId).mockResolvedValue(SELF);
       const env = uploadEnv();
@@ -514,12 +409,17 @@ describe('Uploads Handler delete authorization', () => {
       const response = await handleUploads(deleteRequest(`${bucket}/${SELF}/doc.pdf`), env);
 
       expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code: 'asset_referenced' });
       expect(env.R2_UPLOADS.delete).not.toHaveBeenCalled();
     },
   );
 
   it.each([
     ['another account avatar', `avatars/${OTHER}/a.png`],
+    ['an unknown account avatar', 'avatars/user-999/a.png'],
+    ['an avatar key with the caller id after another segment', `avatars/evil/${SELF}/a.png`],
+    ['a Template image key with the caller id after another segment', `template-images/evil/${SELF}/a.png`],
+    ['a key in another bucket', `other-bucket/${SELF}/a.png`],
     ['a key with the caller id smuggled in', `template-files/${OTHER}/a.pdf/${SELF}/x`],
     ['an extra path segment', `avatars/${SELF}/nested/a.png`],
     ['an unknown bucket', `x/${SELF}/y`],

@@ -42,13 +42,17 @@ describe('payload schemas', () => {
     expect(resolveRequestedSlug(legacySlug, legacySlug)).toEqual({ kind: 'unchanged' });
     expect(resolveRequestedSlug('', legacySlug)).toEqual({ kind: 'unchanged' });
     expect(resolveRequestedSlug('new-list', legacySlug)).toEqual({ kind: 'changed', slug: 'new-list' });
-    // A changed slug is normalized to one the slug rule accepts, not stored as typed.
-    expect(resolveRequestedSlug('Bad Slug!', legacySlug)).toEqual({ kind: 'changed', slug: 'bad-slug' });
-    expect(resolveRequestedSlug('Bad Slug!', 'bad-slug')).toEqual({ kind: 'unchanged' });
     expect(resolveRequestedSlug('?!?', legacySlug)).toEqual({
       kind: 'invalid',
       message: 'slug: Use Latin letters or numbers in the URL slug.',
     });
+  });
+
+  it('normalizes a changed slug to one the slug rule accepts instead of storing it as typed', () => {
+    const legacySlug = "tom's-list:-week-1-1a2b3c4d";
+
+    expect(resolveRequestedSlug('Bad Slug!', legacySlug)).toEqual({ kind: 'changed', slug: 'bad-slug' });
+    expect(resolveRequestedSlug('Bad Slug!', 'bad-slug')).toEqual({ kind: 'unchanged' });
   });
 
   it('decodes slug path segments and rejects malformed encodings', () => {

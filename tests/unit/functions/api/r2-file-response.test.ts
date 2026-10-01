@@ -34,13 +34,11 @@ describe('resolveByteRange', () => {
     expect(resolveByteRange(range as R2Range, size)).toEqual(expected);
   });
 
-  // workerd's local R2 reports the range it served with every field, the unused ones
-  // undefined; `bytes=0-1` came back as `Content-Range: bytes NaN-63/64`.
   it.each([
     [{ offset: 0, length: 2, suffix: undefined }, 64, { start: 0, end: 1 }],
     [{ offset: 60, length: undefined, suffix: undefined }, 64, { start: 60, end: 63 }],
     [{ offset: undefined, length: undefined, suffix: 3 }, 64, { start: 61, end: 63 }],
-  ])('reads %j of %d bytes, as an R2 object reports it, as %j', (range, size, expected) => {
+  ])('reads %j of %d bytes, as workerd\'s local R2 reports it with the unused fields undefined, as %j', (range, size, expected) => {
     expect(resolveByteRange(range as unknown as R2Range, size)).toEqual(expected);
   });
 });

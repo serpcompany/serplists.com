@@ -1,23 +1,12 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 
 import { createDb } from '@functions/api/db';
 import { selectPublicProfileTemplates } from '@functions/api/handlers/template-reads';
 import { selectAuditEventHistory, selectTemplateVersionHistory } from '@functions/api/utils/history-queries';
+import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 
-// D1 bills rows scanned. These plans come from the real migrations and the SQL Drizzle
-// generates, so a history query that sorts every row before LIMIT fails here.
-
-const migrationsDir = new URL('../../../../db/migrations/', import.meta.url);
-
-function migratedDatabase(): DatabaseSync {
-  const db = new DatabaseSync(':memory:');
-  for (const file of readdirSync(migrationsDir).filter((name) => name.endsWith('.sql')).sort()) {
-    db.exec(readFileSync(new URL(file, migrationsDir), 'utf8'));
-  }
-  return db;
-}
+const migratedDatabase = (): DatabaseSync => createMigratedD1().sqlite;
 
 type BuiltQuery = { toSQL(): { sql: string; params: unknown[] } };
 
@@ -29,7 +18,7 @@ function explain(db: DatabaseSync, query: BuiltQuery): string {
   return rows.map((row) => row.detail).join('; ');
 }
 
-describe('history query plans', () => {
+describe('history query plans from the real migrations and Drizzle SQL, which fail when a query sorts every row before LIMIT', () => {
   it('reads template versions from the unique index in order, without sorting', () => {
     const db = migratedDatabase();
     const plan = explain(db, selectTemplateVersionHistory(drizzleDb, 'template-1', 8));
@@ -57,9 +46,9 @@ describe('history query plans', () => {
     const insert = db.prepare(`INSERT INTO template_versions
       (id, template_id, version, changed_by_user_id, subject_type, subject_id, snapshot_json, created_at)
       VALUES (?, 'template-1', ?, 'user-1', 'user', 'user-1', '{}', ?)`);
-    // created_at out of order on purpose: version is the order that matters.
+    const createdAtOutOfVersionOrder = (version: number) => `2026-01-01T00:00:${String(version % 60).padStart(2, '0')}Z`;
     for (let version = 1; version <= 300; version += 1) {
-      insert.run(`version-${version}`, version, `2026-01-01T00:00:${String(version % 60).padStart(2, '0')}Z`);
+      insert.run(`version-${version}`, version, createdAtOutOfVersionOrder(version));
     }
 
     const { sql, params } = selectTemplateVersionHistory(drizzleDb, 'template-1', 8).toSQL();

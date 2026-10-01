@@ -32,9 +32,6 @@ import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/ap
 import { getSessionUserId } from '@functions/api/utils/session';
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from '@/lib/schemas/contentLimits';
 
-// A save resends the whole Template or run under the 1MB body limit, so no write may store
-// content larger than src/lib/schemas/contentLimits.ts allows (content_too_large, 413).
-
 type Task = Record<string, unknown>;
 
 const sectionsWithText = (length: number, task: Task = {}, extraTasks: Task[] = []) => [
@@ -48,13 +45,11 @@ const sectionsWithText = (length: number, task: Task = {}, extraTasks: Task[] = 
   },
 ];
 
-// Content whose measured size is exactly `bytes`.
-const sectionsOfSize = (bytes: number, task: Task = {}, extraTasks: Task[] = []) =>
+const sectionsMeasuringExactly = (bytes: number, task: Task = {}, extraTasks: Task[] = []) =>
   sectionsWithText(bytes - contentSaveBytes(sectionsWithText(0, task, extraTasks)), task, extraTasks);
 
-// A run of the same content, with `notes` bringing it to exactly `bytes`.
-const runOfSize = (bytes: number, templateBytes: number, task: Task = {}) => {
-  const template = sectionsOfSize(templateBytes);
+const runWithNotesFillingItTo = (bytes: number, templateBytes: number, task: Task = {}) => {
+  const template = sectionsMeasuringExactly(templateBytes);
   const withNotes = (notes: string) => [{
     ...template[0],
     items: template[0].items.map((item) => ({ ...item, isCompleted: false, ...task, ...(item.id === 'item-1' ? { notes } : {}) })),
@@ -117,25 +112,24 @@ describe('Template content limit', () => {
   }), env);
 
   it('creates a template at the limit and refuses one over it', async () => {
-    await expectTooLarge(await post(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES + 1)));
+    await expectTooLarge(await post(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 1)));
 
-    const response = await post(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES));
+    const response = await post(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES));
     expect(response.status).toBe(200);
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a save that grows the content past the limit', async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate(sectionsOfSize(1000))]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate(sectionsMeasuringExactly(1000))]);
 
-    await expectTooLarge(await put(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES + 1)));
+    await expectTooLarge(await put(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 1)));
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
   });
 
-  // Content stored before the limit can still be edited, as long as the save does not grow it.
-  it('saves a template already over the limit when the save does not grow it', async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES + 5000))]);
+  it('saves a template stored over the limit before it existed, when the save does not grow it', async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 5000))]);
 
-    const response = await put(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES + 4000));
+    const response = await put(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 4000));
 
     expect(response.status).toBe(200);
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
@@ -143,7 +137,7 @@ describe('Template content limit', () => {
 
   it('refuses to copy a public template stored over the limit', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([
-      { ...storedTemplate(sectionsOfSize(TEMPLATE_CONTENT_MAX_BYTES + 1)), user_id: 'other-user', is_public: true },
+      { ...storedTemplate(sectionsMeasuringExactly(TEMPLATE_CONTENT_MAX_BYTES + 1)), user_id: 'other-user', is_public: true },
     ]);
 
     await expectTooLarge(await handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
@@ -152,15 +146,13 @@ describe('Template content limit', () => {
     }), env));
   });
 
-  // A run whose notes the change would take past the run limit keeps its content and goes
-  // stale; the template save and the other runs go through.
-  it('leaves out of reconciliation a run the change would take past the run limit', async () => {
+  it('leaves out of reconciliation a run the change would take past the run limit, which goes stale while the save and other runs go through', async () => {
     const templateBytes = 400 * 1024;
-    const stored = sectionsOfSize(templateBytes);
+    const stored = sectionsMeasuringExactly(templateBytes);
     dbMocks.selectChain.limit.mockResolvedValueOnce([storedTemplate(stored)]);
     dbMocks.selectChain.orderBy.mockResolvedValueOnce([
-      { id: 'run-full', items: JSON.stringify(runOfSize(RUN_CONTENT_MAX_BYTES - 100, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
-      { id: 'run-small', items: JSON.stringify(runOfSize(templateBytes + 1000, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
+      { id: 'run-full', items: JSON.stringify(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES - 100, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
+      { id: 'run-small', items: JSON.stringify(runWithNotesFillingItTo(templateBytes + 1000, templateBytes)), retired_items: '[]', status: 'in_progress', is_public: false, revision: 1 },
     ]);
     const grown = [{ ...stored[0], items: [...stored[0].items, { id: 'item-2', title: 'New', description: '', contents: [{ id: 'content-2', type: 'text', value: 'y'.repeat(1000) }] }] }];
 
@@ -203,7 +195,7 @@ describe('Run content limit', () => {
       owner_type: 'user',
       team_id: null,
       title: 'Guide',
-      items: JSON.stringify(sectionsOfSize(RUN_CONTENT_MAX_BYTES + 1)),
+      items: JSON.stringify(sectionsMeasuringExactly(RUN_CONTENT_MAX_BYTES + 1)),
       is_public: false,
       version: 1,
     }]);
@@ -216,18 +208,16 @@ describe('Run content limit', () => {
   });
 
   it('refuses a save whose notes take the run past the limit', async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([run(runOfSize(RUN_CONTENT_MAX_BYTES - 10, 1000))]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([run(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES - 10, 1000))]);
 
-    await expectTooLarge(await putRun(runOfSize(RUN_CONTENT_MAX_BYTES + 90, 1000)));
+    await expectTooLarge(await putRun(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES + 90, 1000)));
   });
 
-  // Unticking writes "false" over "true", one byte more: a run whose notes reached the
-  // limit must still record progress both ways.
-  it('saves an untick on a run at the limit', async () => {
-    const ticked = runOfSize(RUN_CONTENT_MAX_BYTES, 1000, { isCompleted: true });
+  it('saves an untick on a run at the limit, so a run whose notes reached it still records progress both ways', async () => {
+    const ticked = runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES, 1000, { isCompleted: true });
     dbMocks.selectChain.limit.mockResolvedValueOnce([run(ticked)]);
 
-    const response = await putRun(runOfSize(RUN_CONTENT_MAX_BYTES, 1000, { isCompleted: false }));
+    const response = await putRun(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES, 1000, { isCompleted: false }));
 
     expect(response.status).toBe(200);
     expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
@@ -236,7 +226,7 @@ describe('Run content limit', () => {
   it('refuses a revalidate that would take the run past the limit', async () => {
     const templateBytes = 400 * 1024;
     dbMocks.selectChain.limit
-      .mockResolvedValueOnce([run(runOfSize(RUN_CONTENT_MAX_BYTES - 100, templateBytes))])
+      .mockResolvedValueOnce([run(runWithNotesFillingItTo(RUN_CONTENT_MAX_BYTES - 100, templateBytes))])
       .mockResolvedValueOnce([{
         id: 'template-1',
         version: 2,
@@ -244,7 +234,7 @@ describe('Run content limit', () => {
         team_id: null,
         user_id: 'user-123',
         is_public: false,
-        items: JSON.stringify(sectionsOfSize(templateBytes + 1000)),
+        items: JSON.stringify(sectionsMeasuringExactly(templateBytes + 1000)),
       }]);
 
     await expectTooLarge(await handleChecklists(new Request('http://localhost/api/checklists/run-1/revalidate', {
@@ -255,7 +245,7 @@ describe('Run content limit', () => {
 
   it('refuses a share-link save whose notes take the run past the limit', async () => {
     vi.mocked(getSessionUserId).mockResolvedValue(null);
-    const stored = sectionsOfSize(RUN_CONTENT_MAX_BYTES - 10, { isCompleted: false });
+    const stored = sectionsMeasuringExactly(RUN_CONTENT_MAX_BYTES - 10, { isCompleted: false });
     dbMocks.selectChain.limit.mockResolvedValueOnce([run(stored, { is_public: true, share_token: 'share-1' })]);
 
     await expectTooLarge(await handleChecklists(new Request('http://localhost/api/checklists/shared/share-1', {

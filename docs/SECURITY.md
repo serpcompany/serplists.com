@@ -385,7 +385,9 @@ back (`contentSaveBytes`): loading and saving fill in what a stored record may l
 titles, descriptions, content lists, block values and completion), so the stored JSON alone
 would undercount content that was imported or written by hand. A save no larger than the
 content it replaces is allowed, so content stored before the limit can still be saved and
-trimmed.
+trimmed. A Template save leaves out of reconciliation any run it would take past the run
+limit: that run keeps its content and goes stale while the save and the other runs go
+through, and Revalidate refuses it with the same `413`.
 The MCP endpoint (`/api/mcp`) checks its own 1MB body limit too, and bounds what it returns.
 Every tool result stays within 32KB (`MAX_RESULT_BYTES` in
 `functions/api/handlers/agentMcpPages.ts`), which MCP clients take whole: Claude
