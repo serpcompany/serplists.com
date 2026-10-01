@@ -3,6 +3,7 @@ import { getApiEnv } from './env';
 import { applyCorsHeaders, buildCorsPreflightResponse } from './utils/cors';
 import { describeErrorForLog, getClientIp, log } from './utils/logger';
 import { sanitizeLogPath } from './utils/log-path';
+import { runWithRequestId } from './utils/request-context';
 import { checkAuthRateLimit } from './utils/auth-rate-limit';
 import { checkRouteRateLimit, routeRateLimitResponse } from './utils/route-rate-limit';
 import { createBetterAuth } from './better-auth';
@@ -102,9 +103,13 @@ async function handleCORS(context: { request: Request; env: Env }): Promise<Resp
   return buildCorsPreflightResponse(context.request, context.env);
 }
 
-async function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
-  const { env } = context;
+function handleRequest(context: { request: Request; env: Env }): Promise<Response> {
   const requestId = crypto.randomUUID();
+  return runWithRequestId(requestId, () => respondToRequest(context, requestId));
+}
+
+async function respondToRequest(context: { request: Request; env: Env }, requestId: string): Promise<Response> {
+  const { env } = context;
   const requestHeaders = new Headers(context.request.headers);
   requestHeaders.set('X-Request-Id', requestId);
   requestHeaders.delete('X-Forwarded-Host');

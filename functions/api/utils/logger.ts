@@ -1,4 +1,5 @@
 import { DrizzleQueryError } from 'drizzle-orm';
+import { currentRequestId } from './request-context';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -56,7 +57,9 @@ export function describeErrorForLog(error: unknown): { errorName: string; errorM
 
 export function log(level: LogLevel, message: string, data?: Record<string, unknown>) {
   const { level: _fieldNamedLevel, message: _fieldNamedMessage, ...fields } = redact(data);
-  const line = JSON.stringify({ level, message, ...fields, timestamp: new Date().toISOString() });
+  const requestId = currentRequestId();
+  const request = requestId === undefined ? {} : { requestId };
+  const line = JSON.stringify({ level, message, ...request, ...fields, timestamp: new Date().toISOString() });
   if (level === 'error') console.error(line);
   else if (level === 'warn') console.warn(line);
   else if (level === 'debug') console.debug(line);

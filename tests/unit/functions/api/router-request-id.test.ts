@@ -12,6 +12,30 @@ describe('API router request id propagation', { timeout: 30_000 }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/handlers/templates');
     vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  it("tags what a handler logs with the request's id, the one the response carries", async () => {
+    vi.doMock('../../../../functions/api/handlers/templates', async () => {
+      const { log } = await import('../../../../functions/api/utils/logger');
+      return {
+        handleTemplates: vi.fn(async () => {
+          await Promise.resolve();
+          log('info', 'handler_line');
+          return Response.json({});
+        }),
+      };
+    });
+    const lines: string[] = [];
+    vi.spyOn(console, 'info').mockImplementation((line: unknown) => {
+      lines.push(String(line));
+    });
+    const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
+
+    const response = await apiWorker.fetch(new Request('http://localhost/api/templates'), buildEnv());
+
+    const logged = lines.map((line) => JSON.parse(line) as { message: string; requestId?: string });
+    expect(logged.find((entry) => entry.message === 'handler_line')?.requestId).toBe(response.headers.get('X-Request-Id'));
   });
 
   it('passes the generated request id through to routed handlers', async () => {

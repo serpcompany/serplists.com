@@ -13,6 +13,7 @@ import {
   parseStatusRange,
   percentile,
   requestTimeline,
+  rowsReadByRequest,
   summarizeErrors,
   summarizeRoutes,
   summarizeStatements,
@@ -31,8 +32,8 @@ const sampleLog = [
   ' GET /dashboard 200 in 2.3s (next.js: 300ms, application-code: 2s)',
   apiLine({ level: 'error', message: 'api_error', requestId: 'req-b', errorName: 'TypeError', errorMessage: 'x is undefined', timestamp: '2026-09-30T18:58:39.000Z' }),
   apiRequest('req-b', 'POST', 'templates', 500, 45, '2026-09-30T18:58:39.010Z'),
-  apiLine({ message: 'd1_query', sql: "SELECT * FROM templates WHERE id = 'a' LIMIT 20", rowsRead: 40, rowsWritten: 0, rowsReturned: 20, durationMs: 3 }),
-  apiLine({ message: 'd1_query', sql: "SELECT * FROM templates  WHERE id = 'b' LIMIT 20", rowsRead: 60, rowsWritten: 0, rowsReturned: 20, durationMs: 5 }),
+  apiLine({ message: 'd1_query', requestId: 'req-a', sql: "SELECT * FROM templates WHERE id = 'a' LIMIT 20", rowsRead: 40, rowsWritten: 0, rowsReturned: 20, durationMs: 3 }),
+  apiLine({ message: 'd1_query', requestId: 'req-a', sql: "SELECT * FROM templates  WHERE id = 'b' LIMIT 20", rowsRead: 60, rowsWritten: 0, rowsReturned: 20, durationMs: 5 }),
 ].join('\n');
 
 const workDir = mkdtempSync(path.join(tmpdir(), 'log-query-'));
@@ -174,6 +175,16 @@ describe('summaries', () => {
     ]);
   });
 
+  it('adds up the rows each request read, per route, when D1 profiling tags its statements with the request id', () => {
+    const entries = parseLogText(sampleLog);
+
+    const templateRoute = summarizeRoutes(requestRecords(entries), rowsReadByRequest(entries)).find(
+      (route) => route.route === 'GET /api/templates/:id',
+    );
+
+    expect(templateRoute).toMatchObject({ p95RowsRead: 100, maxRowsRead: 100 });
+  });
+
   it("lays out one request's lines in time order with offsets from its first line", () => {
     const timeline = requestTimeline(parseLogText(sampleLog), 'req-b');
 
@@ -202,11 +213,19 @@ describe('runLogQuery', () => {
     const { output, exitCode } = runLogQuery(['--', 'routes', '--file', sample], now);
 
     expect(exitCode).toBe(0);
-    expect(output.split('\n')[0]).toMatch(/^ROUTE\s+KIND\s+COUNT\s+4XX\s+5XX\s+P50\s+P95\s+MAX$/);
+    expect(output.split('\n')[0]).toMatch(/^ROUTE\s+KIND\s+COUNT\s+4XX\s+5XX\s+P50\s+P95\s+MAX\b/);
     expect(output).toContain('GET /dashboard');
   });
 
-  it("prints a request's timeline, and fails for an id no line has", () => {
+  it('adds rows-read columns to the route table when the log has D1 statements for its requests', () => {
+    const { output } = runLogQuery(['routes', '--file', sample], now);
+
+    expect(output.split('\n')[0]).toMatch(/P95\s+MAX\s+ROWS P95\s+ROWS MAX$/);
+    expect(output).toMatch(/GET \/api\/templates\/:id\s+api\s+1\s+0\s+0\s+120ms\s+120ms\s+120ms\s+100\s+100/);
+  });
+
+  it("prints a request's timeline with its D1 totals, and fails for an id no line has", () => {
+    expect(runLogQuery(['request', 'req-a', '--file', sample], now).output).toContain('D1: 2 statements, 100 rows read, 0 rows written');
     expect(runLogQuery(['request', 'req-b', '--file', sample], now).output).toContain('+10ms');
     expect(runLogQuery(['request', 'missing', '--file', sample], now)).toMatchObject({ exitCode: 1 });
   });

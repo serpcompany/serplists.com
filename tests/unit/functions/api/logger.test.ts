@@ -1,6 +1,7 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeErrorForLog, log } from '@functions/api/utils/logger';
+import { runWithRequestId } from '@functions/api/utils/request-context';
 
 describe('log', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -19,6 +20,27 @@ describe('log', () => {
     log('info', 'api_request', { requestId: 'req-1', status: 200 });
 
     expect(JSON.parse(lines[0])).toMatchObject({ level: 'info', message: 'api_request', requestId: 'req-1', status: 200 });
+  });
+
+  it('tags every line logged while a request is handled with its id, awaits included, so one query finds them all', async () => {
+    const lines = capture('info');
+
+    await runWithRequestId('req-ctx', async () => {
+      log('info', 'd1_query', { rowsRead: 3 });
+      await Promise.resolve();
+      log('info', 'mcp_tool_call', { tool: 'get_run' });
+    });
+    log('info', 'outside_a_request');
+
+    expect(lines.map((line) => JSON.parse(line).requestId)).toEqual(['req-ctx', 'req-ctx', undefined]);
+  });
+
+  it('keeps a request id passed as a field', () => {
+    const lines = capture('info');
+
+    runWithRequestId('req-ctx', () => log('info', 'api_request', { requestId: 'req-explicit' }));
+
+    expect(JSON.parse(lines[0]).requestId).toBe('req-explicit');
   });
 
   it('redacts personal data and secrets whatever the key casing', () => {

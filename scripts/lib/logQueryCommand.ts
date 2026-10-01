@@ -13,6 +13,7 @@ import {
   parseStatusRange,
   parseWhere,
   requestTimeline,
+  rowsReadByRequest,
   slowestRequests,
   summarizeErrors,
   summarizeRoutes,
@@ -181,18 +182,23 @@ function requestCommand(entries: LogEntry[], requestId: string | undefined, json
   const timeline = requestTimeline(entries, requestId);
   if (json) return result(JSON.stringify(timeline, null, 2));
   if (timeline.length === 0) return result(`No lines have a request id starting with ${requestId}.`, 1);
-  return result(
-    timeline.map(({ offsetMs, entry }) => `${offsetMs === undefined ? "    ?" : `+${offsetMs}ms`.padStart(8)}  ${formatEntry(entry)}`).join("\n"),
-  );
+  const lines = timeline.map(({ offsetMs, entry }) => `${offsetMs === undefined ? "    ?" : `+${offsetMs}ms`.padStart(8)}  ${formatEntry(entry)}`);
+  const statements = summarizeStatements(timeline.map(({ entry }) => entry));
+  if (statements.length === 0) return result(lines.join("\n"));
+  const count = statements.reduce((sum, statement) => sum + statement.count, 0);
+  const read = statements.reduce((sum, statement) => sum + statement.rowsRead, 0);
+  const written = statements.reduce((sum, statement) => sum + statement.rowsWritten, 0);
+  return result([...lines, "", `D1: ${count} statements, ${read} rows read, ${written} rows written`].join("\n"));
 }
 
-function routesCommand(entries: LogEntry[], limit: number, json: boolean): CommandResult {
-  const routes = summarizeRoutes(requestRecords(entries)).slice(0, limit);
+function routesCommand(entries: LogEntry[], rowsRead: Map<string, number>, limit: number, json: boolean): CommandResult {
+  const routes = summarizeRoutes(requestRecords(entries), rowsRead).slice(0, limit);
   if (json) return result(JSON.stringify(routes, null, 2));
   if (routes.length === 0) return result("No requests match.");
+  const profiled = routes.some((route) => route.maxRowsRead !== undefined);
   return result(
     formatTable(
-      ["ROUTE", "KIND", "COUNT", "4XX", "5XX", "P50", "P95", "MAX"],
+      ["ROUTE", "KIND", "COUNT", "4XX", "5XX", "P50", "P95", "MAX", ...(profiled ? ["ROWS P95", "ROWS MAX"] : [])],
       routes.map((route) => [
         route.route,
         route.kind,
@@ -202,6 +208,7 @@ function routesCommand(entries: LogEntry[], limit: number, json: boolean): Comma
         milliseconds(route.p50Ms),
         milliseconds(route.p95Ms),
         milliseconds(route.maxMs),
+        ...(profiled ? [route.p95RowsRead ?? "-", route.maxRowsRead ?? "-"] : []),
       ]),
     ),
   );
@@ -272,7 +279,7 @@ export function runLogQuery(argv: string[], nowMs: number): CommandResult {
       lines: () => linesCommand(matching, lineLimit, json),
       errors: () => errorsCommand(matching, lineLimit, json),
       request: () => requestCommand(matching, requestId, json),
-      routes: () => routesCommand(matching, tableLimit, json),
+      routes: () => routesCommand(matching, rowsReadByRequest(entries), tableLimit, json),
       slow: () => slowCommand(matching, tableLimit, json),
       d1: () => d1Command(matching, tableLimit, json),
     };

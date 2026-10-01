@@ -97,6 +97,13 @@ export function percentile(values: number[], fraction: number): number {
   return sorted[rank] ?? 0;
 }
 
+const d1QueryFieldsSchema = z.object({
+  sql: z.string(),
+  rowsRead: z.number(),
+  rowsWritten: z.number(),
+  durationMs: z.number(),
+});
+
 export type RouteStats = {
   route: string;
   kind: RequestKind;
@@ -106,9 +113,21 @@ export type RouteStats = {
   p50Ms: number;
   p95Ms: number;
   maxMs: number;
+  p95RowsRead: number | undefined;
+  maxRowsRead: number | undefined;
 };
 
-export function summarizeRoutes(records: RequestRecord[]): RouteStats[] {
+export function rowsReadByRequest(entries: LogEntry[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.event !== "d1_query" || !entry.requestId) continue;
+    const parsed = d1QueryFieldsSchema.safeParse(entry.fields);
+    if (parsed.success) totals.set(entry.requestId, (totals.get(entry.requestId) ?? 0) + parsed.data.rowsRead);
+  }
+  return totals;
+}
+
+export function summarizeRoutes(records: RequestRecord[], rowsRead: Map<string, number> = new Map()): RouteStats[] {
   const groups = new Map<string, RequestRecord[]>();
   for (const record of records) {
     const key = `${record.kind} ${record.method} ${normalizeRoute(record.path)}`;
@@ -118,6 +137,10 @@ export function summarizeRoutes(records: RequestRecord[]): RouteStats[] {
     .map((group) => {
       const first = group[0];
       const durations = group.map((record) => record.durationMs);
+      const rows = group.flatMap((record) => {
+        const read = record.requestId === undefined ? undefined : rowsRead.get(record.requestId);
+        return read === undefined ? [] : [read];
+      });
       return {
         route: `${first?.method ?? ""} ${normalizeRoute(first?.path ?? "")}`,
         kind: first?.kind ?? "api",
@@ -127,6 +150,8 @@ export function summarizeRoutes(records: RequestRecord[]): RouteStats[] {
         p50Ms: percentile(durations, 0.5),
         p95Ms: percentile(durations, 0.95),
         maxMs: Math.max(...durations),
+        p95RowsRead: rows.length === 0 ? undefined : percentile(rows, 0.95),
+        maxRowsRead: rows.length === 0 ? undefined : Math.max(...rows),
       };
     })
     .sort((left, right) => right.p95Ms - left.p95Ms || right.count - left.count);
@@ -150,12 +175,6 @@ export function requestTimeline(entries: LogEntry[], requestId: string): Timelin
     .sort((left, right) => (left.offsetMs ?? 0) - (right.offsetMs ?? 0) || left.entry.lineNumber - right.entry.lineNumber);
 }
 
-const d1QueryFieldsSchema = z.object({
-  sql: z.string(),
-  rowsRead: z.number(),
-  rowsWritten: z.number(),
-  durationMs: z.number(),
-});
 
 export type StatementStats = {
   statement: string;
