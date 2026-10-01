@@ -159,8 +159,17 @@ explicitly per environment, never inferred from the host.
   with the tool's name, and a key over its limit `mcp_rate_limited`.
 - Production: Cloudflare runtime logs for the Pages project. There is no external
   log sink, metrics, traces, or alerting yet.
-- Local: `pnpm run dev:all` mirrors output to `tmp/logs/dev-all.log`; search for
-  `"level":"error"` or a request id.
+- Local: `pnpm run dev:all` mirrors its output to `tmp/logs/dev-all.log`, and the browser
+  tests' server mirrors its output to `tmp/logs/e2e-server.log`. `pnpm run logs:query`
+  answers questions about either log:
+  - errors grouped by event and error;
+  - requests per route, with 4xx and 5xx counts and p50, p95 and max latency;
+  - the slowest requests;
+  - one request's lines as a timeline;
+  - D1 statements by rows read, when `D1_PROFILE=true`.
+
+  Details and examples are in the
+  [development environment](design-docs/development-environment.md#run).
 - Frontend: `ErrorBoundary` (the page-level `RouteErrorBoundary` and the last-resort
   one in `App.tsx`, see [FRONTEND.md](FRONTEND.md#structure)) and analytics
   (`src/lib/analytics.ts`, in-memory) write to the browser console only.

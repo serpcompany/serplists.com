@@ -77,11 +77,21 @@ Local servers (`localhost`, `127.0.0.1`) get the Content-Security-Policy without
 the redirects the app's navigations follow to https, which nothing serves.
 
 Output is mirrored to `tmp/logs/dev-all.log`. API logs are JSON lines with a
-`requestId` (also the `X-Request-Id` response header):
+`requestId` (also the `X-Request-Id` response header). `pnpm run logs:query` reads them,
+and Next.js's page lines, instead of a `grep`:
 
 ```bash
-grep '"level":"error"' tmp/logs/dev-all.log
+pnpm run logs:query errors                # warnings, errors and 5xx requests, grouped
+pnpm run logs:query routes --since 15m    # requests, 4xx, 5xx, p50, p95 and max per route
+pnpm run logs:query slow                  # the slowest requests, with their request ids
+pnpm run logs:query request <id>          # one request's lines in order, with offsets
+pnpm run logs:query lines --event mcp_tool_error --path /^mcp/
+pnpm run logs:query d1                    # D1 statements by rows read (D1_PROFILE=true)
 ```
+
+Every command takes `--json` for scripts. `--file` reads another log, or the newest `.log`
+file in a folder. `pnpm run logs:query --help` lists the filters (level, event, request,
+path, status, field values and time).
 
 A failed query after pulling new code usually means local D1 is behind;
 `pnpm run setup` applies pending migrations.
@@ -167,7 +177,10 @@ serves the existing build on your own local D1.
 
 Browser failures keep a trace, video, and screenshot under `tests/test-results/`;
 open a trace with `pnpm exec playwright show-trace <path>/trace.zip`. Each failure
-also has an `error-context.md` with the page snapshot at the moment it failed.
+also has an `error-context.md` with the page snapshot at the moment it failed. The
+server's output from the latest browser test run, API lines included, is in
+`tmp/logs/e2e-server.log`: `pnpm run logs:query errors --file tmp/logs/e2e-server.log`
+shows what the API did while a test failed.
 Testing conventions are in [RELIABILITY.md](../RELIABILITY.md#testing-conventions).
 
 ## Verify an Organization flow by hand

@@ -32,6 +32,7 @@ Use `grep`/`find` instead.
 pnpm install && pnpm run setup   # fresh clone or worktree: .dev.vars, local D1, browser
 pnpm run dev:all                 # next dev (pages + API) on a free port; logs in tmp/logs/dev-all.log
 pnpm run dev:stop                # stop it, including child processes (use this, not a kill)
+pnpm run logs:query errors       # what the API logged; also routes, slow, request <id>, d1
 pnpm run preview                 # the OpenNext build in workerd, as deployed
 pnpm run ui:snap -- dashboard --login john@test.com   # screenshot + accessibility tree of the dev:all app
 pnpm run verify                  # the pre-PR gate: env, lint, types, repo checks, unit tests
