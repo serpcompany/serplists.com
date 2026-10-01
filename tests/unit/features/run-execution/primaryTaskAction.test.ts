@@ -47,45 +47,40 @@ describe('getPrimaryTaskAction', () => {
     ],
     ['completed run on the last task', buildRun([true, true], 'completed'), 'item-2', false, { kind: 'run_completed' }],
     ['completed run with a next task', buildRun([true, true], 'completed'), 'item-1', true, { kind: 'next_task' }],
-    // A completed run is frozen, even one saved with open tasks before this rule existed.
-    ['open task on a completed run', buildRun([false, true], 'completed'), 'item-1', true, { kind: 'next_task' }],
-    ['open last task on a completed run', buildRun([true, false], 'completed'), 'item-2', false, { kind: 'run_completed' }],
-    ['done last task on a completed run with an open task', buildRun([false, true], 'completed'), 'item-2', false, { kind: 'run_completed' }],
+    ['open task on a frozen completed run saved with open tasks', buildRun([false, true], 'completed'), 'item-1', true, { kind: 'next_task' }],
+    ['open last task on a frozen completed run saved with open tasks', buildRun([true, false], 'completed'), 'item-2', false, { kind: 'run_completed' }],
+    ['done last task on a frozen completed run saved with an open task', buildRun([false, true], 'completed'), 'item-2', false, { kind: 'run_completed' }],
   ])('%s', (_label, run, taskId, hasNext, expected) => {
     expect(getPrimaryTaskAction(run, taskId, hasNext)).toEqual(expected);
   });
 });
 
-// A task can be ticked while one of its Sub-tasks is still open (runs saved before a task
-// followed its Sub-tasks, or written through the API). That task is not done and the run
-// cannot be finished yet, so the button leads to it and never reads "Run completed".
-describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open', () => {
+describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open, which older runs and API writes can hold and which is not done', () => {
   const subTasks = (...done: boolean[]) => ({
     type: 'subItems' as const,
     value: '',
     subItems: done.map((isCompleted, index) => ({ id: `sub-${index + 1}`, title: `Sub-task ${index + 1}`, isCompleted })),
   });
-  // Every task ticked; the task at openIndex has a done Sub-tasks block and an open one.
-  const withOpenSubTask = (openIndex: number): ChecklistRun => {
+  const everyTaskTickedWithAnOpenSubTaskOn = (taskIndex: number): ChecklistRun => {
     const run = buildRun([true, true, true]);
-    run.sections[0].items[openIndex].contents = [subTasks(true), subTasks(true, false)];
+    run.sections[0].items[taskIndex].contents = [subTasks(true), subTasks(true, false)];
     return run;
   };
 
   it('leads from the last task to the earlier task with the open Sub-task', () => {
-    const run = withOpenSubTask(0);
+    const run = everyTaskTickedWithAnOpenSubTaskOn(0);
 
     expect(canFinishRun(run)).toBe(false);
     expect(getPrimaryTaskAction(run, 'item-3', false)).toEqual({ kind: 'next_unfinished', itemId: 'item-1' });
   });
 
   it('offers Mark Complete on the task with the open Sub-task, also when it is the last task', () => {
-    expect(getPrimaryTaskAction(withOpenSubTask(2), 'item-3', false)).toEqual({ kind: 'complete_task' });
-    expect(getPrimaryTaskAction(withOpenSubTask(1), 'item-2', true)).toEqual({ kind: 'complete_task' });
+    expect(getPrimaryTaskAction(everyTaskTickedWithAnOpenSubTaskOn(2), 'item-3', false)).toEqual({ kind: 'complete_task' });
+    expect(getPrimaryTaskAction(everyTaskTickedWithAnOpenSubTaskOn(1), 'item-2', true)).toEqual({ kind: 'complete_task' });
   });
 
   it('still moves on from a done task that has a next one', () => {
-    expect(getPrimaryTaskAction(withOpenSubTask(2), 'item-1', true)).toEqual({ kind: 'next_task' });
+    expect(getPrimaryTaskAction(everyTaskTickedWithAnOpenSubTaskOn(2), 'item-1', true)).toEqual({ kind: 'next_task' });
   });
 
   it('treats a ticked task with an empty Sub-tasks block as done', () => {
@@ -95,15 +90,17 @@ describe('getPrimaryTaskAction with a ticked task whose Sub-task is still open',
     expect(getPrimaryTaskAction(run, 'item-2', false)).toEqual({ kind: 'finish_run' });
   });
 
-  it('never reads "Run completed" on a run that is still in progress', () => {
-    // Every combination of three tasks and one Sub-task each, ticked or not, on every task.
-    for (let mask = 0; mask < 64; mask += 1) {
-      const run = buildRun([0, 1, 2].map((index) => (mask & (1 << index)) !== 0));
+  it('never reads "Run completed" on a run that is still in progress, whichever of three tasks and their Sub-tasks are ticked', () => {
+    const taskCount = 3;
+    const tickCombinations = 2 ** (taskCount * 2);
+    for (let ticks = 0; ticks < tickCombinations; ticks += 1) {
+      const isTicked = (bit: number) => (ticks & (1 << bit)) !== 0;
+      const run = buildRun([0, 1, 2].map((index) => isTicked(index)));
       run.sections[0].items.forEach((item, index) => {
-        item.contents = [subTasks((mask & (1 << (index + 3))) !== 0)];
+        item.contents = [subTasks(isTicked(index + taskCount))];
       });
       run.sections[0].items.forEach((item, index) => {
-        expect(getPrimaryTaskAction(run, item.id, index < 2).kind, `mask ${mask}, ${item.id}`).not.toBe('run_completed');
+        expect(getPrimaryTaskAction(run, item.id, index < 2).kind, `ticks ${ticks}, ${item.id}`).not.toBe('run_completed');
       });
     }
   });

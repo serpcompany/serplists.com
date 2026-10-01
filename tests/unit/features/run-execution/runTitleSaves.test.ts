@@ -10,15 +10,12 @@ import {
 } from '@/features/run-execution/runExecutionActions';
 import type { ChecklistRun } from '@/types/checklist';
 
-// Titles had no length limit before the 160-character PUT limit, and runs started from a
-// Template with a long title (MCP start_run, template share) still get one. Saving progress on
-// such a run must not resend the unchanged title, or every save fails validation.
-const longTitle = `Quarterly launch readiness ${'x'.repeat(150)}`;
+const titleOverThePutLimit = `Quarterly launch readiness ${'x'.repeat(150)}`;
 
 const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({
   id: 'run-1',
   templateId: 'template-1',
-  title: longTitle,
+  title: titleOverThePutLimit,
   status: 'in_progress',
   progress: 0,
   sections: [
@@ -37,8 +34,7 @@ const buildRun = (overrides: Partial<ChecklistRun> = {}): ChecklistRun => ({
   ...overrides,
 });
 
-// Stands in for TemplatesContext.updateRun: records the PUT body it would send.
-function setup() {
+function setupUpdateRunRecordingItsPutBodies() {
   const bodies: ReturnType<typeof buildRunUpdatePayload>[] = [];
   const updateRun = vi.fn(async (run: ChecklistRun, options?: RunUpdateOptions) => {
     bodies.push(buildRunUpdatePayload(run, options));
@@ -53,19 +49,18 @@ function setup() {
   return { bodies, dependencies: { apiClient, updateRun } };
 }
 
-describe('private run saves', () => {
+describe('private run saves, which leave out an unchanged title, since a run started from a Template with a long title can hold one over the PUT limit', () => {
   it('save ticks, notes and completion on a run whose stored title is over 160 characters', async () => {
-    expect(longTitle.length).toBeGreaterThan(160);
-    const { bodies, dependencies } = setup();
+    expect(titleOverThePutLimit.length).toBeGreaterThan(160);
+    const { bodies, dependencies } = setupUpdateRunRecordingItsPutBodies();
 
     await toggleRunItem({ isCompleted: true, itemId: 'item-1', run: buildRun() }, dependencies);
     await saveRunItemNotes({ itemId: 'item-1', notes: 'Checked with legal', run: buildRun() }, dependencies);
-    // Completion needs every task done.
-    const finishedRun = buildRun();
-    finishedRun.sections[0].items.forEach((item) => {
+    const runWithEveryTaskDone = buildRun();
+    runWithEveryTaskDone.sections[0].items.forEach((item) => {
       item.isCompleted = true;
     });
-    await completeRunExecution({ run: finishedRun }, dependencies);
+    await completeRunExecution({ run: runWithEveryTaskDone }, dependencies);
 
     expect(bodies).toHaveLength(3);
     for (const body of bodies) {
@@ -75,7 +70,7 @@ describe('private run saves', () => {
   });
 
   it('send the title only for a rename', async () => {
-    const { bodies, dependencies } = setup();
+    const { bodies, dependencies } = setupUpdateRunRecordingItsPutBodies();
 
     const result = await saveRunExecutionTitle({ run: buildRun(), title: '  Launch readiness  ' }, dependencies);
 

@@ -41,9 +41,7 @@ const buildRun = (revision: number, done: Record<string, boolean> = {}, notes: R
   revision,
 });
 
-// A server that holds one run and refuses a save whose revision is not the current one,
-// like PUT /api/checklists/:id and PUT /api/shared/:token.
-const createServer = (initial: ChecklistRun) => {
+const createServerRefusingStaleRevisions = (initial: ChecklistRun) => {
   let stored = initial;
   const sent: ChecklistRun[] = [];
   const accept = (run: ChecklistRun) => {
@@ -70,7 +68,7 @@ const createServer = (initial: ChecklistRun) => {
         return { revision: saved.revision };
       }),
     },
-    edit: (change: (run: ChecklistRun) => ChecklistRun) => {
+    saveFromAnotherSession: (change: (run: ChecklistRun) => ChecklistRun) => {
       stored = { ...change(stored), revision: stored.revision + 1 };
     },
     sent,
@@ -79,20 +77,20 @@ const createServer = (initial: ChecklistRun) => {
   };
 };
 
-// Mirrors the hook: an ok result's run becomes the latest run the next save builds on.
 const createPage = (
-  server: ReturnType<typeof createServer>,
+  server: ReturnType<typeof createServerRefusingStaleRevisions>,
   initial: ChecklistRun,
   shareToken?: string,
   noteDrafts: NoteDrafts = {},
 ) => {
   const page = { latest: initial as ChecklistRun | null, notFound: false };
   const dependencies = { apiClient: server.apiClient, updateRun: server.updateRun };
+  const keepAnOkRunAsTheLatest = (result: RunExecutionActionResult) => {
+    if (result.kind === 'ok' && result.run) page.latest = result.run;
+    return result;
+  };
   const context: RunSaverContext = {
-    apply: (result: RunExecutionActionResult) => {
-      if (result.kind === 'ok' && result.run) page.latest = result.run;
-      return result;
-    },
+    apply: keepAnOkRunAsTheLatest,
     latest: () => page.latest,
     onNotFound: () => {
       page.notFound = true;
@@ -106,9 +104,9 @@ const createPage = (
 
 describe('a run page whose run was saved by another session', () => {
   it('reloads on an edit conflict, retries once on the latest run, and keeps both changes', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) })); // U1 ticks task 1 -> revision 6
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const result = await saver(saves.toggleItem('item-2', true), context);
 
@@ -120,9 +118,9 @@ describe('a run page whose run was saved by another session', () => {
   });
 
   it('builds saves queued behind the conflict on the reloaded run', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const [first, second] = await Promise.all([
       saver(saves.toggleItem('item-2', true), context),
@@ -136,23 +134,23 @@ describe('a run page whose run was saved by another session', () => {
     expect(page.latest?.sections[0]?.items.map((item) => item.isCompleted)).toEqual([true, true, true]);
   });
 
-  it('does not undo a tick the other session already made on the same task', async () => {
-    const server = createServer(buildRun(5));
+  it('does not undo a tick the other session already made on the same task, and sends no retry for it', async () => {
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const result = await saver(saves.toggleItem('item-1', true), context);
 
     expect(result.kind).toBe('ok');
-    expect(server.sent).toHaveLength(1); // the refused save; the task already had the chosen value
+    expect(server.sent).toHaveLength(1);
     expect(server.stored().sections[0]?.items[0]?.isCompleted).toBe(true);
     expect(page.latest?.sections[0]?.items[0]?.isCompleted).toBe(true);
   });
 
   it('does not undo a sub-task tick the other session already made', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => ({ ...run, sections: sections({ 'item-3': true, 'sub-1': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-3': true, 'sub-1': true }) }));
 
     const result = await saver(saves.toggleSubItem('item-3', 0, 0, true), context);
 
@@ -161,12 +159,12 @@ describe('a run page whose run was saved by another session', () => {
     expect(page.latest?.sections[0]?.items[2]?.contents?.[0]?.subItems?.[0]?.isCompleted).toBe(true);
   });
 
-  it('retries only once and then reports the conflict with the latest run shown', async () => {
-    const server = createServer(buildRun(5));
+  it('retries only once, even when another session saves again between the reload and the retry, and then reports the conflict with the latest run shown', async () => {
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => run);
+    server.saveFromAnotherSession((run) => run);
     server.apiClient.getChecklistById.mockImplementation(async () => {
-      server.edit((run) => run); // someone saves again between the reload and the retry
+      server.saveFromAnotherSession((run) => run);
       return { id: 'run-1', sections: server.stored().sections, revision: server.stored().revision - 1, status: 'in_progress' };
     });
 
@@ -178,9 +176,9 @@ describe('a run page whose run was saved by another session', () => {
   });
 
   it('marks the run not found when the reload finds it gone', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => run);
+    server.saveFromAnotherSession((run) => run);
     server.apiClient.getChecklistById.mockRejectedValue(createApiError(404, { error: 'Not found' }));
 
     const result = await saver(saves.toggleItem('item-2', true), context);
@@ -191,9 +189,9 @@ describe('a run page whose run was saved by another session', () => {
   });
 
   it('does not overwrite task notes another session changed', async () => {
-    const server = createServer(buildRun(5, {}, { 'item-1': 'old' }));
+    const server = createServerRefusingStaleRevisions(buildRun(5, {}, { 'item-1': 'old' }));
     const { context, page, saver, saves } = createPage(server, buildRun(5, {}, { 'item-1': 'old' }));
-    server.edit((run) => ({ ...run, sections: sections({}, { 'item-1': 'teammate' }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({}, { 'item-1': 'teammate' }) }));
 
     const result = await saver(saves.notes('item-1', 'mine'), context);
 
@@ -204,9 +202,9 @@ describe('a run page whose run was saved by another session', () => {
   });
 
   it('retries a notes save when the other session changed a different task', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, saver, saves } = createPage(server, buildRun(5));
-    server.edit((run) => ({ ...run, sections: sections({ 'item-2': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-2': true }) }));
 
     const result = await saver(saves.notes('item-1', 'mine'), context);
 
@@ -218,12 +216,10 @@ describe('a run page whose run was saved by another session', () => {
     ]);
   });
 
-  // The page moves on once Mark Complete lands, so its notes must be saved even when the
-  // retry finds the task already complete.
-  it('saves the task notes with Mark Complete when the other session already completed the task', async () => {
-    const server = createServer(buildRun(5));
+  it('saves the task notes with Mark Complete when the other session already completed the task, since the page then moves on', async () => {
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, saver, saves } = createPage(server, buildRun(5), undefined, { 'item-1': 'mine' });
-    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const result = await saver(saves.toggleItem('item-1', true), context);
 
@@ -234,9 +230,9 @@ describe('a run page whose run was saved by another session', () => {
 
   it('does not send completion again when the other session already completed the run', async () => {
     const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
-    const server = createServer(buildRun(5, allDone));
+    const server = createServerRefusingStaleRevisions(buildRun(5, allDone));
     const { context, page, saver, saves } = createPage(server, buildRun(5, allDone));
-    server.edit((run) => ({ ...run, completedAt: '2026-04-20T00:00:00.000Z', status: 'completed' }));
+    server.saveFromAnotherSession((run) => ({ ...run, completedAt: '2026-04-20T00:00:00.000Z', status: 'completed' }));
 
     const result = await saver(saves.complete, context);
 
@@ -246,9 +242,9 @@ describe('a run page whose run was saved by another session', () => {
   });
 
   it('recovers the same way on a shared run link', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page, saver, saves } = createPage(server, buildRun(5), 'share-token');
-    server.edit((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
+    server.saveFromAnotherSession((run) => ({ ...run, sections: sections({ 'item-1': true }) }));
 
     const result = await saver(saves.toggleItem('item-2', true), context);
 
@@ -283,8 +279,7 @@ describe('run actions keep what the retry needs', () => {
 });
 
 describe('toggles queued while an earlier save is in flight', () => {
-  // item-2 has sub-tasks [a, b]; the page shows the run as it was before the first save.
-  const twoSubTasks = (done: Record<string, boolean>): ChecklistRun => ({
+  const runWhereTask2HasSubTasksAAndB = (done: Record<string, boolean>): ChecklistRun => ({
     ...buildRun(1),
     sections: [
       {
@@ -316,9 +311,9 @@ describe('toggles queued while an earlier save is in flight', () => {
     return [item?.isCompleted, ...(item?.contents?.[0]?.subItems ?? []).map((sub) => sub.isCompleted)];
   };
 
-  it('Mark Complete, then ticking a sub-task that still looks unticked, keeps both ticked', async () => {
-    const server = createServer(twoSubTasks({}));
-    const { context, page, saver, saves } = createPage(server, twoSubTasks({}));
+  it('Mark Complete, then ticking a sub-task that still looks unticked, keeps both ticked with one save, as Mark Complete already ticked it', async () => {
+    const server = createServerRefusingStaleRevisions(runWhereTask2HasSubTasksAAndB({}));
+    const { context, page, saver, saves } = createPage(server, runWhereTask2HasSubTasksAAndB({}));
 
     await Promise.all([
       saver(saves.toggleItem('item-2', true), context),
@@ -326,12 +321,12 @@ describe('toggles queued while an earlier save is in flight', () => {
     ]);
 
     expect(task(page)).toEqual([true, true, true]);
-    expect(server.sent).toHaveLength(1); // the sub-task was already ticked: nothing more to save
+    expect(server.sent).toHaveLength(1);
   });
 
   it('ticking the last sub-task, then Mark Complete before it saves, keeps every sub-task ticked', async () => {
-    const server = createServer(twoSubTasks({ b: true }));
-    const { context, page, saver, saves } = createPage(server, twoSubTasks({ b: true }));
+    const server = createServerRefusingStaleRevisions(runWhereTask2HasSubTasksAAndB({ b: true }));
+    const { context, page, saver, saves } = createPage(server, runWhereTask2HasSubTasksAAndB({ b: true }));
 
     await Promise.all([
       saver(saves.toggleSubItem('item-2', 0, 0, true), context),
@@ -344,8 +339,8 @@ describe('toggles queued while an earlier save is in flight', () => {
   });
 
   it('ticking the last sub-task, then typing a note and Mark Complete, saves the note', async () => {
-    const server = createServer(twoSubTasks({ b: true }));
-    const { context, saver, saves } = createPage(server, twoSubTasks({ b: true }), undefined, { 'item-2': 'checked' });
+    const server = createServerRefusingStaleRevisions(runWhereTask2HasSubTasksAAndB({ b: true }));
+    const { context, saver, saves } = createPage(server, runWhereTask2HasSubTasksAAndB({ b: true }), undefined, { 'item-2': 'checked' });
 
     await Promise.all([
       saver(saves.toggleSubItem('item-2', 0, 0, true), context),
@@ -357,8 +352,8 @@ describe('toggles queued while an earlier save is in flight', () => {
   });
 
   it('applies an untick as an untick even when the task changed before it ran', async () => {
-    const server = createServer(twoSubTasks({ 'item-2': true, a: true, b: true }));
-    const { context, page, saver, saves } = createPage(server, twoSubTasks({ 'item-2': true, a: true, b: true }));
+    const server = createServerRefusingStaleRevisions(runWhereTask2HasSubTasksAAndB({ 'item-2': true, a: true, b: true }));
+    const { context, page, saver, saves } = createPage(server, runWhereTask2HasSubTasksAAndB({ 'item-2': true, a: true, b: true }));
 
     await Promise.all([
       saver(saves.toggleSubItem('item-2', 0, 1, false), context),
@@ -371,7 +366,7 @@ describe('toggles queued while an earlier save is in flight', () => {
 
 describe('toggle keys and no-op saves', () => {
   it('ignores a double click that asks for the same value, but queues a different one', async () => {
-    const server = createServer(buildRun(1));
+    const server = createServerRefusingStaleRevisions(buildRun(1));
     const { context, page, saver, saves } = createPage(server, buildRun(1));
 
     const [first, repeat] = await Promise.all([
@@ -417,7 +412,7 @@ describe('toggle keys and no-op saves', () => {
 describe('a run completed while a toggle waits in the queue', () => {
   it('refuses the toggle once completion has landed, so the run never reads Completed with open tasks', async () => {
     const allDone = { 'item-1': true, 'item-2': true, 'item-3': true, 'sub-1': true };
-    const server = createServer(buildRun(5, allDone));
+    const server = createServerRefusingStaleRevisions(buildRun(5, allDone));
     const { context, page, saver, saves } = createPage(server, buildRun(5, allDone));
 
     const [completed, untick] = await Promise.all([
@@ -434,21 +429,16 @@ describe('a run completed while a toggle waits in the queue', () => {
   });
 });
 
-// The run Changelog refreshes once the saves settle, not once per click (each refresh reads
-// D1).
-describe('refreshing after saves', () => {
-  it('reports once, with the latest run, when a burst of saves has finished and one of them saved', async () => {
-    const server = createServer(buildRun(5));
+describe('refreshing the run Changelog once a burst of saves settles, not once per click, since each refresh reads D1', () => {
+  it('reports once, with the latest run, when a burst of saves with an ignored double click has finished and one of them saved', async () => {
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context, page } = createPage(server, buildRun(5));
     const onSaved = vi.fn();
     const saver = createRunSaver(onSaved);
     const saves = bindRunSaves({ dependencies: { apiClient: server.apiClient, updateRun: server.updateRun }, noteDrafts: () => ({}) });
 
-    await Promise.all([
-      saver(saves.toggleItem('item-1', true), context),
-      saver(saves.toggleItem('item-1', true), context), // a double click, ignored
-      saver(saves.toggleItem('item-2', true), context),
-    ]);
+    const tickTask1 = () => saver(saves.toggleItem('item-1', true), context);
+    await Promise.all([tickTask1(), tickTask1(), saver(saves.toggleItem('item-2', true), context)]);
 
     expect(server.sent).toHaveLength(2);
     expect(onSaved).toHaveBeenCalledTimes(1);
@@ -460,7 +450,7 @@ describe('refreshing after saves', () => {
   });
 
   it('does not report when nothing was saved', async () => {
-    const server = createServer(buildRun(5));
+    const server = createServerRefusingStaleRevisions(buildRun(5));
     const { context } = createPage(server, buildRun(5));
     server.updateRun.mockRejectedValue(new Error('offline'));
     const onSaved = vi.fn();

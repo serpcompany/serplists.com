@@ -39,9 +39,7 @@ describe('getNextSelectedItemId', () => {
   });
 });
 
-// A ticked task can still hold an open Sub-task (older runs, API writes). It is not done:
-// the run cannot be finished until it is, so opening the run and moving on both lead to it.
-describe('a ticked task with an open Sub-task', () => {
+describe('a ticked task with an open Sub-task, which older runs and API writes can hold, is not done', () => {
   const withOpenSubTask = (): ChecklistRun => {
     const legacy = run(['a', 'b', 'c', 'd']);
     legacy.sections[0].items[1].contents = [
@@ -69,27 +67,21 @@ describe('a ticked task with an open Sub-task', () => {
   });
 });
 
-// The auto-advance after a toggle runs when the save lands, as a state updater, so it sees
-// the task the user moved to while the save was in flight, not the one they clicked on.
-describe('getSelectionAfterToggle', () => {
+describe('getSelectionAfterToggle, the auto-advance that runs when a save lands and sees the task the user moved to meanwhile', () => {
   it('moves on from a completed task that is still selected', () => {
     expect(getSelectionAfterToggle(run(['a']), 'a', 'a')).toBe('b');
     expect(getSelectionAfterToggle(run(['a', 'c', 'd']), 'c', 'c')).toBe('b');
   });
 
-  it('keeps the task the user moved to while the save was in flight', () => {
-    // Mark Complete on A, then D picked in the Progress panel (or Previous) before the save lands.
+  it('keeps the task the user picked in the Progress panel, or with Previous, while the save was in flight', () => {
     expect(getSelectionAfterToggle(run(['a']), 'a', 'd')).toBe('d');
     expect(getSelectionAfterToggle(run(['c']), 'c', 'b')).toBe('b');
   });
 
-  it('never moves back to an earlier task when queued completions land', () => {
-    // Complete A, Next to B, complete B, Next to C; then save A lands, then save B.
-    let selected = 'c';
-    selected = getSelectionAfterToggle(run(['a']), 'a', selected);
-    expect(selected).toBe('c');
-    selected = getSelectionAfterToggle(run(['a', 'b']), 'b', selected);
-    expect(selected).toBe('c');
+  it('never moves back to an earlier task when the saves of A and B land after the user completed both and went Next to C', () => {
+    const afterSaveOfA = getSelectionAfterToggle(run(['a']), 'a', 'c');
+    expect(afterSaveOfA).toBe('c');
+    expect(getSelectionAfterToggle(run(['a', 'b']), 'b', afterSaveOfA)).toBe('c');
   });
 
   it('moves on when the user came back to the completed task before the save landed', () => {
@@ -151,9 +143,7 @@ describe('areItemSubItemsCompleted', () => {
   });
 });
 
-// "Tasks" on the run page are top-level tasks, as in the task list, "Task N of M" and the
-// runs list. Sub-tasks are counted apart; progress still weights both, like the API.
-describe('countRunExecutionItems', () => {
+describe('countRunExecutionItems, which counts top-level tasks as the task list and the runs list do, and Sub-tasks apart, while progress weights both like the API', () => {
   const task = (id: string, subTasks: boolean[], isCompleted = false): ChecklistItem => ({
     id,
     title: id,

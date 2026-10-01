@@ -7,9 +7,6 @@ import {
   selectRunHistoryPreview,
 } from '@/features/run-execution/runHistory';
 
-// The run page shows RUN_HISTORY_PREVIEW_LIMIT events, so it must ask the API for that many
-// instead of reading the server's default of 50 audit rows and their users.
-
 const event = (index: number): TemplateHistoryEvent =>
   ({
     id: `event-${index}`,
@@ -24,7 +21,7 @@ const response = (count: number): ChecklistRunHistoryResponse => ({
 });
 
 describe('run history query', () => {
-  it('requests only the events the page shows', async () => {
+  it("requests only the events the page shows, instead of the server's default of 50 audit rows and their users", async () => {
     const client = { getChecklistHistory: vi.fn().mockResolvedValue(response(8)) };
     const query = buildRunHistoryQuery({ runId: 'run-1', mode: 'private', client });
 

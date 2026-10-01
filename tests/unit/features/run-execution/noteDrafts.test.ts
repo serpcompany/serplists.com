@@ -52,10 +52,10 @@ describe('hasNoteDraftFor', () => {
 
 describe('pruneNoteDrafts', () => {
   it('keeps text typed while a notes save was in flight', () => {
-    // The user saved "abc", kept typing "def", and the save then returned "abc".
-    const drafts = { 'item-1': 'abcdef' };
+    const typedOnWhileTheSaveOfAbcWasInFlight = { 'item-1': 'abcdef' };
+    const runTheSaveReturned = buildRun({ 'item-1': 'abc' });
 
-    expect(pruneNoteDrafts(drafts, buildRun({ 'item-1': 'abc' }))).toEqual({ 'item-1': 'abcdef' });
+    expect(pruneNoteDrafts(typedOnWhileTheSaveOfAbcWasInFlight, runTheSaveReturned)).toEqual({ 'item-1': 'abcdef' });
   });
 
   it('clears a draft once the saved notes match it', () => {

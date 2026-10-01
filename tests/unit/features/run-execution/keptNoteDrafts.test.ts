@@ -7,9 +7,6 @@ import {
 } from '@/features/run-execution/keptNoteDrafts';
 import type { ChecklistRun } from '@/types/checklist';
 
-// Unsaved task notes, kept when the session ends in the background so the run page can
-// offer them back after sign-in.
-
 const buildRun = (notes: Record<string, string | undefined>): ChecklistRun => ({
   id: 'run-1',
   templateId: 'template-1',
@@ -55,7 +52,7 @@ const blockedStorage: KeptNoteDraftStorage = {
 
 const owner = { userId: 'user-1', runId: 'run-1' };
 
-describe('kept run note drafts', () => {
+describe('run note drafts kept when the session ends in the background, for the run page to offer back after sign-in', () => {
   it('gives the drafts back once, for the same user and run', () => {
     const storage = createStorage();
     const run = buildRun({ 'item-1': 'Old', 'item-2': undefined });
@@ -71,8 +68,7 @@ describe('kept run note drafts', () => {
     expect(takeKeptRunNoteDrafts(owner, run, storage)).toEqual({});
   });
 
-  // Restoring a draft over notes someone saved since would overwrite their text.
-  it('drops a draft whose task notes changed on the server, or whose task is gone', () => {
+  it('drops a draft whose task notes changed on the server, which restoring it would overwrite, or whose task is gone', () => {
     const storage = createStorage();
     keepRunNoteDrafts(
       owner,

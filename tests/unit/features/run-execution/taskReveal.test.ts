@@ -7,13 +7,8 @@ import {
   type TaskRevealView,
 } from '@/features/run-execution/taskReveal';
 
-// The console shell scrolls the window, and Mark Complete, Previous and Next sit below the
-// task's content. Moving to another task swaps the content in place, so without a reveal the
-// new task opens scrolled past its title.
-
-// A 720px window under a 56px sticky header.
-const STICKY = 56;
-const VIEWPORT = 720;
+const STICKY_HEADER_HEIGHT = 56;
+const WINDOW_HEIGHT = 720;
 
 const view = (
   { headerTop, titleBottom = headerTop + 120, activeElement = { tagName: 'BUTTON' } }: {
@@ -30,21 +25,21 @@ const view = (
       activeElement,
       header: { getBoundingClientRect: () => ({ top: headerTop }), scrollIntoView },
       onScrolled,
-      stickyOffset: STICKY,
+      stickyOffset: STICKY_HEADER_HEIGHT,
       title: { focus, getBoundingClientRect: () => ({ bottom: titleBottom }) },
-      viewportHeight: VIEWPORT,
+      viewportHeight: WINDOW_HEIGHT,
     }),
   );
   return { focus, getView, onScrolled, scrollIntoView };
 };
 
-describe('createTaskRevealer', () => {
+describe('createTaskRevealer, since the window scrolls and moving to another task swaps the content above Mark Complete, Previous and Next in place', () => {
   it('scrolls the next task to its title when Mark Complete moved on from the bottom of a long task', () => {
     const reveal = createTaskRevealer();
     reveal('task-a', view({ headerTop: 150 }).getView);
 
-    // Task A was about 2000px tall; the user scrolled to its buttons (header ~1250px up).
-    const next = view({ headerTop: -1250 });
+    const headerTopAtTheButtonsOfA2000pxTask = -1250;
+    const next = view({ headerTop: headerTopAtTheButtonsOfA2000pxTask });
     reveal('task-b', next.getView);
 
     expect(next.scrollIntoView).toHaveBeenCalledTimes(1);
@@ -140,18 +135,18 @@ describe('createTaskRevealer', () => {
 
 describe('isTaskHeaderInView', () => {
   it('is in view between the sticky header and the bottom of the window', () => {
-    expect(isTaskHeaderInView({ headerTop: STICKY, stickyOffset: STICKY, titleBottom: 200, viewportHeight: VIEWPORT })).toBe(true);
-    expect(isTaskHeaderInView({ headerTop: 300, stickyOffset: STICKY, titleBottom: VIEWPORT, viewportHeight: VIEWPORT })).toBe(true);
+    expect(isTaskHeaderInView({ headerTop: STICKY_HEADER_HEIGHT, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: 200, viewportHeight: WINDOW_HEIGHT })).toBe(true);
+    expect(isTaskHeaderInView({ headerTop: 300, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: WINDOW_HEIGHT, viewportHeight: WINDOW_HEIGHT })).toBe(true);
   });
 
   it('allows a pixel of subpixel rounding once scrolled into place', () => {
-    expect(isTaskHeaderInView({ headerTop: STICKY - 0.5, stickyOffset: STICKY, titleBottom: 200, viewportHeight: VIEWPORT })).toBe(true);
+    expect(isTaskHeaderInView({ headerTop: STICKY_HEADER_HEIGHT - 0.5, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: 200, viewportHeight: WINDOW_HEIGHT })).toBe(true);
   });
 
   it('is out of view above the sticky header or with its title below the window', () => {
-    expect(isTaskHeaderInView({ headerTop: STICKY - 2, stickyOffset: STICKY, titleBottom: 200, viewportHeight: VIEWPORT })).toBe(false);
-    expect(isTaskHeaderInView({ headerTop: -1200, stickyOffset: STICKY, titleBottom: -1100, viewportHeight: VIEWPORT })).toBe(false);
-    expect(isTaskHeaderInView({ headerTop: 650, stickyOffset: STICKY, titleBottom: VIEWPORT + 1, viewportHeight: VIEWPORT })).toBe(false);
+    expect(isTaskHeaderInView({ headerTop: STICKY_HEADER_HEIGHT - 2, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: 200, viewportHeight: WINDOW_HEIGHT })).toBe(false);
+    expect(isTaskHeaderInView({ headerTop: -1200, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: -1100, viewportHeight: WINDOW_HEIGHT })).toBe(false);
+    expect(isTaskHeaderInView({ headerTop: 650, stickyOffset: STICKY_HEADER_HEIGHT, titleBottom: WINDOW_HEIGHT + 1, viewportHeight: WINDOW_HEIGHT })).toBe(false);
   });
 });
 

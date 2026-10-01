@@ -181,8 +181,7 @@ describe('run execution model actions', () => {
   });
 });
 
-// Every task and Sub-task ticked: completion checks Sub-tasks too.
-const allDone = (run: ChecklistRun): ChecklistRun => ({
+const withEveryTaskAndSubTaskTicked = (run: ChecklistRun): ChecklistRun => ({
   ...run,
   sections: run.sections.map((section) => ({
     ...section,
@@ -209,7 +208,7 @@ describe('completing a run', () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
 
     const result = await completeRunExecution(
-      { run: allDone(buildRun()), completedAt: '2026-05-01T00:00:00.000Z' },
+      { run: withEveryTaskAndSubTaskTicked(buildRun()), completedAt: '2026-05-01T00:00:00.000Z' },
       { apiClient: apiClient(), updateRun },
     );
 
@@ -230,7 +229,7 @@ describe('completing a run', () => {
 
   it('does not re-send completion for a run that is already completed', async () => {
     const updateRun = vi.fn();
-    const run = allDone(buildRun({ status: 'completed', completedAt: '2026-04-20T00:00:00.000Z' }));
+    const run = withEveryTaskAndSubTaskTicked(buildRun({ status: 'completed', completedAt: '2026-04-20T00:00:00.000Z' }));
 
     const result = await completeRunExecution({ run }, { apiClient: apiClient(), updateRun });
 
@@ -268,10 +267,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
     expect(sent.sections[0].items[1].notes).toBeUndefined();
   });
 
-  // A teammate's tick (reloaded after a 409) or a queued sub-task save can complete the task
-  // first. Mark Complete then changes no completion, but it still saves the task's notes;
-  // the page moves on to the next task afterwards.
-  const completedFirstItem = (notes?: string): ChecklistRun => {
+  const runWhoseFirstTaskWasCompletedFirst = (notes?: string): ChecklistRun => {
     const run = buildRun();
     const [first, ...rest] = run.sections[0].items;
     const done = {
@@ -286,11 +282,11 @@ describe('unsaved task notes ride along with the save that would lose them', () 
     return { ...run, sections: [{ ...run.sections[0], items: [done, ...rest] }] };
   };
 
-  it('Mark Complete saves the draft notes of a task that is already complete', async () => {
+  it('Mark Complete saves the draft notes of a task that a teammate or a queued Sub-task save already completed', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => ({ ...run, revision: 2 }));
 
     const result = await toggleRunItem(
-      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: completedFirstItem() },
+      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: runWhoseFirstTaskWasCompletedFirst() },
       { apiClient: apiClient(), updateRun },
     );
 
@@ -306,7 +302,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
     const client = { ...apiClient(), updateSharedChecklist: vi.fn(async () => ({ revision: 2 })) };
 
     const result = await toggleRunItem(
-      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: completedFirstItem(), shareToken: 'share-1' },
+      { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x' }, run: runWhoseFirstTaskWasCompletedFirst(), shareToken: 'share-1' },
       { apiClient: client, updateRun: vi.fn() },
     );
 
@@ -320,7 +316,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
   it('sends nothing for a complete task whose draft matches its saved notes, or for another task', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
-    const run = completedFirstItem('x');
+    const run = runWhoseFirstTaskWasCompletedFirst('x');
 
     const same = await toggleRunItem(
       { isCompleted: true, itemId: 'item-1', noteDrafts: { 'item-1': 'x', 'item-2': 'other task' }, run },
@@ -333,7 +329,7 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 
   it('completing the run saves every draft before the page leaves', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
-    const doneRun = allDone(buildRun());
+    const doneRun = withEveryTaskAndSubTaskTicked(buildRun());
 
     const result = await completeRunExecution(
       { noteDrafts: { 'item-1': 'first', 'item-2': 'second' }, run: doneRun },
@@ -347,7 +343,8 @@ describe('unsaved task notes ride along with the save that would lose them', () 
 });
 
 describe('a task with several Sub-tasks blocks', () => {
-  // Task item-1 has blocks [a, b] and [c], with a text block and an empty block between them.
+  const blockWithAAndB = 0;
+  const blockWithC = 3;
   const multiBlockRun = (): ChecklistRun =>
     buildRun({
       sections: [
@@ -391,19 +388,19 @@ describe('a task with several Sub-tasks blocks', () => {
   };
 
   it('stays open until every sub-task in every block is ticked', async () => {
-    const afterC = await toggle(multiBlockRun(), 3, 0, true);
+    const afterC = await toggle(multiBlockRun(), blockWithC, 0, true);
     expect(afterC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(afterC.shouldPromptComplete).toBe(false);
 
-    const afterA = await toggle(afterC.run, 0, 0, true);
+    const afterA = await toggle(afterC.run, blockWithAAndB, 0, true);
     expect(afterA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(afterA.shouldPromptComplete).toBe(false);
 
-    const afterB = await toggle(afterA.run, 0, 1, true);
+    const afterB = await toggle(afterA.run, blockWithAAndB, 1, true);
     expect(afterB.run.sections[0]?.items[0]?.isCompleted).toBe(true);
     expect(afterB.shouldPromptComplete).toBe(true);
 
-    const untickA = await toggle(afterB.run, 0, 0, false);
+    const untickA = await toggle(afterB.run, blockWithAAndB, 0, false);
     expect(untickA.run.sections[0]?.items[0]?.isCompleted).toBe(false);
     expect(untickA.shouldPromptComplete).toBe(false);
   });
@@ -420,16 +417,13 @@ describe('a task with several Sub-tasks blocks', () => {
     expect(item?.isCompleted).toBe(true);
     expect(item?.contents?.flatMap((content) => content.subItems ?? []).every((sub) => sub.isCompleted)).toBe(true);
 
-    const untickC = await toggle(marked.run, 3, 0, false);
+    const untickC = await toggle(marked.run, blockWithC, 0, false);
     expect(untickC.run.sections[0]?.items[0]?.isCompleted).toBe(false);
   });
 });
 
-// A double click on Rename lands its second click on Save title, and Enter can submit the
-// editor untouched. An unchanged title must not send a PUT (which bumps the revision and
-// writes an audit event).
-describe('saving the run title', () => {
-  it('does not persist a title that is unchanged, even with surrounding spaces', async () => {
+describe('saving the run title, which a double click on Rename or Enter in the untouched editor submits unchanged', () => {
+  it('does not send a PUT, which bumps the revision and writes an audit event, for an unchanged title, even with surrounding spaces', async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
     const run = buildRun();
 
@@ -451,9 +445,7 @@ describe('saving the run title', () => {
     expect(updateRun).toHaveBeenCalledWith(expect.objectContaining({ title: 'Launch v2' }), { includeTitle: true });
   });
 
-  // The API caps run titles at 160 characters after trimming; a longer one used to reach it
-  // and come back as a raw schema error ("String must contain at most 160 character(s)").
-  it('refuses a title over the limit with a clear message and sends nothing', async () => {
+  it("refuses a title over the API's 160-character limit with a clear message, not the API's raw schema error, and sends nothing", async () => {
     const updateRun = vi.fn(async (run: ChecklistRun) => run);
 
     const result = await saveRunExecutionTitle({ run: buildRun(), title: 'a'.repeat(161) }, { updateRun });
@@ -473,26 +465,9 @@ describe('saving the run title', () => {
   });
 });
 
-// Completed runs are frozen (docs/product-specs/features.md). Unticking a task on one used
-// to save it as Completed with open tasks, and re-ticking never offered completion again.
-describe('a completed run', () => {
+describe('a completed run, which is frozen so it never reads Completed with open tasks', () => {
   const completedRun = () =>
-    buildRun({
-      completedAt: '2026-04-20T00:00:00.000Z',
-      progress: 100,
-      sections: buildRun().sections.map((section) => ({
-        ...section,
-        items: section.items.map((item) => ({
-          ...item,
-          isCompleted: true,
-          contents: item.contents?.map((content) => ({
-            ...content,
-            subItems: content.subItems?.map((sub) => ({ ...sub, isCompleted: true })),
-          })),
-        })),
-      })),
-      status: 'completed',
-    });
+    withEveryTaskAndSubTaskTicked(buildRun({ completedAt: '2026-04-20T00:00:00.000Z', progress: 100, status: 'completed' }));
   const apiClient = () => ({
     createChecklistRunShare: vi.fn(),
     getChecklistById: vi.fn(),
@@ -534,9 +509,7 @@ describe('a completed run', () => {
   });
 });
 
-// The runs list is cached for 5 minutes; a share made here must reach it, or it keeps
-// offering Revalidate, which the API refuses for a shared run.
-describe('sharing from the run page', () => {
+describe('sharing from the run page tells the cached runs list, which would otherwise keep offering a Revalidate the API refuses for a shared run', () => {
   const apiClient = (createChecklistRunShare: ReturnType<typeof vi.fn>) => ({
     createChecklistRunShare,
     getChecklistById: vi.fn(),
@@ -607,12 +580,11 @@ describe('run page sharing', () => {
 
   it('marks the run shared and refreshes the runs list after sharing', async () => {
     const apiClient = sharingApiClient();
-    // onShared marks the run shared in the cached runs lists and reloads them (markRunShared).
-    const onShared = vi.fn();
+    const markRunSharedInTheCachedLists = vi.fn();
 
     const result = await createRunExecutionShare(
       { run: buildRun({ isPublic: false }) },
-      { apiClient, onShared, origin: 'https://app.test', updateRun: vi.fn() },
+      { apiClient, onShared: markRunSharedInTheCachedLists, origin: 'https://app.test', updateRun: vi.fn() },
     );
 
     expect(result).toEqual({
@@ -620,10 +592,10 @@ describe('run page sharing', () => {
       run: expect.objectContaining({ id: 'run-1', isPublic: true }),
       shareUrl: 'https://app.test/share/token-1/',
     });
-    expect(onShared).toHaveBeenCalledWith('run-1');
+    expect(markRunSharedInTheCachedLists).toHaveBeenCalledWith('run-1');
   });
 
-  it('stops sharing through the API, marks the run private and refreshes the runs list', async () => {
+  it('stops sharing through the API, marks the run private at the same revision so later saves keep working, and refreshes the runs list', async () => {
     const apiClient = sharingApiClient();
     const refreshRuns = vi.fn();
     const run = buildRun({ isPublic: true, revision: 4 });
@@ -631,7 +603,6 @@ describe('run page sharing', () => {
     const result = await stopRunExecutionSharing({ run }, { apiClient, refreshRuns, updateRun: vi.fn() });
 
     expect(apiClient.revokeChecklistRunShare).toHaveBeenCalledWith('run-1');
-    // Stopping sharing does not bump the revision, so later saves keep working.
     expect(result).toEqual({ kind: 'ok', run: { ...run, isPublic: false } });
     expect(refreshRuns).toHaveBeenCalledTimes(1);
   });

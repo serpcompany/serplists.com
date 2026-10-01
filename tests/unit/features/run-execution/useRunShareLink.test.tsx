@@ -5,37 +5,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { RunExecutionActionResult } from '@/features/run-execution/runExecutionResult';
 import { useRunShareLink } from '@/features/run-execution/useRunShareLink';
 
+import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
-// Each Share replaces the run's token, so the run page reopens the link it made instead of
-// minting another. Another tab or a teammate can stop sharing the run, which kills that link.
-// Once the page shows the run private (it reloads the run after an edit conflict), Share must
-// make a new link instead of handing out the dead one.
-
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void;
 beforeAll(() => {
-  globals.window = { HTMLIFrameElement: class {}, document: fakeDocument, addEventListener() {}, removeEventListener() {} };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  restoreGlobals = installFakeDomGlobals();
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 afterEach(() => {
@@ -59,7 +37,7 @@ async function mountShareLink(initial: ShownRun) {
     state = useRunShareLink(runId, { createShare, stopSharing }, isPublic);
     return null;
   }
-  root = createRoot(fakeContainer as unknown as Element);
+  root = createRoot(createFakeContainer() as unknown as Element);
   const render = async (shown: ShownRun) => {
     await act(async () => {
       root?.render(<Probe {...shown} />);
@@ -85,11 +63,10 @@ async function mountShareLink(initial: ShownRun) {
   };
 }
 
-describe('the run page share link', () => {
+describe("the run page share link, which each Share replaces and stopping sharing kills", () => {
   it('reopens the link it made while the run is shown shared', async () => {
     const page = await mountShareLink({ runId: 'run-1', isPublic: false });
     await page.share();
-    // The share result marks the run public on the page.
     await page.render({ runId: 'run-1', isPublic: true });
     expect(page.current().shareUrl).toBe('https://serplists.com/share/token-1');
     await page.closeDialog();
@@ -101,13 +78,12 @@ describe('the run page share link', () => {
     expect(page.current().shareUrl).toBe('https://serplists.com/share/token-1');
   });
 
-  it('makes a new link once the run is shown private, as after sharing was stopped elsewhere', async () => {
+  it('makes a new link once the page reloads the run as private, as after another tab stopped sharing it', async () => {
     const page = await mountShareLink({ runId: 'run-1', isPublic: false });
     await page.share();
     await page.render({ runId: 'run-1', isPublic: true });
     await page.closeDialog();
 
-    // Another tab stopped sharing; the page reloaded the run after an edit conflict.
     await page.render({ runId: 'run-1', isPublic: false });
     expect(page.current().shareUrl).toBe('');
     await page.share();
@@ -129,13 +105,12 @@ describe('the run page share link', () => {
     expect(page.current().shareUrl).toBe('');
   });
 
-  it('does not bring the old link back when the run is later shown shared again', async () => {
+  it('does not bring its old link back when the run was stopped and shared again elsewhere, which killed that link', async () => {
     const page = await mountShareLink({ runId: 'run-1', isPublic: false });
     await page.share();
     await page.render({ runId: 'run-1', isPublic: true });
     await page.closeDialog();
 
-    // Stopped elsewhere, then shared elsewhere with a new token: the first link is dead.
     await page.render({ runId: 'run-1', isPublic: false });
     await page.render({ runId: 'run-1', isPublic: true });
     await page.share();
