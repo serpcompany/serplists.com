@@ -5,20 +5,14 @@ import { describe, expect, it } from 'vitest';
 import { THEME_STORAGE_KEY } from '@/lib/theme';
 import { THEME_BOOT_SCRIPT } from '@/lib/themeBootScript';
 
-// The page must be dark from its first paint for a user who chose the dark theme: a white
-// screen until the app loaded, then a flip to dark, was a bug (the boot splash was always
-// white). The server sends each page's HTML; the root layout's theme script marks <html>
-// dark before the page paints, and the page's own background follows the class.
-
-/** Runs the pre-paint theme script and returns whether <html> ended up with `dark`. */
-function runThemeScript(stored: string | null | Error): { dark: boolean; keysRead: string[] } {
+function runThemeScript(storedThemeOrReadError: string | null | Error): { dark: boolean; keysRead: string[] } {
   const classes = new Set<string>();
   const keysRead: string[] = [];
   const localStorage = {
     getItem(key: string) {
       keysRead.push(key);
-      if (stored instanceof Error) throw stored;
-      return stored;
+      if (storedThemeOrReadError instanceof Error) throw storedThemeOrReadError;
+      return storedThemeOrReadError;
     },
   };
   vm.runInNewContext(THEME_BOOT_SCRIPT, {
@@ -32,15 +26,14 @@ function runThemeScript(stored: string | null | Error): { dark: boolean; keysRea
   return { dark: classes.has('dark'), keysRead };
 }
 
-const indexCss = readFileSync('src/app/globals.css', 'utf8');
+const globalsCss = readFileSync('src/app/globals.css', 'utf8');
 
-/** The lightness of an oklch(L 0 0) token in the `.dark` block of src/app/globals.css. */
-const darkTokenLightness = (name: string): number => {
-  const body = /\.dark\s*\{([^}]*)\}/.exec(indexCss)?.[1] ?? '';
+const oklchLightnessInTheDarkBlock = (name: string): number => {
+  const body = /\.dark\s*\{([^}]*)\}/.exec(globalsCss)?.[1] ?? '';
   return Number(new RegExp(`--${name}:\\s*oklch\\(([\\d.]+) 0 0\\)`).exec(body)?.[1]);
 };
 
-describe('theme boot script', () => {
+describe('theme boot script, which makes a dark-theme page dark from its first paint', () => {
   it('reads the theme from the key the app stores it under', () => {
     expect(runThemeScript('dark')).toEqual({ dark: true, keysRead: [THEME_STORAGE_KEY] });
   });
@@ -52,9 +45,7 @@ describe('theme boot script', () => {
     expect(runThemeScript(new Error('storage blocked')).dark).toBe(false);
   });
 
-  // next/script's beforeInteractive only queues an inline script for Next.js's runtime, which
-  // runs it once its JavaScript has loaded: after the first paint.
-  it('runs from the root layout head while the page is parsed, before the first paint', () => {
+  it("runs from the root layout head while the page is parsed, before the first paint, not through next/script, which waits for Next.js's runtime", () => {
     const layout = readFileSync('src/app/layout.tsx', 'utf8');
     const head = /<head>([\s\S]*?)<\/head>/.exec(layout)?.[1] ?? '';
 
@@ -63,10 +54,12 @@ describe('theme boot script', () => {
   });
 
   it('paints the page background from the theme tokens, dark under html.dark', () => {
-    expect(indexCss).toMatch(/body\s*\{\s*@apply bg-background text-foreground/);
-    expect(darkTokenLightness('background')).toBeLessThan(0.15);
-    expect(darkTokenLightness('foreground')).toBeGreaterThan(0.9);
-    // The app has no system theme, so the OS setting must not darken the page.
-    expect(indexCss).not.toContain('prefers-color-scheme');
+    expect(globalsCss).toMatch(/body\s*\{\s*@apply bg-background text-foreground/);
+    expect(oklchLightnessInTheDarkBlock('background')).toBeLessThan(0.15);
+    expect(oklchLightnessInTheDarkBlock('foreground')).toBeGreaterThan(0.9);
+  });
+
+  it('never darkens the page for the operating system setting, since the app has no system theme', () => {
+    expect(globalsCss).not.toContain('prefers-color-scheme');
   });
 });

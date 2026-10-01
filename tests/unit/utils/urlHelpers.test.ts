@@ -4,7 +4,7 @@ import { generateSlug, getVideoEmbedSource, getYoutubeVideoId } from '@/utils/ur
 import { getOutboundLinkProps, withSerpListsClipyRef } from '@/lib/utils/clipyUrl';
 import { EMBED_FRAME_ORIGINS } from '@/lib/utils/embedOrigins';
 
-import { YOUTUBE_VIDEO_LINKS } from '../../fixtures/videoLinks';
+import { YOUTUBE_VIDEO_ID, YOUTUBE_VIDEO_LINKS } from '../../fixtures/videoLinks';
 
 describe('urlHelpers', () => {
   describe('generateSlug', () => {
@@ -122,13 +122,12 @@ describe('getVideoEmbedSource', () => {
 });
 
 describe('getVideoEmbedSource for YouTube links', () => {
-  // The player keeps a nocookie link's origin and a link's start time (`?start=90`).
-  it.each(YOUTUBE_VIDEO_LINKS)('embeds %s', (link) => {
+  it.each(YOUTUBE_VIDEO_LINKS)("embeds %s in the video's player, whichever origin and start time the link keeps", (link) => {
     const source = getVideoEmbedSource(link);
     expect(source?.kind).toBe('iframe');
     const player = new URL(source!.url);
     expect(['https://www.youtube.com', 'https://www.youtube-nocookie.com']).toContain(player.origin);
-    expect(player.pathname).toBe('/embed/dQw4w9WgXcQ');
+    expect(player.pathname).toBe(`/embed/${YOUTUBE_VIDEO_ID}`);
   });
 
   it.each([
