@@ -8,10 +8,7 @@ import {
 } from "@/lib/forms/templateEditorForm";
 import type { ChecklistSection } from "@/types/checklist";
 
-// Content stored before the API checked every write (a legacy backup, a hand-written or
-// generated JSON file) can hold nulls, numbers, or unknown types. The editor must still
-// open it in a state it can save.
-const malformedContents: Array<[string, unknown]> = [
+const contentsStoredBeforeTheApiCheckedWrites: Array<[string, unknown]> = [
   ["null file details", { id: "c1", type: "file", value: "https://x/doc.pdf", fileName: null, fileSize: null, uploadType: null }],
   ["a numeric id and value", { id: 1, type: "text", value: 5 }],
   ["an unknown type", { id: "c2", type: "link", value: "https://example.com" }],
@@ -32,8 +29,8 @@ const sectionsWith = (content: unknown): ChecklistSection[] =>
     },
   ] as unknown as ChecklistSection[];
 
-describe("buildTemplateEditorFormValues with stored content", () => {
-  it.each(malformedContents)("opens %s in a state the editor can save", (_label, content) => {
+describe("buildTemplateEditorFormValues with content stored before the API checked every write", () => {
+  it.each(contentsStoredBeforeTheApiCheckedWrites)("opens %s in a state the editor can save", (_label, content) => {
     const direct = buildTemplateEditorFormValues({ title: "Legacy", sections: sectionsWith(content) });
     const loaded = buildTemplateEditorFormValues(
       mapApiTemplateToChecklistTemplate(
@@ -79,10 +76,7 @@ describe("buildTemplateEditorFormValues with stored content", () => {
     expect(bare).toEqual(expect.objectContaining({ type: "text", value: "Just some text" }));
   });
 
-  // Before typing a URL over an upload dropped the upload's name and size, they were
-  // saved next to the new URL. Loading drops them, so the next save stores the fix; a
-  // name an author gave a linked file (uploadType "url") is kept.
-  it("drops a file name and size left over from an upload the value no longer points to", () => {
+  it("drops a file name and size left over from an upload the value no longer points to, so the next save stores the fix, and keeps a name an author gave a linked file", () => {
     const contents = buildTemplateEditorFormValues({
       sections: [
         {
@@ -112,8 +106,7 @@ describe("buildTemplateEditorFormValues with stored content", () => {
     expect(contents[3]).toEqual(expect.objectContaining({ fileName: "doc.pdf", fileSize: 5 }));
   });
 
-  // Uploads find their block by content id, so two blocks must never share one.
-  it("gives every content block its own id", () => {
+  it("gives every content block its own id, since an upload finds its block by id", () => {
     const values = buildTemplateEditorFormValues({
       sections: [
         {

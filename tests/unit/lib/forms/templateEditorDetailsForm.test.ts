@@ -116,10 +116,16 @@ describe("templateEditorDetailsForm", () => {
     ["  --Café Opening!!  ", "cafe-opening"],
     ["Straße Checkliste", "strasse-checkliste"],
     ["   ", ""],
-    // Nothing to keep: the typed text stays, and the save refuses it (below).
+  ])("turns the typed URL slug %j into %j when saving", (typed, expected) => {
+    expect(
+      normalizeTemplateEditorDetailsForSave({ ...validDetails, seoUrl: typed }).seoUrl,
+    ).toBe(expected);
+  });
+
+  it.each([
     ["!!!", "!!!"],
     [" Список ", "Список"],
-  ])("turns the typed URL slug %j into %j when saving", (typed, expected) => {
+  ])("keeps the typed URL slug %j, with nothing to keep, as %j for the save to refuse", (typed, expected) => {
     expect(
       normalizeTemplateEditorDetailsForSave({ ...validDetails, seoUrl: typed }).seoUrl,
     ).toBe(expected);
@@ -136,9 +142,7 @@ describe("templateEditorDetailsForm", () => {
     expect(templatePayloadSchema.safeParse({ slug: seoUrl }).success).toBe(true);
   });
 
-  // A typed slug with no Latin letters or digits used to be blanked and dropped, so the
-  // save kept the old slug without saying why.
-  it("refuses a typed URL slug with nothing to keep, naming the field", () => {
+  it("refuses a typed URL slug with nothing to keep, naming the field, instead of keeping the old slug without saying why", () => {
     expect(findTemplateEditorSlugIssue("Список", "launch-checklist")).toBe(
       "URL Slug: use Latin letters or numbers.",
     );
