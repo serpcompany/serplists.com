@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 
-// A deployed, non-local host so the deployed limits apply.
-const HOST = 'https://app.example.test';
 const WRITE_LIMIT_PER_MINUTE = 120;
 const MCP_RUN_KEY_LIMIT_PER_MINUTE = 120;
 const MCP_IP_LIMIT_PER_MINUTE = 240;
@@ -14,32 +13,23 @@ function buildEnv() {
   } as any;
 }
 
-function apiRequest(ip: string, method: string, path: string) {
-  return new Request(`${HOST}/api/${path}`, {
-    method,
-    headers: { 'CF-Connecting-IP': ip, 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-}
-
 async function loadRouter() {
   const handleAgentMcp = vi.fn(async () => Response.json({ jsonrpc: '2.0', id: 1, result: {} }));
   const handleChecklists = vi.fn(async () => Response.json({ ok: true }));
   vi.doMock('../../../../functions/api/handlers/agentMcp', () => ({ handleAgentMcp }));
   vi.doMock('../../../../functions/api/handlers/checklists', () => ({ handleChecklists }));
   const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
-  const send = (ip: string, method: string, path: string) => apiWorker.fetch(apiRequest(ip, method, path), buildEnv());
+  const send = (ip: string, method: string, path: string) => apiWorker.fetch(requestFromIp(ip, method, path), buildEnv());
   return { send, handleAgentMcp, handleChecklists };
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router MCP rate limit', { timeout: 30_000 }, () => {
+describe('API router MCP rate limit on a deployed host', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let ip: string;
 
   beforeEach(() => {
     ipCounter += 1;
     ip = `203.0.113.${ipCounter}`;
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
   });
 
   afterEach(() => {
@@ -73,7 +63,7 @@ describe('API router MCP rate limit', { timeout: 30_000 }, () => {
     expect(handleAgentMcp).toHaveBeenCalledTimes(1);
   });
 
-  it('still caps MCP per IP, above one Run Key budget, with a JSON-RPC 429', async () => {
+  it('still caps MCP per IP, above one Run Key budget, with a JSON-RPC 429 that never spills over into web saves', async () => {
     const { send, handleAgentMcp } = await loadRouter();
 
     for (let index = 0; index < MCP_IP_LIMIT_PER_MINUTE; index += 1) {
@@ -91,7 +81,7 @@ describe('API router MCP rate limit', { timeout: 30_000 }, () => {
     });
     expect(handleAgentMcp).toHaveBeenCalledTimes(MCP_IP_LIMIT_PER_MINUTE);
 
-    // The MCP cap never spills over into web saves.
-    expect((await send(ip, 'PUT', 'checklists/run-1')).status).toBe(200);
+    const webSaveOnceMcpIsCapped = await send(ip, 'PUT', 'checklists/run-1');
+    expect(webSaveOnceMcpIsCapped.status).toBe(200);
   });
 });

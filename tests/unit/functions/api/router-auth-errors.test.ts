@@ -1,27 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
 
-// Errors the router sends for /api/auth/* itself, before Better Auth runs. The
-// Better Auth client hands the UI the parsed body, and the UI reads `message`
-// (Better Auth's own shape), so every such body must carry one.
-const HOST = 'https://app.example.test';
 const BETTER_AUTH_MODULE = '../../../../functions/api/better-auth';
 let ipCounter = 0;
 
 function buildEnv(overrides: Record<string, unknown> = {}) {
   return {
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
-    FRONTEND_URL: HOST,
+    FRONTEND_URL: DEPLOYED_HOST,
     RESEND_API_KEY: 're_test_key',
     ...overrides,
   } as any;
 }
 
 function authPost(path: string, init: { body?: string; headers?: Record<string, string>; ip?: string } = {}) {
-  return new Request(`${HOST}/api/${path}`, {
+  return new Request(`${DEPLOYED_HOST}/api/${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Origin: HOST,
+      Origin: DEPLOYED_HOST,
       ...(init.ip ? { 'CF-Connecting-IP': init.ip } : {}),
       ...init.headers,
     },
@@ -29,7 +26,7 @@ function authPost(path: string, init: { body?: string; headers?: Record<string, 
   });
 }
 
-describe('router-generated auth errors', { timeout: 30_000 }, () => {
+describe('auth errors the router sends before Better Auth runs, each with the message the Better Auth client hands the UI', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   const betterAuthHandler = vi.fn(async () => Response.json({ ok: true }));
 
   async function send(request: Request, env = buildEnv()) {
@@ -42,7 +39,6 @@ describe('router-generated auth errors', { timeout: 30_000 }, () => {
     const body = await response.json();
     expect(typeof body.message).toBe('string');
     expect(body.message.trim()).not.toBe('');
-    // Existing API readers use `error`.
     expect(body.error).toBe(body.message);
     if (code) expect(body.code).toBe(code);
     return body;
@@ -129,7 +125,7 @@ describe('router-generated auth errors', { timeout: 30_000 }, () => {
 
   it('keeps the plain { error } shape for other API routes', async () => {
     const response = await send(
-      new Request(`${HOST}/api/templates`, {
+      new Request(`${DEPLOYED_HOST}/api/templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: 'x'.repeat(2 * 1024 * 1024) }),

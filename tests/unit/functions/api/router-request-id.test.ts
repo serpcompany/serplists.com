@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
@@ -7,8 +8,7 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router request id propagation', { timeout: 30_000 }, () => {
+describe('API router request id propagation', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.doUnmock('../../../../functions/api/handlers/templates');
     vi.resetModules();

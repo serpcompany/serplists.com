@@ -1,5 +1,6 @@
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
 
 const SECRET = 'SECRETTOKEN123';
 const MODULES = {
@@ -15,9 +16,8 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router log path redaction', { timeout: 30_000 }, () => {
-  const lines: string[] = [];
+describe('API router log path redaction', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
+  let lines: string[];
   const handlers = {
     authHandler: vi.fn(async () => new Response(null, { status: 302, headers: { Location: '/reset-password' } })),
     handleChecklists: vi.fn(async () => Response.json({ ok: true })),
@@ -30,16 +30,11 @@ describe('API router log path redaction', { timeout: 30_000 }, () => {
   }
 
   beforeEach(() => {
-    lines.length = 0;
     for (const handler of Object.values(handlers)) handler.mockClear();
     vi.doMock(MODULES.betterAuth, () => ({ createBetterAuth: () => ({ handler: handlers.authHandler }) }));
     vi.doMock(MODULES.checklists, () => ({ handleChecklists: handlers.handleChecklists }));
     vi.doMock(MODULES.teams, () => ({ handleTeams: handlers.handleTeams }));
-    for (const level of ['info', 'warn', 'error', 'debug'] as const) {
-      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
-        lines.push(args.map(String).join(' '));
-      });
-    }
+    lines = captureLogLines(['info', 'warn', 'error', 'debug']);
   });
 
   afterEach(() => {

@@ -22,8 +22,7 @@ describe('Rate limit utility', () => {
   });
 });
 
-// The store lives as long as the isolate, and every new client IP adds a key.
-describe('rate limit store size', () => {
+describe('rate limit store size, which lives as long as the isolate and gains a key for every new client IP', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
@@ -68,7 +67,7 @@ describe('rate limit store size', () => {
     expect(store.size).toBe(1);
   });
 
-  it('sweeps an expired short window that sits behind live longer ones', () => {
+  it('sweeps an expired short window that sits behind live longer ones, which keep their counts', () => {
     const store = createRateLimitStore({ maxKeys: 10 });
     for (let index = 0; index < 5; index += 1) {
       store.check(`auth:${index}`, { windowMs: 5 * MINUTE, max: 30 });
@@ -81,8 +80,8 @@ describe('rate limit store size', () => {
     store.check('write:new', { windowMs: MINUTE, max: 120 });
 
     expect(store.size).toBe(6);
-    // The live 5-minute windows kept their counts.
-    expect(store.check('auth:0', { windowMs: 5 * MINUTE, max: 30 }).remaining).toBe(28);
+    const liveFiveMinuteWindowCheckedAgain = store.check('auth:0', { windowMs: 5 * MINUTE, max: 30 });
+    expect(liveFiveMinuteWindowCheckedAgain.remaining).toBe(28);
   });
 
   it('keeps a blocked client blocked while a flood of new keys overflows the store', () => {
@@ -117,15 +116,15 @@ describe('rate limit store size', () => {
     for (let index = 0; index < 9; index += 1) store.check(`steady:${index}`, limit);
 
     vi.advanceTimersByTime(2_000);
-    // A new window for the first key inserted.
-    expect(store.check('renewed', limit).remaining).toBe(4);
+    const firstKeyInsertedStartsANewWindow = store.check('renewed', limit);
+    expect(firstKeyInsertedStartsANewWindow.remaining).toBe(4);
 
     store.check('newcomer', limit);
 
     expect(store.size).toBeLessThanOrEqual(10);
-    // Still counting its window: it was not the one evicted.
-    expect(store.check('renewed', limit).remaining).toBe(3);
-    // The oldest untouched key was evicted and starts over.
-    expect(store.check('steady:0', limit).remaining).toBe(4);
+    const renewedKeyStillCountingItsWindow = store.check('renewed', limit);
+    expect(renewedKeyStillCountingItsWindow.remaining).toBe(3);
+    const oldestUntouchedKeyEvictedAndStartingOver = store.check('steady:0', limit);
+    expect(oldestUntouchedKeyEvictedAndStartingOver.remaining).toBe(4);
   });
 });

@@ -1,23 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 
-// A deployed, non-local host so the deployed limits apply.
-const HOST = 'https://app.example.test';
 const BILLING_LIMIT_PER_MINUTE = 10;
 let ipCounter = 0;
 
 function buildEnv() {
   return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
-}
-
-function apiRequest(ip: string, method: string, path: string, host = HOST) {
-  return new Request(`${host}/api/${path}`, {
-    method,
-    headers: {
-      'CF-Connecting-IP': ip,
-      ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
-    },
-    ...(method === 'GET' ? {} : { body: '{}' }),
-  });
 }
 
 async function loadRouter() {
@@ -29,18 +17,17 @@ async function loadRouter() {
   vi.doMock('../../../../functions/api/handlers/templates', () => ({ handleTemplates }));
   const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
   const send = (ip: string, method: string, path: string, host?: string) =>
-    apiWorker.fetch(apiRequest(ip, method, path, host), buildEnv());
+    apiWorker.fetch(requestFromIp(ip, method, path, host), buildEnv());
   return { send, handleBilling, handleStripe };
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router billing rate limit', { timeout: 30_000 }, () => {
+describe('API router billing rate limit on a deployed host', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let ip: string;
 
   beforeEach(() => {
     ipCounter += 1;
     ip = `198.51.100.${ipCounter}`;
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
   });
 
   afterEach(() => {

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, requestFromIp, silenceRequestLog } from '../../../support/apiRouter';
 
-// A deployed, non-local host so the tight deployed limits apply.
-const HOST = 'https://app.example.test';
 let ipCounter = 0;
 
 function buildEnv() {
@@ -11,17 +10,6 @@ function buildEnv() {
   } as any;
 }
 
-function authRequest(ip: string, method: string, path: string) {
-  return new Request(`${HOST}/api/${path}`, {
-    method,
-    headers: {
-      'CF-Connecting-IP': ip,
-      ...(method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
-    },
-    ...(method === 'GET' ? {} : { body: '{}' }),
-  });
-}
-
 async function loadRouter() {
   const handler = vi.fn(async () => Response.json({ ok: true }));
   vi.doMock('../../../../functions/api/better-auth', () => ({
@@ -29,7 +17,7 @@ async function loadRouter() {
   }));
   const { default: apiWorker } = await import('../../../../functions/api/[[route]].ts');
   const send = (ip: string, method: string, path: string) =>
-    apiWorker.fetch(authRequest(ip, method, path), buildEnv());
+    apiWorker.fetch(requestFromIp(ip, method, path), buildEnv());
   return { send, handler };
 }
 
@@ -56,15 +44,13 @@ describe('authRateLimitBucket', () => {
   });
 });
 
-// Each test imports the whole router graph fresh and sends hundreds of requests.
-describe('API router auth rate limits', { timeout: 30_000 }, () => {
+describe('API router auth rate limits on a deployed host', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let ip: string;
 
   beforeEach(() => {
     ipCounter += 1;
     ip = `203.0.113.${ipCounter}`;
-    // Hundreds of requests per test; keep the per-request log line out of the output.
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
   });
 
   afterEach(() => {
@@ -73,7 +59,7 @@ describe('API router auth rate limits', { timeout: 30_000 }, () => {
     vi.resetModules();
   });
 
-  it('does not count session checks against the sign-in limit', async () => {
+  it('does not count session checks against the sign-in limit, so exhausting it never signs a user out', async () => {
     const { send } = await loadRouter();
 
     for (let index = 0; index < 100; index += 1) {
@@ -94,9 +80,8 @@ describe('API router auth rate limits', { timeout: 30_000 }, () => {
     expect(blocked.status).toBe(429);
     expect(Number(blocked.headers.get('Retry-After'))).toBeGreaterThan(0);
 
-    // Exhausting the credential bucket must not log signed-in users out.
-    const afterBlock = await send(ip, 'GET', 'auth/get-session');
-    expect(afterBlock.status).toBe(200);
+    const sessionCheckOnceSignInIsBlocked = await send(ip, 'GET', 'auth/get-session');
+    expect(sessionCheckOnceSignInIsBlocked.status).toBe(200);
   });
 
   it('keeps every other auth route in the tight bucket', async () => {

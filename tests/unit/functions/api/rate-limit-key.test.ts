@@ -79,10 +79,9 @@ describe('rateLimitKeyForIp', () => {
   });
 });
 
-describe('per-IP buckets for IPv6 clients', () => {
-  // A unique /64 per test run, because the limiter store is module-level.
-  const group = () => Math.floor(Math.random() * 0x10000).toString(16);
-  const prefix = `2001:db8:${group()}:${group()}`;
+describe('per-IP buckets for IPv6 clients, in a random /64 since the module-level limiter store keeps earlier counts', () => {
+  const randomHextet = () => Math.floor(Math.random() * 0x10000).toString(16);
+  const prefix = `2001:db8:${randomHextet()}:${randomHextet()}`;
 
   it('limits sign-in attempts from rotating addresses in one /64', () => {
     const results = Array.from({ length: 31 }, (_, index) =>

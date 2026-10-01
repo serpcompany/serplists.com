@@ -1,12 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
 import { serverContext } from '../../../support/nextServerContext';
 
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../../support/nextServerContext')).cloudflareMock);
-
-// Every /api/* request reaches the API router, whatever its method: HEAD requests once fell
-// through to the static SPA page and answered 200 with HTML. The Next.js route handler
-// src/app/api/[[...route]]/route.ts exports each method Next.js routes, all to the router.
 
 const HOST = 'http://localhost:3000';
 const FILE_KEY = 'template-images/user-1/photo.png';
@@ -48,14 +45,12 @@ async function loadRoute(): Promise<RouteModule> {
   return (await import('../../../../src/app/api/[[...route]]/route')) as unknown as RouteModule;
 }
 
-// As Next.js calls the route: the handler exported for the request's method.
-async function send(request: Request): Promise<Response> {
+async function callTheHandlerExportedForItsMethod(request: Request): Promise<Response> {
   const route = await loadRoute();
   return route[request.method as (typeof METHODS)[number]](request);
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API route handler methods', { timeout: 30_000 }, () => {
+describe('API route handler methods, which send every /api/* request to the API router instead of a page', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
@@ -69,10 +64,10 @@ describe('API route handler methods', { timeout: 30_000 }, () => {
   });
 
   it('answers HEAD /api/health from the API with no body', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
     useEnv();
 
-    const response = await send(new Request(`${HOST}/api/health`, { method: 'HEAD' }));
+    const response = await callTheHandlerExportedForItsMethod(new Request(`${HOST}/api/health`, { method: 'HEAD' }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('application/json');
@@ -81,10 +76,10 @@ describe('API route handler methods', { timeout: 30_000 }, () => {
   });
 
   it('answers HEAD for a missing upload with a JSON 404, not a page', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
     useEnv();
 
-    const response = await send(
+    const response = await callTheHandlerExportedForItsMethod(
       new Request(`${HOST}/api/uploads/file?key=${encodeURIComponent('template-images/user-1/missing.png')}`, {
         method: 'HEAD',
       }),
@@ -96,10 +91,10 @@ describe('API route handler methods', { timeout: 30_000 }, () => {
   });
 
   it("answers HEAD for an upload with the file's headers and without reading it", async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
     const env = useEnv();
 
-    const response = await send(
+    const response = await callTheHandlerExportedForItsMethod(
       new Request(`${HOST}/api/uploads/file?key=${encodeURIComponent(FILE_KEY)}`, { method: 'HEAD' }),
     );
 
@@ -111,10 +106,10 @@ describe('API route handler methods', { timeout: 30_000 }, () => {
   });
 
   it('answers PATCH from the API instead of a page', async () => {
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
     useEnv();
 
-    const response = await send(new Request(`${HOST}/api/nothing-here`, { method: 'PATCH' }));
+    const response = await callTheHandlerExportedForItsMethod(new Request(`${HOST}/api/nothing-here`, { method: 'PATCH' }));
 
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type') ?? '').not.toContain('text/html');

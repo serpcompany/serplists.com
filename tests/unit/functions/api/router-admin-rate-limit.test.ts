@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEPLOYED_HOST, FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
 
-// A deployed, non-local host so the deployed limits apply.
-const HOST = 'https://app.example.test';
 const ADMIN_LIMIT_PER_MINUTE = 10;
 let ipCounter = 0;
 
 function send(apiWorker: { fetch: (request: Request, env: unknown) => Promise<Response> }, ip: string, method: string) {
-  return apiWorker.fetch(new Request(`${HOST}/api/admin/entitlements/override`, {
+  return apiWorker.fetch(new Request(`${DEPLOYED_HOST}/api/admin/entitlements/override`, {
     method,
     headers: { 'CF-Connecting-IP': ip, 'X-Admin-Secret': `guess-${ipCounter}-${Math.random()}` },
   }), {
@@ -15,14 +14,13 @@ function send(apiWorker: { fetch: (request: Request, env: unknown) => Promise<Re
   });
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router admin rate limit', { timeout: 30_000 }, () => {
+describe('API router admin rate limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let ip: string;
 
   beforeEach(() => {
     ipCounter += 1;
     ip = `203.0.113.${ipCounter}`;
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 

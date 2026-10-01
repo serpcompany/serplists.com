@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { FRESH_ROUTER_IMPORT_TIMEOUT_MS, silenceRequestLog } from '../../../support/apiRouter';
 
 const MB = 1024 * 1024;
 const HANDLER_MODULES = {
@@ -13,8 +14,7 @@ function buildEnv() {
   return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 }
 
-/** A body sent in chunks with no Content-Length, like a chunked upload. */
-function streamedBody(totalBytes: number): ReadableStream<Uint8Array> {
+function chunkedBody(totalBytes: number): ReadableStream<Uint8Array> {
   const chunk = new Uint8Array(64 * 1024).fill(0x61);
   let sent = 0;
   return new ReadableStream({
@@ -43,8 +43,7 @@ function request(
   } as RequestInit);
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router request body limit', { timeout: 30_000 }, () => {
+describe('API router request body limit', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   const handlers = {
     handleTemplates: vi.fn(async () => Response.json({ ok: true })),
     handleChecklists: vi.fn(async () => Response.json({ ok: true })),
@@ -65,7 +64,7 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
     vi.doMock(HANDLER_MODULES.teams, () => ({ handleTeams: handlers.handleTeams }));
     vi.doMock(HANDLER_MODULES.uploads, () => ({ handleUploads: handlers.handleUploads }));
     vi.doMock(HANDLER_MODULES.stripe, () => ({ handleStripe: handlers.handleStripe }));
-    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    silenceRequestLog();
   });
 
   afterEach(() => {
@@ -92,7 +91,7 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
   });
 
   it('rejects an oversized streamed body to the unauthenticated shared run route', async () => {
-    const response = await send(request('PUT', 'checklists/shared/anything', { body: streamedBody(1.5 * MB) }));
+    const response = await send(request('PUT', 'checklists/shared/anything', { body: chunkedBody(1.5 * MB) }));
 
     expect(response.status).toBe(413);
     expect(handlers.handleChecklists).not.toHaveBeenCalled();
@@ -108,11 +107,11 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
   });
 
   it('rejects oversized DELETE bodies and counts bytes when Content-Length is malformed', async () => {
-    const deleteResponse = await send(request('DELETE', 'templates/abc', { body: streamedBody(1.5 * MB) }));
+    const deleteResponse = await send(request('DELETE', 'templates/abc', { body: chunkedBody(1.5 * MB) }));
     const malformedResponse = await send(
       request('POST', 'templates', {
         headers: { 'Content-Length': 'not-a-number' },
-        body: streamedBody(1.5 * MB),
+        body: chunkedBody(1.5 * MB),
       }),
     );
 
@@ -123,7 +122,7 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
 
   it.each([
     ['declared', { 'Content-Type': 'application/json', 'Content-Length': String(20 * 1024) }, new Uint8Array(16)],
-    ['streamed', { 'Content-Type': 'application/json' }, streamedBody(20 * 1024)],
+    ['streamed', { 'Content-Type': 'application/json' }, chunkedBody(20 * 1024)],
   ])('caps %s auth bodies at 16KB before Better Auth parses them', async (_label, headers, body) => {
     const response = await send(request('POST', 'auth/update-user', { headers, body }));
 
@@ -132,8 +131,8 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
   });
 
   it('allows up to 2MB for Template backups', async () => {
-    const allowed = await send(request('POST', 'templates/backup', { body: streamedBody(1.5 * MB) }));
-    const rejected = await send(request('POST', 'templates/backup', { body: streamedBody(2 * MB + 1) }));
+    const allowed = await send(request('POST', 'templates/backup', { body: chunkedBody(1.5 * MB) }));
+    const rejected = await send(request('POST', 'templates/backup', { body: chunkedBody(2 * MB + 1) }));
 
     expect(allowed.status).toBe(200);
     expect(rejected.status).toBe(413);
@@ -159,16 +158,14 @@ describe('API router request body limit', { timeout: 30_000 }, () => {
     expect(handlers.handleUploads).toHaveBeenCalledTimes(1);
   });
 
-  // Counting a chunked upload would tee up to 51MB into memory, and the handler's
-  // formData() buffers the whole body before it can check the file size.
   it.each([
     ['no Content-Length', {}],
     ['a malformed Content-Length', { 'Content-Length': 'lots' }],
-  ])('refuses an upload streamed with %s before the handler parses it', async (_label, headers) => {
+  ])('refuses an upload streamed with %s before the handler parses it, since counting it would buffer up to 51MB', async (_label, headers) => {
     const response = await send(
       request('POST', 'uploads', {
         headers: { 'Content-Type': 'multipart/form-data; boundary=x', ...headers },
-        body: streamedBody(60 * MB),
+        body: chunkedBody(60 * MB),
       }),
     );
 

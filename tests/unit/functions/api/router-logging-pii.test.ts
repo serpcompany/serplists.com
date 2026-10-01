@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
 
 const TEMPLATES_MODULE = '../../../../functions/api/handlers/templates';
 const IP = '203.0.113.5';
@@ -11,9 +12,8 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router logs no personal data', { timeout: 30_000 }, () => {
-  const lines: string[] = [];
+describe('API router logs no personal data', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
+  let lines: string[];
   const handleTemplates = vi.fn(async () => Response.json({ ok: true }));
 
   async function send(request: Request, env = buildEnv()) {
@@ -22,14 +22,9 @@ describe('API router logs no personal data', { timeout: 30_000 }, () => {
   }
 
   beforeEach(() => {
-    lines.length = 0;
     handleTemplates.mockReset().mockImplementation(async () => Response.json({ ok: true }));
     vi.doMock(TEMPLATES_MODULE, () => ({ handleTemplates }));
-    for (const level of ['info', 'warn', 'error', 'debug'] as const) {
-      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
-        lines.push(args.map(String).join(' '));
-      });
-    }
+    lines = captureLogLines(['info', 'warn', 'error', 'debug']);
   });
 
   afterEach(() => {

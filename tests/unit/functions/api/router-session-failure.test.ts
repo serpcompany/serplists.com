@@ -1,5 +1,6 @@
 import { APIError } from 'better-auth/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { captureLogLines, FRESH_ROUTER_IMPORT_TIMEOUT_MS } from '../../../support/apiRouter';
 
 const HOST = 'http://localhost:8788';
 const SESSION_COOKIE = 'better-auth.session_token=SECRET_TOKEN.SIGNATURE';
@@ -8,9 +9,7 @@ function buildEnv() {
   return { BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' } as any;
 }
 
-// Better Auth's getSession resolves null when there is no session and throws
-// APIError('INTERNAL_SERVER_ERROR') when its database lookup fails.
-async function loadRouter(getSession: () => Promise<unknown>) {
+async function loadRouterWithBetterAuthGetSession(getSession: () => Promise<unknown>) {
   vi.doMock('../../../../functions/api/better-auth', () => ({
     createBetterAuth: vi.fn(() => ({ api: { getSession: vi.fn(getSession) }, handler: vi.fn() })),
   }));
@@ -22,17 +21,11 @@ async function loadRouter(getSession: () => Promise<unknown>) {
     );
 }
 
-// Each test imports the whole router graph fresh; allow for a busy machine.
-describe('API router when the session lookup fails', { timeout: 30_000 }, () => {
+describe('API router when the session lookup fails, which Better Auth reports by throwing', { timeout: FRESH_ROUTER_IMPORT_TIMEOUT_MS }, () => {
   let lines: string[];
 
   beforeEach(() => {
-    lines = [];
-    for (const method of ['info', 'warn', 'error'] as const) {
-      vi.spyOn(console, method).mockImplementation((line: unknown) => {
-        lines.push(String(line));
-      });
-    }
+    lines = captureLogLines(['info', 'warn', 'error']);
   });
 
   afterEach(() => {
@@ -47,17 +40,12 @@ describe('API router when the session lookup fails', { timeout: 30_000 }, () => 
     ['POST', 'uploads'],
     ['GET', 'agent-keys'],
   ])('answers %s /api/%s with 500, not 401, and logs the failure', async (method, path) => {
-    const send = await loadRouter(async () => {
+    const send = await loadRouterWithBetterAuthGetSession(async () => {
       throw new APIError('INTERNAL_SERVER_ERROR', { message: 'Failed to get session' });
     });
+    const jsonBodyWithTheContentLengthABrowserSends = { body: '{}', headers: { 'Content-Type': 'application/json', 'Content-Length': '2' } };
 
-    const response = await send(path, {
-      method,
-      // Content-Length as a browser sends it: uploads without one get 411.
-      ...(method === 'POST'
-        ? { body: '{}', headers: { 'Content-Type': 'application/json', 'Content-Length': '2' } }
-        : {}),
-    });
+    const response = await send(path, { method, ...(method === 'POST' ? jsonBodyWithTheContentLengthABrowserSends : {}) });
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ error: 'Internal Server Error' });
@@ -66,8 +54,8 @@ describe('API router when the session lookup fails', { timeout: 30_000 }, () => 
     expect(lines.join('\n')).not.toContain('SECRET_TOKEN');
   });
 
-  it('still answers 401 when there is no session', async () => {
-    const send = await loadRouter(async () => null);
+  it('still answers 401 when there is no session, which Better Auth reports as null', async () => {
+    const send = await loadRouterWithBetterAuthGetSession(async () => null);
 
     const response = await send('teams');
 

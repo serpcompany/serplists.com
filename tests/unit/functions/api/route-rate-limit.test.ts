@@ -22,13 +22,6 @@ describe('routeRateLimitBucket', () => {
     ['DELETE', 'agent-keys/key-1', 'write'],
     ['POST', 'mcp', 'mcp'],
     ['GET', 'mcp', null],
-    // Every admin request counts: the endpoint checks a secret, and a GET must not be a
-    // free way to test guesses.
-    ['POST', 'admin/entitlements/override', 'admin'],
-    ['DELETE', 'admin/entitlements/override', 'admin'],
-    ['GET', 'admin/entitlements/override', 'admin'],
-    ['HEAD', 'admin', 'admin'],
-    ['PROPFIND', 'admin/x', 'admin'],
     ['POST', 'templates/generate-from-clipy', 'write'],
     ['GET', 'templates', null],
     ['GET', 'checklists/shared/abc', null],
@@ -37,11 +30,19 @@ describe('routeRateLimitBucket', () => {
   ])('%s %s -> %s', (method, path, expected) => {
     expect(routeRateLimitBucket(method, path)).toBe(expected);
   });
+
+  it.each([
+    ['POST', 'admin/entitlements/override'],
+    ['DELETE', 'admin/entitlements/override'],
+    ['GET', 'admin/entitlements/override'],
+    ['HEAD', 'admin'],
+    ['PROPFIND', 'admin/x'],
+  ])('counts %s %s as admin, since a read must not be a free way to test guesses at the secret', (method, path) => {
+    expect(routeRateLimitBucket(method, path)).toBe('admin');
+  });
 });
 
-// A new state-changing route family must not ship without a limit: every path
-// literal the router dispatches on is either limited for POST or exempt with a reason.
-describe('router rate limit coverage', () => {
+describe('router rate limit coverage, so no new state-changing route family ships without a limit', () => {
   const routerSource = readFileSync(resolve(__dirname, '../../../../functions/api/[[route]].ts'), 'utf8');
   const dispatched = Array.from(
     routerSource.matchAll(/path(?:\s*===\s*|\.startsWith\()'([^']+)'/g),

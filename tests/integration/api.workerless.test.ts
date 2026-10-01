@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import apiWorker from '../../functions/api/[[route]].ts';
+import { varFromWranglerToml } from '../support/wranglerToml';
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
@@ -8,9 +9,11 @@ function buildEnv(overrides?: Record<string, unknown>) {
   } as any;
 }
 
-// The production auth policy comes from wrangler.toml, not the hostname.
 function productionEnv(overrides?: Record<string, unknown>) {
-  return buildEnv({ AUTH_EMAIL_VERIFICATION_REQUIRED: 'true', ...overrides });
+  return buildEnv({
+    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+    ...overrides,
+  });
 }
 
 describe('API Worker (no-wrangler integration)', () => {
@@ -174,8 +177,13 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(data.code).toBe("auth_email_unavailable");
   });
 
-  it('refuses sign-up before creating an account when verification is required but email cannot be sent', async () => {
-    // No DB binding: reaching Better Auth would throw instead of answering 503.
+  it('refuses sign-up before Better Auth creates an account when verification is required but email cannot be sent', async () => {
+    const envWithNoDatabaseForBetterAuthToReach = buildEnv({
+      AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
+      RESEND_API_KEY: undefined,
+      USESEND_API_KEY: undefined,
+    });
+
     const response = await apiWorker.fetch(
       new Request("http://localhost/api/auth/sign-up/email", {
         method: "POST",
@@ -186,11 +194,7 @@ describe('API Worker (no-wrangler integration)', () => {
           name: "New User",
         }),
       }),
-      buildEnv({
-        AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
-        RESEND_API_KEY: undefined,
-        USESEND_API_KEY: undefined,
-      })
+      envWithNoDatabaseForBetterAuthToReach
     );
 
     expect(response.status).toBe(503);
