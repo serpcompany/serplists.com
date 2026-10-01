@@ -45,9 +45,9 @@
   `admin@test.com` and the other personas in `src/lib/auth/devUsers.ts` are ordinary
   sign-ups that anyone can register where email verification is off. API code never
   grants anything by email address: local seeds give the personas their plans as data
-  (seeded `entitlement_overrides` rows), and
-  `tests/unit/security/no-persona-emails-in-api.test.ts` fails if `functions/` names a
-  persona's address.
+  (seeded `entitlement_overrides` rows), and ESLint refuses a persona's address anywhere in
+  `functions/` (`serplists/restricted-code`; `tests/unit/config/code-conventions.test.ts`
+  checks it for every address in `DEV_TEST_USERS`).
 - **Auth requests are CSRF-protected in the router.** Better Auth also parses
   form-encoded and multipart bodies and checks `Origin` only when cookies are sent,
   and a cross-site HTML form needs no CORS preflight and sends no `SameSite=Lax`

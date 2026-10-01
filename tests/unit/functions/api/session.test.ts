@@ -1,6 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { APIError } from 'better-auth/api';
@@ -129,36 +126,5 @@ describe('getSessionUserId', { timeout: 30_000 }, () => {
     await expect(getSessionUserId(new Request(`${BASE_URL}/api/teams`), env)).rejects.toThrow('BETTER_AUTH_SECRET');
     expect(JSON.parse(errorLines[0])).toMatchObject({ message: 'session_lookup_failed', errorName: 'Error' });
     vi.restoreAllMocks();
-  });
-});
-
-describe('server-side session lookups', () => {
-  const functionsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../functions');
-
-  function listTsFiles(dir: string): string[] {
-    return readdirSync(dir).flatMap((name) => {
-      const full = path.join(dir, name);
-      if (statSync(full).isDirectory()) return listTsFiles(full);
-      return full.endsWith('.ts') ? [full] : [];
-    });
-  }
-
-  it('never refresh a session outside the auth route', () => {
-    const offenders: string[] = [];
-    let lookups = 0;
-    for (const file of listTsFiles(functionsDir)) {
-      const source = readFileSync(file, 'utf8');
-      for (const match of source.matchAll(/\.api\.getSession\(/g)) {
-        lookups += 1;
-        const callEnd = source.indexOf('})', match.index);
-        const call = source.slice(match.index, callEnd === -1 ? undefined : callEnd);
-        if (!/disableRefresh:\s*true/.test(call)) {
-          offenders.push(path.relative(functionsDir, file));
-        }
-      }
-    }
-
-    expect(lookups).toBeGreaterThan(0);
-    expect(offenders).toEqual([]);
   });
 });

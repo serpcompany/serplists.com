@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,44 +51,5 @@ describe('runs cache isolation across a user switch', () => {
     expect(tab.client.getQueryData(['runs', 'user-b', 'personal'])).toEqual([{ id: 'user-b-run', owner: 'user-b' }]);
     expect(tab.client.getQueryState(['runs', 'user-a', 'personal'])?.isInvalidated).toBe(true);
     leaveRunsPageOfUserB();
-  });
-});
-
-const SRC_ROOT = path.resolve(__dirname, '../../../src');
-
-function listSourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
-    const full = path.join(dir, entry);
-    if (statSync(full).isDirectory()) return listSourceFiles(full);
-    return /\.(ts|tsx)$/.test(entry) ? [full] : [];
-  });
-}
-
-function argumentTextOfEachCall(source: string, callee: string): string[] {
-  const calls: string[] = [];
-  let index = source.indexOf(`${callee}(`);
-  while (index !== -1) {
-    const start = index + callee.length + 1;
-    let depth = 1;
-    let end = start;
-    while (end < source.length && depth > 0) {
-      if (source[end] === '(') depth += 1;
-      if (source[end] === ')') depth -= 1;
-      end += 1;
-    }
-    calls.push(source.slice(start, end - 1));
-    index = source.indexOf(`${callee}(`, end);
-  }
-  return calls;
-}
-
-describe('query refetch guard', () => {
-  it('only refetches active queries, because inactive keys may belong to a signed-out user', () => {
-    const offenders = listSourceFiles(SRC_ROOT).flatMap((file) =>
-      argumentTextOfEachCall(readFileSync(file, 'utf8'), 'refetchQueries')
-        .filter((args) => !/type:\s*['"]active['"]/.test(args))
-        .map((args) => `${path.relative(SRC_ROOT, file)}: refetchQueries(${args.trim()})`),
-    );
-    expect(offenders, 'Use invalidateQueries, or refetchQueries({ ..., type: "active" })').toEqual([]);
   });
 });

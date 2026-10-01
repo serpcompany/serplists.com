@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -27,12 +27,6 @@ const firstImage = (images: unknown): ImageEntry => {
 
 const resolveAgainstMetadataBase = (url: string | URL) => new URL(url, rootMetadata.metadataBase ?? undefined).toString();
 
-const sourceFiles = (directory: string): string[] =>
-  readdirSync(directory).flatMap((entry) => {
-    const file = path.join(directory, entry);
-    return statSync(file).isDirectory() ? sourceFiles(file) : /\.(tsx?|html)$/.test(entry) ? [file] : [];
-  });
-
 describe('link preview image, one absolute 1200x630 PNG since social sites render neither SVG images nor relative URLs', () => {
   it('is an absolute PNG in the root layout defaults, shipped in public/', () => {
     const image = firstImage(rootMetadata.openGraph?.images);
@@ -53,11 +47,4 @@ describe('link preview image, one absolute 1200x630 PNG since social sites rende
     expect(ogImage).toBe(resolveAgainstMetadataBase(firstImage(rootMetadata.openGraph?.images).url));
   });
 
-  it('never points at the SVG placeholder', () => {
-    const offenders = [...sourceFiles('src'), ...sourceFiles('functions')].filter((file) =>
-      readFileSync(file, 'utf8').includes('placeholder.svg'),
-    );
-
-    expect(offenders).toEqual([]);
-  });
 });

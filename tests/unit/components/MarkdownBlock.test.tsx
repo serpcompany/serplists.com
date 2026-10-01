@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -82,12 +80,4 @@ describe('markdown call sites', () => {
     expect(markup).toContain('<ol><li>first</li><li>second</li></ol>');
   });
 
-  it('import react-markdown only in MarkdownBlock, so the wrappers cannot drift apart', () => {
-    const importers = readdirSync('src', { recursive: true, encoding: 'utf8' })
-      .filter((file) => /\.tsx?$/.test(file))
-      .map((file) => path.join('src', file).split(path.sep).join('/'))
-      .filter((file) => /from ['"]react-markdown['"]/.test(readFileSync(file, 'utf8')));
-
-    expect(importers).toEqual(['src/components/shared/MarkdownBlock.tsx']);
-  });
 });

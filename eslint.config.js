@@ -3,9 +3,27 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import globals from "globals";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
+import {
+  API_CONVENTIONS,
+  APP_CONVENTIONS,
+  BROWSER_AND_INTEGRATION_TEST_CONVENTIONS,
+  SCRIPT_CONVENTIONS,
+} from "./scripts/eslint-rules/code-conventions.mjs";
+import { navigateWhileVisitIsCurrent } from "./scripts/eslint-rules/navigate-while-visit-is-current.mjs";
 import { noComments } from "./scripts/eslint-rules/no-comments.mjs";
+import { noSourceTextReads } from "./scripts/eslint-rules/no-source-text-reads.mjs";
+import { restrictedCode } from "./scripts/eslint-rules/restricted-code.mjs";
 
 const MAX_LINES = 500;
+
+const SERPLISTS_RULES = {
+  rules: {
+    "navigate-while-visit-is-current": navigateWhileVisitIsCurrent,
+    "no-comments": noComments,
+    "no-source-text-reads": noSourceTextReads,
+    "restricted-code": restrictedCode,
+  },
+};
 
 const TEST_FILES = ["**/*.test.{ts,tsx,js,mjs}", "**/*.spec.{ts,tsx,js,mjs}", "tests/**/*.{ts,tsx,js,mjs}"];
 const SKIPPED_TEST_MESSAGE =
@@ -92,12 +110,6 @@ const LIBRARY_MESSAGE =
   "The /templates/ page is the Template Library (docs/PRODUCT_SENSE.md): label it 'Template Library' and " +
   "its buttons 'Browse the Template Library', never Discover, Discover Templates or Browse Templates.";
 const LIBRARY_OLD_NAME = "/^\\s*Discover\\s*$|\\bDiscover Templates\\b|\\bBrowse (?:Public )?Templates\\b|\\bBrowse templates\\b/";
-const CLIPBOARD_RESTRICTION = {
-  selector: "MemberExpression[property.name='clipboard']",
-  message:
-    "Copy with copyTextToClipboard from src/lib/clipboard.ts: it never throws and returns false when the browser " +
-    "refuses. Also show the text (for share links, ShareLinkDialog) so a failed copy never loses it.",
-};
 
 export default tseslint.config(
   {
@@ -152,7 +164,7 @@ export default tseslint.config(
   {
     files: ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
     linterOptions: { noInlineConfig: true },
-    plugins: { serplists: { rules: { "no-comments": noComments } } },
+    plugins: { serplists: SERPLISTS_RULES },
     rules: { "max-lines": ["error", { max: MAX_LINES }], "serplists/no-comments": "error" },
   },
   {
@@ -217,20 +229,27 @@ export default tseslint.config(
         { selector: `JSXText[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
         { selector: `Literal[value=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
         { selector: `TemplateElement[value.raw=${LIBRARY_OLD_NAME}]`, message: LIBRARY_MESSAGE },
-        CLIPBOARD_RESTRICTION,
       ],
     },
   },
   {
-    files: [
-      "src/*.{ts,tsx}",
-      "src/components/ui/**/*.{ts,tsx}",
-      "src/{contexts,data,hooks,lib,types,utils}/**/*.{ts,tsx}",
-    ],
-    ignores: ["src/lib/clipboard.ts", "**/*.test.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-syntax": ["error", CLIPBOARD_RESTRICTION],
+      "serplists/restricted-code": ["error", APP_CONVENTIONS],
+      "serplists/navigate-while-visit-is-current": "error",
     },
+  },
+  {
+    files: ["functions/**/*.ts"],
+    rules: { "serplists/restricted-code": ["error", API_CONVENTIONS] },
+  },
+  {
+    files: ["scripts/**/*.{js,mjs,cjs,ts,mts}"],
+    rules: { "serplists/restricted-code": ["error", SCRIPT_CONVENTIONS] },
+  },
+  {
+    files: ["tests/e2e/**/*.{ts,mjs,js}", "tests/integration/**/*.{ts,mjs,js}"],
+    rules: { "serplists/restricted-code": ["error", BROWSER_AND_INTEGRATION_TEST_CONVENTIONS] },
   },
   {
     files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/tests/**/*.{ts,tsx}"],
@@ -243,6 +262,7 @@ export default tseslint.config(
     files: TEST_FILES,
     rules: {
       "no-restricted-syntax": ["error", ...SKIPPED_TEST_RESTRICTIONS],
+      "serplists/no-source-text-reads": "error",
     },
   }
 );

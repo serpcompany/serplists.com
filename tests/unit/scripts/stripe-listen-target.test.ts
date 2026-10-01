@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   resolveWebhookForwardTarget,
@@ -87,14 +86,5 @@ describe("retargetForDevSession", () => {
     const explicit = { url: "http://localhost:9999/api/stripe/webhook", source: "env" as const };
 
     expect(retargetForDevSession(explicit, session({ pid: ALIVE }), isAlive)).toBeNull();
-  });
-});
-
-describe("scripts/stripe/listen-local.mjs", () => {
-  const source = readFileSync(new URL("../../../scripts/stripe/listen-local.mjs", import.meta.url), "utf8");
-
-  it("resolves its forward target instead of hardcoding the default port", () => {
-    expect(source).not.toMatch(/localhost:\d/);
-    expect(source).toMatch(/resolveWebhookForwardTarget/);
   });
 });

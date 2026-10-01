@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
 
 import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,20 +39,6 @@ describe('queryKeys', () => {
     expect(queryKeys.templateHistoryFor('t1', undefined, 'org-1')).toEqual(['templates', 'history', 't1', 'guest', 'org-1']);
     expect(queryKeys.templateHistoryFor('t1').slice(0, 3)).toEqual([...queryKeys.everyTemplateHistory('t1')]);
     expect(queryKeys.runHistory('r1')).toEqual(['checklist-run-history', 'r1']);
-  });
-
-  it('is the only place the history keys are spelled out', () => {
-    const srcDir = path.resolve(__dirname, '../../../src');
-    const files = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
-        const full = path.join(dir, name);
-        return statSync(full).isDirectory() ? files(full) : /\.tsx?$/.test(name) ? [full] : [];
-      });
-    const spelled = files(srcDir)
-      .filter((file) => /['"](checklist-run-history|history)['"]/.test(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(srcDir, file).split(path.sep).join('/'));
-
-    expect(spelled).toEqual(['lib/queryCache.ts']);
   });
 });
 

@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { calculateRunProgress } from '@functions/api/utils/template-reconciliation';
@@ -98,20 +96,5 @@ describe('run progress on large runs, where one open unit in 200 must not round 
       const partial = [{ ...sections[0], items: items.map((item, index) => ({ ...item, isCompleted: index < done })) }];
       expect(calculateRunProgress(partial)).toBe(calculateSectionsProgress(partial));
     }
-  });
-
-  it('has no inline percentage left outside src/lib/progress.ts', () => {
-    const files = (directory: string): string[] =>
-      readdirSync(directory).flatMap((entry) => {
-        const file = path.join(directory, entry);
-        return statSync(file).isDirectory() ? files(file) : /\.tsx?$/.test(entry) ? [file] : [];
-      });
-    const offenders = [...files('src'), ...files('functions')].filter(
-      (file) =>
-        path.normalize(file) !== path.normalize('src/lib/progress.ts') &&
-        /Math\.round\(\s*\(?\s*completed\s*\/\s*total/.test(readFileSync(file, 'utf8')),
-    );
-
-    expect(offenders).toEqual([]);
   });
 });

@@ -1,19 +1,13 @@
-import { Linter, RuleTester } from 'eslint';
-import tseslint from 'typescript-eslint';
+import { Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
 import { NO_COMMENTS_MESSAGE, noComments } from '../../../scripts/eslint-rules/no-comments.mjs';
-
-RuleTester.describe = describe;
-RuleTester.it = it;
-RuleTester.itOnly = it.only;
+import { javascriptRuleTester, typescriptRuleTester } from '../../support/ruleTester';
 
 const removeComment = (line: number, column: number) => ({ message: NO_COMMENTS_MESSAGE, line, column });
 
-const javascript = new RuleTester();
-const typescript = new RuleTester({
-  languageOptions: { parser: tseslint.parser, parserOptions: { ecmaFeatures: { jsx: true } } },
-});
+const javascript = javascriptRuleTester();
+const typescript = typescriptRuleTester();
 
 javascript.run('no-comments in JavaScript', noComments, {
   valid: [

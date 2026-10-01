@@ -38,7 +38,8 @@ such as `/api/uploads/...` is loaded (`safeImageUrl` in `src/lib/utils/safeUrl.t
 Anything else, or an image that fails to load, shows a local "Image unavailable" box.
 The error handler only records the failure: it never sets `src`, and there is no
 remote placeholder, so a broken image makes one request and stops.
-`tests/unit/components/TaskImage.test.tsx` checks this.
+`tests/unit/components/TaskImage.test.tsx` checks this, and ESLint refuses an `onError`
+that sets an image's `src` and a placeholder image host anywhere in `src/`.
 
 An image uploaded into an Image block is shrunk in the browser first, without changing
 what it shows (`optimizeImage` in `src/lib/imageOptimization.ts`; a File block keeps the

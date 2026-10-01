@@ -110,8 +110,9 @@ and agents (MCP) call them directly and do not follow redirects.
 
 - Link with the builders in `src/lib/routes.ts`, which return canonical paths, and never write
   a page path by hand: no link may depend on a redirect. `tests/unit/lib/canonicalUrls.test.ts`
-  checks every builder, the sitemap entries and the links the API writes, and scans `src` for a
-  hard-coded link that is not in canonical form or that redirects.
+  checks every builder, the sitemap entries and the links the API writes, and ESLint refuses a
+  hard-coded internal path in an `href`, a nav item, `router.push()` or `replace()`,
+  `navigate()` or `withReturnPath()` (`scripts/eslint-rules/code-conventions.mjs`).
 - `usePathname()` and `location.pathname` report the slashed form. Compare paths with the
   route helpers (`isPathWithin`, `resolveRouteShell`, `resolveConsoleSection`), which accept
   either form, not with `===` or `startsWith` on a literal.
@@ -263,7 +264,8 @@ write: [client data](design-docs/client-data.md).
   catalog is the same for everyone, so it waits only for the session; the workspace
   and run lists also wait for the active context (`src/contexts/templateListObservers.ts`).
   A failed teams request must not hide the public library. Only pages that display the
-  catalog may load it; `tests/unit/contexts/catalogConsumers.test.ts` lists them, and
+  catalog may load it; an ESLint convention allows `catalog: true` only in
+  `useTemplateLibrary()` and the dashboard, and
   data built on the server (such as the import/export pack) never needs it on the
   client. In Personal, `allTemplates` merges the catalog with
   the user's own list; once that list has loaded it is the source of truth for the
@@ -300,9 +302,10 @@ write: [client data](design-docs/client-data.md).
   `useTemplateLibrary`): show a skeleton while pending, a retry state on error, and a
   404 or "no templates" message only after the catalog loaded. That includes category
   lists and counts (`/categories/`), which would otherwise count only the bundled
-  templates; `tests/unit/contexts/catalogConsumers.test.ts` checks every page that uses
-  `useTemplateLibrary`. A failed catalog request stays an error; it is never cached as
-  an empty catalog.
+  templates. Each page that uses `useTemplateLibrary` has tests of both states
+  (`tests/unit/views/Categories.test.tsx`, `tests/unit/views/ChecklistLibrary.test.tsx`), and an
+  ESLint convention lets only those pages import the hook, so a new one is added with its tests.
+  A failed catalog request stays an error; it is never cached as an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser
   blocks site data, even reading `window.localStorage` throws, and one unguarded read in
@@ -344,12 +347,14 @@ write: [client data](design-docs/client-data.md).
   Copy/Save and Share results through `followTemplateActionResult`; My Templates
   passes the visit to `reportDashboardTemplateRunFailure`, and template import and
   export pass `isCurrent` to `handleAccessFailure`. A plain error is still shown
-  after the user has left. `tests/unit/views/navigateAfterAwait.test.ts` scans `src/`
-  and fails when an async handler navigates, signs in or starts checkout after an
-  await outside a visit gate (an `if (visit.isCurrent())` branch, an early return once
-  the visit has ended, a callback given to one of the visit helpers, or a call that is
-  passed the visit), unless it is listed as ungated on purpose. It also fails when a
-  file uses a sign-in or checkout helper without calling `usePageVisit`.
+  after the user has left. ESLint's `serplists/navigate-while-visit-is-current`
+  (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses an async handler in
+  `src/` that navigates, signs in or starts checkout after an await outside a visit gate (an
+  `if (visit.isCurrent())` branch, an early return once the visit has ended, a callback given
+  to one of the visit helpers, or a call that is passed the visit). A handler that must move the
+  user on wherever they went, because the account changed (a sign-in, a sign-up, a password
+  reset), says so by moving inside `moveOnAfterAnAccountChange()`
+  (`src/lib/navigation/moveOnAfterAnAccountChange.ts`).
 - Surface API failures by their structured code, not message text: `401` means sign
   in (keep the return path), `403 upgrade_required` and `403 limit_reached` mean a
   plan gate, `503 billing_unavailable` means checkout is down. Keep the kind with
@@ -381,8 +386,9 @@ write: [client data](design-docs/client-data.md).
   back/forward cache with its React state intact, so the hook clears the flag on that
   restore, and Billing, Pricing and the template editor refetch billing status too.
   Every checkout entry point uses it, including the Start a Run dialog on My Templates
-  and the editor's Upgrade to Pro; `tests/unit/components/billing-redirect-pending.test.ts`
-  scans `src/` for pending flags next to a checkout or portal call.
+  and the editor's Upgrade to Pro, and ESLint refuses a checkout, portal or redirect flag
+  (`isStartingCheckout` and the like) kept in `useState`. The Billing, Pricing and editor tests
+  restore a page from the back/forward cache and check that it refetches billing status.
 
 ## Template editor forms
 

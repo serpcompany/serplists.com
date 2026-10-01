@@ -492,8 +492,8 @@ Each of these needs the user's approval, or happens with the domain move:
   collapsed state from a cookie on the server, which would render every console page per
   request instead of from the static cache.
 - 2026-09-29: **Home without category tiles.** The reference's category tiles would need
-  the public catalog, which Home must not load
-  (`tests/unit/contexts/catalogConsumers.test.ts`).
+  the public catalog, which Home must not load (an ESLint convention in
+  `scripts/eslint-rules/code-conventions.mjs` now holds that).
 - 2026-09-29: **Public template page as a detail page.** A breadcrumb replaces "Back" (the
   same destination). The sticky header with the actions is gone: the actions sit in the page
   header, and the closing banner keeps Save and Start Run.

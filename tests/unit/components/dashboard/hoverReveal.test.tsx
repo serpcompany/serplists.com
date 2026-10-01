@@ -1,6 +1,4 @@
 import { navigation } from '../../../support/mockedNextNavigation';
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -88,17 +86,4 @@ describe('dashboard hover-revealed controls', () => {
     expect(overlay).toContain(HOVER_ONLY_DUPLICATE);
   });
 
-  it('has no hover-only class string in src/components/dashboard, so no new component hides a control until hover', () => {
-    const dir = path.resolve(__dirname, '../../../../src/components/dashboard');
-    const offenders = readdirSync(dir)
-      .filter((entry) => /\.(ts|tsx)$/.test(entry))
-      .flatMap((entry) =>
-        [...readFileSync(path.join(dir, entry), 'utf8').matchAll(/(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)]
-          .map((match) => match[2])
-          .filter(breaksRevealRule)
-          .map((value) => `${entry}: ${value}`),
-      );
-
-    expect(offenders).toEqual([]);
-  });
 });

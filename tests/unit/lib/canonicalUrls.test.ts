@@ -1,6 +1,4 @@
 import { loadBuiltRoutes, nextServerRedirect, workerRedirect } from '../../support/builtRoutes';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { buildTeamInvitePath } from '@functions/api/utils/team-invite-delivery';
@@ -118,65 +116,5 @@ describe('sitemap entries', () => {
       'https://serplists.com/sitemaps/pages/1.xml',
     ]);
     for (const loc of locs) await expectServedAsIs(loc);
-  });
-});
-
-const HARD_CODED_LINK_PATTERNS = {
-  jsxHref: /\bhref=["'](\/[^"']*)["']/g,
-  jsxHrefExpression: /\bhref=\{\s*["'`](\/[^"'`$]*)["'`]\s*\}/g,
-  routerOrSignInPath: /\b(?:push|replace|navigate|withReturnPath)\(\s*["'`](\/[^"'`$]*)["'`]/g,
-  hrefProperty: /\bhref:\s*["'`](\/[^"'`$]*)["'`]/g,
-};
-
-describe('hard-coded links in src, which the route builders do not cover', () => {
-  const sourceFiles = (directory: string): string[] =>
-    readdirSync(directory).flatMap((name) => {
-      const file = path.join(directory, name);
-      if (statSync(file).isDirectory()) return sourceFiles(file);
-      return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [file] : [];
-    });
-
-  const linksIn = (source: string): string[] =>
-    Object.values(HARD_CODED_LINK_PATTERNS).flatMap((pattern) => Array.from(source.matchAll(pattern), (match) => match[1]));
-
-  const linksNotCanonicalOrRedirected = async (source: string): Promise<string[]> => {
-    const bad: string[] = [];
-    for (const link of linksIn(source)) {
-      const pathname = pathOf(link);
-      const redirect = await workerRedirect(redirects, new URL(link, 'https://serplists.com').href);
-      if (canonicalPath(pathname) !== pathname || redirect) bad.push(link);
-    }
-    return bad;
-  };
-
-  it('finds a link written without its slash, or one that only redirects, such as a legacy path or /dashboard/', async () => {
-    const source = [
-      '<Link href="/login">Log in</Link>',
-      "<Link href={'/pricing?x=1'}>Pricing</Link>",
-      "router.push('/dashboard/runs');",
-      "navigate(withReturnPath('/login', returnPath));",
-      "{ href: '/about', label: 'About' }",
-      '<Link href="/about/">About</Link>',
-      '<a href="/og-default.png">Image</a>',
-      "router.replace('/dashboard/');",
-      '<Link href="/account/">Account</Link>',
-    ].join('\n');
-    expect(await linksNotCanonicalOrRedirected(source)).toEqual([
-      '/login',
-      '/account/',
-      '/pricing?x=1',
-      '/dashboard/runs',
-      '/login',
-      '/dashboard/',
-      '/about',
-    ]);
-  });
-
-  it('links only to canonical URLs, which answer without a redirect', async () => {
-    const found: string[] = [];
-    for (const file of sourceFiles('src')) {
-      for (const link of await linksNotCanonicalOrRedirected(readFileSync(file, 'utf8'))) found.push(`${file}: ${link}`);
-    }
-    expect(found).toEqual([]);
   });
 });

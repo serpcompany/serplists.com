@@ -269,8 +269,9 @@ and refuses any argument that is not a plain token. Never spawn `npx` or `pnpm` 
 Windows they are `.cmd` shims, so a spawn without a shell fails with `ENOENT` (or, since
 Node 18.20.2, `EINVAL` for `npx.cmd`), and passing arguments through a shell lets `cmd.exe`
 reinterpret characters such as `&`, `^` and `%` in values like the auth secret.
-`tests/unit/scripts/tool-spawns.test.ts` fails when a script names `npx` or `pnpm` as a
-command.
+ESLint refuses `npx` or `pnpm` named as a command in `scripts/`, `tests/e2e/` and
+`tests/integration/` (`serplists/restricted-code` with the conventions in
+`scripts/eslint-rules/code-conventions.mjs`), outside `scripts/lib/run-tool.mjs`.
 
 `killPidTree` and `killProcessTree` stop a process with everything it started: on Windows
 they end the tree with `taskkill`, since the children (Next.js, workerd) would otherwise

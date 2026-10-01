@@ -1,6 +1,3 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -268,21 +265,5 @@ describe('theme changes from another tab, which arrive only as a storage event a
     target.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: 'dark' }));
     expect(onChange).toHaveBeenCalledTimes(2);
     expect(harness.isDark()).toBe(true);
-  });
-
-  it('leaves storage listening to theme.ts, so no component updates its label alone', () => {
-    const listFiles = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
-        const path = join(dir, name);
-        return statSync(path).isDirectory() ? listFiles(path) : [path];
-      });
-    const sessionSyncListeningOnlyForItsOwnKey = 'src/contexts/sessionSync.ts';
-    const allowed = new Set(['src/lib/theme.ts', sessionSyncListeningOnlyForItsOwnKey]);
-    const offenders = listFiles('src')
-      .filter((path) => /\.(ts|tsx)$/.test(path))
-      .filter((path) => !allowed.has(path.split('\\').join('/')))
-      .filter((path) => /addEventListener\(\s*['"]storage['"]/.test(readFileSync(path, 'utf8')));
-
-    expect(offenders).toEqual([]);
   });
 });

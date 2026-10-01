@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,17 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaskImageView } from '@/components/shared/TaskImage';
 import { resolveTaskImageSource } from '@/components/shared/taskImageSource';
 import { findElement } from '../../support/elementTree';
-
-const SRC = path.resolve(__dirname, '../../../src');
-
-const sourceFiles = (dir: string): string[] =>
-  readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) return sourceFiles(full);
-    return /\.(ts|tsx)$/.test(entry.name) ? [full] : [];
-  });
-
-const relative = (file: string) => path.relative(SRC, file).split(path.sep).join('/');
 
 describe('TaskImageView', () => {
   it('reports a failed load without touching the img src, however often the error fires', () => {
@@ -66,22 +53,4 @@ describe('resolveTaskImageSource', () => {
       expect(resolveTaskImageSource(value, null)).toBeNull();
     },
   );
-});
-
-describe('image fallbacks in src', () => {
-  it('never points a fallback at a third-party placeholder host', () => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => readFileSync(file, 'utf8').includes('placehold.co'))
-      .map(relative);
-
-    expect(offenders).toEqual([]);
-  });
-
-  it('never reassigns an image src from an onError handler', () => {
-    const offenders = sourceFiles(SRC)
-      .filter((file) => /onError=\{[\s\S]{0,300}?\.src\s*=(?!=)/.test(readFileSync(file, 'utf8')))
-      .map(relative);
-
-    expect(offenders).toEqual([]);
-  });
 });

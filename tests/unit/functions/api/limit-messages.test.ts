@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiErrorBody, jsonObject, readJson } from '../../../support/readJson';
 
@@ -125,18 +123,5 @@ describe('copying a public template into Personal on Free', () => {
     expect(response.status).toBe(403);
     expect(data.code).toBe('upgrade_required');
     expect(data.error).toMatch(/Upgrade to Pro/);
-  });
-});
-
-describe('limit_reached responses have one source', () => {
-  it('is built only in limit-reached.ts, since handlers that wrote their own limit text drifted apart', () => {
-    const root = path.resolve(__dirname, '../../../../functions');
-    const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-      entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);
-    const builders = sources(root)
-      .filter((file) => /code:\s*['"]limit_reached['"]|Upgrade to Pro/.test(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(root, file).split(path.sep).join('/'));
-
-    expect(builders).toEqual(['api/utils/limit-reached.ts']);
   });
 });

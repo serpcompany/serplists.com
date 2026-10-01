@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTableColumns } from 'drizzle-orm';
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core';
@@ -95,19 +93,6 @@ describe('activeRunsInContext', () => {
     for (const teamId of ['org-1', null]) {
       expect(render({ userId: 'owner', teamId }).sql).not.toContain('is_public');
     }
-  });
-});
-
-describe('the active-run limit has one implementation', () => {
-  it('reads maxActiveRuns only in active-run-limit.ts, since a route that counted its own way left shared runs out of the count', () => {
-    const root = path.resolve(__dirname, '../../../../functions');
-    const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-      entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);
-    const readers = sources(root)
-      .filter((file) => /limits\.maxActiveRuns/.test(readFileSync(file, 'utf8')))
-      .map((file) => path.relative(root, file).split(path.sep).join('/'));
-
-    expect(readers).toEqual(['api/utils/active-run-limit.ts']);
   });
 });
 

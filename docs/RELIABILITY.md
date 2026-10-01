@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint, `tsc -b`, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (code conventions and tests that read no source text included), `tsc -b`, `check:repo` (secrets, docs, comments, architecture, duplicated code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -128,6 +128,36 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     ([harness hardening plan](exec-plans/active/harness-hardening.md)). `db/migrations` stays
     out for good: applied migrations are append-only history, and a migration that rebuilds a
     table restates all of it.
+- **Tests check what code does, not how it is written.** A test that matches the text of the
+  code breaks on a harmless refactor and passes when the behavior breaks, so ESLint's
+  `serplists/no-source-text-reads` (`scripts/eslint-rules/no-source-text-reads.mjs`) refuses,
+  in every test file, a `readFileSync`, `readFile` or `createReadStream` of a code file under
+  `src/` or `functions/` (JavaScript, TypeScript or CSS), a listing of a folder under them
+  (`readdirSync`, `readdir`, `opendir`, `glob`), and a `?raw` import or raw `import.meta.glob`
+  of one. It works out the path from string literals, `const`s, template literals,
+  `path.join`, `path.resolve`, `new URL(..., import.meta.url)`, `fileURLToPath`, a `for ... of`
+  loop over literals, a local arrow function that builds the path, and one level of wrapper
+  (`const read = (file) => readFileSync(path.join(root, file))` called with a source path).
+  Reading JSON the app ships, the repository's own files as files (line endings, secrets,
+  comments, generated output), harness configuration and test fixtures is allowed because
+  of what those reads name, not through a list of files. The testing conventions say how to
+  test instead.
+- **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
+  that scans the code:
+  - `serplists/restricted-code` (`scripts/eslint-rules/restricted-code.mjs`) takes the
+    conventions in `scripts/eslint-rules/code-conventions.mjs`: each an esquery selector, the
+    message saying what to use instead, and the modules that own that code, if any (the one
+    module that may import `react-markdown`, read `maxActiveRuns`, listen for storage events
+    or touch the clipboard). It runs with `APP_CONVENTIONS` on `src/`, `API_CONVENTIONS` on
+    `functions/`, `SCRIPT_CONVENTIONS` on `scripts/`, and the tool-spawn convention on the
+    browser and integration tests, one rule name per folder, so no block overrides another.
+  - `serplists/navigate-while-visit-is-current`
+    (`scripts/eslint-rules/navigate-while-visit-is-current.mjs`) refuses an async handler in
+    `src/` that moves the user after an await outside a page-visit check ([frontend
+    conventions](FRONTEND.md)).
+  - Each rule has RuleTester tests in `tests/unit/scripts/`, and
+    `tests/unit/config/code-conventions.test.ts` lints a sample of every convention with the
+    real config, in the folder it covers and in the module that owns it.
 
 ## Deploy pipeline
 
@@ -325,6 +355,20 @@ Common failures:
 ## Testing conventions
 
 - Run the smallest relevant test while developing; run `pnpm run verify` before a PR.
+- **Test what the code does, never its text.** ESLint refuses a test that reads code under
+  `src/` or `functions/` ([repository checks](#repository-checks)). Instead:
+  - a page, layout or route file: call it (`AppLayout({ children })`, a page's default export)
+    and search the elements it returns (`tests/support/elementTree.ts`), or render it; the root
+    layout through `tests/support/rootLayout.ts`;
+  - the stylesheet: compile what the root layout imports and read the compiled rules
+    (`tests/support/appStylesheet.ts`);
+  - data the app ships: import it (a JSON pack, `templatePackModules`);
+  - the modules a feature reaches: ask dependency-cruiser's `cruise()`, as
+    `tests/unit/scripts/sitemap-implementation-sources.test.ts` does;
+  - a column default or a trigger: apply the migrations with `SqliteD1` and read the row back;
+  - a rule about how all code is written: a convention in
+    `scripts/eslint-rules/code-conventions.mjs`, with a sample in
+    `tests/unit/config/code-conventions.test.ts`.
 - **Look for shared setup before writing any.** A mock, fixture or browser step that a second
   test needs lives in one of three folders, and `pnpm run duplicates:check` fails on a second
   copy of 5 lines and 50 tokens:
@@ -354,9 +398,14 @@ Common failures:
       `confirmDialogInPlace.ts` and `queryClientsPerTest.ts`; and the providers and pages
       ready to mount (`authProviderHarness.tsx`, `templatesProviderHarness.tsx`,
       `checklistRunPage.tsx`, `templateDetailPage.tsx`, `publicTemplatePage.tsx`,
-      `categoryPage.tsx`, `teamInvitePage.ts`).
+      `categoryPage.tsx`, `teamInvitePage.ts`); a mounted page restored from the back/forward
+      cache (`pageRestore.ts`) and a sign-out control that must wait for the server
+      (`signOutControl.ts`).
+    - The root layout and the stylesheet: `rootLayout.ts` (`rootLayoutOn(siteEnv)`,
+      `plainScriptsInTheHead()`) and `appStylesheet.ts`
+      (`compileTheStylesheetTheRootLayoutImports()`).
     - Scripts and workflows: `workflowGuards.ts`, `throwawayGitRepository.ts` and
-      `e2eSourceFiles.ts`.
+      `e2eSourceFiles.ts`; ESLint rules: `ruleTester.ts`.
   - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
     template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
     (`billing.ts`), API calls (`api-requests.ts`), a mocked API (`mocked-api.ts`) and
