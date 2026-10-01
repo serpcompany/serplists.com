@@ -192,7 +192,7 @@ The local seed includes Organization data, memberships, invites, entitlement ove
 Targeted checks:
 
 ```bash
-pnpm run test:run tests/unit/functions/api/teams-handler.test.ts
+pnpm run test:run tests/unit/functions/api/teams-handler
 pnpm run test:run tests/unit/components/TeamSettingsSection.test.tsx
 pnpm run test:e2e -- tests/e2e/team-workspace.spec.ts
 pnpm run test:e2e -- tests/e2e/team-invite-flow.spec.ts

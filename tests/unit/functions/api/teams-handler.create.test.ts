@@ -1,0 +1,243 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { auditMocks, dbMocks, mockEnv, resetTeamsHandlerMocks, sessionMocks } from "../../../support/teamsHandler";
+import { handleTeams } from "@functions/api/handlers/teams";
+import { apiErrorBody, readJson } from "../../../support/readJson";
+
+const teamBody = z.object({ slug: z.string() }).passthrough();
+
+describe("Teams handler", () => {
+  beforeEach(resetTeamsHandlerMocks);
+
+  it("rejects unauthenticated access", async () => {
+    sessionMocks.getSessionUserId.mockResolvedValue(null);
+
+    const response = await handleTeams(new Request("http://localhost/api/teams"), mockEnv);
+
+    expect(response.status).toBe(401);
+  });
+
+  it("creates a team and owner membership", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme Team" }),
+      }),
+      mockEnv,
+    );
+    const data = await readJson(response, teamBody);
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual(
+      expect.objectContaining({
+        memberId: expect.any(String),
+        membershipStatus: "active",
+        name: "Acme Team",
+      }),
+    );
+    expect(data.slug).toBe("acme-team");
+    expect(data.role).toBe("owner");
+
+    const insertedTeam = dbMocks.insertChain.values.mock.calls[0][0];
+    const insertedMembership = dbMocks.insertChain.values.mock.calls[1][0];
+    expect(insertedTeam.name).toBe("Acme Team");
+    expect(insertedTeam.billing_owner_user_id).toBe("user-1");
+    expect(insertedMembership.role).toBe("owner");
+    expect(insertedMembership.user_id).toBe("user-1");
+    expect(auditMocks.buildAuditEventValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: "user-1",
+        action: "team.created",
+      }),
+    );
+  });
+
+  it("folds the accented letters of an Organization name into its slug", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Équipe Café Straße" }),
+      }),
+      mockEnv,
+    );
+    const data = await readJson(response, teamBody);
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe("equipe-cafe-strasse");
+  });
+
+  it("rejects team creation with an explicitly requested slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    expect(dbMocks.db.batch).not.toHaveBeenCalled();
+    expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
+    expect(auditMocks.buildAuditEventValues).not.toHaveBeenCalled();
+  });
+
+  it("creates a team with an explicitly requested free slug unchanged", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme", slug: "acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await readJson(response, teamBody);
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toBe("acme");
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe("acme");
+  });
+
+  it("suffixes a name-derived slug that is taken", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "Acme" }),
+      }),
+      mockEnv,
+    );
+    const data = await readJson(response, teamBody);
+
+    expect(response.status).toBe(200);
+    expect(data.slug).toMatch(/^acme-[0-9a-f]{8}$/);
+    expect(dbMocks.insertChain.values.mock.calls[0][0].slug).toBe(data.slug);
+  });
+
+  describe("slug races between the check and the write", () => {
+    const slugViolation = () => new Error("D1_ERROR: UNIQUE constraint failed: teams.slug: SQLITE_CONSTRAINT");
+
+    function createRequest(body: unknown) {
+      return new Request("http://localhost/api/teams", { method: "POST", body: JSON.stringify(body) });
+    }
+
+    function createdAuditSlugs() {
+      return auditMocks.buildAuditEventValues.mock.calls
+        .map(([input]) => input)
+        .filter((input) => input.action === "team.created")
+        .map((input) => (input.after as { team: { slug: string } }).team.slug);
+    }
+
+    it("retries a name-derived slug that another request took and records the slug it wrote", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation()).mockResolvedValueOnce([]);
+
+      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const data = await readJson(response, teamBody);
+
+      expect(response.status).toBe(200);
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(2);
+      expect(data.slug).toMatch(/^marketing-[0-9a-f]{8}$/);
+      const insertedTeams = dbMocks.insertChain.values.mock.calls
+        .map(([values]) => values)
+        .filter((values) => "billing_owner_user_id" in values);
+      expect(insertedTeams.map((team) => team.slug)).toEqual(["marketing", data.slug]);
+      expect(createdAuditSlugs()).toEqual(["marketing", data.slug]);
+    });
+
+    it("gives up with a 409 after a bounded number of slug collisions", async () => {
+      dbMocks.db.batch.mockRejectedValue(slugViolation());
+
+      const response = await handleTeams(createRequest({ name: "Marketing" }), mockEnv);
+      const data = await readJson(response, apiErrorBody);
+
+      expect(response.status).toBe(409);
+      expect(data.code).toBe("team_slug_exists");
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(3);
+    });
+
+    it("returns 409 without retrying when a requested slug is taken between the check and the write", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ["another unique index", "D1_ERROR: UNIQUE constraint failed: team_members.team_id, team_members.user_id"],
+      ["a similarly named column", "D1_ERROR: UNIQUE constraint failed: teams.slug_history"],
+      ["any other failure", "D1_ERROR: database is locked"],
+    ])("rethrows %s instead of treating it as a slug conflict", async (_label, message) => {
+      dbMocks.db.batch.mockRejectedValueOnce(new Error(message));
+
+      await expect(handleTeams(createRequest({ name: "Marketing" }), mockEnv)).rejects.toThrow(message);
+      expect(dbMocks.db.batch).toHaveBeenCalledTimes(1);
+    });
+
+    it("recognizes the slug conflict when it is wrapped as the cause of another error", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(new Error("Failed query", { cause: slugViolation() }));
+
+      const response = await handleTeams(createRequest({ name: "Marketing", slug: "marketing" }), mockEnv);
+
+      expect(response.status).toBe(409);
+    });
+
+    function updateRequest(body: { name?: string; slug?: string }) {
+      dbMocks.selectChain.limit
+        .mockResolvedValueOnce([
+          { id: "member-1", team_id: "team-1", user_id: "user-1", role: "admin", status: "active" },
+        ])
+        .mockResolvedValueOnce([{ id: "team-1", name: "Old Team", slug: "old-team", archived_at: null }]);
+      if (body.slug) {
+        const organizationsWithTheSlugWhenChecked: never[] = [];
+        dbMocks.selectChain.limit.mockResolvedValueOnce(organizationsWithTheSlugWhenChecked);
+      }
+      return new Request("http://localhost/api/teams/team-1", { method: "PUT", body: JSON.stringify(body) });
+    }
+
+    it("returns 409 when another Organization saves the same new slug first", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      const response = await handleTeams(updateRequest({ slug: "new-team" }), mockEnv);
+      const data = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(data).toEqual({ error: "Organization slug is already in use", code: "team_slug_exists" });
+    });
+
+    it("rethrows a slug error from an update that did not change the slug", async () => {
+      dbMocks.db.batch.mockRejectedValueOnce(slugViolation());
+
+      await expect(handleTeams(updateRequest({ name: "New Team" }), mockEnv)).rejects.toThrow("teams.slug");
+    });
+  });
+
+  it("keeps a colliding Organization slug within 120 characters", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "other-team" }]).mockResolvedValueOnce([]);
+
+    const response = await handleTeams(
+      new Request("http://localhost/api/teams", {
+        method: "POST",
+        body: JSON.stringify({ name: "a".repeat(120) }),
+      }),
+      mockEnv,
+    );
+    const data = await readJson(response, teamBody);
+
+    expect(response.status).toBe(200);
+    expect(data.slug.length).toBeLessThanOrEqual(120);
+    expect(data.slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+  });
+});
