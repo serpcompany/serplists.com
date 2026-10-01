@@ -1,6 +1,7 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import { json, jsonError } from "../utils/response";
 import {
   getStripeBillingConfig,
@@ -29,8 +30,10 @@ import {
 import { canViewTeam, getActiveTeamMembership, normalizeTeamRole } from "../utils/team-access";
 
 type Db = ReturnType<typeof createDb>;
-type StripeCheckoutSession = { id: string; url: string | null };
-type StripePortalSession = { id: string; url: string };
+const stripeCheckoutSessionSchema = z.object({ id: z.string(), url: z.string().nullish() });
+const stripePortalSessionSchema = z.object({ id: z.string(), url: z.string() });
+type StripeCheckoutSession = z.infer<typeof stripeCheckoutSessionSchema>;
+type StripePortalSession = z.infer<typeof stripePortalSessionSchema>;
 
 const SETTINGS_PATH = "/dashboard/settings/";
 const ACCOUNT_STRIPE_CALL_LIMIT = { windowMs: 60 * 1000, max: 10 };
@@ -217,7 +220,7 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
   }
 
   const createSession = (customerId: string) =>
-    stripePostForm<StripeCheckoutSession>(
+    stripePostForm(
       secretKey,
       "/v1/checkout/sessions",
       {
@@ -233,6 +236,7 @@ async function startCheckout(env: Env, userId: string, origin: string): Promise<
         "subscription_data[metadata][userId]": userId,
         allow_promotion_codes: true,
       },
+      stripeCheckoutSessionSchema,
       {
         idempotencyKey: `checkout-${userId}-${customerId}-${paramsDigest}-${Math.floor(Date.now() / CHECKOUT_IDEMPOTENCY_WINDOW_MS)}`,
       },
@@ -334,11 +338,11 @@ export async function handleBilling(request: Request, env: Env): Promise<Respons
     const returnUrl = `${origin}${SETTINGS_PATH}`;
     let portal: StripePortalSession;
     try {
-      portal = await stripePostForm<StripePortalSession>(secretKey, "/v1/billing_portal/sessions", {
+      portal = await stripePostForm(secretKey, "/v1/billing_portal/sessions", {
         customer: existingCustomer.stripe_customer_id,
         return_url: returnUrl,
         configuration: env.STRIPE_PORTAL_CONFIGURATION_ID,
-      });
+      }, stripePortalSessionSchema);
     } catch (error) {
       if (!isMissingStripeCustomer(error)) throw error;
       const missingCustomerId = existingCustomer.stripe_customer_id;

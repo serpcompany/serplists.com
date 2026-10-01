@@ -308,4 +308,21 @@ describe("Stripe webhook handler", () => {
     expect(storedSubscriptions()).toEqual([]);
     expect(eventErrors("evt_deleted_user")).toEqual([{ error: null }]);
   });
+
+  it("refuses a signed event whose fields have the wrong types, recording nothing so Stripe retries it", async () => {
+    const response = await deliver({ ...subscriptionEvent("evt_malformed"), created: "yesterday" });
+
+    expect(response.status).toBe(400);
+    expect(eventErrors("evt_malformed")).toEqual([]);
+    expect(storedSubscriptions()).toEqual([]);
+  });
+
+  it("acknowledges a completed Checkout whose session it cannot read, storing no customer", async () => {
+    const event = checkoutCompletedEvent("evt_unreadable_session");
+    const response = await deliver({ ...event, data: { object: { customer: { id: "cus_123" }, client_reference_id: 7 } } });
+
+    expect(response.status).toBe(200);
+    expect(d1.rows("SELECT stripe_customer_id FROM stripe_customers")).toEqual([]);
+    expect(eventErrors("evt_unreadable_session")).toEqual([{ error: null }]);
+  });
 });

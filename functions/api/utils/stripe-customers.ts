@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { createDb, schema } from "../db";
 import { log } from "./logger";
-import { shortDigest, stripePostForm } from "./stripe";
+import { shortDigest, stripeObjectSchema, stripePostForm } from "./stripe";
 
 type Db = ReturnType<typeof createDb>;
 
@@ -14,10 +14,11 @@ export async function createStripeCustomer(
   const { users } = schema;
   const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
   const email = user?.email ?? undefined;
-  const customer = await stripePostForm<{ id: string }>(
+  const customer = await stripePostForm(
     secretKey,
     "/v1/customers",
     { email, "metadata[userId]": userId },
+    stripeObjectSchema,
     { idempotencyKey: `${keyPrefix}-${await shortDigest(email ?? "")}` },
   );
   return customer.id;

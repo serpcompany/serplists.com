@@ -1,10 +1,11 @@
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import { describeErrorForLog, log } from "../utils/logger";
 import { json, jsonError } from "../utils/response";
-import { assertStripeWebhookConfigured, verifyStripeWebhookSignature } from "../utils/stripe";
+import { assertStripeWebhookConfigured, expandableStripeIdSchema, verifyStripeWebhookSignature } from "../utils/stripe";
 import {
   isTerminalSubscriptionStatus,
   linkStripeCustomerIfUnmapped,
@@ -24,13 +25,23 @@ import {
 
 type Db = ReturnType<typeof createDb>;
 
-type StripeEvent = {
-  id: string;
-  type: string;
-  created: number;
-  livemode: boolean;
-  data: { object: unknown };
-};
+const stripeEventSchema = z.object({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  created: z.number().optional(),
+  livemode: z.boolean().optional(),
+  data: z.object({ object: z.unknown() }).optional(),
+});
+type StripeEvent = z.infer<typeof stripeEventSchema>;
+
+const checkoutSessionSchema = z.object({
+  client_reference_id: z.string().nullish(),
+  customer: z.string().nullish(),
+  mode: z.string().nullish(),
+  subscription: expandableStripeIdSchema.nullish(),
+  metadata: z.object({ userId: z.string().nullish() }).passthrough().nullish(),
+});
+type CheckoutSession = z.infer<typeof checkoutSessionSchema>;
 
 const SUBSCRIPTION_EVENT_TYPES = new Set([
   "customer.subscription.created",
@@ -38,15 +49,8 @@ const SUBSCRIPTION_EVENT_TYPES = new Set([
   "customer.subscription.deleted",
 ]);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function getEventUserIdFallback(obj: Record<string, unknown> | null): string | null {
-  const metadata = obj && isRecord(obj.metadata) ? obj.metadata : null;
-  const fromMetadata = metadata?.userId;
-  if (typeof fromMetadata === "string" && fromMetadata.length > 0) return fromMetadata;
-  return null;
+function checkoutUserId(session: CheckoutSession): string | null {
+  return session.client_reference_id ?? (session.metadata?.userId || null);
 }
 
 function logSkippedEvent(event: StripeEvent, reason: string): BatchItem<"sqlite">[] {
@@ -80,13 +84,10 @@ async function subscriptionWrites(
 async function loadCheckoutSubscription(
   env: Env,
   event: StripeEvent,
-  session: Record<string, unknown> | null,
+  session: CheckoutSession,
 ): Promise<SubscriptionSnapshot | null> {
-  if (session?.mode !== "subscription") return null;
-  const reference = session.subscription;
-  const subscriptionId = typeof reference === "string"
-    ? reference
-    : isRecord(reference) && typeof reference.id === "string" ? reference.id : null;
+  if (session.mode !== "subscription") return null;
+  const subscriptionId = session.subscription;
   if (!subscriptionId) return null;
   if (!env.STRIPE_SECRET_KEY) {
     logSkippedEvent(event, "subscription_read_needs_secret_key");
@@ -96,15 +97,16 @@ async function loadCheckoutSubscription(
 }
 
 async function buildEventWrites(env: Env, db: Db, event: StripeEvent, nowIso: string): Promise<BatchItem<"sqlite">[]> {
-  const object = isRecord(event.data?.object) ? (event.data.object as Record<string, unknown>) : null;
+  const object = event.data?.object;
 
   if (event.type === "checkout.session.completed") {
-    const userId = typeof object?.client_reference_id === "string"
-      ? object.client_reference_id
-      : getEventUserIdFallback(object);
-    const stripeCustomerId = typeof object?.customer === "string" ? object.customer : null;
+    const parsedSession = checkoutSessionSchema.safeParse(object);
+    if (!parsedSession.success) return logSkippedEvent(event, "invalid_checkout_session");
+    const session = parsedSession.data;
+    const userId = checkoutUserId(session);
+    const stripeCustomerId = session.customer ?? null;
     if (!userId || !stripeCustomerId) return logSkippedEvent(event, "missing_user_or_customer");
-    const subscription = await loadCheckoutSubscription(env, event, object);
+    const subscription = await loadCheckoutSubscription(env, event, session);
     if (subscription) return subscriptionWrites(db, event, userId, subscription, nowIso);
     return [upsertStripeCustomer(db, userId, stripeCustomerId, nowIso)];
   }
@@ -147,23 +149,25 @@ export async function handleStripe(request: Request, env: Env): Promise<Response
       return jsonError(`Webhook signature verification failed: ${verification.error}`, 400);
     }
 
-    let event: StripeEvent;
+    let body: unknown;
     try {
-      event = JSON.parse(payload) as StripeEvent;
+      body = JSON.parse(payload);
     } catch {
       return jsonError("Invalid JSON payload", 400);
     }
 
-    if (!event?.id || !event?.type) {
+    const parsedEvent = stripeEventSchema.safeParse(body);
+    if (!parsedEvent.success) {
       return jsonError("Invalid Stripe event payload", 400);
     }
+    const event = parsedEvent.data;
 
     const db = createDb(env);
     const record: StripeEventRecord = {
       id: event.id,
       type: event.type,
       created: event.created ?? verification.timestamp,
-      livemode: Boolean(event.livemode),
+      livemode: event.livemode ?? false,
       processedAt: new Date().toISOString(),
     };
 

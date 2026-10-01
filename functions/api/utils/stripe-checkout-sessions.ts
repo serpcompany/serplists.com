@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { log } from "./logger";
-import { StripeApiError, expandableStripeIdSchema, isMissingStripeCustomer, stripeGet, stripePostForm } from "./stripe";
+import {
+  StripeApiError,
+  expandableStripeIdSchema,
+  isMissingStripeCustomer,
+  stripeGet,
+  stripeObjectSchema,
+  stripePostForm,
+} from "./stripe";
 
 const MIN_SECONDS_LEFT_TO_REUSE_SESSION = 60 * 60;
 
@@ -64,7 +71,12 @@ export async function settleOpenCheckoutSessions(
   for (const session of subscriptionSessionsNewestFirst) {
     if (session === newestReusable) continue;
     try {
-      await stripePostForm(secretKey, `/v1/checkout/sessions/${encodeURIComponent(session.id)}/expire`, {});
+      await stripePostForm(
+        secretKey,
+        `/v1/checkout/sessions/${encodeURIComponent(session.id)}/expire`,
+        {},
+        stripeObjectSchema,
+      );
     } catch (error) {
       if (error instanceof StripeApiError && error.status >= 400 && error.status < 500) {
         log("warn", "stripe_checkout_session_changed", { stripeCheckoutSessionId: session.id });

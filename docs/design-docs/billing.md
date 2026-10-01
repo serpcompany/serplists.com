@@ -295,7 +295,16 @@ HTTP status and Stripe's error `type`, `code` and `param`. Stripe's message text
 echo request data such as an email address, so it never enters the error message that
 gets logged. A customer Stripe does not have in this mode (deleted, or made with the
 other mode's keys) is `resource_missing` on `customer`, and checkout treats it as having
-no open Checkout Sessions.
+no open Checkout Sessions. Every reply is parsed with the Zod schema its caller passes
+(`stripePostForm(secretKey, path, body, schema)`, or the caller's own parse of
+`stripeGet`), so a reply that lacks a field the code reads fails the request instead
+of passing `undefined` on.
+
+A signed webhook body is parsed with `stripeEventSchema` (`functions/api/handlers/stripe.ts`)
+after the signature check: an event without an `id` or `type`, or with a field of the
+wrong type, is refused with `400` and records nothing, so Stripe retries it. A completed
+Checkout's session is parsed with `checkoutSessionSchema`; one it cannot read is logged
+as skipped and acknowledged, like one without a user or customer.
 
 Webhook event rows provide idempotency and retry state
 (`functions/api/utils/stripe-webhook-events.ts`). A row with no error records an

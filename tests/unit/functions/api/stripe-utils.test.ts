@@ -6,6 +6,7 @@ import {
   shortDigest,
   StripeApiError,
   stripeGet,
+  stripeObjectSchema,
   stripePostForm,
   verifyStripeWebhookSignature,
 } from "@functions/api/utils/stripe";
@@ -76,13 +77,23 @@ describe("stripePostForm", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await stripePostForm("sk_test_example", "/v1/checkout/sessions", { mode: "subscription" }, {
+    await stripePostForm("sk_test_example", "/v1/checkout/sessions", { mode: "subscription" }, stripeObjectSchema, {
       idempotencyKey: "checkout-user-1-window",
     });
 
     const [, options] = fetchMock.mock.calls[0];
     expect(options.headers["Idempotency-Key"]).toBe("checkout-user-1-window");
     expect(options.body).toBe("mode=subscription");
+  });
+
+  it("returns the reply its schema parsed, and refuses a reply the schema does not describe", async () => {
+    const replyWith = (body: unknown) => vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 200 }));
+
+    vi.stubGlobal("fetch", replyWith({ id: "cus_1", email: "kept-out@example.com" }));
+    await expect(stripePostForm("sk_test_example", "/v1/customers", {}, stripeObjectSchema)).resolves.toEqual({ id: "cus_1" });
+
+    vi.stubGlobal("fetch", replyWith({ object: "customer" }));
+    await expect(stripePostForm("sk_test_example", "/v1/customers", {}, stripeObjectSchema)).rejects.toThrow(/id/);
   });
 });
 

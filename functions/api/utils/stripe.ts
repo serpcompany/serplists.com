@@ -77,6 +77,8 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   return params.toString();
 }
 
+export const stripeObjectSchema = z.object({ id: z.string().min(1) });
+
 export const expandableStripeIdSchema = z
   .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
   .transform((value) => (typeof value === "string" ? value : value.id));
@@ -139,7 +141,8 @@ async function readStripeResponse(resp: Response): Promise<unknown> {
   if (!resp.ok) {
     throw new StripeApiError(resp.status, text);
   }
-  return JSON.parse(text) as unknown;
+  const body: unknown = JSON.parse(text);
+  return body;
 }
 
 export async function stripeGet(secretKey: string, path: string): Promise<unknown> {
@@ -150,12 +153,13 @@ export async function stripeGet(secretKey: string, path: string): Promise<unknow
   return readStripeResponse(resp);
 }
 
-export async function stripePostForm<T>(
+export async function stripePostForm<Reply extends z.ZodTypeAny>(
   secretKey: string,
   path: string,
   body: Record<string, string | number | boolean | undefined | null>,
+  reply: Reply,
   options?: { idempotencyKey?: string },
-): Promise<T> {
+): Promise<z.output<Reply>> {
   const resp = await fetch(`https://api.stripe.com${path}`, {
     method: "POST",
     headers: {
@@ -166,7 +170,7 @@ export async function stripePostForm<T>(
     body: encodeForm(body),
   });
 
-  return (await readStripeResponse(resp)) as T;
+  return reply.parse(await readStripeResponse(resp));
 }
 
 function parseStripeSignatureHeader(header: string): { timestamp: number; v1: string[] } | null {
