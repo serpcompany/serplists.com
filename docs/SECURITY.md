@@ -97,8 +97,10 @@
   succeeds with the original revoke time (a retry, or another tab); a missing key
   and another user's key get the same 404.
 - **`/api/mcp` answers only known hosts** (DNS-rebinding defense in
-  `functions/api/utils/agent-mcp-host.ts`): loopback hosts and the hosts in
-  `FRONTEND_URL` and `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`.
+  `functions/api/utils/agent-mcp-host.ts`): `localhost`, `127.0.0.1` and `[::1]`
+  (`isCanonicalLoopbackHostname`) and the hosts in `FRONTEND_URL` and
+  `CORS_ALLOWED_ORIGINS`; any other host gets `403 Invalid Host`, even another name for this
+  machine such as `app.localhost`.
   Per-deployment URLs such as `https://<hash>.<project>.pages.dev` are never listed,
   so Agent Access asks the server which endpoint to show
   (`GET /api/agent-keys/connection`). On a host the check rejects, it shows the
@@ -173,7 +175,7 @@ Workers, each environment's Worker has its own secrets:
 | `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | Optional CORS allowlist; also the remote hosts `/api/mcp` accepts. The first valid one (`FRONTEND_URL` first) is the MCP endpoint Agent Access shows on any other host |
 | `R2_PUBLIC_BASE_URL` | Optional public file URL base |
 | `ENTITLEMENTS_ADMIN_SECRET` | Optional; enables the admin override endpoint (below) |
-| `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for loopback hosts: `localhost`, `127.0.0.1`, `[::1]`; `false` turns them off there too) |
+| `PERSONAL_RUN_MCP_ENABLED`, `NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED` | Optional; enable Run Key and MCP routes on a remote host (on by default only for `localhost`, `127.0.0.1` and `[::1]`, `isCanonicalLoopbackHostname` in `src/lib/utils/loopbackHostname.ts`; `false` turns them off there too) |
 | `NEXT_PUBLIC_API_URL` | Optional; points the pages at another API instead of `/api` on their own origin. A build refuses a loopback value ([development environment](design-docs/development-environment.md#set-up)) |
 
 Rules:

@@ -1,17 +1,13 @@
-const LOOPBACK_HOSTNAMES = new Set(['localhost', '::1', '[::1]', '0.0.0.0']);
+import { isLoopbackHostname } from './utils/loopbackHostname';
 
-export const isLoopbackHostname = (hostname: string): boolean => {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
-  return (
-    LOOPBACK_HOSTNAMES.has(host) ||
-    host.endsWith('.localhost') ||
-    /^127(?:\.\d{1,3}){3}$/.test(host)
-  );
-};
+const ALL_INTERFACES = '0.0.0.0';
 
-export const isLoopbackUrl = (value: string): boolean => {
+export const isLocalDevelopmentHostname = (hostname: string): boolean =>
+  isLoopbackHostname(hostname) || hostname === ALL_INTERFACES;
+
+export const isLocalDevelopmentUrl = (value: string): boolean => {
   try {
-    return isLoopbackHostname(new URL(value).hostname);
+    return isLocalDevelopmentHostname(new URL(value).hostname);
   } catch {
     return false;
   }
@@ -25,7 +21,7 @@ export const resolveApiBaseUrl = ({
   pageHostname: string | undefined;
 }): string => {
   if (!configuredUrl) return '/api';
-  if (isLoopbackUrl(configuredUrl) && !(pageHostname && isLoopbackHostname(pageHostname))) {
+  if (isLocalDevelopmentUrl(configuredUrl) && !(pageHostname && isLocalDevelopmentHostname(pageHostname))) {
     return '/api';
   }
   return configuredUrl;

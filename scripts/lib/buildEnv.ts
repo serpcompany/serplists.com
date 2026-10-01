@@ -1,4 +1,4 @@
-import { isLoopbackUrl } from '../../src/lib/apiBaseUrl';
+import { isLocalDevelopmentUrl } from '../../src/lib/apiBaseUrl';
 
 type BuildEnv = Record<string, string | undefined>;
 
@@ -13,7 +13,7 @@ export const assertProductionApiUrl = (env: BuildEnv): void => {
     valid = false;
   }
 
-  if (!valid || isLoopbackUrl(value)) {
+  if (!valid || isLocalDevelopmentUrl(value)) {
     throw new Error(
       `Refusing a production build with NEXT_PUBLIC_API_URL=${value}: deployed pages would send ` +
         'API and sign-in requests there. Unset it (deployed builds use the same-origin /api), ' +

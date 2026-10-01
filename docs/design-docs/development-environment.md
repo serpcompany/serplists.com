@@ -46,12 +46,15 @@ through `wrangler dev`. The pages read `NEXT_PUBLIC_*` variables through `src/en
 which Next.js inlines when it builds or serves them: `pnpm run dev:all` hands `.dev.vars`
 to `next dev`, and a build takes them from its shell. Pages call the API on their own
 origin (`/api`); `NEXT_PUBLIC_API_URL` only points them at another API. `next build`
-refuses a loopback or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`, which
+refuses a local or malformed `NEXT_PUBLIC_API_URL` (`scripts/lib/buildEnv.ts`, which
 `next.config.ts` runs), since every visitor's pages would send their sign-in and API
 requests there, unless `ALLOW_LOCAL_API_URL=1` (a build you only serve locally). At
 runtime `src/lib/apiBaseUrl.ts` ignores one unless the page itself is served from a
-loopback host. After changing `wrangler.toml` or the variable
-names in `.dev.vars`, `pnpm run cf-typegen` regenerates `cloudflare-env.d.ts`.
+local development host (`isLocalDevelopmentHostname`): a name for this machine
+(`localhost`, `*.localhost`, `127.0.0.0/8` or `::1`, `isLoopbackHostname`) or `0.0.0.0`, the
+address of a dev server bound to all interfaces. The build refuses the same hosts. After
+changing `wrangler.toml` or the variable names in `.dev.vars`, `pnpm run cf-typegen`
+regenerates `cloudflare-env.d.ts`.
 
 ## Run
 

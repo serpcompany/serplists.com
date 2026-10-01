@@ -117,8 +117,8 @@ Client requests go through `src/lib/api.ts`, which uses:
 
 - `/api` on the page's own origin, in development and in deployed environments, unless
   `NEXT_PUBLIC_API_URL` names another API. `src/lib/apiBaseUrl.ts` resolves the base for
-  both `api.ts` and the Better Auth client, and ignores a loopback `NEXT_PUBLIC_API_URL`
-  unless the page is served from a loopback host.
+  both `api.ts` and the Better Auth client, and ignores a local `NEXT_PUBLIC_API_URL`
+  unless the page is served from a local development host (`isLocalDevelopmentHostname`).
 - Better Auth cookies for session state.
 
 Main server handlers:

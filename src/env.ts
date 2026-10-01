@@ -1,6 +1,6 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
-import { isLoopbackHostname } from "@/lib/utils/loopbackHostname";
+import { isCanonicalLoopbackHostname } from "@/lib/utils/loopbackHostname";
 
 export const env = createEnv({
   clientPrefix: "NEXT_PUBLIC_",
@@ -20,5 +20,5 @@ export const isPersonalRunMcpUiEnabled = (hostname?: string): boolean => {
   if (env.NEXT_PUBLIC_PERSONAL_RUN_MCP_ENABLED === "false") return false;
 
   const currentHostname = hostname ?? (typeof window === "undefined" ? "" : window.location.hostname);
-  return isLoopbackHostname(currentHostname);
+  return isCanonicalLoopbackHostname(currentHostname);
 };
