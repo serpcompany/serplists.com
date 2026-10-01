@@ -12,6 +12,7 @@ import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiEnv } from '../../../support/apiEnv';
 import { readJson } from '../../../support/readJson';
+import type { ResponseSchema } from '@/lib/api/request';
 
 const EVERY_ALLOWLISTED_PUBLIC_FIELD = [
   'categories',
@@ -93,7 +94,7 @@ const expectPublicShape = (template: Record<string, unknown>) => {
 const templateRow = z.record(z.unknown());
 const templateRows = z.array(templateRow);
 
-async function get<Schema extends z.ZodTypeAny>(path: string, schema: Schema) {
+async function get<Output>(path: string, schema: ResponseSchema<Output>) {
   const response = await handleTemplates(new Request(`http://localhost${path}`), apiEnv());
   return { status: response.status, body: await readJson(response, schema) };
 }
