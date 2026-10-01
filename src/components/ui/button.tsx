@@ -39,8 +39,6 @@ const buttonVariantClasses = cva(
   }
 )
 
-// Merged, so a link styled as a button (<Link className={buttonVariants(...)}>) gets its
-// variant's border: unmerged, the base's border-transparent beats outline's border-border.
 const buttonVariants = (...args: Parameters<typeof buttonVariantClasses>) =>
   cn(buttonVariantClasses(...args))
 

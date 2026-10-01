@@ -6,8 +6,6 @@ import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon
 import { useDocumentTheme } from "@/lib/theme"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  // The app's own theme (src/lib/theme.ts), not next-themes: light in the server's render
-  // and hydration, the page's theme right after.
   const theme = useDocumentTheme()
 
   return (

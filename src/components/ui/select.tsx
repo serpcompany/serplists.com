@@ -51,8 +51,6 @@ function SelectTrigger({
           <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
         }
       >
-        {/* Empty on purpose: Base UI's default "▼" would land inside lucide's <svg> as
-            text, and the trigger's text would no longer be just its value. */}
         {null}
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>

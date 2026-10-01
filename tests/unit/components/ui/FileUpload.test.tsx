@@ -95,7 +95,7 @@ describe('FileUpload', () => {
     const tree = FileUpload({
       type: 'image',
       value: EXISTING_URL,
-      userId: 'u1',
+      signedIn: true,
       onValueChange: vi.fn(),
       onFileChange,
     });
@@ -128,7 +128,7 @@ describe('FileUpload', () => {
   });
 
   it('names the supported types instead of uploading a file the API would refuse', async () => {
-    const tree = FileUpload({ type: 'file', value: '', userId: 'u1', onValueChange: vi.fn(), onFileChange: vi.fn() });
+    const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
     const fileInput = findElement(tree, (element) => element.props.type === 'file');
 
     await (fileInput!.props.onChange as (event: unknown) => Promise<void>)({
@@ -144,7 +144,7 @@ describe('FileUpload', () => {
 
   it('uploads a Windows ZIP to a File block', async () => {
     vi.mocked(api.uploadToR2).mockResolvedValue({ url: '/api/uploads/file?key=k', fileName: 'r.zip' });
-    const tree = FileUpload({ type: 'file', value: '', userId: 'u1', onValueChange: vi.fn(), onFileChange: vi.fn() });
+    const tree = FileUpload({ type: 'file', value: '', signedIn: true, onValueChange: vi.fn(), onFileChange: vi.fn() });
     const fileInput = findElement(tree, (element) => element.props.type === 'file');
     const zip = new File(['PK'], 'report.zip', { type: 'application/x-zip-compressed' });
 

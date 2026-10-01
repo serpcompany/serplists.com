@@ -131,12 +131,14 @@ page, so a page's sticky parts stick to the window.
 | `RunPageHeader`, `SharedRunView` | `src/components/run-execution/` | The run page's header (the title, or a labelled "Run title" field while renaming; badges; progress from `xl`; the Run's actions), and the shared run page (its own header with Copy Link, a summary Card, a Card per section, the `CtaBanner`) |
 | `TemplateEditorOutline` | `src/components/template-editor/TemplateEditorOutline.tsx` | Where the editor's outline sits: a sticky Card beside the form from `lg`, a bottom `Sheet` below it (opened by the editor header's Outline button; picking or adding an entry closes it and moves focus to that entry's form) |
 
-## Conventions
+## Primitives
 
-- Use an existing primitive before adding one. Add to `src/components/ui/` only if
-  the component is purely presentational (no app state, features, or API calls;
-  enforced by `deps:check`). Add shadcn components with the CLI
-  (`npx shadcn@latest add <name>`) and keep them as generated.
+`src/components/ui/` holds the shadcn components and the app's own presentational blocks
+built from them. Use an existing primitive before adding one, and add one there only if it is
+purely presentational: no app state, features or API calls (enforced by `deps:check`).
+
+- Add shadcn components with the CLI (`npx shadcn@latest add <name>`) and keep them as
+  generated, without the comments the CLI writes: the repository's code carries none.
 - Four generated components carry a change; keep it when you regenerate them.
   `CardTitle` (`card.tsx`) renders a heading, so card titles stay in the page's outline: an
   `h3`, as before the move to base-nova, unless `as` names the level where the card sits. A
@@ -144,12 +146,26 @@ page, so a page's sticky parts stick to the window.
   it (`tests/unit/components/ui/card.test.tsx`). `buttonVariants` (`button.tsx`) merges its
   classes with `cn`: unmerged, the base's `border-transparent` beats the outline variant's
   `border-border`, and a link styled as an outline button showed no border in the light
-  theme. The sonner `Toaster` (`sonner.tsx`) follows the app's
-  theme (`useDocumentTheme`), not next-themes. `SelectTrigger`'s icon (`select.tsx`) has
-  empty children: Base UI's default "▼" would render inside the lucide icon as text and
-  join the trigger's text (`tests/unit/components/ui/select.test.tsx`). `EmptyTitle` and
-  `AlertTitle` render a `div`: put a heading inside when the page needs one, as the
-  library's empty state does.
+  theme (`tests/unit/components/ui/button.test.ts`). The sonner `Toaster` (`sonner.tsx`)
+  follows the app's theme (`useDocumentTheme`), not next-themes. `SelectTrigger`'s icon
+  (`select.tsx`) has empty children: Base UI's default "▼" would render inside the lucide
+  icon as text and join the trigger's text (`tests/unit/components/ui/select.test.tsx`).
+  `EmptyTitle` and `AlertTitle` render a `div`: put a heading inside when the page needs
+  one, as the library's empty state does.
+- shadcn's sidebar is split by responsibility to stay under 500 lines:
+  `sidebar-provider.tsx` (the context, its cookie and the keyboard shortcut),
+  `sidebar-menu.tsx` (the menu parts) and `sidebar.tsx` (the rest), which re-exports the
+  other two. Import from `sidebar`.
+- The app's own: `FileUpload` (`file-upload.tsx`, with the upload and its toasts in
+  `file-upload-flow.ts`), `EmbedField` ([embed blocks](design-docs/template-content-types.md#embed-blocks)),
+  `RunNameDialog` (the [Start a Run dialog](design-docs/ui-screen-inventory.md#start-a-run-dialog)),
+  `Tags` (a multi-select: removable badges over a searchable popover; its `id` goes on the
+  trigger, so a `Label` names the picker) and `HOVER_REVEAL_CLASS` (below). A primitive
+  cannot read the session, so `FileUpload` uploads only when its page passes `signedIn`; the
+  API files the upload under the session's user.
+
+## Conventions
+
 - Base UI, not Radix: compose with the `render` prop (`<DropdownMenuTrigger
   render={<Button variant="ghost" />}>`, `<DropdownMenuItem render={<Link href=... />}>`).
   A link that looks like a button stays a link: `<Link className={buttonVariants(...)}>`

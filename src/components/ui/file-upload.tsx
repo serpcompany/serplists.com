@@ -13,14 +13,7 @@ import { formatAssetSizeLimit } from '@/lib/schemas/templateAssetLimits';
 import { imagePreviewSrc, isUploadedAssetUrl } from '@/lib/utils/mediaSource';
 import { UPLOAD_MAX_BYTES } from '@/lib/schemas/uploadLimits';
 import { VideoEmbed } from '@/components/shared/VideoEmbed';
-import { uploadSelectedFile, type FileUploadType } from './file-upload-flow';
-
-// The bucket each block type uploads to, for the size limit the API enforces there.
-const UPLOAD_BUCKET_BY_TYPE = {
-  image: 'template-images',
-  video: 'template-videos',
-  file: 'template-files',
-} as const satisfies Record<FileUploadType, string>;
+import { UPLOAD_BUCKET_BY_TYPE, uploadSelectedFile, type FileUploadType } from './file-upload-flow';
 
 const SOURCE_LABEL: Record<FileUploadType, string> = {
   image: 'Image URL',
@@ -34,18 +27,12 @@ const TYPE_ICON: Record<FileUploadType, typeof File> = {
   file: File,
 };
 
-// An upload or a clear, reported as one change so the URL and the file details are
-// never written separately (a second write could restore a stale URL).
 export type FileUploadChange = {
   value: string;
   fileName?: string;
   fileSize?: number;
 };
 
-// The preview of one image address (null: nothing loadable yet). FileUpload keys it by
-// the value, so every new value gets a fresh <img> and a fresh failed state: a URL that
-// failed to load (as a URL does while it is typed) cannot hide a later one. A failure
-// is React state, never a style set on the element, which React would keep.
 export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
   const [failed, setFailed] = useState(false);
 
@@ -67,24 +54,18 @@ interface FileUploadProps {
   type: FileUploadType;
   value: string;
   fileName?: string;
-  // The signed-in user, whose folder uploads go to. Without one, picking a file does nothing.
-  userId?: string;
-  // Typing or pasting in the URL field.
+  signedIn?: boolean;
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
-  // Receives each upload as it starts, so the page can wait for it: the file reaches
-  // the form only when the upload finishes, and this field may unmount before then.
   onUploadStart?: (upload: Promise<UploadResult>) => void;
   className?: string;
 }
 
-// A media block's source: a URL field, or an upload, with a preview. Built from the shadcn
-// Field, Input, Textarea, Item and Button.
 export const FileUpload: React.FC<FileUploadProps> = ({
   type,
   value,
   fileName,
-  userId,
+  signedIn = false,
   onValueChange,
   onFileChange,
   onUploadStart,
@@ -97,7 +78,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !userId) return;
+    if (!file || !signedIn) return;
 
     setIsUploading(true);
 
@@ -118,14 +99,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
     }
   };
 
-  // Clearing only changes the form. The stored object stays, because the saved
-  // template, its runs, versions, and copies may still reference it.
   const handleClear = () => {
     onFileChange({ value: '', fileName: undefined, fileSize: undefined });
   };
 
-  // The uploaded-file row (and its Remove button, which clears the value) only while
-  // the value is that upload: a name next to a typed URL is not an upload to remove.
   const uploadedFileName = fileName && isUploadedAssetUrl(value) ? fileName : undefined;
 
   return (

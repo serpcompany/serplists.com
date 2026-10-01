@@ -9,7 +9,7 @@ import {
 
 export type FileUploadType = 'image' | 'video' | 'file';
 
-const BUCKET_BY_TYPE: Record<FileUploadType, TemplateUploadBucket> = {
+export const UPLOAD_BUCKET_BY_TYPE: Record<FileUploadType, TemplateUploadBucket> = {
   image: 'template-images',
   video: 'template-videos',
   file: 'template-files',
@@ -17,8 +17,6 @@ const BUCKET_BY_TYPE: Record<FileUploadType, TemplateUploadBucket> = {
 
 export type UploadedFileInfo = { url: string; fileName?: string; fileSize?: number };
 
-// Feedback goes through sonner, the only toast renderer the app mounts (src/app/providers.tsx), so a
-// rejected upload always tells the user why.
 export const uploadSelectedFile = async ({
   file,
   type,
@@ -27,7 +25,6 @@ export const uploadSelectedFile = async ({
 }: {
   file: File;
   type: FileUploadType;
-  // Receives the upload as it starts, so a page can wait for it before saving or leaving.
   onUploadStart?: (upload: Promise<UploadResult>) => void;
   onUploaded: (info: UploadedFileInfo) => void;
 }): Promise<boolean> => {
@@ -38,7 +35,7 @@ export const uploadSelectedFile = async ({
   }
 
   try {
-    const upload = uploadFile(file, BUCKET_BY_TYPE[type]);
+    const upload = uploadFile(file, UPLOAD_BUCKET_BY_TYPE[type]);
     onUploadStart?.(upload);
     const result = await upload;
     if (!result.success || !result.url) {
@@ -46,8 +43,6 @@ export const uploadSelectedFile = async ({
       return false;
     }
 
-    // The previous upload is never deleted here: the saved template, its runs,
-    // versions, and copies may still reference it, and this change is unsaved.
     onUploaded({ url: result.url, fileName: result.fileName, fileSize: result.fileSize });
     toast.success('Upload successful', { description: `${file.name} has been uploaded.` });
     return true;

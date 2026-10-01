@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react')>();
@@ -6,8 +6,10 @@ vi.mock('react', async (importOriginal) => {
   return { ...actual, useState: useStateKeptBetweenRenders };
 });
 
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { RunNameDialog } from '@/components/ui/run-name-dialog';
 import { RUN_TITLE_MAX } from '@/lib/schemas/nameLimits';
+import { DOUBLE_CLICK_MS } from '@/lib/utils/repeatClick';
 
 import { findElement } from '../../support/elementTree';
 import { forgetKeptState, renderUntilNoStateIsSetDuringRender } from '../../support/hookStateSlots';
@@ -25,6 +27,7 @@ const mountDialog = (initial: Partial<DialogProps> = {}) => {
     const form = findElement(tree, (element) => element.type === 'form');
     return {
       input,
+      tree,
       submit: () => (form?.props.onSubmit as (event: { preventDefault: () => void }) => void)({ preventDefault: () => undefined }),
       type: (value: string) => (input?.props.onChange as (event: { target: { value: string } }) => void)({ target: { value } }),
     };
@@ -90,5 +93,64 @@ describe('RunNameDialog', () => {
     expect(dialog.onConfirm).not.toHaveBeenCalled();
     expect(starting.input?.props.disabled).toBe(true);
     expect(starting.input?.props.value).toBe(typedName);
+  });
+});
+
+describe('RunNameDialog, which a double click on a Start Run button opens', () => {
+  type OpenChange = (open: boolean, details: { reason: string; cancel: () => void }) => void;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const openDialog = () => {
+    const onOpenChange = vi.fn();
+    const dialog = mountDialog({ onOpenChange });
+    const { tree } = dialog.render();
+    const content = findElement(tree, (element) => element.type === DialogContent);
+    (content?.props.ref as (node: unknown) => void)({});
+    const pressOutside = () => {
+      const cancel = vi.fn();
+      const root = findElement(dialog.render().tree, (element) => element.type === Dialog);
+      (root?.props.onOpenChange as OpenChange)(false, { reason: 'outside-press', cancel });
+      return cancel;
+    };
+    return { dialog, onOpenChange, pressOutside };
+  };
+
+  it('stays open when the rest of that double click lands on the overlay', () => {
+    const { onOpenChange, pressOutside } = openDialog();
+
+    const cancel = pressOutside();
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('closes on a click outside once the double click is over', () => {
+    const { onOpenChange, pressOutside } = openDialog();
+    vi.advanceTimersByTime(DOUBLE_CLICK_MS);
+
+    const cancel = pressOutside();
+
+    expect(cancel).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('submits nothing more for the second click of a double click on Start Run, which would start a second run', () => {
+    const { dialog } = openDialog();
+    const startRun = findElement(dialog.render().tree, (element) => element.props.type === 'submit');
+    const click = (detail: number) => {
+      const event = { detail, preventDefault: vi.fn() };
+      (startRun?.props.onClick as (event: unknown) => void)(event);
+      return event.preventDefault;
+    };
+
+    expect(click(1)).not.toHaveBeenCalled();
+    expect(click(2)).toHaveBeenCalledTimes(1);
   });
 });

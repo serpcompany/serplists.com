@@ -28,7 +28,6 @@ export interface TagOption {
 interface TagsProps {
   className?: string
   emptyMessage?: string
-  // Set on the trigger button, so a <label htmlFor> names the picker.
   id?: string
   onSelectionChange: (selected: string[]) => void
   options: TagOption[]
@@ -37,8 +36,6 @@ interface TagsProps {
   selected: string[]
 }
 
-// A multi-select: the chosen options as removable badges, and a searchable list in a
-// popover to add or remove them. Built from the shadcn Badge, Button, Popover and Command.
 export function Tags({
   className,
   emptyMessage = 'No options found.',

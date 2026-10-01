@@ -14,8 +14,6 @@ interface EmbedFieldProps {
 
 const URL_PREFIX = /^https?:\/\//i;
 
-// An embed block's value: a URL or iframe code, with what viewers will get below it.
-// Built from the shadcn Field and Textarea.
 export const EmbedField: React.FC<EmbedFieldProps> = ({
   value,
   onValueChange,
@@ -23,12 +21,8 @@ export const EmbedField: React.FC<EmbedFieldProps> = ({
 }) => {
   const fieldId = React.useId();
   const isUrl = URL_PREFIX.test(value.trimStart());
-  // What viewers get: a link to this URL (or to the src of iframe code), else the text.
   const embedLink = getEmbedLinkUrl(value);
 
-  // One textarea for both modes: swapping element types when the value crosses
-  // "https://" would remount the control and drop focus, the caret and undo history.
-  // Only its props follow the mode, and newlines in embed code are kept.
   return (
     <Field className={className}>
       <FieldLabel htmlFor={fieldId}>

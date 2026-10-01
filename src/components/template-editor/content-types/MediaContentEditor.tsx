@@ -21,7 +21,6 @@ export const MediaContentEditor = ({
   onFileChange,
   onUploadStart,
 }: MediaContentEditorProps) => {
-  // Uploads go to the signed-in user's folder.
   const { user } = useAuth();
 
   const getIcon = () => {
@@ -46,7 +45,7 @@ export const MediaContentEditor = ({
         type={type}
         value={value}
         fileName={fileName}
-        userId={user?.id}
+        signedIn={Boolean(user)}
         onValueChange={onValueChange}
         onFileChange={onFileChange}
         onUploadStart={onUploadStart}
