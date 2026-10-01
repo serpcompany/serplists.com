@@ -85,6 +85,13 @@ and what the sitemaps cost in D1 is in [D1 cost](d1-cost.md#rules-for-d1-queries
 
 ## Caching
 
+Sitemaps are built per request, never at build time. `getSitemapContext()`
+(`src/server/sitemapContext.ts`) calls Next.js's `connection()` before it reads D1.
+- Otherwise the build would try to prerender `/sitemap.xml`, the one sitemap route with no
+  dynamic segment.
+- That would bake in whatever the build machine's database held, or fail the build where that
+  database is empty, as it is in CI.
+
 Building a database sitemap scans every public Template or user, so `cachedSitemap()`
 (`functions/sitemap/cache.ts`) caches the index and the categories, profiles and templates
 shards in the data center ([D1 cost](d1-cost.md#rules-for-d1-queries), rule 5), with

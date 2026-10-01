@@ -11,6 +11,10 @@ import { sitemapRouteInTheWorker } from '../../support/sitemapRoutes';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@opennextjs/cloudflare', async () => (await import('../../support/nextServerContext')).cloudflareMock);
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  ...(await import('../../support/nextServerContext')).requestScopeMock,
+}));
 
 const sitemapIndex = sitemapRouteInTheWorker(sitemapIndexGet);
 const categoriesShard = sitemapRouteInTheWorker(categoriesShardGet);

@@ -13,6 +13,10 @@ export const cloudflareMock = {
   }),
 };
 
+export const requestScopeMock = {
+  connection: async () => undefined,
+};
+
 export const headersMock = {
   headers: async () => new Headers({ host: serverContext.host, 'x-forwarded-proto': serverContext.protocol }),
 };
