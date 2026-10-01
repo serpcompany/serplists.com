@@ -15,7 +15,9 @@ A video block holds a URL or pasted `<iframe>` code. `getVideoEmbedSource`
   channel or playlist) is shown as an "Open video" link, never in the native player.
 - Clipy watch and embed links become a Clipy iframe.
 - Pasted `<iframe>` code is framed only when its origin is in `EMBED_FRAME_ORIGINS`
-  (`src/lib/utils/embedOrigins.ts`); any other origin is shown as a link.
+  (`src/lib/utils/embedOrigins.ts`), compared as a parsed origin so a look-alike host
+  never matches; any other origin is shown as a link. An `http:` src is checked and
+  framed as `https:`, since the policy's `upgrade-insecure-requests` loads it over https.
 - Any other http(s) URL plays in the native `<video>` player. The URL is the player's
   own `src` and its key, so a new URL (the next task's video, a URL being typed in the
   editor) always gets a new player: a player reads a `<source>` child only once. The run

@@ -1,11 +1,12 @@
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
 
+const isInPageAnchorOrSitePath = (value: string): boolean => value.startsWith("#") || value.startsWith("/");
+
 export function safeUrl(url: string): string {
   const value = (url ?? "").trim();
   if (!value) return "";
 
-  // Allow in-page anchors and absolute paths.
-  if (value.startsWith("#") || value.startsWith("/")) return value;
+  if (isInPageAnchorOrSitePath(value)) return value;
 
   try {
     const parsed = new URL(value, "https://example.com");
@@ -16,12 +17,8 @@ export function safeUrl(url: string): string {
   }
 }
 
-
 const IMAGE_PROTOCOLS = new Set(["http:", "https:"]);
 
-// An image source must be an absolute http(s) URL or an app path such as an upload.
-// mailto:, tel:, in-page anchors and bare relative names can never load as images,
-// so they get no request at all.
 export function safeImageUrl(url: string): string {
   const value = safeUrl(url);
   if (!value || value.startsWith("#")) return "";

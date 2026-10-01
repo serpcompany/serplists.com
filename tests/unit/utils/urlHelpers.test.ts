@@ -83,6 +83,7 @@ describe('getVideoEmbedSource', () => {
     ['<iframe src="https://www.youtube.com/embed/aqz-KE-bpKQ?start=5"></iframe>', 'https://www.youtube.com/embed/aqz-KE-bpKQ?start=5'],
     ['<iframe src="http://www.youtube-nocookie.com/embed/aqz-KE-bpKQ"></iframe>', 'https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ'],
     ['<iframe src="https://www.youtube.com/embed/videoseries?list=PL123"></iframe>', 'https://www.youtube.com/embed/videoseries?list=PL123'],
+    ['<iframe src="http://www.youtube.com/embed/videoseries?list=PL123"></iframe>', 'https://www.youtube.com/embed/videoseries?list=PL123'],
   ])('embeds the YouTube player for %s', (input, url) => {
     expect(getVideoEmbedSource(input)).toEqual({ kind: 'iframe', url });
   });
