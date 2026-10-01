@@ -157,6 +157,7 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none", ignoreRestSiblings: true },
       ],
+      "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
   {
