@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { apiRequest } from './support/api-requests';
 import { answerRunStartsAtActiveRunLimit } from './support/billing';
 import { loginAsAdmin } from './support/sign-in';
+import { runIdInTheUrl } from './support/run-saves';
 
 async function expectFullyOpaque(locator: Locator) {
   await expect.poll(() => locator.evaluate((node) => getComputedStyle(node).opacity)).toBe('1');
@@ -48,7 +49,7 @@ test('Start Run with a blank name uses the timestamped default the field shows',
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText(`${templateTitle} - `);
 
-  const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
+  const runId = runIdInTheUrl(page);
   await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 });
 

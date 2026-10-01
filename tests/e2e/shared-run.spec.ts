@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { API_BASE_URL, apiJson, apiRequest } from './support/api-requests';
+import { API_BASE_URL, apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun } from './support/run-saves';
 
 type StoredRun = {
   progress: number;
@@ -26,10 +27,6 @@ async function createSharedRun(page: Page, run: { title: string; sections: unkno
     body: {},
   });
   return { runId, shareToken };
-}
-
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 test('a share-link guest can tick tasks but cannot rewrite or wipe the run', async ({ browser, page }) => {

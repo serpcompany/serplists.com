@@ -70,3 +70,13 @@ export function recordSaves(page: Page, runId: string) {
   });
   return saves;
 }
+
+export const runIdInTheUrl = (page: Page) =>
+  decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
+
+export async function startARunFromTheFirstStartRun(page: Page) {
+  await page.getByRole('button', { name: 'Start Run' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
+  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  return dialog;
+}

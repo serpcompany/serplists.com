@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
 import { fillSignInForm, type TestUser } from './support/sign-in';
+import { runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
 
 async function signIn(page: Page, user: TestUser) {
   await navigateInApp(page, '/login/');
@@ -30,10 +31,9 @@ async function createRun(page: Page, title: string): Promise<string> {
 
 async function startRunFromTemplate(page: Page, templatePath: string): Promise<string> {
   await navigateInApp(page, templatePath);
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
+  await startARunFromTheFirstStartRun(page);
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/, { timeout: 15_000 });
-  return decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
+  return runIdInTheUrl(page);
 }
 
 async function deleteRuns(page: Page, runIds: string[]) {

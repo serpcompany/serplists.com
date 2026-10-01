@@ -1,30 +1,19 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson } from './support/api-requests';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
-
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
-}
-
-async function deleteTemplate(page: Page, templateId: string) {
-  await apiRequest(page, `/templates/${templateId}`, { method: 'DELETE' });
-}
-
-async function createTemplate(page: Page, body: Record<string, unknown>): Promise<string> {
-  return (await apiJson<{ id: string }>(page, '/templates', { method: 'POST', body })).id;
-}
+import { deleteRun, runIdInTheUrl, startARunFromTheFirstStartRun } from './support/run-saves';
+import { createTemplate, deleteTemplate } from './support/template-editor';
 
 test('starts a run from a public template page opened directly', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/profile/admin/sample-technical-seo-audit-checklist/');
 
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  await page.getByRole('dialog', { name: 'Start a Run' }).getByRole('button', { name: 'Start Run' }).click();
+  await startARunFromTheFirstStartRun(page);
 
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
-  await deleteRun(page, decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? ''));
+  await deleteRun(page, runIdInTheUrl(page));
 });
 
 test('keeps toggled tasks and advances on a run opened from the runs dashboard', async ({ page }) => {

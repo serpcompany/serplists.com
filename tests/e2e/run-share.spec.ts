@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { apiJson, apiRequest } from './support/api-requests';
 import { openRunFromRunsList } from './support/navigation';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun } from './support/run-saves';
 
 const SHARE_URL = /\/share\/[0-9a-f-]{36}\/$/;
 
@@ -27,10 +28,6 @@ async function createRun(page: Page, title: string) {
     sections: [{ id: 'share', title: 'Section', items: [{ id: 'share-a', title: 'Task A' }] }],
   });
   return run.id;
-}
-
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 function footerCloseButton(dialog: Locator) {

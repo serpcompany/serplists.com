@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun } from './support/run-saves';
 
 async function createRun(page: Page) {
   const run = await apiJson<{ id: string }>(page, '/checklists', {
@@ -22,10 +23,6 @@ async function createRun(page: Page) {
     },
   });
   return run.id;
-}
-
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 for (const viewport of [{ width: 390, height: 844 }, { width: 1024, height: 768 }]) {

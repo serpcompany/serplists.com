@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { apiJson } from './support/api-requests';
 import { answerRunStartsAtActiveRunLimit, reportBillingEnabled, TEMPLATE_LIMIT_MESSAGE } from './support/billing';
 import { loginAsAdmin, registerNewAccount, uniqueSuffix } from './support/sign-in';
+import { startARunFromTheFirstStartRun } from './support/run-saves';
 
 const PASSWORD = 'Aa!back-from-checkout-password-12345';
 
@@ -42,9 +43,7 @@ test('Back from checkout leaves the Start Run dialog usable on My Templates', as
 
   await page.goto('/dashboard/templates/');
   await page.getByRole('button', { name: 'Show templates in list view' }).click();
-  await page.getByRole('button', { name: 'Start Run' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'Start a Run' });
-  await dialog.getByRole('button', { name: 'Start Run' }).click();
+  const dialog = await startARunFromTheFirstStartRun(page);
 
   await expect(page).toHaveURL(/#checkout-stubbed$/);
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();

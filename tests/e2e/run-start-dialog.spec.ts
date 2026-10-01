@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson, apiRequest } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
+import { runIdInTheUrl } from './support/run-saves';
 
 async function createTemplate(page: Page, title: string) {
   const template = await apiJson<{ id: string }>(page, '/templates', {
@@ -46,7 +47,7 @@ test('a failed start keeps the typed run name, and the retry uses it', async ({ 
 
   await dialog.getByRole('button', { name: 'Start Run' }).click();
   await expect(page).toHaveURL(/\/dashboard\/runs\/[^/]+\/$/);
-  const runId = decodeURIComponent(new URL(page.url()).pathname.split('/').filter(Boolean).pop() ?? '');
+  const runId = runIdInTheUrl(page);
   const { title } = await apiJson<{ title: string }>(page, `/checklists/${runId}`);
   expect(title).toBe(runName);
 

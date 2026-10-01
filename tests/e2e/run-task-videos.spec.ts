@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { apiJson, apiRequest } from './support/api-requests';
+import { apiJson } from './support/api-requests';
 import { loginAsAdmin } from './support/sign-in';
+import { deleteRun } from './support/run-saves';
 
 const videoUrl = (name: string) => `https://videos.example.test/${name}.mp4`;
 
@@ -18,10 +19,6 @@ async function createRun(page: Page, videos: string[]) {
     },
   });
   return run.id;
-}
-
-async function deleteRun(page: Page, runId: string) {
-  await apiRequest(page, `/checklists/${runId}`, { method: 'DELETE' });
 }
 
 async function keepVideoFilesLoadingForever(page: Page) {
