@@ -11,6 +11,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { toast } from 'sonner';
 
 import { createFakeContainer, findAll, findByText } from '../../fixtures/fakeDom';
+import { ACTIVE_AGENT_KEY } from '../../fixtures/agentKeys';
 import { createTestQueryClient } from '../../fixtures/queryClient';
 
 const apiMocks = vi.hoisted(() => ({
@@ -29,16 +30,7 @@ vi.mock('@/lib/api', async (importOriginal) => ({
 
 const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 
-const activeKey: AgentKey = {
-  id: 'key-1',
-  name: 'Codex SOP Runner',
-  prefix: 'slrk_demo12',
-  createdAt: '2026-09-19T01:00:00.000Z',
-  lastUsedAt: null,
-  revokedAt: null,
-  permissions: ['templates:read', 'runs:read', 'runs:write'],
-  status: 'active',
-};
+const activeKey = ACTIVE_AGENT_KEY;
 const revokedKey: AgentKey = { ...activeKey, revokedAt: '2026-09-19T02:00:00.000Z', status: 'revoked' };
 
 const fakeDom = aFakeDomForEachTest();

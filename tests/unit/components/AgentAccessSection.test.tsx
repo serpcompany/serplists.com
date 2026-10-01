@@ -8,8 +8,8 @@ import {
   AgentAccessSectionView,
   type AgentAccessSectionViewProps,
 } from '@/components/account/AgentAccessSection';
-import type { AgentKey } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { ACTIVE_AGENT_KEY } from '../../fixtures/agentKeys';
 import { createTestQueryClient, seedQueryError } from '../../fixtures/queryClient';
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
@@ -18,16 +18,7 @@ vi.mock('@/contexts/CloudflareAuthContext', () => ({
 
 const signedInUserAgentKeysKey = queryKeys.agentKeys('user-1');
 
-const activeKey: AgentKey = {
-  id: 'key-1',
-  name: 'Codex SOP Runner',
-  prefix: 'slrk_demo12',
-  createdAt: '2026-09-19T01:00:00.000Z',
-  lastUsedAt: null,
-  revokedAt: null,
-  permissions: ['templates:read', 'runs:read', 'runs:write'],
-  status: 'active',
-};
+const activeKey = ACTIVE_AGENT_KEY;
 
 const defaultProps: AgentAccessSectionViewProps = {
   createdKey: null,

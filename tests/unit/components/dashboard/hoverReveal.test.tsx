@@ -10,7 +10,8 @@ import { RunsDashboardView } from '@/components/dashboard/RunsDashboardView';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
 import { getResourcePermissions } from '@/lib/organizationPermissions';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+import type { ChecklistRun } from '@/types/checklist';
+import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
@@ -34,19 +35,7 @@ const pointerOnlyStartRunWrapperClass = (html: string) =>
 const classLists = (html: string) =>
   [...html.matchAll(/class="([^"]*)"/g)].map((match) => match[1]);
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Launch workflow',
-  type: 'checklist',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-};
+const template = PRIVATE_LAUNCH_TEMPLATE;
 
 const run: ChecklistRun = {
   id: 'run-1',

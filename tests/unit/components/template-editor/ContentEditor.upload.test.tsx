@@ -1,3 +1,4 @@
+import '../../../support/mockedR2Uploads';
 import { get } from 'react-hook-form';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +14,7 @@ import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
 import { deferred } from '../../../support/deferred';
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
-import { findElement, findElementOf } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, findElementOf, findFileInput } from '../../../support/elementTree';
 
 const harness = vi.hoisted(() => ({
   form: null as unknown as ReturnType<typeof import('react-hook-form').createFormControl>,
@@ -21,46 +22,32 @@ const harness = vi.hoisted(() => ({
   pendingUploadsFromContext: null as unknown,
 }));
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const stubs = {
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
     useId: () => 'content-editor-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [initial, () => undefined],
     useContext: () => harness.pendingUploadsFromContext,
-  };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+  }),
+);
 
-vi.mock('react-hook-form', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-hook-form')>();
-  const watchedValueSnapshot = ({ name }: { name: string }) =>
-    structuredClone(actual.get(harness.form.getValues(), name));
-  return {
-    ...actual,
-    useFormContext: () => ({ ...harness.form, setValue: harness.editorSetValueSpy }),
-    useWatch: watchedValueSnapshot,
-    useFieldArray: ({ name }: { name: string }) => ({
-      fields: ((actual.get(harness.form.getValues(), name) ?? []) as TemplateEditorContent[]).map(
-        (content) => ({ ...content, fieldId: content.id }),
-      ),
-      append: vi.fn(),
-      remove: vi.fn(),
+vi.mock('react-hook-form', async (importOriginal) =>
+  (await import('../../../support/reactHookFormMock')).reactHookFormWatching(
+    importOriginal,
+    harness,
+    ({ valueAt }) => ({
+      useFormContext: () => ({ ...harness.form, setValue: harness.editorSetValueSpy }),
+      useFieldArray: ({ name }: { name: string }) => ({
+        fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
+          (content) => ({ ...content, fieldId: content.id }),
+        ),
+        append: vi.fn(),
+        remove: vi.fn(),
+      }),
     }),
-  };
-});
+  ),
+);
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    deleteFromR2: vi.fn(),
-    uploadToR2: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/imageOptimization', () => ({
-  isImageFile: vi.fn(() => false),
-  optimizeImage: vi.fn(async (file: File) => file),
-}));
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
@@ -156,10 +143,7 @@ describe('ContentEditor media uploads', () => {
     ]);
 
     const tree = renderEditorFileUploadFromCurrentForm();
-    const removeButton = findElement(
-      tree,
-      (element) => element.props['aria-label'] === 'Remove uploaded image',
-    );
+    const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
     expect(removeButton).not.toBeNull();
     await (removeButton!.props.onClick as () => unknown)();
 
@@ -274,10 +258,8 @@ describe('ContentEditor media URL typed over an upload', () => {
     typeUrl(renderEditorFileUploadFromCurrentForm(), EXTERNAL_URL);
     const tree = renderEditorFileUploadFromCurrentForm();
 
-    expect(
-      findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
-    ).toBeNull();
-    expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
+    expect(findByAriaLabel(tree, 'Remove uploaded file')).toBeNull();
+    expect(findFileInput(tree)).not.toBeNull();
   });
 
   it('keeps the file details while the value stays the same', () => {

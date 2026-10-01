@@ -1,21 +1,8 @@
 import { navigation } from '../../../support/mockedNextNavigation';
+import { personalWorkspaceState as workspaceState } from '../../../support/mockedPersonalWorkspace';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const personal = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
-const workspaceState = vi.hoisted(() => ({ status: 'error' as 'ready' | 'loading' | 'error' }));
-
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeWorkspace: personal,
-    isWorkspaceLoading: workspaceState.status !== 'ready',
-    retryWorkspace: vi.fn(),
-    selectWorkspace: vi.fn(),
-    workspaces: [personal],
-    workspaceStatus: workspaceState.status,
-  }),
-}));
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { WorkspaceGate } from '@/components/workspace/WorkspaceGate';
 import { SidebarProvider } from '@/components/ui/sidebar';

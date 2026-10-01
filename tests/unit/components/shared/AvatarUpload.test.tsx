@@ -6,23 +6,16 @@ import { toast } from 'sonner';
 import { AvatarUpload } from '@/components/shared/AvatarUpload';
 import { AVATAR_MIME_TYPES } from '@/lib/schemas/uploadTypes';
 
-import { findElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement } from '../../../support/elementTree';
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const stubs = {
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [initial, () => undefined],
-  };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+  }),
+);
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    deleteFromR2: vi.fn(),
-    uploadToR2: vi.fn(),
-  },
-}));
+vi.mock('@/lib/api', async () => (await import('../../../support/uploadMocks')).r2UploadApi());
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
@@ -51,10 +44,7 @@ const NEW_KEY = 'avatars/u1/new.png';
 function render(onAvatarUpdate = vi.fn()) {
   const tree = AvatarUpload({ currentAvatarUrl: CURRENT_URL, onAvatarUpdate });
   const input = findElement(tree, (element) => element.props.type === 'file');
-  const removeButton = findElement(
-    tree,
-    (element) => element.props['aria-label'] === 'Remove avatar',
-  );
+  const removeButton = findByAriaLabel(tree, 'Remove avatar');
   return {
     onAvatarUpdate,
     input: input!,

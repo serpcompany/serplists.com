@@ -7,7 +7,7 @@ import { SubItemsEditor } from '@/components/template-editor/content-types/SubIt
 import type { TemplateEditorContent } from '@/lib/forms/templateEditorForm';
 
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
-import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { findAllElements, findDomElement, type AnyElement } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
 const harness = vi.hoisted(() => ({
@@ -15,56 +15,44 @@ const harness = vi.hoisted(() => ({
   move: null as unknown as (from: number, to: number) => void,
 }));
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
-  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'blocks', useContext: () => null };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactKeepingStateBetweenRenders(importOriginal, { useId: () => 'blocks', useContext: () => null }),
+);
 
-vi.mock('react-hook-form', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-hook-form')>();
-  const watchedValueSnapshot = ({ name }: { name: string }) =>
-    structuredClone(actual.get(harness.form.getValues(), name));
-  return {
-    ...actual,
-    useFormContext: () => harness.form,
-    useWatch: watchedValueSnapshot,
-    useFieldArray: ({ name }: { name: string }) => ({
-      fields: ((actual.get(harness.form.getValues(), name) ?? []) as TemplateEditorContent[]).map(
-        (content) => ({ ...content, fieldId: `field-${content.id}` }),
-      ),
-      append: vi.fn(),
-      remove: vi.fn(),
-      move: (from: number, to: number) => {
-        harness.move(from, to);
-        const next = [...((actual.get(harness.form.getValues(), name) ?? []) as TemplateEditorContent[])];
-        const [moved] = next.splice(from, 1);
-        next.splice(to, 0, moved);
-        harness.form.setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
-      },
+vi.mock('react-hook-form', async (importOriginal) =>
+  (await import('../../../support/reactHookFormMock')).reactHookFormWatching(
+    importOriginal,
+    harness,
+    ({ valueAt }) => ({
+      useFormContext: () => harness.form,
+      useFieldArray: ({ name }: { name: string }) => ({
+        fields: ((valueAt(name) ?? []) as TemplateEditorContent[]).map(
+          (content) => ({ ...content, fieldId: `field-${content.id}` }),
+        ),
+        append: vi.fn(),
+        remove: vi.fn(),
+        move: (from: number, to: number) => {
+          harness.move(from, to);
+          const next = [...((valueAt(name) ?? []) as TemplateEditorContent[])];
+          const [moved] = next.splice(from, 1);
+          next.splice(to, 0, moved);
+          harness.form.setValue(name as `sections.0.items.0.contents`, next, { shouldDirty: true });
+        },
+      }),
     }),
-  };
-});
+  ),
+);
 
 vi.mock('@/contexts/CloudflareAuthContext', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
 }));
 
 const HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS = new Set(['ReorderHandle', 'ReorderHint']);
-function withHooklessComponentsRendered(tree: React.ReactNode): React.ReactNode[] {
-  const outputs = findAllElements(
-    tree,
-    (element) =>
-      typeof element.type === 'function' &&
-      HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS.has((element.type as { name: string }).name),
-  ).map((element) => (element.type as (props: unknown) => React.ReactNode)(element.props));
-  return [tree, ...outputs];
-}
+const isAHooklessComponentThatRendersButtons = (element: AnyElement) =>
+  HOOKLESS_COMPONENTS_THAT_RENDER_BUTTONS.has((element.type as { name: string }).name);
 
-function findDomElement(tree: React.ReactNode, predicate: (element: AnyElement) => boolean): AnyElement | undefined {
-  return findAllElements(withHooklessComponentsRendered(tree), (element) => typeof element.type === 'string' && predicate(element))[0];
-}
+const findRenderedDomElement = (tree: React.ReactNode, predicate: (element: AnyElement) => boolean) =>
+  findDomElement(tree, predicate, isAHooklessComponentThatRendersButtons);
 
 const CONTENT_PATH = 'sections.0.items.0.contents';
 
@@ -120,7 +108,7 @@ function dragEvent() {
 }
 
 function handle(tree: React.ReactNode, name: string): AnyElement {
-  const button = findDomElement(tree, (element) => element.props['aria-label'] === name);
+  const button = findRenderedDomElement(tree, (element) => element.props['aria-label'] === name);
   expect(button, `a button named ${name}`).toBeDefined();
   return button!;
 }
@@ -158,7 +146,7 @@ describe('ContentEditor block reordering', () => {
     expect(event.preventDefault).toHaveBeenCalled();
     expect(harness.move).toHaveBeenCalledWith(1, 0);
     expect(contentIds()).toEqual(['c-image', 'c-text', 'c-subs']);
-    const status = findDomElement(render(), (element) => element.props['aria-live'] === 'polite');
+    const status = findRenderedDomElement(render(), (element) => element.props['aria-live'] === 'polite');
     expect(status?.props.children).toBe('Moved Image block to position 1 of 3');
   });
 

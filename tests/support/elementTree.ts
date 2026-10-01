@@ -20,3 +20,31 @@ export function findElementOf<Props>(
   const isOf = (element: AnyElement): element is AnyElement & ReactElement<Props> => element.type === component;
   return findAllElements(node, isOf).find(isOf) ?? null;
 }
+
+export const findByAriaLabel = (node: unknown, label: string) =>
+  findElement(node, (element) => element.props['aria-label'] === label);
+
+export const findFileInput = (node: unknown) => findElement(node, (element) => element.props.type === 'file');
+
+export function withComponentsRenderedOneLevel(
+  tree: unknown,
+  renders: (element: AnyElement) => boolean = () => true,
+): unknown[] {
+  const outputs = findAllElements(tree, (element) => typeof element.type === 'function' && renders(element)).flatMap(
+    (element) => {
+      try {
+        return [(element.type as (props: unknown) => unknown)(element.props)];
+      } catch {
+        return [];
+      }
+    },
+  );
+  return [tree, ...outputs];
+}
+
+export const findDomElement = (
+  tree: unknown,
+  matches: (element: AnyElement) => boolean,
+  renders?: (element: AnyElement) => boolean,
+): AnyElement | undefined =>
+  findAllElements(withComponentsRenderedOneLevel(tree, renders), (element) => typeof element.type === 'string' && matches(element))[0];

@@ -1,3 +1,4 @@
+import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { get } from 'react-hook-form';
 import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,7 @@ import { SectionSidebar } from '@/components/template-editor/SectionSidebar';
 import { Input } from '@/components/ui/input';
 
 import { createFormControlMountedLikeUseForm } from '../../../support/editorFormControl';
-import { findAllElements, type AnyElement } from '../../../support/elementTree';
+import { findAllElements, findDomElement, withComponentsRenderedOneLevel } from '../../../support/elementTree';
 import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
 
 const harness = vi.hoisted(() => ({
@@ -14,44 +15,34 @@ const harness = vi.hoisted(() => ({
   setValue: null as unknown as (...args: unknown[]) => void,
 }));
 
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
-  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'outline' };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
-
-vi.mock('react-hook-form', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-hook-form')>();
-  const watchedValueSnapshot = ({ name }: { name: string }) =>
-    structuredClone(actual.get(harness.form.getValues(), name));
-  return {
-    ...actual,
-    useFormContext: () => ({
-      control: {},
-      getValues: (name?: string) =>
-        name ? actual.get(harness.form.getValues(), name) : harness.form.getValues(),
-      setValue: harness.setValue,
+vi.mock('react-hook-form', async (importOriginal) =>
+  (await import('../../../support/reactHookFormMock')).reactHookFormWatching(
+    importOriginal,
+    harness,
+    ({ valueAt }) => ({
+      useFormContext: () => ({
+        control: {},
+        getValues: (name?: string) =>
+          name ? valueAt(name) : harness.form.getValues(),
+        setValue: harness.setValue,
+      }),
+      useFieldArray: ({ name }: { name: string }) => {
+        const values = (valueAt(name) ?? []) as Array<{ id: string }>;
+        return {
+          fields: values.map((value) => ({ ...value, fieldId: `field-${value.id}` })),
+          append: vi.fn(),
+          remove: vi.fn(),
+          move: (from: number, to: number) => {
+            const next = [...values];
+            const [moved] = next.splice(from, 1);
+            next.splice(to, 0, moved);
+            harness.form.setValue(name as 'sections', next as never, { shouldDirty: true });
+          },
+        };
+      },
     }),
-    useFieldArray: ({ name }: { name: string }) => {
-      const values = (actual.get(harness.form.getValues(), name) ?? []) as Array<{ id: string }>;
-      return {
-        fields: values.map((value) => ({ ...value, fieldId: `field-${value.id}` })),
-        append: vi.fn(),
-        remove: vi.fn(),
-        move: (from: number, to: number) => {
-          const next = [...values];
-          const [moved] = next.splice(from, 1);
-          next.splice(to, 0, moved);
-          harness.form.setValue(name as 'sections', next as never, { shouldDirty: true });
-        },
-      };
-    },
-    useWatch: watchedValueSnapshot,
-  };
-});
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+  ),
+);
 
 const selection = {
   onSelectSection: vi.fn(),
@@ -87,23 +78,8 @@ function render(props: { selectedSectionIndex?: number; selectedItemIndex?: numb
   );
 }
 
-function withChildComponentsRenderedOneLevel(tree: React.ReactNode): React.ReactNode[] {
-  const outputs = findAllElements(tree, (element) => typeof element.type === 'function').flatMap((element) => {
-    try {
-      return [(element.type as (props: unknown) => React.ReactNode)(element.props)];
-    } catch {
-      return [];
-    }
-  });
-  return [tree, ...outputs];
-}
-
-function findDomElementNamed(tree: React.ReactNode, name: string): AnyElement | undefined {
-  return findAllElements(
-    withChildComponentsRenderedOneLevel(tree),
-    (element) => typeof element.type === 'string' && element.props['aria-label'] === name,
-  )[0];
-}
+const findDomElementNamed = (tree: React.ReactNode, name: string) =>
+  findDomElement(tree, (element) => element.props['aria-label'] === name);
 
 function pressOnHandle(tree: React.ReactNode, name: string, key: string) {
   const handle = findDomElementNamed(tree, name);
@@ -128,10 +104,7 @@ const taskIds = (sectionIndex: number) =>
   (get(harness.form.getValues(), `sections.${sectionIndex}.items`) as Array<{ id: string }>).map((item) => item.id);
 
 function liveRegionText(tree: React.ReactNode): string {
-  const [region] = findAllElements(
-    withChildComponentsRenderedOneLevel(tree),
-    (element) => typeof element.type === 'string' && element.props['aria-live'] === 'polite',
-  );
+  const region = findDomElement(tree, (element) => element.props['aria-live'] === 'polite');
   return region ? String(region.props.children ?? '') : '';
 }
 
@@ -185,7 +158,7 @@ describe('SectionSidebar keyboard reordering', () => {
   });
 
   it('points every handle at the keyboard hint', () => {
-    const rendered = withChildComponentsRenderedOneLevel(render());
+    const rendered = withComponentsRenderedOneLevel(render());
     const handles = findAllElements(
       rendered,
       (element) => typeof element.type === 'string' && /^Drag /.test(String(element.props['aria-label'] ?? '')),

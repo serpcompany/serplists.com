@@ -103,6 +103,16 @@ function renderSectionWithMembers(members: unknown[], invites: unknown[] = [], a
   );
 }
 
+const activeMember = (id: string, userId: string, role: string, name: string, email: string) => ({
+  id,
+  team_id: 'team-1',
+  user_id: userId,
+  role,
+  status: 'active',
+  email,
+  name,
+});
+
 describe('TeamSettingsSection', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -158,24 +168,8 @@ describe('TeamSettingsSection', () => {
 
   it('marks the current member row and renders its controls disabled', () => {
     const html = renderSectionWithMembers([
-      {
-        id: 'member-current',
-        team_id: 'team-1',
-        user_id: 'user-1',
-        role: 'admin',
-        status: 'active',
-        email: 'current@example.com',
-        name: 'Current User',
-      },
-      {
-        id: 'member-other',
-        team_id: 'team-1',
-        user_id: 'user-2',
-        role: 'viewer',
-        status: 'active',
-        email: 'viewer@example.com',
-        name: 'Viewer User',
-      },
+      activeMember('member-current', 'user-1', 'admin', 'Current User', 'current@example.com'),
+      activeMember('member-other', 'user-2', 'viewer', 'Viewer User', 'viewer@example.com'),
     ]);
 
     expect(html).toContain('Current User');
@@ -188,24 +182,8 @@ describe('TeamSettingsSection', () => {
     workspaceMocks.activeWorkspace.role = 'owner';
 
     const html = renderSectionWithMembers([
-      {
-        id: 'member-current',
-        team_id: 'team-1',
-        user_id: 'user-1',
-        role: 'owner',
-        status: 'active',
-        email: 'owner@example.com',
-        name: 'Owner User',
-      },
-      {
-        id: 'member-other',
-        team_id: 'team-1',
-        user_id: 'user-2',
-        role: 'admin',
-        status: 'active',
-        email: 'admin@example.com',
-        name: 'Admin User',
-      },
+      activeMember('member-current', 'user-1', 'owner', 'Owner User', 'owner@example.com'),
+      activeMember('member-other', 'user-2', 'admin', 'Admin User', 'admin@example.com'),
     ]);
 
     expect(html).toContain('Admin User');
@@ -216,33 +194,9 @@ describe('TeamSettingsSection', () => {
     workspaceMocks.activeWorkspace.role = 'owner';
 
     const html = renderSectionWithMembers([
-      {
-        id: 'member-current',
-        team_id: 'team-1',
-        user_id: 'user-1',
-        role: 'owner',
-        status: 'active',
-        email: 'owner@example.com',
-        name: 'Owner User',
-      },
-      {
-        id: 'member-alice',
-        team_id: 'team-1',
-        user_id: 'user-2',
-        role: 'editor',
-        status: 'active',
-        email: 'alice@example.com',
-        name: 'Alice',
-      },
-      {
-        id: 'member-alice-2',
-        team_id: 'team-1',
-        user_id: 'user-3',
-        role: 'viewer',
-        status: 'active',
-        email: 'alice.two@example.com',
-        name: 'Alice',
-      },
+      activeMember('member-current', 'user-1', 'owner', 'Owner User', 'owner@example.com'),
+      activeMember('member-alice', 'user-2', 'editor', 'Alice', 'alice@example.com'),
+      activeMember('member-alice-2', 'user-3', 'viewer', 'Alice', 'alice.two@example.com'),
       {
         id: 'member-bob',
         team_id: 'team-1',
@@ -341,24 +295,8 @@ describe('TeamSettingsSection', () => {
     workspaceMocks.canManageTeam = false;
 
     const html = renderSectionWithMembers([
-      {
-        id: 'member-current',
-        team_id: 'team-1',
-        user_id: 'user-1',
-        role: 'viewer',
-        status: 'active',
-        email: 'viewer@example.com',
-        name: 'Viewer User',
-      },
-      {
-        id: 'member-editor',
-        team_id: 'team-1',
-        user_id: 'user-2',
-        role: 'editor',
-        status: 'active',
-        email: 'editor@example.com',
-        name: 'Editor User',
-      },
+      activeMember('member-current', 'user-1', 'viewer', 'Viewer User', 'viewer@example.com'),
+      activeMember('member-editor', 'user-2', 'editor', 'Editor User', 'editor@example.com'),
     ]);
 
     expect(html).toContain('Owners and admins manage Organization settings, invites, and activity.');
@@ -394,15 +332,7 @@ describe('TeamSettingsSection', () => {
   it('keeps loaded members visible when a later refresh fails', () => {
     const queryClient = createTestQueryClient();
     seedQueryError(queryClient, queryKeys.teamMembers('user-1', 'team-1'), [
-      {
-        id: 'member-other',
-        team_id: 'team-1',
-        user_id: 'user-2',
-        role: 'viewer',
-        status: 'active',
-        email: 'viewer@example.com',
-        name: 'Viewer User',
-      },
+      activeMember('member-other', 'user-2', 'viewer', 'Viewer User', 'viewer@example.com'),
     ]);
     queryClient.setQueryData(queryKeys.teamInvites('user-1', 'team-1'), []);
     queryClient.setQueryData(queryKeys.teamActivity('user-1', 'team-1'), []);

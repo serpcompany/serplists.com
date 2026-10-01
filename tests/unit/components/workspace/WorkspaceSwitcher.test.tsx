@@ -1,25 +1,8 @@
 import { navigation } from '../../../support/mockedNextNavigation';
+import { personalWorkspaceState as workspaceState } from '../../../support/mockedPersonalWorkspace';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const personal = { id: 'personal', name: 'Personal', role: 'owner', type: 'personal' };
-const workspaceState = vi.hoisted(() => ({
-  status: 'ready' as 'ready' | 'loading' | 'error',
-  teamsUnavailable: false,
-}));
-
-vi.mock('@/contexts/WorkspaceContext', () => ({
-  useWorkspace: () => ({
-    activeWorkspace: personal,
-    isWorkspaceLoading: workspaceState.status !== 'ready',
-    retryWorkspace: vi.fn(),
-    selectWorkspace: vi.fn(),
-    teamsUnavailable: workspaceState.teamsUnavailable,
-    workspaces: [personal],
-    workspaceStatus: workspaceState.status,
-  }),
-}));
 
 vi.mock('@/components/ui/dropdown-menu', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/components/ui/dropdown-menu')>()),

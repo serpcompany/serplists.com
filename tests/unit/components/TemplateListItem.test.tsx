@@ -4,21 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateListItem } from '@/components/dashboard/TemplateListItem';
-import type { ChecklistTemplate } from '@/types/checklist';
+import { PRIVATE_LAUNCH_TEMPLATE } from '../../fixtures/dashboardTemplate';
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Launch workflow',
-  type: 'checklist',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-};
+const template = PRIVATE_LAUNCH_TEMPLATE;
 
 describe('TemplateListItem', () => {
   it('keeps start, edit, and delete actions available in dashboard list view', () => {

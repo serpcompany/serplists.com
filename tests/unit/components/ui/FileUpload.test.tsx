@@ -1,3 +1,4 @@
+import '../../../support/mockedR2Uploads';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,12 +6,11 @@ import { api } from '@/lib/api';
 import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
-import { findElement, type AnyElement } from '../../../support/elementTree';
+import { findByAriaLabel, findElement, findFileInput, type AnyElement } from '../../../support/elementTree';
 
 const useStateStub = vi.hoisted(() => ({ valueForEveryState: undefined as unknown, setterCalls: [] as unknown[] }));
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const stubs = {
+vi.mock('react', async (importOriginal) =>
+  (await import('../../../support/reactHookStubs')).reactWithHookStubs(importOriginal, {
     useId: () => 'file-upload-test',
     useRef: () => ({ current: null }),
     useState: <T,>(initial: T) => [
@@ -19,21 +19,9 @@ vi.mock('react', async (importOriginal) => {
         useStateStub.setterCalls.push(next);
       },
     ],
-  };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
-});
+  }),
+);
 
-vi.mock('@/lib/api', () => ({
-  api: {
-    deleteFromR2: vi.fn(),
-    uploadToR2: vi.fn(),
-  },
-}));
-
-vi.mock('@/lib/imageOptimization', () => ({
-  isImageFile: vi.fn(() => false),
-  optimizeImage: vi.fn(async (file: File) => file),
-}));
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -68,10 +56,7 @@ describe('FileUpload', () => {
       onFileChange,
     });
 
-    const removeButton = findElement(
-      tree,
-      (element) => element.props['aria-label'] === 'Remove uploaded image',
-    );
+    const removeButton = findByAriaLabel(tree, 'Remove uploaded image');
     expect(removeButton).not.toBeNull();
 
     await (removeButton!.props.onClick as () => unknown)();
@@ -164,10 +149,8 @@ describe('FileUpload', () => {
       onFileChange: vi.fn(),
     });
 
-    expect(
-      findElement(tree, (element) => element.props['aria-label'] === 'Remove uploaded file'),
-    ).toBeNull();
-    expect(findElement(tree, (element) => element.props.type === 'file')).not.toBeNull();
+    expect(findByAriaLabel(tree, 'Remove uploaded file')).toBeNull();
+    expect(findFileInput(tree)).not.toBeNull();
   });
 
   describe('image preview of a URL being typed, which fails to load on its first characters', () => {

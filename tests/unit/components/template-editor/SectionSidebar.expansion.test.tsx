@@ -1,3 +1,4 @@
+import '../../../support/sectionSidebarHooks';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,13 +12,6 @@ const harness = vi.hoisted(() => {
   const sections: TemplateEditorSection[] = [];
   const fields: Array<Record<string, unknown>> = [];
   return { sections, fields, nextFieldId: 0 };
-});
-
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  const { useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
-  const stubs = { useState: useStateKeptBetweenRenders, useId: () => 'outline' };
-  return { ...actual, ...stubs, default: { ...actual, ...stubs } };
 });
 
 vi.mock('react-hook-form', async (importOriginal) => {
@@ -38,8 +32,6 @@ vi.mock('react-hook-form', async (importOriginal) => {
     useWatch: () => harness.sections,
   };
 });
-
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const section = (id: string, title: string): TemplateEditorSection => ({
   id,

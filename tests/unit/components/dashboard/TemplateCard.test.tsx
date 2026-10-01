@@ -6,20 +6,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
 import { findAll, findHiddenFocusables, parseMarkup, type MarkupNode } from '../focusVisibility';
+import { PRIVATE_LAUNCH_TEMPLATE } from '../../../fixtures/dashboardTemplate';
 
-const template: ChecklistTemplate = {
-  id: 'template-1',
-  title: 'Website Launch Checklist',
-  description: 'Launch workflow',
-  type: 'checklist',
-  sections: [],
-  userId: 'user-1',
-  createdAt: '2026-04-18T00:00:00.000Z',
-  updatedAt: '2026-04-18T00:00:00.000Z',
-  isPublic: false,
-  categories: [],
-  tags: [],
-};
+const template = PRIVATE_LAUNCH_TEMPLATE;
 
 const findTags = (root: MarkupNode, tag: string): MarkupNode[] => findAll(root, (node) => node.tag === tag);
 
