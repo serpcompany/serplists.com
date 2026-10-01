@@ -19,7 +19,7 @@ type AuthErrorBody = z.infer<typeof authErrorBodySchema>;
 
 export class AuthStatusError extends Error {
   readonly status: number;
-  readonly retryAfterSeconds?: number;
+  readonly retryAfterSeconds: number | undefined;
 
   constructor(status: number, retryAfterSeconds?: number) {
     super(`Failed to load auth status: ${status}`);

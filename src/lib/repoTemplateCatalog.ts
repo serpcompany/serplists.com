@@ -16,7 +16,7 @@ type RepoTemplateModule = {
 type RepoTemplateCreatePayload = {
   title: string;
   description?: string;
-  type?: 'checklist' | 'recipe';
+  type?: 'checklist' | 'recipe' | undefined;
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
@@ -25,7 +25,7 @@ type RepoTemplateCreatePayload = {
   isPublic: boolean;
   categories?: string[];
   tags?: string[];
-  teamId?: string;
+  teamId?: string | undefined;
 };
 
 const repoTemplateModules = templatePackModules as Record<string, RepoTemplateModule>;

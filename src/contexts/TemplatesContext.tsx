@@ -69,8 +69,8 @@ const TemplateListQueriesContext = createContext<
 >(undefined);
 
 export const buildTemplateListQueries = (params: TemplateListReadiness & {
-  userId?: string;
-  activeTeamId?: string;
+  userId?: string | undefined;
+  activeTeamId?: string | undefined;
   workspaceScopeId: string;
   fetchList: (request: TemplateListRequest) => () => Promise<ChecklistTemplate[]>;
 }): TemplateListQueries => ({
@@ -93,7 +93,7 @@ export const buildTemplateListQueries = (params: TemplateListReadiness & {
 
 type CreateRunRequest = {
   apiPayload: {
-    teamId?: string;
+    teamId?: string | undefined;
     template_id?: string;
     title: string;
     sections?: ChecklistSection[];
@@ -104,8 +104,8 @@ type CreateRunRequest = {
 };
 
 export function buildCreateRunRequest(params: {
-  activeTeamId?: string;
-  runName?: string;
+  activeTeamId?: string | undefined;
+  runName?: string | undefined;
   template: ChecklistTemplate;
   templateId: string;
 }): CreateRunRequest {
@@ -288,7 +288,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const createRunMutation = useMutation({
-    mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string; template?: ChecklistTemplate }) => {
+    mutationFn: async ({ templateId, runName, template: loadedTemplate }: { templateId: string; runName?: string | undefined; template?: ChecklistTemplate }) => {
       if (!user) throw new Error("User must be logged in to create a run");
       
       const template = loadedTemplate ??
@@ -331,7 +331,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const updateRunMutation = useMutation({
-    mutationFn: async ({ run, options }: { run: ChecklistRun; options?: RunUpdateOptions }) => {
+    mutationFn: async ({ run, options }: { run: ChecklistRun; options?: RunUpdateOptions | undefined }) => {
       if (!user) throw new Error("User must be logged in to update a run");
       const payload = buildRunUpdatePayload(run, options);
       const result = await api.updateChecklist(run.id, payload);
@@ -367,7 +367,7 @@ export const TemplatesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   });
 
   const importTemplatesMutation = useMutation({
-    mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions }): Promise<TemplateImportSummary> => {
+    mutationFn: async ({ templatesData, options }: { templatesData: ChecklistTemplate[]; options?: TemplateImportOptions | undefined }): Promise<TemplateImportSummary> => {
       if (!user) throw new Error("User must be logged in to import templates");
       assertWorkspaceReady(workspaceStatus);
 

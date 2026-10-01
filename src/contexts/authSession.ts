@@ -75,7 +75,7 @@ export type SessionUser = z.infer<typeof sessionUserSchema>;
 export type SessionCheck =
   | { kind: 'authenticated'; user: SessionUser; session: unknown }
   | { kind: 'unauthenticated' }
-  | { kind: 'unknown'; status?: number };
+  | { kind: 'unknown'; status?: number | undefined };
 
 export function classifySessionResult(result: AuthClientResult): SessionCheck {
   if (!result) {

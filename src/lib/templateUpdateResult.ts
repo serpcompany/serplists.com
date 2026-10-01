@@ -2,9 +2,9 @@ import { z } from "zod";
 
 export type TemplateUpdateResult = {
   version: number;
-  slug?: string;
-  structureChanged?: boolean;
-  reconciledRuns?: number;
+  slug?: string | undefined;
+  structureChanged?: boolean | undefined;
+  reconciledRuns?: number | undefined;
 };
 
 const templateUpdateResponseSchema = z

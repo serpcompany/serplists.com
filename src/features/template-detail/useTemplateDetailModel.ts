@@ -35,14 +35,14 @@ export {
 export { resolveShareOwnerTemplate } from './templateDetailApi';
 
 type PublicTemplateDetailHookOptions = {
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'public';
-  ownerUsername?: string;
+  ownerUsername?: string | undefined;
 };
 
 type PrivateTemplateDetailHookOptions = {
   canEditTemplates: boolean;
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'private';
 };
 
@@ -51,8 +51,8 @@ type TemplateDetailCommonOptions = {
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
   teamId: string | undefined;
-  userId?: string;
-  username?: string;
+  userId?: string | undefined;
+  username?: string | undefined;
   workspaceStatus: WorkspaceStatus;
 };
 

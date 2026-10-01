@@ -31,7 +31,7 @@ function SubTaskList({ subTasks }: { subTasks: RetiredRunSubTask[] }): JSX.Eleme
   );
 }
 
-function RetiredTask({ task, context }: { task: RetiredRunTask; context?: string }): JSX.Element {
+function RetiredTask({ task, context }: { task: RetiredRunTask; context?: string | undefined }): JSX.Element {
   return (
     <div>
       <div className="flex items-start justify-between gap-3">

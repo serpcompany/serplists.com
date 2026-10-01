@@ -5,7 +5,7 @@ import { reloadObservedQueries } from '@/features/teams/reloadObservedQueries';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 
-export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string; canManageTeam: boolean }) {
+export function useTeamSettingsQueries({ activeTeamId, canManageTeam }: { activeTeamId?: string | undefined; canManageTeam: boolean }) {
   const userId = useAuth().user?.id;
   const queryClient = useQueryClient();
   const signedIn = Boolean(userId);

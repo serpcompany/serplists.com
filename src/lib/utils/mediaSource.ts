@@ -35,9 +35,9 @@ export type MediaSourceType = 'upload' | 'url';
 
 type MediaSource = {
   value: string;
-  fileName?: string;
-  fileSize?: number;
-  uploadType?: MediaSourceType;
+  fileName?: string | undefined;
+  fileSize?: number | undefined;
+  uploadType?: MediaSourceType | undefined;
 };
 
 export const mediaSourceTypeFor = (value: string): MediaSourceType | undefined => {

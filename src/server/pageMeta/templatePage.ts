@@ -22,11 +22,11 @@ export type TemplatePageSeo =
 
 interface TemplatePageSource {
   id: string;
-  slug?: string | null;
+  slug?: string | null | undefined;
   title: string;
-  description?: string | null;
-  seoTitle?: string | null;
-  seoDescription?: string | null;
+  description?: string | null | undefined;
+  seoTitle?: string | null | undefined;
+  seoDescription?: string | null | undefined;
   createdAt?: string | null;
   categories?: string[];
   canonicalPath: string | null;

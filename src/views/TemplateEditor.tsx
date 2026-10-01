@@ -78,7 +78,7 @@ const showTemplateSaveToasts = (feedback: TemplateSaveFeedback) => {
 };
 
 type TemplateEditorFormProps = {
-  id?: string;
+  id: string | undefined;
   model: TemplateEditorModel;
 };
 

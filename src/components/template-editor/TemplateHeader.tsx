@@ -19,7 +19,7 @@ interface TemplateHeaderProps {
   isUploading?: boolean;
   isGenerating?: boolean;
   title: string;
-  templateSlug?: string;
+  templateSlug?: string | undefined;
   onCancel: () => void;
   onSave: () => void;
   onPreview?: () => void;

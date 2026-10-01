@@ -49,9 +49,9 @@ interface RunsDashboardViewProps {
   getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
-  onRunShared?: (runId: string) => void;
-  onShareFailed?: (error: unknown) => Promise<void>;
-  onStopSharingRun?: (runId: string) => Promise<void>;
+  onRunShared?: ((runId: string) => void) | undefined;
+  onShareFailed?: ((error: unknown) => Promise<void>) | undefined;
+  onStopSharingRun?: ((runId: string) => Promise<void>) | undefined;
   loading?: boolean;
   loadError?: unknown;
   onRetryLoad?: () => void;

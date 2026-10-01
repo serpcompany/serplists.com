@@ -48,16 +48,16 @@ export type Workspace =
       role: TeamRole;
       teamId: string;
       memberId: string;
-      slug?: string | null;
+      slug?: string | null | undefined;
     };
 
 type CreateTeamInput = {
   name: string;
-  slug?: string;
+  slug?: string | undefined;
 };
 
 type WorkspaceContextValue = {
-  activeTeamId?: string;
+  activeTeamId?: string | undefined;
   activeWorkspace: Workspace;
   activeWorkspaceId: string;
   canEditTemplates: boolean;

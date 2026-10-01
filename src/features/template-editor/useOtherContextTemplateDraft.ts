@@ -21,7 +21,7 @@ export const useOtherContextTemplateDraft = ({
   userId,
 }: {
   enabled: boolean;
-  userId?: string;
+  userId: string | undefined;
 }) => {
   const { activeTeamId, getPermissions, isWorkspaceLoading, selectWorkspace, teams } = useWorkspace();
   const isClient = useIsClient();

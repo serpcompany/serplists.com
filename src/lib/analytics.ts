@@ -1,6 +1,6 @@
 interface AnalyticsEvent {
   event: string;
-  properties?: Record<string, unknown>;
+  properties?: Record<string, unknown> | undefined;
   timestamp: number;
   url: string;
   userAgent: string;

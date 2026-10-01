@@ -12,8 +12,8 @@ export type BillingStatus = BillingStatusState & { refetch: () => void };
 
 export const useBillingStatus = (options: {
   enabled: boolean;
-  teamId?: string | null;
-  userId?: string | null;
+  teamId?: string | null | undefined;
+  userId?: string | null | undefined;
 }): BillingStatus => {
   const query = useQuery({
     queryKey: getBillingStatusQueryKey(options.userId, options.teamId),

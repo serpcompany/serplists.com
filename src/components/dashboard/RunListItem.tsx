@@ -43,11 +43,11 @@ type RunListItemProps = {
   isRevalidating: boolean;
   isStoppingShare: boolean;
   onDelete: () => void;
-  onRevalidate?: () => void;
+  onRevalidate?: (() => void) | undefined;
   onShare: () => void;
-  onStopSharing?: () => void;
+  onStopSharing?: (() => void) | undefined;
   run: ChecklistRun;
-  template?: RunSourceTemplate | null;
+  template?: RunSourceTemplate | null | undefined;
 };
 
 export function RunListItem({

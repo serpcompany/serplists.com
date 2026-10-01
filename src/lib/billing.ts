@@ -16,7 +16,7 @@ export type BillingPlanStatus = BillingPlan | "loading" | "unknown";
 export const PLAN_UNKNOWN_MESSAGE = "Couldn't check your plan. Try again.";
 
 export const getBillingPlanStatus = (query: {
-  data?: { plan: BillingPlan } | null;
+  data?: { plan: BillingPlan } | null | undefined;
   isError: boolean;
 }): BillingPlanStatus => {
   if (query.data) return query.data.plan;
@@ -44,7 +44,7 @@ export type BillingStatusState =
   | { status: "known"; billingEnabled: boolean; isPaid: boolean; plan: BillingPlan };
 
 export const resolveBillingStatus = (query: {
-  data?: BillingStatusData;
+  data?: BillingStatusData | undefined;
   fetchStatus: "fetching" | "paused" | "idle";
   isError: boolean;
 }): BillingStatusState => {

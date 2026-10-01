@@ -100,7 +100,7 @@ export const hydrateTemplateOwner = async (
 
 export const resolveShareOwnerTemplate = async (
   template: ChecklistTemplate,
-  owner: { userId?: string; username?: string },
+  owner: { userId?: string | undefined; username?: string | undefined },
   apiClient: Pick<TemplateDetailApiClient, 'getProfileById'>,
 ): Promise<ChecklistTemplate> => {
   const username = owner.username?.trim();

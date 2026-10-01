@@ -11,9 +11,10 @@ import { reportNavigation } from '@/lib/navigation/navigationSignal';
 type LinkProps = ComponentProps<typeof NextLink>;
 
 export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
-  { href, onNavigate, replace, scroll, prefetch, onMouseEnter, onFocus, onTouchStart, ...props },
+  { href, onNavigate, prefetch, onMouseEnter, onFocus, onTouchStart, ...props },
   ref,
 ) {
+  const { replace, scroll } = props;
   const pathname = usePathname();
   const router = useRouter();
   const [intent, setIntent] = useState(false);
@@ -22,8 +23,6 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
     <NextLink
       ref={ref}
       href={href}
-      replace={replace}
-      scroll={scroll}
       prefetch={prefetch !== undefined ? prefetch : intent ? null : false}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);

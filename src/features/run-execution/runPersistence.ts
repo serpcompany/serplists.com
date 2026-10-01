@@ -17,16 +17,16 @@ export type UpdateRun = (
 ) => void | Promise<ChecklistRun | void>;
 
 export type RunExecutionDependencies = {
-  apiClient?: RunExecutionApiClient;
+  apiClient?: RunExecutionApiClient | undefined;
   onShared?: (runId: string) => void;
-  origin?: string;
+  origin?: string | undefined;
   refreshRuns?: () => unknown;
   updateRun: UpdateRun;
 };
 
 export type RunExecutionMutationParams = {
   run?: ChecklistRun | null;
-  shareToken?: string;
+  shareToken?: string | undefined;
 };
 
 export const getApiClient = (

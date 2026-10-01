@@ -20,7 +20,7 @@ export type SectionOutlineSelection = {
   selectedItemIndex: number | null;
   onSelectSection: (sectionIndex: number) => void;
   onSelectItem: (sectionIndex: number, itemIndex: number) => void;
-  onEntryPicked?: () => void;
+  onEntryPicked?: (() => void) | undefined;
 };
 
 export function useSectionOutline({

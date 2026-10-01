@@ -14,10 +14,10 @@ export type TemplateUpdater = (
 ) => ChecklistTemplate | null;
 
 type TemplateDetailRecordOptions = {
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'private' | 'public';
-  ownerUsername?: string;
-  userId?: string;
+  ownerUsername?: string | undefined;
+  userId?: string | undefined;
 };
 
 export type TemplateDetailRecord = {

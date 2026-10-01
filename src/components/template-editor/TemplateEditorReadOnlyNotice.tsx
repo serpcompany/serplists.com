@@ -8,7 +8,7 @@ import { buildConsoleTemplatePath, buildConsoleTemplatesPath } from "@/lib/route
 import { Link } from '@/components/navigation/Link';
 
 type TemplateEditorReadOnlyNoticeProps = {
-  templateId?: string;
+  templateId?: string | undefined;
   reason: "organization_role" | "not_owner";
 };
 

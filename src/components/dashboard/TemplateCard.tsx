@@ -31,9 +31,9 @@ import { Link } from '@/components/navigation/Link';
 interface TemplateCardProps {
   template: ChecklistTemplate;
   canEdit?: boolean;
-  onDelete?: (id: string) => void;
+  onDelete?: ((id: string) => void) | undefined;
   onDuplicate?: (id: string) => void;
-  onStartRun?: (id: string) => void;
+  onStartRun?: ((id: string) => void) | undefined;
 }
 
 export function TemplateCard({

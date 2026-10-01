@@ -90,7 +90,7 @@ export const findTemplateEditorSlugIssue = (
 
 export const normalizeTemplateEditorDetailsForSave = (
   values: TemplateEditorDetailsFormValues,
-  options: { storedSlug?: string } = {},
+  options: { storedSlug?: string | undefined } = {},
 ): TemplateEditorDetailsFormValues => ({
   title: values.title.trim(),
   description: values.description.trim(),

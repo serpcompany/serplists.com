@@ -39,17 +39,17 @@ export const getResourcePermissions = (
 
 type TemplateForActions = {
   isPublic: boolean;
-  ownerType?: 'user' | 'team';
-  teamId?: string;
+  ownerType?: 'user' | 'team' | undefined;
+  teamId?: string | undefined;
   userId: string;
 };
 
 export const getTemplateActionPermissions = (params: {
-  activeTeamId?: string;
+  activeTeamId?: string | undefined;
   isRepoTemplate: boolean;
   permissionsFor: (teamId?: string) => ResourcePermissions;
   template: TemplateForActions;
-  userId?: string;
+  userId?: string | undefined;
 }) => {
   const { template } = params;
   const isOwner = Boolean(params.userId) && params.userId === template.userId;

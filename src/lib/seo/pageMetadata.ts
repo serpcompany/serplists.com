@@ -8,9 +8,9 @@ export interface PageSeo {
   title: string;
   description?: string;
   keywords?: readonly string[];
-  path?: string;
+  path?: string | undefined;
   type?: 'website' | 'article';
-  publishedTime?: string;
+  publishedTime?: string | undefined;
   robots?: string;
 }
 

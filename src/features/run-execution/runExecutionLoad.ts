@@ -6,15 +6,15 @@ import type { RunExecutionLoadResult, RunExecutionMode } from './runExecutionRes
 import { getApiClient, type RunExecutionDependencies } from './runPersistence';
 
 export type RunExecutionLoadOptions = {
-  getCachedRun?: (id: string) => ChecklistRun | undefined;
-  runId?: string;
-  shareToken?: string;
+  getCachedRun?: ((id: string) => ChecklistRun | undefined) | undefined;
+  runId?: string | undefined;
+  shareToken?: string | undefined;
 };
 
 export const resolveMode = ({
   shareToken,
 }: {
-  shareToken?: string;
+  shareToken?: string | undefined;
 }): RunExecutionMode => (shareToken ? 'shared' : 'private');
 
 export const loadRunExecutionData = async (

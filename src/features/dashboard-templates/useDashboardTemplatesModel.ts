@@ -24,7 +24,7 @@ import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
 
 type CreateRun = (params: {
   templateId: string;
-  runName?: string;
+  runName?: string | undefined;
 }) => Promise<ChecklistRun | null>;
 
 type DeleteTemplate = (id: string) => void | Promise<void>;
@@ -32,15 +32,15 @@ type Navigate = (path: string) => void;
 
 type DashboardTemplatesStateOptions = {
   allTemplates: ChecklistTemplate[];
-  role?: OrganizationRole;
+  role?: OrganizationRole | undefined;
   templatesLoading?: boolean;
-  teamId?: string;
-  userId?: string;
+  teamId?: string | undefined;
+  userId?: string | undefined;
 };
 
 type DashboardTemplateRunOptions = {
   now?: Date;
-  runName?: string;
+  runName?: string | undefined;
   templateId: string;
   templateTitle: string;
 };

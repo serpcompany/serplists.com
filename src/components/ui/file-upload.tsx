@@ -29,8 +29,8 @@ const TYPE_ICON: Record<FileUploadType, typeof File> = {
 
 export type FileUploadChange = {
   value: string;
-  fileName?: string;
-  fileSize?: number;
+  fileName?: string | undefined;
+  fileSize?: number | undefined;
 };
 
 export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
@@ -53,11 +53,11 @@ export const ImagePreview = ({ src }: { src: string | null }): JSX.Element => {
 interface FileUploadProps {
   type: FileUploadType;
   value: string;
-  fileName?: string;
+  fileName?: string | undefined;
   signedIn?: boolean;
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
-  onUploadStart?: (upload: Promise<UploadResult>) => void;
+  onUploadStart?: ((upload: Promise<UploadResult>) => void) | undefined;
   className?: string;
 }
 

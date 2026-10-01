@@ -15,13 +15,13 @@ import {
 import { mapApiTemplateToChecklistTemplate } from './templateDetailMappers';
 
 export type PublicTemplateDetailOptions = {
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'public';
-  ownerUsername?: string;
+  ownerUsername?: string | undefined;
 };
 
 export type PrivateTemplateDetailOptions = {
-  identifier?: string;
+  identifier?: string | undefined;
   mode: 'private';
 };
 
@@ -31,7 +31,7 @@ export type LoadTemplateDetailResult =
   | { kind: 'error'; message: string };
 
 export type TemplateDetailDependencies = {
-  apiClient?: TemplateDetailApiClient;
+  apiClient?: TemplateDetailApiClient | undefined;
 };
 
 const classifyLoadFailure = (error: unknown): LoadTemplateDetailResult =>

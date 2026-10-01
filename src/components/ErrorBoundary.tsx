@@ -5,7 +5,7 @@ import { Link } from './navigation/Link';
 import { buildHomePath } from '@/lib/routes';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
-type FallbackRender = (props: { error?: Error; reset: () => void }) => ReactNode;
+type FallbackRender = (props: { error?: Error | undefined; reset: () => void }) => ReactNode;
 
 interface Props {
   children: ReactNode;
@@ -16,7 +16,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error?: Error;
+  error?: Error | undefined;
 }
 
 export class ErrorBoundary extends Component<Props, State> {

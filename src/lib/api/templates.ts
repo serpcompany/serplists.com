@@ -87,13 +87,13 @@ export const templatesApi = {
 
   async createTemplate(template: {
     title: string;
-    teamId?: string;
-    description?: string;
-    type?: "checklist" | "recipe";
-    seoTitle?: string;
-    seoDescription?: string;
-    rules?: unknown[];
-    slug?: string;
+    teamId?: string | undefined;
+    description?: string | undefined;
+    type?: "checklist" | "recipe" | undefined;
+    seoTitle?: string | undefined;
+    seoDescription?: string | undefined;
+    rules?: unknown[] | undefined;
+    slug?: string | undefined;
     sections?: unknown[];
     items?: unknown[];
     is_public?: boolean;
@@ -108,17 +108,17 @@ export const templatesApi = {
 
   async updateTemplate(id: string, updates: {
     title?: string;
-    description?: string;
-    type?: "checklist" | "recipe";
-    seoTitle?: string;
-    seoDescription?: string;
-    rules?: unknown[];
+    description?: string | undefined;
+    type?: "checklist" | "recipe" | undefined;
+    seoTitle?: string | undefined;
+    seoDescription?: string | undefined;
+    rules?: unknown[] | undefined;
     sections?: unknown[];
-    categories?: string[];
-    tags?: string[];
-    is_public?: boolean;
-    slug?: string;
-    expected_version?: number;
+    categories?: string[] | undefined;
+    tags?: string[] | undefined;
+    is_public?: boolean | undefined;
+    slug?: string | undefined;
+    expected_version?: number | undefined;
   }): Promise<TemplateUpdateResult> {
     const body: unknown = await apiRequest(`/templates/${id}`, {
       method: 'PUT',
@@ -140,7 +140,7 @@ export const templatesApi = {
     });
   },
 
-  async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null }) {
+  async exportTemplateBackup(params?: { format?: 'backup' | 'portable'; teamId?: string | null | undefined }) {
     const search = new URLSearchParams();
     if (params?.teamId) search.set('teamId', params.teamId);
     search.set('format', params?.format ?? 'portable');
@@ -149,7 +149,7 @@ export const templatesApi = {
   },
 
   async importTemplateBackup(payload: {
-    teamId?: string | null;
+    teamId?: string | null | undefined;
     templates: unknown[];
     options?: { visibility?: 'preserve' | 'public' | 'private' };
   }): Promise<TemplateImportSummary> {
@@ -160,7 +160,7 @@ export const templatesApi = {
     return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, { method: 'POST', body: JSON.stringify(body) });
   },
 
-  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve'; teamId?: string }): Promise<{ id: string; slug?: string }> {
+  async clonePublicTemplate(templateId: string, payload?: { visibility?: 'public' | 'private' | 'preserve'; teamId?: string | undefined }): Promise<{ id: string; slug?: string }> {
     return apiRequest(`/templates/${encodeURIComponent(templateId)}/clone`, {
       method: 'POST',
       body: JSON.stringify(payload ?? {}),

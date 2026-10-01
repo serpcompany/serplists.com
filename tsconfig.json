@@ -24,6 +24,7 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
 
     "baseUrl": ".",
     "paths": {

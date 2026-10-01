@@ -37,7 +37,7 @@ export const runsApi = {
   },
 
   async createChecklist(checklist: {
-    teamId?: string;
+    teamId?: string | undefined;
     template_id?: string;
     title: string;
     items?: unknown[];
@@ -76,8 +76,8 @@ export const runsApi = {
       sections?: unknown[];
       status?: string;
       progress?: number;
-      completed_at?: string;
-      expected_revision?: number;
+      completed_at?: string | undefined;
+      expected_revision?: number | undefined;
     }
   ) {
     return apiRequest(`/checklists/shared/${encodeURIComponent(shareToken)}`, {
@@ -93,8 +93,8 @@ export const runsApi = {
     sections?: unknown[];
     status?: string;
     progress?: number;
-    completed_at?: string;
-    expected_revision?: number;
+    completed_at?: string | undefined;
+    expected_revision?: number | undefined;
   }): Promise<{ revision?: number }> {
     return apiRequest(`/checklists/${id}`, {
       method: 'PUT',

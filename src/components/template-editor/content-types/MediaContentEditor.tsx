@@ -7,10 +7,10 @@ import { File, ImageIcon, Video } from "lucide-react";
 interface MediaContentEditorProps {
   type: 'image' | 'video' | 'file';
   value: string;
-  fileName?: string;
+  fileName?: string | undefined;
   onValueChange: (value: string) => void;
   onFileChange: (change: FileUploadChange) => void;
-  onUploadStart?: (upload: Promise<UploadResult>) => void;
+  onUploadStart?: ((upload: Promise<UploadResult>) => void) | undefined;
 }
 
 export const MediaContentEditor = ({ 

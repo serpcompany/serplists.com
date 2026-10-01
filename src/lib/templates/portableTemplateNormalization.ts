@@ -17,7 +17,7 @@ const normalizeStringArray = (values?: string[]) => {
   return normalized.length > 0 ? normalized : undefined;
 };
 
-const normalizeSubItems = (subItems?: { id?: string; title: string }[]) => {
+const normalizeSubItems = (subItems?: { title: string }[]) => {
   if (!Array.isArray(subItems) || subItems.length === 0) return undefined;
   return subItems.map((subItem) => ({
     title: subItem.title.trim(),

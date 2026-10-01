@@ -12,7 +12,7 @@ import {
 type UseViewModePreferenceOptions = {
   defaultValue?: ViewMode;
   surface: ViewModePreferenceSurface;
-  userId?: string;
+  userId?: string | undefined;
 };
 
 const preferenceReaders = new Set<() => void>();

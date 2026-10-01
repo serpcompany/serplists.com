@@ -205,7 +205,7 @@ export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): bo
 
 export const findRunSubItem = (
   item: ChecklistItem,
-  at: { contentIndex: number; subItemId?: string; subItemIndex: number },
+  at: { contentIndex: number; subItemId?: string | undefined; subItemIndex: number },
 ): ChecklistSubItem | undefined => {
   const content = item.contents?.[at.contentIndex];
   const candidate = content?.type === 'subItems' ? content.subItems?.[at.subItemIndex] : undefined;

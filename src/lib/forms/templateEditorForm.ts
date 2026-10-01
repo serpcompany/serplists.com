@@ -256,7 +256,7 @@ export function buildTemplateEditorFormValues(
 
 export function normalizeTemplateEditorFormForSave(
   values: TemplateEditorFormValues,
-  options: { storedSlug?: string } = {},
+  options: { storedSlug?: string | undefined } = {},
 ): TemplateEditorFormValues {
   const normalizedDetails: TemplateEditorDetailsFormValues =
     normalizeTemplateEditorDetailsForSave(values, options);

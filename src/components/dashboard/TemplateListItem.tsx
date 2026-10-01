@@ -20,8 +20,8 @@ import { Link } from '@/components/navigation/Link';
 
 type TemplateListItemProps = {
   canEdit?: boolean;
-  onDelete?: (id: string) => void;
-  onStartRun?: (id: string) => void;
+  onDelete?: ((id: string) => void) | undefined;
+  onStartRun?: ((id: string) => void) | undefined;
   template: ChecklistTemplate;
 };
 

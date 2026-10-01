@@ -63,7 +63,7 @@ function SiteNavigationMenuRoot({
 }: {
   align: 'start' | 'center' | 'end';
   children: ReactNode;
-  className?: string;
+  className?: string | undefined;
 }) {
   return (
     <NavigationMenuPrimitive.Root

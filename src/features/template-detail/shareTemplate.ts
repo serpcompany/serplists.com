@@ -23,8 +23,8 @@ export const shareTemplateToPublic = async (params: {
   origin: string;
   reloadAfterConflict?: () => Promise<void>;
   template: ChecklistTemplate | null;
-  userId?: string;
-  username?: string;
+  userId?: string | undefined;
+  username?: string | undefined;
 }): Promise<TemplateDetailActionResult> => {
   if (!params.template) {
     return { kind: 'error', message: 'Template not found.' };

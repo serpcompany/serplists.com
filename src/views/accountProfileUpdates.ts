@@ -7,9 +7,9 @@ interface ProfileDataInput {
 }
 
 interface CurrentUserInput {
-  name?: string;
-  username?: string;
-  image?: string | null;
+  name?: string | undefined;
+  username?: string | undefined;
+  image?: string | null | undefined;
 }
 
 export interface AccountUpdatePayload {
@@ -99,7 +99,7 @@ export interface ProfileFormValues {
 }
 
 export const profileFormFromUser = (
-  user: CurrentUserInput & { email?: string }
+  user: CurrentUserInput & { email?: string | undefined }
 ): ProfileFormValues => ({
   email: user.email || "",
   fullName: user.name || "",

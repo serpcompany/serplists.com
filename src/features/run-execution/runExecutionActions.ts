@@ -35,7 +35,7 @@ type ToggleRunSubItemParams = RunExecutionMutationParams & {
   contentIndex: number;
   isCompleted: boolean;
   itemId: string;
-  subItemId?: string;
+  subItemId?: string | undefined;
   subItemIndex: number;
 };
 
@@ -262,7 +262,7 @@ export const completeRunExecution = async (
 export const bindRunSaves = ({ dependencies, noteDrafts, shareToken }: {
   dependencies: RunExecutionDependencies;
   noteDrafts: () => NoteDrafts;
-  shareToken?: string;
+  shareToken?: string | undefined;
 }) => ({
   complete: {
     bind: (current: ChecklistRun): RunSave => ({

@@ -102,7 +102,7 @@ export const teamsApi = {
     return apiRequest('/teams');
   },
 
-  async createTeam(payload: { name: string; slug?: string }): Promise<TeamSummary> {
+  async createTeam(payload: { name: string; slug?: string | undefined }): Promise<TeamSummary> {
     return apiRequest('/teams', {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -17,7 +17,7 @@ const readExportedSlugs = (templates: unknown[]): string[] =>
     return parsed.success ? [parsed.data.slug] : [];
   });
 
-type ExportBackup = (params: { teamId?: string }) => Promise<unknown>;
+type ExportBackup = (params: { teamId?: string | undefined }) => Promise<unknown>;
 type LoadPublicCatalog = () => Promise<ChecklistTemplate[]>;
 
 type ExportTemplatePackDependencies = {
@@ -28,9 +28,9 @@ type ExportTemplatePackDependencies = {
 
 export type ExportTemplatePackOptions = {
   includePublic: boolean;
-  teamId?: string;
-  userId?: string;
-  ownedTemplateIds?: Iterable<string>;
+  teamId?: string | undefined;
+  userId?: string | undefined;
+  ownedTemplateIds?: Iterable<string> | undefined;
 };
 
 export type ExportTemplatePackResult = PortableExportSummary;

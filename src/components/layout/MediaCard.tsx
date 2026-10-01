@@ -17,7 +17,7 @@ type MediaCardProps = {
   mediaOverlay?: ReactNode;
   orientation?: 'vertical' | 'horizontal';
   title: ReactNode;
-  titleAs?: 'h2' | 'h3';
+  titleAs?: 'h2' | 'h3' | undefined;
 };
 
 export function MediaCard({
