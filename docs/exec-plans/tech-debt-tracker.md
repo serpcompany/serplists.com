@@ -5,7 +5,7 @@ Known shortcuts and gaps, in one place. Pay these down in small PRs; the weekly
 item, delete its row and mention the ID in the PR. When you take a shortcut, add a row.
 
 IDs are never reused, because commits and PRs refer to them. New rows take the next ID, and
-then you raise it. **Next ID: TD-37.**
+then you raise it. **Next ID: TD-40.**
 
 "Ratchet" names the check that keeps new instances of the debt out of CI.
 
@@ -36,3 +36,6 @@ then you raise it. **Next ID: TD-37.**
 | TD-34 | Hosts | Two `isLoopbackHostname` functions with different rules: `src/lib/apiBaseUrl.ts` accepts `*.localhost`, `127.0.0.0/8` and `0.0.0.0`; `src/lib/utils/loopbackHostname.ts` matches exact names only. | Decide which hosts count as local, then keep one function; unifying them changes behavior. Small. | None |
 | TD-35 | Uploads | The 50MB limit has two formatters that disagree: `formatUploadLimit` (`src/lib/schemas/uploadLimits.ts`) rounds and `formatAssetSizeLimit` (`templateAssetLimits.ts`) floors. | Keep one formatter. Small. | None |
 | TD-36 | Dates | `parseTimestamp` in `src/lib/templates/templateRecency.ts` and `parseDbTimestamp` in `src/lib/utils/dbTimestamp.ts` read an ISO timestamp with a `T` and no zone differently: the first as local time, the second as UTC. | Decide that such timestamps are UTC, as D1 stores them, and keep one parser; this changes behavior for that input. Small. | None |
+| TD-37 | Dead code | The run page never gives `useRunExecutionModel` a `getCachedRun`, so the cached-run path in `src/features/run-execution/runExecutionLoad.ts` runs only in its test. | Remove the option, its pass-through and its test case. Small. | None |
+| TD-38 | Duplication | `TemplateUpdater` is declared twice: `src/features/template-detail/templateVisibility.ts` and `useTemplateDetailRecord.ts`. | Import the exported one. Small. | None |
+| TD-39 | Dead code | `shouldBlockTemplateEditorNavigation` (`src/features/template-editor/navigationGuards.ts`) takes an `isSaving` parameter it never reads; only its test passes it. | Remove the parameter and its test arguments. Small. | None |
