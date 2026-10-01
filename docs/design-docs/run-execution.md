@@ -31,8 +31,9 @@ The page is `src/views/ChecklistRun.tsx`, and a shared Run's layout is
 The page loads its own Run: a private one by id (`GET /api/checklists/<id>`), a shared one by
 token (`GET /api/checklists/shared/<token>`). It never starts from the runs list, which loads only
 on the runs dashboard and is not refreshed after this page saves. A `404` means the Run is gone,
-or the link no longer works, and the page leaves with "Run not found"; any other failure is a load
-error the page reports, never "not found".
+or the link no longer works, and the page leaves with "Run not found" without asking about unsaved
+notes, which can no longer be saved (also when the Run was deleted during a save); any other
+failure is a load error the page reports, never "not found".
 
 The model loads again only when the run id or share token changes
 ([FRONTEND.md](../FRONTEND.md#data-and-state)), since a load clears the unsaved notes and the
@@ -75,7 +76,8 @@ not at the click:
 - completing a Run that is already completed sends nothing, since another save would bump its
   revision and write another audit event;
 - a rename is compared with the latest title, and one that changes nothing (`isRunTitleChange`: an
-  empty title, or the saved one with spaces around it) sends nothing, for the same reason.
+  empty title, or the saved one with spaces around it) sends nothing, for the same reason. The
+  page itself closes an untouched title field without a save or a toast.
 
 ### Double clicks
 
@@ -170,7 +172,8 @@ its history.
   editable.
 - After completing, a signed-in user goes to My Runs only while still on the page
   (`usePageVisit`). The leave guard lets them go, since completion saved every draft; a note typed
-  while completion was saving still asks.
+  while completion was saving still asks. A guest on a share link stays, and the page shows the
+  Run completed.
 
 ## Moving between tasks
 
@@ -184,6 +187,8 @@ its history.
   cannot update the Run, it only moves between tasks. On a finished task with no next one, while
   the Run cannot be finished, it leads to the unfinished task ("Next unfinished task"), and only a
   completed Run reads "Run completed".
+- The private page's shell clips its overflow (`overflow-clip`), never `hidden` or `auto`: a scroll
+  container there would hold the task footer's sticky position to itself instead of the window.
 - The task panel stays mounted while its task changes, and the window scrolls, with Previous, Mark
   Complete and Next below the task's content: without help the next task would open where the last
   one was scrolled to, past its title. `createTaskRevealer`, run by `TaskHeaderReveal` before the

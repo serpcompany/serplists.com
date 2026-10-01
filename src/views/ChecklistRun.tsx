@@ -46,7 +46,6 @@ import { formatCount } from '@/lib/utils/pluralize';
 const ChecklistRunPage = () => {
   const { id, shareToken } = useParams<{ id?: string; shareToken?: string }>();
   const router = useAppRouter();
-  // Completing awaits the save; it leaves for the list only if the user is still here.
   const beginVisit = usePageVisit();
   const { updateRun } = useTemplates();
   const { getPermissions, isRoleUnavailable, retryWorkspace } = useWorkspace();
@@ -79,8 +78,6 @@ const ChecklistRunPage = () => {
     toggleItem,
     toggleSubItem,
   } = useRunExecutionModel({
-    // No getCachedRun: the run list loads only on the runs dashboard and is not refreshed
-    // after this page saves, so the page always loads its own run by id.
     runId: id,
     shareToken,
     updateRun,
@@ -89,8 +86,6 @@ const ChecklistRunPage = () => {
   const displayProgress = displayRun?.progress ?? progress;
   const shareLinkState = useRunShareLink(displayRun?.id, { createShare, stopSharing }, displayRun?.isPublic === true);
   const keepNoteDrafts = useKeptRunNoteDrafts({ privateRun: isSharedRun ? null : run, noteDrafts, restoreNoteDrafts });
-  // Every way out of the page asks once while task notes are unsaved: its own Runs and
-  // Back buttons, the app shell, browser Back/Forward, Sign out, and a reload or tab close.
   const { allowLeave } = useUnsavedChangesGuard(hasUnsavedNotes, RUN_NOTES_UNSAVED_MESSAGE, keepNoteDrafts);
 
   useEffect(() => {
@@ -99,7 +94,6 @@ const ChecklistRunPage = () => {
     }
 
     toast.error('Run not found');
-    // The run is gone (deleted elsewhere, even during a save), so its notes cannot be saved.
     allowLeave();
     router.replace(isSharedRun ? buildPublicTemplatesPath() : buildConsoleHomePath());
   }, [allowLeave, isSharedRun, loading, notFound, router]);
@@ -115,7 +109,6 @@ const ChecklistRunPage = () => {
   const handleBack = () =>
     router.push(isSharedRun ? buildPublicTemplatesPath() : buildConsoleRunsPath());
 
-  // isCompleted is the value the user clicked on the run they saw (set, not flipped).
   const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
     const result = await toggleItem(itemId, isCompleted);
 
@@ -172,7 +165,6 @@ const ChecklistRunPage = () => {
     if (isSharedRun || !run) {
       return;
     }
-    // Enter on an untouched title closes the editor without a save or a toast.
     if (editTitle.trim() === run.title) {
       handleTitleCancel();
       return;
@@ -202,8 +194,6 @@ const ChecklistRunPage = () => {
     else toast.error("Couldn't copy the link. Copy it from the address bar.");
   };
 
-  // A signed-in owner or member then goes to My Runs; a guest on a share link stays, and the
-  // page shows the Run completed.
   const handleCompleteRun = async () => {
     const visit = beginVisit();
     setIsCompletingRun(true);
@@ -212,9 +202,6 @@ const ChecklistRunPage = () => {
     if (result.kind === 'ok') {
       setIsCompleteDialogOpen(false);
       toast.success('Run completed');
-      // Only from this run: after Back or another run, it must not pull the user away.
-      // Completion saved every note draft, so the leave guard lets this through without
-      // asking. A note typed while the completion was saving still asks.
       if (!isSharedRun && visit.isCurrent()) {
         router.push(buildConsoleRunsPath());
       }
@@ -262,11 +249,8 @@ const ChecklistRunPage = () => {
     );
   }
 
-  // Share links govern shared runs; private runs follow the role in the run's Organization.
   const canUpdateRun = isSharedRun || getPermissions(displayRun.teamId).canRun;
-  // The role is unknown because the teams request failed: say so, not a silent View only.
   const roleUnavailable = !isSharedRun && isRoleUnavailable(displayRun.teamId);
-  // Completed runs are frozen: their tasks can no longer be ticked or unticked.
   const isRunCompleted = displayRun.status === 'completed';
   const activeItemId = selectedItemId ?? displayRun.sections[0]?.items[0]?.id ?? null;
   const flatItems = displayRun.sections.flatMap((section, sectionIndex) =>
@@ -293,19 +277,16 @@ const ChecklistRunPage = () => {
     const { tasksCompleted, tasksTotal } = countRunTasks([section]);
     return { completed: tasksCompleted, index, total: tasksTotal, section };
   });
-  // Stays available after the completion dialog is dismissed, a reload, or MCP ticks.
   const finishRunButton = canUpdateRun && canFinishRun(displayRun) ? (
     <Button onClick={() => setIsCompleteDialogOpen(true)}>
       <CheckCircle data-icon="inline-start" />
       Complete run
     </Button>
   ) : null;
-  // Tasks only, like the task list and "Task N of M"; the percentage also weights sub-tasks.
   const privateRunDescription = `${counts.tasksCompleted} of ${formatCount(counts.tasksTotal, 'task')} finished`;
 
   return (
     <>
-      {/* A shared run's title and noindex are the route's metadata (src/app/share). */}
       {isSharedRun ? (
         <SharedRunView
           completedTasks={counts.tasksCompleted}
@@ -325,8 +306,6 @@ const ChecklistRunPage = () => {
           totalTasks={counts.tasksTotal}
         />
       ) : (
-        // Clip, not hidden or auto: a scroll container here would hold the task footer's
-        // sticky position to itself instead of the window.
         <DashboardContentShell className="overflow-clip">
           <RunPageHeader
             canUpdateRun={canUpdateRun}
