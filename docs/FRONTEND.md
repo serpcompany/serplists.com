@@ -16,11 +16,11 @@ Path aliases: `@/*` maps to `src/*`, `@functions/*` to `functions/*`.
 | `src/features/*/` | Headless feature models (`use*Model.ts`) and mappers from API shapes to domain types |
 | `src/contexts/` | Auth, Ownership Context (legacy `WorkspaceContext`), Templates and Runs |
 | `src/hooks/` | Shared hooks |
-| `src/lib/api.ts` | The only HTTP client (transport) |
+| `src/lib/api.ts`, `src/lib/api/` | The only HTTP client (transport): `api.ts` joins the endpoint groups in `src/lib/api/` (templates, runs, teams, account) into one `api` object |
 | `src/lib/schemas/`, `src/types/` | Zod schemas and domain types, shared with the API |
 
 Enforced by `pnpm run deps:check` ([ARCHITECTURE.md](../ARCHITECTURE.md)): pages and
-components never call `src/lib/api.ts` at runtime (put the call in a feature model
+components never call `src/lib/api.ts` or `src/lib/api/` at runtime (put the call in a feature model
 or context), `components/ui/` stays presentational, only the route files in `src/app`
 and `src/server` import `functions/`, client code never imports `src/server`, and every
 module must be reachable from a route file in `src/app`. Remaining legacy call sites are
@@ -155,7 +155,7 @@ let it ask, so the user is asked once.
 
 ## Data and state
 
-- `src/lib/api.ts` handles the base URL, JSON, and structured errors, and sends the
+- `src/lib/api/request.ts` handles the base URL, JSON, and structured errors, and sends the
   Better Auth session cookie with `credentials: 'include'`. It never stores tokens.
   Responses are not yet parsed with Zod (TD-2 in the
   [tech debt tracker](exec-plans/tech-debt-tracker.md)).

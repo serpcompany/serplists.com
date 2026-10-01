@@ -53,7 +53,7 @@ Shared (imported by both sides)
 - shared modules importing React, UI, contexts, hooks, or the browser API client
 - `src/` importing from `functions/`, except the route files in `src/app` and `src/server`
 - client code (views, components, hooks, contexts, features) importing `src/server`
-- views and components calling `src/lib/api.ts` directly (type-only imports are allowed)
+- views and components calling the API client (`src/lib/api.ts`, `src/lib/api/`) directly (type-only imports are allowed)
 - `src/components/ui/` depending on app state, features, pages, or the API client
 - `functions/api/utils/` importing handlers; `db/schema/` importing application code
 - runtime code importing tests or devDependencies; circular imports
