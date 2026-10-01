@@ -9,6 +9,7 @@
     "dev:api": "node scripts/dev-auto.mjs",
     "dev:auto": "node scripts/dev-auto.mjs",
     "dev:stop": "node scripts/dev-stop.mjs",
+    "logs:query": "tsx scripts/logs-query.ts",
     "promote:prepare": "node scripts/promote-prepare.mjs",
     "setup": "node scripts/setup-local.mjs",
     "build": "pnpm run sitemap:generate && pnpm run headers:generate && next build",

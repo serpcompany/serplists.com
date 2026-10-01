@@ -5,6 +5,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { BROWSER_TEST_LOG_PATH, mirrorOutputToLog } from "../../scripts/lib/log-mirror.mjs";
 import { describeSpawnError, killProcessTree, spawnTool } from "../../scripts/lib/run-tool.mjs";
 import { buildPreviewArgs } from "./run-smoke-lib.mjs";
 
@@ -18,8 +19,9 @@ if (!existsSync(path.join(repoRoot, ".open-next", "worker.js"))) {
 const child = spawnTool("opennextjs-cloudflare", buildPreviewArgs(process.env), {
   cwd: repoRoot,
   env: process.env,
-  stdio: "inherit",
+  stdio: ["inherit", "pipe", "pipe"],
 });
+mirrorOutputToLog(child, path.join(repoRoot, BROWSER_TEST_LOG_PATH));
 
 // Playwright stops this process when the tests end; on Windows the preview's workerd would
 // otherwise keep the port.
