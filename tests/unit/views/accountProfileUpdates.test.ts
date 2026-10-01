@@ -165,4 +165,22 @@ describe("saveProfileChanges", () => {
 
     await expect(saveProfileChanges({ username: "alicejones" }, save)).resolves.toEqual({ ok: true });
   });
+
+  it("moves the form's baseline before the session refresh, so the refreshed user brings the server's values", async () => {
+    const save = deps();
+    const order: string[] = [];
+    save.onSaved.mockImplementation(() => order.push("baseline moved"));
+    save.refreshProfile.mockImplementation(async () => order.push("session refreshed"));
+
+    await saveProfileChanges({ name: "Alice Jones" }, save);
+
+    expect(order).toEqual(["baseline moved", "session refreshed"]);
+  });
+
+  it("still reports the save when the session cannot be re-read afterwards", async () => {
+    const save = deps();
+    save.refreshProfile.mockResolvedValue(false);
+
+    await expect(saveProfileChanges({ name: "Alice Jones" }, save)).resolves.toEqual({ ok: true });
+  });
 });

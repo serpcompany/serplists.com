@@ -22,15 +22,8 @@ export type AccountUpdatePlan =
   | { ok: true; updates: AccountUpdatePayload }
   | { ok: false; error: string };
 
-// Public profile and Template share URLs hang off the username, so a saved
-// username can be changed but not removed.
 export const USERNAME_REQUIRED_MESSAGE = "Username can't be removed. Enter a new username instead.";
 
-/**
- * The fields that changed. Every returned key has a value: `authClient.updateUser`
- * sends JSON, which drops undefined keys, so an undefined value would pass the
- * caller's "no changes" check and then save nothing.
- */
 export const buildAccountUpdatePayload = (
   profileData: ProfileDataInput,
   user: CurrentUserInput
@@ -53,7 +46,6 @@ export const buildAccountUpdatePayload = (
   return updates;
 };
 
-/** Validates the profile form and returns the changes to save, or why it cannot be saved. */
 export const planAccountUpdate = (
   profileData: ProfileDataInput,
   user: CurrentUserInput
@@ -77,18 +69,11 @@ type UpdateUserResult = { error?: { message?: string } | null } | null | undefin
 
 export type SaveProfileResult = { ok: true } | { ok: false; error: string };
 
-/**
- * Saves profile changes. Template lists embed the owner's username and name,
- * so when either changes the cached lists are refreshed; otherwise their
- * public links and Share would keep the old username until they go stale.
- */
 export const saveProfileChanges = async (
   updates: AccountUpdatePayload,
   deps: {
     updateUser: (updates: AccountUpdatePayload) => Promise<UpdateUserResult>;
-    /** Runs once the server accepted the change, before the session refresh. */
     onSaved: () => void;
-    // Resolves false when the session could not be re-read; the save itself succeeded.
     refreshProfile: () => Promise<unknown>;
     refreshTemplateOwnerData: () => Promise<unknown>;
   }
@@ -100,7 +85,6 @@ export const saveProfileChanges = async (
 
   deps.onSaved();
   if ("username" in updates || "name" in updates) {
-    // A failed refetch only leaves the lists stale; the profile itself was saved.
     void deps.refreshTemplateOwnerData().catch(() => undefined);
   }
   await deps.refreshProfile();
@@ -123,12 +107,6 @@ export const profileFormFromUser = (
   avatar_url: user.image || "",
 });
 
-/**
- * Merges a refreshed session user into the profile form. Full Name and
- * Username keep what the user typed if it differs from `baseline` (the server
- * values the form last loaded or saved); every other field follows the server.
- * The avatar saves immediately, so it always comes from the server.
- */
 export const syncProfileForm = (
   current: ProfileFormValues,
   baseline: ProfileFormValues | null,

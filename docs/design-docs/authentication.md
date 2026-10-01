@@ -192,6 +192,9 @@ and user-facing failure states when a supporting service is unavailable.
   which `Register.tsx` and `ProfileSection.tsx` use for `maxLength`.
   Public profile and Template share URLs use the username, so Account Settings
   lets a saved username change but not be cleared (`src/views/accountProfileUpdates.ts`).
+  The avatar saves as soon as it is uploaded or removed, so the form always shows the
+  server's; a session refresh (after an avatar change, or a rename in another tab) keeps
+  the Full Name and Username the user is still editing (`syncProfileForm`).
   Saving a new username or name refreshes the cached Template lists, which embed
   the owner's username, and Share always builds the link from the signed-in owner's
   current username. Links shared under an old username stop working after a rename.

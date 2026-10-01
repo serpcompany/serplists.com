@@ -32,10 +32,7 @@ const Account = () => {
   const [profileData, setProfileData] = useState<ProfileFormValues>(() =>
     profileFormFromUser(user ?? {}),
   );
-  // The server values the form last loaded or saved for this user. Fields that
-  // differ from it are unsaved edits, which a session refresh (for example
-  // after an avatar upload) must not overwrite.
-  const baselineRef = useRef<{ userId: string; values: ProfileFormValues } | null>(
+  const lastServerValuesRef = useRef<{ userId: string; values: ProfileFormValues } | null>(
     user ? { userId: user.id, values: profileFormFromUser(user) } : null,
   );
 
@@ -45,11 +42,10 @@ const Account = () => {
     }
 
     const server = profileFormFromUser(user);
-    const previous = baselineRef.current;
-    // A different account starts from scratch.
-    const baseline = previous?.userId === user.id ? previous.values : null;
-    baselineRef.current = { userId: user.id, values: server };
-    setProfileData((current) => syncProfileForm(current, baseline, server));
+    const previous = lastServerValuesRef.current;
+    const baselineOfThisUser = previous?.userId === user.id ? previous.values : null;
+    lastServerValuesRef.current = { userId: user.id, values: server };
+    setProfileData((current) => syncProfileForm(current, baselineOfThisUser, server));
   }, [user]);
 
   const handleProfileUpdate = async () => {
@@ -71,14 +67,12 @@ const Account = () => {
 
       const result = await saveProfileChanges(updates, {
         updateUser: (changes) => authClient.updateUser(changes),
-        // The saved values become the baseline, so the refreshed user replaces
-        // them with the server's (possibly normalized) values.
         onSaved: () => {
-          if (baselineRef.current) {
-            baselineRef.current = {
-              userId: baselineRef.current.userId,
+          if (lastServerValuesRef.current) {
+            lastServerValuesRef.current = {
+              userId: lastServerValuesRef.current.userId,
               values: {
-                ...baselineRef.current.values,
+                ...lastServerValuesRef.current.values,
                 fullName: profileData.fullName,
                 username: profileData.username,
               },
