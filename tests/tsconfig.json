@@ -2,10 +2,6 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.tests.tsbuildinfo",
-    "noImplicitOverride": false,
-    "noFallthroughCasesInSwitch": false,
-    "exactOptionalPropertyTypes": false,
-    "noUncheckedIndexedAccess": false,
     "allowJs": false
   },
   "include": [

@@ -10,6 +10,12 @@ import { elementAt } from '../../support/elements';
 const repoRoot = process.cwd();
 const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
+const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
+  'noImplicitOverride',
+  'noFallthroughCasesInSwitch',
+  'exactOptionalPropertyTypes',
+  'noUncheckedIndexedAccess',
+];
 
 const repositoryFiles: string[] = filesGitTracksOrWouldTrack().filter((file: string) => existsSync(file));
 
@@ -26,7 +32,7 @@ const tsconfigsTypecheckRuns = typecheckScript
     return path.posix.normalize(projectFlag === -1 ? 'tsconfig.json' : elementAt(args, projectFlag + 1));
   });
 
-const filesTheTsconfigIncludes = (tsconfig: string): string[] => {
+const parsedTsconfig = (tsconfig: string): ts.ParsedCommandLine => {
   const parsed = ts.getParsedCommandLineOfConfigFile(path.join(repoRoot, tsconfig), {}, {
     ...ts.sys,
     onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
@@ -34,8 +40,11 @@ const filesTheTsconfigIncludes = (tsconfig: string): string[] => {
     },
   });
   if (!parsed) throw new Error(`TypeScript could not read ${tsconfig}`);
-  return parsed.fileNames.map((file) => path.relative(repoRoot, file).split(path.sep).join('/'));
+  return parsed;
 };
+
+const filesTheTsconfigIncludes = (tsconfig: string): string[] =>
+  parsedTsconfig(tsconfig).fileNames.map((file) => path.relative(repoRoot, file).split(path.sep).join('/'));
 
 describe('pnpm run typecheck', () => {
   it('runs every tsconfig the repository holds', () => {
@@ -43,6 +52,20 @@ describe('pnpm run typecheck', () => {
       repositoryFiles.filter((file) => TSCONFIG_FILE.test(file) && !tsconfigsTypecheckRuns.includes(file)),
       'pnpm run typecheck never runs these tsconfigs, so no file only they include is type-checked. Add ' +
         '"tsc -p <tsconfig>" to the typecheck script in package.json, or delete the tsconfig.',
+    ).toEqual([]);
+  });
+
+  it("holds every tsconfig it runs, the tests' included, to the four settings stricter than strict", () => {
+    expect(
+      tsconfigsTypecheckRuns.flatMap((tsconfig) => {
+        const { options } = parsedTsconfig(tsconfig);
+        return SETTINGS_STRICTER_THAN_STRICT.filter((setting) => options[setting] !== true).map(
+          (setting) => `${tsconfig}: ${setting}`,
+        );
+      }),
+      'These tsconfigs turn off a setting every project keeps on. Set it back to true, or remove the override so the ' +
+        'project inherits it, and fix the errors it reports: narrow the value, give it a default that is right for ' +
+        'that case, or throw an error that names what is missing, never a ! or a cast (docs/RELIABILITY.md#quality-gates).',
     ).toEqual([]);
   });
 
