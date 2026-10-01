@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { firstOf } from "../../../support/elements";
+import { contentAt, firstOf, present, taskIn } from "../../../support/elements";
+import { storedSectionsIn } from "../../../support/storedJson";
 import { z } from "zod";
 import {
   callTool,
@@ -65,9 +66,9 @@ describe("personal run MCP handler", () => {
 
     expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ revision: 4, progress: 100 }));
     const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
-    const sections = JSON.parse(updates.items);
-    expect(sections[0].items[0].isCompleted).toBe(true);
-    expect(sections[0].items[0].contents[0].subItems.every((item: any) => item.isCompleted)).toBe(true);
+    const task = taskIn(storedSectionsIn(updates.items), 0, 0);
+    expect(task.isCompleted).toBe(true);
+    expect(present(contentAt(task, 0).subItems, "the sub-tasks").every((item) => item.isCompleted)).toBe(true);
   });
 
   it("returns a structured edit conflict without writing", async () => {

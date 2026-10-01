@@ -15,6 +15,8 @@ import {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { buildAuditEventValues } from "@functions/api/utils/audit";
 import { mcpRunResult, mcpToolCall } from "../../../support/agentMcp";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
+import { jsonRecordIn } from "../../../support/storedJson";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -41,7 +43,7 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expectCompact(audit.after_json);
-      expect(JSON.parse(audit.after_json ?? "{}")).toEqual(expect.objectContaining({
+      expect(JSON.parse(audit.after_json ?? "{}")).toEqual(objectContaining({
         id: mcpRunResult.parse(body.result.structuredContent).run.id,
         status: "in_progress",
         revision: 1,
@@ -66,16 +68,16 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       for (const payload of [audit.before_json, audit.after_json, audit.diff_json]) expectCompact(payload);
-      const diff = JSON.parse(audit.diff_json ?? "{}");
-      expect(diff).toEqual(expect.objectContaining({ operation, revision: { from: 4, to: 5 } }));
-      expect(diff.progress).toEqual({ from: 0, to: expect.any(Number) });
+      const diff = jsonRecordIn(audit.diff_json ?? "{}");
+      expect(diff).toEqual(objectContaining({ operation, revision: { from: 4, to: 5 } }));
+      expect(diff.progress).toEqual({ from: 0, to: anyInstanceOf(Number) });
       if ("taskId" in fields) expect(diff.taskId).toBe("task-1");
       if (operation === "set_task_notes") {
-        expect(diff).toEqual(expect.objectContaining({ notesLength: 20_000 }));
+        expect(diff).toEqual(objectContaining({ notesLength: 20_000 }));
         expect(audit.diff_json).not.toContain("nnnn");
       }
-      expect(JSON.parse(audit.before_json ?? "{}")).toEqual(expect.objectContaining({ revision: 4 }));
-      expect(JSON.parse(audit.after_json ?? "{}")).toEqual(expect.objectContaining({ revision: 5 }));
+      expect(JSON.parse(audit.before_json ?? "{}")).toEqual(objectContaining({ revision: 4 }));
+      expect(JSON.parse(audit.after_json ?? "{}")).toEqual(objectContaining({ revision: 5 }));
     });
 
     it("does not rewrite run content for a status-only change", async () => {
@@ -90,9 +92,9 @@ describe("personal run MCP handler", () => {
 
       const updates = firstOf(dbMocks.updateChain.set.mock.calls)[0];
       expect(updates).not.toHaveProperty("items");
-      expect(updates).toEqual(expect.objectContaining({ status: "completed", progress: 40, revision: 2 }));
-      const diff = JSON.parse((await recordedAudit()).diff_json ?? "{}");
-      expect(diff).toEqual(expect.objectContaining({ status: "completed", progress: { from: 40, to: 40 } }));
+      expect(updates).toEqual(objectContaining({ status: "completed", progress: 40, revision: 2 }));
+      const diff = jsonRecordIn((await recordedAudit()).diff_json ?? "{}");
+      expect(diff).toEqual(objectContaining({ status: "completed", progress: { from: 40, to: 40 } }));
     });
   });
 });

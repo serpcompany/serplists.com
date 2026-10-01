@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { firstOf, taskIn } from "../../../support/elements";
+import { storedSectionsIn } from "../../../support/storedJson";
 import { z } from "zod";
 import {
   dbMocks,
@@ -18,6 +19,7 @@ import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-ke
 import { authenticateWithAFreshRunKey, mcpRunsPage, mcpToolCall } from "../../../support/agentMcp";
 import { jsonObject } from "../../../support/readJson";
 import { readRunInFull } from "../../../support/runPages";
+import { objectContaining } from "../../../support/asymmetricMatchers";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -29,7 +31,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
 
     const getBody = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env));
-    expect(getBody.result.structuredContent.run).toEqual(expect.objectContaining({ retiredItems: retired }));
+    expect(getBody.result.structuredContent.run).toEqual(objectContaining({ retiredItems: retired }));
 
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ retired_items: JSON.stringify(retired) })]);
     const listBody = await toolBody(await handleAgentMcp(mcpToolCall("list_runs"), env));
@@ -70,7 +72,7 @@ describe("personal run MCP handler", () => {
       expect(task).not.toHaveProperty("subItems");
       const [text, subTasks] = taskContents.parse(task).contents;
       expect(text).not.toHaveProperty("subItems");
-      expect(subTasks.subItems).toEqual([expect.objectContaining({ id: "sub-1" })]);
+      expect(subTasks.subItems).toEqual([objectContaining({ id: "sub-1" })]);
     }
 
     it("leaves them out of get_run, live and retired", async () => {
@@ -97,8 +99,8 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expectOnlySubTasks(body.result.structuredContent.task);
-      const stored = JSON.parse(firstOf(dbMocks.updateChain.set.mock.calls)[0].items);
-      expect(stored[0].items[0].subItems).toEqual([expect.objectContaining({ id: "sub-8" })]);
+      const stored = storedSectionsIn(firstOf(dbMocks.updateChain.set.mock.calls)[0].items);
+      expect(taskIn(stored, 0, 0).subItems).toEqual([objectContaining({ id: "sub-8" })]);
     });
   });
 
@@ -151,7 +153,7 @@ describe("personal run MCP handler", () => {
         section: {
           id: "old-section",
           title: "Retired old-section",
-          items: [expect.objectContaining({ id: "old-section-task-1", notes: "x".repeat(30_000) })],
+          items: [objectContaining({ id: "old-section-task-1", notes: "x".repeat(30_000) })],
         },
       }]);
 

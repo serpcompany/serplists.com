@@ -3,6 +3,7 @@ import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { mcpErrorResponse, mcpToolCall } from "../../../support/agentMcp";
+import { jsonRecordIn } from "../../../support/storedJson";
 import { readJson } from "../../../support/readJson";
 
 describe("personal run MCP handler", () => {
@@ -29,7 +30,7 @@ describe("personal run MCP handler", () => {
       });
       await handleAgentMcp(malformed, env);
 
-      const entries = info.mock.calls.map(([line]) => JSON.parse(String(line)));
+      const entries = info.mock.calls.map(([line]) => jsonRecordIn(line));
       expect(entries).toContainEqual(expect.objectContaining({ message: "mcp_request", requestId: "req-123", keyId: "key-1" }));
       expect(entries).toContainEqual(expect.objectContaining({
         message: "mcp_tool_call",
@@ -61,7 +62,7 @@ describe("personal run MCP handler", () => {
       for (const level of ["error", "warn", "info"] as const) {
         consoleSpies.push(vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
           const raw = String(args[0]);
-          lines.push({ level, raw, entry: JSON.parse(raw) as LogLine });
+          lines.push({ level, raw, entry: jsonRecordIn(raw) });
         }));
       }
       const entries = (level: string) => lines.filter((line) => line.level === level).map((line) => line.entry);

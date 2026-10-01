@@ -3,6 +3,8 @@ import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { DatabaseSync } from "node:sqlite";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { firstOf } from "../../../support/elements";
+import { jsonRecordIn, storedSectionsIn } from "../../../support/storedJson";
+import { recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { z } from "zod";
 import {
   dbMocks,
@@ -17,8 +19,9 @@ import {
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { RUN_SECTIONS_WITH_LEGACY_IDS, TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS } from "../../../fixtures/runStartFixtures";
-import { mcpArgumentsError, mcpTemplatesPage, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
+import { mcpArgumentsError, mcpTemplatesPage, mcpToolCall, mcpToolResponse, runKeyWithEveryPermission } from "../../../support/agentMcp";
 import { readJson } from "../../../support/readJson";
+import { anyInstanceOf, objectContaining, stringContaining } from "../../../support/asymmetricMatchers";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -101,7 +104,7 @@ describe("personal run MCP handler", () => {
     it("treats null optional fields as absent, as every other tool does", async () => {
       dbMocks.selectChain.limit
         .mockResolvedValueOnce(NO_TEMPLATE_HOLDS_THE_SLUG)
-        .mockResolvedValueOnce([{ ...ownedTemplate(JSON.parse(personalRun().items as string)), version: 1 }]);
+        .mockResolvedValueOnce([{ ...ownedTemplate(storedSectionsIn(personalRun().items)), version: 1 }]);
 
       const body = await toolBody(await handleAgentMcp(mcpToolCall("create_template", {
         title: "Release SOP",
@@ -112,10 +115,10 @@ describe("personal run MCP handler", () => {
       }), env));
 
       expect(body.result.isError).toBeUndefined();
-      expect(body.result.structuredContent.template).toEqual(expect.objectContaining({ id: "template-1", version: 1 }));
+      expect(body.result.structuredContent.template).toEqual(objectContaining({ id: "template-1", version: 1 }));
       const created = dbMocks.insertChain.values.mock.calls.map(([values]) => values)
         .find((values: JsonRecord) => values.owner_type === "user" && typeof values.slug === "string");
-      expect(created).toEqual(expect.objectContaining({ is_public: false, team_id: null, user_id: "user-1" }));
+      expect(created).toEqual(objectContaining({ is_public: false, team_id: null, user_id: "user-1" }));
     });
 
     it("names the offending field when template arguments are invalid", async () => {
@@ -145,10 +148,10 @@ describe("personal run MCP handler", () => {
         expect(dbMocks.db.batch).toHaveBeenCalledOnce();
         expect(body.result.isError).toBeUndefined();
         expect(body.result.structuredContent).toEqual({
-          template: { id: expect.any(String), title: "Release SOP", version: 1 },
+          template: { id: anyInstanceOf(String), title: "Release SOP", version: 1 },
           sectionsOmitted: true,
         });
-        expect(warn.mock.calls.map(([line]) => JSON.parse(String(line)).message)).toContain("mcp_template_reload_error");
+        expect(warn.mock.calls.map(([line]) => jsonRecordIn(line).message)).toContain("mcp_template_reload_error");
       } finally {
         warn.mockRestore();
       }
@@ -164,14 +167,15 @@ describe("personal run MCP handler", () => {
         sections: [{ title: "Release", items: [{ title: "Verify" }] }],
       }), env);
 
-      expect(dbMocks.insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
+      expect(dbMocks.insertChain.values).toHaveBeenCalledWith(objectContaining({
         action: "template.created",
-        metadata_json: expect.stringContaining('"personalRunKeyName":"Codex"'),
+        metadata_json: stringContaining('"personalRunKeyName":"Codex"'),
       }));
     });
   });
 
   describe("strict JSON clients", () => {
+    const structuredContentOf = (raw: string) => mcpToolResponse.parse(JSON.parse(raw)).result.structuredContent;
     const LONE_SURROGATE_ESCAPE = /\\ud[89a-f][0-9a-f]{2}/i;
 
     const ownedTemplateRow = (overrides: JsonRecord) => ({
@@ -194,7 +198,7 @@ describe("personal run MCP handler", () => {
       const raw = await (await handleAgentMcp(mcpToolCall("list_templates"), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
-      const description = JSON.parse(raw).result.structuredContent.templates[0].description as string;
+      const description = textIn(firstOf(recordsIn(structuredContentOf(raw).templates)).description);
       expect(description.length).toBeLessThanOrEqual(500);
       expect(description.endsWith("…")).toBe(true);
     });
@@ -207,7 +211,7 @@ describe("personal run MCP handler", () => {
       const raw = await (await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
-      expect(JSON.parse(raw).result.structuredContent.run.title).toBe(`${"R".repeat(158)}\u{1F680}${"x".repeat(40)}`);
+      expect(recordIn(structuredContentOf(raw).run).title).toBe(`${"R".repeat(158)}\u{1F680}${"x".repeat(40)}`);
     });
 
     it("replaces lone surrogates already stored in template text", async () => {
@@ -218,7 +222,7 @@ describe("personal run MCP handler", () => {
       const raw = await (await handleAgentMcp(mcpToolCall("list_templates"), env)).text();
 
       expect(raw).not.toMatch(LONE_SURROGATE_ESCAPE);
-      const [template] = JSON.parse(raw).result.structuredContent.templates;
+      const template = firstOf(recordsIn(structuredContentOf(raw).templates));
       expect(template.title).toBe("Broken � title");
       expect(template.description).toBe("Half � emoji");
     });

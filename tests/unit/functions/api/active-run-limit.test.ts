@@ -21,8 +21,9 @@ import {
   runInsertStatements,
 } from '@functions/api/utils/active-run-limit';
 import { getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
+import { apiEnv } from '../../../support/apiEnv';
 
-const env = { DB: {} } as any;
+const env = apiEnv();
 const free = { plan: 'free' as const, limits: { maxTemplates: 1, maxActiveRuns: 3 } };
 
 describe('isReopening', () => {

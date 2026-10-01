@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { firstOf, valueAt } from "../../../support/elements";
+import { firstOf, present, valueAt } from "../../../support/elements";
+import { storedSectionsIn } from "../../../support/storedJson";
 import { z } from "zod";
 import {
   byteLength,
@@ -24,6 +25,7 @@ import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
 import { mcpRequest, mcpToolCall, mcpToolList, runKeyWithEveryPermission } from "../../../support/agentMcp";
 import { jsonObject, readJson } from "../../../support/readJson";
+import { anyInstanceOf, objectContaining } from "../../../support/asymmetricMatchers";
 
 const sectionPage = z.object({ section: z.object({ firstTask: z.number(), items: z.array(jsonObject) }).passthrough() }).passthrough();
 
@@ -83,7 +85,7 @@ describe("personal run MCP handler", () => {
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.structuredContent).toEqual({
-        run: expect.objectContaining({ templateId: "template-1", title: "Release SOP", revision: 1, progress: 0 }),
+        run: objectContaining({ templateId: "template-1", title: "Release SOP", revision: 1, progress: 0 }),
         sectionsOmitted: true,
       });
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
@@ -133,7 +135,7 @@ describe("personal run MCP handler", () => {
 
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.isError).toBeUndefined();
-      expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
+      expect(body.result.structuredContent.run).toEqual(objectContaining({ id: "run-1", revision: 8 }));
       expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
       expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
     });
@@ -157,8 +159,8 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
-      expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ id: "run-1", revision: 8 }));
-      expect(body.result.structuredContent.task).toEqual(expect.objectContaining({ id: "task-1", isCompleted: false }));
+      expect(body.result.structuredContent.run).toEqual(objectContaining({ id: "run-1", revision: 8 }));
+      expect(body.result.structuredContent.task).toEqual(objectContaining({ id: "task-1", isCompleted: false }));
       expect(markPersonalRunKeyUsed).toHaveBeenCalledWith(env, runKeyWithEveryPermission);
     });
 
@@ -215,12 +217,12 @@ describe("personal run MCP handler", () => {
         expect(body.result.isError, name).toBeUndefined();
         const { structuredContent } = body.result;
         if (name.endsWith("_template")) {
-          expect(structuredContent.template).toEqual(expect.objectContaining({ id: expect.any(String), version: 2 }));
+          expect(structuredContent.template).toEqual(objectContaining({ id: anyInstanceOf(String), version: 2 }));
           expect(structuredContent.sectionsOmitted).toBe(true);
         } else {
-          expect(structuredContent.run).toEqual(expect.objectContaining({
-            id: expect.any(String),
-            revision: expect.any(Number),
+          expect(structuredContent.run).toEqual(objectContaining({
+            id: anyInstanceOf(String),
+            revision: anyInstanceOf(Number),
           }));
         }
         expect(byteLength(structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
@@ -235,24 +237,24 @@ describe("personal run MCP handler", () => {
 
       expect(body.result.structuredContent.run).not.toHaveProperty("sections");
       expect(body.result.structuredContent).toEqual({
-        run: expect.objectContaining({ id: "run-1", revision: 3 }),
+        run: objectContaining({ id: "run-1", revision: 3 }),
         sectionId: "section-1",
         taskId: "task-1",
-        task: expect.objectContaining({ id: "task-1", notes: "Evidence" }),
+        task: objectContaining({ id: "task-1", notes: "Evidence" }),
       });
     });
 
     it("names a changed task too large for one result instead of returning it", async () => {
       const templateTextTooLargeForOneResult = "Read the runbook first. ".repeat(1_500);
-      const [section] = JSON.parse(personalRun().items as string);
-      section.items[0].contents.unshift({ id: "guide", type: "text", value: templateTextTooLargeForOneResult });
+      const section = firstOf(storedSectionsIn(personalRun().items));
+      present(firstOf(section.items).contents, "the task's contents").unshift({ id: "guide", type: "text", value: templateTextTooLargeForOneResult });
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify([section]), revision: 2 })]);
 
       const body = await setTaskNotes(2, "Evidence");
 
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.structuredContent).toEqual({
-        run: expect.objectContaining({ id: "run-1", revision: 3 }),
+        run: objectContaining({ id: "run-1", revision: 3 }),
         sectionId: "section-1",
         taskId: "task-1",
         taskOmitted: true,
@@ -270,11 +272,11 @@ describe("personal run MCP handler", () => {
       expect(task.structuredContent).toEqual({
         run: { id: "run-1", revision: 1 },
         sectionId: "section-1",
-        task: expect.objectContaining({ id: "task-1", title: "Verify" }),
+        task: objectContaining({ id: "task-1", title: "Verify" }),
       });
 
       const firstPage = await read({ sectionId: "section-1" });
-      expect(firstPage.structuredContent.section).toMatchObject({ id: "section-1", taskCount: expect.any(Number), firstTask: 0 });
+      expect(firstPage.structuredContent.section).toMatchObject({ id: "section-1", taskCount: anyInstanceOf(Number), firstTask: 0 });
       const nextPage = await read({ cursor: firstPage.structuredContent.nextCursor });
       expect(sectionPage.parse(nextPage.structuredContent).section.firstTask)
         .toBe(sectionPage.parse(firstPage.structuredContent).section.items.length);
@@ -286,7 +288,7 @@ describe("personal run MCP handler", () => {
       const section = await callTool("get_run", { runId: "run-1", sectionId: "section-1" });
       expect(section.result.structuredContent).toEqual({
         run: { id: "run-1", revision: 1 },
-        section: expect.objectContaining({ id: "section-1", title: "Release" }),
+        section: objectContaining({ id: "section-1", title: "Release" }),
       });
     });
   });

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleAdmin } from '@functions/api/handlers/admin';
 import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { SqliteD1 } from '../../../support/sqlite-d1';
+import { apiEnv } from '../../../support/apiEnv';
+import type { Env } from '@functions/api/types';
 import { apiErrorBody, readJson } from '../../../support/readJson';
 
 const ADMIN_SECRET = 'admin-secret-for-tests';
@@ -9,7 +11,7 @@ const DAY = 24 * 60 * 60;
 
 describe('POST /api/admin/entitlements/override on the migrated tables, with their real primary key and upsert', () => {
   let database: SqliteD1;
-  let env: any;
+  let env: Env;
   const nowSeconds = () => Math.floor(Date.now() / 1000);
 
   function addUser(id: string, email: string) {
@@ -38,7 +40,7 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
 
   beforeEach(() => {
     database = new SqliteD1();
-    env = { DB: database.binding, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET };
+    env = apiEnv({ DB: database.binding, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET });
     addUser('user-1', 'jane@example.com');
     addUser('user-2', 'other@example.com');
   });
@@ -170,7 +172,7 @@ describe('POST /api/admin/entitlements/override on the migrated tables, with the
 });
 
 describe('requests the admin endpoint does not serve, which never read the secret so none can test a guess', () => {
-  const env = { DB: {}, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET } as any;
+  const env = apiEnv({ ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET });
   const secrets: Array<[string, string | null]> = [['no secret', null], ['a wrong secret', 'not-the-secret'], ['the secret', ADMIN_SECRET]];
   const send = (method: string, path: string, secret: string | null) => handleAdmin(
     new Request(`http://localhost${path}`, { method, headers: secret ? { 'X-Admin-Secret': secret } : {} }),
@@ -201,7 +203,7 @@ describe('requests the admin endpoint does not serve, which never read the secre
     expect((await send('DELETE', '/api/admin/entitlements/override?userId=user-1', 'not-the-secret')).status).toBe(401);
     const disabled = await handleAdmin(
       new Request('http://localhost/api/admin/entitlements/override', { method: 'POST', headers: { 'X-Admin-Secret': ADMIN_SECRET } }),
-      { DB: {} } as any,
+      apiEnv(),
     );
     expect(disabled.status).toBe(401);
   });

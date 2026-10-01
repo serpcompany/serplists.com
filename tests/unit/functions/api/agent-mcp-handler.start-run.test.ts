@@ -1,7 +1,8 @@
 import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { elementAt, firstOf } from "../../../support/elements";
+import { elementAt, firstOf, taskIn } from "../../../support/elements";
+import { storedSectionsIn } from "../../../support/storedJson";
 import {
   callTool,
   dbMocks,
@@ -20,6 +21,7 @@ import {
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
 import { mcpRunResult } from "../../../support/agentMcp";
+import { arrayContaining, objectContaining, stringContaining } from "../../../support/asymmetricMatchers";
 
 const startRun = () => callTool("start_run", { templateId: "template-1" });
 
@@ -39,7 +41,7 @@ describe("personal run MCP handler", () => {
     const body = await startRun();
 
     expect(body.result.isError).toBeUndefined();
-    expect(body.result.structuredContent.run).toEqual(expect.objectContaining({
+    expect(body.result.structuredContent.run).toEqual(objectContaining({
       templateId: "template-1",
       title: "Release SOP",
       revision: 1,
@@ -47,10 +49,10 @@ describe("personal run MCP handler", () => {
     const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.user_id).toBe("user-1");
     expect(inserted.team_id).toBeNull();
-    expect(JSON.parse(inserted.items)[0].items[0].isCompleted).toBe(false);
-    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
+    expect(taskIn(storedSectionsIn(inserted.items), 0, 0).isCompleted).toBe(false);
+    expect(dbMocks.insertChain.values).toHaveBeenCalledWith(objectContaining({
       action: "checklist_run.created",
-      metadata_json: expect.stringContaining('"personalRunKeyId":"key-1"'),
+      metadata_json: stringContaining('"personalRunKeyId":"key-1"'),
     }));
   });
 
@@ -63,7 +65,7 @@ describe("personal run MCP handler", () => {
     const body = await startRun();
 
     expect(body.result.isError).toBeUndefined();
-    expect(JSON.parse(firstOf(dbMocks.insertChain.values.mock.calls)[0].items)).toEqual(runSections);
+    expect(storedSectionsIn(firstOf(dbMocks.insertChain.values.mock.calls)[0].items)).toEqual(runSections);
   });
 
   describe("Free plan active run limit", () => {
@@ -108,7 +110,7 @@ describe("personal run MCP handler", () => {
       expect(runInsert.sql).toMatch(/where \(select count\(\*\) from "checklist_runs" where .*"status" = \? .*\) < \?$/s);
       expect(runInsert.params.at(-1)).toBe(3);
       const startedRunId = mcpRunResult.parse(body.result.structuredContent).run.id;
-      expect(runInsert.params).toEqual(expect.arrayContaining([startedRunId, "user-1", "in_progress"]));
+      expect(runInsert.params).toEqual(arrayContaining([startedRunId, "user-1", "in_progress"]));
       expect(auditInsert.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);
       expect(auditInsert.params.at(-1)).toBe(startedRunId);
     });

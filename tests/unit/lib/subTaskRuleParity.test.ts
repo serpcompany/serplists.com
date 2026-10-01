@@ -12,6 +12,8 @@ import {
   reconcileRunSections,
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
+import { objectContaining } from '../../support/asymmetricMatchers';
+import { errorThrownBy } from '../../support/thrownError';
 
 type Json = Record<string, any>;
 
@@ -54,9 +56,9 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
   it('does not let an agent tick a sub-item the run page never shows', () => {
     const sections = sectionsOf(task({ isCompleted: false, contents: [onText(false), subTasksBlock(false)] }));
 
-    expect(() => applyRunOperation(sections, {
+    expect(errorThrownBy(() => applyRunOperation(sections, {
       runId: 'run-1', expectedRevision: 1, operation: 'set_subtask_completed', taskId: 'task-1', subtaskId: 'hidden', completed: true,
-    })).toThrow(expect.objectContaining({ code: 'subtask_not_found' }));
+    }))).toMatchObject({ code: 'subtask_not_found' });
   });
 
   it('keeps a completed task complete when its Template is reconciled', () => {
@@ -85,7 +87,7 @@ describe('the Sub-tasks of a task, which are only the rows of its Sub-tasks bloc
   it('are the only sub-items stored content keeps on a block', () => {
     const section = firstOf(sanitizeStoredSections(sectionsOf(task({ contents: [onText(false), subTasksBlock(true)] }))));
 
-    expect(section.items).toEqual([expect.objectContaining({
+    expect(section.items).toEqual([objectContaining({
       contents: [{ type: 'text', value: 'Steps' }, { type: 'subItems', value: '', subItems: [visible(true)] }],
     })]);
   });

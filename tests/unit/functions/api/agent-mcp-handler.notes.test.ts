@@ -1,10 +1,12 @@
 import { assert, beforeEach, describe, expect, it } from "vitest";
 import { firstOf, valueAt } from "../../../support/elements";
+import { storedSectionsIn } from "../../../support/storedJson";
 import { dbMocks, env, personalRun, resetAgentMcpHandlerMocks, toolBody } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH } from "@functions/api/handlers/agentMcpTools";
 import { mcpArgumentsError, mcpRequest, mcpToolCall, mcpToolList } from "../../../support/agentMcp";
 import { readJson } from "../../../support/readJson";
+import { objectContaining } from "../../../support/asymmetricMatchers";
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -46,10 +48,10 @@ describe("personal run MCP handler", () => {
       const written = await setNotes(notes);
       expect(written.result.isError).toBeUndefined();
       expect(written.result.structuredContent).toEqual({
-        run: expect.objectContaining({ id: "run-1", revision: 2 }),
+        run: objectContaining({ id: "run-1", revision: 2 }),
         sectionId: "section-1",
         taskId: "task-1",
-        task: expect.objectContaining({ id: "task-1", notes }),
+        task: objectContaining({ id: "task-1", notes }),
       });
 
       const stored = firstOf(dbMocks.updateChain.set.mock.calls)[0].items as string;
@@ -58,7 +60,7 @@ describe("personal run MCP handler", () => {
       expect(read.result.structuredContent).toEqual({
         run: { id: "run-1", revision: 2 },
         sectionId: "section-1",
-        task: expect.objectContaining({ id: "task-1", notes }),
+        task: objectContaining({ id: "task-1", notes }),
       });
     });
 
@@ -80,8 +82,8 @@ describe("personal run MCP handler", () => {
     });
 
     it("replaces longer notes written in the web app, which get_run reads in parts", async () => {
-      const [section] = JSON.parse(personalRun().items as string);
-      section.items[0].notes = "界".repeat(40_000);
+      const section = firstOf(storedSectionsIn(personalRun().items));
+      firstOf(section.items).notes = "界".repeat(40_000);
       const run = personalRun({ items: JSON.stringify([section]) });
 
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
@@ -91,7 +93,7 @@ describe("personal run MCP handler", () => {
 
       const replaced = await setNotes("Rollback verified; details in the incident doc.", run);
       expect(replaced.result.isError).toBeUndefined();
-      expect(replaced.result.structuredContent.task).toEqual(expect.objectContaining({
+      expect(replaced.result.structuredContent.task).toEqual(objectContaining({
         id: "task-1",
         notes: "Rollback verified; details in the incident doc.",
       }));
