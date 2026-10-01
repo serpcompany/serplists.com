@@ -47,7 +47,7 @@ function createEarlierRetiredLookup(previousRetired: unknown[]) {
   const take = (kind: RetiredRunEntry['kind'], id: string): JsonRecord | undefined => {
     for (let index = remaining.length - 1; index >= 0; index -= 1) {
       const entry = remaining[index];
-      if (entry.kind !== kind) continue;
+      if (entry?.kind !== kind) continue;
       const record = entry.kind === 'section' ? entry.section : entry.kind === 'item' ? entry.item : entry.subItem;
       if (isRecord(record) && getId(record) === id) {
         remaining.splice(index, 1);

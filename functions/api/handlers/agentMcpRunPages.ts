@@ -165,13 +165,12 @@ const minimalRun = (header: JsonRecord): JsonRecord => ({
   revision: header.revision,
 });
 
-const firstFitting = (candidates: JsonRecord[]): JsonRecord => candidates.find(fits) ?? candidates[candidates.length - 1];
+const firstFittingOr = (smallest: JsonRecord, larger: JsonRecord[]): JsonRecord => larger.find(fits) ?? smallest;
 
 export function startedRunResult(view: RunView): JsonRecord {
-  return firstFitting([
+  return firstFittingOr({ run: minimalRun(view.header), sectionsOmitted: true }, [
     wholeRun(view),
     { run: view.header, sectionsOmitted: true },
-    { run: minimalRun(view.header), sectionsOmitted: true },
   ]);
 }
 
@@ -190,9 +189,8 @@ export function updatedRunResult(header: JsonRecord, sections: JsonRecord[], ope
   const section = at ? sections[at.sectionIndex] : undefined;
   const ids = { ...(section ? frameId("sectionId", section.id) : {}), ...frameId("taskId", operation.taskId) };
   const task = at && section ? tasksOf(section)[at.taskIndex] : undefined;
-  return firstFitting([
+  return firstFittingOr({ run: minimalRun(header), taskOmitted: true }, [
     ...(task ? [{ run, ...ids, task: agentTaskView(task) }] : []),
     { run, ...ids, taskOmitted: true },
-    { run: minimalRun(header), taskOmitted: true },
   ]);
 }

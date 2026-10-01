@@ -112,7 +112,7 @@ const stripeSubscriptionSchema = z
     trial_end: z.number().nullish(),
     current_period_end: z.number().nullish(),
     metadata: z.record(z.unknown()).nullish(),
-    items: z.object({ data: z.array(subscriptionItemSchema).min(1) }).passthrough(),
+    items: z.object({ data: z.array(subscriptionItemSchema).nonempty() }).passthrough(),
   })
   .passthrough();
 

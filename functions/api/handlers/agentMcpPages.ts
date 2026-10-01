@@ -46,6 +46,12 @@ export function findSection(sections: JsonRecord[], sectionId: string, idArgumen
   return index;
 }
 
+export function sectionAt<Section extends JsonRecord>(sections: Section[], index: number): Section {
+  const section = sections[index];
+  if (!section) throw new ToolError("Section not found", "section_not_found");
+  return section;
+}
+
 export function findTask(
   sections: JsonRecord[],
   taskId: string,
@@ -54,7 +60,7 @@ export function findTask(
 ): { sectionIndex: number; taskIndex: number } {
   const candidates = sectionId === undefined ? sections.map((_, index) => index) : [findSection(sections, sectionId)];
   for (const sectionIndex of candidates) {
-    const taskIndex = tasksOf(sections[sectionIndex]).findIndex((task) => task.id === taskId);
+    const taskIndex = tasksOf(sectionAt(sections, sectionIndex)).findIndex((task) => task.id === taskId);
     if (taskIndex >= 0) return { sectionIndex, taskIndex };
   }
   throw new ToolError(
@@ -161,8 +167,8 @@ export function pack(units: Unit[], start: Position, room: number): Packed {
   if (start.offset === 0) {
     let used = 0;
     let count = 0;
-    while (start.unit + count < units.length && used + units[start.unit + count].bytes + SEPARATOR_BYTES <= room) {
-      used += units[start.unit + count].bytes + SEPARATOR_BYTES;
+    for (let next = units[start.unit]; next && used + next.bytes + SEPARATOR_BYTES <= room; next = units[start.unit + count]) {
+      used += next.bytes + SEPARATOR_BYTES;
       count += 1;
     }
     if (count > 0) {
@@ -230,7 +236,7 @@ export function outlinePage(paged: Paged, header: JsonRecord, sections: JsonReco
 export function sectionPage(paged: Paged, sections: JsonRecord[], sectionIndex: number, start: Position): JsonRecord {
   const fieldsUnit = 0;
   const firstTaskUnit = 1;
-  const section = sections[sectionIndex];
+  const section = sectionAt(sections, sectionIndex);
   const { items: _items, ...fields } = section;
   const tasks = tasksOf(section);
   const values: JsonRecord[] = [fields, ...tasks];
@@ -251,7 +257,7 @@ export function sectionPage(paged: Paged, sections: JsonRecord[], sectionIndex: 
 }
 
 export function taskPage(paged: Paged, sections: JsonRecord[], sectionIndex: number, taskIndex: number, start: Position): JsonRecord {
-  const section = sections[sectionIndex];
+  const section = sectionAt(sections, sectionIndex);
   const task = tasksOf(section)[taskIndex];
   const frame = { [paged.key]: paged.ref, ...frameId("sectionId", section.id) };
   const packed = pack([unitOf(task)], start, roomForUnits(frame));
@@ -265,7 +271,7 @@ export function taskPage(paged: Paged, sections: JsonRecord[], sectionIndex: num
 export function readSectionOrTask(paged: Paged, sections: JsonRecord[], args: SectionAndTaskIds): JsonRecord {
   if (args.taskId !== undefined) {
     const { sectionIndex, taskIndex } = findTask(sections, args.taskId, args.sectionId);
-    const section = sections[sectionIndex];
+    const section = sectionAt(sections, sectionIndex);
     const whole = { [paged.key]: paged.ref, sectionId: section.id, task: tasksOf(section)[taskIndex] };
     return fits(whole) ? whole : taskPage(paged, sections, sectionIndex, taskIndex, START);
   }

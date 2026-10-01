@@ -94,7 +94,9 @@ export function withD1Profiling(db: D1Database, record: Recorder): D1Database {
           const startedAt = Date.now();
           const results = await target.batch(statements.map((statement) => statementTarget.get(statement) ?? statement));
           results.forEach((result, index) => {
-            record(toRecord(statementSql.get(statements[index]) ?? "(unknown batch statement)", result, startedAt));
+            const statement = statements[index];
+            const sql = statement === undefined ? undefined : statementSql.get(statement);
+            record(toRecord(sql ?? "(unknown batch statement)", result, startedAt));
           });
           return results;
         };

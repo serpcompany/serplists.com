@@ -177,7 +177,7 @@ export async function handleTeams(request: Request, env: Env): Promise<Response>
     return listTeamInvites({ db, teamId });
   }
 
-  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath[3] === "link" && teamsSubpath.length === 4) {
+  if (request.method === "POST" && teamsSubpath[1] === "invites" && teamsSubpath[2] && teamsSubpath[3] === "link" && teamsSubpath.length === 4) {
     if (!canManageTeam(role)) {
       return jsonError("Forbidden", 403);
     }

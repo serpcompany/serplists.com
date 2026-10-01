@@ -1,9 +1,11 @@
 export const REDACTED_PATH_TOKEN = ':token';
 
 function redactSecretSegments(segments: string[]): string[] | null {
-  const [first, second, third] = segments.map((segment) => segment.toLowerCase());
-  if (third === undefined) return null;
-  const [firstAsSent, secondAsSent] = segments;
+  const [firstAsSent, secondAsSent, thirdAsSent] = segments;
+  if (firstAsSent === undefined || secondAsSent === undefined || thirdAsSent === undefined) return null;
+  const first = firstAsSent.toLowerCase();
+  const second = secondAsSent.toLowerCase();
+  const third = thirdAsSent.toLowerCase();
 
   const passwordResetToken = first === 'auth' && second === 'reset-password';
   const runShareToken = first === 'checklists' && second === 'shared';

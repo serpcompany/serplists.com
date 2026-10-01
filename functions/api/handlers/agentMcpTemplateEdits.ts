@@ -1,6 +1,6 @@
 import { isSubTasksBlock } from "../../../src/lib/schemas/storedSections";
 import { getId } from "../utils/template-identities";
-import { findSection, findTask, tasksOf } from "./agentMcpPages";
+import { findSection, findTask, sectionAt, tasksOf } from "./agentMcpPages";
 import type { TemplateOperationArgs } from "./agentMcpTemplateTools";
 import { isRecord, ToolError, type JsonRecord } from "./agentMcpTools";
 
@@ -31,12 +31,12 @@ function withSectionIds(section: JsonRecord): Section {
 
 const needsATask = () => new ToolError("A section needs at least one task; remove the section instead", "invalid_template");
 
-function taskInsertionPoint(sections: JsonRecord[], sectionId?: string, beforeTaskId?: string): { tasks: JsonRecord[]; at: number } {
+function taskInsertionPoint(sections: Section[], sectionId?: string, beforeTaskId?: string): { tasks: JsonRecord[]; at: number } {
   if (beforeTaskId !== undefined) {
     const { sectionIndex, taskIndex } = findTask(sections, beforeTaskId, sectionId, "beforeTaskId");
-    return { tasks: sections[sectionIndex].items as JsonRecord[], at: taskIndex };
+    return { tasks: sectionAt(sections, sectionIndex).items, at: taskIndex };
   }
-  const tasks = sections[findSection(sections, sectionId as string)].items as JsonRecord[];
+  const tasks = sectionAt(sections, findSection(sections, sectionId as string)).items;
   return { tasks, at: tasks.length };
 }
 
@@ -44,13 +44,13 @@ const spliceableCopy = (section: JsonRecord): Section => ({ ...section, items: [
 
 export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOperationArgs): TemplateEdit {
   const sections: Section[] = stored.map(spliceableCopy);
-  const tasksAt = (index: number) => sections[index].items;
+  const tasksAt = (index: number) => sectionAt(sections, index).items;
 
   switch (args.operation) {
     case "replace_section": {
       const index = findSection(sections, args.sectionId);
       const { id: _id, items, ...fields } = args.section;
-      sections[index] = { ...sections[index], ...fields, ...(items ? { items: items.map(withTaskIds) } : {}) };
+      sections[index] = { ...sectionAt(sections, index), ...fields, ...(items ? { items: items.map(withTaskIds) } : {}) };
       return { sections, sectionId: args.sectionId };
     }
     case "insert_section": {
@@ -64,7 +64,8 @@ export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOpera
     case "move_section": {
       const from = findSection(sections, args.sectionId);
       if (args.beforeSectionId === args.sectionId) return { sections, sectionId: args.sectionId };
-      const [section] = sections.splice(from, 1);
+      const section = sectionAt(sections, from);
+      sections.splice(from, 1);
       const at = args.beforeSectionId === undefined
         ? sections.length
         : findSection(sections, args.beforeSectionId, "beforeSectionId");
@@ -96,6 +97,7 @@ export function applyTemplateOperation(stored: JsonRecord[], args: TemplateOpera
       }
       const from = findTask(sections, args.taskId);
       const [task] = tasksAt(from.sectionIndex).splice(from.taskIndex, 1);
+      if (!task) throw new ToolError("Task not found (taskId)", "task_not_found");
       const { tasks, at } = taskInsertionPoint(sections, args.sectionId, args.beforeTaskId);
       if (tasksAt(from.sectionIndex).length === 0 && tasks !== tasksAt(from.sectionIndex)) throw needsATask();
       tasks.splice(at, 0, task);

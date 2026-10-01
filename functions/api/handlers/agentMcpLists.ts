@@ -127,7 +127,8 @@ function listPage<Row>({ name, rowsAndOneMore, owned, summarize, cursor }: Listi
   }
   const more = consumed < candidates.length || rowsAndOneMore.length > LIST_PAGE_ROWS;
   if (more && consumed === 0) throw resultTooLarge();
-  return bounded({ [name]: page, ...(more ? { nextCursor: encodeCursor(cursor(candidates[consumed - 1])) } : {}) });
+  const lastConsumed = more ? candidates[consumed - 1] : undefined;
+  return bounded({ [name]: page, ...(lastConsumed === undefined ? {} : { nextCursor: encodeCursor(cursor(lastConsumed)) }) });
 }
 
 function readListCursor(value: string | undefined, list: ListCursor["l"]): ListCursor | undefined {

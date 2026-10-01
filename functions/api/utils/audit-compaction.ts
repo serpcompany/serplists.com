@@ -70,7 +70,7 @@ function summarizeTaskChanges(previousRaw: unknown, nextRaw: unknown): JsonRecor
   const previous = previousRaw === undefined ? null : readTasks(previousRaw);
   if (!previous) return summary;
 
-  const lists: Record<string, string[]> = {
+  const lists: Record<'completed' | 'reopened' | 'notesChanged' | 'edited' | 'added' | 'removed', string[]> = {
     completed: [], reopened: [], notesChanged: [], edited: [], added: [], removed: [],
   };
   for (const task of next.tasks.values()) {

@@ -18,7 +18,9 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
   const shareToken = checklistsSubpath[1];
   const userId = await getSessionUserId(request, env);
   const isSharedRoute = checklistsSubpath[0] === 'shared';
-  const isRunSharePath = checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share';
+  const runIdInSharePath = checklistsSubpath.length === 3 && checklistsSubpath[0] === 'run' && checklistsSubpath[2] === 'share'
+    ? checklistsSubpath[1]
+    : undefined;
   const isCollectionPath = checklistsSubpath.length === 0;
 
   if (isSharedRoute) {
@@ -46,8 +48,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
       return revalidateChecklistRun(request, env, db, userId, checklistsSubpath[0]);
     }
 
-    if (isRunSharePath) {
-      return shareChecklistRun(request, env, db, userId, checklistsSubpath[1]);
+    if (runIdInSharePath !== undefined) {
+      return shareChecklistRun(request, env, db, userId, runIdInSharePath);
     }
 
     if (!isCollectionPath) {
@@ -67,8 +69,8 @@ export async function handleChecklists(request: Request, env: Env): Promise<Resp
     return updateChecklistRun(request, env, db, userId, checklistId);
   }
 
-  if (request.method === 'DELETE' && isRunSharePath) {
-    return stopSharingChecklistRun(request, env, db, userId, checklistsSubpath[1]);
+  if (request.method === 'DELETE' && runIdInSharePath !== undefined) {
+    return stopSharingChecklistRun(request, env, db, userId, runIdInSharePath);
   }
 
   if (request.method === 'DELETE') {

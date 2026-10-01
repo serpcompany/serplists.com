@@ -65,66 +65,75 @@ export function validateStableTemplateIdentities(sections: unknown[]): string | 
   return null;
 }
 
+type SiblingMatch = { record: JsonRecord; id: string; previousIndex: number | null };
+
 function matchSiblingIdentities(
   currentRecords: JsonRecord[],
   previousRaw: JsonRecord[],
   previousNormalized: JsonRecord[],
   fallbackId: (index: number) => string,
-): Array<{ id: string; previousIndex: number | null }> {
-  const matches: Array<{ id?: string; previousIndex: number | null }> = currentRecords.map(() => ({ previousIndex: null }));
+): SiblingMatch[] {
+  const matches = currentRecords.map(
+    (record): { record: JsonRecord; id?: string; previousIndex: number | null } => ({ record, previousIndex: null }),
+  );
   const usedPrevious = new Set<number>();
 
-  currentRecords.forEach((current, currentIndex) => {
-    const currentId = getId(current);
+  matches.forEach((match) => {
+    const currentId = getId(match.record);
     if (!currentId) return;
     const previousIndex = previousNormalized.findIndex(
       (candidate, candidateIndex) => !usedPrevious.has(candidateIndex) && getId(candidate) === currentId,
     );
     if (previousIndex < 0) return;
-    matches[currentIndex] = { id: currentId, previousIndex };
+    match.id = currentId;
+    match.previousIndex = previousIndex;
     usedPrevious.add(previousIndex);
   });
 
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
-    const title = typeof current.title === 'string' ? current.title : null;
+  matches.forEach((match, currentIndex) => {
+    if (match.id) return;
+    const title = typeof match.record.title === 'string' ? match.record.title : null;
     if (!title || currentRecords.filter((candidate) => candidate.title === title).length !== 1) return;
     const candidates = previousRaw.flatMap((candidate, candidateIndex) =>
       !usedPrevious.has(candidateIndex) && candidate.title === title ? [candidateIndex] : []
     );
-    if (candidates.length !== 1 || getId(previousRaw[candidates[0]])) return;
-    const previousIndex = candidates[0];
-    matches[currentIndex] = {
-      id: getId(previousNormalized[previousIndex]) ?? fallbackId(currentIndex),
-      previousIndex,
-    };
+    const [previousIndex] = candidates;
+    if (previousIndex === undefined || candidates.length !== 1 || getId(previousRaw[previousIndex])) return;
+    match.id = getId(previousNormalized[previousIndex]) ?? fallbackId(currentIndex);
+    match.previousIndex = previousIndex;
     usedPrevious.add(previousIndex);
   });
 
-  currentRecords.forEach((current, currentIndex) => {
-    if (matches[currentIndex].id) return;
+  matches.forEach((match, currentIndex) => {
+    if (match.id) return;
     if (
       previousRaw[currentIndex]
       && !usedPrevious.has(currentIndex)
       && !getId(previousRaw[currentIndex])
     ) {
-      matches[currentIndex] = {
-        id: getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex),
-        previousIndex: currentIndex,
-      };
+      match.id = getId(previousNormalized[currentIndex]) ?? fallbackId(currentIndex);
+      match.previousIndex = currentIndex;
       usedPrevious.add(currentIndex);
       return;
     }
-    matches[currentIndex] = {
-      id: getId(current) ?? fallbackId(currentIndex),
-      previousIndex: null,
-    };
+    match.id = getId(match.record) ?? fallbackId(currentIndex);
+    match.previousIndex = null;
   });
 
   return matches.map((match, index) => ({
+    record: match.record,
     id: match.id ?? fallbackId(index),
     previousIndex: match.previousIndex,
   }));
+}
+
+const previousAt = (previous: JsonRecord[], previousIndex: number | null): JsonRecord | undefined =>
+  previousIndex === null ? undefined : previous[previousIndex];
+
+function matchedIdAt(matches: SiblingMatch[], index: number): string {
+  const match = matches[index];
+  if (!match) throw new Error(`No id was matched for sub-item ${index + 1}`);
+  return match.id;
 }
 
 function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]): JsonRecord[] {
@@ -138,15 +147,9 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
     (index) => `legacy-section-${index + 1}`,
   );
 
-  return sections.map((section, sectionIndex) => {
-    const sectionMatch = sectionMatches[sectionIndex];
-    const sectionId = sectionMatch.id;
-    const previousSectionRaw = sectionMatch.previousIndex === null
-      ? undefined
-      : previousSections[sectionMatch.previousIndex];
-    const previousSectionNormalized = sectionMatch.previousIndex === null
-      ? undefined
-      : previousNormalized[sectionMatch.previousIndex];
+  return sectionMatches.map(({ record: section, id: sectionId, previousIndex: previousSectionIndex }, sectionIndex) => {
+    const previousSectionRaw = previousAt(previousSections, previousSectionIndex);
+    const previousSectionNormalized = previousAt(previousNormalized, previousSectionIndex);
     const previousItemsRaw = getArray(previousSectionRaw?.items).filter(isRecord);
     const previousItemsNormalized = getArray(previousSectionNormalized?.items).filter(isRecord);
     const currentItems = getArray(section.items).filter(isRecord);
@@ -160,15 +163,9 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
     return {
       ...section,
       id: sectionId,
-      items: currentItems.map((item, itemIndex) => {
-        const itemMatch = itemMatches[itemIndex];
-        const itemId = itemMatch.id;
-        const previousItemRaw = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsRaw[itemMatch.previousIndex];
-        const previousItemNormalized = itemMatch.previousIndex === null
-          ? undefined
-          : previousItemsNormalized[itemMatch.previousIndex];
+      items: itemMatches.map(({ record: item, id: itemId, previousIndex: previousItemIndex }, itemIndex) => {
+        const previousItemRaw = previousAt(previousItemsRaw, previousItemIndex);
+        const previousItemNormalized = previousAt(previousItemsNormalized, previousItemIndex);
         const previousSubItemsRaw = previousItemRaw ? getSubItems(previousItemRaw) : [];
         const previousSubItemsNormalized = previousItemNormalized ? getSubItems(previousItemNormalized) : [];
         const currentSubItems = getSubItems(item);
@@ -181,7 +178,7 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
         let subItemSequence = 0;
         const assignSubItems = (subItems: unknown[]) => subItems.filter(isRecord).map((subItem) => ({
           ...subItem,
-          id: subItemMatches[subItemSequence++].id,
+          id: matchedIdAt(subItemMatches, subItemSequence++),
         }));
 
         return {
@@ -227,13 +224,20 @@ export function withStableTemplateIdentities(sections: unknown[]): unknown[] {
   let sectionIndex = 0;
   return sections.map((section) => {
     if (!isRecord(section)) return section;
-    const stableSection = stableSections[sectionIndex++];
+    const stableSection = stableRecordAt(stableSections, sectionIndex++, 'section');
     if (!Array.isArray(section.items)) return { ...section, id: stableSection.id };
     const stableItems = getArray(stableSection.items).filter(isRecord);
     let itemIndex = 0;
-    const items = section.items.map((item) => (isRecord(item) ? withItemIds(item, stableItems[itemIndex++]) : item));
+    const items = section.items.map((item) =>
+      (isRecord(item) ? withItemIds(item, stableRecordAt(stableItems, itemIndex++, 'item')) : item));
     return { ...section, id: stableSection.id, items };
   });
+}
+
+function stableRecordAt(stable: JsonRecord[], index: number, kind: 'section' | 'item'): JsonRecord {
+  const record = stable[index];
+  if (!record) throw new Error(`Assigning stable ids returned no ${kind} at position ${index + 1}`);
+  return record;
 }
 
 export function withStableItemsColumn(items: string): string {

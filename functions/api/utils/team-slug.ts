@@ -19,7 +19,7 @@ const TEAM_SLUG_UNIQUE_VIOLATION = /unique constraint failed:[^:]*\bteams\.slug\
 export async function isTeamSlugTaken(db: Db, slug: string, exceptTeamId?: string): Promise<boolean> {
   const { teams } = schema;
   const [existing] = await db.select({ id: teams.id }).from(teams).where(eq(teams.slug, slug)).limit(1);
-  return Boolean(existing) && existing.id !== exceptTeamId;
+  return existing !== undefined && existing.id !== exceptTeamId;
 }
 
 export function teamSlugInUseError(): Response {
