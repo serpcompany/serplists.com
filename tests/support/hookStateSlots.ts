@@ -1,6 +1,8 @@
 type StateUpdate<T> = T | ((previous: T) => T);
+type MountedEffect = { dependencies?: readonly unknown[]; cleanup?: () => void };
 
 const slots = { values: [] as unknown[], next: 0, rendering: false, setWhileRendering: false };
+const mountedEffects = new Map<number, MountedEffect>();
 
 export function useStateKeptBetweenRenders<T>(initial: T | (() => T)) {
   const slot = slots.next;
@@ -15,9 +17,42 @@ export function useStateKeptBetweenRenders<T>(initial: T | (() => T)) {
   return [slots.values[slot] as T, setState] as const;
 }
 
+export function useRefKeptBetweenRenders<T>(initial: T) {
+  const [ref] = useStateKeptBetweenRenders(() => ({ current: initial }));
+  return ref;
+}
+
+const dependenciesChanged = (previous: readonly unknown[] | undefined, next: readonly unknown[] | undefined) =>
+  !previous || !next || next.some((dependency, index) => !Object.is(dependency, previous[index]));
+
+export function useEffectKeptBetweenRenders(effect: () => void | (() => void), dependencies?: readonly unknown[]) {
+  const slot = slots.next;
+  slots.next += 1;
+  const mounted = mountedEffects.get(slot);
+  if (mounted && !dependenciesChanged(mounted.dependencies, dependencies)) return;
+  mounted?.cleanup?.();
+  mountedEffects.set(slot, { dependencies, cleanup: effect() ?? undefined });
+}
+
+export function unmountEffects() {
+  const unmounting = [...mountedEffects.values()];
+  mountedEffects.clear();
+  for (const effect of unmounting) effect.cleanup?.();
+}
+
+export const hooksKeptBetweenRenders = {
+  useCallback: <T>(callback: T) => callback,
+  useEffect: useEffectKeptBetweenRenders,
+  useMemo: <T>(create: () => T) => create(),
+  useRef: useRefKeptBetweenRenders,
+  useState: useStateKeptBetweenRenders,
+  useSyncExternalStore: <T>(_subscribe: unknown, getSnapshot: () => T) => getSnapshot(),
+};
+
 export function forgetKeptState() {
   slots.values = [];
   slots.next = 0;
+  mountedEffects.clear();
 }
 
 export function renderKeepingState<T>(render: () => T): T {

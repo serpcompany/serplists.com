@@ -53,9 +53,7 @@ const refuseCopy = async (): Promise<boolean> => {
   throw new Error('The request is not allowed by the user agent');
 };
 
-// The API makes a shared run public, and revalidating a public run fails with 409. The runs
-// list is cached for 5 minutes, so it kept offering Revalidate after a share.
-describe('sharing a run from the runs list', () => {
+describe('sharing a run from the runs list, which is cached for 5 minutes and must stop offering Revalidate, which fails on a public run', () => {
   it('marks the cached run shared as soon as the link exists, even when the copy fails', async () => {
     const client = new QueryClient();
     clients.push(client);
@@ -91,10 +89,7 @@ describe('sharing a run from the runs list', () => {
   });
 });
 
-// A run archived in another tab, by a teammate or over MCP stays in the cached runs list for
-// up to 5 minutes. Share and Stop sharing on it answer 404; the list must reload so the run
-// leaves it, instead of every retry failing the same way.
-describe('Share and Stop sharing on a run archived elsewhere', () => {
+describe('Share and Stop sharing on a run archived elsewhere, which the cached runs list still shows for up to 5 minutes', () => {
   const archived = () => createApiError(404, { error: 'Checklist run not found' });
 
   it('reloads the runs list before a refused Stop sharing rejects', async () => {

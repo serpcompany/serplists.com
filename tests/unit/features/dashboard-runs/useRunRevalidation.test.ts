@@ -2,65 +2,45 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChecklistRun } from '@/types/checklist';
 
-// Vitest runs without a DOM, so a minimal stand-in for React runs the hook: state and refs
-// live in `cells`, kept across renders by call order.
-const fake = vi.hoisted(() => ({ cells: [] as unknown[], cursor: 0 }));
-
-vi.mock('react', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react')>()),
-  useState: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = typeof initial === 'function' ? (initial as () => unknown)() : initial;
-    const setState = (next: unknown) => {
-      fake.cells[index] = typeof next === 'function' ? (next as (value: unknown) => unknown)(fake.cells[index]) : next;
-    };
-    return [fake.cells[index], setState];
-  },
-  useRef: (initial: unknown) => {
-    const index = fake.cursor++;
-    if (!(index in fake.cells)) fake.cells[index] = { current: initial };
-    return fake.cells[index];
-  },
-}));
+vi.mock('react', async (importOriginal) => {
+  const { useRefKeptBetweenRenders, useStateKeptBetweenRenders } = await import('../../../support/hookStateSlots');
+  return { ...(await importOriginal<typeof import('react')>()), useRef: useRefKeptBetweenRenders, useState: useStateKeptBetweenRenders };
+});
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { toast } from 'sonner';
 import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
 
+import { forgetKeptState, renderKeepingState } from '../../../support/hookStateSlots';
+
 const run = (id: string) => ({ id, revision: 3, isStale: true, isPublic: false }) as ChecklistRun;
 const runA = run('run-a');
 const runB = run('run-b');
 
-// Each request stays open until the test settles every open request for that run.
-const requests: Array<{ runId: string; resolve: () => void; reject: (error: unknown) => void }> = [];
+const openRequests: Array<{ runId: string; resolve: () => void; reject: (error: unknown) => void }> = [];
 const onRevalidateRun = vi.fn(
   (target: ChecklistRun) =>
     new Promise<void>((resolve, reject) => {
-      requests.push({ runId: target.id, resolve, reject });
+      openRequests.push({ runId: target.id, resolve, reject });
     }),
 );
 const settle = (runId: string, error?: Error) => {
-  for (const request of requests.filter((entry) => entry.runId === runId)) {
+  for (const request of openRequests.filter((entry) => entry.runId === runId)) {
     if (error) request.reject(error);
     else request.resolve();
   }
 };
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-// The runs list, reduced to the hook under test.
 function RunsList() {
   return useRunRevalidation(onRevalidateRun);
 }
 
-// One render of it under the fake React, as the runs list does on each change.
-const rendered = () => {
-  fake.cursor = 0;
-  return RunsList();
-};
+const rendered = () => renderKeepingState(RunsList);
 
 beforeEach(() => {
-  fake.cells = [];
-  requests.length = 0;
+  forgetKeptState();
+  openRequests.length = 0;
   onRevalidateRun.mockClear();
   vi.mocked(toast.error).mockClear();
   vi.mocked(toast.success).mockClear();
@@ -87,9 +67,7 @@ describe('useRunRevalidation', () => {
     expect(toast.success).toHaveBeenCalledTimes(2);
   });
 
-  // A second request would carry the same revision, and the API refuses one of the two
-  // with 409 edit_conflict: a success and a "changed elsewhere" toast for one action.
-  it('sends one request per run however often its Revalidate is pressed', async () => {
+  it('sends one request per run however often its Revalidate is pressed, since a second would carry the same revision and fail with 409 edit_conflict', async () => {
     void rendered().revalidate(runA);
     void rendered().revalidate(runB);
     settle('run-a');

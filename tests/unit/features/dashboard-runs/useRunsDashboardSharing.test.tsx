@@ -4,47 +4,23 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import type { ChecklistRun } from '@/types/checklist';
 
+import { createFakeContainer, installFakeDomGlobals } from '../../../fixtures/fakeDom';
+
 const { createChecklistRunShare } = vi.hoisted(() => ({ createChecklistRunShare: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: { createChecklistRunShare } }));
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 
-// Each Share replaces the run's token, so the runs list reopens the link it made instead of
-// minting another. A teammate or another tab can stop sharing the run, which kills that link.
-// Once the refreshed list shows the run private, Share Run must make the run public again
-// with a new link instead of handing out the dead one.
-
-// Vitest runs in node with no DOM. The probe renders nothing, so React DOM needs only a
-// container object, and a window while it commits, to run effects.
-const fakeDocument = { nodeType: 9, activeElement: null, addEventListener() {}, removeEventListener() {} };
-const fakeContainer = {
-  nodeType: 1,
-  nodeName: 'DIV',
-  tagName: 'DIV',
-  namespaceURI: 'http://www.w3.org/1999/xhtml',
-  ownerDocument: fakeDocument,
-  addEventListener() {},
-  removeEventListener() {},
-};
-const globals = globalThis as Record<string, unknown>;
-const savedGlobals = { window: globals.window, act: globals.IS_REACT_ACT_ENVIRONMENT };
-
+let restoreGlobals: () => void;
 beforeAll(() => {
-  globals.window = {
-    HTMLIFrameElement: class {},
-    document: fakeDocument,
+  restoreGlobals = installFakeDomGlobals({
     location: { origin: 'https://serplists.com' },
     addEventListener() {},
     removeEventListener() {},
-  };
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
 });
-
-afterAll(() => {
-  globals.window = savedGlobals.window;
-  globals.IS_REACT_ACT_ENVIRONMENT = savedGlobals.act;
-});
+afterAll(() => restoreGlobals());
 
 let root: Root | null = null;
 beforeEach(() => {
@@ -75,7 +51,7 @@ async function mountRunsList(initial: ChecklistRun[]) {
     state = useRunsDashboardSharing({ runs, onStopSharingRun: async () => undefined });
     return null;
   }
-  root = createRoot(fakeContainer as unknown as Element);
+  root = createRoot(createFakeContainer() as unknown as Element);
   const render = async (runs: ChecklistRun[]) => {
     await act(async () => {
       root?.render(<Probe runs={runs} />);
@@ -100,11 +76,10 @@ async function mountRunsList(initial: ChecklistRun[]) {
   };
 }
 
-describe('sharing from the runs list', () => {
+describe("sharing from the runs list, where each Share replaces the run's token and stopping sharing kills the link", () => {
   it('reopens the link it made while the list shows the run shared', async () => {
     const list = await mountRunsList([listedRun('run-1', false)]);
     await list.share('run-1');
-    // markRunShared marks the run public in the cached list.
     await list.render([listedRun('run-1', true)]);
     await list.closeDialog();
 
@@ -125,13 +100,12 @@ describe('sharing from the runs list', () => {
     expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-1/');
   });
 
-  it('makes a new link once the refreshed list shows the run private', async () => {
+  it('makes a new link once the list refetches the run as private, as after a teammate stopped sharing it', async () => {
     const list = await mountRunsList([listedRun('run-1', false)]);
     await list.share('run-1');
     await list.render([listedRun('run-1', true)]);
     await list.closeDialog();
 
-    // A teammate stopped sharing; the list refetched on focus.
     await list.render([listedRun('run-1', false)]);
     expect(list.current().sharedLink).toBeNull();
     await list.share('run-1');
@@ -141,13 +115,12 @@ describe('sharing from the runs list', () => {
     expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
   });
 
-  it('does not bring the old link back when the run is later listed shared again', async () => {
+  it('does not bring its old link back when the run was stopped and shared again elsewhere, which killed that link', async () => {
     const list = await mountRunsList([listedRun('run-1', false)]);
     await list.share('run-1');
     await list.render([listedRun('run-1', true)]);
     await list.closeDialog();
 
-    // Stopped elsewhere, then shared elsewhere with a new token: the first link is dead.
     await list.render([listedRun('run-1', false)]);
     await list.render([listedRun('run-1', true)]);
     await list.share('run-1');
@@ -156,13 +129,12 @@ describe('sharing from the runs list', () => {
     expect(list.current().sharedLink?.url).toBe('https://serplists.com/share/token-2/');
   });
 
-  it('forgets the link, and closes its dialog, when the run leaves the list', async () => {
+  it('forgets the link, and closes its dialog, when the run is deleted elsewhere and leaves the list', async () => {
     const list = await mountRunsList([listedRun('run-1', false), listedRun('run-2', false)]);
     await list.share('run-1');
     await list.render([listedRun('run-1', true), listedRun('run-2', false)]);
     expect(list.current().isShareDialogOpen).toBe(true);
 
-    // Archived or deleted elsewhere.
     await list.render([listedRun('run-2', false)]);
 
     expect(list.current().sharedLink).toBeNull();
