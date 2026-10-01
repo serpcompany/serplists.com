@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { normalizeSqlFormatting } from "../check-production-d1-schema-lib.mjs";
 import { execTool } from "../lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -37,15 +38,12 @@ function wranglerJson(persistPath, statement) {
   return JSON.parse(output)[0]?.results ?? [];
 }
 
-// Wrangler only returns the first result set of a multi-statement command, so
-// batch same-shaped SELECTs into UNION ALL queries. D1 allows at most 5 terms
-// per compound SELECT.
-const D1_MAX_COMPOUND_SELECT = 5;
+const D1_MAX_COMPOUND_SELECT_TERMS = 5;
 
 function wranglerBatch(persistPath, statements) {
   const rows = [];
-  for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT) {
-    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT)));
+  for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT_TERMS) {
+    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT_TERMS)));
   }
   return rows;
 }
@@ -69,16 +67,8 @@ function wranglerUnion(persistPath, statements) {
   return JSON.parse(output).flatMap(({ results }) => results ?? []);
 }
 
-export function normalizeSql(value) {
-  return String(value ?? "")
-    .trim()
-    .replaceAll("`", "")
-    .replaceAll('"', "")
-    .replace(/\s+/g, " ");
-}
-
 function normalizeComparableSql(value) {
-  return normalizeSql(value)
+  return normalizeSqlFormatting(value)
     .replace(/\bfalse\b/gi, "0")
     .replace(/\btrue\b/gi, "1")
     .toLowerCase();
@@ -197,7 +187,7 @@ async function loadCatalog(persistPath) {
 
   catalog.triggers = objects
     .filter(({ type }) => type === "trigger")
-    .map(({ name, tbl_name: table, sql }) => ({ name, table, definition: normalizeSql(sql) }))
+    .map(({ name, tbl_name: table, sql }) => ({ name, table, definition: normalizeSqlFormatting(sql) }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return catalog;
 }

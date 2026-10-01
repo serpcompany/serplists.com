@@ -1,9 +1,5 @@
 import { readFileSync } from "node:fs";
 
-// What a remote D1 database must have for the deployed API to work. The tables,
-// columns and named indexes mirror the Drizzle schema in db/schema/, and
-// tests/unit/scripts/check-production-d1-schema-lib.test.ts fails when they
-// drift apart. The triggers come from db/sql-only-schema.json.
 export const REQUIRED_D1_SCHEMA = Object.freeze({
   sitemap_revisions: ["kind", "revised_at"],
   sitemap_profile_revisions: ["user_id", "revised_at"],
@@ -325,12 +321,10 @@ function loadSqlOnlyTriggers() {
   return triggers.map(({ name, table, definition }) => Object.freeze({ name, table, definition }));
 }
 
-// Triggers Drizzle cannot express (the sitemap revision triggers from 0023).
 export const REQUIRED_D1_TRIGGERS = Object.freeze(loadSqlOnlyTriggers());
 
 const TRIGGER_QUERY = "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger';";
 
-/** One Wrangler command: per-table column, index and foreign-key pragmas, then the triggers. */
 export function buildSchemaQuery(tableNames) {
   const pragmas = (pragma) => tableNames.map((tableName) => `pragma ${pragma}('${tableName}');`);
   return [
@@ -341,7 +335,6 @@ export function buildSchemaQuery(tableNames) {
   ].join(" ");
 }
 
-/** Splits Wrangler's result sets for buildSchemaQuery, failing if any are missing. */
 export function splitSchemaQueryResults(tableNames, wranglerResults) {
   const count = tableNames.length;
   const expected = count * 3 + 1;
@@ -569,9 +562,7 @@ export function diffD1Schema(
   };
 }
 
-// The same normalization the Drizzle parity check uses to record
-// db/sql-only-schema.json, so formatting-only differences are not drift.
-function normalizeTriggerSql(value) {
+export function normalizeSqlFormatting(value) {
   return String(value ?? "")
     .trim()
     .replaceAll("`", "")
@@ -579,7 +570,6 @@ function normalizeTriggerSql(value) {
     .replace(/\s+/g, " ");
 }
 
-/** Maps the sqlite_master trigger rows to { name: { table, definition } }. */
 export function mapTriggerResults(wranglerResult) {
   const rows = Array.isArray(wranglerResult?.results) ? wranglerResult.results : [];
   return Object.fromEntries(
@@ -589,7 +579,7 @@ export function mapTriggerResults(wranglerResult) {
         row.name,
         {
           table: typeof row.tbl_name === "string" ? row.tbl_name : "",
-          definition: normalizeTriggerSql(row.sql),
+          definition: normalizeSqlFormatting(row.sql),
         },
       ]),
   );
@@ -610,7 +600,7 @@ export function diffD1Triggers(requiredTriggers, actualTriggersByName) {
     if (actualTrigger.table !== requiredTrigger.table) {
       issues.push(`expected on ${requiredTrigger.table}, found on ${actualTrigger.table || "no table"}`);
     }
-    if (actualTrigger.definition !== normalizeTriggerSql(requiredTrigger.definition)) {
+    if (actualTrigger.definition !== normalizeSqlFormatting(requiredTrigger.definition)) {
       issues.push("definition differs from db/sql-only-schema.json");
     }
     if (issues.length > 0) invalidTriggers.push({ name: requiredTrigger.name, issues });

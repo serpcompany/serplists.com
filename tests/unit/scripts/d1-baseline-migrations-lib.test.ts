@@ -70,6 +70,13 @@ describe('resolveBaselineTarget against wrangler.toml', () => {
     expect(target.ok).toBe(false);
   });
 
+  it('takes --database over D1_DATABASE_NAME', () => {
+    expect(parseBaselineArgs(['--remote', '--database', 'serp-checklists-db'], { D1_DATABASE_NAME: 'DB' }).databaseName).toBe(
+      'serp-checklists-db',
+    );
+    expect(parseBaselineArgs(['--remote'], { D1_DATABASE_NAME: 'DB' }).databaseName).toBe('DB');
+  });
+
   it('needs no flag for a local run', () => {
     expect(resolve(['--local', '--database', 'DB'])).toMatchObject({ ok: true, environment: 'local' });
     expect(resolve(['--database', 'serp-checklists-db'])).toMatchObject({ ok: true, environment: 'local' });
@@ -112,8 +119,7 @@ describe('package.json baseline scripts', () => {
   });
 });
 
-describe('d1-baseline-migrations CLI', () => {
-  // Dry runs only: without --execute the script never calls wrangler.
+describe('d1-baseline-migrations CLI dry runs, which never call wrangler without --execute', () => {
   function dryRun(args: string[], env: Record<string, string> = {}) {
     const childEnv: NodeJS.ProcessEnv = { ...process.env, ...env };
     delete childEnv.CLOUDFLARE_ENV;

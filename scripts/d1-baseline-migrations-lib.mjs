@@ -1,11 +1,3 @@
-// Target resolution for scripts/d1-baseline-migrations.mjs, kept apart from the
-// wrangler call so it can be unit tested.
-//
-// A baseline writes ledger rows that mark migrations as applied, so the guard has
-// to decide production the way wrangler does, not by the typed name. `wrangler d1
-// execute <name>` matches <name> against both database_name and binding in the
-// top-level [[d1_databases]], and uses preview_database_id only with --preview:
-// `DB` without --preview is production.
 import { z } from "zod";
 
 const d1DatabaseSchema = z.object({
@@ -18,11 +10,6 @@ const d1DatabaseSchema = z.object({
 const ARRAY_TABLE_HEADER = /^\[\[\s*([^\]\s]+)\s*\]\]\s*(?:#.*)?$/;
 const STRING_KEY = /^([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"\s*(?:#.*)?$/;
 
-/**
- * Reads the D1 entries from wrangler.toml: the top-level [[d1_databases]] that
- * wrangler uses without --env, and [[env.production.d1_databases]]. Only string
- * keys are read, which is all a D1 entry holds.
- */
 export function readD1Databases(toml) {
   const tables = new Map();
   let current = null;
@@ -59,7 +46,6 @@ function readArg(argv, name) {
   return null;
 }
 
-/** Reads the baseline flags. `--database` wins over D1_DATABASE_NAME. */
 export function parseBaselineArgs(argv, env) {
   const isRemote = argv.includes("--remote");
   return {
@@ -75,11 +61,6 @@ export function parseBaselineArgs(argv, env) {
 
 const refuse = (error) => ({ ok: false, error });
 
-/**
- * Decides which database a baseline would write to, and whether that is allowed.
- * A remote run needs exactly one of --preview (staging) or --allow-production
- * (production), and the flag has to match where wrangler would really send it.
- */
 export function resolveBaselineTarget({ databaseName, isRemote, usePreview, allowProduction, cloudflareEnv, d1 }) {
   if (!isRemote) {
     return { ok: true, environment: "local", databaseId: null, label: `${databaseName} (local)` };
@@ -120,12 +101,10 @@ export function resolveBaselineTarget({ databaseName, isRemote, usePreview, allo
     return { ok: true, environment: "staging", databaseId, label: `staging ${databaseName} --preview (${databaseId})` };
   }
 
-  // Not in the top-level config, wrangler looks the name up in the account, so
-  // only the production entry's own name or id can mean production.
-  const databaseId =
-    configured?.database_id ??
-    d1.production.find((entry) => entry.database_name === databaseName || entry.database_id === databaseName)
-      ?.database_id;
+  const productionEntryByItsOwnNameOrId = d1.production.find(
+    (entry) => entry.database_name === databaseName || entry.database_id === databaseName,
+  );
+  const databaseId = configured?.database_id ?? productionEntryByItsOwnNameOrId?.database_id;
   if (!databaseId || !productionIds.has(databaseId)) {
     return refuse(
       `--allow-production is only for the production database, and ${databaseName} does not resolve to it. Use --database DB --preview for staging.`,

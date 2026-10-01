@@ -41,7 +41,11 @@ binding with `--preview`; do not change them to use the database name directly.
 After changing either contract, run `pnpm run check:db:drizzle-parity` (CI runs it
 too). It replays every migration into a temporary local database, generates the
 Drizzle baseline into a second one, and compares their catalogs. It never touches
-staging or production.
+staging or production. It reads each catalog in `UNION ALL` queries of at most five
+SELECTs: D1 refuses a compound SELECT with more terms ("too many terms in compound
+SELECT"). Trigger definitions are compared, and recorded in `db/sql-only-schema.json`,
+with quotes, backticks and runs of whitespace dropped, so a formatting change is not
+drift; the remote schema check below normalizes them the same way.
 
 `db/drizzle.config.ts` configures Drizzle Kit, which generates migrations without
 Cloudflare credentials; Wrangler is the only migration executor. The historical
@@ -106,9 +110,12 @@ pnpm run check:prod:d1-schema
 
 A remote baseline needs exactly one of `--preview` (staging, as
 `db:migrations:baseline:staging` passes) or `--allow-production` (production). The
-script resolves the target the way Wrangler does: `DB` and `serp-checklists-db`
-both mean production unless `--preview` is set, so `--database DB` without
-`--preview` is refused. `--allow-production` is refused for anything that does not
+script resolves the target the way Wrangler does, since a baseline writes ledger rows
+that mark migrations as applied: Wrangler matches the name against both `database_name`
+and `binding` in the top-level `[[d1_databases]]`, and uses `preview_database_id` only
+with `--preview`. So `DB` and `serp-checklists-db` both mean production unless
+`--preview` is set, and `--database DB` without `--preview` is refused. `--database`
+takes precedence over `D1_DATABASE_NAME`. `--allow-production` is refused for anything that does not
 resolve to production, a name outside `wrangler.toml` is refused, and so is any
 remote run while `CLOUDFLARE_ENV` is set. The dry run prints the resolved database
 UUID.

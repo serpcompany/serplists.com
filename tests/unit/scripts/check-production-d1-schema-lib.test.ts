@@ -49,9 +49,7 @@ function sortIndexesByTable(record: Record<string, RequiredIndex[]>) {
   );
 }
 
-// When one of these fails, update REQUIRED_D1_* in
-// scripts/check-production-d1-schema-lib.mjs to match db/schema/.
-describe("required D1 schema matches Drizzle", () => {
+describe("REQUIRED_D1_* in scripts/check-production-d1-schema-lib.mjs matches db/schema/", () => {
   it("requires every table and column in the Drizzle schema", () => {
     const required = Object.fromEntries(
       Object.entries(REQUIRED_D1_SCHEMA as Record<string, string[]>).map(([table, columns]) => [
