@@ -1,20 +1,9 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// Duplicate on the template detail page creates a Template, and POST /api/templates has no
-// idempotency. While a slow copy runs, the reopened actions menu must show Duplicate as
-// running and disabled, and only one copy may be created.
+import { loginAsAdmin } from './support/sign-in';
 
 const isTemplatesEndpoint = (url: URL) => url.pathname.endsWith('/api/templates');
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 test('a slow Duplicate cannot be chosen again and makes one copy', async ({ page }) => {
   await loginAsAdmin(page);

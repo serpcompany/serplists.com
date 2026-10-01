@@ -1,18 +1,32 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { z } from 'zod';
 
 import { apiJson } from './support/api-requests';
 import { navigateInApp } from './support/navigation';
-import { fillSignInForm } from './support/sign-in';
+import { loginAsAdmin } from './support/sign-in';
 
-// My Templates merges the user's own list with the cached public catalog (docs/FRONTEND.md).
-// A Template deleted after a page loaded the catalog must leave My Templates at once, without
-// a reload, even though the catalog copy is still cached.
+const catalogRowsSchema = z.array(z.record(z.unknown()));
+
+async function loadThePublicCatalogFromTheRunsPage(page: Page) {
+  const catalogLoaded = page.waitForResponse((response) => response.url().includes('/api/templates?scope=public'));
+  await page.goto('/dashboard/runs/');
+  await catalogLoaded;
+}
+
+async function serveTheEdgeCopyFromBeforeTheDelete(page: Page, templateId: string, rowBeforeDelete: unknown) {
+  const catalog = { requests: 0 };
+  await page.route('**/api/templates?scope=public*', async (route) => {
+    catalog.requests += 1;
+    const response = await route.fetch();
+    const rows = catalogRowsSchema.parse(await response.json());
+    const json = rows.some((row) => row.id === templateId) ? rows : [rowBeforeDelete, ...rows];
+    await route.fulfill({ response, json });
+  });
+  return catalog;
+}
 
 test('a deleted public template leaves My Templates after the catalog was loaded', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAsAdmin(page);
 
   const title = `Catalog delete ${Date.now()}`;
   const { id: templateId } = await apiJson<{ id: string }>(page, '/templates', {
@@ -24,10 +38,7 @@ test('a deleted public template leaves My Templates after the catalog was loaded
     },
   });
 
-  // The runs page loads the public catalog, which now includes the new public template.
-  const catalogLoaded = page.waitForResponse((response) => response.url().includes('/api/templates?scope=public'));
-  await page.goto('/dashboard/runs/');
-  await catalogLoaded;
+  await loadThePublicCatalogFromTheRunsPage(page);
 
   await navigateInApp(page, '/dashboard/templates/');
   await page.getByPlaceholder('Search templates...').fill(title);
@@ -48,14 +59,8 @@ test('a deleted public template leaves My Templates after the catalog was loaded
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0, { timeout: 15_000 });
 });
 
-// The edge cache can answer the catalog request with the pre-delete copy for up to 5 minutes.
-// Deleting a Template drops it from the cached catalog, and that copy must stay: a refetch on
-// the next library visit would bring the deleted Template back.
 test('a deleted public template stays off the library while the edge still serves the old catalog', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAsAdmin(page);
 
   const title = `Catalog edge delete ${Date.now()}`;
   const { id: templateId } = await apiJson<{ id: string }>(page, '/templates', {
@@ -66,29 +71,18 @@ test('a deleted public template stays off the library while the edge still serve
       sections: [{ id: 'section-1', title: 'Section', items: [{ id: 'item-1', title: 'Task' }] }],
     },
   });
-  // The list row carries the owner's username, which the library needs to list it.
   const ownRows = await apiJson<Array<Record<string, unknown>>>(page, '/templates?scope=personal');
-  const storedRow = ownRows.find((row) => row.id === templateId);
-  expect(storedRow?.owner_username).toBeTruthy();
-
-  // Every catalog answer still lists the template, as an edge copy stored before the delete would.
-  let catalogRequests = 0;
-  await page.route('**/api/templates?scope=public*', async (route) => {
-    catalogRequests += 1;
-    const response = await route.fetch();
-    const rows = (await response.json()) as Array<Record<string, unknown>>;
-    const json = rows.some((row) => row.id === templateId) ? rows : [storedRow, ...rows];
-    await route.fulfill({ response, json });
-  });
+  const rowTheLibraryCanList = ownRows.find((row) => row.id === templateId);
+  expect(rowTheLibraryCanList?.owner_username).toBeTruthy();
+  const catalog = await serveTheEdgeCopyFromBeforeTheDelete(page, templateId, rowTheLibraryCanList);
 
   const search = `/templates/?search=${encodeURIComponent(title)}`;
   await page.goto(search);
   const card = page.getByRole('heading', { name: title, exact: true });
   await expect(card).toBeVisible({ timeout: 15_000 });
-  const requestsBeforeDelete = catalogRequests;
+  const requestsBeforeDelete = catalog.requests;
 
   await navigateInApp(page, `/dashboard/templates/${templateId}/`);
-  // The detail page offers Delete in its template actions menu.
   await page.getByRole('button', { name: 'Template actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   const deleted = page.waitForResponse(
@@ -102,5 +96,5 @@ test('a deleted public template stays off the library while the edge still serve
   await expect(page.getByPlaceholder('Search templates...')).toHaveValue(title);
   await expect(page.getByRole('heading', { name: 'No templates found', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(card).toHaveCount(0);
-  expect(catalogRequests).toBe(requestsBeforeDelete);
+  expect(catalog.requests).toBe(requestsBeforeDelete);
 });

@@ -1,18 +1,15 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import { apiRequest } from "./support/api-requests";
-import { fillSignInForm } from "./support/sign-in";
+import { loginAsAdmin } from "./support/sign-in";
 
-async function signInAsAdmin(page: Page) {
-  await page.goto("/login/");
-  await fillSignInForm(page, 'admin');
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  // A sign-in with no return path opens the console home.
-  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
-}
+const templatesArrayJson = JSON.stringify([{
+  title: "Launch plan",
+  sections: [{ title: "Checklist", items: [{ title: "Check DNS" }] }],
+}]);
 
 test("template import API returns structured per-template failures for rejected imports", async ({ page }) => {
-  await signInAsAdmin(page);
+  await loginAsAdmin(page);
 
   const result = await apiRequest<Record<string, unknown>>(page, "/templates/backup", {
     method: "POST",
@@ -50,8 +47,8 @@ test("template import API returns structured per-template failures for rejected 
   );
 });
 
-test("the import page lists every failed template when none imported", async ({ page }) => {
-  await signInAsAdmin(page);
+test("the import page lists every failed template when none imported, and keeps the preview for another try", async ({ page }) => {
+  await loginAsAdmin(page);
   const saveFailure = "Could not save this template. Try importing it again.";
   const shapeFailure = "sections[0].items[0].contents[0].subItems: Expected array, received string";
   await page.route("**/api/templates/backup", async (route) => {
@@ -76,18 +73,12 @@ test("the import page lists every failed template when none imported", async ({ 
   });
 
   await page.goto("/dashboard/import-templates/");
-  // The picker stays disabled until the template list and plan load; a file set on a
-  // disabled input is ignored.
   const fileInput = page.locator("#template-file-input");
   await expect(fileInput).toBeEnabled();
   await fileInput.setInputFiles({
     name: "launch-plan.json",
     mimeType: "application/json",
-    // JSON imports take a backup, a portable pack, or an array of templates.
-    buffer: Buffer.from(JSON.stringify([{
-      title: "Launch plan",
-      sections: [{ title: "Checklist", items: [{ title: "Check DNS" }] }],
-    }])),
+    buffer: Buffer.from(templatesArrayJson),
   });
   await expect(page.getByRole("heading", { name: "Import Preview" })).toBeVisible();
   await page.getByRole("button", { name: "Confirm Import" }).click();
@@ -97,6 +88,5 @@ test("the import page lists every failed template when none imported", async ({ 
   await expect(page.getByText("2 failed")).toBeVisible();
   await expect(page.getByText(`Launch plan: ${saveFailure}`)).toBeVisible();
   await expect(page.getByText(`Template 2: ${shapeFailure}`)).toBeVisible();
-  // The preview stays, so the file can be fixed and imported again.
   await expect(page.getByRole("button", { name: "Confirm Import" })).toBeVisible();
 });

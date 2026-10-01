@@ -1,20 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// Share on a template detail page left open must not hand out a dead public link when the
-// template was made private or given a new slug elsewhere (another tab, device, or an
-// Organization teammate). The page still shows it as public, so Share has to ask the server.
+import { loginAsAdmin } from './support/sign-in';
 
 const CONFLICT_MESSAGE = 'This template changed elsewhere. It was reloaded; try again.';
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
   return apiJson<Record<string, unknown>>(page, path, { method, body });
@@ -36,7 +25,7 @@ async function openPublicDetail(page: Page, templateId: string) {
   return callApi(page, 'GET', `/templates/${templateId}`);
 }
 
-test('Share gives no link after the template was made private elsewhere', async ({ page, browser }) => {
+test('Share gives no link after the template was made private elsewhere, and publishes it again on the next try', async ({ page, browser }) => {
   await loginAsAdmin(page);
   const templateId = await createPublicTemplate(page, 'private');
 
@@ -47,7 +36,6 @@ test('Share gives no link after the template was made private elsewhere', async 
       expected_version: loaded.version,
     });
 
-    // The page still shows Public; Share must not offer the old link.
     await page.getByRole('button', { name: 'Share' }).click();
     await expect(page.getByText(CONFLICT_MESSAGE)).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Share Template' })).toHaveCount(0);
@@ -55,7 +43,6 @@ test('Share gives no link after the template was made private elsewhere', async 
     const stored = await callApi(page, 'GET', `/templates/${templateId}`);
     expect(Boolean(stored.is_public)).toBe(false);
 
-    // After the reload, Share publishes again and the link opens.
     await page.getByRole('button', { name: 'Share' }).click();
     const dialog = page.getByRole('dialog', { name: 'Share Template' });
     await expect(dialog).toBeVisible();
@@ -65,7 +52,6 @@ test('Share gives no link after the template was made private elsewhere', async 
     const republished = await callApi(page, 'GET', `/templates/${templateId}`);
     expect(Boolean(republished.is_public)).toBe(true);
 
-    // The Share dialog is modal, so the page behind it is out of the accessibility tree until it closes.
     await dialog.getByRole('button', { name: 'Close' }).first().click();
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole('switch')).toHaveAttribute('aria-checked', 'true');

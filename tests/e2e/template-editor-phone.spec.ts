@@ -1,21 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { fillSignInForm } from './support/sign-in';
-
-// Below lg the template editor is one column and its outline opens in a sheet from the
-// top bar's Outline button (src/components/template-editor/TemplateEditorOutline.tsx). A
-// touch screen cannot drag, so every section, task and content block shows Move up and
-// Move down buttons in place of its drag handle (ReorderMoveButtons).
+import { loginAsAdmin } from './support/sign-in';
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  // A sign-in with no return path opens the console home.
-  await expect(page.getByRole('heading', { name: 'My Templates', level: 1 })).toBeVisible({ timeout: 30_000 });
-}
 
 async function expectNoSidewaysScroll(page: Page) {
   const widths = await page.evaluate(() => ({
@@ -32,21 +19,19 @@ async function openOutline(page: Page) {
   return sheet;
 }
 
-test('at 390px the outline opens in a sheet and closes on the entry picked', async ({ page }) => {
+test('at 390px the outline opens in a sheet, closes on the entry picked, and stays open while a section moves', async ({ page }) => {
   await loginAsAdmin(page);
   await page.goto('/dashboard/templates/new/');
   await expect(page.getByLabel('Template Name', { exact: true })).toBeVisible();
-  // The outline is not beside the form on a phone.
-  await expect(page.getByRole('button', { name: 'Add section' })).toHaveCount(0);
+  const outlineBesideTheForm = page.getByRole('button', { name: 'Add section' });
+  await expect(outlineBesideTheForm).toHaveCount(0);
   await expectNoSidewaysScroll(page);
 
   let sheet = await openOutline(page);
-  // A touch screen gets Move buttons, not drag handles.
   await expect(sheet.getByRole('button', { name: 'Drag Section 1' })).toBeHidden();
   await expect(sheet.getByRole('button', { name: 'Move Section 1 up' })).toBeVisible();
   await sheet.getByRole('button', { name: 'Add section' }).click();
 
-  // The sheet closes on the new section's form, which takes focus.
   await expect(sheet).toBeHidden();
   const panelHeading = page.getByRole('heading', { name: 'Section Settings' });
   await expect(panelHeading).toBeFocused();
@@ -54,7 +39,6 @@ test('at 390px the outline opens in a sheet and closes on the entry picked', asy
   sheet = await openOutline(page);
   await expect(sheet.getByRole('button', { name: 'Move Section 1 up' })).toBeDisabled();
   await sheet.getByRole('button', { name: 'Move Section 2 up' }).click();
-  // Moving keeps the sheet open, keeps focus on the moved section and announces its place.
   await expect(sheet).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'Moved Section 2 to position 1 of 2' })).toHaveCount(1);
   await expect(sheet.getByRole('button', { name: 'Move Section 1 down' })).toBeFocused();
@@ -83,7 +67,6 @@ test('at 390px a touch screen reorders content blocks with their Move buttons', 
   await page.getByRole('button', { name: 'Move Embed block up' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Moved Embed block to position 1 of 2' })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Move Embed block down' })).toBeFocused();
-  // The Embed block's field now comes before the Text block's.
   const embedField = await page.getByLabel('Embed Code or URL').boundingBox();
   const textField = await page.getByLabel('Text Content').boundingBox();
   expect(embedField!.y).toBeLessThan(textField!.y);

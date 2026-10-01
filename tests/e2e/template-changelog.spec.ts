@@ -1,23 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// Share, archive and restore create no template version, only an audit event; the
-// Changelog must still show them (src/features/template-detail/templateHistoryTimeline.ts).
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { loginAsAdmin } from './support/sign-in';
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
   return apiJson<Record<string, unknown>>(page, path, { method, body });
 }
 
-test('the Changelog shows Share, archive and restore next to versions', async ({ page }) => {
+test('the Changelog shows Share without a reload, and archive and restore next to versions', async ({ page }) => {
   await loginAsAdmin(page);
   const stamp = Date.now();
   const created = await callApi(page, 'POST', '/templates', {
@@ -34,7 +24,6 @@ test('the Changelog shows Share, archive and restore next to versions', async ({
 
     await page.getByRole('button', { name: 'Share' }).click();
     await page.getByRole('button', { name: 'Close' }).first().click();
-    // No reload: the Changelog refreshes after Share.
     await expect(page.getByText('Made template public')).toBeVisible();
 
     await callApi(page, 'DELETE', `/templates/${templateId}`);

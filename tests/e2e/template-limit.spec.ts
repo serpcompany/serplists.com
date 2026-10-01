@@ -1,11 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { apiJson } from "./support/api-requests";
+import { reportBillingEnabled } from "./support/billing";
 
 const PASSWORD = "Aa!template-limit-password-12345";
 const LIMIT_MESSAGE = "Template limit reached. Upgrade to create more templates.";
+const CHECKOUT_RETURN_PATH = "/account";
+const BILLING_SETTINGS_URL = /\/dashboard\/settings/;
 
-// A new account is Free with no templates; Free Personal allows one template.
 async function registerFreeAccount(page: Page) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -28,48 +30,41 @@ async function createTemplateViaApi(page: Page, title: string): Promise<string> 
   return template.id;
 }
 
-// Checkout would leave for Stripe; answer it with the billing page instead, and report
-// billing as enabled so the Upgrade action is offered even without Stripe keys.
-async function stubCheckout(page: Page): Promise<{ requests: number }> {
+async function answerCheckoutWithTheBillingPage(page: Page): Promise<{ requests: number }> {
   const checkout = { requests: 0 };
   await page.route("**/api/billing/checkout", async (route) => {
     checkout.requests += 1;
-    await route.fulfill({ json: { url: "/account" } });
+    await route.fulfill({ json: { url: CHECKOUT_RETURN_PATH } });
   });
-  await page.route("**/api/billing/status**", async (route) => {
-    const response = await route.fetch();
-    const status = (await response.json()) as Record<string, unknown>;
-    await route.fulfill({ response, json: { ...status, billingEnabled: true } });
-  });
+  await reportBillingEnabled(page);
   return checkout;
 }
 
+async function waitUntilTheEditorHasCountedTheTemplates(page: Page) {
+  await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
+}
+
 test.describe("template limit upgrade path", () => {
-  // The page a test ends on is often still loading its billing status through the stub.
-  // Let that request finish, or closing the page fails the stub's route.fetch.
   test.afterEach(async ({ page }) => {
     await page.unrouteAll({ behavior: "wait" });
   });
 
-  test("offers the upgrade in the editor and keeps the draft across checkout", async ({ page }) => {
+  test("offers the upgrade in the editor in one message, and keeps the draft across checkout", async ({ page }) => {
     await registerFreeAccount(page);
     await createTemplateViaApi(page, "First template");
-    const checkout = await stubCheckout(page);
+    const checkout = await answerCheckoutWithTheBillingPage(page);
 
     await page.goto("/dashboard/templates/new/");
-    // Warned before writing a template the plan cannot save.
-    await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
+    await waitUntilTheEditorHasCountedTheTemplates(page);
 
     await page.getByPlaceholder("Enter template name...").fill("Second template");
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
-    // One message, with its action, not an error alert plus a toast.
     await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
 
-    // /account, the checkout return, redirects to settings, which holds the billing section.
-    await expect(page).toHaveURL(/\/dashboard\/settings/);
+    await expect(page).toHaveURL(BILLING_SETTINGS_URL);
     expect(checkout.requests).toBe(1);
     await page.getByRole("link", { name: "Resume template draft" }).click();
 
@@ -78,22 +73,19 @@ test.describe("template limit upgrade path", () => {
     await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("Second template");
   });
 
-  // Restore draft replaces the whole form, so a template typed since needs a yes first.
   test("Restore draft asks before replacing a template typed since", async ({ page }) => {
     await registerFreeAccount(page);
     await createTemplateViaApi(page, "First template");
-    await stubCheckout(page);
+    await answerCheckoutWithTheBillingPage(page);
 
     await page.goto("/dashboard/templates/new/");
-    // Warned once the editor has counted the templates; a Save before that is refused by
-    // the API with its own message.
-    await expect(page.getByText(LIMIT_MESSAGE)).toBeVisible();
+    await waitUntilTheEditorHasCountedTheTemplates(page);
     const title = page.getByPlaceholder("Enter template name...");
     await title.fill("Second template");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText(LIMIT_MESSAGE)).toHaveCount(1);
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/settings/);
+    await expect(page).toHaveURL(BILLING_SETTINGS_URL);
     await page.getByRole("link", { name: "Resume template draft" }).click();
     await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
 
@@ -117,14 +109,13 @@ test.describe("template limit upgrade path", () => {
   test("Duplicate on a template offers the upgrade", async ({ page }) => {
     await registerFreeAccount(page);
     const templateId = await createTemplateViaApi(page, "Only template");
-    const checkout = await stubCheckout(page);
+    const checkout = await answerCheckoutWithTheBillingPage(page);
 
     await page.goto(`/dashboard/templates/${templateId}/`);
     await page.getByRole("button", { name: "Template actions" }).click();
     await page.getByRole("menuitem", { name: "Duplicate" }).click();
 
-    // /account, the checkout return, redirects to settings, which holds the billing section.
-    await expect(page).toHaveURL(/\/dashboard\/settings/);
+    await expect(page).toHaveURL(BILLING_SETTINGS_URL);
     expect(checkout.requests).toBe(1);
   });
 });

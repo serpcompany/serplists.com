@@ -1,15 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
+import { loginAs, loginAsAdmin } from './support/sign-in';
 
-// The editor opens its form only for someone who can save the template
-// (src/features/template-editor/templateEditPermission.ts). Seeded data: template-1 is
-// admin@test.com's public "Technical SEO Audit Checklist".
+const ADMINS_SEEDED_PUBLIC_TEMPLATE_ID = 'template-1';
 
 test("another user's public template opens as a read-only notice, not the editor", async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'john');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAs(page, 'john');
   const templateWrites: string[] = [];
   page.on('request', (request) => {
     if (request.method() === 'PUT' && new URL(request.url()).pathname.includes('/api/templates/')) {
@@ -17,7 +12,7 @@ test("another user's public template opens as a read-only notice, not the editor
     }
   });
 
-  await page.goto('/dashboard/templates/template-1/edit/');
+  await page.goto(`/dashboard/templates/${ADMINS_SEEDED_PUBLIC_TEMPLATE_ID}/edit/`);
 
   await expect(page.getByText("You can't edit this template")).toBeVisible();
   await expect(page.getByText('Only its owner can edit it.')).toBeVisible();
@@ -25,17 +20,14 @@ test("another user's public template opens as a read-only notice, not the editor
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'View template' }).click();
-  await expect(page).toHaveURL(/\/dashboard\/templates\/template-1\/$/);
+  await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${ADMINS_SEEDED_PUBLIC_TEMPLATE_ID}/$`));
   expect(templateWrites).toEqual([]);
 });
 
 test('the owner still gets the editor for their template', async ({ page }) => {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
+  await loginAsAdmin(page);
 
-  await page.goto('/dashboard/templates/template-1/edit/');
+  await page.goto(`/dashboard/templates/${ADMINS_SEEDED_PUBLIC_TEMPLATE_ID}/edit/`);
 
   await expect(page.getByPlaceholder('Enter template name...')).toHaveValue('Technical SEO Audit Checklist');
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();

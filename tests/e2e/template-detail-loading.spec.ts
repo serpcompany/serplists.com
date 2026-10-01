@@ -1,21 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm, type TestUser } from './support/sign-in';
-
-// Template detail pages load their template once. Re-renders from auth, context, list, or
-// mutation state must not refetch it or swap the page for its loading spinner, which would
-// unmount open dialogs (see src/features/template-detail/useTemplateDetailRecord.ts).
+import { PAST_THE_TEAMS_LIST_STALE_TIME, returnToTabAfter } from './support/navigation';
+import { loginAs } from './support/sign-in';
 
 const PUBLIC_TEMPLATE_PATH = '/profile/admin/sample-technical-seo-audit-checklist';
 const PUBLIC_TEMPLATE_SLUG = 'sample-technical-seo-audit-checklist';
-
-async function login(page: Page, user: TestUser) {
-  await page.goto('/login/');
-  await fillSignInForm(page, user);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
 
 function countRequests(page: Page, matches: (url: URL) => boolean) {
   const seen: string[] = [];
@@ -27,7 +17,7 @@ function countRequests(page: Page, matches: (url: URL) => boolean) {
 
 for (const signedIn of [false, true]) {
   test(`a public template page fetches its template once on a direct visit (${signedIn ? 'signed in' : 'signed out'})`, async ({ page }) => {
-    if (signedIn) await login(page, 'admin');
+    if (signedIn) await loginAs(page, 'admin');
     const requests = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/slug/${PUBLIC_TEMPLATE_SLUG}`));
 
     await page.goto(PUBLIC_TEMPLATE_PATH);
@@ -39,23 +29,20 @@ for (const signedIn of [false, true]) {
 }
 
 test('the Start a Run dialog keeps its typed name when the app refreshes data in the background', async ({ page }) => {
-  await login(page, 'john');
+  await loginAs(page, 'john');
   const { id: templateId } = await apiJson<{ id: string }>(page, `/templates/slug/${PUBLIC_TEMPLATE_SLUG}`);
 
-  // Another owner's template is not in John's lists, so the page fetches it by id.
-  const requests = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/${templateId}`));
+  const readsById = countRequests(page, (url) => url.pathname.endsWith(`/api/templates/${templateId}`));
   await page.clock.install();
   await page.goto(`/dashboard/templates/${templateId}/`);
   await page.getByRole('button', { name: 'Start Run' }).click();
   await page.getByLabel('Run name', { exact: true }).fill('Kept run name');
 
-  // Returning to the tab after a minute refetches the Organization list (60s staleTime).
   const teamsRefetched = page.waitForResponse((response) => new URL(response.url()).pathname.endsWith('/api/teams'));
-  await page.clock.fastForward('02:00');
-  await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+  await returnToTabAfter(page, PAST_THE_TEAMS_LIST_STALE_TIME);
   await teamsRefetched;
 
   await expect(page.getByLabel('Run name', { exact: true })).toHaveValue('Kept run name');
   await expect(page.getByText('Loading template...')).toHaveCount(0);
-  expect(requests).toHaveLength(1);
+  expect(readsById).toHaveLength(1);
 });

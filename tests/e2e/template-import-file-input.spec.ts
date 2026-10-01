@@ -1,17 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { fillSignInForm } from './support/sign-in';
-
-// Every chosen import file replaces the previous preview, even a rejected one, and the
-// file input is cleared after each choice so re-choosing a fixed file fires `change`.
-// setInputFiles always dispatches `change`, so the empty input value is the guard for
-// Chromium's same-path suppression.
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { expect, test } from '@playwright/test';
+import { loginAsAdmin } from './support/sign-in';
 
 const portablePack = (title: string) =>
   JSON.stringify({

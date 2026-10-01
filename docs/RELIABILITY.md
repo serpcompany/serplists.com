@@ -324,6 +324,13 @@ Common failures:
   with `persisted: true` that a restore fires (`billing-back-from-checkout.spec.ts`).
 - `toBeVisible()` passes for an element at opacity 0, so a spec checks a control that fades
   in on focus or hover by its computed opacity.
+- A modal dialog takes the page behind it out of the accessibility tree, so `getByRole()`
+  finds nothing there until the spec closes the dialog.
+- `setInputFiles()` does not wait for the input to be enabled, and the page ignores a file
+  set on a disabled input, so a spec waits for `toBeEnabled()` first (the import page's
+  picker stays disabled until the Template list and the plan load). It also dispatches
+  `change` every time, even for the file already chosen, where Chromium would not: a spec
+  that checks a file can be chosen again checks that the input is empty after each choice.
 - A double click whose second click must land on what the first one changed (the next
   task's button, a dialog that opened) is two `page.mouse` clicks with `clickCount` 1 and 2,
   the `event.detail` the browser reports (`run-saves.spec.ts`). `page.mouse` does not

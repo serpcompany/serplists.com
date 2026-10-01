@@ -1,23 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { apiJson } from './support/api-requests';
-import { fillSignInForm } from './support/sign-in';
-
-// The template detail page shows the visibility the server holds after the switch and
-// Share are used together, and each later change is accepted (no stale version).
-
-async function loginAsAdmin(page: Page) {
-  await page.goto('/login/');
-  await fillSignInForm(page, 'admin');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({ timeout: 30_000 });
-}
+import { loginAsAdmin } from './support/sign-in';
 
 async function callApi(page: Page, method: string, path: string, body?: unknown) {
   return apiJson<Record<string, unknown>>(page, path, { method, body });
 }
 
-test('shows Public after Share follows a switch to Private', async ({ page }) => {
+test('shows Public after Share follows a switch to Private, and accepts the next change', async ({ page }) => {
   await loginAsAdmin(page);
   const created = await callApi(page, 'POST', '/templates', {
     title: `Visibility QA ${Date.now()}`,
@@ -43,7 +33,6 @@ test('shows Public after Share follows a switch to Private', async ({ page }) =>
     await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByText('Public', { exact: true }).first()).toBeVisible();
 
-    // A later change is accepted: the page did not keep an outdated version.
     await visibilitySwitch.click();
     await expect(page.getByText('Template is now private')).toBeVisible();
     await expect(visibilitySwitch).toHaveAttribute('aria-checked', 'false');
