@@ -111,7 +111,6 @@ export const filterAndSortTemplates = (
   },
 ): ChecklistTemplate[] => {
   const normalizedQuery = normalizeQuery(searchQuery ?? '');
-  // No category means no filter. A category that slugs to '' ('!!!') matches nothing.
   const normalizedCategorySlug = categorySlug?.trim() ? buildCategorySlug(categorySlug) : null;
 
   const filtered = templates.filter((template) => {
@@ -146,9 +145,6 @@ export const buildDiscoveryCategories = (
   const categoryCountsBySlug = new Map<string, number>();
   const categoryLabelBySlug = new Map<string, string>();
 
-  // A name with no letters or digits has no category page, so it gets no entry
-  // (they used to merge into one '' entry that linked to a 404). A template that lists a
-  // category twice ('SEO' and 'seo') counts once, as the category page lists it once.
   templates.forEach((template) => {
     uniqueCategoryNames(template.categories ?? []).forEach((category) => {
       const slug = buildCategorySlug(category);
@@ -188,9 +184,6 @@ export const buildDiscoveryCategories = (
     });
 };
 
-// Category slugs used to keep only ASCII letters and digits ('Café Culture' was
-// 'caf-culture'). Returns the category an old link or sitemap entry like that meant, so
-// the page can redirect to its current slug.
 export const findCategoryByLegacySlug = (
   categories: DiscoveryCategory[],
   slug: string,

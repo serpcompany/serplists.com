@@ -22,13 +22,11 @@ const sortOptions: Array<{
 
 interface CategoryChipsProps {
   categories: DiscoveryCategory[];
-  // Where a category chip goes; without it, a chip filters in place.
   getCategoryPath?: (category: DiscoveryCategory) => string;
   onCategoryChange: (categorySlug: string | null) => void;
   selectedCategorySlug: string | null;
 }
 
-// The category chips: All, then each category. A chip with a category page links there.
 export const CategoryChips: React.FC<CategoryChipsProps> = ({
   categories,
   getCategoryPath,
@@ -82,7 +80,6 @@ interface SortButtonsProps {
   sortBy: DiscoverySort;
 }
 
-// Popular, Trending and Recent.
 export const SortButtons: React.FC<SortButtonsProps> = ({ onSortChange, sortBy }) => (
   <div className="flex items-center gap-1">
     {sortOptions.map((option) => {

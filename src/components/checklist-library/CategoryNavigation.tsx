@@ -14,8 +14,6 @@ interface CategoryNavigationProps {
   title?: string;
 }
 
-// Up to five other categories as chips (the library's category chips), under a category
-// page's templates.
 export const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
   categories,
   currentCategorySlug,

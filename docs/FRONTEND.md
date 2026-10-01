@@ -46,7 +46,9 @@ wrapped in `<Suspense>` in its route file (`/templates/`, `/login/`, `/register/
 In-app links use `Link` (`src/components/navigation/Link.tsx`) and code navigates with
 `useAppRouter` (`src/lib/navigation/useAppRouter.ts`); both ask a page holding unsaved work
 first (below). A page that drops one-shot query parameters once it has read them (a reset
-token, the login notices, `?billing=`) or keeps its filters in the URL (the library) rewrites
+token, the login notices, `?billing=`) or keeps its filters in the URL (the library, whose
+filters live nowhere else: the page stays mounted when a link or Back/Forward changes the
+URL, so filters kept in state would go stale; `src/components/checklist-library/libraryFilters.ts`) rewrites
 the current entry with `replaceCurrentUrl` (`src/lib/navigation/replaceCurrentUrl.ts`), the
 History API that Next.js follows: the page keeps its state and nothing is fetched. The
 `state` it is given stays with that entry across a reload and Back/Forward and never enters

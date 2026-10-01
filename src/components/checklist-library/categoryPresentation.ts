@@ -22,9 +22,6 @@ export interface CategoryPresentation {
 
 const DEFAULT_CATEGORY_ICON: ElementType = FileText;
 
-// A Map, not an object literal: the slug comes from the URL, and indexing a plain
-// object with 'constructor' or '__proto__' returns an Object.prototype member. Icon tiles
-// are neutral (no color per category).
 const CATEGORY_ICONS = new Map<string, ElementType>([
   ['business', Briefcase],
   ['engineering', Code],
@@ -37,14 +34,9 @@ const CATEGORY_ICONS = new Map<string, ElementType>([
   ['compliance', DEFAULT_CATEGORY_ICON],
 ]);
 
-/** The icon of a category: its built-in one, or the default for any other category. */
 export const getCategoryIcon = (slug: string): ElementType =>
   CATEGORY_ICONS.get(slug) ?? DEFAULT_CATEGORY_ICON;
 
-/**
- * How a category page presents itself, or null when the slug is neither a built-in
- * category nor one that a public template uses (the page then renders NotFound).
- */
 export const resolveCategoryPresentation = (
   slug: string,
   categoryStats: { name: string } | undefined,

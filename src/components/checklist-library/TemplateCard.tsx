@@ -23,28 +23,21 @@ import {
 import { Link } from '@/components/navigation/Link';
 
 interface TemplateCardProps {
-  // `horizontal`: a list row with the media on the left (the category page's list view).
   layout?: 'horizontal' | 'vertical';
   template: ChecklistTemplate & {
     copyCount?: number;
     runCount?: number;
     viewCount?: number;
   };
-  // The title's heading level: h2 when the grid follows the page's h1.
   titleAs?: 'h2' | 'h3';
 }
 
-// A public Template in the library and category grids: a MediaCard with its categories,
-// counts, owner and a Start link. The whole card opens the template's page.
 export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical', template, titleAs }) => {
   const sectionCount = getTemplateSectionCount(template);
   const itemCount = getTemplateItemCount(template);
   const ownerLabel = getTemplateOwnerLabel(template);
   const ownerHandle = template.ownerProfile?.username;
-  // Imported or API-written lists can repeat a category ('SEO', 'seo'); show each once.
   const categories = uniqueCategoryNames(template.categories ?? []);
-  // Discovery lists only templates with a public URL; if one slips through, render it
-  // without links rather than pointing them back at the library.
   const templatePath = buildCanonicalPublicTemplatePath({
     ...template,
     slug: template.slug ?? generateSlug(template.title),
@@ -79,8 +72,6 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({ layout = 'vertical',
       icon={<TypeIcon />}
       orientation={layout}
       mediaOverlay={
-        // A pointer shortcut only: the title and Start links reach the same page, so this
-        // copy, invisible until hover, never takes focus.
         templatePath ? (
           <div
             aria-hidden="true"

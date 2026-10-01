@@ -38,13 +38,11 @@ describe('TemplateCard', () => {
     expect(markup).toContain('designops');
     expect(markup).toContain('Start');
     expect(markup).toContain('View Template');
-    // The title opens the template (its link covers the card), the owner opens the profile.
     expect(markup).toMatch(
       /<h3[^>]*><a href="\/profile\/designops\/website-launch-checklist\/"[^>]*data-slot="media-card-link"/,
     );
     expect(markup).toContain('href="/profile/designops/"');
     expect(markup).not.toContain('href="/dashboard/runs/');
-    // Categories are passive pills, not links.
     expect(markup).not.toContain('href="/categories/');
     const pills = [...markup.matchAll(/<span[^>]*data-slot="badge"[^>]*>([^<]*)</g)].map((match) => match[1]);
     expect(pills).toEqual(['Launch', 'Marketing']);
