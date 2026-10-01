@@ -195,6 +195,23 @@ Scheduling:
     described the code wrongly were corrected. Its auth commit landed inside 29af3457,
     under that commit's test message.
   - `tests/unit/features`, `tests/unit/hooks`: 326 comments (d70122d8..cefac098).
+- 2026-10-01: phase 3, all of `src/`, `functions/` and most of `tests/` are comment-free.
+  - `pnpm run verify` passed at every pair boundary, most recently at ebf04fb8 (5,601 tests).
+  - The no-comments rule is enforced on `src/` and `functions/` (9eb2ea39) and on the
+    cleaned test folders (45fbd5ce), with `noInlineConfig`.
+  - New design docs:
+    - [client data](../../design-docs/client-data.md);
+    - [template editor](../../design-docs/template-editor.md);
+    - [run execution](../../design-docs/run-execution.md).
+  - Agents also added tests, in most cases checking each one fails when the code it guards
+    is broken.
+  - They replaced copied test helpers with shared ones in `tests/support/`.
+  - Two unit checks read marker comments in browser specs; they now use a `no-such-` slug
+    convention and a named fetch helper.
+  - Duplication and dead code that the checks below do not cover went into the tracker as
+    TD-30 to TD-47.
+  - Left: `scripts/`, the views, contexts, server and SEO tests, the root config, `db/`,
+    the other formats, and the files that wait for the phase 5 port.
 - 2026-09-30: phase 6 done.
   - `pnpm run logs:query` (5bffc6aa) reads the `dev:all` log and the browser tests' server
     log, which is new: `tmp/logs/e2e-server.log`. Before, Playwright discarded the API lines
