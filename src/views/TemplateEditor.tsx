@@ -116,7 +116,6 @@ const TemplateEditorForm = ({ id, model }: TemplateEditorFormProps) => {
   const hasPendingUploads = pendingCount > 0;
   const shouldBlockNavigation = shouldBlockTemplateEditorNavigation({
     isDirty: templateForm.formState.isDirty,
-    isSaving: model.isSaving,
     loading: model.loading,
     hasPendingUploads,
   });

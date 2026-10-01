@@ -22,7 +22,6 @@ export const shouldBlockTemplateEditorNavigation = ({
   hasPendingUploads = false,
 }: {
   isDirty: boolean;
-  isSaving: boolean;
   loading: boolean;
   hasPendingUploads?: boolean;
 }): boolean => (isDirty || hasPendingUploads) && !loading;

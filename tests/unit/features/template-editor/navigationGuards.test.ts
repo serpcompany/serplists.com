@@ -13,58 +13,10 @@ import {
 } from '@/features/template-editor/navigationGuards';
 
 describe('template editor navigation guards', () => {
-  it('blocks navigation when there are unsaved changes and nothing is loading', () => {
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: true,
-        isSaving: false,
-        loading: false,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: true,
-        isSaving: false,
-        loading: true,
-      }),
-    ).toBe(false);
-
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: false,
-        isSaving: false,
-        loading: false,
-      }),
-    ).toBe(false);
-  });
-
-  it('never allows leaving unasked while a save is unconfirmed, since it can still fail and the edits live only in the form until it succeeds', () => {
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: true,
-        isSaving: true,
-        loading: false,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: true,
-        isSaving: true,
-        loading: true,
-      }),
-    ).toBe(false);
-  });
-
-  it('lets a clean form go during a save, which has nothing to lose', () => {
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: false,
-        isSaving: true,
-        loading: false,
-      }),
-    ).toBe(false);
+  it('blocks navigation when there are unsaved changes and nothing is loading, and takes no save state, so a save in flight, which can still fail, never lifts it', () => {
+    expect(shouldBlockTemplateEditorNavigation({ isDirty: true, loading: false })).toBe(true);
+    expect(shouldBlockTemplateEditorNavigation({ isDirty: true, loading: true })).toBe(false);
+    expect(shouldBlockTemplateEditorNavigation({ isDirty: false, loading: false })).toBe(false);
   });
 
   it('says the template is still saving when leaving during a save', () => {
@@ -77,23 +29,8 @@ describe('template editor navigation guards', () => {
   });
 
   it('blocks leaving while a file is still uploading, even with no other edits, since the form changes only once the upload finishes', () => {
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: false,
-        isSaving: false,
-        loading: false,
-        hasPendingUploads: true,
-      }),
-    ).toBe(true);
-
-    expect(
-      shouldBlockTemplateEditorNavigation({
-        isDirty: false,
-        isSaving: false,
-        loading: true,
-        hasPendingUploads: true,
-      }),
-    ).toBe(false);
+    expect(shouldBlockTemplateEditorNavigation({ isDirty: false, loading: false, hasPendingUploads: true })).toBe(true);
+    expect(shouldBlockTemplateEditorNavigation({ isDirty: false, loading: true, hasPendingUploads: true })).toBe(false);
   });
 
   it('says a file is still uploading when that is what would be lost', () => {
