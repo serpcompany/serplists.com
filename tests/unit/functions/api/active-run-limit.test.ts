@@ -99,9 +99,7 @@ describe('activeRunsInContext', () => {
 });
 
 describe('the active-run limit has one implementation', () => {
-  // A route that counted active runs its own way let Free users past the limit (shared runs
-  // were left out of the count), so every limit check goes through active-run-limit.ts.
-  it('reads maxActiveRuns only in active-run-limit.ts', () => {
+  it('reads maxActiveRuns only in active-run-limit.ts, since a route that counted its own way left shared runs out of the count', () => {
     const root = path.resolve(__dirname, '../../../../functions');
     const sources = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
       entry.isDirectory() ? sources(path.join(dir, entry.name)) : entry.name.endsWith('.ts') ? [path.join(dir, entry.name)] : []);
@@ -114,9 +112,7 @@ describe('the active-run limit has one implementation', () => {
 });
 
 describe('runInsertStatements with a limit', () => {
-  // Real Drizzle builders (the module mock above only stubs select); they only render SQL
-  // here, and nothing reaches D1.
-  async function realDb() {
+  async function realDrizzleWithoutD1() {
     const { drizzle } = await vi.importActual<typeof import('drizzle-orm/d1')>('drizzle-orm/d1');
     return drizzle({} as D1Database, { schema });
   }
@@ -130,9 +126,7 @@ describe('runInsertStatements with a limit', () => {
     return (/select\s+(.*?)\s+where (?:\(|exists)/s.exec(sqlText)?.[1] ?? '').split(', ');
   }
 
-  // Every provided value (null included) is a bound parameter, in column order. Missing
-  // columns render their default or a literal null instead.
-  function expectedValueParams(columns: string[], values: Record<string, unknown>): unknown[] {
+  function providedValuesInColumnOrder(columns: string[], values: Record<string, unknown>): unknown[] {
     return columns.filter((column) => column in values).map((column) => values[column]);
   }
 
@@ -170,28 +164,29 @@ describe('runInsertStatements with a limit', () => {
   };
 
   it('selects one value per inserted column, in column order, then applies the limit', async () => {
-    const db = await realDb();
+    const db = await realDrizzleWithoutD1();
     const [runInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = runInsert.toSQL();
     const columns = insertedColumns(query.sql);
 
     expect(columns).toEqual(Object.values(getTableColumns(schema.checklist_runs)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
-    // Values come first, in column order; the guard's user id, status, and limit follow.
-    expect(query.params.slice(0, -3)).toEqual(expectedValueParams(columns, run));
-    expect(query.params.slice(-3)).toEqual(['user-1', 'in_progress', 3]);
+    const valueParams = query.params.slice(0, -3);
+    const limitGuardParams = query.params.slice(-3);
+    expect(valueParams).toEqual(providedValuesInColumnOrder(columns, run));
+    expect(limitGuardParams).toEqual(['user-1', 'in_progress', 3]);
     expect(query.sql).toMatch(/where \(select count\(\*\) from "checklist_runs" where .*"deleted_at" is null\)\) < \?$/s);
   });
 
   it('writes the audit event only when its run row exists', async () => {
-    const db = await realDb();
+    const db = await realDrizzleWithoutD1();
     const [, auditInsert] = runInsertStatements(db as never, run, auditEvent, { userId: 'user-1', teamId: null }, 3);
     const query = auditInsert.toSQL();
 
     const columns = insertedColumns(query.sql);
     expect(columns).toEqual(Object.values(getTableColumns(schema.audit_events)).map((column) => column.name));
     expect(selectedValues(query.sql)).toHaveLength(columns.length);
-    expect(query.params).toEqual([...expectedValueParams(columns, auditEvent), 'run-1']);
+    expect(query.params).toEqual([...providedValuesInColumnOrder(columns, auditEvent), 'run-1']);
     expect(query.sql).toMatch(/where exists \(select 1 from "checklist_runs" where "checklist_runs"\."id" = \?\)$/s);
   });
 });

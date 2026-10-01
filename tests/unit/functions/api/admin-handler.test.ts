@@ -6,9 +6,7 @@ import { createMigratedD1 } from '../../../fixtures/sqliteD1';
 const ADMIN_SECRET = 'admin-secret-for-tests';
 const DAY = 24 * 60 * 60;
 
-// Runs against a migrated SQLite database so the real table, primary key and
-// upsert are used.
-describe('POST /api/admin/entitlements/override', () => {
+describe('POST /api/admin/entitlements/override on the migrated tables, with their real primary key and upsert', () => {
   let database: ReturnType<typeof createMigratedD1>;
   let env: any;
   const nowSeconds = () => Math.floor(Date.now() / 1000);
@@ -170,9 +168,7 @@ describe('POST /api/admin/entitlements/override', () => {
   });
 });
 
-// The secret is checked only for a request the endpoint serves, so no other request can tell
-// a right guess from a wrong one (a GET is never counted against the write rate limit).
-describe('requests the admin endpoint does not serve', () => {
+describe('requests the admin endpoint does not serve, which never read the secret so none can test a guess', () => {
   const env = { DB: {}, ENTITLEMENTS_ADMIN_SECRET: ADMIN_SECRET } as any;
   const secrets: Array<[string, string | null]> = [['no secret', null], ['a wrong secret', 'not-the-secret'], ['the secret', ADMIN_SECRET]];
   const send = (method: string, path: string, secret: string | null) => handleAdmin(
