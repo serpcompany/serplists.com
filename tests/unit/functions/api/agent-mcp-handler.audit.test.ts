@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dbMocks,
   env,
+  everyUpdateRunOperation,
   finishedIfCompleting,
   finishedRun,
   ownedTemplate,
@@ -47,12 +48,7 @@ describe("personal run MCP handler", () => {
       expect(audit.metadata_json).toContain('"personalRunKeyName":"Codex"');
     });
 
-    it.each([
-      ["set_task_completed", { taskId: "task-1", completed: true }],
-      ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: true }],
-      ["set_task_notes", { taskId: "task-1", notes: "n".repeat(20_000) }],
-      ["set_run_status", { status: "completed" }],
-    ])("records a compact %s change instead of copies of the run", async (operation, fields) => {
+    it.each(everyUpdateRunOperation({ taskId: "task-1", notes: "n".repeat(20_000) }))("records a compact %s change instead of copies of the run", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
         items: JSON.stringify(finishedIfCompleting(operation, sectionsOfAtLeast(200 * 1024))),
         retired_items: JSON.stringify(sectionsOfAtLeast(20 * 1024)),

@@ -13,7 +13,16 @@ import {
 import { MAX_TASK_NOTES_LENGTH } from "@functions/api/handlers/agentMcpTools";
 import { RUN_KEY_REQUESTS_PER_MINUTE } from "@functions/api/utils/mcp-limits";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
-import { asTheClientReceives, cursorMovedPastTheEnd, resultBytes, toolErrorOf } from "../../../support/agentMcp";
+import {
+  asTheClientReceives,
+  cursorMovedPastTheEnd,
+  expectAnInvalidCursor,
+  expectReadBackInFullWithinTheBound,
+  outlineOf,
+  resultBytes,
+  sectionFieldsOfTheFirstTwoPages,
+  toolErrorOf,
+} from "../../../support/agentMcp";
 import { MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse, TEXT_COSTLIER_IN_JSON } from "../../../support/jsonText";
 import { reproducibleShapes } from "../../../support/reproducibleRandom";
 import { readRetiredWork, readRunInFull } from "../../../support/runPages";
@@ -117,11 +126,7 @@ describe("get_run results", () => {
         retiredBytes: resultBytes(view.retired),
       },
       sectionsOmitted: true,
-      outline: view.sections.map((entry) => expect.objectContaining({
-        id: entry.id,
-        taskCount: (entry.items as unknown[]).length,
-        bytes: resultBytes(entry),
-      })),
+      outline: outlineOf(view.sections),
       limit: MAX_RESULT_BYTES,
     });
     const entry = (outline.outline as JsonRecord[])[3];
@@ -155,9 +160,7 @@ describe("get_run results", () => {
     const view = viewOf([section("big", Array.from({ length: 200 }, (_, index) => runTask(`t${index}`, 500)))]);
     const pages = everyPageOf(view, { sectionId: "big" });
 
-    expect(pages.length).toBeGreaterThan(3);
-    const [first, second] = pages.map((page) => page.section as JsonRecord);
-    expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });
+    const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: (first.items as unknown[]).length });
     expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(view.sections[0].items);
     for (const page of pages) {
@@ -201,8 +204,7 @@ describe("get_run results", () => {
       const view = viewOf(live, retired, { title: text(200) || "Run" });
       const { run, results } = await readInFullWithinTheBound(view);
 
-      expect(run, `seed ${seed}`).toEqual(asTheClientReceives(wholeOf(view)));
-      expect(results.every((result) => resultBytes(result) <= MAX_RESULT_BYTES), `seed ${seed}`).toBe(true);
+      expectReadBackInFullWithinTheBound(run, wholeOf(view), results, seed);
     }
   }, 60_000);
 });
@@ -317,9 +319,7 @@ describe("get_run cursors", () => {
     ["a retired cursor with another section", () => readRun(view, { cursor: retiredCursor, sectionId: "big" })],
     ["a cursor past the end", () => readRun(view, { cursor: cursorMovedPastTheEnd(sectionCursor) })],
   ])("refuses %s as invalid arguments", (_name, action) => {
-    const error = toolErrorOf(action);
-    expect(error.code).toBe("invalid_arguments");
-    expect(error.message).toMatch(/^cursor: /);
+    expectAnInvalidCursor(action);
   });
 });
 

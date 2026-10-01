@@ -2,14 +2,14 @@ import type { SQL } from "drizzle-orm";
 import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  callTool,
   dbMocks,
-  env,
+  expectAToolError,
   ownedTemplate,
   resetAgentMcpHandlerMocks,
   sectionsOfAtLeast,
-  toolBody,
 } from "../../../support/agentMcpHandler";
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { FREE_PLAN, PRO_PLAN } from "../../../fixtures/plans";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import {
@@ -18,20 +18,15 @@ import {
   TEMPLATE_SECTIONS_CARRYING_RUN_STATE,
   UNTICKED_RUN_SECTIONS,
 } from "../../../fixtures/runStartFixtures";
-import { mcpToolCall } from "../../../support/agentMcp";
+
+const startRun = () => callTool("start_run", { templateId: "template-1" });
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
   it("starts a persistent personal run from an owned template snapshot", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([{
-      id: "template-1",
-      user_id: "user-1",
-      owner_type: "user",
-      team_id: null,
-      deleted_at: null,
-      title: "Release SOP",
-      items: JSON.stringify([{
+      ...ownedTemplate([{
         id: "section-1",
         title: "Release",
         items: [{ id: "task-1", title: "Verify", isCompleted: true }],
@@ -39,8 +34,7 @@ describe("personal run MCP handler", () => {
       content_version: 4,
     }]);
 
-    const response = await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env);
-    const body = await response.json() as any;
+    const body = await startRun();
 
     expect(body.result.isError).toBeUndefined();
     expect(body.result.structuredContent.run).toEqual(expect.objectContaining({
@@ -62,30 +56,19 @@ describe("personal run MCP handler", () => {
     ["", TEMPLATE_SECTIONS_CARRYING_RUN_STATE, UNTICKED_RUN_SECTIONS],
     [" and the ids its Template's next save stores", TEMPLATE_SECTIONS_WITHOUT_ACCEPTED_IDS, RUN_SECTIONS_WITH_LEGACY_IDS],
   ])("starts a run with every task and Sub-task unticked%s, exactly as a web start stores it", async (_ids, templateSections, runSections) => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([{
-      id: "template-1",
-      user_id: "user-1",
-      owner_type: "user",
-      team_id: null,
-      deleted_at: null,
-      title: "Release SOP",
-      items: JSON.stringify(templateSections),
-      content_version: 2,
-    }]);
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ ...ownedTemplate(templateSections), content_version: 2 }]);
 
-    const response = await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env);
-    const body = await response.json() as any;
+    const body = await startRun();
 
     expect(body.result.isError).toBeUndefined();
     expect(JSON.parse(dbMocks.insertChain.values.mock.calls[0][0].items)).toEqual(runSections);
   });
 
   describe("Free plan active run limit", () => {
-    const freePlan = { plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } } as const;
     const renderSql = (query: unknown) => new SQLiteSyncDialect().sqlToQuery(query as SQL);
 
     beforeEach(() => {
-      vi.mocked(getEntitlementsForUser).mockResolvedValue(freePlan as any);
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
     });
 
     it("rejects start_run when a concurrent start filled the limit after the pre-check", async () => {
@@ -97,13 +80,12 @@ describe("personal run MCP handler", () => {
         .mockResolvedValueOnce(recountAfterTheGuardedInsertIsRefused);
       dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
+      const body = await startRun();
 
-      expect(body.result.isError).toBe(true);
-      expect(body.result.structuredContent).toEqual(expect.objectContaining({
+      expectAToolError(body, {
         error: "limit_reached",
         details: { limit: 3, current: 3 },
-      }));
+      });
       expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
     });
 
@@ -112,7 +94,7 @@ describe("personal run MCP handler", () => {
         .mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))])
         .mockResolvedValueOnce([{ count: 2 }]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
+      const body = await startRun();
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.values).not.toHaveBeenCalled();
@@ -127,13 +109,10 @@ describe("personal run MCP handler", () => {
     });
 
     it("keeps a plain insert for plans without an active run limit", async () => {
-      vi.mocked(getEntitlementsForUser).mockResolvedValue({
-        plan: "pro",
-        limits: { maxTemplates: null, maxActiveRuns: null },
-      });
+      vi.mocked(getEntitlementsForUser).mockResolvedValue(PRO_PLAN);
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sectionsOfAtLeast(1))]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
+      const body = await startRun();
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.insertChain.select).not.toHaveBeenCalled();

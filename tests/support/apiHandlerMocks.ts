@@ -1,10 +1,11 @@
 import { expect, vi } from 'vitest';
+import { dbMocks } from './mockedDrizzleD1';
 import { z } from 'zod';
 import { type Entitlements, getEntitlementsForContext, getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiEnv } from './apiEnv';
 import { EVERY_GUARDED_WRITE_APPLIED, resetChainsToEmptyResults } from './drizzleChainMocks';
-import { dbMocks } from './mockedDrizzleD1';
+import { FREE_PLAN } from '../fixtures/plans';
 import { readJson } from './readJson';
 
 vi.mock('@functions/api/utils/session', () => ({
@@ -20,9 +21,7 @@ export { dbMocks } from './mockedDrizzleD1';
 
 export const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
-export const FREE_PLAN: Entitlements = { plan: 'free', limits: { maxTemplates: 1, maxActiveRuns: 3 } };
-export const PRO_PLAN: Entitlements = { plan: 'pro', limits: { maxTemplates: null, maxActiveRuns: null } };
-export const TEAM_PLAN: Entitlements = { plan: 'team', limits: { maxTemplates: null, maxActiveRuns: null } };
+export { FREE_PLAN, PRO_PLAN, TEAM_PLAN } from '../fixtures/plans';
 
 export { EVERY_GUARDED_WRITE_APPLIED } from './drizzleChainMocks';
 

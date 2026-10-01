@@ -1,23 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { SqliteD1 } from "../../../support/sqlite-d1";
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { beforeEach, describe, expect, it } from "vitest";
+import { callToolWithAFreshRunKey, openAFreshMcpDatabase } from "../../../support/agentMcpOnSqlite";
+import type { SqliteD1 } from "../../../support/sqlite-d1";
 import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { MAX_TASK_NOTES_BYTES, MAX_TASK_NOTES_LENGTH, toolDefinitions } from "@functions/api/handlers/agentMcpTools";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import {
   contentSaveBytes,
   RUN_CONTENT_MAX_BYTES,
   TEMPLATE_CONTENT_MAX_BYTES,
 } from "@/lib/schemas/contentLimits";
 import { TEMPLATE_DESCRIPTION_MAX, TEMPLATE_LIST_ITEM_MAX, TEMPLATE_LIST_MAX_ITEMS, TEMPLATE_TITLE_MAX } from "@/lib/schemas/templateLimits";
-import { authenticateWithAFreshRunKey, mcpToolCall, resultBytes } from "../../../support/agentMcp";
+import { resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText, MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse } from "../../../support/jsonText";
 import { readRunInFull } from "../../../support/runPages";
 import { readTemplateInFull } from "../../../support/templatePages";
@@ -29,13 +21,9 @@ const CREATE_TEMPLATE_MAX_SECTIONS = 100;
 const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 
 let d1: SqliteD1;
-let calls = 0;
 
 async function call(name: string, args: JsonRecord): Promise<JsonRecord> {
-  calls += 1;
-  authenticateWithAFreshRunKey(authenticatePersonalRunKey);
-  const response = await handleAgentMcp(mcpToolCall(name, args, calls), { DB: d1.binding } as never);
-  const body = await response.json() as JsonRecord;
+  const body = await callToolWithAFreshRunKey(d1, name, args);
   expect(body.error, name).toBeUndefined();
   const result = body.result as JsonRecord;
   expect(result.isError, `${name}: ${toJson(result.structuredContent).slice(0, 300)}`).toBeUndefined();
@@ -221,9 +209,7 @@ const cases: Record<string, () => Promise<JsonRecord[]>> = {
 
 describe("the largest result of every MCP tool", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new SqliteD1();
+    d1 = openAFreshMcpDatabase();
     d1.run("INSERT INTO users (id, email, name, email_verified, created_at) VALUES ('user-1', 'user-1@example.test', 'User', 1, ?)", NOW);
     liftTheTemplateAndActiveRunLimits();
   });

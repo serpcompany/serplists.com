@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dbMocks,
   env,
+  everyUpdateRunOperation,
   finishedRun,
   personalRun,
   resetAgentMcpHandlerMocks,
@@ -122,12 +123,7 @@ describe("personal run MCP handler", () => {
       for (const operation of operations) expect(updateRun.description).toContain(operation);
     });
 
-    it.each([
-      ["set_task_completed", { taskId: "task-1", completed: true }],
-      ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: true }],
-      ["set_task_notes", { taskId: "task-1", notes: "Checked" }],
-      ["set_run_status", { status: "completed" }],
-    ])("accepts %s arguments that match the advertised schema, with unused fields sent as null", async (operation, fields) => {
+    it.each(everyUpdateRunOperation({ taskId: "task-1", notes: "Checked" }))("accepts %s arguments that match the advertised schema, with unused fields sent as null", async (operation, fields) => {
       const updateRun = (await listTools()).find((tool) => tool.name === "update_run");
       const args = { runId: "run-1", expectedRevision: 1, operation, ...fields };
       expect(problemsAClientFindsAgainstTheAdvertisedSchema(updateRun.inputSchema, args)).toEqual([]);

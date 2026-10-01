@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   byteLength,
+  callTool,
   dbMocks,
   env,
+  everyUpdateRunOperation,
   finishedIfCompleting,
+  getRunWithinTheBound,
   NO_TEMPLATE_HOLDS_THE_SLUG,
   ownedTemplate,
   personalRun,
@@ -19,6 +22,15 @@ import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
 import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } from "@/lib/schemas/contentLimits";
 import { mcpRequest, mcpToolCall, runKeyWithEveryPermission } from "../../../support/agentMcp";
 
+const setTaskNotes = (expectedRevision: number, notes: string) =>
+  callTool("update_run", { runId: "run-1", expectedRevision, operation: "set_task_notes", taskId: "task-1", notes });
+
+function expectTooLargeToSaveAndNothingWritten(body: Awaited<ReturnType<typeof callTool>>) {
+  expect(body.result.isError).toBe(true);
+  expect(body.result.structuredContent).toMatchObject({ error: "content_too_large", details: { limit: RUN_CONTENT_MAX_BYTES } });
+  expect(dbMocks.db.batch).not.toHaveBeenCalled();
+}
+
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
 
@@ -27,8 +39,7 @@ describe("personal run MCP handler", () => {
       items: JSON.stringify([{ id: "section-1", title: "Release", items: [{ id: "task-1", notes: "x".repeat(600_000) }] }]),
     })]);
 
-    const response = await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1" }), env);
-    const body = await response.json() as any;
+    const body = await callTool("get_run", { runId: "run-1" });
 
     expect(body.result.isError).toBeUndefined();
     expect(body.result.structuredContent).toMatchObject({
@@ -51,11 +62,9 @@ describe("personal run MCP handler", () => {
     it("rejects start_run on a template whose run would be too large to save, before writing anything", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(templateSectionsPaddedWithDescriptions(RUN_CONTENT_MAX_BYTES + 32 * 1024))]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
+      const body = await callTool("start_run", { templateId: "template-1" });
 
-      expect(body.result.isError).toBe(true);
-      expect(body.result.structuredContent).toMatchObject({ error: "content_too_large", details: { limit: RUN_CONTENT_MAX_BYTES } });
-      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expectTooLargeToSaveAndNothingWritten(body);
       expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
     });
 
@@ -64,7 +73,7 @@ describe("personal run MCP handler", () => {
       expect(contentSaveBytes(sections)).toBeLessThanOrEqual(TEMPLATE_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([ownedTemplate(sections)]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("start_run", { templateId: "template-1" }), env));
+      const body = await callTool("start_run", { templateId: "template-1" });
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
@@ -84,17 +93,9 @@ describe("personal run MCP handler", () => {
       expect(contentSaveBytes(sections) + 20_000).toBeGreaterThan(RUN_CONTENT_MAX_BYTES);
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 1,
-        operation: "set_task_notes",
-        taskId: "task-1",
-        notes: "n".repeat(20_000),
-      }), env));
+      const body = await setTaskNotes(1, "n".repeat(20_000));
 
-      expect(body.result.isError).toBe(true);
-      expect(body.result.structuredContent).toMatchObject({ error: "content_too_large", details: { limit: RUN_CONTENT_MAX_BYTES } });
-      expect(dbMocks.db.batch).not.toHaveBeenCalled();
+      expectTooLargeToSaveAndNothingWritten(body);
     });
 
     it("counts notes by UTF-8 bytes, not characters", async () => {
@@ -108,13 +109,7 @@ describe("personal run MCP handler", () => {
       expect(threeByteNotesBytes).toBeLessThanOrEqual(MAX_TASK_NOTES_BYTES);
       const setNotes = (notes: string) => {
         dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify(sections) })]);
-        return handleAgentMcp(mcpToolCall("update_run", {
-          runId: "run-1",
-          expectedRevision: 1,
-          operation: "set_task_notes",
-          taskId: "task-1",
-          notes,
-        }), env).then(toolBody);
+        return setTaskNotes(1, notes);
       };
 
       expect((await setNotes(threeByteNotes)).result.structuredContent.error).toBe("content_too_large");
@@ -123,23 +118,13 @@ describe("personal run MCP handler", () => {
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
     });
 
-    it.each([
-      ["set_task_completed", { taskId: "task-1", completed: true }],
-      ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: true }],
-      ["set_task_notes", { taskId: "filler-0", notes: "" }],
-      ["set_run_status", { status: "completed" }],
-    ])("never reports a committed %s on a run over the content limit as a failure", async (operation, fields) => {
+    it.each(everyUpdateRunOperation({ taskId: "filler-0", notes: "" }))("never reports a committed %s on a run over the content limit as a failure", async (operation, fields) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
         items: JSON.stringify(finishedIfCompleting(operation, sectionsOfAtLeast(RUN_CONTENT_MAX_BYTES + 64 * 1024))),
         revision: 7,
       })]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 7,
-        operation,
-        ...fields,
-      }), env));
+      const body = await callTool("update_run", { runId: "run-1", expectedRevision: 7, operation, ...fields });
 
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.isError).toBeUndefined();
@@ -163,12 +148,7 @@ describe("personal run MCP handler", () => {
         revision: 7,
       })]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 7,
-        operation,
-        ...fields,
-      }), env));
+      const body = await callTool("update_run", { runId: "run-1", expectedRevision: 7, operation, ...fields });
 
       expect(body.result.isError).toBeUndefined();
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
@@ -247,13 +227,7 @@ describe("personal run MCP handler", () => {
     it("returns the changed task and a compact run summary from update_run", async () => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 2,
-        operation: "set_task_notes",
-        taskId: "task-1",
-        notes: "Evidence",
-      }), env));
+      const body = await setTaskNotes(2, "Evidence");
 
       expect(body.result.structuredContent.run).not.toHaveProperty("sections");
       expect(body.result.structuredContent).toEqual({
@@ -270,13 +244,7 @@ describe("personal run MCP handler", () => {
       section.items[0].contents.unshift({ id: "guide", type: "text", value: templateTextTooLargeForOneResult });
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ items: JSON.stringify([section]), revision: 2 })]);
 
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 2,
-        operation: "set_task_notes",
-        taskId: "task-1",
-        notes: "Evidence",
-      }), env));
+      const body = await setTaskNotes(2, "Evidence");
 
       expect(dbMocks.db.batch).toHaveBeenCalledOnce();
       expect(body.result.structuredContent).toEqual({
@@ -291,12 +259,7 @@ describe("personal run MCP handler", () => {
 
     it("reads a run too large for one result a section, a page of tasks, or a task at a time", async () => {
       const oversized = personalRun({ items: JSON.stringify(sectionsOfAtLeast(600 * 1024)) });
-      const read = async (args: JsonRecord) => {
-        dbMocks.selectChain.limit.mockResolvedValueOnce([oversized]);
-        const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", ...args }), env));
-        expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-        return body.result;
-      };
+      const read = (args: JsonRecord) => getRunWithinTheBound(oversized, args);
 
       const task = await read({ taskId: "task-1" });
       expect(task.isError).toBeUndefined();
@@ -315,7 +278,7 @@ describe("personal run MCP handler", () => {
       expect((await read({ taskId: "nope" })).structuredContent.error).toBe("task_not_found");
 
       dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun()]);
-      const section = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", sectionId: "section-1" }), env));
+      const section = await callTool("get_run", { runId: "run-1", sectionId: "section-1" });
       expect(section.result.structuredContent).toEqual({
         run: { id: "run-1", revision: 1 },
         section: expect.objectContaining({ id: "section-1", title: "Release" }),

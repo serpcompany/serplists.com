@@ -1,10 +1,12 @@
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
+import { dbMocks } from "./mockedDrizzleD1";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { runKeyWithEveryPermission } from "./agentMcp";
+import { mcpToolCall, runKeyWithEveryPermission } from "./agentMcp";
 import { apiEnv } from "./apiEnv";
 import { chainSelectsUpdatesAndDeletes } from "./drizzleChainMocks";
-import { dbMocks } from "./mockedDrizzleD1";
+import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 
 vi.mock("@functions/api/utils/personal-run-key", () => ({
   authenticatePersonalRunKey: vi.fn(),
@@ -125,6 +127,10 @@ export async function toolBody(response: Response): Promise<any> {
   return response.json();
 }
 
+export async function callTool(name: string, args: JsonRecord) {
+  return toolBody(await handleAgentMcp(mcpToolCall(name, args), env));
+}
+
 function dropRowsAndBatchResultsALastTestLeftQueued() {
   dbMocks.selectChain.limit.mockReset();
   dbMocks.db.batch.mockReset();
@@ -145,4 +151,25 @@ export function resetAgentMcpHandlerMocks() {
     plan: "pro",
     limits: { maxTemplates: null, maxActiveRuns: null },
   });
+}
+
+export function everyUpdateRunOperation(setTaskNotesFields: JsonRecord): Array<[string, JsonRecord]> {
+  return [
+    ["set_task_completed", { taskId: "task-1", completed: true }],
+    ["set_subtask_completed", { taskId: "task-1", subtaskId: "sub-1", completed: true }],
+    ["set_task_notes", setTaskNotesFields],
+    ["set_run_status", { status: "completed" }],
+  ];
+}
+
+export async function getRunWithinTheBound(run: JsonRecord, args: JsonRecord = {}) {
+  dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
+  const body = await callTool("get_run", { runId: "run-1", ...args });
+  expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
+  return body.result;
+}
+
+export function expectAToolError(body: Awaited<ReturnType<typeof callTool>>, error: Record<string, unknown>) {
+  expect(body.result.isError).toBe(true);
+  expect(body.result.structuredContent).toEqual(expect.objectContaining(error));
 }

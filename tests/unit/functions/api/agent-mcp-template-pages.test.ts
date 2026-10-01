@@ -8,7 +8,16 @@ import {
   writtenTemplateResult,
   type TemplateView,
 } from "@functions/api/handlers/agentMcpTemplatePages";
-import { asTheClientReceives, cursorMovedPastTheEnd, resultBytes, toolErrorOf } from "../../../support/agentMcp";
+import {
+  asTheClientReceives,
+  cursorMovedPastTheEnd,
+  expectAnInvalidCursor,
+  expectReadBackInFullWithinTheBound,
+  outlineOf,
+  resultBytes,
+  sectionFieldsOfTheFirstTwoPages,
+  toolErrorOf,
+} from "../../../support/agentMcp";
 import { TEXT_COSTLIER_IN_JSON } from "../../../support/jsonText";
 import { reproducibleShapes } from "../../../support/reproducibleRandom";
 import { readTemplateInFull } from "../../../support/templatePages";
@@ -80,11 +89,7 @@ describe("get_template results", () => {
         bytes: resultBytes(view.sections),
       },
       sectionsOmitted: true,
-      outline: view.sections.map((entry) => expect.objectContaining({
-        id: entry.id,
-        taskCount: (entry.items as unknown[]).length,
-        bytes: resultBytes(entry),
-      })),
+      outline: outlineOf(view.sections),
       limit: MAX_RESULT_BYTES,
     });
     const longTitleEntry = (outline.outline as JsonRecord[])[3];
@@ -122,9 +127,7 @@ describe("get_template results", () => {
     const pages: JsonRecord[] = [readTemplate(view, { sectionId: "big" })];
     while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readTemplate(view, { cursor: pages.at(-1)?.nextCursor as string }));
 
-    expect(pages.length).toBeGreaterThan(3);
-    const [first, second] = pages.map((page) => page.section as JsonRecord);
-    expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });
+    const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
     expect(second).not.toHaveProperty("title");
     expect(second).toMatchObject({ id: "big", taskCount: 200, firstTask: (first.items as unknown[]).length });
     expect(pages.flatMap((page) => (page.section as JsonRecord).items as JsonRecord[])).toEqual(view.sections[0].items);
@@ -188,8 +191,7 @@ describe("get_template results", () => {
       const view = viewOf(generated, { description: text(4_000) });
       const { template, results } = await readInFullWithinTheBound(view);
 
-      expect(template, `seed ${seed}`).toEqual(asTheClientReceives(wholeOf(view)));
-      expect(results.every((result) => resultBytes(result) <= MAX_RESULT_BYTES), `seed ${seed}`).toBe(true);
+      expectReadBackInFullWithinTheBound(template, wholeOf(view), results, seed);
     }
   }, 60_000);
 });
@@ -215,9 +217,7 @@ describe("get_template cursors and ids", () => {
     ["a cursor with a task", () => readTemplate(view, { cursor, taskId: "t0" })],
     ["a cursor past the end", () => readTemplate(view, { cursor: cursorMovedPastTheEnd(cursor) })],
   ])("refuses %s as invalid arguments", (_name, action) => {
-    const error = toolErrorOf(action);
-    expect(error.code).toBe("invalid_arguments");
-    expect(error.message).toMatch(/^cursor: /);
+    expectAnInvalidCursor(action);
   });
 
   it("names the id it cannot find", () => {

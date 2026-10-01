@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  byteLength,
   dbMocks,
   env,
+  getRunWithinTheBound,
   personalRun,
   resetAgentMcpHandlerMocks,
   sectionsOfAtLeast,
@@ -10,7 +10,7 @@ import {
   type JsonRecord,
 } from "../../../support/agentMcpHandler";
 import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
-import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
+import { toJson } from "@functions/api/handlers/agentMcpPages";
 import { runView } from "@functions/api/handlers/agentMcpRunPages";
 import { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 import { authenticateWithAFreshRunKey, mcpToolCall } from "../../../support/agentMcp";
@@ -117,12 +117,9 @@ describe("personal run MCP handler", () => {
       retired_items: JSON.stringify([retiredSection("old-section", 2, 30_000), retiredTask, retiredSubtask]),
     });
 
-    async function getRun(run: JsonRecord, args: JsonRecord = {}) {
+    function getRun(run: JsonRecord, args: JsonRecord = {}) {
       authenticateWithAFreshRunKey(authenticatePersonalRunKey);
-      dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      const body = await toolBody(await handleAgentMcp(mcpToolCall("get_run", { runId: "run-1", ...args }), env));
-      expect(byteLength(body.result.structuredContent)).toBeLessThanOrEqual(MAX_RESULT_BYTES);
-      return body.result;
+      return getRunWithinTheBound(run, args);
     }
 
     it("reads retired work with retired: true, all of it or one section's or task's", async () => {

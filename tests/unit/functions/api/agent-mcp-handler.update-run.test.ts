@@ -1,16 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  callTool,
   dbMocks,
-  env,
+  expectAToolError,
   finishedRun,
   personalRun,
   resetAgentMcpHandlerMocks,
   type JsonRecord,
 } from "../../../support/agentMcpHandler";
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { FREE_PLAN } from "../../../fixtures/plans";
 import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
 import { markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { mcpToolCall } from "../../../support/agentMcp";
+
+const updateRun = (args: JsonRecord) => callTool("update_run", { runId: "run-1", ...args });
+
+const setTaskNotes = (expectedRevision: number, notes: string) =>
+  updateRun({ expectedRevision, operation: "set_task_notes", taskId: "task-1", notes });
+
+const setRunStatus = (status: string, expectedRevision = 2) =>
+  updateRun({ expectedRevision, operation: "set_run_status", status });
+
+function aCompletedRunAtRevision2(progress: number) {
+  dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
+    status: "completed",
+    progress,
+    revision: 2,
+    completed_at: "2026-09-19T01:00:00.000Z",
+    completed_by_user_id: "user-1",
+  })]);
+}
 
 describe("personal run MCP handler", () => {
   beforeEach(resetAgentMcpHandlerMocks);
@@ -29,15 +47,13 @@ describe("personal run MCP handler", () => {
     });
     dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
+    const body = await updateRun({
       expectedRevision: 3,
       operation: "set_subtask_completed",
       taskId: "task-1",
       subtaskId: "sub-2",
       completed: true,
-    }), env);
-    const body = await response.json() as any;
+    });
 
     expect(body.result.structuredContent.run).toEqual(expect.objectContaining({ revision: 4, progress: 100 }));
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
@@ -49,20 +65,12 @@ describe("personal run MCP handler", () => {
   it("returns a structured edit conflict without writing", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 4,
-      operation: "set_task_notes",
-      taskId: "task-1",
-      notes: "Verified locally",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setTaskNotes(4, "Verified locally");
 
-    expect(body.result.isError).toBe(true);
-    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+    expectAToolError(body, {
       error: "edit_conflict",
       details: { expectedRevision: 4, currentRevision: 5 },
-    }));
+    });
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
   });
@@ -71,14 +79,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 5 })]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 0 } }, { meta: { changes: 0 } }]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 5,
-      operation: "set_task_notes",
-      taskId: "task-1",
-      notes: "Verified locally",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setTaskNotes(5, "Verified locally");
 
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent.error).toBe("edit_conflict");
@@ -91,21 +92,9 @@ describe("personal run MCP handler", () => {
   });
 
   it("matches the checklist endpoint when reopening a completed run", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-      status: "completed",
-      progress: 67,
-      revision: 2,
-      completed_at: "2026-09-19T01:00:00.000Z",
-      completed_by_user_id: "user-1",
-    })]);
+    aCompletedRunAtRevision2(67);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_run_status",
-      status: "in_progress",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setRunStatus("in_progress");
 
     expect(body.result.isError).toBeUndefined();
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
@@ -118,21 +107,9 @@ describe("personal run MCP handler", () => {
   });
 
   it("keeps the original completion stamps when a completed run is marked completed again", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({
-      status: "completed",
-      progress: 100,
-      revision: 2,
-      completed_at: "2026-09-19T01:00:00.000Z",
-      completed_by_user_id: "user-1",
-    })]);
+    aCompletedRunAtRevision2(100);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_run_status",
-      status: "completed",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setRunStatus("completed");
 
     expect(body.result.isError).toBeUndefined();
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
@@ -144,13 +121,7 @@ describe("personal run MCP handler", () => {
   it("stamps the completer and time when a run becomes completed", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([finishedRun({ revision: 2 })]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_run_status",
-      status: "completed",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setRunStatus("completed");
 
     expect(body.result.isError).toBeUndefined();
     const updates = dbMocks.updateChain.set.mock.calls[0][0];
@@ -161,12 +132,7 @@ describe("personal run MCP handler", () => {
   describe("completing a run with work left, which the run page would freeze with open work it cannot reopen", () => {
     const completeRun = (run: JsonRecord) => {
       dbMocks.selectChain.limit.mockResolvedValueOnce([run]);
-      return handleAgentMcp(mcpToolCall("update_run", {
-        runId: "run-1",
-        expectedRevision: 1,
-        operation: "set_run_status",
-        status: "completed",
-      }), env).then((response) => response.json() as Promise<any>);
+      return setRunStatus("completed", 1);
     };
     const task = (fields: JsonRecord) => ({ id: "task-1", title: "Verify", ...fields });
     const runOf = (...tasks: JsonRecord[]) => personalRun({ items: JSON.stringify([{ id: "section-1", title: "Release", items: tasks }]) });
@@ -183,11 +149,10 @@ describe("personal run MCP handler", () => {
     ])("refuses a run with %s and writes nothing", async (_label, run, openTaskIds) => {
       const body = await completeRun(run);
 
-      expect(body.result.isError).toBe(true);
-      expect(body.result.structuredContent).toEqual(expect.objectContaining({
+      expectAToolError(body, {
         error: "run_incomplete",
         details: { openTaskCount: openTaskIds.length, openTaskIds },
-      }));
+      });
       expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
       expect(dbMocks.db.batch).not.toHaveBeenCalled();
     });
@@ -223,39 +188,26 @@ describe("personal run MCP handler", () => {
   });
 
   it("refuses to reopen a completed run when the Free active-run limit is reached", async () => {
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
     dbMocks.selectChain.limit
       .mockResolvedValueOnce([personalRun({ status: "completed", revision: 2 })])
       .mockResolvedValueOnce([{ count: 3 }]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_run_status",
-      status: "in_progress",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setRunStatus("in_progress");
 
-    expect(body.result.isError).toBe(true);
-    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+    expectAToolError(body, {
       error: "limit_reached",
       details: { limit: 3, current: 3 },
-    }));
+    });
     expect(dbMocks.updateChain.set).not.toHaveBeenCalled();
     expect(dbMocks.db.batch).not.toHaveBeenCalled();
   });
 
   it("does not check the limit for status saves on a run that is already in progress", async () => {
-    vi.mocked(getEntitlementsForUser).mockResolvedValue({ plan: "free", limits: { maxTemplates: 1, maxActiveRuns: 3 } });
+    vi.mocked(getEntitlementsForUser).mockResolvedValue(FREE_PLAN);
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_run_status",
-      status: "in_progress",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setRunStatus("in_progress");
 
     expect(body.result.isError).toBeUndefined();
     expect(getEntitlementsForUser).not.toHaveBeenCalled();
@@ -265,20 +217,12 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
     dbMocks.db.batch.mockResolvedValueOnce([{ meta: { changes: 1 } }, { meta: { changes: 0 } }]);
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_task_notes",
-      taskId: "task-1",
-      notes: "Evidence",
-    }), env);
-    const body = await response.json() as any;
+    const body = await setTaskNotes(2, "Evidence");
 
-    expect(body.result.isError).toBe(true);
-    expect(body.result.structuredContent).toEqual(expect.objectContaining({
+    expectAToolError(body, {
       error: "internal_invariant",
       message: "Unable to update the run safely",
-    }));
+    });
     expect(markPersonalRunKeyUsed).not.toHaveBeenCalled();
   });
 
@@ -286,14 +230,7 @@ describe("personal run MCP handler", () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([personalRun({ revision: 2 })]);
     dbMocks.db.batch.mockRejectedValueOnce(new Error("audit constraint secret"));
 
-    const response = await handleAgentMcp(mcpToolCall("update_run", {
-      runId: "run-1",
-      expectedRevision: 2,
-      operation: "set_task_notes",
-      taskId: "task-1",
-      notes: "Evidence",
-    }), env);
-    expect(await response.json()).toEqual({
+    expect(await setTaskNotes(2, "Evidence")).toEqual({
       jsonrpc: "2.0",
       id: 1,
       error: { code: -32603, message: "Internal error" },

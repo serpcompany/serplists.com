@@ -1,29 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { SqliteD1 } from "../../../support/sqlite-d1";
-
-vi.mock("@functions/api/utils/personal-run-key", () => ({
-  authenticatePersonalRunKey: vi.fn(),
-  markPersonalRunKeyUsed: vi.fn(),
-}));
-
-import { handleAgentMcp } from "@functions/api/handlers/agentMcp";
+import { beforeEach, describe, expect, it } from "vitest";
+import { callToolWithAFreshRunKey, openAFreshMcpDatabase } from "../../../support/agentMcpOnSqlite";
+import type { SqliteD1 } from "../../../support/sqlite-d1";
 import { LIST_PAGE_ROWS } from "@functions/api/handlers/agentMcpLists";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
-import { authenticatePersonalRunKey, markPersonalRunKeyUsed } from "@functions/api/utils/personal-run-key";
-import { authenticateWithAFreshRunKey, mcpToolCall, resultBytes } from "../../../support/agentMcp";
+import { resultBytes } from "../../../support/agentMcp";
 import { costliestJsonText } from "../../../support/jsonText";
 
 type JsonRecord = Record<string, unknown>;
 
 let d1: SqliteD1;
-let requestId = 0;
 
 async function call(name: string, args: JsonRecord = {}): Promise<{ result: JsonRecord; error?: JsonRecord }> {
-  requestId += 1;
-  authenticateWithAFreshRunKey(authenticatePersonalRunKey);
-  const response = await handleAgentMcp(mcpToolCall(name, args, requestId), { DB: d1.binding } as never);
-  const body = await response.json() as JsonRecord;
+  const body = await callToolWithAFreshRunKey(d1, name, args);
   return { result: body.result as JsonRecord, error: body.error as JsonRecord | undefined };
 }
 
@@ -71,9 +59,7 @@ function insertRun(id: string, fields: { userId?: string; createdAt: string; sta
 
 describe("MCP list tools on the migrated tables", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(markPersonalRunKeyUsed).mockResolvedValue();
-    d1 = new SqliteD1();
+    d1 = openAFreshMcpDatabase();
     seedUsers();
   });
 

@@ -1,6 +1,6 @@
-import { vi } from "vitest";
+import { expect, vi } from "vitest";
 import { z } from "zod";
-import { toJson } from "@functions/api/handlers/agentMcpPages";
+import { MAX_RESULT_BYTES, toJson } from "@functions/api/handlers/agentMcpPages";
 import { ToolError } from "@functions/api/handlers/agentMcpTools";
 import type { authenticatePersonalRunKey } from "@functions/api/utils/personal-run-key";
 
@@ -55,4 +55,29 @@ export function toolErrorOf(action: () => unknown): ToolError {
     throw error;
   }
   throw new Error("expected a ToolError");
+}
+
+export const outlineOf = (sections: JsonRecord[]) =>
+  sections.map((entry) => expect.objectContaining({
+    id: entry.id,
+    taskCount: (entry.items as unknown[]).length,
+    bytes: resultBytes(entry),
+  }));
+
+export function sectionFieldsOfTheFirstTwoPages(pages: JsonRecord[]) {
+  expect(pages.length).toBeGreaterThan(3);
+  const [first, second] = pages.map((page) => page.section as JsonRecord);
+  expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });
+  return { first, second };
+}
+
+export function expectReadBackInFullWithinTheBound(readBack: unknown, whole: unknown, results: JsonRecord[], seed: number) {
+  expect(readBack, `seed ${seed}`).toEqual(asTheClientReceives(whole));
+  expect(results.every((result) => resultBytes(result) <= MAX_RESULT_BYTES), `seed ${seed}`).toBe(true);
+}
+
+export function expectAnInvalidCursor(action: () => unknown) {
+  const error = toolErrorOf(action);
+  expect(error.code).toBe("invalid_arguments");
+  expect(error.message).toMatch(/^cursor: /);
 }
