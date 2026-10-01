@@ -3,11 +3,8 @@ ALTER TABLE checklist_runs ADD COLUMN template_version INTEGER NOT NULL DEFAULT 
 ALTER TABLE checklist_runs ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE checklist_runs ADD COLUMN retired_items TEXT NOT NULL DEFAULT '[]';
 
--- Advancing both versions invalidates editors opened before the identity backfill.
 UPDATE templates SET content_version = version + 1, version = version + 1;
 
--- Backfill deterministic identities before the API starts reconciling legacy snapshots.
--- The path-based IDs are identical for a template and runs created from its old shape.
 UPDATE templates
 SET items = json_array(json_object('id', '1', 'title', 'Checklist', 'items', json(items)))
 WHERE json_valid(items)
@@ -122,6 +119,4 @@ SET items = (
 )
 WHERE json_valid(items) AND json_type(items) = 'array';
 
--- Existing materialized snapshots may already differ from their source. There is no
--- trustworthy historical marker, so conservatively require one explicit revalidation.
 UPDATE checklist_runs SET template_version = 0 WHERE template_id IS NOT NULL;

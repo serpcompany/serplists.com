@@ -1,6 +1,3 @@
--- Backfill missing/blank template slugs for legacy rows.
--- Uses a deterministic slug built from the title plus a stable id suffix to guarantee uniqueness.
-
 UPDATE templates
 SET slug = (
   CASE
@@ -22,4 +19,3 @@ SET slug = (
   END
 )
 WHERE slug IS NULL OR trim(slug) = '';
-

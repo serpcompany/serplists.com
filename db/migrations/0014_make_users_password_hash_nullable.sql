@@ -1,7 +1,3 @@
--- Allow Better Auth to manage credentials via the account table.
--- SQLite doesn't support dropping NOT NULL directly, so rebuild the users table.
--- D1 remote migrations reject explicit BEGIN/COMMIT statements in this path.
-
 PRAGMA foreign_keys=OFF;
 
 DROP TABLE IF EXISTS users_new;

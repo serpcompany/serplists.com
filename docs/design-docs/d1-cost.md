@@ -81,7 +81,11 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
    nothing.
 4. **Every index costs a write.** Each insert writes one row per index, and updates do
    the same for indexed columns they change. Drop unused indexes, and keep
-   write-amplified tables (audit, history) lean.
+   write-amplified tables (audit, history) lean. Migration `0026` dropped
+   `idx_templates_user_id` and `idx_templates_slug`, which `idx_templates_owner` and
+   `idx_templates_slug_unique` cover, and `idx_audit_events_actor` and
+   `idx_template_versions_subject`: no query filters audit events by actor or template
+   versions by subject.
 5. **Cache public, anonymous responses** at the edge (the Cache API, per data center).
    Choose the invalidation by how often the content changes:
    - **Rarely, relative to reads:** key by a revision. Sitemaps use `cachedSitemap()`

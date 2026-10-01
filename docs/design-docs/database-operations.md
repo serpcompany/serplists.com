@@ -53,6 +53,23 @@ Cloudflare credentials; Wrangler is the only migration executor. The historical
 migrations lack Drizzle snapshot metadata, so `pnpm run db:generate` currently
 proposes a fresh baseline migration: do not apply or commit it (TD-14).
 
+### Writing a migration
+
+D1 is SQLite, whose `ALTER TABLE` adds a column but cannot make the new column `UNIQUE` or
+change a column's `NOT NULL` or default:
+
+- For a unique column, add the column, then a unique index on it, as the second `0002`
+  migration did for `users.username`.
+- To change a column, rebuild the table: create `<table>_new`, copy every row, drop the old
+  table, rename the new one and recreate its indexes, as `0014` to `0016` did for `users`. A
+  rebuild names every column the table can hold on any database it runs on: `0016` redid
+  `0014` and `0015` in one rebuild that keeps every column `0001` to `0015` gave `users`, the
+  unused affiliate columns included.
+- Write no `BEGIN` or `COMMIT`: remote D1 rejects transaction statements in a migration.
+
+Why the existing migrations did what they did is in
+[data persistence](data-persistence.md#schema-history).
+
 ## Applying migrations
 
 ```bash

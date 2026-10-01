@@ -66,7 +66,7 @@ retried insert drops the column from the statement itself (`withoutColumns`).
 - `templates`: Template metadata, JSON content, visibility, Public Profile routing, Resource Owner scope, attribution, and soft-delete state.
 - `checklist_runs`: Run state, progress, share fields, Resource Owner scope, assignment/actor attribution, and soft-delete state.
 - `template_likes`: favorites.
-- `usage_analytics`: product event log.
+- `usage_analytics`: product event log (an `action` such as `template_created`, `checklist_started` or `checklist_completed`, with JSON `metadata`). Only the local seed writes it.
 - `stripe_customers`, `stripe_subscriptions`, `stripe_webhook_events`: billing records and webhook idempotency.
 - `entitlement_overrides`: user-level plan overrides.
 - `teams`: legacy implementation table for Organization identity and billing/creator metadata.
@@ -253,6 +253,42 @@ killed the link. A Share made elsewhere replaces the token while the run stays s
 which the page cannot see because run reads never return share tokens; the reused link
 is then dead until the page is reloaded. ESLint bans direct `navigator.clipboard`
 access outside `src/lib/clipboard.ts`.
+
+## Schema history
+
+Why some tables and columns look as they do, by topic (the numbers are files in
+`db/migrations/`; how to write a migration is in
+[database operations](database-operations.md#writing-a-migration)):
+
+- **Users and sign-in.** `users` came before Better Auth. `0008` kept it, since Templates
+  and Runs reference it, added the fields Better Auth needs, and moved each password hash
+  into a `credential` row in `account` ([authentication](authentication.md#database)).
+  Better Auth then inserted users with no password hash and no `created_at`, so `0014` to
+  `0016` made `password_hash` nullable and gave `created_at` a default.
+- **Retired features.** Affiliate tracking and a "Pages" blog came in the second `0002` and
+  were cut from the MVP: `0004` dropped their tables and indexes, but not the affiliate
+  columns on `users` (`affiliate_code`, `referral_count`, `total_earnings`).
+- **Template slugs.** `0002` and `0005` gave older Templates slugs built from the title with
+  the first 8 characters of the id appended, so two Templates with one title still get
+  different slugs, and `0003` made slugs unique, suffixing later duplicates the same way.
+  `db/maintenance/add-slugs-to-templates.sql` gives any Template still without a slug one
+  the same way (`Ultimate Camping Checklist` becomes `ultimate-camping-checklist-d2f53738`).
+- **Stable ids.** `0024` gave legacy content ids derived from each entry's path, which come
+  out the same for a Template and every Run started from the same content, so Runs keep
+  their state through [reconciliation](#stable-ids-and-run-reconciliation). It advanced
+  `version` and `content_version`, so an editor opened before it gets a conflict instead of
+  saving content without those ids, and marked every linked Run stale
+  ([portable template spec](../product-specs/portable-templates.md#storage-strategy-d1)).
+- **Test data in shared databases.** `0012` deleted the Templates that automated tests and
+  manual API smoke runs had left (`Test Template`, `Updated Template Title`), and `0018`
+  named the four seeded test Users after their plans (`Admin (Pro)`, `John (Free)`).
+- **Organizations.** `0021` added the Organization tables (legacy `team` names) and the
+  audit history in D1 itself, with no new paid service, and `0022` allows one active owner
+  per Organization while keeping former owners' rows ([Organizations](organizations.md)).
+- **Indexes.** `0026` replaced indexes that made queries scan or writes cost more with the
+  ones queries use ([D1 cost](d1-cost.md)).
+- **Run Keys.** `0027`'s `permissions` default gives each key made before template writes
+  existed what it could do then: `templates:read`, `runs:read` and `runs:write`.
 
 ## Seeds
 
