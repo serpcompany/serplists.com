@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
+import type { SelectedFields } from 'drizzle-orm/sqlite-core';
 import {
   sitemap_category_revisions,
   sitemap_owner_revisions,
@@ -344,11 +345,14 @@ export async function handleInMemoryPagedSitemap(
     : xmlResponse(request, renderUrlset(pageEntries));
 }
 
-export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
-  const db = createDb(env);
-  const rows = await db
+export function selectPublicTemplatesOfListedOwners<Fields extends SelectedFields>(
+  db: ReturnType<typeof createDb>,
+  fields: Fields,
+  ...conditions: SQL[]
+) {
+  return db
     .select({
-      category: templates.category,
+      ...fields,
       created_at: templates.created_at,
       updated_at: templates.updated_at,
       owner_updated_at: sitemap_owner_revisions.revised_at,
@@ -356,12 +360,17 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
     .from(templates)
     .innerJoin(users, eq(users.id, templates.user_id))
     .leftJoin(sitemap_owner_revisions, eq(sitemap_owner_revisions.user_id, users.id))
-    .where(and(
-      publicTemplateCondition,
-      validUsernameCondition,
-      isNotNull(templates.category),
-      nonEmptyTemplateCategoryCondition,
-    ));
+    .where(and(publicTemplateCondition, validUsernameCondition, ...conditions));
+}
+
+export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
+  const db = createDb(env);
+  const rows = await selectPublicTemplatesOfListedOwners(
+    db,
+    { category: templates.category },
+    isNotNull(templates.category),
+    nonEmptyTemplateCategoryCondition,
+  );
   const lastmodBySlug = new Map<string, string | null>();
   const addCategory = (category: string, lastmod: string | null | undefined) => {
     const slug = categorySlug(category);
