@@ -22,6 +22,7 @@ export {
   mcpToolResult,
   type McpToolInputSchema,
 } from "./mcpResponses";
+import { recordIn, type McpRecord } from "./mcpResponses";
 
 export const runKeyWithEveryPermission = {
   keyId: "key-1",
@@ -57,7 +58,7 @@ const jsonRecord = z.record(z.string(), z.unknown());
 
 export const asTheClientReceives = (value: unknown): unknown => JSON.parse(toJson(value));
 
-export const pageAsTheClientReceives = (page: JsonRecord): JsonRecord => jsonRecord.parse(asTheClientReceives(page));
+export const pageAsTheClientReceives = (page: JsonRecord): McpRecord => recordIn(asTheClientReceives(page));
 
 export const resultBytes = (value: unknown) => new TextEncoder().encode(toJson(value)).byteLength;
 
@@ -85,7 +86,7 @@ export const outlineOf = (sections: readonly SectionRecord[]) =>
 
 export function sectionFieldsOfTheFirstTwoPages(pages: readonly { section?: unknown }[]) {
   expect(pages.length).toBeGreaterThan(3);
-  const sections = pages.map((page) => jsonRecord.parse(page.section));
+  const sections = pages.map((page) => recordIn(page.section));
   const first = firstOf(sections);
   const second = elementAt(sections, 1);
   expect(first).toMatchObject({ id: "big", title: "Section big", taskCount: 200, firstTask: 0 });

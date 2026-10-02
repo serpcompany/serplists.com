@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
 import { allRowsAsArrays } from "./sqliteRowArrays";
-import { D1StatementDouble } from "./d1Doubles";
+import { D1StatementDouble, type StoredRow } from "./d1Doubles";
 
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../db/migrations");
 
@@ -144,7 +144,7 @@ export class SqliteD1 implements D1Database {
     this.sqlite.prepare(sql).run(...params.map(toSqliteValue));
   }
 
-  rows<T extends Row = Row>(sql: string, ...params: unknown[]): T[];
+  rows<T extends Row = StoredRow>(sql: string, ...params: unknown[]): T[];
   rows(sql: string, ...params: unknown[]): Row[] {
     return this.sqlite.prepare(sql).all(...params.map(toSqliteValue)).map((row) => ({ ...row }));
   }

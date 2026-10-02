@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
+import type { StoredRow } from './d1Doubles';
 
-type Row = Record<string, unknown>;
 type ChainStep = (...args: unknown[]) => unknown;
 type Condition = (condition: unknown) => unknown;
 
@@ -12,8 +12,8 @@ export function drizzleChainMocks() {
     orderBy: vi.fn<ChainStep>(),
     limit: vi.fn<(count: number) => unknown>(),
   };
-  const insertChain = { values: vi.fn<(row: Row) => unknown>(), select: vi.fn<ChainStep>(), onConflictDoNothing: vi.fn<ChainStep>() };
-  const updateChain = { set: vi.fn<(values: Row) => unknown>(), where: vi.fn<Condition>(), returning: vi.fn<ChainStep>() };
+  const insertChain = { values: vi.fn<(row: StoredRow) => unknown>(), select: vi.fn<ChainStep>(), onConflictDoNothing: vi.fn<ChainStep>() };
+  const updateChain = { set: vi.fn<(values: StoredRow) => unknown>(), where: vi.fn<Condition>(), returning: vi.fn<ChainStep>() };
   const deleteChain = { where: vi.fn<Condition>() };
   const db = {
     select: vi.fn((_fields?: unknown) => selectChain),

@@ -2,17 +2,30 @@ import { z } from 'zod';
 import { mockEnv, PRO_PLAN, resetToASignedOutVisitorOnTheFreePlan, signInWithPlans, TEAM_PLAN } from './apiHandlerMocks';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { apiRequest } from './apiRequest';
+import { storedTask } from './storedJson';
 
 export { dbMocks, expectTheOrganizationOwnsIt, expectTheOrganizationPlanChecked, mockEnv } from './apiHandlerMocks';
 
 const exportedTemplate = z
   .object({
     title: z.string(),
-    sections: z.array(z.object({ items: z.array(z.record(z.unknown())) }).passthrough()),
+    type: z.unknown(),
+    visibility: z.unknown(),
+    seoTitle: z.unknown(),
+    seoDescription: z.unknown(),
+    rules: z.unknown(),
+    sections: z.array(z.object({ id: z.unknown(), title: z.unknown(), items: z.array(storedTask) }).passthrough()),
   })
   .passthrough();
-export const packBody = z.object({ templates: z.array(exportedTemplate), manifest: z.record(z.unknown()) }).passthrough();
-export const importBody = z.object({ imported: z.number() }).passthrough();
+const packManifest = z
+  .object({ totalTemplates: z.unknown(), skippedTemplates: z.unknown(), includesRules: z.unknown() })
+  .passthrough();
+export const packBody = z
+  .object({ kind: z.unknown(), schemaVersion: z.unknown(), templates: z.array(exportedTemplate), manifest: packManifest })
+  .passthrough();
+export const importBody = z
+  .object({ imported: z.number(), total: z.unknown(), successes: z.unknown(), failed: z.unknown() })
+  .passthrough();
 
 export function resetPortableTemplatesHandlerMocks() {
   resetToASignedOutVisitorOnTheFreePlan();

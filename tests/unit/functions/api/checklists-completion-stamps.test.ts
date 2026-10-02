@@ -49,7 +49,7 @@ async function put(body: Record<string, unknown>) {
   return { response, data: await readJson(response, jsonObject) };
 }
 
-function savedUpdates(): Record<string, unknown> {
+function savedUpdates() {
   expect(dbMocks.updateChain.set).toHaveBeenCalledOnce();
   return firstOf(dbMocks.updateChain.set.mock.calls)[0];
 }
@@ -122,7 +122,7 @@ describe('run completion stamps on PUT /api/checklists/:id, which only a transit
 
     const updates = savedUpdates();
     expect(updates.completed_by_user_id).toBe('member-b');
-    expect(Date.parse(updates.completed_at as string)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(String(updates.completed_at))).toBeGreaterThanOrEqual(before - 1000);
     expect(auditDiff()).toEqual(expect.objectContaining({ completed_by_user_id: 'member-b' }));
   });
 
@@ -177,7 +177,7 @@ describe('run completion stamps on POST /api/checklists', () => {
     }), mockEnv);
 
     expect(response.status).toBe(200);
-    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0] as Record<string, unknown>;
+    const inserted = firstOf(dbMocks.insertChain.values.mock.calls)[0];
     expect(inserted.status).toBe('completed');
     expect(inserted.completed_by_user_id).toBe('member-b');
     expect(typeof inserted.completed_at).toBe('string');

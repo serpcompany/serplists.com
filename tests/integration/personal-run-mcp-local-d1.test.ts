@@ -16,7 +16,6 @@ import {
   toolError,
   toolPayload,
   sendRequestsWithRunKey,
-  type JsonRecord,
 } from "../support/personalRunMcpLocalD1";
 import { handleAgentMcp } from "../../functions/api/handlers/agentMcp";
 import {
@@ -97,7 +96,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     `).bind(keyId, secret.keyPrefix, secret.keyHash, "2026-09-19T02:00:00.000Z").run();
     await applyMigration(migration27);
 
-    const stored = await rows<JsonRecord>("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
+    const stored = await rows("SELECT * FROM personal_run_keys WHERE id = ?", keyId);
     expect(JSON.stringify(stored)).not.toContain(rawKey);
     expect(stored[0]).toMatchObject({
       id: keyId,
@@ -155,7 +154,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     }));
     expect(toolPayload(completeBody).run).toMatchObject({ revision: 3, progress: 33 });
 
-    const storedRun = onlyElement(await rows<JsonRecord>("SELECT * FROM checklist_runs WHERE id = ?", runId));
+    const storedRun = onlyElement(await rows("SELECT * FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun).toMatchObject({
       user_id: "user-a",
       team_id: null,
@@ -170,7 +169,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     });
     expect(subTaskAt(contentAt(taskIn(sections, 0, 0), 0), 0).isCompleted).toBe(true);
 
-    const history = await rows<JsonRecord>(
+    const history = await rows(
       "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? ORDER BY created_at",
       runId,
     );
@@ -178,7 +177,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
 
-    const itemsCopiesAndSizeOfEachAuditRow = await rows<JsonRecord>(`
+    const itemsCopiesAndSizeOfEachAuditRow = await rows(`
       SELECT
         coalesce(json_extract(before_json, '$.items'), json_extract(after_json, '$.items'),
           json_extract(diff_json, '$.items'), json_extract(after_json, '$.retired_items')) AS stored_items,
@@ -212,13 +211,13 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(bodies.filter((body) => toolError(body) === undefined)).toHaveLength(1);
     expect(bodies.filter((body) => toolError(body) === "edit_conflict")).toHaveLength(1);
 
-    const storedRun = onlyElement(await rows<JsonRecord>("SELECT revision FROM checklist_runs WHERE id = ?", runId));
+    const storedRun = onlyElement(await rows("SELECT revision FROM checklist_runs WHERE id = ?", runId));
     expect(storedRun.revision).toBe(4);
     expect(await auditEventsOfTheRun()).toBe(auditEventsBefore + 1);
   });
 
   it("rolls a run mutation back when its audit insert fails", async () => {
-    const [beforeRun] = await rows<JsonRecord>(
+    const [beforeRun] = await rows(
       "SELECT items, progress, revision, updated_at FROM checklist_runs WHERE id = ?",
       runId,
     );

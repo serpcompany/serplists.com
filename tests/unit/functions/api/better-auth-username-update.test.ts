@@ -2,8 +2,9 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import type { BetterAuthOptions } from 'better-auth';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { StoredRow } from '../../../support/d1Doubles';
 
-type Row = Record<string, unknown>;
+type Row = StoredRow;
 type MemoryTables = { users: Row[]; session: Row[]; account: Row[]; verification: Row[] };
 const memory = vi.hoisted((): { db: MemoryTables; claimBetweenCheckAndWrite: null | { id: string; username: string } } => ({
   db: { users: [], session: [], account: [], verification: [] },

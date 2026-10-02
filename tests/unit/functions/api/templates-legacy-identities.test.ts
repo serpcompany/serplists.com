@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { contentAt, firstOf, present } from '../../../support/elements';
-import { jsonObject, readJson, readSuccessfulJson } from '../../../support/readJson';
+import { z } from 'zod';
+import { readJson, readSuccessfulJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import type { StoredRow } from '../../../support/d1Doubles';
 import { chainSelectsUpdatesAndDeletes } from '../../../support/drizzleChainMocks';
 
 const dbMocks = await vi.hoisted(async () => (await import('../../../support/drizzleChainMocks')).drizzleChainMocks());
@@ -35,9 +38,9 @@ import { buildTemplateUpdateRequest } from '@/lib/templates/templateUpdate';
 import { parseTemplateUpdateResponse } from '@/lib/templateUpdateResult';
 import { jsonRecordsIn, storedSectionsIn } from '../../../support/storedJson';
 
-type Row = Record<string, unknown>;
+const mockEnv = apiEnv({ BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
 
-const mockEnv = { DB: {}, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' };
+const updateBody = z.object({ error: z.unknown() }).passthrough();
 
 const subTasks = (ids: [unknown, unknown], ticked: boolean) => [
   { type: 'subItems', value: '', subItems: [
@@ -64,7 +67,7 @@ const cases: Array<[string, [[unknown, unknown], [unknown, unknown]]]> = [
 ];
 
 function createStore(subItemIds: [[unknown, unknown], [unknown, unknown]]) {
-  const template: Row = {
+  const template: StoredRow = {
     id: 'template-1',
     user_id: 'user-123',
     owner_type: 'user',
@@ -83,7 +86,7 @@ function createStore(subItemIds: [[unknown, unknown], [unknown, unknown]]) {
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: null,
   };
-  const run: Row = {
+  const run: StoredRow = {
     id: 'run-1',
     user_id: 'user-123',
     team_id: null,
@@ -109,7 +112,7 @@ function serveFromAndWriteBatchesTo(store: Store) {
   dbMocks.selectChain.orderBy.mockImplementation(async () => [store.run]);
   dbMocks.db.update.mockImplementation((table?: unknown) => ({
     ...dbMocks.updateChain,
-    set: vi.fn((values: Row) => ({ where: () => ({ table, values }) })),
+    set: vi.fn((values: StoredRow) => ({ where: () => ({ table, values }) })),
   }));
   dbMocks.db.batch.mockImplementation(async (statements) => {
     for (const statement of statements) {
@@ -123,7 +126,7 @@ function serveFromAndWriteBatchesTo(store: Store) {
 
 const apiClient = {
   getTemplateById: async (id: string) => {
-    const response = await handleTemplates(new Request(`http://localhost/api/templates/${id}`), mockEnv as never);
+    const response = await handleTemplates(new Request(`http://localhost/api/templates/${id}`), mockEnv);
     return readSuccessfulJson(response, apiTemplateSchema);
   },
 };
@@ -136,8 +139,8 @@ const editorSavePathToTheRealPutHandler = (input: SaveTemplateInput) => persistT
     const response = await handleTemplates(new Request(`http://localhost/api/templates/${payload.id}`, {
       method: 'PUT',
       body: JSON.stringify(buildTemplateUpdateRequest(payload)),
-    }), mockEnv as never);
-    const body = await readJson(response, jsonObject);
+    }), mockEnv);
+    const body = await readJson(response, updateBody);
     responses.push(body);
     if (!response.ok) throw new Error(String(body.error));
     return parseTemplateUpdateResponse(body);
@@ -237,10 +240,10 @@ describe('saving a Template stored without ids the API accepts, which the editor
     const response = await handleTemplates(new Request('http://localhost/api/templates/template-1/clone', {
       method: 'POST',
       body: JSON.stringify({ visibility: 'private' }),
-    }), mockEnv as never);
+    }), mockEnv);
 
     expect(response.status).toBe(200);
-    const copy = dbMocks.insertChain.values.mock.calls.map(([values]) => values as Row).find((values) => 'owner_type' in values);
+    const copy = dbMocks.insertChain.values.mock.calls.map(([values]) => values).find((values) => 'owner_type' in values);
     expect(storedIds(copy?.items)).toEqual([
       'legacy-section-1',
       'legacy-item-1-1', 'legacy-subitem-1-1-1', 'legacy-subitem-1-1-2',

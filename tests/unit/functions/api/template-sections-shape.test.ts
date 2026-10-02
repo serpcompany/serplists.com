@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf, sectionAt } from '../../../support/elements';
-import { jsonObject, readJson } from '../../../support/readJson';
+import { z } from 'zod';
+import { readJson } from '../../../support/readJson';
+import { apiEnv } from '../../../support/apiEnv';
+import { sectionRecordsIn, taskRecordsIn } from '@/lib/schemas/jsonRecords';
 
 import { normalizeSectionsPayload } from '@functions/api/utils/payloads';
 import {
@@ -15,17 +18,19 @@ vi.mock('@functions/api/utils/session', () => ({ getSessionUserId: vi.fn(async (
 
 import { handleTemplates } from '@functions/api/handlers/templates';
 
-type Json = Record<string, unknown>;
+const templateBody = z
+  .object({ id: z.unknown(), template: z.object({ id: z.unknown() }).passthrough().optional(), sections: z.unknown() })
+  .passthrough();
 
 const onboarding = () => [
   { id: 's1', title: 'Intro', items: null },
   { id: 's2', title: 'Steps', items: [{ id: 'i1', title: 'Create account' }] },
 ];
 
-const sectionOutline = (sections: unknown[]) => (sections as Json[]).map((section) => ({
+const sectionOutline = (sections: unknown) => sectionRecordsIn(sections).map((section) => ({
   id: section.id,
   title: section.title,
-  items: ((section.items ?? []) as Json[]).map((item) => item.id),
+  items: taskRecordsIn(section.items).map((item) => item.id),
 }));
 
 describe('a first section with items: null, which every reader takes as sections rather than tasks of one Checklist section', () => {
@@ -60,8 +65,10 @@ describe('a first section with items: null, which every reader takes as sections
     ['sections, the first with items: []', [{ id: 's1', title: 'A', items: [] }], true],
     ['a flat task list', [{ id: 'i1', title: 'Task' }, { id: 'i2', title: 'Task 2' }], false],
   ])('reads %s as sections or a legacy flat task list the same way in every reader', (_label, list, sectioned) => {
-    const wrapped = (sections: unknown[]) => sections.length === 1 && (sections[0] as Json).title === 'Checklist'
-      && (sections[0] as Json).id === '1';
+    const wrapped = (sections: unknown[]) => {
+      const [first] = sectionRecordsIn(sections);
+      return sections.length === 1 && first?.title === 'Checklist' && first.id === '1';
+    };
 
     expect(isSectionsShape(list)).toBe(sectioned);
     expect(wrapped(normalizeSectionsPayload(list).sections)).toBe(!sectioned);
@@ -73,14 +80,14 @@ describe('saving a Template whose first section has items: null', () => {
   const createdAt = '2026-01-01T00:00:00.000Z';
   let d1: SqliteD1;
 
-  const env = () => ({ DB: d1.binding, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' }) as never;
+  const env = () => apiEnv({ DB: d1.binding, BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!' });
   const call = async (method: string, path: string, body?: unknown) => {
     const response = await handleTemplates(new Request(`http://localhost/api/templates${path}`, {
       method,
       headers: { 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     }), env());
-    return { status: response.status, data: await readJson(response, jsonObject) };
+    return { status: response.status, data: await readJson(response, templateBody) };
   };
 
   beforeEach(() => {
@@ -92,11 +99,11 @@ describe('saving a Template whose first section has items: null', () => {
   it('stores and returns the sections it was sent', async () => {
     const created = await call('POST', '', { title: 'Onboarding', sections: onboarding() });
     expect(created.status, JSON.stringify(created.data)).toBe(200);
-    const id = String(created.data.id ?? (created.data.template as Json | undefined)?.id);
+    const id = String(created.data.id ?? created.data.template?.id);
 
     const fetched = await call('GET', `/${id}`);
     expect(fetched.status).toBe(200);
-    expect(sectionOutline(fetched.data.sections as unknown[])).toEqual([
+    expect(sectionOutline(fetched.data.sections)).toEqual([
       { id: 's1', title: 'Intro', items: [] },
       { id: 's2', title: 'Steps', items: ['i1'] },
     ]);
@@ -106,7 +113,7 @@ describe('saving a Template whose first section has items: null', () => {
     const sent = onboarding();
     const created = await call('POST', '', { title: 'Onboarding', sections: [{ ...sent[0], items: [] }, sent[1]] });
     expect(created.status, JSON.stringify(created.data)).toBe(200);
-    const id = String(created.data.id ?? (created.data.template as Json | undefined)?.id);
+    const id = String(created.data.id ?? created.data.template?.id);
     const template = firstOf(d1.rows<{ version: number; content_version: number }>(
       'SELECT version, content_version FROM templates WHERE id = ?', id,
     ));

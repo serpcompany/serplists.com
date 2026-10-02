@@ -1,17 +1,10 @@
+import type { McpRecord } from './mcpResponses';
 import { jsonObject, jsonObjects } from './readJson';
 
 type JsonRecord = Record<string, unknown>;
 
-export interface PagedResult extends JsonRecord {
-  part?: unknown;
-  section?: unknown;
-  outline?: unknown;
-  nextCursor?: unknown;
-  sectionsOmitted?: unknown;
-  template?: unknown;
-  run?: unknown;
+export interface PagedResult extends McpRecord {
   firstRetired?: unknown;
-  retiredItems?: unknown;
 }
 
 interface TextPart extends JsonRecord {
@@ -119,7 +112,7 @@ export function callRecordingResults(read: PagedRead, argumentsOfEveryCall: Json
 export async function readTemplateInFull(
   read: TemplateRead,
   templateId: string,
-): Promise<{ template: JsonRecord; results: PagedResult[] }> {
+): Promise<{ template: McpRecord; results: PagedResult[] }> {
   const results: PagedResult[] = [];
   const call = callRecordingResults(read, { templateId }, results);
 

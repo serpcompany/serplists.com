@@ -12,7 +12,8 @@ import { releaseSectionWithTwoSubTasks } from "../fixtures/handlerRows";
 import { firstOf } from "./elements";
 import { jsonObject, readJson } from "./readJson";
 import { apiEnv } from "./apiEnv";
-import { optionalRecordIn } from "./mcpResponses";
+import { optionalRecordIn, recordIn, type McpRecord } from "./mcpResponses";
+import type { StoredRow } from "./d1Doubles";
 import type { Env } from "@functions/api/types";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -52,7 +53,7 @@ export async function applyMigration(name: string): Promise<void> {
   for (const statement of statements) await env.DB.prepare(statement).run();
 }
 
-export async function rows<T extends JsonRecord>(sql: string, ...bindings: unknown[]): Promise<T[]> {
+export async function rows<T extends JsonRecord = StoredRow>(sql: string, ...bindings: unknown[]): Promise<T[]> {
   const result = await env.DB.prepare(sql).bind(...bindings).all<T>();
   return result.results;
 }
@@ -79,13 +80,13 @@ export async function callTool(name: string, args: JsonRecord = {}, id = 1): Pro
   return handleAgentMcp(mcpRequest("tools/call", { name, arguments: args }, id), env);
 }
 
-export async function bodyOf(response: Response): Promise<JsonRecord> {
-  return readJson(response, jsonObject);
+export async function bodyOf(response: Response): Promise<McpRecord> {
+  return recordIn(await readJson(response, jsonObject));
 }
 
 const toolResultBody = z.object({ result: z.object({ structuredContent: z.unknown() }).passthrough() }).passthrough();
 
-export function toolPayload(body: unknown): JsonRecord {
+export function toolPayload(body: unknown): McpRecord {
   return optionalRecordIn(toolResultBody.parse(body).result.structuredContent) ?? {};
 }
 

@@ -1,4 +1,13 @@
+import type * as schema from '../../db/schema/index';
+
 type Row = Record<string, unknown>;
+
+type ColumnsOf<Table> = Table extends { $inferInsert: infer TableRow } ? keyof TableRow : never;
+type StoredColumn = ColumnsOf<(typeof schema)[keyof typeof schema]>;
+
+export interface StoredRow extends Partial<Record<StoredColumn, unknown>> {
+  [column: string]: unknown;
+}
 
 export function d1Result(results: Row[], meta: Partial<D1Meta> = {}): D1Result<Row> {
   return {

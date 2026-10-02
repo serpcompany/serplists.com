@@ -9,8 +9,7 @@ import {
   validateStableTemplateIdentities,
 } from '@functions/api/utils/template-reconciliation';
 import { jsonRecordsIn } from '../../../support/storedJson';
-
-type Row = Record<string, unknown>;
+import { contentRecordsIn, sectionRecordsIn, subTaskRecordsIn, taskRecordsIn } from '@/lib/schemas/jsonRecords';
 
 const storedSectionsWithNumericBlankOrMissingIds = [
   {
@@ -33,14 +32,13 @@ const storedSectionsWithNumericBlankOrMissingIds = [
   { id: 'kept-section', title: 'Ship', items: [{ id: '', title: 'Release' }] },
 ];
 
-const idsInNumberingOrder = (sections: unknown[]): unknown[] => (sections.filter((section) => typeof section === 'object' && section !== null) as Row[])
-  .flatMap((section) => [
+const idsInNumberingOrder = (sections: unknown): unknown[] =>
+  sectionRecordsIn(sections).flatMap((section) => [
     section.id,
-    ...((section.items as unknown[]).filter((item) => typeof item === 'object' && item !== null) as Row[]).flatMap((item) => [
+    ...taskRecordsIn(section.items).flatMap((item) => [
       item.id,
-      ...((item.subItems as Row[] | undefined) ?? []).filter((subItem) => typeof subItem === 'object').map((subItem) => subItem.id),
-      ...((item.contents as Row[] | undefined) ?? []).flatMap((content) =>
-        ((content.subItems as Row[] | undefined) ?? []).filter((subItem) => typeof subItem === 'object').map((subItem) => subItem.id)),
+      ...subTaskRecordsIn(item.subItems).map((subItem) => subItem.id),
+      ...contentRecordsIn(item.contents).flatMap((content) => subTaskRecordsIn(content.subItems).map((subItem) => subItem.id)),
     ]),
   ]);
 
@@ -63,8 +61,9 @@ describe('withStableTemplateIdentities', () => {
   it('changes nothing but the ids', () => {
     const stable = withStableTemplateIdentities(storedSectionsWithNumericBlankOrMissingIds);
 
-    expect((stable[0] as Row).title).toBe('Plan');
-    expect(firstOf((stable[0] as Row).items as Row[]).contents).toEqual([
+    const plan = firstOf(sectionRecordsIn(stable));
+    expect(plan.title).toBe('Plan');
+    expect(firstOf(taskRecordsIn(plan.items)).contents).toEqual([
       { type: 'text', value: 'Notes' },
       { type: 'subItems', value: '', subItems: [{ id: 'legacy-subitem-1-1-1', title: 'In a block' }, { id: 'legacy-subitem-1-1-2', title: 'No id' }] },
     ]);
@@ -116,7 +115,7 @@ describe('withStableTemplateIdentities', () => {
       { id: 'legacy-section-2', title: 'Steps', items: [{ id: 'legacy-item-2-1', title: 'Create account' }] },
     ]);
     const saved = assignMissingStableTemplateIdentities(sections);
-    expect((stable as Row[]).map((section) => section.id)).toEqual(saved.map((section) => section.id));
+    expect(sectionRecordsIn(stable).map((section) => section.id)).toEqual(saved.map((section) => section.id));
     expect(templateStructureChanged(saved, assignMissingStableTemplateIdentities(stable, saved))).toBe(false);
   });
 

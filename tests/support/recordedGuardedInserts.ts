@@ -1,14 +1,11 @@
 import { vi } from 'vitest';
+import type { StoredRow } from './d1Doubles';
 
-interface InsertedValues extends Record<string, unknown> {
-  action?: unknown;
-}
-
-const guardedInserts = vi.hoisted(() => [] as Array<{ values: InsertedValues; condition: unknown }>);
+const guardedInserts = vi.hoisted(() => [] as Array<{ values: StoredRow; condition: unknown }>);
 
 vi.mock('@functions/api/utils/guarded-insert', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@functions/api/utils/guarded-insert')>()),
-  insertRowWhere: vi.fn((_db: unknown, _table: unknown, values: InsertedValues, condition: unknown) => {
+  insertRowWhere: vi.fn((_db: unknown, _table: unknown, values: StoredRow, condition: unknown) => {
     guardedInserts.push({ values, condition });
     return { guardedInsert: values.action };
   }),

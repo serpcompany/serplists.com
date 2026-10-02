@@ -2,11 +2,12 @@ import {
   callRecordingResults,
   isRecord,
   jsonTextPartsJoiner,
-  type PagedResult,
   readOutlineFromItsFirstPage,
   readSectionInFull,
   type PagedRead,
+  type PagedResult,
 } from './templatePages';
+import type { McpRecord } from './mcpResponses';
 import { jsonObject, jsonObjects } from './readJson';
 
 type JsonRecord = Record<string, unknown>;
@@ -33,7 +34,7 @@ export async function readRetiredWork(call: PagedRead, scope: JsonRecord = {}): 
   return entries;
 }
 
-export async function readRunInFull(read: PagedRead, runId: string): Promise<{ run: JsonRecord; results: PagedResult[] }> {
+export async function readRunInFull(read: PagedRead, runId: string): Promise<{ run: McpRecord; results: PagedResult[] }> {
   const results: PagedResult[] = [];
   const call = callRecordingResults(read, { runId }, results);
 

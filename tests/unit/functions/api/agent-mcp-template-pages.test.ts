@@ -4,7 +4,7 @@ import { elementAt, firstOf, sectionAt } from "../../../support/elements";
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
   describeTemplateRead,
-  readTemplate,
+  readTemplate as readTemplateResult,
   templateView,
   writtenTemplateResult,
   type TemplateView,
@@ -22,11 +22,13 @@ import {
 } from "../../../support/agentMcp";
 import { TEXT_COSTLIER_IN_JSON } from "../../../support/jsonText";
 import { reproducibleShapes } from "../../../support/reproducibleRandom";
-import { readTemplateInFull } from "../../../support/templatePages";
+import { readTemplateInFull, type PagedResult } from "../../../support/templatePages";
 import { optionalRecordIn, recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { getTemplateArgs } from "@functions/api/handlers/agentMcpTemplateTools";
 
 type JsonRecord = Record<string, unknown>;
+
+const readTemplate = (...args: Parameters<typeof readTemplateResult>): PagedResult => readTemplateResult(...args);
 
 const row = (sections: unknown[], overrides: JsonRecord = {}): JsonRecord => ({
   id: "template-1",
@@ -128,7 +130,7 @@ describe("get_template results", () => {
 
   it("pages a section too large for one result a run of whole tasks at a time, its fields first", async () => {
     const view = viewOf([section("big", Array.from({ length: 200 }, (_, index) => task(`t${index}`, 500)))]);
-    const pages: JsonRecord[] = [readTemplate(view, { sectionId: "big" })];
+    const pages: PagedResult[] = [readTemplate(view, { sectionId: "big" })];
     while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readTemplate(view, { cursor: textIn(pages.at(-1)?.nextCursor) }));
 
     const { first, second } = sectionFieldsOfTheFirstTwoPages(pages);
@@ -142,7 +144,7 @@ describe("get_template results", () => {
   it("returns a task too large for one result in parts whose text joins into it", () => {
     const huge = { ...task("huge", 100_000, TEXT_COSTLIER_IN_JSON), description: TEXT_COSTLIER_IN_JSON.repeat(50) };
     const view = viewOf([section("s1", [task("small"), huge, task("after")])]);
-    const pages: JsonRecord[] = [readTemplate(view, { taskId: "huge" })];
+    const pages: PagedResult[] = [readTemplate(view, { taskId: "huge" })];
     while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readTemplate(view, { cursor: textIn(pages.at(-1)?.nextCursor) }));
 
     expect(pages.length).toBeGreaterThan(3);

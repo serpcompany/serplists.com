@@ -14,6 +14,7 @@ import { mcpRunsPage, mcpTemplateResult, mcpTemplatesPage, resultBytes } from ".
 import { costliestJsonText, MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse } from "../../../support/jsonText";
 import { readRunInFull } from "../../../support/runPages";
 import { readTemplateInFull } from "../../../support/templatePages";
+import type { McpRecord } from "../../../support/mcpResponses";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -23,7 +24,7 @@ const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
 
 let d1: SqliteD1;
 
-async function call(name: string, args: JsonRecord): Promise<JsonRecord> {
+async function call(name: string, args: JsonRecord): Promise<McpRecord> {
   const { result } = await callToolWithAFreshRunKey(d1, name, args);
   expect(result.isError, `${name}: ${toJson(result.structuredContent).slice(0, 300)}`).toBeUndefined();
   return result.structuredContent;
@@ -63,7 +64,9 @@ const largestTemplateHeader = () => ({
   tags: Array.from({ length: TEMPLATE_LIST_MAX_ITEMS }, (_, index) => `${index}${costliestJsonText(TEMPLATE_LIST_ITEM_MAX - 2)}`),
 });
 
-function insertTemplate(id: string, sections: unknown[], fields: JsonRecord = {}) {
+type StoredTemplateFields = { title?: string; description?: string; categories?: string[]; tags?: string[]; createdAt?: string };
+
+function insertTemplate(id: string, sections: unknown[], fields: StoredTemplateFields = {}) {
   d1.run(`INSERT INTO templates (id, user_id, title, description, items, is_public, category, tags, created_at, updated_at,
       version, type, owner_type, team_id, created_by_user_id, content_version)
     VALUES (?, 'user-1', ?, ?, ?, 0, ?, ?, ?, NULL, 1, 'checklist', 'user', NULL, 'user-1', 1)`,
@@ -71,7 +74,7 @@ function insertTemplate(id: string, sections: unknown[], fields: JsonRecord = {}
   JSON.stringify(fields.categories ?? []), JSON.stringify(fields.tags ?? []), fields.createdAt ?? NOW);
 }
 
-function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fields: JsonRecord = {}) {
+function insertRun(id: string, sections: unknown[], retired: unknown[] = [], fields: { title?: string; createdAt?: string } = {}) {
   d1.run(`INSERT INTO checklist_runs (id, user_id, template_id, title, items, status, started_at, created_at, progress, team_id,
       created_by_user_id, started_by_user_id, template_version, revision, retired_items)
     VALUES (?, 'user-1', NULL, ?, ?, 'in_progress', ?, ?, 0, NULL, 'user-1', 'user-1', 1, 1, ?)`,
@@ -126,7 +129,7 @@ function liftTheTemplateAndActiveRunLimits() {
   d1.run("INSERT INTO entitlement_overrides (user_id, plan, created_at) VALUES ('user-1', 'pro', ?)", NOW);
 }
 
-async function everyPageOf(name: "list_templates" | "list_runs"): Promise<JsonRecord[]> {
+async function everyPageOf(name: "list_templates" | "list_runs"): Promise<McpRecord[]> {
   const pages = [await call(name, {})];
   while (typeof pages.at(-1)?.nextCursor === "string") pages.push(await call(name, { cursor: pages.at(-1)?.nextCursor }));
   return pages;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { elementAt, firstOf } from "../../../support/elements";
+import { elementAt, taskIn } from "../../../support/elements";
+import { storedSections, type StoredSections } from "../../../support/storedJson";
 
 import { buildRunUpdatePayload } from "@/contexts/runUpdatePayload";
 import { mapApiTemplate } from "@/contexts/templateListFetchers";
@@ -28,7 +29,7 @@ import { requestBodyLimit } from "@functions/api/utils/body-limit";
 import { normalizeSectionsPayload } from "@functions/api/utils/payloads";
 import { resetRunCompletionState } from "@functions/api/utils/template-reconciliation";
 
-type Sections = Array<Record<string, unknown>>;
+type Sections = StoredSections;
 
 const D1_MAX_ROW_BYTES = 2_000_000;
 
@@ -38,10 +39,8 @@ function withTextBlockPaddingTo(sections: Sections, target: number, char = "a"):
   const charBytes = contentSaveBytes([{ value: char }]) - contentSaveBytes([{ value: "" }]);
   const padded = structuredClone(sections);
   const block = { id: "pad", type: "text", value: "" };
-  firstOf(firstOf(padded).items as Array<Record<string, unknown>>).contents = [
-    ...((firstOf(firstOf(padded).items as Array<Record<string, unknown>>).contents as unknown[]) ?? []),
-    block,
-  ];
+  const task = taskIn(padded, 0, 0);
+  task.contents = [...(task.contents ?? []), block];
   const missing = target - contentSaveBytes(padded);
   expect(missing).toBeGreaterThanOrEqual(0);
   block.value = char.repeat(Math.floor(missing / charBytes)) + "a".repeat(missing % charBytes);
@@ -123,7 +122,7 @@ function editorBodyForAnUnchangedSave(stored: Sections) {
 }
 
 const runAsPostChecklistsStoresIt = (stored: Sections): Sections =>
-  resetRunCompletionState(sanitizeStoredSections(normalizeSectionsPayload(stored).sections)) as Sections;
+  storedSections.parse(resetRunCompletionState(sanitizeStoredSections(normalizeSectionsPayload(stored).sections)));
 
 function runRenameSaveBody(runSections: Sections) {
   const run = mapChecklistToRun({ id: "run-1", title: sixByteJsonEscapes(RUN_TITLE_MAX), items: JSON.stringify(runSections), revision: 1 }, "run-1");
@@ -134,12 +133,12 @@ function setEveryCompletion(sections: Sections, isCompleted: boolean): Sections 
   const tick = (record: Record<string, unknown>) => ({ ...record, isCompleted });
   return sections.map((section) => ({
     ...section,
-    items: (section.items as Array<Record<string, unknown>>).map((item) => ({
+    items: section.items.map((item) => ({
       ...tick(item),
       ...(Array.isArray(item.subItems) ? { subItems: item.subItems.map(tick) } : {}),
       ...(Array.isArray(item.contents)
         ? {
-            contents: item.contents.map((content: Record<string, unknown>) =>
+            contents: item.contents.map((content) =>
               Array.isArray(content.subItems) ? { ...content, subItems: content.subItems.map(tick) } : content),
           }
         : {}),

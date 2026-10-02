@@ -2,15 +2,56 @@ import { z } from "zod";
 
 const jsonObject = z.record(z.unknown());
 
+export interface McpRecord extends Record<string, unknown> {
+  id?: unknown;
+  title?: unknown;
+  description?: unknown;
+  notes?: unknown;
+  isCompleted?: unknown;
+  status?: unknown;
+  progress?: unknown;
+  revision?: unknown;
+  version?: unknown;
+  items?: unknown;
+  subItems?: unknown;
+  sections?: unknown;
+  section?: unknown;
+  task?: unknown;
+  taskId?: unknown;
+  firstTask?: unknown;
+  outline?: unknown;
+  part?: unknown;
+  of?: unknown;
+  text?: unknown;
+  nextCursor?: unknown;
+  sectionsOmitted?: unknown;
+  template?: unknown;
+  templates?: unknown;
+  run?: unknown;
+  retiredItems?: unknown;
+  operation?: unknown;
+  result?: unknown;
+  structuredContent?: unknown;
+  isError?: unknown;
+  tools?: unknown;
+  name?: unknown;
+  error?: unknown;
+  code?: unknown;
+  data?: unknown;
+  message?: unknown;
+}
+
+const mcpRecord = jsonObject.transform((record): McpRecord => record);
+
 export const mcpToolResult = z.object({
   content: z.array(z.object({ type: z.literal("text"), text: z.string() }).passthrough()),
-  structuredContent: jsonObject,
+  structuredContent: mcpRecord,
   isError: z.literal(true).optional(),
 }).passthrough();
 
 export const mcpToolResponse = z.object({ jsonrpc: z.literal("2.0"), result: mcpToolResult }).passthrough();
 
-export const mcpResultResponse = z.object({ jsonrpc: z.literal("2.0"), result: jsonObject }).passthrough();
+export const mcpResultResponse = z.object({ jsonrpc: z.literal("2.0"), result: mcpRecord }).passthrough();
 
 export const mcpErrorResponse = z.object({
   jsonrpc: z.literal("2.0"),
@@ -55,13 +96,13 @@ export const mcpTemplateResult = z.object({
   template: z.object({ id: z.string(), version: z.number() }).passthrough(),
 }).passthrough();
 
-export const mcpTemplatesPage = z.object({ templates: z.array(jsonObject), nextCursor: z.string().optional() }).passthrough();
+export const mcpTemplatesPage = z.object({ templates: z.array(mcpRecord), nextCursor: z.string().optional() }).passthrough();
 
-export const mcpRunsPage = z.object({ runs: z.array(jsonObject), nextCursor: z.string().optional() }).passthrough();
+export const mcpRunsPage = z.object({ runs: z.array(mcpRecord), nextCursor: z.string().optional() }).passthrough();
 
-export const recordIn = (value: unknown) => jsonObject.parse(value);
+export const recordIn = (value: unknown): McpRecord => mcpRecord.parse(value);
 
-export const recordsIn = (value: unknown) => z.array(jsonObject).parse(value);
+export const recordsIn = (value: unknown): McpRecord[] => z.array(mcpRecord).parse(value);
 
 export const optionalRecordIn = (value: unknown) => (value === undefined ? undefined : recordIn(value));
 

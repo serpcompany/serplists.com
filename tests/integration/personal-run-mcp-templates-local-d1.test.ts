@@ -25,7 +25,7 @@ import { contentSaveBytes, RUN_CONTENT_MAX_BYTES, TEMPLATE_CONTENT_MAX_BYTES } f
 import { readRunInFull } from "../support/runPages";
 import { readTemplateInFull } from "../support/templatePages";
 import { objectContaining } from "../support/asymmetricMatchers";
-import { numberIn, optionalRecordIn, recordIn, recordsIn, textIn } from "../support/mcpResponses";
+import { numberIn, optionalRecordIn, recordIn, recordsIn, textIn, type McpRecord } from "../support/mcpResponses";
 import { jsonRecordIn, jsonRecordsIn, storedSections, storedSectionsIn } from "../support/storedJson";
 
 describe.sequential("Personal Run Key MCP against real local D1", () => {
@@ -124,7 +124,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const created = recordIn(toolPayload(createBody).template);
     expect(created).toMatchObject({ title: "Agent Harness Setup", version: 1, tags: ["harness"] });
     const templateId = textIn(created.id);
-    const [storedTemplate] = await rows<JsonRecord>(
+    const [storedTemplate] = await rows(
       "SELECT user_id, owner_type, team_id, is_public FROM templates WHERE id = ?",
       templateId,
     );
@@ -165,7 +165,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     const stale = await bodyOf(await callTool("update_template", { templateId, expectedVersion: 1, title: "Stale" }));
     expect(toolError(stale)).toBe("edit_conflict");
 
-    const history = await rows<JsonRecord>(
+    const history = await rows(
       "SELECT action, actor_user_id, metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? ORDER BY created_at",
       templateId,
     );
@@ -173,7 +173,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(history.every((event) => event.actor_user_id === "user-a")).toBe(true);
     expect(history.every((event) => String(event.metadata_json).includes(`"personalRunKeyId":"${keyId}"`))).toBe(true);
 
-    const reconciledEventsInTheRunsChangelog = await rows<JsonRecord>(
+    const reconciledEventsInTheRunsChangelog = await rows(
       "SELECT metadata_json FROM audit_events WHERE resource_type = 'checklist_run' AND resource_id = ? AND action = 'checklist_run.reconciled'",
       templateRunId,
     );
@@ -315,7 +315,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     firstOf(templateWithOnlyThoseFourChanges).items.splice(1, 0, { id: insertedId, title: "Read the summary first" });
     templateWithOnlyThoseFourChanges.push(present(templateWithOnlyThoseFourChanges.shift(), "the guide section"));
     elementAt(templateWithOnlyThoseFourChanges, 1).items.splice(3, 1);
-    const stored = onlyElement(await rows<JsonRecord>("SELECT items, version FROM templates WHERE id = ?", templateId));
+    const stored = onlyElement(await rows("SELECT items, version FROM templates WHERE id = ?", templateId));
     expect(stored.version).toBe(5);
     expect(storedSectionsIn(stored.items)).toEqual(templateWithOnlyThoseFourChanges);
 
@@ -323,11 +323,11 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     expect(recordsIn(outline.outline).map(({ id }) => id).at(-1)).toBe("guide");
     expect(await readTool({ templateId, taskId: insertedId })).toMatchObject({ sectionId: "guide", task: { id: insertedId } });
 
-    const history = await rows<JsonRecord>(
+    const history = await rows(
       "SELECT metadata_json FROM audit_events WHERE resource_type = 'template' AND resource_id = ? AND action = 'template.updated' ORDER BY created_at",
       templateId,
     );
-    expect(history.map(({ metadata_json }) => jsonRecordIn(metadata_json).operation))
+    expect(history.map(({ metadata_json }) => jsonRecordIn(metadata_json)["operation"]))
       .toEqual(["replace_task", "insert_task", "move_section", "remove_task"]);
   }, 60_000);
 
@@ -347,7 +347,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
     };
     onTestFinished(removeItForTheKeyCountChecksThatExpectOnlyTheFirstKey);
     let calls = 0;
-    const call = async (name: string, args: JsonRecord): Promise<JsonRecord> => {
+    const call = async (name: string, args: JsonRecord): Promise<McpRecord> => {
       calls += 1;
       const body = await bodyOf(await handleAgentMcp(
         mcpRequest("tools/call", { name, arguments: args }, calls, "/api/mcp", runKeyOfItsOwnForTheLongRead.key),
@@ -358,7 +358,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       expect(byteLength(payload), name).toBeLessThanOrEqual(MAX_RESULT_BYTES);
       return payload;
     };
-    const tool = async (name: string, args: JsonRecord): Promise<JsonRecord> => {
+    const tool = async (name: string, args: JsonRecord): Promise<McpRecord> => {
       const payload = await call(name, args);
       expect(payload.error, `${name}: ${String(payload.message)}`).toBeUndefined();
       return payload;
@@ -375,7 +375,7 @@ describe.sequential("Personal Run Key MCP against real local D1", () => {
       revision = numberIn(recordIn(result.run).revision);
       return result;
     };
-    const storedRun = async () => onlyElement(await rows<JsonRecord>(
+    const storedRun = async () => onlyElement(await rows(
       "SELECT items, retired_items, revision FROM checklist_runs WHERE id = ?",
       runId,
     ));

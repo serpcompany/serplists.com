@@ -4,7 +4,7 @@ import { elementAt, firstOf, sectionAt, taskIn } from "../../../support/elements
 import { MAX_RESULT_BYTES } from "@functions/api/handlers/agentMcpPages";
 import {
   describeRunRead,
-  readRun,
+  readRun as readRunResult,
   runView,
   startedRunResult,
   updatedRunResult,
@@ -29,10 +29,13 @@ import {
 import { MULTIBYTE_PROSE_BYTES_PER_CHARACTER_AT_MOST, multibyteProse, TEXT_COSTLIER_IN_JSON } from "../../../support/jsonText";
 import { reproducibleShapes } from "../../../support/reproducibleRandom";
 import { readRetiredWork, readRunInFull } from "../../../support/runPages";
+import type { PagedResult } from "../../../support/templatePages";
 import { optionalRecordIn, recordIn, recordsIn, textIn } from "../../../support/mcpResponses";
 import { anyInstanceOf } from "../../../support/asymmetricMatchers";
 
 type JsonRecord = Record<string, unknown>;
+
+const readRun = (...args: Parameters<typeof readRunResult>): PagedResult => readRunResult(...args);
 
 const D1_ROW_MAX_BYTES = 2_000_000;
 const NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES = 200_000;
@@ -95,7 +98,7 @@ async function readInFullWithinTheBound(view: RunView) {
   return read;
 }
 
-function everyPageOf(view: RunView, args: RunReadArgs): JsonRecord[] {
+function everyPageOf(view: RunView, args: RunReadArgs): PagedResult[] {
   const pages = [readRun(view, args)];
   while (typeof pages.at(-1)?.nextCursor === "string") pages.push(readRun(view, { cursor: textIn(pages.at(-1)?.nextCursor) }));
   return pages;
@@ -336,7 +339,7 @@ describe("a run at the size limits", () => {
       section("notes", Array.from({ length: 12 }, (_, index) => notedTask(`note-${index}`, MAX_TASK_NOTES_LENGTH))),
       section("huge", [notedTask("huge-note", NOTE_LENGTH_ONLY_THE_WEB_APP_WRITES)]),
     ];
-    let lastAreaTasks: JsonRecord[] = [];
+    let lastAreaTasks: ReturnType<typeof notedTask>[] = [];
     for (let index = 0; contentSaveBytes(live) < RUN_CONTENT_MAX_BYTES - 40_000; index += 1) {
       lastAreaTasks = Array.from({ length: 12 }, (_, t) => notedTask(`area-${index}-${t}`, 700));
       live.push(section(`area-${index}`, lastAreaTasks));

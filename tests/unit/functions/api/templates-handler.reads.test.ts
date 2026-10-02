@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { firstOf, sectionAt } from '../../../support/elements';
 import { z } from 'zod';
-import { dbMocks, mockEnv, resetTemplatesHandlerMocks, slugBody } from '../../../support/templatesHandler';
+import { dbMocks, mockEnv, resetTemplatesHandlerMocks } from '../../../support/templatesHandler';
 import { handleTemplates } from '@functions/api/handlers/templates';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiRequest } from '../../../support/apiRequest';
 import { columnNamesIn } from '../../../support/drizzleSql';
-import { jsonObject, jsonObjects, readJson } from '../../../support/readJson';
+import { readJson } from '../../../support/readJson';
+import { apiTemplateSchema } from '@/lib/schemas/apiTemplates';
 
+const templateBody = apiTemplateSchema.extend({ ownerProfile: z.unknown() }).passthrough();
 const templateListBody = z.array(
-  z.object({ sections: z.array(z.object({ items: z.array(z.unknown()) }).passthrough()) }).passthrough(),
+  templateBody.extend({ sections: z.array(z.object({ items: z.array(z.unknown()) }).passthrough()) }),
 );
-const templateOrList = z.union([jsonObjects, jsonObject]);
+const templateOrList = z.union([z.array(templateBody), templateBody]);
 
 describe('Templates Handlers', () => {
   beforeEach(resetTemplatesHandlerMocks);
@@ -155,7 +157,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates?teamId=team-1', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await readJson(response, jsonObjects);
+    const data = await readJson(response, z.array(templateBody));
 
     expect(response.status).toBe(200);
     expect(firstOf(data).id).toBe('template-1');
@@ -191,7 +193,7 @@ describe('Templates Handlers', () => {
 
     const request = new Request('http://localhost/api/templates/template-1', { method: 'GET' });
     const response = await handleTemplates(request, mockEnv);
-    const data = await readJson(response, slugBody);
+    const data = await readJson(response, templateBody);
 
     expect(response.status).toBe(200);
     expect(data.slug).toBe('seo-template');

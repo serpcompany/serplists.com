@@ -7,7 +7,8 @@ import { getEntitlementsForUser } from '@functions/api/utils/entitlements';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { withoutKeys } from '../../../support/guestState';
 import { jsonObject, readJson } from '../../../support/readJson';
-import { storedSectionsIn } from '../../../support/storedJson';
+import { storedSections as storedSectionsSchema, storedSectionsIn, type StoredSections } from '../../../support/storedJson';
+import { sharedRunSavedSchema } from '@/lib/schemas/apiRuns';
 
 const storedSections = [
   {
@@ -58,10 +59,10 @@ function sharedRun(overrides: Record<string, unknown> = {}) {
 }
 
 function sectionsTheSharePageRendered() {
-  return structuredClone(storedSections);
+  return storedSectionsSchema.parse(structuredClone(storedSections));
 }
 
-function contentsOfTheFirstTask(sections: typeof storedSections) {
+function contentsOfTheFirstTask(sections: StoredSections) {
   const { contents } = taskIn(sections, 0, 0);
   assert.exists(contents);
   return contents;
@@ -86,7 +87,7 @@ async function putShared(body: unknown) {
   return { response, data: await readJson(response, jsonObject) };
 }
 
-function storedUpdate(): Record<string, unknown> {
+function storedUpdate() {
   expect(dbMocks.updateChain.set).toHaveBeenCalledTimes(1);
   return firstOf(dbMocks.updateChain.set.mock.calls)[0];
 }
@@ -113,7 +114,7 @@ describe('shared run updates, which take only completion and notes from a guest 
     const { response } = await putShared({ sections: [], expected_revision: 3 });
 
     expect(response.status).toBe(200);
-    expect(JSON.parse(storedUpdate().items as string)).toEqual(storedSections);
+    expect(storedSectionsIn(storedUpdate().items)).toEqual(storedSections);
   });
 
   it('keeps the stored tasks when a guest sends a section with no items', async () => {
@@ -125,7 +126,7 @@ describe('shared run updates, which take only completion and notes from a guest 
     });
 
     expect(response.status).toBe(200);
-    expect(JSON.parse(storedUpdate().items as string)).toEqual(storedSections);
+    expect(storedSectionsIn(storedUpdate().items)).toEqual(storedSections);
   });
 
   it('applies only completion from a payload that also rewrites titles, contents, and adds tasks', async () => {
@@ -136,9 +137,9 @@ describe('shared run updates, which take only completion and notes from a guest 
     taskIn(sections, 0, 0).description = 'Visit https://attacker.example';
     taskIn(sections, 0, 0).isCompleted = true;
     firstOf(contentsOfTheFirstTask(sections)).value = '[Log in](https://attacker.example)';
-    (taskIn(sections, 0, 0).contents as unknown[]).push({ type: 'file', value: 'https://attacker.example/x.exe' });
-    (firstOf(sections).items as unknown[]).push({ id: 'item-99', title: 'Injected', isCompleted: true });
-    (sections as unknown[]).push({ id: 'section-99', title: 'Injected', items: [{ id: 'item-98', title: 'Injected' }] });
+    contentsOfTheFirstTask(sections).push({ type: 'file', value: 'https://attacker.example/x.exe' });
+    firstOf(sections).items.push({ id: 'item-99', title: 'Injected', isCompleted: true });
+    sections.push({ id: 'section-99', title: 'Injected', items: [{ id: 'item-98', title: 'Injected' }] });
 
     const { response } = await putShared({ sections, title: 'Renamed run', expected_revision: 3 });
 
@@ -166,7 +167,7 @@ describe('shared run updates, which take only completion and notes from a guest 
     const update = storedUpdate();
     expect(update.progress).toBe(0);
     expect(update).not.toHaveProperty('completed_at');
-    expect(data.progress).toBe(0);
+    expect(sharedRunSavedSchema.parse(data).progress).toBe(0);
   });
 
   it('sets completed_at on the server when a guest completes the run', async () => {
@@ -275,7 +276,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('keeps saving notes on a run completed before the rule, open tasks and all', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun({ status: 'completed', completed_at: '2026-02-01T00:00:00.000Z' })]);
     const sections = sectionsTheSharePageRendered();
-    (taskIn(sections, 0, 1) as Record<string, unknown>).notes = 'Shipped anyway';
+    taskIn(sections, 0, 1).notes = 'Shipped anyway';
 
     const { response } = await putShared({ sections, status: 'completed', expected_revision: 3 });
 
@@ -311,7 +312,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('rejects oversized notes', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    (taskIn(sections, 0, 0) as Record<string, unknown>).notes = 'x'.repeat(5001);
+    taskIn(sections, 0, 0).notes = 'x'.repeat(5001);
 
     const { response } = await putShared({ sections, expected_revision: 3 });
 
@@ -322,7 +323,7 @@ describe('shared run updates, which take only completion and notes from a guest 
   it('saves guest notes and sub-item completion matched by id', async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([sharedRun()]);
     const sections = sectionsTheSharePageRendered();
-    (taskIn(sections, 0, 0) as Record<string, unknown>).notes = 'Guest note';
+    taskIn(sections, 0, 0).notes = 'Guest note';
     const { subItems } = elementAt(contentsOfTheFirstTask(sections), 1);
     assert.exists(subItems);
     subItems.reverse();
