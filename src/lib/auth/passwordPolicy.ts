@@ -1,12 +1,9 @@
 import {
-  MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
   PASSWORD_TOO_LONG_MESSAGE,
   PASSWORD_TOO_SHORT_MESSAGE,
   passwordExceedsMaxBytes,
 } from "@/lib/schemas/passwordLimits";
-
-export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH };
 
 export type PasswordPolicyResult = { ok: true } | { ok: false; message: string };
 

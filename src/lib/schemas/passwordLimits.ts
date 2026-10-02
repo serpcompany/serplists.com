@@ -1,7 +1,6 @@
 export const MIN_PASSWORD_LENGTH = 10;
 
 export const MAX_PASSWORD_BYTES = 72;
-export const MAX_PASSWORD_LENGTH = MAX_PASSWORD_BYTES;
 
 export const PASSWORD_TOO_SHORT_MESSAGE = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
 export const PASSWORD_TOO_LONG_MESSAGE =

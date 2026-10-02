@@ -3,7 +3,7 @@ export type JsonRecord = Record<string, unknown>;
 export const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-export const recordsIn = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+const recordsIn = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
 
 export interface ChecklistNodeRecord extends JsonRecord {
   id?: unknown;
@@ -38,13 +38,13 @@ export interface SectionRecord extends ChecklistNodeRecord {
   items?: unknown;
 }
 
-export const isChecklistNodeRecord: (value: unknown) => value is ChecklistNodeRecord = isRecord;
-export const isSectionRecord: (value: unknown) => value is SectionRecord = isRecord;
-export const isTaskRecord: (value: unknown) => value is TaskRecord = isRecord;
-export const isContentRecord: (value: unknown) => value is ContentRecord = isRecord;
-export const isSubTaskRecord: (value: unknown) => value is SubTaskRecord = isRecord;
+export const isChecklistNodeRecord = (value: unknown): value is ChecklistNodeRecord => isRecord(value);
+export const isSectionRecord = (value: unknown): value is SectionRecord => isRecord(value);
+export const isTaskRecord = (value: unknown): value is TaskRecord => isRecord(value);
+export const isContentRecord = (value: unknown): value is ContentRecord => isRecord(value);
+export const isSubTaskRecord = (value: unknown): value is SubTaskRecord => isRecord(value);
 
-export const sectionRecordsIn: (value: unknown) => SectionRecord[] = recordsIn;
-export const taskRecordsIn: (value: unknown) => TaskRecord[] = recordsIn;
-export const contentRecordsIn: (value: unknown) => ContentRecord[] = recordsIn;
-export const subTaskRecordsIn: (value: unknown) => SubTaskRecord[] = recordsIn;
+export const sectionRecordsIn = (value: unknown): SectionRecord[] => recordsIn(value);
+export const taskRecordsIn = (value: unknown): TaskRecord[] => recordsIn(value);
+export const contentRecordsIn = (value: unknown): ContentRecord[] => recordsIn(value);
+export const subTaskRecordsIn = (value: unknown): SubTaskRecord[] => recordsIn(value);
