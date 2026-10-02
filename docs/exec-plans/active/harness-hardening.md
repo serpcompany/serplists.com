@@ -163,11 +163,6 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
 - **`db/migrations`** is left out of the duplicate check.
   - Applied migrations are append-only history and cannot be edited to share code.
   - A migration that rebuilds a table has to restate the whole table.
-- **Two CI workflows keep their comments:** `.github/workflows/claude-code-review.yml` and
-  `maintenance.yml`, listed in `WORKFLOWS_AWAITING_A_PERSON`.
-  - Claude Code's safety check refused an agent's edit to them, so a person has to remove the
-    comments.
-  - A test fails once either file is clean, so the list can only shrink.
 - **knip's ignore lists:**
   - `@secretlint/secretlint-rule-preset-recommend`, which secretlint loads by name from
     `.secretlintrc.json`.
@@ -260,6 +255,13 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-02: no comments anywhere. The Claude review and weekly maintenance workflows are
+  comment-free, and `WORKFLOWS_AWAITING_A_PERSON` is gone, so `comments:check` skips no
+  file.
+  - It also reads Markdown's HTML comments, outside code. The PR template's hints are
+    visible text, and the generated schema doc's header is a sentence.
+  - AGENTS.md has no `next dev` markers: `agentRules: false` in `next.config.ts` stops
+    `next dev` from writing its block, with its HTML comment markers, back into AGENTS.md.
 - 2026-10-02: phase 4 done.
   - The full browser suite ran on a fresh production build: 269 of 270 passed. The one
     failure was a stale mocked reply in `team-settings-conflicts.spec.ts`, which the client
