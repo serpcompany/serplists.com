@@ -11,6 +11,8 @@ const repoRoot = process.cwd();
 const TYPESCRIPT_FILE = /\.(ts|tsx|mts|cts)$/;
 const JAVASCRIPT_FILE = /\.(js|jsx|mjs|cjs)$/;
 const DECLARATION_OF_A_JAVASCRIPT_MODULE = /\.d\.(mts|cts)$/;
+const DECLARATION_FILE = /\.d\.(ts|mts|cts)$/;
+const FOLDERS_OF_AUTHORED_CODE = ['src/', 'functions/', 'scripts/', 'db/', 'tests/'];
 const TSCONFIG_FILE = /(^|\/)tsconfig[^/]*\.json$/;
 const SETTINGS_STRICTER_THAN_STRICT: ReadonlyArray<keyof ts.CompilerOptions> = [
   'noImplicitOverride',
@@ -105,6 +107,25 @@ describe('pnpm run typecheck', () => {
         '(node --import tsx), and ESLint loads eslint.config.ts and scripts/eslint-rules/ through jiti. Only a module ' +
         `that a root config read without a TypeScript loader imports (${configsOnlyJavaScriptLoads.join(', ')}) may be ` +
         'JavaScript (docs/design-docs/development-environment.md#writing-scripts).',
+    ).toEqual([]);
+  });
+
+  it('type-checks the declaration files the repository writes with skipLibCheck off', () => {
+    const checkedDeclarations = new Set(
+      tsconfigsTypecheckRuns
+        .filter((tsconfig) => parsedTsconfig(tsconfig).options.skipLibCheck !== true)
+        .flatMap(filesTheTsconfigIncludes),
+    );
+
+    expect(
+      repositoryFiles.filter(
+        (file) =>
+          DECLARATION_FILE.test(file) &&
+          FOLDERS_OF_AUTHORED_CODE.some((folder) => file.startsWith(folder)) &&
+          !checkedDeclarations.has(file),
+      ),
+      'Every other project sets skipLibCheck, which skips declaration files, so no tsconfig pnpm run typecheck runs ' +
+        'checks these. Add each to the "include" of tsconfig.declarations.json, which turns skipLibCheck off.',
     ).toEqual([]);
   });
 

@@ -14,7 +14,7 @@
     "setup": "node --import tsx scripts/setup-local.ts",
     "build": "pnpm run sitemap:generate && pnpm run headers:generate && next build",
     "lint": "eslint --config eslint.type-aware.config.ts .",
-    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json && tsc -p functions/tsconfig.json && tsc -p tests/tsconfig.json",
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json && tsc -p functions/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p tsconfig.declarations.json",
     "typecheck:env": "node --import tsx scripts/check-env.ts",
     "verify": "pnpm run typecheck:env && pnpm run lint && pnpm run typecheck && pnpm run check:repo && pnpm run test:run",
     "check:repo": "pnpm run secret:scan && pnpm run docs:check && pnpm run comments:check && pnpm run deps:check && pnpm run duplicates:check && pnpm run deadcode:check && pnpm run schema:portable:check && pnpm run db:schema:check && pnpm run templates:check",

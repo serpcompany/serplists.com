@@ -19,7 +19,7 @@ migrations, backups, and R2 storage are in
 | --- | --- |
 | Pre-commit hook | Secret scan, ESLint (`eslint.config.ts`, without the type-aware rules) and the comment check on staged files |
 | Pre-push hook | `pnpm run verify` |
-| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
+| `pnpm run verify` | Env contract, lint (type-aware: code conventions, naming conventions, external data parsed at the boundary in app code and tests alike, no narrowing type assertions, ESLint's recommended rules on JavaScript files and tests that read no source text included), `pnpm run typecheck`, covering the app, node (root config, the ESLint configs and every script), API and tests projects and, with `skipLibCheck` off, the declaration files the repository writes, `check:repo` (secrets, docs, comments, architecture, duplicated code, dead code, generated artifacts), unit tests |
 | CI Quality Gate | `verify` steps plus the local D1 tests (`test:local-d1`, the rows-read budgets of the hot requests included), the OpenNext build (`build:worker`), and browser tests against it: smoke on every PR, the full suite on PRs into `main` |
 | CI schema parity | Replays every migration and compares it with the Drizzle schema |
 | Claude code review | Advisory inline review comments on every non-draft PR; never blocks merging ([agent workflow](design-docs/agent-workflow.md#claude-code-review)) |
@@ -34,7 +34,8 @@ at 450 lines or more.
 
 `pnpm run typecheck` runs `next typegen`, then `tsc -p` over four projects: `tsconfig.json`
 (`src/` and what it imports), `tsconfig.node.json` (root config and `scripts/`),
-`functions/tsconfig.json` (the API and `db/`) and `tests/tsconfig.json`. Each adds four
+`functions/tsconfig.json` (the API and `db/`) and `tests/tsconfig.json`, and a fifth for the
+declaration files (`tsconfig.declarations.json`, below). Each adds four
 settings to `strict`, the tests' tsconfig by inheriting them from the app's:
 - `noUncheckedIndexedAccess`: an array element or record value read by index may be
   `undefined`;
@@ -93,11 +94,20 @@ row's diff and metadata, whose keys vary by action.
 No project takes JavaScript into its program untyped: the app's tsconfig sets `allowJs: false`
 (Next.js adds its suggested `allowJs: true` only when the key is missing), the node and API
 projects leave it at TypeScript's default of off, and the tests' tsconfig turns it off too.
-`skipLibCheck` stays on in every project: without it `tsc` reports more than 1,300 errors in
+`skipLibCheck` stays on in those four projects: without it `tsc` reports more than 1,300 errors in
 declaration files the repository cannot edit (miniflare's, better-auth's, Drizzle's MySQL and
 SingleStore builders, `lib.dom.d.ts` against the Workers types, the generated
-`cloudflare-env.d.ts` and Next.js's `.next/types`). The authored declaration files
-(`src/*.d.ts`, `scripts/lib/postcss-tokenize.d.ts`) check clean with it off.
+`cloudflare-env.d.ts` and Next.js's `.next/types`). It skips every declaration file, the
+repository's own too, so a fifth project, `tsconfig.declarations.json`, checks the declaration
+files the repository writes (every `.d.ts`, `.d.mts` and `.d.cts` under `src/`, `functions/`,
+`scripts/`, `db/` and `tests/`) with it off. It loads no `@types` package (`"types": []`), so the
+only third-party declarations in its program are the ones those files import (React's,
+csstype's, PostCSS's and source-map-js's), which check clean; an error in any of them fails
+it. `tests/unit/config/typecheck-coverage.test.ts` fails on a declaration file under those
+folders that no project `pnpm run typecheck` runs checks with `skipLibCheck` off. The two at
+the root are generated, `next-env.d.ts` by Next.js and `cloudflare-env.d.ts` by
+`wrangler types`, and stay out: `cloudflare-env.d.ts` names the build output
+(`./.open-next/worker`), which exists only after `opennextjs-cloudflare build`.
 
 Scripts are TypeScript too, run with tsx's loader (`node --import tsx scripts/<name>.ts`), and
 ESLint loads `eslint.config.ts`, `eslint.type-aware.config.ts` and the rules in
