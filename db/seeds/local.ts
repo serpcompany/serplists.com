@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import {
   account,
   audit_events,
@@ -78,79 +78,89 @@ function ownedTestUserIds(db: LocalDb) {
     .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
 }
 
+function fixtureAndTestUserCreatedTeamIds(db: LocalDb) {
+  return db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(or(inArray(teams.id, TEST_TEAM_IDS), inArray(teams.created_by_user_id, ownedTestUserIds(db))));
+}
+
 export async function cleanupLocalTestData(db: LocalDb): Promise<void> {
   const testUserIds = ownedTestUserIds(db);
+  const testTeamIds = fixtureAndTestUserCreatedTeamIds(db);
 
-  await db
-    .delete(checklist_runs)
-    .where(
-      or(
-        inArray(checklist_runs.team_id, TEST_TEAM_IDS),
-        inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
-        inArray(checklist_runs.user_id, testUserIds),
-        inArray(checklist_runs.id, TEST_RUN_IDS),
+  await db.batch([
+    db
+      .delete(checklist_runs)
+      .where(
+        or(
+          inArray(checklist_runs.team_id, testTeamIds),
+          inArray(checklist_runs.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(checklist_runs.user_id, testUserIds),
+          inArray(checklist_runs.id, TEST_RUN_IDS),
+        ),
       ),
-    );
-  await db
-    .delete(template_versions)
-    .where(
-      or(
-        inArray(template_versions.id, TEST_VERSION_IDS),
-        inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+    db
+      .delete(template_versions)
+      .where(
+        or(
+          inArray(template_versions.id, TEST_VERSION_IDS),
+          inArray(template_versions.template_id, TEST_TEAM_TEMPLATE_IDS),
+          inArray(template_versions.changed_by_user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(audit_events)
-    .where(
-      or(
-        inArray(audit_events.subject_id, TEST_TEAM_IDS),
-        inArray(audit_events.id, TEST_AUDIT_IDS),
-        inArray(audit_events.resource_id, [
-          ...TEST_TEAM_IDS,
-          ...TEST_TEAM_TEMPLATE_IDS,
-          "team-invite-seed-client-john",
-        ]),
+    db
+      .delete(audit_events)
+      .where(
+        or(
+          inArray(audit_events.subject_id, TEST_TEAM_IDS),
+          inArray(audit_events.subject_id, testTeamIds),
+          inArray(audit_events.id, TEST_AUDIT_IDS),
+          inArray(audit_events.resource_id, [
+            ...TEST_TEAM_IDS,
+            ...TEST_TEAM_TEMPLATE_IDS,
+            "team-invite-seed-client-john",
+          ]),
+        ),
       ),
-    );
-  await db
-    .delete(template_likes)
-    .where(
-      or(
-        inArray(template_likes.user_id, testUserIds),
-        inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+    db
+      .delete(template_likes)
+      .where(
+        or(
+          inArray(template_likes.user_id, testUserIds),
+          inArray(template_likes.template_id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+        ),
       ),
-    );
-  await db
-    .delete(usage_analytics)
-    .where(
-      or(
-        inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
-        inArray(usage_analytics.user_id, testUserIds),
+    db
+      .delete(usage_analytics)
+      .where(
+        or(
+          inArray(usage_analytics.id, TEST_ANALYTICS_IDS),
+          inArray(usage_analytics.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(templates)
-    .where(
-      or(
-        inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
-        inArray(templates.team_id, TEST_TEAM_IDS),
-        inArray(templates.user_id, testUserIds),
+    db
+      .delete(templates)
+      .where(
+        or(
+          inArray(templates.id, [...TEST_TEMPLATE_IDS, ...TEST_TEAM_TEMPLATE_IDS]),
+          inArray(templates.team_id, testTeamIds),
+          inArray(templates.user_id, testUserIds),
+        ),
       ),
-    );
-  await db
-    .delete(team_entitlement_overrides)
-    .where(inArray(team_entitlement_overrides.team_id, TEST_TEAM_IDS));
-  await db.delete(team_invites).where(inArray(team_invites.team_id, TEST_TEAM_IDS));
-  await db
-    .delete(team_members)
-    .where(or(inArray(team_members.team_id, TEST_TEAM_IDS), inArray(team_members.user_id, testUserIds)));
-  await db.delete(teams).where(inArray(teams.id, TEST_TEAM_IDS));
-  await db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds));
-  await db.delete(session).where(inArray(session.userId, testUserIds));
-  await db.delete(account).where(inArray(account.userId, testUserIds));
-  await db
-    .delete(users)
-    .where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS)));
+    db.delete(team_entitlement_overrides).where(inArray(team_entitlement_overrides.team_id, testTeamIds)),
+    db
+      .delete(team_invites)
+      .where(or(inArray(team_invites.team_id, testTeamIds), inArray(team_invites.invited_by_user_id, testUserIds))),
+    db
+      .delete(team_members)
+      .where(or(inArray(team_members.team_id, testTeamIds), inArray(team_members.user_id, testUserIds))),
+    db.delete(teams).where(inArray(teams.id, testTeamIds)),
+    db.delete(entitlement_overrides).where(inArray(entitlement_overrides.user_id, testUserIds)),
+    db.delete(session).where(inArray(session.userId, testUserIds)),
+    db.delete(account).where(inArray(account.userId, testUserIds)),
+    db.delete(users).where(or(inArray(users.id, TEST_USER_IDS), inArray(users.email, TEST_USER_EMAILS))),
+  ]);
 }
 
 const personalTemplateItems = {
@@ -555,7 +565,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Technical SEO"]),
       tags: json(["audit", "crawl", "indexation", "cwv"]),
-      slug: "technical-seo-audit-checklist",
+      slug: "sample-technical-seo-audit-checklist",
       created_at: at(0),
     },
     {
@@ -567,7 +577,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Research"]),
       tags: json(["keywords", "intent", "mapping"]),
-      slug: "keyword-research-mapping-checklist",
+      slug: "sample-keyword-research-mapping-checklist",
       created_at: at(0),
     },
     {
@@ -579,7 +589,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["Content", "SEO"]),
       tags: json(["refresh", "update", "on-page"]),
-      slug: "content-refresh-checklist",
+      slug: "sample-content-refresh-checklist",
       created_at: at(0),
     },
     {
@@ -603,7 +613,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       is_public: true,
       category: json(["SEO", "Local SEO"]),
       tags: json(["gbp", "local", "maps"]),
-      slug: "local-seo-gbp-checklist",
+      slug: "sample-local-seo-gbp-checklist",
       created_at: at(0),
     },
     {
@@ -642,6 +652,7 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       category: json(["Operations", "SEO"]),
       tags: json(["team", "launch", "qa"]),
       slug: "shared-growth-launch-checklist",
+      version: 2,
       created_at: at(-3 * DAY),
       updated_at: at(-DAY),
     },
@@ -1032,12 +1043,76 @@ export async function seedLocalTestData(db: LocalDb): Promise<void> {
       after_json: json({ email: "john@test.com", role: "editor" }),
       metadata_json: json({
         source: "seed",
-        inviteUrlPath: "/team-invites/dev-client-john-invite",
+        inviteUrlPath: "/team-invites/dev-client-john-invite/",
       }),
       user_agent: "seed",
       created_at: at(-12 * HOUR),
     },
   ]);
+}
+
+export type LocalSeedStatus = {
+  testData: boolean;
+  officialTemplates: boolean;
+  officialLogin: boolean;
+  legacyTestSlugs: boolean;
+};
+
+export const LEGACY_TEST_TEMPLATE_SLUGS: Readonly<Record<string, string>> = {
+  "template-1": "technical-seo-audit-checklist",
+  "template-2": "keyword-research-mapping-checklist",
+  "template-3": "content-refresh-checklist",
+  "template-5": "local-seo-gbp-checklist",
+};
+const legacyTestSlugMatch = or(
+  ...Object.entries(LEGACY_TEST_TEMPLATE_SLUGS).map(([id, slug]) =>
+    and(eq(templates.id, id), eq(templates.slug, slug)),
+  ),
+);
+
+const LOCAL_SEED_COMPLETE_AUDIT_ID = TEST_AUDIT_IDS[TEST_AUDIT_IDS.length - 1];
+const OFFICIAL_SEED_TEMPLATE_ID = "serp-template-technical-seo-audit";
+const OFFICIAL_LOGIN_ACCOUNT_ID = "account-serp-user-credential";
+
+export async function readLocalSeedStatus(db: LocalDb): Promise<LocalSeedStatus> {
+  try {
+    const [[testUsers], [marker], [officialTemplate], [officialLogin], [legacySlugs]] = await Promise.all([
+      db.select({ value: count() }).from(users).where(inArray(users.email, TEST_USER_EMAILS)),
+      db.select({ value: count() }).from(audit_events).where(eq(audit_events.id, LOCAL_SEED_COMPLETE_AUDIT_ID)),
+      db
+        .select({ value: count() })
+        .from(templates)
+        .where(and(eq(templates.id, OFFICIAL_SEED_TEMPLATE_ID), eq(templates.user_id, "serp-user"))),
+      db
+        .select({ value: count() })
+        .from(account)
+        .where(and(eq(account.id, OFFICIAL_LOGIN_ACCOUNT_ID), eq(account.userId, "serp-user"))),
+      db.select({ value: count() }).from(templates).where(legacyTestSlugMatch),
+    ]);
+    return {
+      testData: testUsers.value === TEST_USER_EMAILS.length && marker.value === 1,
+      officialTemplates: officialTemplate.value === 1,
+      officialLogin: officialLogin.value === 1,
+      legacyTestSlugs: legacySlugs.value > 0,
+    };
+  } catch (error) {
+    if (/no such table/i.test(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error))) {
+      return { testData: false, officialTemplates: false, officialLogin: false, legacyTestSlugs: false };
+    }
+    throw error;
+  }
+}
+
+export async function repairLegacyTestTemplateSlugs(db: LocalDb): Promise<void> {
+  for (const [id, legacySlug] of Object.entries(LEGACY_TEST_TEMPLATE_SLUGS)) {
+    const sampleSlug = `sample-${legacySlug}`;
+    const [taken] = await db.select({ id: templates.id }).from(templates).where(eq(templates.slug, sampleSlug)).limit(1);
+    if (taken) continue;
+    await db
+      .update(templates)
+      .set({ slug: sampleSlug })
+      .where(and(eq(templates.id, id), eq(templates.slug, legacySlug)));
+  }
 }
 
 export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
@@ -1048,7 +1123,7 @@ export async function seedOfficialLocalLogin(db: LocalDb): Promise<void> {
     .delete(account)
     .where(and(eq(account.userId, "serp-user"), eq(account.providerId, "credential")));
   await db.insert(account).values({
-    id: "account-serp-user-credential",
+    id: OFFICIAL_LOGIN_ACCOUNT_ID,
     accountId: "serp-user",
     providerId: "credential",
     userId: "serp-user",

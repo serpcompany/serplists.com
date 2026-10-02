@@ -1,23 +1,32 @@
 # UI Decoupling Execution Plan
 
 - **Status:** active
-- **Last updated:** 2026-09-27
+- **Last updated:** 2026-09-30
 - **Goal:** product screens consume typed feature state and actions, never transport
   code, so a new UI can be built without re-implementing business rules.
 
 ## Progress
 
 Mechanical tracking: the `screens-do-not-call-transport` rule in `pnpm run deps:check`
-fails on any new direct `api` call from `src/pages` or `src/components`. Remaining
-legacy call sites are listed in `.dependency-cruiser-known-violations.json`.
+fails on any direct `api` call from `src/views` or `src/components`. No screen calls it
+any more, and the rule has no baseline.
 
 - [x] Task 1: legacy `api/client.ts` removed (2026-09-27). It was imported only by
   its own test, so the 401-redirect behavior added to it never reached the app;
   see the [tech debt tracker](../tech-debt-tracker.md).
 - [x] Task 5: `PublicTemplate`, `TemplateDetail`, and `ChecklistRun` no longer call
   `api` at runtime (type-only imports remain). Verified by `deps:check`.
-- [ ] Remove the remaining direct `api` calls from 9 components and pages (see the
-  known-violations file). `UserInfo.tsx` was dead code and was deleted on 2026-09-27.
+- [x] Remove the remaining direct `api` calls from 8 components and pages.
+  `UserInfo.tsx` was dead code and was deleted on 2026-09-27.
+  `TemplateBackup.tsx` stopped calling `api` on 2026-09-28 (billing status through
+  `useBillingStatus`, export through `features/template-backup/exportTemplatePack.ts`),
+  and so did `UserProfile.tsx` (profile loading through `features/profile/loadUserProfile.ts`).
+  The last five stopped on 2026-09-30: `AgentAccessSection.tsx` (Run Keys through
+  `features/agent-access/useRunKeys.ts`), `BillingSection.tsx`
+  (`features/billing/billingSettings.ts` and `features/billing/pricingBilling.ts`),
+  `TeamSettingsSection.tsx` (`features/teams/teamSettingsRequests.ts`),
+  `shared/AvatarUpload.tsx` (`uploadAvatar` in `lib/utils/fileUpload.ts`), and
+  `template-editor/GenerateFromClipy.tsx` (`features/template-editor/clipyDraft.ts`).
 - [ ] Tasks 2, 3, 4, 6, 7: status not re-verified since 2026-04-10. Check the code
   before starting; mapper modules already exist under `src/features/*`.
 
@@ -110,11 +119,11 @@ Do now:
 
 High-value first targets:
 
-- `src/pages/PublicTemplate.tsx`
-- `src/pages/ChecklistRun.tsx`
-- `src/pages/TemplateDetail.tsx`
-- `src/pages/TemplateEditor.tsx`
-- `src/pages/UserProfile.tsx`
+- `src/views/PublicTemplate.tsx`
+- `src/views/ChecklistRun.tsx`
+- `src/views/TemplateDetail.tsx`
+- `src/views/TemplateEditor.tsx`
+- `src/views/UserProfile.tsx` (done 2026-09-28: loads through `src/features/profile/loadUserProfile.ts`)
 
 Expected result:
 

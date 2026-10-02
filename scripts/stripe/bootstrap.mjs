@@ -1,15 +1,8 @@
-import { loadLocalEnv } from "./_env.mjs";
+import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
+import { bootstrapUsage, describePrice, ensurePrice } from "./_bootstrap-lib.mjs";
 
 function usage(exitCode) {
-  console.log(`Usage:
-  node scripts/stripe/bootstrap.mjs --mode both --currency usd --monthly 1900 [--yearly 19000] [--dry-run]
-
-Reads keys from .env / .env.local / .dev.vars:
-  STRIPE_TEST_SECRET_KEY=sk_test_...
-  STRIPE_LIVE_SECRET_KEY=sk_live_...
-
-Or a single STRIPE_SECRET_KEY (sk_test_... or sk_live_...) for single-mode runs.
-`);
+  console.log(bootstrapUsage());
   process.exit(exitCode);
 }
 
@@ -42,17 +35,13 @@ function requireNumber(name, value) {
 }
 
 function getKeys(env, liveEnv, mode) {
-  const fromSingle = env.STRIPE_SECRET_KEY;
-  const testKey =
-    env.STRIPE_TEST_SECRET_KEY ??
-    env.STRIPE_SECRET_KEY_TEST ??
-    (fromSingle?.startsWith("sk_test_") ? fromSingle : undefined);
+  const testKey = resolveTestSecretKey(env);
   const injectedLiveKey = liveEnv.STRIPE_LIVE_SECRET_KEY ??
     liveEnv.STRIPE_SECRET_KEY_LIVE ??
     (liveEnv.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? liveEnv.STRIPE_SECRET_KEY : undefined);
 
   if (mode === "test") {
-    if (!testKey) throw new Error("Missing STRIPE_TEST_SECRET_KEY (or STRIPE_SECRET_KEY starting with sk_test_)");
+    if (!testKey) throw new Error(`Missing Stripe test secret key. ${TEST_SECRET_KEY_HINT}`);
     return { testKey, liveKey: null };
   }
   if (mode === "live") {
@@ -61,7 +50,6 @@ function getKeys(env, liveEnv, mode) {
     }
     return { testKey: null, liveKey: injectedLiveKey };
   }
-  // both
   if (!testKey || !injectedLiveKey) {
     throw new Error(
       "For --mode both, set a local test key and inject STRIPE_LIVE_SECRET_KEY through the process environment.",
@@ -91,8 +79,7 @@ async function stripeRequest({ secretKey, method, path, form, dryRun }) {
   return JSON.parse(text);
 }
 
-async function ensureProProduct({ secretKey, dryRun }) {
-  // Prefer Search API (fast). Fallback to listing.
+async function searchProProduct({ secretKey, dryRun }) {
   const query = `metadata['app']:'serp-checklists' AND metadata['tier']:'pro'`;
   try {
     const search = await stripeRequest({
@@ -102,10 +89,15 @@ async function ensureProProduct({ secretKey, dryRun }) {
       dryRun,
     });
     const existing = search?.data?.[0];
-    if (existing?.id) return existing;
+    return existing?.id ? existing : null;
   } catch {
-    // ignore and fallback
+    return null;
   }
+}
+
+async function ensureProProduct({ secretKey, dryRun }) {
+  const searched = await searchProProduct({ secretKey, dryRun });
+  if (searched) return searched;
 
   const list = await stripeRequest({
     secretKey,
@@ -131,64 +123,35 @@ async function ensureProProduct({ secretKey, dryRun }) {
   });
 }
 
-async function ensurePrice({ secretKey, productId, lookupKey, currency, unitAmount, interval, dryRun }) {
-  const lookupResp = await stripeRequest({
-    secretKey,
-    method: "GET",
-    path: `/v1/prices?lookup_keys[]=${encodeURIComponent(lookupKey)}&limit=1`,
-    dryRun,
-  });
-
-  const existing = lookupResp?.data?.[0];
-  if (existing?.id) return existing;
-
-  return stripeRequest({
-    secretKey,
-    method: "POST",
-    path: "/v1/prices",
-    form: {
-      product: productId,
-      currency,
-      unit_amount: String(unitAmount),
-      "recurring[interval]": interval,
-      lookup_key: lookupKey,
-      "metadata[app]": "serp-checklists",
-      "metadata[tier]": "pro",
-    },
-    dryRun,
-  });
-}
-
 async function bootstrapOne({ secretKey, label, currency, monthly, yearly, dryRun }) {
   const product = await ensureProProduct({ secretKey, dryRun });
   const productId = product?.id ?? "(dry-run)";
+  const request = ({ method, path, form }) => stripeRequest({ secretKey, method, path, form, dryRun });
 
   const monthlyPrice = await ensurePrice({
-    secretKey,
+    request,
     productId,
     lookupKey: "serp-checklists_pro_monthly",
     currency,
     unitAmount: monthly,
     interval: "month",
-    dryRun,
   });
 
   const yearlyPrice = yearly
     ? await ensurePrice({
-        secretKey,
+        request,
         productId,
         lookupKey: "serp-checklists_pro_yearly",
         currency,
         unitAmount: yearly,
         interval: "year",
-        dryRun,
       })
     : null;
 
   console.log(`\n[${label}]`);
   console.log(`Product: ${product?.id ?? "(dry-run)"}`);
-  console.log(`Monthly price: ${monthlyPrice?.id ?? "(dry-run)"}`);
-  if (yearly) console.log(`Yearly price: ${yearlyPrice?.id ?? "(dry-run)"}`);
+  console.log(`Monthly price: ${describePrice(monthlyPrice)}`);
+  if (yearly) console.log(`Yearly price: ${describePrice(yearlyPrice)}`);
 }
 
 async function main() {

@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Refreshes the vendored third-party docs in docs/references/ (`pnpm run docs:references`).
-// Agents read these offline instead of relying on memory of other library versions.
-// Pinned-version caveats are listed in ARCHITECTURE.md.
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 

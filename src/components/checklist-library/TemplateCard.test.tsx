@@ -1,9 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { StaticRouter } from 'react-router-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { TemplateCard } from '@/components/checklist-library/TemplateCard';
 import type { ChecklistTemplate } from '@/types/checklist';
+import { navigation } from '../../../tests/support/nextNavigation';
+
+vi.mock('next/navigation', async () => (await import('../../../tests/support/nextNavigation')).nextNavigationMock);
+vi.mock('next/link', async () => (await import('../../../tests/support/nextNavigation')).nextLinkMock);
 
 const template = {
   id: 'website-launch',
@@ -23,15 +26,10 @@ const template = {
 } satisfies ChecklistTemplate & { viewCount: number };
 
 describe('TemplateCard', () => {
-  it('renders the v0 preview card metadata, direct links, passive category pills, and creator fallback', () => {
-    const markup = renderToStaticMarkup(
-      <StaticRouter location="/">
-        <TemplateCard template={template} />
-      </StaticRouter>,
-    );
+  it('renders the card metadata, direct links, passive category pills, and creator fallback', () => {
+    navigation.reset('/');
+    const markup = renderToStaticMarkup(<TemplateCard template={template} />);
 
-    expect(markup).toContain('Launch');
-    expect(markup).toContain('Marketing');
     expect(markup).toContain('Website Launch Checklist');
     expect(markup).toContain('A comprehensive checklist for launching a new website.');
     expect(markup).toContain('2 sections');
@@ -40,12 +38,35 @@ describe('TemplateCard', () => {
     expect(markup).toContain('designops');
     expect(markup).toContain('Start');
     expect(markup).toContain('View Template');
-    expect(markup).toContain('href="/profile/designops/website-launch-checklist"');
-    expect(markup).toContain('href="/profile/designops"');
-    expect(markup).not.toContain('href="/run/website-launch"');
+    expect(markup).toMatch(
+      /<h3[^>]*><a href="\/profile\/designops\/website-launch-checklist\/"[^>]*data-slot="media-card-link"/,
+    );
+    expect(markup).toContain('href="/profile/designops/"');
+    expect(markup).not.toContain('href="/dashboard/runs/');
     expect(markup).not.toContain('href="/categories/');
-    expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Launch</span>');
-    expect(markup).toContain('<span class="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">Marketing</span>');
+    const pills = [...markup.matchAll(/<span[^>]*data-slot="badge"[^>]*>([^<]*)</g)].map((match) => match[1]);
+    expect(pills).toEqual(['Launch', 'Marketing']);
     expect(markup).toContain('>D</span>');
+  });
+
+  it('keeps the hover shortcut out of the tab order and away from assistive technology', () => {
+    navigation.reset('/');
+    const markup = renderToStaticMarkup(<TemplateCard template={template} />);
+
+    expect(markup).toMatch(/<div aria-hidden="true"[^>]*><a [^>]*tabindex="-1"[^>]*>(?:(?!<\/a>).)*View Template<\/a>/);
+  });
+
+  it('never links a template without a public URL back to the library', () => {
+    navigation.reset('/categories/launch/');
+    const markup = renderToStaticMarkup(
+      <TemplateCard
+        template={{ ...template, ownerProfile: { full_name: 'No Handle' } }}
+      />,
+    );
+
+    expect(markup).toContain('Website Launch Checklist');
+    expect(markup).not.toContain('href="/templates');
+    const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map((match) => match[1]);
+    hrefs.forEach((href) => expect(href).toMatch(/^\/profile\/[^/]+(\/[^/]+)?\/$/));
   });
 });

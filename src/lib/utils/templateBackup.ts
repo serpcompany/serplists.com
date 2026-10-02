@@ -1,17 +1,23 @@
+import { ZodError } from "zod";
 import { 
   validateBackup, 
   validatePortableTemplatePackEnvelope,
-  validatePortableTemplatePack,
   validateTemplateImportArray,
   PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION
 } from "@/lib/schemas/checklistSchema";
+import { parsePortableTemplate } from "@/lib/schemas/portableTemplateNormalize";
 import type { 
   ChecklistTemplateImport,
   PortableChecklistTemplate,
   PortableTemplatePack,
   TemplateBackup
 } from "@/lib/schemas/checklistSchema";
+import { toPortableSections } from "@/lib/schemas/portableSections";
+import { formatValidationError } from "@/lib/schemas/formatValidationError";
+import { uniqueCategoryNames } from "@/lib/categorySlug";
 import { isSectionsShape, normalizeSections } from "@/lib/utils/checklistSections";
+import { findInvalidImportSectionEntry } from "@/lib/utils/importSectionEntries";
+import { withImportedLinkSource } from "@/lib/utils/mediaSource";
 import {
   detectTemplateSourceExtension,
   isMarkdownTemplateExtension,
@@ -19,15 +25,13 @@ import {
   parseTemplateMarkdown,
   parseTemplateYaml,
 } from "@/lib/templates/templateMarkdown";
-import type { ChecklistSection, ChecklistTemplate, TemplateImportOptions } from "@/types/checklist";
+import type { ChecklistSection, ChecklistTemplate } from "@/types/checklist";
 
 export type TemplateImportWarning = {
   templateTitle: string;
   message: string;
 };
 
-// Backup built from in-app templates. Their content ids are optional, so this is not
-// guaranteed to satisfy the stricter `TemplateBackup` schema used when validating uploads.
 export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
   templates: ChecklistTemplate[];
 };
@@ -35,6 +39,10 @@ export type TemplateBackupExport = Omit<TemplateBackup, "templates"> & {
 export type TemplateImportResult = {
   templates: ChecklistTemplate[];
   warnings: TemplateImportWarning[];
+};
+
+export type ParseTemplatesOptions = {
+  timestampForUndatedTemplates?: string;
 };
 
 const generateTempId = (prefix: string) => {
@@ -66,30 +74,40 @@ const normalizeStringList = (value: unknown): string[] => {
   return [];
 };
 
-const coerceSections = (input: unknown): ChecklistSection[] | null => {
+const normalizeCategoryList = (value: unknown): string[] => uniqueCategoryNames(normalizeStringList(value));
+
+const sectionHoldingLegacyItems = (items: unknown[]) => ({ id: "1", title: "Checklist", items });
+
+const withImportedLinkSources = (sections: ChecklistSection[]): ChecklistSection[] =>
+  sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) =>
+      item.contents ? { ...item, contents: item.contents.map(withImportedLinkSource) } : item,
+    ),
+  }));
+
+const coerceSections = (input: unknown, templateTitle: string): ChecklistSection[] | null => {
   const parsed = parseJsonArray(input);
   if (!parsed) return null;
   if (parsed.length === 0) return [];
-  if (isSectionsShape(parsed)) {
-    return normalizeSections(parsed);
+  const sections = isSectionsShape(parsed) ? parsed : [sectionHoldingLegacyItems(parsed)];
+  const invalidEntry = findInvalidImportSectionEntry(sections);
+  if (invalidEntry) {
+    throw new Error(`Template "${templateTitle}": ${invalidEntry}`);
   }
-  return normalizeSections([
-    {
-      id: "1",
-      title: "Checklist",
-      items: parsed,
-    },
-  ]);
+  return withImportedLinkSources(normalizeSections(sections));
 };
 
-const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTemplate => {
-  const now = new Date().toISOString();
+const normalizeImportTemplate = (
+  template: ChecklistTemplateImport,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
   const hasSectionsField = typeof template.sections !== "undefined" || typeof template.items !== "undefined";
   if (!hasSectionsField) {
     throw new Error(`Template "${template.title}" is missing sections/items`);
   }
 
-  const sections = coerceSections(template.sections ?? template.items);
+  const sections = coerceSections(template.sections ?? template.items, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections/items`);
   }
@@ -109,14 +127,16 @@ const normalizeImportTemplate = (template: ChecklistTemplateImport): ChecklistTe
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories ?? template.category),
+    categories: normalizeCategoryList(template.categories ?? template.category),
     tags: normalizeStringList(template.tags),
   };
 };
 
-const normalizePortableTemplate = (template: PortableChecklistTemplate): ChecklistTemplate => {
-  const now = new Date().toISOString();
-  const sections = coerceSections(template.sections);
+const normalizePortableTemplate = (
+  template: PortableChecklistTemplate,
+  now = new Date().toISOString(),
+): ChecklistTemplate => {
+  const sections = coerceSections(template.sections, template.title);
   if (!sections) {
     throw new Error(`Template "${template.title}" has invalid sections`);
   }
@@ -136,7 +156,7 @@ const normalizePortableTemplate = (template: PortableChecklistTemplate): Checkli
     seoTitle: template.seoTitle || "",
     seoDescription: template.seoDescription || "",
     rules: template.rules,
-    categories: normalizeStringList(template.categories),
+    categories: normalizeCategoryList(template.categories),
     tags: normalizeStringList(template.tags),
   };
 };
@@ -181,9 +201,6 @@ const collectAssetWarnings = (templates: ChecklistTemplate[]): TemplateImportWar
   return warnings;
 };
 
-/**
- * Export templates as JSON backup file
- */
 export const exportTemplatesToJSON = (
   templates: ChecklistTemplate[], 
   exportedBy?: string
@@ -211,38 +228,41 @@ export const exportPortableTemplatesToJSON = (
   exportedBy?: string
 ): PortableTemplatePack => {
   const warnings = collectAssetWarnings(templates);
+  const results = templates.map((template) => parsePortableTemplate({
+    title: template.title,
+    description: template.description || "",
+    type: template.type,
+    slug: template.slug || undefined,
+    seoTitle: template.seoTitle || undefined,
+    seoDescription: template.seoDescription || undefined,
+    visibility: template.isPublic ? "public" : "private",
+    categories: normalizeCategoryList(template.categories),
+    tags: normalizeStringList(template.tags),
+    sections: toPortableSections(template.sections) as PortableChecklistTemplate["sections"],
+    rules: template.rules,
+  }));
+  const exported = results.flatMap((result) => (result.success ? [result.data] : []));
+  const skippedTemplates = results.flatMap((result) =>
+    result.success ? [] : [{ title: result.title, reason: result.reason }]
+  );
 
   return {
     kind: "serplists-template-pack",
     schemaVersion: PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     exportedBy,
-    templates: templates.map((template) => ({
-      title: template.title,
-      description: template.description || "",
-      type: template.type,
-      slug: template.slug || undefined,
-      seoTitle: template.seoTitle || undefined,
-      seoDescription: template.seoDescription || undefined,
-      visibility: template.isPublic ? "public" : "private",
-      categories: normalizeStringList(template.categories),
-      tags: normalizeStringList(template.tags),
-      sections: template.sections,
-      rules: template.rules,
-    })),
+    templates: exported,
     manifest: {
-      totalTemplates: templates.length,
+      totalTemplates: exported.length,
       format: "portable",
       includesVisibility: true,
-      includesRules: templates.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
+      includesRules: exported.some((template) => Array.isArray(template.rules) && template.rules.length > 0),
       assetWarnings: warnings.length,
+      ...(skippedTemplates.length > 0 ? { skippedTemplates } : {}),
     },
   };
 };
 
-/**
- * Download backup as JSON file
- */
 export const downloadBackupFile = (
   backup: TemplateBackupExport | PortableTemplatePack,
   filename?: string
@@ -264,9 +284,6 @@ export const downloadBackupFile = (
   URL.revokeObjectURL(url);
 };
 
-/**
- * Parse and validate imported JSON backup
- */
 export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -281,7 +298,7 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
         if (error instanceof SyntaxError) {
           reject(new Error("Invalid JSON file format"));
         } else {
-          reject(new Error(`Backup validation failed: ${(error as Error).message}`));
+          reject(new Error(`Backup validation failed: ${formatValidationError(error)}`));
         }
       }
     };
@@ -294,21 +311,44 @@ export const parseBackupFile = async (file: File): Promise<TemplateBackup> => {
   });
 };
 
-export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
+const parsePortablePackTemplates = (
+  templates: unknown[],
+  now: string,
+): { templates: ChecklistTemplate[]; warnings: TemplateImportWarning[] } => {
+  const results = templates.map(parsePortableTemplate);
+  const warnings = results.flatMap((result, index) => result.success ? [] : [{
+    templateTitle: result.title || `Template ${index + 1}`,
+    message: `Skipped: ${result.reason}`,
+  }]);
+  const valid = results.flatMap((result) => (result.success ? [result.data] : []));
+  if (valid.length === 0 && warnings.length > 0) {
+    throw new Error(warnings.map((warning) => `${warning.templateTitle}: ${warning.message}`).join("; "));
+  }
+
+  return { templates: valid.map((template) => normalizePortableTemplate(template, now)), warnings };
+};
+
+export const parseTemplatesFromData = (
+  data: unknown,
+  { timestampForUndatedTemplates }: ParseTemplatesOptions = {},
+): TemplateImportResult => {
+  const now = timestampForUndatedTemplates ?? new Date().toISOString();
   try {
     let rawTemplates: ChecklistTemplateImport[] = [];
     let normalizedTemplates: ChecklistTemplate[] = [];
+    let skippedWarnings: TemplateImportWarning[] = [];
 
     if (Array.isArray(data)) {
       rawTemplates = validateTemplateImportArray(data);
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else if (data && typeof data === "object" && "kind" in data && (data as { kind?: unknown }).kind === "serplists-template-pack") {
       const portablePackEnvelope = validatePortableTemplatePackEnvelope(data);
       if (portablePackEnvelope.schemaVersion !== PORTABLE_TEMPLATE_PACK_SCHEMA_VERSION) {
         throw new Error(`Unsupported portable template schema version: ${portablePackEnvelope.schemaVersion}`);
       }
-      const portablePack = validatePortableTemplatePack(data);
-      normalizedTemplates = portablePack.templates.map((template) => normalizePortableTemplate(template));
+      const portablePack = parsePortablePackTemplates(portablePackEnvelope.templates, now);
+      normalizedTemplates = portablePack.templates;
+      skippedWarnings = portablePack.warnings;
     } else if (data && typeof data === "object" && "templates" in data) {
       try {
         const backup = validateBackup(data);
@@ -316,22 +356,19 @@ export const parseTemplatesFromData = (data: unknown): TemplateImportResult => {
       } catch {
         rawTemplates = validateTemplateImportArray((data as { templates: unknown }).templates);
       }
-      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template));
+      normalizedTemplates = rawTemplates.map((template) => normalizeImportTemplate(template, now));
     } else {
       throw new Error("Unsupported JSON format (expected backup or template array)");
     }
 
-    const warnings = collectAssetWarnings(normalizedTemplates);
+    const warnings = [...skippedWarnings, ...collectAssetWarnings(normalizedTemplates)];
 
     return { templates: normalizedTemplates, warnings };
   } catch (error) {
-    throw new Error(`Template validation failed: ${(error as Error).message}`);
+    throw new Error(`Template validation failed: ${formatValidationError(error)}`);
   }
 };
 
-/**
- * Parse templates from various JSON formats (backup or simple array)
- */
 export const parseTemplatesFromJSON = async (file: File): Promise<TemplateImportResult> => {
   const jsonString = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -378,78 +415,18 @@ export const parseTemplatesFromFile = async (file: File): Promise<TemplateImport
     if (error instanceof SyntaxError) {
       throw new Error("Invalid JSON file format");
     }
-    throw error instanceof Error ? error : new Error("Failed to parse template file");
+    if (error instanceof ZodError) {
+      throw new Error(`Template validation failed: ${formatValidationError(error)}`);
+    }
+    throw new Error(error instanceof Error ? formatValidationError(error) : "Failed to parse template file");
   }
 };
 
-/**
- * Generate unique IDs for imported templates to avoid conflicts
- */
-export const generateUniqueIds = (templates: ChecklistTemplate[]): ChecklistTemplate[] => {
-  return templates.map(template => {
-    const newTemplate: ChecklistTemplate = {
-      ...template,
-      id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      sections: template.sections.map(section => ({
-        ...section,
-        id: `section_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        items: section.items.map(item => ({
-          ...item,
-          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          contents: item.contents?.map(content => ({
-            ...content,
-            subItems: content.subItems?.map(subItem => ({
-              ...subItem,
-              id: `subitem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-            }))
-          }))
-        }))
-      })),
-      // Update timestamps
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      // Clear slug to regenerate
-      slug: ""
-    };
-    
-    return newTemplate;
-  });
-};
-
-/**
- * Prepare templates for import (clean and validate)
- */
-export const prepareTemplatesForImport = (
-  templates: ChecklistTemplate[], 
-  userId: string,
-  options: TemplateImportOptions = {}
-): ChecklistTemplate[] => {
-  const templatesWithUniqueIds = generateUniqueIds(templates);
-  const visibility = options.visibility ?? "preserve";
-  
-  return templatesWithUniqueIds.map(template => ({
-    ...template,
-    userId,
-    isPublic:
-      visibility === "public"
-        ? true
-        : visibility === "private"
-          ? false
-          : template.isPublic ?? false,
-    // Reset completion states for fresh imports
-    sections: template.sections.map(section => ({
-      ...section,
-      items: section.items.map(item => ({
-        ...item,
-        isCompleted: false,
-        contents: item.contents?.map(content => ({
-          ...content,
-          subItems: content.subItems?.map(subItem => ({
-            ...subItem,
-            isCompleted: false
-          }))
-        }))
-      }))
-    }))
-  }));
-};
+export {
+  countImportPublicTemplates,
+  generateUniqueIds,
+  IMPORT_VISIBILITY_LABELS,
+  prepareTemplatesForImport,
+  resolveImportIsPublic,
+  type ImportVisibility,
+} from "./templateImportPrep";

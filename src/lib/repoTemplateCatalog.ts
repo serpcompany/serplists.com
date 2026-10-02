@@ -1,9 +1,13 @@
+import { z } from 'zod';
+
+import { templatePackModules } from '@/data/public-template-packs';
 import { parseTemplatesFromData } from '@/lib/utils/templateBackup';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 export const REPO_TEMPLATE_USER_ID = 'repo-template-catalog';
 export const REPO_TEMPLATE_OWNER_NAME = 'SERP Lists Library';
 export const REPO_TEMPLATE_OWNER_SLUG = 'serp';
+export const REPO_TEMPLATE_FALLBACK_TIMESTAMP = '2026-03-22T00:00:00.000Z';
 
 type RepoTemplateModule = {
   default?: unknown;
@@ -21,14 +25,10 @@ type RepoTemplateCreatePayload = {
   isPublic: boolean;
   categories?: string[];
   tags?: string[];
+  teamId?: string;
 };
 
-const repoTemplateModules = import.meta.glob(
-  '../data/public-template-packs/*.json',
-  {
-    eager: true,
-  },
-) as Record<string, RepoTemplateModule>;
+const repoTemplateModules = templatePackModules as Record<string, RepoTemplateModule>;
 
 const getSourceData = (value: unknown): unknown => {
   if (
@@ -39,6 +39,16 @@ const getSourceData = (value: unknown): unknown => {
     return (value as RepoTemplateModule).default;
   }
   return value;
+};
+
+const packDateSchema = z.object({ exportedAt: z.string() });
+
+const resolveRepoPackTimestamp = (sourceData: unknown): string => {
+  const parsed = packDateSchema.safeParse(sourceData);
+  const time = parsed.success ? Date.parse(parsed.data.exportedAt) : Number.NaN;
+  return Number.isFinite(time)
+    ? new Date(time).toISOString()
+    : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
 };
 
 const buildRepoTemplateId = (
@@ -60,7 +70,9 @@ export const normalizeRepoTemplateSources = (
 
   Object.entries(sources).forEach(([sourcePath, value]) => {
     const sourceData = getSourceData(value);
-    const { templates } = parseTemplatesFromData(sourceData);
+    const { templates } = parseTemplatesFromData(sourceData, {
+      timestampForUndatedTemplates: resolveRepoPackTimestamp(sourceData),
+    });
 
     templates.forEach((template, index) => {
       const repoTemplate: ChecklistTemplate = {
@@ -88,6 +100,42 @@ export const normalizeRepoTemplateSources = (
   );
 };
 
+export const getRepoCatalogCreatedAt = (
+  templates: Pick<ChecklistTemplate, 'createdAt'>[],
+): string => {
+  const times = templates
+    .map((template) => Date.parse(template.createdAt))
+    .filter(Number.isFinite);
+  return times.length > 0
+    ? new Date(Math.min(...times)).toISOString()
+    : REPO_TEMPLATE_FALLBACK_TIMESTAMP;
+};
+
+export const resolvePublicTemplateOwnerSlug = (
+  template: Pick<ChecklistTemplate, 'id' | 'userId' | 'ownerProfile'>,
+): string | null => {
+  const username = template.ownerProfile?.username?.trim();
+
+  if (username) {
+    return username;
+  }
+
+  if (
+    template.userId === REPO_TEMPLATE_USER_ID ||
+    template.id.startsWith('repo:')
+  ) {
+    return REPO_TEMPLATE_OWNER_SLUG;
+  }
+
+  return null;
+};
+
+const publicCatalogKey = (template: ChecklistTemplate): string => {
+  const ownerSlug = resolvePublicTemplateOwnerSlug(template);
+  if (!ownerSlug) return `id:${template.id}`;
+  return `${ownerSlug.toLowerCase()}/${template.slug?.trim() || template.id}`;
+};
+
 export const mergePublicTemplateCollections = (
   repoCollection: ChecklistTemplate[],
   apiCollection: ChecklistTemplate[],
@@ -96,7 +144,7 @@ export const mergePublicTemplateCollections = (
 
   [...repoCollection, ...apiCollection].forEach((template) => {
     if (!template.isPublic) return;
-    const key = template.slug?.trim() || template.id;
+    const key = publicCatalogKey(template);
     if (merged.has(key)) return;
     merged.set(key, template);
   });
@@ -106,17 +154,26 @@ export const mergePublicTemplateCollections = (
 
 export const mergeAccountTemplateCollections = (
   publicCollection: ChecklistTemplate[],
-  apiCollection: ChecklistTemplate[],
+  loadedPersonalList: ChecklistTemplate[] | undefined,
   currentUserId?: string,
 ): ChecklistTemplate[] => {
-  if (!currentUserId) return publicCollection;
+  if (!currentUserId || !loadedPersonalList) return publicCollection;
 
-  const ownedTemplates = apiCollection.filter(
+  const ownedTemplates = loadedPersonalList.filter(
     (template) => template.userId === currentUserId,
   );
-  // The catalog can be up to 5 minutes old (edge cache), so the user's own copy wins;
-  // Map.set keeps each template's original position.
-  const merged = new Map(publicCollection.map((template) => [template.id, template]));
+  const ownedIds = new Set(ownedTemplates.map((template) => template.id));
+  const merged = new Map(
+    publicCollection
+      .filter(
+        (template) =>
+          template.userId !== currentUserId ||
+          Boolean(template.teamId) ||
+          isRepoTemplate(template) ||
+          ownedIds.has(template.id),
+      )
+      .map((template) => [template.id, template]),
+  );
   ownedTemplates.forEach((template) => merged.set(template.id, template));
 
   return Array.from(merged.values());
@@ -125,11 +182,14 @@ export const mergeAccountTemplateCollections = (
 export const findPublicTemplateByIdentifier = (
   templates: ChecklistTemplate[],
   identifier: string,
+  ownerUsername?: string,
 ): ChecklistTemplate | undefined => {
+  const owner = ownerUsername?.trim().toLowerCase();
   return templates.find(
     (template) =>
       template.isPublic &&
-      (template.slug === identifier || template.id === identifier),
+      (template.slug === identifier || template.id === identifier) &&
+      (!owner || resolvePublicTemplateOwnerSlug(template)?.toLowerCase() === owner),
   );
 };
 
@@ -144,6 +204,7 @@ export const isRepoTemplate = (
 
 export const buildRepoTemplateCreatePayload = (
   template: ChecklistTemplate,
+  destinationTeamIdOrPersonal: string | undefined,
 ): RepoTemplateCreatePayload => ({
   title: template.title,
   description: template.description || '',
@@ -151,11 +212,11 @@ export const buildRepoTemplateCreatePayload = (
   seoTitle: template.seoTitle || '',
   seoDescription: template.seoDescription || '',
   rules: template.rules,
-  seoUrl: template.slug,
   sections: template.sections,
   isPublic: false,
   categories: template.categories || [],
   tags: template.tags || [],
+  teamId: destinationTeamIdOrPersonal,
 });
 
 export const repoTemplates = normalizeRepoTemplateSources(repoTemplateModules);

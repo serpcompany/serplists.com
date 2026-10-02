@@ -1,5 +1,3 @@
--- Stripe billing tables (subscriptions + webhook idempotency log).
-
 CREATE TABLE IF NOT EXISTS stripe_customers (
   user_id TEXT PRIMARY KEY,
   stripe_customer_id TEXT NOT NULL UNIQUE,
@@ -33,4 +31,3 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
   processed_at TEXT NOT NULL,
   error TEXT
 );
-

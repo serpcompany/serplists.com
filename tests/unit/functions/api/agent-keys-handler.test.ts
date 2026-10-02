@@ -8,7 +8,7 @@ const dbMocks = vi.hoisted(() => {
     limit: vi.fn(),
   };
   const insertChain = { values: vi.fn() };
-  const updateChain = { set: vi.fn(), where: vi.fn() };
+  const updateChain = { set: vi.fn(), where: vi.fn(), returning: vi.fn() };
   return {
     db: {
       select: vi.fn(() => selectChain),
@@ -33,6 +33,8 @@ vi.mock("@functions/api/utils/session", () => sessionMocks);
 vi.mock("@functions/api/utils/personal-run-key", () => keyMocks);
 
 import { handleAgentKeys } from "@functions/api/handlers/agent-keys";
+import { varFromWranglerToml } from "../../../support/wranglerToml";
+import { STAGING_ORIGIN } from "@/lib/seo/siteOrigin";
 
 const mockEnv = { DB: {} as D1Database };
 
@@ -52,7 +54,8 @@ describe("Personal run key management handler", () => {
     dbMocks.selectChain.limit.mockResolvedValue([]);
     dbMocks.insertChain.values.mockResolvedValue(undefined);
     dbMocks.updateChain.set.mockReturnValue(dbMocks.updateChain);
-    dbMocks.updateChain.where.mockResolvedValue(undefined);
+    dbMocks.updateChain.where.mockReturnValue(dbMocks.updateChain);
+    dbMocks.updateChain.returning.mockResolvedValue([]);
   });
 
   it("requires an authenticated browser session", async () => {
@@ -210,8 +213,68 @@ describe("Personal run key management handler", () => {
     expect(dbMocks.selectChain.limit).toHaveBeenCalledWith(50);
   });
 
+  describe("MCP connection", () => {
+    const previewEnv = {
+      ...mockEnv,
+      CORS_ALLOWED_ORIGINS: varFromWranglerToml("env.preview.vars", "CORS_ALLOWED_ORIGINS"),
+    };
+
+    const connection = async (url: string, env: typeof mockEnv & Record<string, string> = previewEnv) => {
+      const response = await handleAgentKeys(new Request(url), env);
+      return { status: response.status, body: await response.json() };
+    };
+
+    it("points a per-deployment URL at the canonical host the MCP server accepts", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection"))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: true },
+        });
+      expect(dbMocks.db.select).not.toHaveBeenCalled();
+    });
+
+    it("prefers FRONTEND_URL as the canonical host", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", {
+        ...previewEnv,
+        FRONTEND_URL: "https://staging.serp-checklists.pages.dev/",
+      })).resolves.toEqual({
+        status: 200,
+        body: { mcpEndpoint: "https://staging.serp-checklists.pages.dev/api/mcp", hostMismatch: true },
+      });
+    });
+
+    it("keeps an allowed or loopback host's own endpoint", async () => {
+      await expect(connection(`${STAGING_ORIGIN}/api/agent-keys/connection`))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: `${STAGING_ORIGIN}/api/mcp`, hostMismatch: false },
+        });
+      await expect(connection("http://localhost:8788/api/agent-keys/connection", mockEnv as never))
+        .resolves.toEqual({
+          status: 200,
+          body: { mcpEndpoint: "http://localhost:8788/api/mcp", hostMismatch: false },
+        });
+    });
+
+    it("returns no endpoint when a remote host has no configured origin", async () => {
+      await expect(connection("https://3f2a1b9c.serp-checklists.pages.dev/api/agent-keys/connection", mockEnv as never))
+        .resolves.toEqual({ status: 200, body: { mcpEndpoint: null, hostMismatch: true } });
+    });
+
+    it("requires an authenticated browser session", async () => {
+      sessionMocks.getSessionUserId.mockResolvedValue(null);
+
+      const response = await handleAgentKeys(
+        new Request(`${STAGING_ORIGIN}/api/agent-keys/connection`),
+        previewEnv,
+      );
+
+      expect(response.status).toBe(401);
+    });
+  });
+
   it("revokes only a key found under the current user", async () => {
-    dbMocks.selectChain.limit.mockResolvedValueOnce([{ id: "key-1" }]);
+    dbMocks.updateChain.returning.mockResolvedValueOnce([{ revokedAt: "2026-09-19T02:00:00.000Z" }]);
 
     const response = await handleAgentKeys(
       new Request("http://localhost/api/agent-keys/key-1", { method: "DELETE" }),
@@ -220,12 +283,25 @@ describe("Personal run key management handler", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ id: "key-1", revokedAt: expect.any(String) });
+    expect(body).toEqual({ id: "key-1", revokedAt: "2026-09-19T02:00:00.000Z" });
     expect(dbMocks.updateChain.set).toHaveBeenCalledWith({ revoked_at: expect.any(String) });
     expect(dbMocks.updateChain.where).toHaveBeenCalledOnce();
+    expect(dbMocks.db.select).not.toHaveBeenCalled();
   });
 
-  it("does not revoke a missing, already-revoked, or foreign key", async () => {
+  it("reports an already-revoked key's stored time without revoking it again", async () => {
+    dbMocks.selectChain.limit.mockResolvedValueOnce([{ revokedAt: "2026-09-18T02:00:00.000Z" }]);
+
+    const response = await handleAgentKeys(
+      new Request("http://localhost/api/agent-keys/key-1", { method: "DELETE" }),
+      mockEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ id: "key-1", revokedAt: "2026-09-18T02:00:00.000Z" });
+  });
+
+  it("does not revoke a missing or foreign key", async () => {
     dbMocks.selectChain.limit.mockResolvedValueOnce([]);
 
     const response = await handleAgentKeys(
@@ -234,7 +310,7 @@ describe("Personal run key management handler", () => {
     );
 
     expect(response.status).toBe(404);
-    expect(dbMocks.db.update).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual(expect.objectContaining({ error: "Personal run key not found" }));
   });
 
   it("rejects lookalike paths instead of treating them as the collection", async () => {

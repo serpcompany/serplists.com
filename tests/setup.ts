@@ -1,7 +1,8 @@
-// Test setup file
+import { forgetGitRepositoryOverrides } from '../scripts/lib/git-env.mjs';
 
-// Mock localStorage for Node environment
-global.localStorage = {
+forgetGitRepositoryOverrides();
+
+const localStorageThatKeepsNothing = {
   getItem: () => null,
   setItem: () => {},
   removeItem: () => {},
@@ -10,37 +11,33 @@ global.localStorage = {
   key: () => null,
 };
 
-// Polyfill FileReader for Node environment
-if (typeof FileReader === 'undefined') {
-  (global as any).FileReader = class FileReader {
-    onload: ((event: any) => void) | null = null;
-    onerror: (() => void) | null = null;
-    result: string | null = null;
+global.localStorage = localStorageThatKeepsNothing;
 
-    readAsText(blob: Blob) {
-      // For test purposes, handle File/Blob reading synchronously
-      if (blob instanceof Blob) {
-        // Convert blob to text
-        const textDecoder = new TextDecoder();
-        const fileReader = this;
-        
-        // Use a simple approach for test files
-        blob.arrayBuffer().then(buffer => {
-          const text = textDecoder.decode(buffer);
-          fileReader.result = text;
-          if (fileReader.onload) {
-            setTimeout(() => {
-              fileReader.onload!({ target: { result: text } });
-            }, 0);
-          }
-        }).catch(() => {
-          if (fileReader.onerror) {
-            setTimeout(() => {
-              fileReader.onerror!();
-            }, 0);
-          }
-        });
+class TextOnlyFileReader {
+  onload: ((event: any) => void) | null = null;
+  onerror: (() => void) | null = null;
+  result: string | null = null;
+
+  readAsText(blob: Blob) {
+    if (!(blob instanceof Blob)) return;
+    blob.arrayBuffer().then((buffer) => {
+      const text = new TextDecoder().decode(buffer);
+      this.result = text;
+      if (this.onload) {
+        setTimeout(() => {
+          this.onload!({ target: { result: text } });
+        }, 0);
       }
-    }
-  };
+    }).catch(() => {
+      if (this.onerror) {
+        setTimeout(() => {
+          this.onerror!();
+        }, 0);
+      }
+    });
+  }
+}
+
+if (typeof FileReader === 'undefined') {
+  (global as any).FileReader = TextOnlyFileReader;
 }

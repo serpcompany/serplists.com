@@ -1,58 +1,47 @@
-import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getAccessFailure } from '@/lib/api-errors';
+import type { WorkspaceStatus } from '@/contexts/workspaceSelection';
+import { useBillingStatus } from '@/hooks/useBillingStatus';
 import { api, type TemplateHistoryResponse } from '@/lib/api';
-import { getBillingStatusQueryKey } from '@/lib/billing';
+import type { ChecklistTemplate } from '@/types/checklist';
+
+import { shareTemplateToPublic } from './shareTemplate';
 import {
-  buildRepoTemplateCreatePayload,
-  findPublicTemplateByIdentifier,
-  isRepoTemplate,
-} from '@/lib/repoTemplateCatalog';
-import {
-  buildCanonicalPublicTemplatePath,
-  resolvePublicTemplateOwnerSlug,
-} from '@/lib/routes';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
+  type CreateRun,
+  type CreateTemplate,
+  duplicateOwnedTemplate,
+  saveTemplateToAccount,
+  startTemplateRun,
+  type TemplateDetailActionResult,
+  type TemplateDetailBillingState,
+} from './templateActionOutcome';
+import { countTemplateItems } from './templateDetailMappers';
+import { getTemplateHistoryQueryKey } from './templateHistoryTimeline';
+import { getTemplateDetailPermissions } from './templatePermissions';
+import { setTemplateVisibility } from './templateVisibility';
+import { useTemplateDetailRecord } from './useTemplateDetailRecord';
 
-import {
-  countTemplateItems,
-  mapApiTemplateToChecklistTemplate,
-  resolveTemplateOwnerProfile,
-} from './templateDetailMappers';
+export {
+  duplicateOwnedTemplate,
+  saveTemplateToAccount,
+  startTemplateRun,
+  type TemplateDetailActionResult,
+  type TemplateDetailBillingState,
+};
+export {
+  loadTemplateDetailData,
+  type LoadTemplateDetailResult,
+} from './loadTemplateDetail';
+export { resolveShareOwnerTemplate } from './templateDetailApi';
 
-type TemplateDetailApiClient = Pick<
-  typeof api,
-  | 'clonePublicTemplate'
-  | 'getBillingStatus'
-  | 'getProfileById'
-  | 'getTemplateById'
-  | 'getTemplateBySlug'
-  | 'updateTemplate'
->;
-
-type CreateTemplate = (
-  templateData: Omit<
-    ChecklistTemplate,
-    'id' | 'userId' | 'createdAt' | 'updatedAt' | 'slug'
-  >,
-) => Promise<ChecklistTemplate>;
-
-type CreateRun = (params: {
-  runName?: string;
-  template?: ChecklistTemplate;
-  templateId: string;
-}) => Promise<ChecklistRun | null>;
-
-type PublicTemplateDetailOptions = {
-  cachedTemplates: ChecklistTemplate[];
+type PublicTemplateDetailHookOptions = {
   identifier?: string;
   mode: 'public';
   ownerUsername?: string;
 };
 
-type PrivateTemplateDetailOptions = {
-  getCachedTemplate: (identifier: string) => ChecklistTemplate | undefined;
+type PrivateTemplateDetailHookOptions = {
+  canEditTemplates: boolean;
   identifier?: string;
   mode: 'private';
 };
@@ -61,25 +50,14 @@ type TemplateDetailCommonOptions = {
   createRun: CreateRun;
   createTemplate: CreateTemplate;
   isAuthenticated: boolean;
-  teamId?: string;
+  teamId: string | undefined;
   userId?: string;
   username?: string;
+  workspaceStatus: WorkspaceStatus;
 };
 
 export type UseTemplateDetailModelOptions = TemplateDetailCommonOptions &
-  (PublicTemplateDetailOptions | PrivateTemplateDetailOptions);
-
-export type TemplateDetailActionResult =
-  | { kind: 'ok'; runId?: string; shareUrl?: string; templateId?: string }
-  | { kind: 'login_required' }
-  | { kind: 'upgrade_required' }
-  | { kind: 'error'; message: string };
-
-export type TemplateDetailBillingState = {
-  billingEnabled: boolean;
-  isLoading: boolean;
-  isPro: boolean;
-};
+  (PublicTemplateDetailHookOptions | PrivateTemplateDetailHookOptions);
 
 export type TemplateDetailHistoryState = {
   data: TemplateHistoryResponse | null;
@@ -87,320 +65,63 @@ export type TemplateDetailHistoryState = {
   isLoading: boolean;
 };
 
-type LoadTemplateDetailResult = {
-  notFound: boolean;
-  template: ChecklistTemplate | null;
-};
-
-type TemplateDetailDependencies = {
-  apiClient?: TemplateDetailApiClient;
-};
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const isUuidLike = (value: string): boolean => UUID_PATTERN.test(value);
-
-const getApiClient = (
-  dependencies?: TemplateDetailDependencies,
-): TemplateDetailApiClient => dependencies?.apiClient ?? api;
-
-const mapActionFailure = (
-  error: unknown,
-  fallbackMessage: string,
-): TemplateDetailActionResult => {
-  const failure = getAccessFailure(error, fallbackMessage);
-
-  if (failure.kind === 'auth_required') {
-    return { kind: 'login_required' };
-  }
-
-  if (failure.kind === 'upgrade_required') {
-    return { kind: 'upgrade_required' };
-  }
-
-  return { kind: 'error', message: failure.message };
-};
-
-const hydrateTemplateOwner = async (
-  template: ChecklistTemplate,
-  apiClient: TemplateDetailApiClient,
-): Promise<ChecklistTemplate> => {
-  const { ownerSlug } = resolveTemplateOwnerProfile(template);
-
-  if (ownerSlug || !template.userId) {
-    return template;
-  }
-
-  try {
-    const profile = (await apiClient.getProfileById(
-      template.userId,
-    )) as Record<string, unknown>;
-    return resolveTemplateOwnerProfile(template, profile).template;
-  } catch {
-    return template;
-  }
-};
-
-export const loadTemplateDetailData = async (
-  options: PublicTemplateDetailOptions | PrivateTemplateDetailOptions,
-  dependencies?: TemplateDetailDependencies,
-): Promise<LoadTemplateDetailResult> => {
-  const apiClient = getApiClient(dependencies);
-
-  if (!options.identifier) {
-    return { template: null, notFound: true };
-  }
-
-  if (options.mode === 'public') {
-    if (!options.ownerUsername) {
-      return { template: null, notFound: true };
-    }
-
-    const cachedTemplate = findPublicTemplateByIdentifier(
-      options.cachedTemplates,
-      options.identifier,
-    );
-    if (cachedTemplate) {
-      const ownerSlug = resolvePublicTemplateOwnerSlug(cachedTemplate);
-      if (ownerSlug?.toLowerCase() === options.ownerUsername.toLowerCase()) {
-        return { template: cachedTemplate, notFound: false };
-      }
-    }
-
-    try {
-      const rawTemplate = isUuidLike(options.identifier)
-        ? await apiClient.getTemplateById(options.identifier)
-        : await apiClient.getTemplateBySlug(options.identifier);
-      const mappedTemplate = await hydrateTemplateOwner(
-        mapApiTemplateToChecklistTemplate(
-          rawTemplate as Record<string, unknown>,
-          options.identifier,
-        ),
-        apiClient,
-      );
-      const ownerSlug = resolvePublicTemplateOwnerSlug(mappedTemplate);
-
-      if (
-        !mappedTemplate.isPublic ||
-        ownerSlug?.toLowerCase() !== options.ownerUsername.toLowerCase()
-      ) {
-        return { template: null, notFound: true };
-      }
-
-      return { template: mappedTemplate, notFound: false };
-    } catch {
-      return { template: null, notFound: true };
-    }
-  }
-
-  const cachedTemplate = options.getCachedTemplate(options.identifier);
-  if (cachedTemplate) {
-    return { template: cachedTemplate, notFound: false };
-  }
-
-  try {
-    let rawTemplate: unknown;
-
-    try {
-      rawTemplate = await apiClient.getTemplateById(options.identifier);
-    } catch {
-      rawTemplate = await apiClient.getTemplateBySlug(options.identifier);
-    }
-
-    const mappedTemplate = await hydrateTemplateOwner(
-      mapApiTemplateToChecklistTemplate(
-        rawTemplate as Record<string, unknown>,
-        options.identifier,
-      ),
-      apiClient,
-    );
-
-    return { template: mappedTemplate, notFound: false };
-  } catch {
-    return { template: null, notFound: true };
-  }
-};
-
-export const startTemplateRun = async (params: {
-  createRun: CreateRun;
-  isAuthenticated: boolean;
-  runName?: string;
-  template: ChecklistTemplate | null;
-}): Promise<TemplateDetailActionResult> => {
-  if (!params.template) {
-    return { kind: 'error', message: 'Template not found.' };
-  }
-
-  if (!params.isAuthenticated) {
-    return { kind: 'login_required' };
-  }
-
-  try {
-    const run = await params.createRun({
-      templateId: params.template.id,
-      runName: params.runName,
-      template: params.template,
-    });
-
-    if (!run?.id) {
-      return { kind: 'error', message: 'Failed to start template run' };
-    }
-
-    return { kind: 'ok', runId: run.id };
-  } catch (error) {
-    return mapActionFailure(error, 'Failed to start template run');
-  }
-};
-
-export const saveTemplateToAccount = async (params: {
-  apiClient?: TemplateDetailApiClient;
-  billingState: TemplateDetailBillingState;
-  createTemplate: CreateTemplate;
-  invalidateTemplates?: () => Promise<void> | void;
-  isAuthenticated: boolean;
-  teamId?: string;
-  template: ChecklistTemplate | null;
-  userId?: string;
-}): Promise<TemplateDetailActionResult> => {
-  if (!params.template) {
-    return { kind: 'error', message: 'Template not found.' };
-  }
-
-  if (!params.isAuthenticated || !params.userId) {
-    return { kind: 'login_required' };
-  }
-
-  if (params.billingState.isLoading) {
-    return { kind: 'error', message: 'Checking your plan. Try again in a moment.' };
-  }
-
-  if (!params.billingState.isPro) {
-    return { kind: 'upgrade_required' };
-  }
-
-  const apiClient = params.apiClient ?? api;
-
-  try {
-    if (isRepoTemplate(params.template)) {
-      const createdTemplate = await params.createTemplate(
-        buildRepoTemplateCreatePayload(params.template),
-      );
-      return { kind: 'ok', templateId: createdTemplate.id };
-    }
-
-    const clonedTemplate = await apiClient.clonePublicTemplate(params.template.id, {
-      teamId: params.teamId,
-      visibility: 'private',
-    });
-
-    await params.invalidateTemplates?.();
-
-    return { kind: 'ok', templateId: clonedTemplate.id };
-  } catch (error) {
-    return mapActionFailure(error, 'Failed to save template');
-  }
-};
+const replaceTemplateIfStillShown =
+  (next: ChecklistTemplate) =>
+  (current: ChecklistTemplate | null): ChecklistTemplate | null =>
+    current?.id === next.id ? next : current;
 
 export const useTemplateDetailModel = (
   options: UseTemplateDetailModelOptions,
 ) => {
-  const [template, setTemplate] = useState<ChecklistTemplate | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
   const queryClient = useQueryClient();
-  const cachedTemplates =
-    options.mode === 'public' ? options.cachedTemplates : null;
-  const getCachedTemplate =
-    options.mode === 'private' ? options.getCachedTemplate : null;
-  const publicOwnerUsername =
-    options.mode === 'public' ? options.ownerUsername : undefined;
+  const {
+    loadError,
+    loading,
+    notFound,
+    reload,
+    template,
+    updateTemplate,
+  } = useTemplateDetailRecord({
+    identifier: options.identifier,
+    mode: options.mode,
+    ownerUsername: options.mode === 'public' ? options.ownerUsername : undefined,
+    userId: options.userId,
+  });
 
-  const billing = useQuery({
-    queryKey: getBillingStatusQueryKey(options.userId, options.teamId),
-    queryFn: () =>
-      api.getBillingStatus(options.teamId ? { teamId: options.teamId } : undefined),
+  const billing = useBillingStatus({
     enabled: options.isAuthenticated,
-    retry: false,
+    teamId: options.teamId,
+    userId: options.userId,
   });
 
   const billingState: TemplateDetailBillingState = {
-    billingEnabled: billing.data?.billingEnabled ?? true,
-    isLoading: options.isAuthenticated && billing.isLoading,
-    isPro: billing.data?.plan === 'pro' || billing.data?.plan === 'team',
+    billingEnabled: billing.status === 'known' ? billing.billingEnabled : true,
+    isError: billing.status === 'error',
+    isLoading: billing.status === 'loading',
+    isPro: billing.status === 'known' && billing.isPaid,
   };
+  const permissions = getTemplateDetailPermissions({
+    activeTeamId: options.teamId,
+    canEditTemplates: options.mode === 'private' && options.canEditTemplates,
+    template: options.mode === 'private' ? template : null,
+    userId: options.userId,
+  });
   const canLoadTemplateHistory =
-    options.mode === 'private' &&
-    options.isAuthenticated &&
-    Boolean(template?.id) &&
-    (template?.userId === options.userId ||
-      (Boolean(options.teamId) && template?.teamId === options.teamId));
+    options.isAuthenticated && permissions.canViewHistory;
 
   const history = useQuery({
-    queryKey: [
-      'template-history',
-      template?.id ?? 'none',
-      options.userId ?? 'guest',
-      options.teamId ?? 'personal',
-    ],
+    queryKey: getTemplateHistoryQueryKey(template?.id, options.userId, options.teamId),
     queryFn: () => api.getTemplateHistory(template?.id ?? ''),
     enabled: canLoadTemplateHistory,
     retry: false,
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTemplate = async () => {
-      setLoading(true);
-      setNotFound(false);
-
-      const result = await loadTemplateDetailData(
-        options.mode === 'public'
-          ? {
-              cachedTemplates: cachedTemplates ?? [],
-              identifier: options.identifier,
-              mode: 'public',
-              ownerUsername: publicOwnerUsername,
-            }
-          : {
-              getCachedTemplate:
-                getCachedTemplate ?? (() => undefined),
-              identifier: options.identifier,
-              mode: 'private',
-            },
-      );
-
-      if (cancelled) {
-        return;
-      }
-
-      setTemplate(result.template);
-      setNotFound(result.notFound);
-      setLoading(false);
-    };
-
-    void loadTemplate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    cachedTemplates,
-    getCachedTemplate,
-    options.identifier,
-    options.mode,
-    publicOwnerUsername,
-  ]);
 
   const invalidateTemplates = async () => {
     if (!options.userId) {
       return;
     }
 
-    await queryClient.invalidateQueries({
-      queryKey: ['templates', options.userId],
-    });
+    await queryClient.invalidateQueries({ queryKey: ['templates'] });
   };
 
   const startRun = async (runName?: string): Promise<TemplateDetailActionResult> =>
@@ -411,8 +132,12 @@ export const useTemplateDetailModel = (
       template,
     });
 
-  const saveTemplate = async (): Promise<TemplateDetailActionResult> =>
-    saveTemplateToAccount({
+  const saveTemplate = async (): Promise<TemplateDetailActionResult> => {
+    if (billing.status === 'error') {
+      billing.refetch();
+    }
+
+    return saveTemplateToAccount({
       billingState,
       createTemplate: options.createTemplate,
       invalidateTemplates,
@@ -420,85 +145,60 @@ export const useTemplateDetailModel = (
       teamId: options.teamId,
       template,
       userId: options.userId,
+      workspaceStatus: options.workspaceStatus,
+    });
+  };
+
+  const duplicateTemplate = async (): Promise<TemplateDetailActionResult> =>
+    template
+      ? duplicateOwnedTemplate({
+          activeTeamId: options.teamId,
+          createTemplate: options.createTemplate,
+          template,
+        })
+      : { kind: 'error', message: 'Template not found.' };
+
+  const shareTemplate = async (): Promise<TemplateDetailActionResult> =>
+    shareTemplateToPublic({
+      canShare: permissions.canShare,
+      invalidateTemplates,
+      isAuthenticated: options.isAuthenticated,
+      onTemplateChange: (shared) => updateTemplate(replaceTemplateIfStillShown(shared)),
+      origin: window.location.origin,
+      reloadAfterConflict: invalidateTemplates,
+      template,
+      userId: options.userId,
+      username: options.username,
     });
 
-  const shareTemplate = async (): Promise<TemplateDetailActionResult> => {
-    if (!template) {
-      return { kind: 'error', message: 'Template not found.' };
-    }
-
-    if (!options.isAuthenticated || !options.userId) {
-      return { kind: 'login_required' };
-    }
-
-    if (template.userId !== options.userId) {
-      return {
-        kind: 'error',
-        message: 'You can only share templates you own.',
-      };
-    }
-
-    try {
-      let nextTemplate = template;
-
-      if (!nextTemplate.isPublic) {
-        await api.updateTemplate(nextTemplate.id, {
-          is_public: true,
-          expected_version: nextTemplate.version,
-        });
-        nextTemplate = {
-          ...nextTemplate,
-          isPublic: true,
-        };
-      }
-
-      nextTemplate = await hydrateTemplateOwner(nextTemplate, api);
-
-      if (!nextTemplate.ownerProfile?.username && options.username) {
-        nextTemplate = {
-          ...nextTemplate,
-          ownerProfile: {
-            ...nextTemplate.ownerProfile,
-            username: options.username,
-          },
-        };
-      }
-
-      const publicPath = buildCanonicalPublicTemplatePath(nextTemplate);
-
-      if (!publicPath) {
-        return {
-          kind: 'error',
-          message:
-            'Set a username on your account before sharing templates with the canonical public URL.',
-        };
-      }
-
-      setTemplate(nextTemplate);
-      await invalidateTemplates();
-
-      return {
-        kind: 'ok',
-        shareUrl: `${window.location.origin}${publicPath}`,
-      };
-    } catch (error) {
-      return mapActionFailure(
-        error,
-        'Failed to create a share link for this template.',
-      );
-    }
-  };
+  const setVisibility = async (
+    isPublic: boolean,
+  ): Promise<TemplateDetailActionResult> =>
+    setTemplateVisibility({
+      canEdit: permissions.canEdit,
+      invalidateTemplates,
+      isPublic,
+      onTemplateChange: updateTemplate,
+      reloadAfterConflict: invalidateTemplates,
+      template,
+    });
 
   return {
     billingState,
+    duplicateTemplate,
+    refetchBilling: billing.refetch,
     history: {
       data: history.data ?? null,
       isError: history.isError,
       isLoading: canLoadTemplateHistory && history.isLoading,
     } satisfies TemplateDetailHistoryState,
+    loadError,
     loading,
     notFound,
+    permissions,
+    reload,
     saveTemplate,
+    setVisibility,
     shareTemplate,
     startRun,
     template,

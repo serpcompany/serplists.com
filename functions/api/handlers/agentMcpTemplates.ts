@@ -1,148 +1,14 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { z } from "zod";
-import { portableChecklistSectionSchema } from "../../../src/lib/schemas/checklistSchema";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
-import { isRecord, parseStoredSections, ToolError, type JsonRecord } from "../utils/mcp-tools";
-import { normalizeStringArray } from "../utils/payloads";
+import { describeErrorForLog, log } from "../utils/logger";
 import type { PersonalRunKeyIdentity } from "../utils/personal-run-key";
-import { createTemplateForUser, updateTemplateForUser } from "./templates";
-
-const MAX_WRITE_RESULT_BYTES = 256 * 1024;
-
-const getTemplateArgs = z.object({
-  templateId: z.string().trim().min(1),
-}).strict();
-
-const templateTitleArg = z.string().trim().min(1).max(160);
-const templateDescriptionArg = z.string().max(5000);
-const templateSectionsArg = z.array(portableChecklistSectionSchema).min(1).max(100);
-const templateLabelsArg = z.array(z.string().trim().min(1).max(80)).max(20);
-
-const createTemplateArgs = z.object({
-  title: templateTitleArg,
-  description: templateDescriptionArg.optional(),
-  sections: templateSectionsArg,
-  categories: templateLabelsArg.optional(),
-  tags: templateLabelsArg.optional(),
-}).strict();
-
-const updateTemplateArgs = z.object({
-  templateId: z.string().trim().min(1),
-  expectedVersion: z.number().int().positive(),
-  title: templateTitleArg.optional(),
-  description: templateDescriptionArg.optional(),
-  sections: templateSectionsArg.optional(),
-  categories: templateLabelsArg.optional(),
-  tags: templateLabelsArg.optional(),
-}).strict().refine(
-  ({ templateId: _templateId, expectedVersion: _expectedVersion, ...changes }) => Object.keys(changes).length > 0,
-  "Provide at least one of title, description, sections, categories, or tags",
-);
-
-const templateSectionsJsonSchema = {
-  type: "array",
-  minItems: 1,
-  maxItems: 100,
-  description: "Sections in order. Keep the id of every existing section, task, and subtask you change so run progress follows it; omit ids for new ones.",
-  items: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      title: { type: "string", minLength: 1 },
-      items: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: {
-            id: { type: "string" },
-            title: { type: "string", minLength: 1 },
-            description: { type: "string" },
-            contents: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  id: { type: "string" },
-                  type: { type: "string", enum: ["text", "image", "video", "file", "embed", "subItems"] },
-                  value: { type: "string", description: "Markdown for text; a URL for image, video, file, and embed." },
-                  subItems: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: { id: { type: "string" }, title: { type: "string", minLength: 1 } },
-                      required: ["title"],
-                    },
-                  },
-                },
-                required: ["type"],
-              },
-            },
-          },
-          required: ["title"],
-        },
-      },
-    },
-    required: ["title", "items"],
-  },
-} as const;
-
-const templateLabelsJsonSchema = {
-  type: "array",
-  maxItems: 20,
-  items: { type: "string", minLength: 1, maxLength: 80 },
-} as const;
-
-export const templateToolDefinitions = [
-  {
-    name: "get_template",
-    description: "Read a personal template, including its sections, tasks, subtasks, ids, and version.",
-    inputSchema: {
-      type: "object",
-      properties: { templateId: { type: "string" } },
-      required: ["templateId"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  },
-  {
-    name: "create_template",
-    description: "Create a private personal template.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        title: { type: "string", minLength: 1, maxLength: 160 },
-        description: { type: "string", maxLength: 5000 },
-        sections: templateSectionsJsonSchema,
-        categories: templateLabelsJsonSchema,
-        tags: templateLabelsJsonSchema,
-      },
-      required: ["title", "sections"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-  },
-  {
-    name: "update_template",
-    description: "Update a private personal template (public templates can only be edited in SERP Lists). Fields you pass replace the stored ones; sections replaces the whole checklist. In-progress private runs of the template pick up the change. Pass the latest version from get_template as expectedVersion to prevent lost updates.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        templateId: { type: "string" },
-        expectedVersion: { type: "integer", minimum: 1 },
-        title: { type: "string", minLength: 1, maxLength: 160 },
-        description: { type: "string", maxLength: 5000 },
-        sections: templateSectionsJsonSchema,
-        categories: templateLabelsJsonSchema,
-        tags: templateLabelsJsonSchema,
-      },
-      required: ["templateId", "expectedVersion"],
-      additionalProperties: false,
-    },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
-  },
-] as const;
+import { applyTemplateOperation } from "./agentMcpTemplateEdits";
+import { readTemplate, templateSections, templateView, writtenTemplateResult } from "./agentMcpTemplatePages";
+import { createTemplateArgs, getTemplateArgs, templateOperationArgs, updateTemplateArgs } from "./agentMcpTemplateTools";
+import { isRecord, parseToolArguments, ToolError, type JsonRecord } from "./agentMcpTools";
+import { createTemplateForUser } from "./template-create";
+import { updateTemplateForUser } from "./template-update";
 
 const templateWriteErrorCodes: Record<number, string> = {
   400: "invalid_template",
@@ -175,24 +41,13 @@ export async function getOwnedTemplate(env: Env, userId: string, templateId: str
   return template;
 }
 
-function serializeTemplate(template: JsonRecord): JsonRecord {
+function mcpAuditMetadata(identity: PersonalRunKeyIdentity, operation?: string): JsonRecord {
   return {
-    id: template.id,
-    title: template.title,
-    description: template.description,
-    type: template.type,
-    categories: normalizeStringArray(template.category),
-    tags: normalizeStringArray(template.tags),
-    sections: parseStoredSections(template.items),
-    version: typeof template.version === "number" ? template.version : 1,
-    contentVersion: template.content_version,
-    createdAt: template.created_at,
-    updatedAt: template.updated_at,
+    source: "mcp",
+    ...(operation ? { operation } : {}),
+    personalRunKeyId: identity.keyId,
+    personalRunKeyName: identity.name,
   };
-}
-
-function mcpAuditMetadata(identity: PersonalRunKeyIdentity): JsonRecord {
-  return { source: "mcp", personalRunKeyId: identity.keyId, personalRunKeyName: identity.name };
 }
 
 async function readTemplateWrite(response: Response): Promise<JsonRecord> {
@@ -206,18 +61,26 @@ async function readTemplateWrite(response: Response): Promise<JsonRecord> {
   );
 }
 
-async function loadTemplate(env: Env, userId: string, templateId: string): Promise<JsonRecord> {
-  const template = await getOwnedTemplate(env, userId, templateId);
-  return { template: serializeTemplate(template as unknown as JsonRecord) };
-}
-
-// A write has already committed, so an oversized result must not come back as a
-// retryable error; drop the sections and let the caller read them with get_template.
-async function loadWrittenTemplate(env: Env, userId: string, templateId: string): Promise<JsonRecord> {
-  const result = await loadTemplate(env, userId, templateId);
-  if (new TextEncoder().encode(JSON.stringify(result)).byteLength <= MAX_WRITE_RESULT_BYTES) return result;
-  const { sections: _sections, ...summary } = result.template as JsonRecord;
-  return { template: summary, sectionsOmitted: true };
+async function loadWrittenTemplate(
+  request: Request,
+  env: Env,
+  identity: PersonalRunKeyIdentity,
+  written: JsonRecord & { id: string },
+  changed: { sectionId?: string; taskId?: string } = {},
+): Promise<JsonRecord> {
+  let row: JsonRecord;
+  try {
+    row = await getOwnedTemplate(env, identity.userId, written.id) as unknown as JsonRecord;
+  } catch (error) {
+    log("warn", "mcp_template_reload_error", {
+      requestId: request.headers.get("X-Request-Id") ?? undefined,
+      keyId: identity.keyId,
+      templateId: written.id,
+      ...describeErrorForLog(error),
+    });
+    return { template: written, sectionsOmitted: true };
+  }
+  return writtenTemplateResult(templateView(row), changed);
 }
 
 export async function getTemplate(
@@ -225,9 +88,9 @@ export async function getTemplate(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = getTemplateArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
-  return loadTemplate(env, identity.userId, parsed.data.templateId);
+  const { templateId, ...read } = parseToolArguments(getTemplateArgs, rawArguments);
+  const template = await getOwnedTemplate(env, identity.userId, templateId);
+  return readTemplate(templateView(template as unknown as JsonRecord), read);
 }
 
 export async function createTemplate(
@@ -236,18 +99,55 @@ export async function createTemplate(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = createTemplateArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
+  const args = parseToolArguments(createTemplateArgs, rawArguments);
 
   const created = await readTemplateWrite(await createTemplateForUser(
     request,
     env,
     identity.userId,
-    { ...parsed.data, is_public: false },
-    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
+    { ...args, is_public: false },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
   if (typeof created.id !== "string") throw new Error("Template write returned no id");
-  return loadWrittenTemplate(env, identity.userId, created.id);
+  return loadWrittenTemplate(request, env, identity, { id: created.id, title: args.title, version: 1 });
+}
+
+function assertTemplateEditableAt(
+  stored: Pick<Awaited<ReturnType<typeof getOwnedTemplate>>, "is_public" | "version">,
+  expectedVersion: number,
+): void {
+  if (stored.is_public) throw new ToolError("Public templates can only be edited in SERP Lists", "template_is_public");
+  if (expectedVersion !== stored.version) {
+    throw new ToolError("Template changed since it was loaded. Refresh before saving again.", "edit_conflict", {
+      expectedVersion,
+      currentVersion: stored.version,
+    });
+  }
+}
+
+async function updateTemplatePart(
+  request: Request,
+  env: Env,
+  identity: PersonalRunKeyIdentity,
+  rawArguments: unknown,
+): Promise<JsonRecord> {
+  const args = parseToolArguments(templateOperationArgs, rawArguments);
+  const stored = await getOwnedTemplate(env, identity.userId, args.templateId);
+  assertTemplateEditableAt(stored, args.expectedVersion);
+  const edit = applyTemplateOperation(templateSections(stored.items), args);
+
+  const updated = await readTemplateWrite(await updateTemplateForUser(
+    request,
+    env,
+    identity.userId,
+    args.templateId,
+    { sections: edit.sections, expected_version: args.expectedVersion },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity, args.operation) },
+  ));
+  return loadWrittenTemplate(request, env, identity, {
+    id: args.templateId,
+    ...(typeof updated.version === "number" ? { version: updated.version } : {}),
+  }, { sectionId: edit.sectionId, taskId: edit.taskId });
 }
 
 export async function updateTemplate(
@@ -256,17 +156,21 @@ export async function updateTemplate(
   identity: PersonalRunKeyIdentity,
   rawArguments: unknown,
 ): Promise<JsonRecord> {
-  const parsed = updateTemplateArgs.safeParse(rawArguments ?? {});
-  if (!parsed.success) throw new ToolError(parsed.error.issues[0]?.message ?? "Invalid arguments", "invalid_arguments");
+  if (isRecord(rawArguments) && rawArguments.operation !== undefined && rawArguments.operation !== null) {
+    return updateTemplatePart(request, env, identity, rawArguments);
+  }
+  const { templateId, expectedVersion, ...changes } = parseToolArguments(updateTemplateArgs, rawArguments);
 
-  const { templateId, expectedVersion, ...changes } = parsed.data;
-  await readTemplateWrite(await updateTemplateForUser(
+  const updated = await readTemplateWrite(await updateTemplateForUser(
     request,
     env,
     identity.userId,
     templateId,
     { ...changes, expected_version: expectedVersion },
-    { personalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
+    { privatePersonalOnly: true, auditMetadata: mcpAuditMetadata(identity) },
   ));
-  return loadWrittenTemplate(env, identity.userId, templateId);
+  return loadWrittenTemplate(request, env, identity, {
+    id: templateId,
+    ...(typeof updated.version === "number" ? { version: updated.version } : {}),
+  });
 }

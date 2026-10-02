@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import {
   Copy,
   Edit3,
@@ -11,6 +10,8 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import { MediaCard } from '@/components/layout/MediaCard';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,140 +20,133 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { HOVER_REVEAL_CLASS } from '@/components/ui/hover-reveal';
 import { buildConsoleTemplateEditPath, buildConsoleTemplatePath } from '@/lib/routes';
+import { cn } from '@/lib/utils';
+import { formatCount } from '@/lib/utils/pluralize';
 import type { ChecklistTemplate } from '@/types/checklist';
+
+import { Link } from '@/components/navigation/Link';
 
 interface TemplateCardProps {
   template: ChecklistTemplate;
-  onDelete: (id: string) => void;
+  canEdit?: boolean;
+  onDelete?: (id: string) => void;
   onDuplicate?: (id: string) => void;
-  onStartRun: (id: string) => void;
+  onStartRun?: (id: string) => void;
 }
 
 export function TemplateCard({
   template,
+  canEdit = true,
   onDelete,
   onDuplicate,
   onStartRun,
 }: TemplateCardProps) {
+  const hasMenuActions = canEdit || Boolean(onStartRun || onDuplicate || onDelete);
   const sectionCount = template.sections.length;
   const taskCount = template.sections.reduce(
     (total, section) => total + section.items.length,
     0,
   );
+  const title = template.title.trim();
+  const actionsLabel = title ? `Actions for ${title}` : 'Template actions';
+  const categories = template.categories ?? [];
+  const TypeIcon = template.type === 'recipe' ? List : FileText;
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-card transition-all hover:border-muted-foreground/30">
-      <div className="flex h-24 items-center justify-center bg-secondary/50">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-background">
-          {template.type === 'recipe' ? (
-            <List className="h-6 w-6 text-muted-foreground" />
-          ) : (
-            <FileText className="h-6 w-6 text-muted-foreground" />
-          )}
-        </div>
-      </div>
-
-      <div className="p-4">
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex-1">
-            <Link
-              to={buildConsoleTemplatePath(template.id)}
-              className="text-sm font-medium text-foreground hover:underline"
-            >
-              {template.title}
-            </Link>
-            {template.description ? (
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {template.description}
-              </p>
-            ) : null}
-          </div>
-
+    <MediaCard
+      titleAs="h2"
+      action={
+        hasMenuActions ? (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                size="icon"
-                variant="ghost"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  aria-label={actionsLabel}
+                  className={cn('data-popup-open:opacity-100', HOVER_REVEAL_CLASS)}
+                  size="icon"
+                  variant="secondary"
+                />
+              }
+            >
+              <MoreHorizontal aria-hidden="true" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
-              <DropdownMenuItem asChild>
-                <Link to={buildConsoleTemplateEditPath(template.id)}>
-                  <Edit3 className="mr-2 h-4 w-4" />
+            <DropdownMenuContent align="end">
+              {canEdit ? (
+                <DropdownMenuItem render={<Link href={buildConsoleTemplateEditPath(template.id)} />}>
+                  <Edit3 />
                   Edit
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onStartRun(template.id)}>
-                <Play className="mr-2 h-4 w-4" />
-                Start Run
-              </DropdownMenuItem>
+                </DropdownMenuItem>
+              ) : null}
+              {onStartRun ? (
+                <DropdownMenuItem onClick={() => onStartRun(template.id)}>
+                  <Play />
+                  Start Run
+                </DropdownMenuItem>
+              ) : null}
               {onDuplicate ? (
                 <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
-                  <Copy className="mr-2 h-4 w-4" />
+                  <Copy />
                   Duplicate
                 </DropdownMenuItem>
               ) : null}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={() => onDelete(template.id)}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
+              {onDelete ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onDelete(template.id)} variant="destructive">
+                    <Trash2 />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        {template.categories?.length ? (
-          <div className="mb-3 flex flex-wrap gap-1">
-            {template.categories.slice(0, 2).map((category) => (
-              <span
-                key={category}
-                className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-              >
+        ) : undefined
+      }
+      clampDescription
+      description={template.description || undefined}
+      eyebrow={
+        categories.length > 0 ? (
+          <span className="flex flex-wrap gap-1">
+            {categories.slice(0, 2).map((category) => (
+              <Badge key={category} variant="secondary">
                 {category}
-              </span>
+              </Badge>
             ))}
-            {template.categories.length > 2 ? (
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                +{template.categories.length - 2}
-              </span>
-            ) : null}
+            {categories.length > 2 ? <Badge variant="secondary">+{categories.length - 2}</Badge> : null}
+          </span>
+        ) : undefined
+      }
+      href={buildConsoleTemplatePath(template.id)}
+      icon={<TypeIcon />}
+      mediaOverlay={
+        onStartRun ? (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 flex items-center justify-center rounded-xl bg-background/80 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:hidden"
+          >
+            <Button className="relative z-10" onClick={() => onStartRun(template.id)} tabIndex={-1}>
+              <Play data-icon="inline-start" />
+              Start Run
+            </Button>
           </div>
-        ) : null}
-
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-3">
-            <span>{sectionCount} sections</span>
-            <span>{taskCount} tasks</span>
-          </div>
-          <div className="flex items-center gap-1">
-            {template.isPublic ? (
-              <>
-                <Globe className="h-3 w-3" />
-                <span>Public</span>
-              </>
-            ) : (
-              <>
-                <Lock className="h-3 w-3" />
-                <span>Private</span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-card to-transparent p-4 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100">
-        <Button className="w-full" onClick={() => onStartRun(template.id)} size="sm">
-          <Play className="mr-2 h-3.5 w-3.5" />
-          Start Run
-        </Button>
-      </div>
-    </div>
+        ) : undefined
+      }
+      title={template.title}
+    >
+      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>{formatCount(sectionCount, 'section')}</span>
+        <span>{formatCount(taskCount, 'task')}</span>
+        <span className="ml-auto flex items-center gap-1">
+          {template.isPublic ? (
+            <Globe aria-hidden="true" className="size-3" />
+          ) : (
+            <Lock aria-hidden="true" className="size-3" />
+          )}
+          {template.isPublic ? 'Public' : 'Private'}
+        </span>
+      </p>
+    </MediaCard>
   );
 }

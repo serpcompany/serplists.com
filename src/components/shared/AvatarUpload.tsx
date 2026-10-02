@@ -1,12 +1,15 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Camera, User, X } from "lucide-react";
 import { useAuth } from "@/contexts/CloudflareAuthContext";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
-import { deleteUploadedAsset } from "@/lib/utils/fileUpload";
+import { getApiErrorMessage } from "@/lib/api-errors";
+import { isAllowedUpload, uploadAcceptAttribute } from "@/lib/schemas/uploadTypes";
+import { deleteUploadedAsset, uploadAvatar } from "@/lib/utils/fileUpload";
+import { UPLOAD_MAX_BYTES, formatUploadLimit } from "@/lib/schemas/uploadLimits";
 
 interface AvatarUploadProps {
   currentAvatarUrl?: string | null;
@@ -27,9 +30,9 @@ export const AvatarUpload = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sizeClasses = {
-    sm: "h-12 w-12",
-    md: "h-24 w-24",
-    lg: "h-32 w-32"
+    sm: "size-12",
+    md: "size-16",
+    lg: "size-20"
   };
 
   const handleFileSelect = () => {
@@ -37,35 +40,41 @@ export const AvatarUpload = ({
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = "";
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      toast.error("Please select an image file");
+    if (!isAllowedUpload("avatars", file)) {
+      toast.error("Please select a PNG, JPEG, WebP, or GIF image");
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
+    if (file.size > UPLOAD_MAX_BYTES.avatars) {
+      toast.error(`File size must be less than ${formatUploadLimit(UPLOAD_MAX_BYTES.avatars)}`);
       return;
     }
 
     setIsUploading(true);
 
     try {
-      const upload = await api.uploadToR2({ bucket: 'avatars', file });
-      await authClient.updateUser({ image: upload.url });
-      await refreshProfile();
+      const upload = await uploadAvatar(file);
+      const result = await authClient.updateUser({ image: upload.url });
+      if (result?.error) {
+        await deleteUploadedAsset(upload.url);
+        toast.error(result.error.message || "Failed to update avatar. Please try again.");
+        return;
+      }
+
       if (currentAvatarUrl && currentAvatarUrl !== upload.url) {
         await deleteUploadedAsset(currentAvatarUrl);
       }
+      await refreshProfile();
       toast.success("Avatar updated successfully!");
       onAvatarUpdate?.(upload.url);
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error("Failed to upload avatar");
+      toast.error(getApiErrorMessage(error, "Failed to upload avatar"));
     } finally {
       setIsUploading(false);
     }
@@ -77,7 +86,12 @@ export const AvatarUpload = ({
     setIsRemoving(true);
 
     try {
-      await authClient.updateUser({ image: null });
+      const result = await authClient.updateUser({ image: null });
+      if (result?.error) {
+        toast.error(result.error.message || "Failed to remove avatar. Please try again.");
+        return;
+      }
+
       await deleteUploadedAsset(currentAvatarUrl);
       await refreshProfile();
       toast.success("Avatar removed successfully!");
@@ -91,57 +105,49 @@ export const AvatarUpload = ({
   };
 
   return (
-    <div className="relative group">
-      <Avatar className={`${sizeClasses[size]}`}>
+    <div className="flex flex-wrap items-center gap-4">
+      <Avatar className={sizeClasses[size]}>
         <AvatarImage src={currentAvatarUrl || undefined} />
         <AvatarFallback>
-          <User className="h-1/2 w-1/2" />
+          <User className="size-1/2" />
         </AvatarFallback>
       </Avatar>
-      
+
       {editable && (
-        <>
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            size="icon"
-            className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+            size="sm"
             onClick={handleFileSelect}
             disabled={isUploading || isRemoving}
             aria-label="Upload avatar"
           >
-            {isUploading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <Camera className="h-4 w-4" />
-            )}
+            {isUploading ? <Spinner data-icon="inline-start" /> : <Camera data-icon="inline-start" />}
+            Upload avatar
           </Button>
 
           {currentAvatarUrl ? (
             <Button
               variant="outline"
-              size="icon"
-              className="absolute -bottom-2 -left-2 h-8 w-8 rounded-full shadow-lg opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              size="sm"
               onClick={handleRemoveAvatar}
               disabled={isUploading || isRemoving}
               aria-label="Remove avatar"
             >
-              {isRemoving ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
+              {isRemoving ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
+              Remove avatar
             </Button>
           ) : null}
-          
+
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={uploadAcceptAttribute("avatars")}
             onChange={handleFileUpload}
             disabled={isUploading || isRemoving}
             className="hidden"
           />
-        </>
+        </div>
       )}
     </div>
   );

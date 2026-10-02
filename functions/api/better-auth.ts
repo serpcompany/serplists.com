@@ -2,125 +2,32 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { haveIBeenPwned, username } from "better-auth/plugins";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import type { Env } from "./types";
 import { createDb, schema } from "./db";
 import { resolveAuthSecret } from "./utils/auth-secret";
-import { resolveConfiguredCorsOrigins } from "./utils/cors";
+import { resolveTrustedOrigins } from "./utils/cors";
+import {
+  AuthEmailDeliveryError,
+  sendEmailVerificationEmail,
+  sendPasswordResetEmail,
+} from "./utils/auth-email";
+import { getAuthEmailPolicy, isProductionAuthPolicy } from "./utils/auth-policy";
+import { deliverAuthEmail, discardUnsentPasswordResetToken } from "./utils/auth-email-throttle";
 import { log } from "./utils/logger";
+import { betterAuthLogger } from "./utils/better-auth-logger";
+import { assertNotBlockedTestEmail } from "./utils/test-email-block";
+import { buildUserProfileWritePolicy, validateUserProfileWrite } from "./utils/user-profile-validation";
+import { assertUsernameAvailableForUpdate, mapUsernameConflicts } from "./utils/username-conflict";
+import { rejectInvalidNewPassword } from "./utils/password-length";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../../src/lib/schemas/passwordLimits";
 
-const sendEmail = async (
-  env: Env,
-  params: { to: string; subject: string; text: string; tag: "password-reset" | "email-verification" }
-) => {
-  const from = env.EMAIL_FROM?.trim() || "noreply@mail.auth.serp.co";
-
-  const payload = {
-    from,
-    to: params.to,
-    subject: params.subject,
-    text: params.text,
-  };
-
-  if (env.RESEND_API_KEY) {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `Resend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
-      );
-    }
-    return;
-  }
-
-  if (env.USESEND_API_KEY) {
-    const response = await fetch("https://app.usesend.com/api/v1/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.USESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `UseSend auth email send failed (${response.status}) for ${params.tag}: ${body || "unknown error"}`
-      );
-    }
-    return;
-  }
-
-  throw new Error("Auth email provider is not configured. Set RESEND_API_KEY or USESEND_API_KEY.");
-};
-
-const sendPasswordResetEmail = async (env: Env, params: { to: string; url: string }) => {
-  await sendEmail(env, {
-    to: params.to,
-    subject: "Reset your password",
-    text: `Reset your password: ${params.url}`,
-    tag: "password-reset",
-  });
-};
-
-const sendEmailVerificationEmail = async (env: Env, params: { to: string; url: string }) => {
-  await sendEmail(env, {
-    to: params.to,
-    subject: "Verify your email",
-    text: `Verify your email: ${params.url}`,
-    tag: "email-verification",
-  });
-};
-
-function isAuthEmailConfigured(env: Env): boolean {
-  return Boolean(env.RESEND_API_KEY || env.USESEND_API_KEY);
-}
-
-function isProductionHost(hostname: string): boolean {
-  return hostname === "serplists.com" || hostname.endsWith(".serplists.com");
-}
-
-function isProductionAuthRequest(env: Env, request: Request): boolean {
-  const url = new URL(request.url);
-  if (isProductionHost(url.hostname)) {
-    return true;
-  }
-
-  if (env.FRONTEND_URL) {
-    try {
-      return isProductionHost(new URL(env.FRONTEND_URL).hostname);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-export function getAuthEmailPolicy(env: Env, request: Request) {
-  const emailAuthAvailable = isAuthEmailConfigured(env);
-  const configuredRequirement = env.AUTH_EMAIL_VERIFICATION_REQUIRED;
-  const emailVerificationRequired = configuredRequirement
-    ? configuredRequirement === "true"
-    : emailAuthAvailable || isProductionAuthRequest(env, request);
-
-  return {
-    accountRegistrationAvailable: emailAuthAvailable || !emailVerificationRequired,
-    emailAuthAvailable,
-    emailVerificationRequired,
-  };
+function isSignUpRequest(request: Request | undefined): boolean {
+  return request !== undefined && new URL(request.url).pathname.endsWith("/auth/sign-up/email");
 }
 
 function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
-  if (!isProductionAuthRequest(env, request)) {
+  if (!isProductionAuthPolicy(env)) {
     return false;
   }
 
@@ -134,17 +41,13 @@ function shouldCheckBreachedPassword(env: Env, request: Request): boolean {
 
 export function createBetterAuth(env: Env, request: Request) {
   const authSecret = resolveAuthSecret(env);
-  const authEmailPolicy = getAuthEmailPolicy(env, request);
+  const authEmailPolicy = getAuthEmailPolicy(env);
 
   const origin = new URL(request.url).origin;
-
-  const trustedOrigins = new Set<string>();
-  trustedOrigins.add(origin);
-  for (const configuredOrigin of resolveConfiguredCorsOrigins(env)) {
-    trustedOrigins.add(configuredOrigin);
-  }
-
+  const trustedOrigins = resolveTrustedOrigins(request, env);
   const isSecure = origin.startsWith("https://");
+  const blockTestAccounts = isProductionAuthPolicy(env);
+  const userProfilePolicy = buildUserProfileWritePolicy(env, trustedOrigins);
 
   const db = createDb(env);
   const plugins = [
@@ -160,23 +63,32 @@ export function createBetterAuth(env: Env, request: Request) {
   ];
 
   return betterAuth({
+    baseURL: origin,
+    basePath: "/api/auth",
     secret: authSecret,
+    logger: betterAuthLogger,
     trustedOrigins: Array.from(trustedOrigins),
-    database: drizzleAdapter(db, {
-      provider: "sqlite",
-      schema,
-    }),
+    database: mapUsernameConflicts(
+      drizzleAdapter(db, {
+        provider: "sqlite",
+        schema,
+      })
+    ),
     emailAndPassword: {
       enabled: true,
-      sendResetPassword: async ({ user, url }) => {
-        await sendPasswordResetEmail(env, { to: user.email, url });
+      sendResetPassword: async ({ user, url, token }) => {
+        const sent = await deliverAuthEmail(env, "password-reset", user.id, () =>
+          sendPasswordResetEmail(env, { to: user.email, url })
+        );
+        if (!sent) await discardUnsentPasswordResetToken(env, token);
       },
+      revokeSessionsOnPasswordReset: true,
       onPasswordReset: async ({ user }) => {
         log("info", "password_reset_completed", { userId: user.id });
       },
       requireEmailVerification: authEmailPolicy.emailVerificationRequired,
-      minPasswordLength: 10,
-      maxPasswordLength: 128,
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+      maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: {
         hash: async (password) => bcrypt.hash(password, 10),
         verify: async ({ hash, password }) => bcrypt.compare(password, hash),
@@ -184,11 +96,60 @@ export function createBetterAuth(env: Env, request: Request) {
     },
     emailVerification: {
       sendOnSignUp: authEmailPolicy.emailVerificationRequired,
-      sendVerificationEmail: async ({ user, url }) => {
-        await sendEmailVerificationEmail(env, { to: user.email, url });
+      sendVerificationEmail: async ({ user, url }, callbackRequest) => {
+        if (user.emailVerified) return;
+        try {
+          await deliverAuthEmail(env, "email-verification", user.id, () =>
+            sendEmailVerificationEmail(env, { to: user.email, url })
+          );
+        } catch (error) {
+          if (error instanceof AuthEmailDeliveryError && isSignUpRequest(callbackRequest)) {
+            log("warn", "auth_email_send_failed", {
+              userId: user.id,
+              tag: error.tag,
+              provider: error.provider,
+              status: error.status,
+            });
+            return;
+          }
+          throw error;
+        }
       },
     },
     plugins,
+    hooks: {
+      before: rejectInvalidNewPassword,
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            if (blockTestAccounts) assertNotBlockedTestEmail(user.email);
+            return { data: validateUserProfileWrite(user, "create", userProfilePolicy) };
+          },
+        },
+        update: {
+          before: async (user, context) => {
+            const data = validateUserProfileWrite(user, "update", userProfilePolicy);
+            await assertUsernameAvailableForUpdate(data, context);
+            return { data };
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session) => {
+            if (!blockTestAccounts) return;
+            const owner = await db
+              .select({ email: schema.users.email })
+              .from(schema.users)
+              .where(eq(schema.users.id, session.userId))
+              .get();
+            assertNotBlockedTestEmail(owner?.email);
+          },
+        },
+      },
+    },
     user: {
       modelName: "users",
       fields: {

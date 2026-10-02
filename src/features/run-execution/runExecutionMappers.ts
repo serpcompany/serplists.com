@@ -1,13 +1,17 @@
 import {
   calculateSectionsProgress,
+  countRunTasks,
   isSectionsShape,
   normalizeSections,
+  type RunTaskCounts,
 } from '@/lib/utils/checklistSections';
 import type {
+  ChecklistItem,
   ChecklistRun,
   ChecklistSection,
   ChecklistSubItem,
 } from '@/types/checklist';
+import { parseRetiredRunItems } from '@/features/run-execution/retiredRunItems';
 
 type ApiRecord = Record<string, unknown>;
 
@@ -69,6 +73,7 @@ export const mapChecklistToRun = (
       new Date().toISOString(),
     completedAt: asString(checklist.completed_at),
     userId: asString(checklist.user_id) ?? '',
+    teamId: asString(checklist.team_id) || undefined,
     templateVersion:
       typeof checklist.template_version === 'number'
         ? checklist.template_version
@@ -76,8 +81,23 @@ export const mapChecklistToRun = (
     revision: typeof checklist.revision === 'number' ? checklist.revision : 1,
     isStale: checklist.is_stale === true,
     isPublic: checklist.is_public === true || checklist.is_public === 1,
+    retiredItems: parseRetiredRunItems(checklist.retired_items),
   };
 };
+
+export const mapChecklistRuns = (checklists: unknown): ChecklistRun[] =>
+  (Array.isArray(checklists) ? checklists : []).flatMap((checklist): ChecklistRun[] => {
+    if (typeof checklist !== 'object' || checklist === null || typeof (checklist as ApiRecord).id !== 'string') {
+      return [];
+    }
+    const record = checklist as ApiRecord;
+    try {
+      return [mapChecklistToRun(record, record.id as string)];
+    } catch (error) {
+      console.error('Unable to read run content', { runId: record.id, error });
+      return [mapChecklistToRun({ ...record, items: '[]', sections: undefined, retired_items: '[]' }, record.id as string)];
+    }
+  });
 
 export const cloneRunSections = (
   sections: ChecklistRun['sections'],
@@ -92,7 +112,7 @@ export const getInitialSelectedItemId = (
 
   for (const section of run.sections) {
     for (const item of section.items) {
-      if (!item.isCompleted) {
+      if (!isRunItemFinished(item)) {
         return item.id;
       }
     }
@@ -101,8 +121,6 @@ export const getInitialSelectedItemId = (
   return run.sections[0]?.items[0]?.id ?? null;
 };
 
-// After a task is completed, move to the next unfinished task after it, wrapping to
-// earlier ones; stay on it when every task is done.
 export const getNextSelectedItemId = (
   run: ChecklistRun,
   completedItemId: string,
@@ -110,52 +128,26 @@ export const getNextSelectedItemId = (
   const items = run.sections.flatMap((section) => section.items);
   const index = items.findIndex((item) => item.id === completedItemId);
   const next = [...items.slice(index + 1), ...items.slice(0, Math.max(index, 0))].find(
-    (item) => !item.isCompleted,
+    (item) => !isRunItemFinished(item),
   );
   return next?.id ?? completedItemId;
 };
 
+export const getSelectionAfterToggle = (
+  run: ChecklistRun,
+  toggledItemId: string,
+  currentSelectedItemId: string | null,
+): string | null => {
+  if (currentSelectedItemId !== toggledItemId) return currentSelectedItemId;
+  const toggled = run.sections.flatMap((section) => section.items).find((item) => item.id === toggledItemId);
+  return toggled?.isCompleted ? getNextSelectedItemId(run, toggledItemId) : currentSelectedItemId;
+};
+
 export const countRunExecutionItems = (
   run: ChecklistRun | null,
-): {
-  completed: number;
-  progress: number;
-  total: number;
-} => {
-  if (!run) {
-    return { completed: 0, progress: 0, total: 0 };
-  }
-
-  let completed = 0;
-  let total = 0;
-
-  run.sections.forEach((section) => {
-    section.items.forEach((item) => {
-      total += 1;
-      if (item.isCompleted) {
-        completed += 1;
-      }
-
-      item.contents?.forEach((content) => {
-        if (content.type !== 'subItems' || !content.subItems) {
-          return;
-        }
-
-        content.subItems.forEach((subItem) => {
-          total += 1;
-          if (subItem.isCompleted) {
-            completed += 1;
-          }
-        });
-      });
-    });
-  });
-
-  return {
-    completed,
-    progress: total > 0 ? Math.round((completed / total) * 100) : 0,
-    total,
-  };
+): RunTaskCounts & { progress: number } => {
+  const sections = run?.sections ?? [];
+  return { ...countRunTasks(sections), progress: calculateSectionsProgress(sections) };
 };
 
 export const getSelectedRunItem = (
@@ -182,10 +174,11 @@ export const getSelectedRunItem = (
   return null;
 };
 
+export const isRunItemFinished = (item: ChecklistItem): boolean =>
+  item.isCompleted === true && getItemSubItems(item).every((subItem) => subItem.isCompleted === true);
+
 export const areAllRunItemsCompleted = (run: ChecklistRun): boolean =>
-  run.sections.every((section) =>
-    section.items.every((item) => item.isCompleted),
-  );
+  run.sections.every((section) => section.items.every(isRunItemFinished));
 
 export const setSubItemsCompletion = (
   subItems: ChecklistSubItem[] | undefined,
@@ -195,3 +188,27 @@ export const setSubItemsCompletion = (
     ...subItem,
     isCompleted,
   }));
+
+const getItemSubItems = (item: ChecklistItem): ChecklistSubItem[] =>
+  item.contents?.flatMap((content) =>
+    content.type === 'subItems' ? (content.subItems ?? []) : [],
+  ) ?? [];
+
+export const areItemSubItemsCompleted = (item: ChecklistItem): boolean => {
+  const subItems = getItemSubItems(item);
+  return subItems.length > 0 && subItems.every((subItem) => subItem.isCompleted === true);
+};
+
+export const itemHasCompletion = (item: ChecklistItem, isCompleted: boolean): boolean =>
+  (item.isCompleted === true) === isCompleted &&
+  getItemSubItems(item).every((subItem) => (subItem.isCompleted === true) === isCompleted);
+
+export const findRunSubItem = (
+  item: ChecklistItem,
+  at: { contentIndex: number; subItemId?: string; subItemIndex: number },
+): ChecklistSubItem | undefined => {
+  const content = item.contents?.[at.contentIndex];
+  const candidate = content?.type === 'subItems' ? content.subItems?.[at.subItemIndex] : undefined;
+  if (!at.subItemId || candidate?.id === at.subItemId) return candidate;
+  return getItemSubItems(item).find((subItem) => subItem.id === at.subItemId);
+};

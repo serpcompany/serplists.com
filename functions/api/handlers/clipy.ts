@@ -1,7 +1,7 @@
 import type { Env } from '../types';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
-import { withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
+import { clipyVideoId, withSerpListsClipyRef } from '../../../src/lib/utils/clipyUrl';
 
 const CLIPY_ORIGIN = 'https://clipy.online';
 const CLIPY_CDN_ORIGIN = 'https://cdn.clipy.online';
@@ -109,34 +109,46 @@ function buildSeoDescription(tldr: string, stepCount: number): string {
 
 const TAG_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'GitHub', pattern: /\bgithub\b/i },
-  { label: 'Issue Tracking', pattern: /\b(issue|issues|bug|bugs|ticket|tickets)\b/i },
-  { label: 'Software Development', pattern: /\b(code|developer|development|git|repository|repositories|pull request)\b/i },
-  { label: 'Project Management', pattern: /\b(project|task|tasks|workflow|planning)\b/i },
+  {
+    label: 'Issue Tracking',
+    pattern: /\b(issue[- ]track(er|ers|ing)|bug[- ]track(er|ers|ing)|bug reports?|bug fix(es|ing)?|bug triage|triag(e|ing) (bugs|issues|tickets)|(github|gitlab) (issues?|bugs?|tickets?)|(issues?|bugs?|tickets?) (in|on) (github|gitlab)|jira|support tickets?|help ?desk tickets?|ticketing (system|tool)s?)\b/i,
+  },
+  { label: 'Software Development', pattern: /\b(source code|code review|coding|developer|developers|software development|git|repository|repositories|pull request)\b/i },
+  { label: 'Project Management', pattern: /\b(project management|project plan|project planning|sprint planning|kanban|milestones?)\b/i },
   { label: 'Tutorial', pattern: /\b(guide|tutorial|walkthrough|how to)\b/i },
-  { label: 'Productivity', pattern: /\b(productivity|organize|organizing|routine|process)\b/i },
+  { label: 'Productivity', pattern: /\b(productivity|time management|daily routine|habits)\b/i },
 ];
 
 const CATEGORY_RULES: Array<{ label: string; pattern: RegExp }> = [
   { label: 'wedding', pattern: /\bwedding\b/i },
-  { label: 'moving', pattern: /\b(moving|relocation|relocate)\b/i },
+  {
+    label: 'moving',
+    pattern: /\b(moving (house|home|day|checklist)|move-(in|out)|(move|moving) (in|out) (day|date|checklist|inspection|cleaning)|house move|relocation checklist|relocating to a new (city|country|state|home|house))\b/i,
+  },
   { label: 'camping', pattern: /\b(camping|campsite|campground)\b/i },
-  { label: 'packing', pattern: /\b(packing|pack|luggage)\b/i },
+  {
+    label: 'packing',
+    pattern: /\b(packing (list|checklist|boxes|tips)|luggage|suitcase|pack(ing)? for (a |an |your |the )?(trip|vacation|holiday|travel|move|flight))\b/i,
+  },
   { label: 'morning routine', pattern: /\b(morning routine|morning habits)\b/i },
   { label: 'home inspection', pattern: /\b(home inspection|property inspection)\b/i },
 ];
 
-function suggestTags(searchableText: string): string[] {
-  return [
-    'Clipy',
-    ...TAG_RULES.filter(({ pattern }) => pattern.test(searchableText)).map(({ label }) => label),
-  ].slice(0, 6);
-}
-
-function suggestCategories(searchableText: string): string[] {
-  return CATEGORY_RULES
-    .filter(({ pattern }) => pattern.test(searchableText))
-    .map(({ label }) => label)
-    .slice(0, 2);
+export function classifyClipySummary(summary: { title: string; tldr: string }): {
+  categories: string[];
+  tags: string[];
+} {
+  const text = `${summary.title} ${summary.tldr}`;
+  return {
+    categories: CATEGORY_RULES
+      .filter(({ pattern }) => pattern.test(text))
+      .map(({ label }) => label)
+      .slice(0, 2),
+    tags: [
+      'Clipy',
+      ...TAG_RULES.filter(({ pattern }) => pattern.test(text)).map(({ label }) => label),
+    ].slice(0, 6),
+  };
 }
 
 export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: string } | null {
@@ -149,24 +161,16 @@ export function parseClipyWatchUrl(value: unknown): { id: string; watchUrl: stri
     return null;
   }
 
-  if (
-    parsed.protocol !== 'https:' ||
-    parsed.hostname !== 'clipy.online' ||
-    parsed.username ||
-    parsed.password ||
-    parsed.port ||
-    parsed.search ||
-    parsed.hash
-  ) {
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.port) {
     return null;
   }
 
-  const match = parsed.pathname.match(/^\/video\/([a-zA-Z0-9_-]{6,64})\/?$/);
-  if (!match?.[1] || !CLIPY_ID_PATTERN.test(match[1])) return null;
+  const id = clipyVideoId(parsed);
+  if (!id || !CLIPY_ID_PATTERN.test(id)) return null;
 
   return {
-    id: match[1],
-    watchUrl: `${CLIPY_ORIGIN}/video/${match[1]}`,
+    id,
+    watchUrl: `${CLIPY_ORIGIN}/video/${id}`,
   };
 }
 
@@ -289,14 +293,14 @@ export function buildClipyTemplateDraft(
     `### Recording summary\n${tldr}`,
     transcript ? `### Transcript\n${transcript}` : '',
   ].filter(Boolean).join('\n\n');
-  const searchableText = [title, tldr, ...keyPoints, transcript].join(' ');
+  const { categories, tags } = classifyClipySummary({ title, tldr });
 
   return {
     title,
     description: tldr,
     templateType: 'checklist',
-    categories: suggestCategories(searchableText),
-    tags: suggestTags(searchableText),
+    categories,
+    tags,
     isPublic: false,
     seoTitle: buildSeoTitle(title),
     seoDescription: buildSeoDescription(tldr, keyPoints.length),

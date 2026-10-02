@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Env } from "../types";
 
 export type StripeConfig = {
@@ -9,17 +10,23 @@ export type StripeConfig = {
 export type StripeBillingConfig = {
   secretKey: string;
   proPriceId: string;
+  proPriceIds: string[];
 };
 
 export type StripeWebhookConfig = {
   webhookSecret: string;
 };
 
+function parsePriceIds(value: string | undefined): string[] {
+  return (value ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+}
+
 export function getStripeBillingConfig(env: Env): StripeBillingConfig | null {
   const secretKey = env.STRIPE_SECRET_KEY;
   const proPriceId = env.STRIPE_PRO_PRICE_ID;
   if (!secretKey || !proPriceId) return null;
-  return { secretKey, proPriceId };
+  const proPriceIds = [...new Set([proPriceId, ...parsePriceIds(env.STRIPE_PRO_LEGACY_PRICE_IDS)])];
+  return { secretKey, proPriceId, proPriceIds };
 }
 
 export function getStripeWebhookConfig(env: Env): StripeWebhookConfig | null {
@@ -70,6 +77,79 @@ function encodeForm(body: Record<string, string | number | boolean | undefined |
   return params.toString();
 }
 
+export const expandableStripeIdSchema = z
+  .union([z.string().min(1), z.object({ id: z.string().min(1) }).passthrough()])
+  .transform((value) => (typeof value === "string" ? value : value.id));
+
+const stripeErrorBodySchema = z.object({
+  error: z
+    .object({
+      type: z.string().optional(),
+      code: z.string().optional(),
+      param: z.string().optional(),
+    })
+    .passthrough(),
+});
+
+function parseStripeErrorBody(text: string): { type?: string; code?: string; param?: string } {
+  try {
+    const parsed = stripeErrorBodySchema.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data.error : {};
+  } catch {
+    return {};
+  }
+}
+
+export class StripeApiError extends Error {
+  readonly status: number;
+  readonly type?: string;
+  readonly code?: string;
+  readonly param?: string;
+
+  constructor(status: number, body: string) {
+    const { type, code, param } = parseStripeErrorBody(body);
+    const detail = [type, code].filter(Boolean).join(" ");
+    super(`Stripe API error (${status})${detail ? `: ${detail}` : ""}${param ? ` (${param})` : ""}`);
+    this.name = "StripeApiError";
+    this.status = status;
+    this.type = type;
+    this.code = code;
+    this.param = param;
+  }
+}
+
+export function isMissingStripeCustomer(error: unknown): error is StripeApiError {
+  return error instanceof StripeApiError && error.code === "resource_missing" && error.param === "customer";
+}
+
+export function isStripeIdempotencyConflict(error: unknown): error is StripeApiError {
+  return error instanceof StripeApiError
+    && (error.code === "idempotency_key_in_use" || error.type === "idempotency_error");
+}
+
+export async function shortDigest(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest).slice(0, 8))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function readStripeResponse(resp: Response): Promise<unknown> {
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new StripeApiError(resp.status, text);
+  }
+  return JSON.parse(text) as unknown;
+}
+
+export async function stripeGet(secretKey: string, path: string): Promise<unknown> {
+  const resp = await fetch(`https://api.stripe.com${path}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  return readStripeResponse(resp);
+}
+
 export async function stripePostForm<T>(
   secretKey: string,
   path: string,
@@ -86,11 +166,7 @@ export async function stripePostForm<T>(
     body: encodeForm(body),
   });
 
-  const text = await resp.text();
-  if (!resp.ok) {
-    throw new Error(`Stripe API error (${resp.status}): ${text}`);
-  }
-  return JSON.parse(text) as T;
+  return (await readStripeResponse(resp)) as T;
 }
 
 function parseStripeSignatureHeader(header: string): { timestamp: number; v1: string[] } | null {

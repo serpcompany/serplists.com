@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { checklistPayloadSchema, templatePayloadSchema } from '@functions/api/utils/payloads';
+import {
+  checklistPayloadSchema,
+  templatePayloadSchema,
+  templateUpdatePayloadSchema,
+} from '@functions/api/utils/payloads';
+import { decodeSlugPath, resolveRequestedSlug } from '@functions/api/utils/slug';
 
 describe('payload schemas', () => {
   it('accepts valid template payloads', () => {
@@ -27,6 +32,34 @@ describe('payload schemas', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('lets updates echo a legacy slug for the handler to compare with the stored one', () => {
+    const legacySlug = "tom's-list:-week-1-1a2b3c4d";
+
+    expect(templatePayloadSchema.safeParse({ slug: legacySlug }).success).toBe(false);
+    expect(templateUpdatePayloadSchema.safeParse({ title: 'List', slug: legacySlug }).success).toBe(true);
+    expect(resolveRequestedSlug(legacySlug, legacySlug)).toEqual({ kind: 'unchanged' });
+    expect(resolveRequestedSlug('', legacySlug)).toEqual({ kind: 'unchanged' });
+    expect(resolveRequestedSlug('new-list', legacySlug)).toEqual({ kind: 'changed', slug: 'new-list' });
+    expect(resolveRequestedSlug('?!?', legacySlug)).toEqual({
+      kind: 'invalid',
+      message: 'slug: Use Latin letters or numbers in the URL slug.',
+    });
+  });
+
+  it('normalizes a changed slug to one the slug rule accepts instead of storing it as typed', () => {
+    const legacySlug = "tom's-list:-week-1-1a2b3c4d";
+
+    expect(resolveRequestedSlug('Bad Slug!', legacySlug)).toEqual({ kind: 'changed', slug: 'bad-slug' });
+    expect(resolveRequestedSlug('Bad Slug!', 'bad-slug')).toEqual({ kind: 'unchanged' });
+  });
+
+  it('decodes slug path segments and rejects malformed encodings', () => {
+    expect(decodeSlugPath(['qanda%3A-launch-plan-1a2b3c4d'])).toBe('qanda:-launch-plan-1a2b3c4d');
+    expect(decodeSlugPath(['caf%C3%A9-list'])).toBe('café-list');
+    expect(decodeSlugPath(['plain-slug'])).toBe('plain-slug');
+    expect(decodeSlugPath(['%E0%A4%A'])).toBeNull();
   });
 
   it('rejects empty template titles when provided', () => {

@@ -7,31 +7,34 @@ import {
 } from "node:fs";
 import path from "node:path";
 import net from "node:net";
+import { DEV_BINDINGS_VARIABLE } from "./lib/dev-bindings.mjs";
+import { readProcessInfo } from "./lib/process-info.mjs";
+import { buildToolInvocation, killPidTree } from "./lib/run-tool.mjs";
 
-export const DEFAULT_FRONTEND_PORT = 8080;
-export const DEFAULT_API_PORT = 8788;
+export const DEFAULT_DEV_PORT = 3000;
 export const PORT_SEARCH_LIMIT = 25;
 export const DEV_SESSION_PATH = "tmp/dev-session.json";
+export const START_TIME_TOLERANCE_MS = 5_000;
+export const DEV_FALLBACK_AUTH_SECRET = "local-dev-better-auth-secret-32-chars";
+const DEV_LAUNCHER_SCRIPT = /dev-auto\.mjs/;
 
 function normalizePid(value) {
   return Number.isInteger(value) && value > 0 ? value : null;
 }
 
+function normalizeStartedAt(value) {
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 function normalizeDevSession(value) {
-  if (
-    !value ||
-    !Number.isInteger(value.frontendPort) ||
-    !Number.isInteger(value.apiPort)
-  ) {
+  if (!value || !Number.isInteger(value.port) || value.port <= 0) {
     return null;
   }
 
   return {
-    frontendPort: value.frontendPort,
-    apiPort: value.apiPort,
-    frontendPid: normalizePid(value.frontendPid),
-    apiPid: normalizePid(value.apiPid),
-    allPid: normalizePid(value.allPid),
+    port: value.port,
+    pid: normalizePid(value.pid),
+    startedAt: normalizeStartedAt(value.startedAt),
   };
 }
 
@@ -58,7 +61,7 @@ export function parseEnvFile(filePath) {
   return entries;
 }
 
-export function buildCorsAllowedOrigins(existingValue, frontendUrl) {
+export function buildCorsAllowedOrigins(existingValue, origin) {
   const origins = new Set();
 
   for (const rawValue of String(existingValue ?? "").split(",")) {
@@ -67,100 +70,114 @@ export function buildCorsAllowedOrigins(existingValue, frontendUrl) {
     origins.add(trimmed);
   }
 
-  origins.add(frontendUrl);
+  origins.add(origin);
 
   return Array.from(origins).join(",");
 }
 
-export function buildDevAutoConfig({
-  frontendPort,
-  apiPort,
-  baseEnv = {},
-}) {
-  const frontendUrl = `http://localhost:${frontendPort}`;
-  const apiUrl = `http://localhost:${apiPort}/api`;
-  const corsAllowedOrigins = buildCorsAllowedOrigins(
-    baseEnv.CORS_ALLOWED_ORIGINS,
-    frontendUrl,
-  );
-  const betterAuthSecret =
-    baseEnv.BETTER_AUTH_SECRET ||
-    baseEnv.JWT_SECRET ||
-    "local-dev-better-auth-secret-32-chars";
-
+export function buildDevServerConfig({ port, baseEnv = {} }) {
+  const origin = `http://localhost:${port}`;
   return {
-    frontendPort,
-    apiPort,
-    frontendUrl,
-    apiUrl,
-    betterAuthSecret,
-    corsAllowedOrigins,
-    envOverrides: {
-      BETTER_AUTH_SECRET: betterAuthSecret,
-      FRONTEND_URL: frontendUrl,
-      CORS_ALLOWED_ORIGINS: corsAllowedOrigins,
-      PORT: String(frontendPort),
-      VITE_API_URL: apiUrl,
+    port,
+    origin,
+    bindings: {
+      FRONTEND_URL: origin,
+      CORS_ALLOWED_ORIGINS: buildCorsAllowedOrigins(baseEnv.CORS_ALLOWED_ORIGINS, origin),
+      BETTER_AUTH_SECRET: baseEnv.BETTER_AUTH_SECRET || baseEnv.JWT_SECRET || DEV_FALLBACK_AUTH_SECRET,
     },
   };
 }
 
-export async function isPortAvailable(port) {
+export function buildDevServerCommand({ config, baseEnv = {}, execPath = process.execPath }) {
+  return {
+    ...buildToolInvocation("next", ["dev", "--port", String(config.port)], { execPath }),
+    label: "Next.js",
+    env: {
+      ...baseEnv,
+      PORT: String(config.port),
+      [DEV_BINDINGS_VARIABLE]: JSON.stringify(config.bindings),
+    },
+  };
+}
+
+const PORT_PROBE_BINDS = [
+  { host: "127.0.0.1" },
+  { host: "::1" },
+  { host: "0.0.0.0" },
+  { host: "::", ipv6Only: false },
+];
+const PORT_PROBE_CONNECT_HOSTS = ["127.0.0.1", "::1"];
+const PORT_PROBE_CONNECT_TIMEOUT_MS = 500;
+const ADDRESS_THIS_MACHINE_LACKS_CODES = new Set(["EADDRNOTAVAIL", "EAFNOSUPPORT", "ENETUNREACH", "EPROTONOSUPPORT"]);
+
+function bindsAndClosesAgain(port, listenOptions) {
   return new Promise((resolve) => {
     const server = net.createServer();
-
-    server.once("error", () => {
-      resolve(false);
-    });
-
-    server.once("listening", () => {
-      server.close(() => resolve(true));
-    });
-
-    server.listen({
-      host: "::",
-      port,
-      exclusive: true,
-      ipv6Only: false,
-    });
+    server.once("error", (error) => resolve(ADDRESS_THIS_MACHINE_LACKS_CODES.has(error?.code)));
+    server.once("listening", () => server.close(() => resolve(true)));
+    server.listen({ ...listenOptions, port, exclusive: true });
   });
 }
 
-export function isProcessAlive(pid) {
+function acceptsConnection(port, host) {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const finish = (accepted) => {
+      socket.destroy();
+      resolve(accepted);
+    };
+    socket.setTimeout(PORT_PROBE_CONNECT_TIMEOUT_MS, () => finish(false));
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+export async function isPortAvailable(port) {
+  const accepted = await Promise.all(PORT_PROBE_CONNECT_HOSTS.map((host) => acceptsConnection(port, host)));
+  if (accepted.some(Boolean)) return false;
+  for (const listenOptions of PORT_PROBE_BINDS) {
+    if (!(await bindsAndClosesAgain(port, listenOptions))) return false;
+  }
+  return true;
+}
+
+export async function findOpenPort({
+  preferredPort = DEFAULT_DEV_PORT,
+  searchLimit = PORT_SEARCH_LIMIT,
+  portAvailabilityChecker = isPortAvailable,
+} = {}) {
+  for (let offset = 0; offset <= searchLimit; offset += 1) {
+    const port = preferredPort + offset;
+    if (await portAvailabilityChecker(port)) return port;
+  }
+
+  throw new Error(`Unable to find an open port from ${preferredPort} to ${preferredPort + searchLimit}.`);
+}
+
+export function isProcessAlive(pid, kill = (target, signal) => process.kill(target, signal)) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
   }
 
   try {
-    process.kill(pid, 0);
+    kill(pid, 0);
     return true;
-  } catch (error) {
-    return error?.code === "EPERM";
+  } catch {
+    return false;
   }
 }
 
-export async function findOpenPortPair({
-  preferredFrontendPort = DEFAULT_FRONTEND_PORT,
-  preferredApiPort = DEFAULT_API_PORT,
-  searchLimit = PORT_SEARCH_LIMIT,
-  portAvailabilityChecker = isPortAvailable,
-} = {}) {
-  for (let offset = 0; offset <= searchLimit; offset += 1) {
-    const frontendPort = preferredFrontendPort + offset;
-    const apiPort = preferredApiPort + offset;
-
-    const [frontendAvailable, apiAvailable] = await Promise.all([
-      portAvailabilityChecker(frontendPort),
-      portAvailabilityChecker(apiPort),
-    ]);
-
-    if (frontendAvailable && apiAvailable) {
-      return { frontendPort, apiPort };
-    }
+export async function isOwnedDevProcess(pid, startedAt, { isAlive = isProcessAlive, readInfo = readProcessInfo } = {}) {
+  if (normalizePid(pid) == null || normalizeStartedAt(startedAt) == null || !isAlive(pid)) {
+    return false;
   }
 
-  throw new Error(
-    `Unable to find an open frontend/API port pair starting at ${preferredFrontendPort}/${preferredApiPort}.`,
+  const info = await readInfo(pid);
+  return (
+    info != null &&
+    typeof info.commandLine === "string" &&
+    DEV_LAUNCHER_SCRIPT.test(info.commandLine) &&
+    Math.abs(info.startedAt - startedAt) <= START_TIME_TOLERANCE_MS
   );
 }
 
@@ -193,179 +210,56 @@ export function removeDevSession(sessionPath = DEV_SESSION_PATH) {
   }
 }
 
-export async function resolvePortPairForMode({
-  mode,
+export async function resolveDevServerPort({
   existingSession = null,
-  preferredFrontendPort = DEFAULT_FRONTEND_PORT,
-  preferredApiPort = DEFAULT_API_PORT,
+  preferredPort = DEFAULT_DEV_PORT,
   searchLimit = PORT_SEARCH_LIMIT,
   portAvailabilityChecker = isPortAvailable,
-  processLivenessChecker = isProcessAlive,
+  processLivenessChecker = isOwnedDevProcess,
 } = {}) {
   const session = normalizeDevSession(existingSession);
-
-  if (session && mode === "all") {
-    const allActive = await processLivenessChecker(session.allPid);
-
-    if (allActive) {
-      return {
-        frontendPort: session.frontendPort,
-        apiPort: session.apiPort,
-        source: "session",
-        roleAlreadyRunning: true,
-      };
-    }
+  if (session && (await processLivenessChecker(session.pid, session.startedAt))) {
+    return { port: session.port, running: true, pid: session.pid };
   }
-
-  if (session && mode !== "all") {
-    const [apiActive, allActive, frontendActive] = await Promise.all([
-      processLivenessChecker(session.apiPid),
-      processLivenessChecker(session.allPid),
-      processLivenessChecker(session.frontendPid),
-    ]);
-
-    const shouldReuse =
-      mode === "frontend"
-        ? frontendActive || apiActive || allActive
-        : apiActive || frontendActive || allActive;
-
-    if (shouldReuse) {
-      const roleAlreadyRunning =
-        mode === "frontend" ? frontendActive || allActive : apiActive || allActive;
-
-      return {
-        frontendPort: session.frontendPort,
-        apiPort: session.apiPort,
-        source: "session",
-        roleAlreadyRunning,
-      };
-    }
-  }
-
-  const openPair = await findOpenPortPair({
-    preferredFrontendPort,
-    preferredApiPort,
-    searchLimit,
-    portAvailabilityChecker,
-  });
 
   return {
-    ...openPair,
-    source: "open-pair",
-    roleAlreadyRunning: false,
+    port: await findOpenPort({ preferredPort, searchLimit, portAvailabilityChecker }),
+    running: false,
   };
 }
 
-export function buildDevSession({
-  existingSession = null,
-  role,
-  pid,
-  config,
-}) {
-  const previousSession = normalizeDevSession(existingSession);
-  const reusingExistingPair =
-    previousSession != null &&
-    previousSession.frontendPort === config.frontendPort &&
-    previousSession.apiPort === config.apiPort;
-  const nextSession = {
-    frontendPort: config.frontendPort,
-    apiPort: config.apiPort,
-    frontendPid: reusingExistingPair ? previousSession.frontendPid : null,
-    apiPid: reusingExistingPair ? previousSession.apiPid : null,
-    allPid: reusingExistingPair ? previousSession.allPid : null,
-  };
-
-  if (role === "all") {
-    nextSession.frontendPid = null;
-    nextSession.apiPid = null;
-    nextSession.allPid = pid;
-    return nextSession;
-  }
-
-  if (role === "frontend") {
-    nextSession.frontendPid = pid;
-  }
-
-  if (role === "api") {
-    nextSession.apiPid = pid;
-  }
-
-  return nextSession;
-}
-
-export function clearDevSessionRole({
-  existingSession,
-  role,
-  pid,
-}) {
-  const session = normalizeDevSession(existingSession);
-  if (!session) {
-    return null;
-  }
-
-  const nextSession = { ...session };
-
-  if (role === "all") {
-    if (pid == null || nextSession.allPid === pid) {
-      nextSession.allPid = null;
-    }
-  }
-
-  if (role === "frontend") {
-    if (pid == null || nextSession.frontendPid === pid) {
-      nextSession.frontendPid = null;
-    }
-  }
-
-  if (role === "api") {
-    if (pid == null || nextSession.apiPid === pid) {
-      nextSession.apiPid = null;
-    }
-  }
-
-  if (
-    nextSession.frontendPid == null &&
-    nextSession.apiPid == null &&
-    nextSession.allPid == null
-  ) {
-    return null;
-  }
-
-  return nextSession;
-}
-
-export function storeDevSession({
-  role,
-  pid,
-  config,
-  sessionPath = DEV_SESSION_PATH,
-}) {
-  const nextSession = buildDevSession({
-    existingSession: readDevSession(sessionPath),
-    role,
-    pid,
-    config,
-  });
-  writeDevSession(nextSession, sessionPath);
-  return nextSession;
-}
-
-export function releaseDevSession({
-  role,
-  pid,
-  sessionPath = DEV_SESSION_PATH,
-}) {
-  const nextSession = clearDevSessionRole({
-    existingSession: readDevSession(sessionPath),
-    role,
-    pid,
-  });
-
-  if (nextSession) {
-    writeDevSession(nextSession, sessionPath);
-    return nextSession;
-  }
-
+export function releaseDevSession({ pid, sessionPath = DEV_SESSION_PATH }) {
+  const session = readDevSession(sessionPath);
+  if (session && session.pid !== pid) return session;
   removeDevSession(sessionPath);
   return null;
+}
+
+export async function stopDevSession({
+  session,
+  isOwned = isOwnedDevProcess,
+  killTree = killPidTree,
+  removeSession = () => removeDevSession(),
+}) {
+  const result = { stopped: [], skipped: [], failed: [] };
+
+  try {
+    const { pid, startedAt } = session;
+    if (pid != null) {
+      if (!(await isOwned(pid, startedAt))) {
+        result.skipped.push(pid);
+      } else {
+        try {
+          killTree(pid);
+          result.stopped.push(pid);
+        } catch (error) {
+          result.failed.push({ pid, message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    }
+  } finally {
+    removeSession();
+  }
+
+  return result;
 }

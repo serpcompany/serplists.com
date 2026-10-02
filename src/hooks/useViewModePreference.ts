@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
+import { safeLocalStorage } from '@/lib/browserStorage';
 import {
   buildViewModePreferenceKey,
   readViewModePreference,
@@ -14,32 +15,30 @@ type UseViewModePreferenceOptions = {
   userId?: string;
 };
 
-const getBrowserStorage = (): Storage | undefined =>
-  typeof window === 'undefined' ? undefined : window.localStorage;
+const preferenceReaders = new Set<() => void>();
+const subscribe = (reader: () => void) => {
+  preferenceReaders.add(reader);
+  return () => {
+    preferenceReaders.delete(reader);
+  };
+};
 
 export const useViewModePreference = ({
   defaultValue = 'grid',
   surface,
   userId,
 }: UseViewModePreferenceOptions): [ViewMode, (value: ViewMode) => void] => {
-  const storageKey = useMemo(
-    () => buildViewModePreferenceKey(userId, surface),
-    [surface, userId],
+  const storageKey = buildViewModePreferenceKey(userId, surface);
+  const viewMode = useSyncExternalStore(
+    subscribe,
+    () => readViewModePreference(safeLocalStorage, storageKey, defaultValue),
+    () => defaultValue,
   );
-  const [viewMode, setViewModeState] = useState<ViewMode>(() =>
-    readViewModePreference(getBrowserStorage(), storageKey, defaultValue),
-  );
-
-  useEffect(() => {
-    setViewModeState(
-      readViewModePreference(getBrowserStorage(), storageKey, defaultValue),
-    );
-  }, [defaultValue, storageKey]);
 
   const setViewMode = useCallback(
     (value: ViewMode) => {
-      setViewModeState(value);
-      writeViewModePreference(getBrowserStorage(), storageKey, value);
+      writeViewModePreference(safeLocalStorage, storageKey, value);
+      preferenceReaders.forEach((reread) => reread());
     },
     [storageKey],
   );

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 export const REQUIRED_D1_SCHEMA = Object.freeze({
   sitemap_revisions: ["kind", "revised_at"],
   sitemap_profile_revisions: ["user_id", "revised_at"],
@@ -76,6 +78,7 @@ export const REQUIRED_D1_SCHEMA = Object.freeze({
     "created_at",
     "updated_at",
     "deleted_at",
+    "content_version",
   ],
   checklist_runs: [
     "id",
@@ -99,6 +102,9 @@ export const REQUIRED_D1_SCHEMA = Object.freeze({
     "updated_at",
     "deleted_at",
     "progress",
+    "template_version",
+    "revision",
+    "retired_items",
   ],
   template_likes: [
     "user_id",
@@ -246,6 +252,13 @@ export const REQUIRED_D1_FOREIGN_KEYS = Object.freeze({
 });
 
 export const REQUIRED_D1_INDEXES = Object.freeze({
+  users: [
+    { name: "idx_users_email" },
+    { name: "idx_users_username", unique: true },
+  ],
+  account: [{ name: "account_user_id_idx" }],
+  session: [{ name: "session_user_id_idx" }],
+  verification: [{ name: "verification_identifier_idx" }],
   templates: [
     { name: "idx_templates_slug_unique", unique: true },
     { name: "idx_templates_public_created_at" },
@@ -253,8 +266,18 @@ export const REQUIRED_D1_INDEXES = Object.freeze({
     { name: "idx_templates_team_id" },
   ],
   checklist_runs: [
+    { name: "idx_checklist_runs_user_id" },
+    { name: "idx_checklist_runs_share_token" },
     { name: "idx_checklist_runs_team_id" },
     { name: "idx_checklist_runs_template_owner" },
+  ],
+  usage_analytics: [
+    { name: "idx_usage_analytics_user_id" },
+    { name: "idx_usage_analytics_action" },
+  ],
+  stripe_subscriptions: [
+    { name: "stripe_subscriptions_user_id_idx" },
+    { name: "stripe_subscriptions_customer_id_idx" },
   ],
   teams: [
     { name: "idx_teams_slug_unique", unique: true, partial: true },
@@ -283,6 +306,50 @@ export const REQUIRED_D1_INDEXES = Object.freeze({
     { name: "idx_personal_run_keys_key_hash_unique", unique: true },
   ],
 });
+
+function loadSqlOnlyTriggers() {
+  const manifest = JSON.parse(readFileSync(new URL("../db/sql-only-schema.json", import.meta.url), "utf8"));
+  const triggers = manifest?.triggers;
+  const valid =
+    Array.isArray(triggers) &&
+    triggers.every((trigger) =>
+      ["name", "table", "definition"].every((key) => typeof trigger?.[key] === "string" && trigger[key] !== ""),
+    );
+  if (!valid) {
+    throw new Error("db/sql-only-schema.json must list triggers as { name, table, definition } strings.");
+  }
+  return triggers.map(({ name, table, definition }) => Object.freeze({ name, table, definition }));
+}
+
+export const REQUIRED_D1_TRIGGERS = Object.freeze(loadSqlOnlyTriggers());
+
+const TRIGGER_QUERY = "SELECT name, tbl_name, sql FROM sqlite_master WHERE type = 'trigger';";
+
+export function buildSchemaQuery(tableNames) {
+  const pragmas = (pragma) => tableNames.map((tableName) => `pragma ${pragma}('${tableName}');`);
+  return [
+    ...pragmas("table_info"),
+    ...pragmas("index_list"),
+    ...pragmas("foreign_key_list"),
+    TRIGGER_QUERY,
+  ].join(" ");
+}
+
+export function splitSchemaQueryResults(tableNames, wranglerResults) {
+  const count = tableNames.length;
+  const expected = count * 3 + 1;
+  if (!Array.isArray(wranglerResults) || wranglerResults.length !== expected) {
+    const actual = Array.isArray(wranglerResults) ? wranglerResults.length : "no";
+    throw new Error(`Wrangler returned ${actual} result sets; expected ${expected} result sets.`);
+  }
+
+  return {
+    tableResults: wranglerResults.slice(0, count),
+    indexResults: wranglerResults.slice(count, count * 2),
+    foreignKeyResults: wranglerResults.slice(count * 2, count * 3),
+    triggerResult: wranglerResults[count * 3],
+  };
+}
 
 export function mapPragmaResults(tableNames, wranglerResults) {
   return Object.fromEntries(
@@ -495,8 +562,70 @@ export function diffD1Schema(
   };
 }
 
+export function normalizeSqlFormatting(value) {
+  return String(value ?? "")
+    .trim()
+    .replaceAll("`", "")
+    .replaceAll('"', "")
+    .replace(/\s+/g, " ");
+}
+
+export function mapTriggerResults(wranglerResult) {
+  const rows = Array.isArray(wranglerResult?.results) ? wranglerResult.results : [];
+  return Object.fromEntries(
+    rows
+      .filter((row) => typeof row?.name === "string")
+      .map((row) => [
+        row.name,
+        {
+          table: typeof row.tbl_name === "string" ? row.tbl_name : "",
+          definition: normalizeSqlFormatting(row.sql),
+        },
+      ]),
+  );
+}
+
+export function diffD1Triggers(requiredTriggers, actualTriggersByName) {
+  const missingTriggers = [];
+  const invalidTriggers = [];
+
+  for (const requiredTrigger of requiredTriggers) {
+    const actualTrigger = actualTriggersByName[requiredTrigger.name];
+    if (!actualTrigger) {
+      missingTriggers.push(requiredTrigger.name);
+      continue;
+    }
+
+    const issues = [];
+    if (actualTrigger.table !== requiredTrigger.table) {
+      issues.push(`expected on ${requiredTrigger.table}, found on ${actualTrigger.table || "no table"}`);
+    }
+    if (actualTrigger.definition !== normalizeSqlFormatting(requiredTrigger.definition)) {
+      issues.push("definition differs from db/sql-only-schema.json");
+    }
+    if (issues.length > 0) invalidTriggers.push({ name: requiredTrigger.name, issues });
+  }
+
+  return { missingTriggers, invalidTriggers };
+}
+
+export function hasSchemaDrift(diff) {
+  const hasEntries = (value) => (Array.isArray(value) ? value.length > 0 : Object.keys(value ?? {}).length > 0);
+  return [
+    diff.missingTables,
+    diff.missingColumns,
+    diff.missingIndexes,
+    diff.invalidIndexes,
+    diff.invalidColumns,
+    diff.missingForeignKeys,
+    diff.invalidForeignKeys,
+    diff.missingTriggers,
+    diff.invalidTriggers,
+  ].some(hasEntries);
+}
+
 export function formatSchemaDrift(diff, databaseName) {
-  const lines = [`Production D1 schema drift detected for ${databaseName}.`];
+  const lines = [`D1 schema drift detected for ${databaseName}.`];
 
   for (const tableName of diff.missingTables) {
     lines.push(`- missing table: ${tableName}`);
@@ -531,6 +660,14 @@ export function formatSchemaDrift(diff, databaseName) {
     for (const invalidForeignKey of invalidForeignKeys) {
       lines.push(`- ${tableName}: invalid foreign key ${invalidForeignKey.name} (${invalidForeignKey.issues.join("; ")})`);
     }
+  }
+
+  for (const triggerName of diff.missingTriggers ?? []) {
+    lines.push(`- missing trigger: ${triggerName}`);
+  }
+
+  for (const invalidTrigger of diff.invalidTriggers ?? []) {
+    lines.push(`- invalid trigger ${invalidTrigger.name} (${invalidTrigger.issues.join("; ")})`);
   }
 
   lines.push("Apply the required checked-in D1 migrations before deploying.");

@@ -2,76 +2,143 @@ export interface ImageOptimizationOptions {
   maxWidth?: number;
   maxHeight?: number;
   quality?: number;
-  format?: 'jpeg' | 'png' | 'webp';
 }
+
+type EncodedImageType = 'image/png' | 'image/jpeg' | 'image/webp';
+
+export type ImageUploadPlan =
+  | { action: 'keep' }
+  | {
+      action: 'encode';
+      mimeType: EncodedImageType;
+      width: number;
+      height: number;
+      resized: boolean;
+    };
+
+const KEEP_ORIGINAL_MAX_BYTES = 1024 * 1024;
+
+const REENCODED_IN_OWN_FORMAT: Record<string, EncodedImageType> = {
+  'image/png': 'image/png',
+  'image/jpeg': 'image/jpeg',
+  'image/webp': 'image/webp',
+};
+
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpeg',
+  'image/webp': 'webp',
+};
+
+export const planImageUpload = (
+  source: { type: string; size: number; width: number; height: number },
+  limits: { maxWidth: number; maxHeight: number },
+): ImageUploadPlan => {
+  if (source.type === 'image/gif') {
+    return { action: 'keep' };
+  }
+
+  const scale = Math.min(1, limits.maxWidth / source.width, limits.maxHeight / source.height);
+  const resized = scale < 1;
+  const sameFormat = REENCODED_IN_OWN_FORMAT[source.type];
+
+  if (sameFormat && !resized && source.size <= KEEP_ORIGINAL_MAX_BYTES) {
+    return { action: 'keep' };
+  }
+
+  return {
+    action: 'encode',
+    mimeType: sameFormat ?? 'image/png',
+    width: Math.max(1, Math.round(source.width * scale)),
+    height: Math.max(1, Math.round(source.height * scale)),
+    resized,
+  };
+};
+
+const renameForType = (name: string, sourceType: string, type: string): string => {
+  const extension = EXTENSION_BY_TYPE[type];
+  const hasExtension = /\.[^/.]+$/.test(name);
+  if (!extension || (type === sourceType && hasExtension)) {
+    return name;
+  }
+
+  const base = name.replace(/\.[^/.]+$/, '');
+  return `${base || 'image'}.${extension}`;
+};
+
+const loadImage = (file: File): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    const src = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(src);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(src);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = src;
+  });
+
+const encodeCanvas = (
+  canvas: HTMLCanvasElement,
+  type: EncodedImageType,
+  quality: number,
+): Promise<Blob> =>
+  new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Failed to optimize image'))),
+      type,
+      quality,
+    );
+  });
 
 export const optimizeImage = async (
   file: File,
-  options: ImageOptimizationOptions = {}
+  options: ImageOptimizationOptions = {},
 ): Promise<File> => {
-  const {
-    maxWidth = 1920,
-    maxHeight = 1080,
-    quality = 0.8,
-    format = 'jpeg'
-  } = options;
+  const { maxWidth = 1920, maxHeight = 1080, quality = 0.8 } = options;
 
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
+  if (file.type === 'image/gif') {
+    return file;
+  }
 
-    if (!ctx) {
-      reject(new Error('Could not get canvas context'));
-      return;
-    }
+  const img = await loadImage(file);
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  if (!width || !height) {
+    throw new Error('Image has no size');
+  }
 
-    img.onload = () => {
-      // Calculate new dimensions
-      let { width, height } = img;
-      
-      if (width > maxWidth || height > maxHeight) {
-        const ratio = Math.min(maxWidth / width, maxHeight / height);
-        width *= ratio;
-        height *= ratio;
-      }
+  const plan = planImageUpload(
+    { type: file.type, size: file.size, width, height },
+    { maxWidth, maxHeight },
+  );
+  if (plan.action === 'keep') {
+    return file;
+  }
 
-      // Set canvas dimensions
-      canvas.width = width;
-      canvas.height = height;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
 
-      // Draw and compress image
-      ctx.drawImage(img, 0, 0, width, height);
+  canvas.width = plan.width;
+  canvas.height = plan.height;
+  ctx.drawImage(img, 0, 0, plan.width, plan.height);
 
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error('Failed to optimize image'));
-            return;
-          }
+  const blob = await encodeCanvas(canvas, plan.mimeType, quality);
+  if (!plan.resized && REENCODED_IN_OWN_FORMAT[file.type] && blob.size >= file.size) {
+    return file;
+  }
 
-          // Create new file with optimized blob
-          const optimizedFile = new File(
-            [blob],
-            file.name.replace(/\.[^/.]+$/, `.${format}`),
-            {
-              type: `image/${format}`,
-              lastModified: Date.now()
-            }
-          );
-
-          resolve(optimizedFile);
-        },
-        `image/${format}`,
-        quality
-      );
-    };
-
-    img.onerror = () => {
-      reject(new Error('Failed to load image'));
-    };
-
-    img.src = URL.createObjectURL(file);
+  const encodedType = blob.type || plan.mimeType;
+  return new File([blob], renameForType(file.name, file.type, encodedType), {
+    type: encodedType,
+    lastModified: Date.now(),
   });
 };
 
@@ -82,17 +149,18 @@ export const isImageFile = (file: File): boolean => {
 export const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    
+    const objectUrl = URL.createObjectURL(file);
+
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
       resolve({ width: img.width, height: img.height });
-      URL.revokeObjectURL(img.src);
     };
-    
+
     img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
       reject(new Error('Failed to load image'));
-      URL.revokeObjectURL(img.src);
     };
-    
-    img.src = URL.createObjectURL(file);
+
+    img.src = objectUrl;
   });
 };

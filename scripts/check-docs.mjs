@@ -1,27 +1,26 @@
 #!/usr/bin/env node
-// Mechanical checks for the repository knowledge base (AGENTS.md, root docs, docs/**).
-// - the root and docs/ follow the fixed layout (see DOCS_LAYOUT)
-// - relative Markdown links (and #anchors into Markdown files) resolve
-// - backticked repository paths such as `src/lib/api.ts` exist
-// - every docs/**/*.md page is reachable from AGENTS.md or README.md
-// - design docs and product specs are catalogued in their index.md
-// - AGENTS.md stays a short map rather than an encyclopedia
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import yaml from "js-yaml";
+import { directoriesAFreshCheckoutLacks } from "./lib/repo-files.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_DOCS = ["AGENTS.md", "ARCHITECTURE.md", "README.md"];
+const SKILLS_DIR = ".claude/skills";
+const SKILLS_CATALOG = "docs/design-docs/agent-workflow.md";
+const AGENT_SKILLS_DESCRIPTION_LIMIT = 1024;
 const ENTRY_POINTS = ["AGENTS.md", "README.md"];
-// The only entries allowed directly under docs/.
-const DOCS_LAYOUT = [
+const DOCS_TOP_LEVEL_ENTRIES = [
   "design-docs", "exec-plans", "generated", "product-specs", "references",
   "DESIGN.md", "FRONTEND.md", "PLANS.md", "PRODUCT_SENSE.md", "QUALITY_SCORE.md", "RELIABILITY.md", "SECURITY.md",
 ];
 const DESIGN_DOC_STATUSES = new Set(["current", "accepted", "historical", "draft"]);
 const AGENTS_MAX_LINES = 120;
-const PATH_PREFIXES = ["src/", "functions/", "scripts/", "db/", "tests/", "docs/", ".github/"];
+const PATH_PREFIXES = ["src/", "functions/", "scripts/", "db/", "tests/", "docs/", ".github/", ".claude/", ".mcp.json"];
+const LINK_WITH_A_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+const GLOB_PLACEHOLDER_OR_COMMAND = /[*<>{}\s]|\.\.\./;
 
 function walkMarkdown(dir) {
   return readdirSync(path.join(repoRoot, dir), { withFileTypes: true }).flatMap((entry) => {
@@ -65,28 +64,52 @@ function lineOf(text, index) {
   return text.slice(0, index).split("\n").length;
 }
 
-const files = [...ROOT_DOCS.filter((file) => existsSync(path.join(repoRoot, file))), ...walkMarkdown("docs")];
+function gitIgnored(paths) {
+  return new Set(
+    paths.length === 0
+      ? []
+      : spawnSync("git", ["check-ignore", "--stdin"], { cwd: repoRoot, encoding: "utf8", input: paths.join("\n") })
+          .stdout.split("\n").filter(Boolean),
+  );
+}
+
+const files = [
+  ...ROOT_DOCS.filter((file) => existsSync(path.join(repoRoot, file))),
+  ...walkMarkdown("docs"),
+  ...(existsSync(path.join(repoRoot, SKILLS_DIR)) ? walkMarkdown(SKILLS_DIR) : []),
+];
+const packageScripts = new Set(Object.keys(JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")).scripts ?? {}));
 const errors = [];
 const linkGraph = new Map();
 let linksChecked = 0;
 let pathsChecked = 0;
+let scriptsChecked = 0;
 const missingPaths = [];
+const directoryPaths = [];
 
 for (const file of files) {
-  const text = stripFencedCode(readFileSync(path.join(repoRoot, file), "utf8"));
+  const markdown = readFileSync(path.join(repoRoot, file), "utf8");
+  const outsideCodeBlocks = stripFencedCode(markdown);
   const targets = new Set();
   linkGraph.set(file, targets);
 
-  for (const match of text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+  for (const match of markdown.matchAll(/\bpnpm run ([a-z][\w:.-]*\w)/g)) {
+    scriptsChecked += 1;
+    if (!packageScripts.has(match[1])) {
+      errors.push(`${file}:${lineOf(markdown, match.index)} runs "pnpm run ${match[1]}", but package.json has no "${match[1]}" script. Name an existing script, or update the command if the script was renamed.`);
+    }
+  }
+
+  for (const match of outsideCodeBlocks.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
     const raw = match[1];
-    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) continue; // http:, https:, mailto:
+    if (LINK_WITH_A_SCHEME.test(raw)) continue;
     const [rawTarget, anchor] = raw.split("#");
     const target = decodeURIComponent(rawTarget);
     const resolved = target === ""
       ? file
       : path.posix.normalize(target.startsWith("/") ? target.slice(1) : path.posix.join(path.posix.dirname(file), target));
     linksChecked += 1;
-    const where = `${file}:${lineOf(text, match.index)}`;
+    const where = `${file}:${lineOf(outsideCodeBlocks, match.index)}`;
     if (!existsSync(path.join(repoRoot, resolved))) {
       errors.push(`${where} links to "${raw}", but ${resolved} does not exist. Fix the link, or if the file moved, update every reference to it.`);
       continue;
@@ -100,31 +123,33 @@ for (const file of files) {
     }
   }
 
-  for (const match of text.matchAll(/`([^`\n]+)`/g)) {
+  for (const match of outsideCodeBlocks.matchAll(/`([^`\n]+)`/g)) {
     const candidate = match[1].trim().replace(/[.,;:]+$/, "").replace(/:\d+(-\d+)?$/, "");
     if (!PATH_PREFIXES.some((prefix) => candidate.startsWith(prefix))) continue;
-    if (/[*<>{}\s]|\.\.\./.test(candidate)) continue; // globs, placeholders, commands
+    if (GLOB_PLACEHOLDER_OR_COMMAND.test(candidate)) continue;
     pathsChecked += 1;
+    const where = `${file}:${lineOf(outsideCodeBlocks, match.index)}`;
     if (!existsSync(path.join(repoRoot, candidate))) {
-      missingPaths.push({ candidate, where: `${file}:${lineOf(text, match.index)}` });
+      missingPaths.push({ candidate, where });
+    } else if (statSync(path.join(repoRoot, candidate)).isDirectory()) {
+      directoryPaths.push({ candidate, where });
     }
   }
 }
 
-// Gitignored paths (test output, logs) are generated at runtime and may legitimately be absent.
-const ignored = new Set(
-  missingPaths.length === 0
-    ? []
-    : spawnSync("git", ["check-ignore", "--stdin"], {
-        cwd: repoRoot,
-        encoding: "utf8",
-        input: missingPaths.map(({ candidate }) => candidate).join("\n"),
-      }).stdout.split("\n").filter(Boolean),
-);
-for (const { candidate, where } of missingPaths) {
-  if (!ignored.has(candidate)) {
-    errors.push(`${where} references \`${candidate}\`, which does not exist. Update the path or remove the stale reference.`);
-  }
+const directoriesNotCheckedOut = directoriesAFreshCheckoutLacks(repoRoot, [...new Set(directoryPaths.map(({ candidate }) => candidate))]);
+for (const { candidate, where } of directoryPaths) {
+  if (directoriesNotCheckedOut.has(candidate)) missingPaths.push({ candidate, where, untracked: true });
+}
+
+const runtimeOutputs = gitIgnored(missingPaths.map(({ candidate }) => candidate));
+for (const { candidate, where, untracked } of missingPaths) {
+  if (runtimeOutputs.has(candidate)) continue;
+  errors.push(
+    untracked
+      ? `${where} references \`${candidate}\`, which holds no file git tracks, so a fresh checkout will not have it. If the folder should stay, commit a .gitkeep in it; otherwise update the reference.`
+      : `${where} references \`${candidate}\`, which does not exist. Update the path or remove the stale reference.`,
+  );
 }
 
 const reachable = new Set();
@@ -143,28 +168,23 @@ for (const file of files) {
   }
 }
 
-// Layout: root Markdown files and docs/ entries.
-const gitIgnored = (paths) => new Set(
-  paths.length === 0
-    ? []
-    : spawnSync("git", ["check-ignore", "--stdin"], { cwd: repoRoot, encoding: "utf8", input: paths.join("\n") })
-        .stdout.split("\n").filter(Boolean),
-);
-const rootMarkdown = readdirSync(repoRoot).filter((name) => name.endsWith(".md"));
-const ignoredRoot = gitIgnored(rootMarkdown);
-for (const name of rootMarkdown) {
-  if (!ROOT_DOCS.includes(name) && !ignoredRoot.has(name)) {
-    errors.push(`${name} is not an allowed root document (${ROOT_DOCS.join(", ")}). Move its content into docs/ (for example docs/PRODUCT_SENSE.md or a design doc) and link it from AGENTS.md.`);
+function checkLayout() {
+  const rootMarkdown = readdirSync(repoRoot).filter((name) => name.endsWith(".md"));
+  const ignoredRoot = gitIgnored(rootMarkdown);
+  for (const name of rootMarkdown) {
+    if (!ROOT_DOCS.includes(name) && !ignoredRoot.has(name)) {
+      errors.push(`${name} is not an allowed root document (${ROOT_DOCS.join(", ")}). Move its content into docs/ (for example docs/PRODUCT_SENSE.md or a design doc) and link it from AGENTS.md.`);
+    }
+  }
+  for (const name of readdirSync(path.join(repoRoot, "docs"))) {
+    if (!DOCS_TOP_LEVEL_ENTRIES.includes(name)) {
+      errors.push(`docs/${name} is outside the docs layout. Allowed entries: ${DOCS_TOP_LEVEL_ENTRIES.join(", ")}. Put design and runbook material in docs/design-docs/, user-facing behavior in docs/product-specs/, and third-party docs in docs/references/.`);
+    }
   }
 }
-for (const name of readdirSync(path.join(repoRoot, "docs"))) {
-  if (!DOCS_LAYOUT.includes(name)) {
-    errors.push(`docs/${name} is outside the docs layout. Allowed entries: ${DOCS_LAYOUT.join(", ")}. Put design and runbook material in docs/design-docs/, user-facing behavior in docs/product-specs/, and third-party docs in docs/references/.`);
-  }
-}
+checkLayout();
 
-// Catalogs: every design doc and product spec is listed in its folder's index.md.
-function checkCatalog(dir, { requireStatus }) {
+function checkIndexListsEveryDoc(dir, { requireStatus }) {
   const indexPath = `${dir}/index.md`;
   if (!existsSync(path.join(repoRoot, indexPath))) {
     errors.push(`${indexPath} is missing. Create it and list every document in ${dir}/.`);
@@ -186,8 +206,40 @@ function checkCatalog(dir, { requireStatus }) {
     }
   }
 }
-checkCatalog("docs/design-docs", { requireStatus: true });
-checkCatalog("docs/product-specs", { requireStatus: false });
+checkIndexListsEveryDoc("docs/design-docs", { requireStatus: true });
+checkIndexListsEveryDoc("docs/product-specs", { requireStatus: false });
+
+function checkSkills() {
+  if (!existsSync(path.join(repoRoot, SKILLS_DIR))) return;
+  const catalog = readFileSync(path.join(repoRoot, SKILLS_CATALOG), "utf8");
+  for (const entry of readdirSync(path.join(repoRoot, SKILLS_DIR), { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const skillFile = `${SKILLS_DIR}/${entry.name}/SKILL.md`;
+    if (!existsSync(path.join(repoRoot, skillFile))) {
+      errors.push(`${SKILLS_DIR}/${entry.name}/ has no SKILL.md. Add one, or delete the folder.`);
+      continue;
+    }
+    const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(readFileSync(path.join(repoRoot, skillFile), "utf8"))?.[1];
+    let fields = {};
+    try {
+      fields = yaml.load(frontmatter ?? "") ?? {};
+    } catch (error) {
+      errors.push(`${skillFile}: its frontmatter is not valid YAML (${error.message.split("\n")[0]}).`);
+    }
+    if (fields.name !== entry.name) {
+      errors.push(`${skillFile}: set "name: ${entry.name}" in its frontmatter, the name of its folder.`);
+    }
+    if (typeof fields.description !== "string" || fields.description.trim() === "") {
+      errors.push(`${skillFile}: add a frontmatter description saying what the skill does and when to use it; Claude reads it to decide when to load the skill.`);
+    } else if (fields.description.length > AGENT_SKILLS_DESCRIPTION_LIMIT) {
+      errors.push(`${skillFile}: its description has ${fields.description.length} characters (limit ${AGENT_SKILLS_DESCRIPTION_LIMIT}). Move detail into the body.`);
+    }
+    if (!catalog.includes(`](../../${skillFile})`)) {
+      errors.push(`${skillFile} is not listed in ${SKILLS_CATALOG}. Add it to the skills table under Agent tooling.`);
+    }
+  }
+}
+checkSkills();
 
 const agentsLines = readFileSync(path.join(repoRoot, "AGENTS.md"), "utf8").trimEnd().split("\n").length;
 if (agentsLines > AGENTS_MAX_LINES) {
@@ -203,4 +255,4 @@ if (errors.length > 0) {
   console.error(`\nDocs check failed with ${errors.length} problem(s).`);
   process.exit(1);
 }
-console.log(`Docs OK: ${files.length} files, ${linksChecked} links, ${pathsChecked} repository paths, ${reachable.size} pages reachable.`);
+console.log(`Docs OK: ${files.length} files, ${linksChecked} links, ${pathsChecked} repository paths, ${scriptsChecked} script commands, ${reachable.size} pages reachable.`);

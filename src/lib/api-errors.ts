@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const DEFAULT_ERROR_PREFIX = "HTTP";
 
 type ApiErrorPayload = {
@@ -44,24 +46,63 @@ export const getApiErrorMessage = (error: unknown, fallbackMessage: string): str
   return error instanceof Error && error.message ? error.message : fallbackMessage;
 };
 
+export const isNotFoundError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 404;
+};
+
 export const isAuthRequiredError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.status === 401;
 };
 
+export type LimitContext = "personal" | "organization";
+
+const limitReachedDetailsSchema = z.object({
+  context: z.enum(["personal", "organization"]),
+});
+
+export const getLimitContext = (error: ApiError): LimitContext | null => {
+  const parsed = limitReachedDetailsSchema.safeParse(error.details);
+  return parsed.success ? parsed.data.context : null;
+};
+
+const isPersonalLimitReached = (error: ApiError): boolean =>
+  error.code === "limit_reached" && getLimitContext(error) !== "organization";
+
 export const isUpgradeRequiredError = (error: unknown): error is ApiError => {
-  return isApiError(error)
-    && error.status === 403
-    && (error.code === "upgrade_required" || error.code === "limit_reached");
+  if (!isApiError(error) || error.status !== 403) {
+    return false;
+  }
+
+  return error.code === "upgrade_required" || isPersonalLimitReached(error);
+};
+
+export const isEditConflictError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "edit_conflict";
 };
 
 export const isBillingUnavailableError = (error: unknown): error is ApiError => {
   return isApiError(error) && error.code === "billing_unavailable";
 };
 
+export const isSubscriptionNeedsAttentionError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "subscription_needs_attention";
+};
+
+export const isOpenSubscriptionConflictError = (error: unknown): error is ApiError => {
+  return isApiError(error)
+    && error.status === 409
+    && (error.code === "already_subscribed" || error.code === "subscription_needs_attention");
+};
+
+export const isBillingCustomerMissingError = (error: unknown): error is ApiError => {
+  return isApiError(error) && error.status === 409 && error.code === "billing_customer_missing";
+};
+
 export type AccessFailure =
   | { kind: "auth_required"; message: string }
   | { kind: "upgrade_required"; message: string }
   | { kind: "billing_unavailable"; message: string }
+  | { kind: "subscription_needs_attention"; message: string }
   | { kind: "error"; message: string };
 
 export const getAccessFailure = (error: unknown, fallbackMessage: string): AccessFailure => {
@@ -78,6 +119,13 @@ export const getAccessFailure = (error: unknown, fallbackMessage: string): Acces
 
   if (isBillingUnavailableError(error)) {
     return { kind: "billing_unavailable", message: BILLING_UNAVAILABLE_MESSAGE };
+  }
+
+  if (isSubscriptionNeedsAttentionError(error)) {
+    return {
+      kind: "subscription_needs_attention",
+      message: getApiErrorMessage(error, "Your Pro subscription needs attention."),
+    };
   }
 
   return { kind: "error", message: getApiErrorMessage(error, fallbackMessage) };

@@ -1,9 +1,9 @@
-import { loadLocalEnv } from "./_env.mjs";
+import { loadLocalEnv, resolveTestSecretKey, TEST_SECRET_KEY_HINT } from "./_env.mjs";
 
 const env = loadLocalEnv();
 const mode = process.argv.includes("--test") ? "test" : "live";
 const secretKey = mode === "test"
-  ? env.STRIPE_TEST_SECRET_KEY ?? env.STRIPE_SECRET_KEY_TEST
+  ? resolveTestSecretKey(env)
   : process.env.STRIPE_LIVE_SECRET_KEY ??
     process.env.STRIPE_SECRET_KEY_LIVE ??
     (process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? process.env.STRIPE_SECRET_KEY : undefined);
@@ -12,7 +12,7 @@ if (!secretKey || !secretKey.startsWith(`sk_${mode}_`)) {
   throw new Error(
     mode === "live"
       ? "Live mode requires STRIPE_LIVE_SECRET_KEY injected through the process environment."
-      : "Missing Stripe test secret key in the local environment.",
+      : `Missing Stripe test secret key in the local environment. ${TEST_SECRET_KEY_HINT}`,
   );
 }
 
@@ -42,7 +42,7 @@ if (!configuration) {
   const form = new URLSearchParams();
   const values = {
     "business_profile[headline]": "Manage your SERP Lists Pro subscription",
-    default_return_url: "https://serplists.com/account",
+    default_return_url: "https://serplists.com/dashboard/settings/",
     "features[customer_update][enabled]": "true",
     "features[invoice_history][enabled]": "true",
     "features[payment_method_update][enabled]": "true",

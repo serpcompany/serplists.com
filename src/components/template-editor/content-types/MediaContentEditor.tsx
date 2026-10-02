@@ -1,13 +1,16 @@
-import { Label } from "@/components/ui/label";
-import { FileUpload } from "@/components/ui/file-upload";
-import { Image, Video, File } from "lucide-react";
+import { FieldLegend, FieldSet } from "@/components/ui/field";
+import { FileUpload, type FileUploadChange } from "@/components/ui/file-upload";
+import { useAuth } from "@/contexts/CloudflareAuthContext";
+import type { UploadResult } from "@/lib/utils/fileUpload";
+import { File, ImageIcon, Video } from "lucide-react";
 
 interface MediaContentEditorProps {
   type: 'image' | 'video' | 'file';
   value: string;
   fileName?: string;
   onValueChange: (value: string) => void;
-  onFileInfoChange: (fileName?: string, fileSize?: number) => void;
+  onFileChange: (change: FileUploadChange) => void;
+  onUploadStart?: (upload: Promise<UploadResult>) => void;
 }
 
 export const MediaContentEditor = ({ 
@@ -15,13 +18,16 @@ export const MediaContentEditor = ({
   value, 
   fileName, 
   onValueChange, 
-  onFileInfoChange 
+  onFileChange,
+  onUploadStart,
 }: MediaContentEditorProps) => {
+  const { user } = useAuth();
+
   const getIcon = () => {
     switch (type) {
-      case 'image': return <Image className="h-4 w-4" />;
-      case 'video': return <Video className="h-4 w-4" />;
-      case 'file': return <File className="h-4 w-4" />;
+      case 'image': return <ImageIcon className="size-4" />;
+      case 'video': return <Video className="size-4" />;
+      case 'file': return <File className="size-4" />;
     }
   };
 
@@ -30,18 +36,20 @@ export const MediaContentEditor = ({
   };
 
   return (
-    <div>
-      <Label className="flex items-center gap-2 mb-3">
+    <FieldSet className="gap-3">
+      <FieldLegend className="mb-0 flex items-center gap-2" variant="label">
         {getIcon()}
         {getLabel()}
-      </Label>
+      </FieldLegend>
       <FileUpload
         type={type}
         value={value}
         fileName={fileName}
+        signedIn={Boolean(user)}
         onValueChange={onValueChange}
-        onFileInfoChange={onFileInfoChange}
+        onFileChange={onFileChange}
+        onUploadStart={onUploadStart}
       />
-    </div>
+    </FieldSet>
   );
 };

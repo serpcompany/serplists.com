@@ -1,6 +1,3 @@
--- Team/workspace foundations plus DB-backed history.
--- These tables are intentionally D1-only and avoid new paid services.
-
 CREATE TABLE teams (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

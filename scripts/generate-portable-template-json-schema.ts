@@ -4,6 +4,7 @@ import {
   PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH,
   buildPortableTemplatePackJsonSchema,
 } from "../src/lib/schemas/portableTemplateJsonSchema";
+import { matchesGeneratedText } from "./lib/line-endings.mjs";
 
 const outputPath = path.join(process.cwd(), PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH);
 const nextJson = `${JSON.stringify(buildPortableTemplatePackJsonSchema(), null, 2)}\n`;
@@ -21,7 +22,7 @@ const run = async () => {
   }
 
   if (checkOnly) {
-    if (currentJson !== nextJson) {
+    if (!matchesGeneratedText(currentJson, nextJson)) {
       throw new Error(`Portable template JSON Schema artifact is out of date: ${PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH}`);
     }
 

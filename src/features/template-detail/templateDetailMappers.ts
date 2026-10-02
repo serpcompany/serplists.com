@@ -1,4 +1,7 @@
 import { resolvePublicTemplateOwnerSlug } from '@/lib/routes';
+import { resolveTemplateDestinationTeamId } from '@/lib/templateDestination';
+import { readApiTemplateTeamId } from '@/lib/templates/apiTemplateOwner';
+import { buildDuplicateTemplateTitle } from '@/lib/templates/duplicateTemplateTitle';
 import {
   isSectionsShape,
   normalizeSections as normalizeChecklistSections,
@@ -76,11 +79,16 @@ export const mapApiTemplateToChecklistTemplate = (
     categories,
     tags: asStringArray(foundTemplate.tags) ?? [],
     userId: String(foundTemplate.user_id || ''),
+    teamId: readApiTemplateTeamId(foundTemplate),
     createdAt: String(foundTemplate.created_at || ''),
     updatedAt: String(foundTemplate.updated_at || foundTemplate.created_at || ''),
     isPublic: Boolean(foundTemplate.is_public),
     slug: asString(foundTemplate.slug) ?? fallbackSlug,
     version: typeof foundTemplate.version === 'number' ? foundTemplate.version : 1,
+    ownerType:
+      foundTemplate.owner_type === 'team' || foundTemplate.owner_type === 'user'
+        ? foundTemplate.owner_type
+        : undefined,
     ownerProfile:
       typeof foundTemplate.owner_username === 'string' ||
       typeof foundTemplate.owner_full_name === 'string'
@@ -118,6 +126,24 @@ export const resolveTemplateOwnerProfile = (
     template: nextTemplate,
   };
 };
+
+export const buildTemplateCopyPayload = (
+  template: ChecklistTemplate,
+  activeTeamId: string | undefined,
+): Omit<ChecklistTemplate, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'slug'> => ({
+  categories: template.categories ?? [],
+  description: template.description,
+  isPublic: template.isPublic,
+  rules: template.rules,
+  sections: template.sections,
+  seoDescription: template.seoDescription,
+  seoTitle: template.seoTitle,
+  seoUrl: '',
+  tags: template.tags ?? [],
+  teamId: resolveTemplateDestinationTeamId(template, activeTeamId),
+  title: buildDuplicateTemplateTitle(template.title),
+  type: template.type ?? 'checklist',
+});
 
 export const countTemplateItems = (template: ChecklistTemplate): number =>
   template.sections.reduce((total, section) => total + section.items.length, 0);

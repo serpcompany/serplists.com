@@ -1,15 +1,16 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
+import { normalizeSqlFormatting } from "../check-production-d1-schema-lib.mjs";
+import { execTool } from "../lib/run-tool.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const database = "serp-checklists-db";
 
-function run(command, args, options = {}) {
-  return execFileSync(command, args, {
+function run(tool, args, options = {}) {
+  return execTool(tool, args, {
     cwd: repoRoot,
     env: { ...process.env, CI: "1" },
     encoding: "utf8",
@@ -20,10 +21,8 @@ function run(command, args, options = {}) {
 
 function wranglerJson(persistPath, statement) {
   const output = run(
-    "pnpm",
+    "wrangler",
     [
-      "exec",
-      "wrangler",
       "d1",
       "execute",
       database,
@@ -39,25 +38,20 @@ function wranglerJson(persistPath, statement) {
   return JSON.parse(output)[0]?.results ?? [];
 }
 
-// Wrangler only returns the first result set of a multi-statement command, so
-// batch same-shaped SELECTs into UNION ALL queries. D1 allows at most 5 terms
-// per compound SELECT.
-const D1_MAX_COMPOUND_SELECT = 5;
+const D1_MAX_COMPOUND_SELECT_TERMS = 5;
 
 function wranglerBatch(persistPath, statements) {
   const rows = [];
-  for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT) {
-    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT)));
+  for (let start = 0; start < statements.length; start += D1_MAX_COMPOUND_SELECT_TERMS) {
+    rows.push(...wranglerUnion(persistPath, statements.slice(start, start + D1_MAX_COMPOUND_SELECT_TERMS)));
   }
   return rows;
 }
 
 function wranglerUnion(persistPath, statements) {
   const output = run(
-    "pnpm",
+    "wrangler",
     [
-      "exec",
-      "wrangler",
       "d1",
       "execute",
       database,
@@ -73,16 +67,8 @@ function wranglerUnion(persistPath, statements) {
   return JSON.parse(output).flatMap(({ results }) => results ?? []);
 }
 
-export function normalizeSql(value) {
-  return String(value ?? "")
-    .trim()
-    .replaceAll("`", "")
-    .replaceAll('"', "")
-    .replace(/\s+/g, " ");
-}
-
 function normalizeComparableSql(value) {
-  return normalizeSql(value)
+  return normalizeSqlFormatting(value)
     .replace(/\bfalse\b/gi, "0")
     .replace(/\btrue\b/gi, "1")
     .toLowerCase();
@@ -201,7 +187,7 @@ async function loadCatalog(persistPath) {
 
   catalog.triggers = objects
     .filter(({ type }) => type === "trigger")
-    .map(({ name, tbl_name: table, sql }) => ({ name, table, definition: normalizeSql(sql) }))
+    .map(({ name, tbl_name: table, sql }) => ({ name, table, definition: normalizeSqlFormatting(sql) }))
     .sort((left, right) => left.name.localeCompare(right.name));
   return catalog;
 }
@@ -270,12 +256,12 @@ async function main() {
   const generatedOutput = path.join(root, "generated");
 
   try {
-    run("pnpm", [
-      "exec", "wrangler", "d1", "migrations", "apply", database,
+    run("wrangler", [
+      "d1", "migrations", "apply", database,
       "--local", "--persist-to", authoritativePersist,
     ], { capture: true });
-    run("pnpm", [
-      "exec", "drizzle-kit", "generate",
+    run("drizzle-kit", [
+      "generate",
       "--dialect", "sqlite",
       "--schema", "./db/schema/index.ts",
       "--out", generatedOutput,
@@ -284,8 +270,8 @@ async function main() {
     assert.equal(sqlFiles.length, 1, "expected exactly one generated baseline SQL file");
     const generatedSqlPath = path.join(generatedOutput, sqlFiles[0]);
     assert.ok(readFileSync(generatedSqlPath, "utf8").includes("CREATE TABLE"), "generated baseline SQL is empty");
-    run("pnpm", [
-      "exec", "wrangler", "d1", "execute", database,
+    run("wrangler", [
+      "d1", "execute", database,
       "--local", "--persist-to", generatedPersist, "--file", generatedSqlPath,
     ], { capture: true });
 

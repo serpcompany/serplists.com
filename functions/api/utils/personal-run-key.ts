@@ -63,8 +63,6 @@ function readBearerToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-// One statement, so parallel requests cannot push a user past the cap. Returns false when
-// the user already has the maximum number of active keys.
 export async function insertPersonalRunKeyWithinCap(
   env: Env,
   record: PersonalRunKeyRecord,

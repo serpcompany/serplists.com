@@ -1,5 +1,5 @@
-// Centralized type definitions for checklist functionality
 import type { PortableTemplateRule } from "@/lib/schemas/checklistSchema";
+import type { TemplateUpdateResult } from "@/lib/templateUpdateResult";
 
 export type ChecklistSubItem = {
   id: string;
@@ -8,13 +8,13 @@ export type ChecklistSubItem = {
 };
 
 export type ChecklistItemContent = {
-  id?: string; // Assigned by the template editor; imported, repo, and legacy content may not have one
+  id?: string;
   type: "text" | "image" | "video" | "file" | "embed" | "subItems";
-  value: string; // URL for image/video/file, embed code, markdown for text, or empty for subItems
-  uploadType?: "url" | "upload"; // For image/video/file: whether it's a URL or uploaded file
-  fileName?: string; // Original filename for uploaded files
-  fileSize?: number; // File size in bytes for uploaded files
-  subItems?: ChecklistSubItem[]; // Only used when type is "subItems"
+  value: string;
+  uploadType?: "url" | "upload";
+  fileName?: string;
+  fileSize?: number;
+  subItems?: ChecklistSubItem[];
 };
 
 export type ChecklistItem = {
@@ -32,8 +32,6 @@ export type ChecklistSection = {
   items: ChecklistItem[];
 };
 
-// Rules are always parsed with portableTemplateRuleSchema (API responses, imports, repo packs),
-// so `severity` has its default applied.
 export type TemplateRule = PortableTemplateRule;
 
 export type ChecklistTemplate = {
@@ -59,6 +57,7 @@ export type ChecklistTemplate = {
     username?: string;
   };
   teamId?: string;
+  ownerType?: "user" | "team";
 };
 
 export type TemplateSavePayload = {
@@ -67,7 +66,7 @@ export type TemplateSavePayload = {
   description?: string;
   type?: "checklist" | "recipe";
   sections: ChecklistSection[];
-  isPublic: boolean;
+  isPublic?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   seoUrl?: string;
@@ -77,6 +76,24 @@ export type TemplateSavePayload = {
   slug?: string;
   version?: number;
 };
+
+export type { TemplateUpdateResult };
+
+export type RetiredRunSubTask = {
+  id: string;
+  title: string;
+  isCompleted: boolean;
+};
+
+export type RetiredRunTask = RetiredRunSubTask & {
+  notes?: string;
+  subTasks: RetiredRunSubTask[];
+};
+
+export type RetiredRunItem =
+  | { kind: "section"; id: string; title: string; tasks: RetiredRunTask[] }
+  | { kind: "item"; id: string; sectionTitle?: string; task: RetiredRunTask }
+  | { kind: "subItem"; id: string; itemTitle?: string; subTask: RetiredRunSubTask };
 
 export type ChecklistRun = {
   id: string;
@@ -93,6 +110,7 @@ export type ChecklistRun = {
   isStale?: boolean;
   isPublic?: boolean;
   teamId?: string;
+  retiredItems?: RetiredRunItem[];
 };
 
 export type TemplateImportOptions = {
@@ -105,7 +123,7 @@ export type TemplateImportFailure = {
   index: number;
   title: string;
   reason: string;
-  code: "invalid_sections" | "oversized_asset" | "insert_failed";
+  code: "invalid_fields" | "invalid_sections" | "oversized_asset" | "content_too_large" | "insert_failed";
 };
 
 export type TemplateImportSuccess = {
@@ -135,11 +153,12 @@ export interface TemplatesContextProps {
   getRunsForTemplate: (templateId: string) => ChecklistRun[];
   getAllPublicTemplates: () => ChecklistTemplate[];
   createTemplate: (templateData: Omit<ChecklistTemplate, "id" | "userId" | "createdAt" | "updatedAt" | "slug">) => Promise<ChecklistTemplate>;
-  updateTemplate: (template: TemplateSavePayload) => Promise<void>;
+  updateTemplate: (template: TemplateSavePayload) => Promise<TemplateUpdateResult>;
   deleteTemplate: (id: string) => Promise<void>;
   createRun: (params: { templateId: string; runName?: string; template?: ChecklistTemplate }) => Promise<ChecklistRun | null>;
-  updateRun: (run: ChecklistRun) => Promise<ChecklistRun>;
+  updateRun: (run: ChecklistRun, options?: { includeTitle?: boolean }) => Promise<ChecklistRun>;
   revalidateRun: (run: ChecklistRun) => Promise<void>;
+  markRunShared?: (runId: string) => void;
   deleteRun: (id: string) => Promise<void>;
   importTemplates: (templates: ChecklistTemplate[], options?: TemplateImportOptions) => Promise<TemplateImportSummary>;
 }

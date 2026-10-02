@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-// Prepare a staging -> main promotion branch that merges without conflicts.
-//
-// Both branches require linear history, so promotions are squash merges and main never
-// shares history with staging. Git then diffs a promotion against a months-old merge base
-// and reports conflicts in files that already match. This script pushes a branch whose
-// files are exactly staging's, with main recorded as a second parent, so GitHub merges it
-// against main's tip. No files change, nothing is force-pushed, and no sync-back PR is
-// needed afterwards.
-//
-// Usage: pnpm run promote:prepare [-- --dry-run]
 import { execFileSync } from "node:child_process";
 
 const dryRun = process.argv.includes("--dry-run");
@@ -36,19 +26,16 @@ if (mainTree === stagingTree) {
   process.exit(0);
 }
 
-// Keeping staging's files drops anything that exists only on main (a hotfix), so check
-// that main has nothing staging lacks. The last promotion is the newest main commit whose
-// files match some staging commit. Anything main changed after it must already be in
-// staging: merging those changes into staging has to leave staging's files unchanged.
-const stagingTrees = new Set(git("log", "--format=%T", "origin/staging").split("\n"));
+const treesStagingHasHad = new Set(git("log", "--format=%T", "origin/staging").split("\n"));
 const lastPromotion = git("log", "--first-parent", "--format=%H %T", "origin/main")
   .split("\n")
   .map((line) => line.split(" "))
-  .find(([, tree]) => stagingTrees.has(tree))?.[0];
+  .find(([, tree]) => treesStagingHasHad.has(tree))?.[0];
+const mainUnchangedSinceTheLastPromotion = () => git("rev-parse", `${lastPromotion}^{tree}`) === mainTree;
+const mergingMainsLaterChangesLeavesStagingUnchanged = () =>
+  tryGit("merge-tree", "--write-tree", `--merge-base=${lastPromotion}`, "origin/staging", "origin/main") === stagingTree;
 const mainOnlyChangesAreInStaging =
-  lastPromotion !== undefined &&
-  (git("rev-parse", `${lastPromotion}^{tree}`) === mainTree ||
-    tryGit("merge-tree", "--write-tree", `--merge-base=${lastPromotion}`, "origin/staging", "origin/main") === stagingTree);
+  lastPromotion !== undefined && (mainUnchangedSinceTheLastPromotion() || mergingMainsLaterChangesLeavesStagingUnchanged());
 if (!mainOnlyChangesAreInStaging) {
   const changed = lastPromotion ? git("diff", "--name-only", lastPromotion, "origin/main") : "(no earlier promotion found)";
   console.error(

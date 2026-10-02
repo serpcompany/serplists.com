@@ -1,6 +1,6 @@
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import { getStripeBillingConfig } from "./stripe";
 
 export type Plan = "free" | "pro" | "team";
@@ -13,8 +13,7 @@ export type EntitlementSource =
   | "free"
   | "user_override"
   | "team_override"
-  | "user_subscription"
-  | "dev_test_user";
+  | "user_subscription";
 
 export type Entitlements = {
   plan: Plan;
@@ -24,8 +23,6 @@ export type Entitlements = {
     maxActiveRuns: number | null;
   };
 };
-
-const devProTestEmails = new Set(["admin@test.com", "jane@test.com"]);
 
 function isProSubscriptionStatus(status: string): boolean {
   return status === "active" || status === "trialing";
@@ -53,7 +50,7 @@ function paidEntitlements(plan: "pro" | "team", source: EntitlementSource): Enti
 }
 
 function userOverrideEntitlements(plan: string): Entitlements {
-  return plan === "pro" ? paidEntitlements("pro", "user_override") : freeEntitlements();
+  return plan === "pro" ? paidEntitlements("pro", "user_override") : { ...freeEntitlements(), source: "user_override" };
 }
 
 function teamOverrideEntitlements(plan: string): Entitlements {
@@ -62,16 +59,12 @@ function teamOverrideEntitlements(plan: string): Entitlements {
   return freeEntitlements();
 }
 
-export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
-  const stripe = getStripeBillingConfig(env);
-  const db = createDb(env);
-  const { entitlement_overrides, users } = schema;
-  const nowSeconds = Math.floor(Date.now() / 1000);
+type Db = ReturnType<typeof createDb>;
 
-  // Manual override takes priority (for comp/revoke / support).
-  let override: typeof entitlement_overrides.$inferSelect | undefined;
+async function findActiveManualOverride(db: Db, userId: string, nowSeconds: number) {
+  const { entitlement_overrides } = schema;
   try {
-    [override] = await db
+    const [override] = await db
       .select()
       .from(entitlement_overrides)
       .where(
@@ -81,25 +74,23 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
         )
       )
       .limit(1);
+    return override;
   } catch (error) {
     if (!isMissingOptionalBillingTableError(error)) {
       throw error;
     }
+    return undefined;
   }
+}
 
-  if (override) {
-    return userOverrideEntitlements(override.plan);
-  }
+export async function getEntitlementsForUser(env: Env, userId: string): Promise<Entitlements> {
+  const stripe = getStripeBillingConfig(env);
+  const db = createDb(env);
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
-  // Keep local seeded personas aligned with their visible labels before a reseed.
-  const [user] = await db
-    .select({ email: users.email })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (user?.email && devProTestEmails.has(user.email.toLowerCase())) {
-    return paidEntitlements("pro", "dev_test_user");
+  const manualOverride = await findActiveManualOverride(db, userId, nowSeconds);
+  if (manualOverride) {
+    return userOverrideEntitlements(manualOverride.plan);
   }
 
   if (!stripe) {
@@ -114,7 +105,7 @@ export async function getEntitlementsForUser(env: Env, userId: string): Promise<
     subs = await db
       .select()
       .from(stripe_subscriptions)
-      .where(and(eq(stripe_subscriptions.user_id, userId), eq(stripe_subscriptions.price_id, stripe.proPriceId)))
+      .where(and(eq(stripe_subscriptions.user_id, userId), inArray(stripe_subscriptions.price_id, stripe.proPriceIds)))
       .orderBy(desc(stripe_subscriptions.updated_at));
   } catch (error) {
     if (!isMissingOptionalBillingTableError(error)) {

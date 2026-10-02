@@ -1,6 +1,7 @@
 # Agent Workflow
 
-How work moves from an issue to production, and how the repo is kept clean.
+How work moves from an issue to production, the tools agents share, and how the repo is
+kept clean.
 
 ## From issue to merged PR
 
@@ -9,8 +10,9 @@ How work moves from an issue to production, and how the repo is kept clean.
 2. Branch from `staging`. For multi-step work, add a plan under
    `docs/exec-plans/active/` ([PLANS.md](../PLANS.md)).
 3. Reproduce first: `pnpm run setup`, `pnpm run dev:all`, then confirm the bug or
-   current behavior with `pnpm run ui:snap` or a failing test
-   ([development environment](development-environment.md)).
+   current behavior in Chrome with the `verify-web` skill (recording it), with
+   `pnpm run ui:snap`, or with a failing test
+   ([development environment](development-environment.md), [agent tooling](#agent-tooling)).
 4. Make the change with tests. Run `pnpm run verify` before opening the PR.
 5. Open a PR into `staging` and fill in the template, including evidence for UI changes.
 6. Review loop: review your own diff first. Claude then reviews the PR automatically
@@ -29,6 +31,62 @@ sync-back PR from `main` to `staging` is needed afterwards. Squash only: a rebas
 would replay `staging`'s history onto `main`. The script refuses to run if `main` has
 changes that `staging` lacks (a hotfix) and lists the files; bring those into `staging`
 with a normal PR, then run it again.
+
+## Agent tooling
+
+The Claude Code configuration everyone shares is committed, so every checkout and worktree
+starts with the same tools. Personal settings go in `.claude/settings.local.json`, which git
+ignores.
+
+- **Chrome (`.mcp.json`):** the `chrome-devtools` MCP server
+  ([chrome-devtools-mcp](https://github.com/ChromeDevTools/chrome-devtools-mcp), pinned to an
+  exact version) lets an agent drive the app in Chrome: open pages, read the accessibility
+  tree, click and type, take screenshots, record video, and read the console, network
+  requests, and performance traces. It starts its own Chrome with a temporary profile
+  (`--isolated`) when a tool first needs one, and sends no usage statistics or CrUX lookups.
+  Recording (`--experimental-screencast`) needs ffmpeg on the PATH; without it only the
+  recording tools fail. Claude Code asks each person once per checkout to approve the server.
+  `npx` starts it on Windows too, without a `cmd /c` wrapper (checked with Claude Code
+  2.1.284). To upgrade, change the version in `.mcp.json` and in the `verify-web` skill's
+  setup line; a test checks that they match.
+- **Skills (`.claude/skills/`):** instructions Claude loads when a task matches a skill's
+  description, or when you type `/<name>`. They point to the docs rather than repeat them.
+  To add one, create `.claude/skills/<name>/SKILL.md` with `name` and `description`
+  frontmatter and list it here.
+
+  | Skill | Use it to |
+  | --- | --- |
+  | [verify-web](../../.claude/skills/verify-web/SKILL.md) | Run the app and check a change or reproduce a UI bug in Chrome, with screenshots and before-and-after recordings |
+  | [debug-api](../../.claude/skills/debug-api/SKILL.md) | Find a request's server log lines by its `X-Request-Id`, look at local D1 data, and measure D1 rows read |
+  | [browser-tests](../../.claude/skills/browser-tests/SKILL.md) | Pick the smallest Playwright run, read a failure, and write specs the way this repository does |
+  | [pr-review](../../.claude/skills/pr-review/SKILL.md) | Review a PR for bugs and rule breaches, post new findings inline, and keep one summary comment current; the CI review runs it on every push |
+
+- **Permissions (`.claude/settings.json`):** Claude asks before commands that reach staging,
+  production, Cloudflare, or live Stripe: wrangler with `--remote`, the `*:staging`,
+  `*:prod`, and `*:remote` package scripts, deploys, version uploads, rollbacks, Worker
+  deletion, secrets, `stripe:portal:configure`, and `stripe` with `--live`. `rg` is denied,
+  since it crashes VS Code. Each rule starts with the command it guards (`wrangler`,
+  `npx wrangler`, `pnpm wrangler`, `pnpm exec wrangler`, the same four for
+  `opennextjs-cloudflare`, and `pnpm` for the package scripts), never with a wildcard: a
+  leading `*` matches text anywhere in a command, so a search for "wrangler deploy" or a
+  review comment that mentions one would trip it. Every Bash rule has a PowerShell twin. The
+  rules match the commands agents usually write, not every way to run a program, so they
+  back the [escalation rules](../../AGENTS.md#escalate-to-a-human) rather than replace them.
+- **CI loads the same settings:** the Claude jobs in [Claude code review](#claude-code-review)
+  and [Weekly maintenance](#weekly-maintenance) run in the checkout, and on pull requests
+  the action restores these files from the base branch. There an ask rule cannot prompt,
+  so it denies: the review's guard names any denied tool and fails when the review posted
+  nothing, and the gardening job could not push its branch. A deny on the Grep or Glob
+  tools would take them from both jobs. The settings therefore never deny or ask for what
+  those jobs use: `git push`, `gh`, and the Grep and Glob tools. To keep the Grep tool
+  (built on ripgrep) out of your own sessions, deny it in `.claude/settings.local.json`.
+  Both jobs pass `--strict-mcp-config`, so the `chrome-devtools` server in `.mcp.json`
+  never starts in CI. `tests/unit/config/agent-tooling.test.ts` checks both directions:
+  every package script that reaches staging, production, Cloudflare, or Stripe is asked,
+  and nothing the CI jobs run, or merely mention, is.
+- **Checks:** `pnpm run docs:check` covers the skills as it does the docs: links and
+  repository paths resolve, every `pnpm run` names a script in `package.json`, and each skill
+  is named after its folder, has a description, and is listed above.
 
 ## Triage labels
 
@@ -60,8 +118,8 @@ small steps every week instead of in occasional big cleanups.
 `.github/workflows/maintenance.yml` runs every Monday at 14:00 UTC (or on demand from
 the Actions tab; scheduled workflows run from the default branch). Both of its jobs
 start from `pnpm run maintenance:report`, which lists docs-check results, docs whose
-referenced code changed since they were edited, stale design docs and plans, recorded
-debt in the baselines, oversized files, and open tech debt.
+referenced code changed since they were edited, stale design docs and plans, files near
+the size limit, and open tech debt.
 
 - **Doc gardening (automatic):** Claude re-checks up to 8 flagged docs against the
   code, fixes what is no longer true, updates "Last verified" dates, runs
@@ -69,7 +127,16 @@ debt in the baselines, oversized files, and open tech debt.
   gardening". It edits only `AGENTS.md`, `ARCHITECTURE.md`, and `docs/`, skips the
   week if a gardening PR is still open, and opens nothing when there is no drift.
   These PRs are small; skim and merge them. Claude code review skips them because
-  a bot opens them.
+  a bot opens them. Its commits and PRs carry no attribution (the `attribution` setting
+  plus the prompt, since the model otherwise adds a Co-Authored-By trailer by habit). Like
+  the review, the job keeps Claude's subagents in the foreground
+  (`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS`) and keeps Claude's transcript as a week-long
+  artifact. A check after it prints what Claude said and passes only on an outcome: a
+  gardening PR opened during the run, "No doc drift found", or an open gardening PR left
+  alone. It fails when Claude left no log, ended in an error or with subagents still
+  running, or reached none of those outcomes, and a denied tool only warns when Claude got
+  there anyway, since it often retries a refused command another way
+  (`tests/unit/workflows/maintenance.test.ts`).
 - **Report issue:** the full report is posted to the issue "Weekly repository
   maintenance" (`chore`, `ready-for-agent`) for the items below that need judgment.
 
@@ -77,10 +144,10 @@ Work the issue in small PRs, one item each:
 
 1. **Docs:** anything the gardening PR left unresolved; update its "Last verified"
    date in [the design-docs index](index.md).
-2. **Debt:** fix a few baseline entries, then shrink the baseline
-   (`pnpm run deps:baseline`, `pnpm exec eslint . --prune-suppressions`) and confirm
-   the diff only removes entries.
-3. **Size:** split one oversized file and lower its cap in `eslint.config.js`.
+2. **Debt:** close one row of the
+   [tech debt tracker](../exec-plans/tech-debt-tracker.md).
+3. **Size:** split one file the report lists as near the 500-line limit, by
+   responsibility.
 4. **Plans:** update stale active plans or move finished ones to `completed/`.
 5. **Scores:** re-grade [QUALITY_SCORE.md](../QUALITY_SCORE.md) rows whose code changed.
 6. **Harness:** if recent PRs repeated a mistake, add it to
@@ -89,25 +156,64 @@ Work the issue in small PRs, one item each:
 
 ## Claude code review
 
-`.github/workflows/claude-code-review.yml` runs the Claude Code GitHub Action with the
-`code-review` plugin on every non-draft PR opened by a person (opened, updated,
-reopened, or marked ready). Bot-opened PRs, such as doc gardening, are skipped. Claude posts an inline comment for each high-confidence issue, or one summary
-comment when it finds none. The review is advisory and never blocks merging.
+`.github/workflows/claude-code-review.yml` runs the Claude Code GitHub Action on every push
+to a non-draft PR opened by a person (opened, updated, reopened, or marked ready).
+Bot-opened PRs, such as doc gardening, are skipped. Claude reviews with the
+[pr-review skill](../../.claude/skills/pr-review/SKILL.md): each new finding becomes an
+inline comment, and one summary comment names the commit reviewed, counts the new
+findings, and says whether each earlier finding is fixed or still applies. The review is
+advisory and never blocks merging, but its check goes red when Claude posted or updated
+nothing. Run the same review locally with `/pr-review <owner>/<repo>/pull/<number>`.
 
-- Guidelines: the plugin reads `CLAUDE.md`, so the workflow builds one on the runner
-  from `AGENTS.md` and [core beliefs](core-beliefs.md). Keep review rules in those
-  files; do not commit a `CLAUDE.md`.
-- Once per PR: the plugin skips closed and draft PRs, trivial ones, and PRs Claude
-  has already commented on, so pushes after the first review are not re-reviewed.
-  For another pass after large changes, run `/code-review` in Claude Code locally.
-- Cost: runs use the Claude subscription of whoever generated the token (counting
-  against its usage limits) plus GitHub Actions minutes.
+- Re-reviews without repeats: before the review, a step reads what Claude posted on
+  earlier pushes (its inline comments and its summary) and passes them in. The skill drops
+  any finding that repeats one, however it is worded or wherever its lines moved, and edits
+  its summary in place (`gh pr comment --edit-last --create-if-none`) rather than adding
+  another.
+- Rules: before Claude starts, the action replaces `CLAUDE.md`, the .claude folder, and
+  .mcp.json with the base branch's copies (a PR's copies are untrusted) and deletes them
+  when the base has none. So the skill always comes from the base branch, and a PR cannot
+  change how it is reviewed. The workflow copies `AGENTS.md` and [core beliefs](core-beliefs.md)
+  from the base branch too, so a PR cannot weaken the rules it is reviewed against, and adds
+  the earlier findings. It writes them to a file outside the checkout and appends it to the
+  system prompt of Claude and of every subagent. Keep review rules in those two files; do not
+  commit a `CLAUDE.md`.
+- Subagents in the foreground: the skill reviews with three subagents at once (bugs, rules,
+  and tests and docs), which Claude Code runs in the background by default. Claude then
+  ends its turn to wait for them, the action stops at that first result, and nothing is
+  posted ([claude-code-action#1646](https://github.com/anthropics/claude-code-action/issues/1646)).
+  The review step sets `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, so they run in the
+  foreground.
+- Tools: `claude_args` allows every tool in the skill's `allowed-tools` frontmatter:
+  `gh pr view`, `gh pr diff`, `gh pr comment`, the inline comment tool, `Task`, and Read,
+  Glob, and Grep. Naming Glob and Grep brings those tools back on Linux, where Claude Code
+  otherwise searches with `grep` and `find` in Bash. `--strict-mcp-config` keeps the
+  repository's MCP servers out of the review. The model is pinned in `claude_args`, so an
+  action update cannot change it silently.
+- Guard: the step after the review fails the job unless Claude posted or updated something
+  on the PR during the run: an inline comment, a review, or the summary. It also fails when
+  the review wrote no log, ended in an error, or ended with subagents still running, and it
+  names any denied tool (a warning when the review still posted). It reads the PR with the
+  workflow token, which only needs read access. It and the earlier-findings step are inline
+  in the workflow (the job can mint an OIDC token, so it runs no script from the PR), and
+  `tests/unit/workflows/claude-code-review.test.ts` runs both against a stand-in for the
+  GitHub API.
+- Transcript: the action logs only turn and denial counts. Each run uploads Claude's full
+  transcript as the `claude-review-transcript` artifact, kept for a week, and the step
+  summary shows turns, time, estimated cost, and models.
+- Cost: runs use the Claude subscription of whoever generated the token (counting against
+  its usage limits) plus GitHub Actions minutes, and every push is reviewed. In a sandbox,
+  reviews of small PRs took 20 to 70 seconds and about $0.10 to $0.25 each; the step
+  summary shows every run's figures.
 - Until the setup below is done, the job logs a notice and skips.
-- Workflow validation: the action runs only when the workflow file on the PR is
-  identical to the one on the default branch (`main`), so a PR cannot edit the
-  workflow to reach the secret. A new or edited review or maintenance workflow
-  therefore skips (the log says "Skipping action due to workflow validation") until
-  it is promoted to `main`. The weekly schedule also runs only from `main`.
+- Workflow validation: the action runs only when the workflow file on the PR is identical
+  to the one on the default branch (`main`), so a PR cannot edit the workflow to reach the
+  secret, and a change to the workflow cannot be tried on a PR here. Develop changes in a
+  throwaway repository with the same workflow, skill, and rules files first. A new or edited
+  review or maintenance workflow skips (the log says "Skipping action due to workflow
+  validation") until it is promoted to `main`, and the guard marks that run red because no
+  review happened. PRs into `staging` skip the same way while `staging`'s copy of the
+  workflow differs from `main`'s. The weekly schedule also runs only from `main`.
 
 ## Repository settings (admin only)
 

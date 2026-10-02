@@ -1,212 +1,60 @@
-import { createWriteStream, existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
 import { spawn } from "node:child_process";
 import {
-  buildDevAutoConfig,
-  DEFAULT_API_PORT,
-  DEFAULT_FRONTEND_PORT,
+  buildDevServerCommand,
+  buildDevServerConfig,
+  DEFAULT_DEV_PORT,
   DEV_SESSION_PATH,
   parseEnvFile,
   readDevSession,
   releaseDevSession,
-  resolvePortPairForMode,
-  storeDevSession,
+  resolveDevServerPort,
+  writeDevSession,
 } from "./dev-auto-lib.mjs";
-
-const DIST_INDEX_PATH = "dist/index.html";
-const LOG_DIR = "tmp/logs";
-
-function getMode() {
-  const rawMode = process.argv[2] ?? "all";
-
-  if (rawMode === "frontend" || rawMode === "api" || rawMode === "all") {
-    return rawMode;
-  }
-
-  throw new Error(`Unsupported dev-auto mode "${rawMode}".`);
-}
-
-function buildCommands(mode, config) {
-  const frontendCommand = `pnpm exec vite --host localhost --port ${config.frontendPort} --strictPort`;
-  const devVarsArgs = existsSync(".dev.vars") ? ["--env-file", ".dev.vars"] : [];
-  const devVarsFlag = existsSync(".dev.vars") ? "--env-file .dev.vars " : "";
-  const apiCommand =
-    `npx wrangler pages dev ./dist --local --port ${config.apiPort} ${devVarsFlag}` +
-    `--show-interactive-dev-session=false ` +
-    `-b FRONTEND_URL=${config.frontendUrl} ` +
-    `-b CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins} ` +
-    `-b BETTER_AUTH_SECRET=${config.betterAuthSecret}`;
-
-  if (mode === "frontend") {
-    return {
-      executable: "pnpm",
-      args: ["exec", "vite", "--host", "localhost", "--port", String(config.frontendPort), "--strictPort"],
-    };
-  }
-
-  if (mode === "api") {
-    return {
-      executable: "npx",
-      args: [
-        "wrangler",
-        "pages",
-        "dev",
-        "./dist",
-        "--local",
-        "--port",
-        String(config.apiPort),
-        ...devVarsArgs,
-        "--show-interactive-dev-session=false",
-        "-b",
-        `FRONTEND_URL=${config.frontendUrl}`,
-        "-b",
-        `CORS_ALLOWED_ORIGINS=${config.corsAllowedOrigins}`,
-        "-b",
-        `BETTER_AUTH_SECRET=${config.betterAuthSecret}`,
-      ],
-    };
-  }
-
-  return {
-    executable: "pnpm",
-    args: [
-      "exec",
-      "concurrently",
-      "--kill-others-on-fail",
-      "--names",
-      "web,api",
-      "--prefix-colors",
-      "cyan,magenta",
-      frontendCommand,
-      apiCommand,
-    ],
-  };
-}
-
-function printStartupSummary({
-  mode,
-  config,
-  source,
-  roleAlreadyRunning,
-}) {
-  const scriptName =
-    mode === "all" ? "dev:all/dev:auto" : mode === "frontend" ? "dev" : "dev:api";
-
-  if (source === "session") {
-    console.log(
-      `${scriptName}: reusing active session ports ${config.frontendPort}/${config.apiPort} from ${DEV_SESSION_PATH}.`,
-    );
-  } else if (
-    config.frontendPort === DEFAULT_FRONTEND_PORT &&
-    config.apiPort === DEFAULT_API_PORT
-  ) {
-    console.log(
-      `${scriptName}: using default ports ${config.frontendPort}/${config.apiPort}.`,
-    );
-  } else {
-    console.log(
-      `${scriptName}: default ports ${DEFAULT_FRONTEND_PORT}/${DEFAULT_API_PORT} are busy, using ${config.frontendPort}/${config.apiPort}.`,
-    );
-  }
-
-  console.log(`Frontend: ${config.frontendUrl}`);
-  console.log(`API: ${config.apiUrl}`);
-
-  if (roleAlreadyRunning) {
-    console.log(
-      `${scriptName}: requested service is already running on that pair, so this command is reusing the live session instead of starting a duplicate process.`,
-    );
-  }
-
-  if ((mode === "api" || mode === "all") && !existsSync(DIST_INDEX_PATH)) {
-    console.warn(
-      `${scriptName}: ${DIST_INDEX_PATH} is missing. The API process uses ./dist just like the normal Wrangler dev flow. Run "pnpm run build:dev" if it fails to start.`,
-    );
-  }
-}
-
-// Mirror dev server output into tmp/logs/dev-<mode>.log (ANSI stripped) so agents and
-// humans can search it after the fact, e.g. grep '"level":"error"' tmp/logs/dev-all.log
-function teeToLogFile(child, mode) {
-  mkdirSync(LOG_DIR, { recursive: true });
-  const logPath = path.join(LOG_DIR, `dev-${mode}.log`);
-  const logFile = createWriteStream(logPath, { flags: "w" });
-  const ansi = /\x1b\[[0-9;]*[A-Za-z]/g;
-  const forward = (source, target) => {
-    source.on("data", (chunk) => {
-      target.write(chunk);
-      logFile.write(chunk.toString().replace(ansi, ""));
-    });
-  };
-  forward(child.stdout, process.stdout);
-  forward(child.stderr, process.stderr);
-  console.log(`Logs: ${logPath}`);
-}
+import { currentProcessStartedAt } from "./lib/process-info.mjs";
+import { DEV_LOG_PATH, mirrorOutputToLog } from "./lib/log-mirror.mjs";
+import { describeSpawnError, killProcessTree } from "./lib/run-tool.mjs";
 
 async function main() {
-  const mode = getMode();
-  const fileEnv = parseEnvFile(".dev.vars");
-  const baseEnv = { ...fileEnv, ...process.env };
+  const baseEnv = { ...parseEnvFile(".dev.vars"), ...process.env };
+  const selected = await resolveDevServerPort({ existingSession: readDevSession() });
 
-  const selectedPorts = await resolvePortPairForMode({
-    mode,
-    existingSession: readDevSession(),
-  });
-  const config = buildDevAutoConfig({
-    frontendPort: selectedPorts.frontendPort,
-    apiPort: selectedPorts.apiPort,
-    baseEnv,
-  });
-
-  printStartupSummary({
-    mode,
-    config,
-    source: selectedPorts.source,
-    roleAlreadyRunning: selectedPorts.roleAlreadyRunning,
-  });
-
-  if (selectedPorts.roleAlreadyRunning) {
+  if (selected.running) {
+    console.log(
+      `dev:all is already running at http://localhost:${selected.port} (pid ${selected.pid}, recorded in ${DEV_SESSION_PATH}). ` +
+        "Stop it with `pnpm run dev:stop`.",
+    );
     process.exit(0);
   }
 
-  storeDevSession({
-    role: mode,
-    pid: process.pid,
-    config,
-  });
+  const config = buildDevServerConfig({ port: selected.port, baseEnv });
+  if (config.port !== DEFAULT_DEV_PORT) {
+    console.log(`dev:all: port ${DEFAULT_DEV_PORT} is busy, using ${config.port}.`);
+  }
+  console.log(`App and API: ${config.origin} (API at ${config.origin}/api)`);
 
-  const childEnv = {
-    ...baseEnv,
-    ...config.envOverrides,
-  };
+  writeDevSession({ port: config.port, pid: process.pid, startedAt: currentProcessStartedAt() });
 
-  const command = buildCommands(mode, config);
-  const child = spawn(command.executable, command.args, {
+  const command = buildDevServerCommand({ config, baseEnv });
+  const child = spawn(command.command, command.args, {
+    ...command.options,
     cwd: process.cwd(),
-    env: { ...childEnv, FORCE_COLOR: childEnv.FORCE_COLOR ?? "1" },
+    env: { ...command.env, FORCE_COLOR: command.env.FORCE_COLOR ?? "1" },
     stdio: ["inherit", "pipe", "pipe"],
   });
-  teeToLogFile(child, mode);
+  mirrorOutputToLog(child, DEV_LOG_PATH);
+  console.log(`Logs: ${DEV_LOG_PATH} (query them with pnpm run logs:query)`);
 
-  const cleanupSession = () => {
-    releaseDevSession({
-      role: mode,
-      pid: process.pid,
-    });
-  };
+  const cleanupSession = () => releaseDevSession({ pid: process.pid });
 
-  const shutdown = (signal) => {
-    if (!child.killed) {
-      child.kill(signal);
-    }
-  };
+  const stopTheServerAndEverythingItStarted = (signal) => killProcessTree(child, signal);
 
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => stopTheServerAndEverythingItStarted("SIGINT"));
+  process.on("SIGTERM", () => stopTheServerAndEverythingItStarted("SIGTERM"));
+  process.on("SIGHUP", () => stopTheServerAndEverythingItStarted("SIGHUP"));
 
   child.on("error", (error) => {
     cleanupSession();
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(describeSpawnError(error, command.label));
     process.exit(1);
   });
 
@@ -223,10 +71,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  releaseDevSession({
-    role: getMode(),
-    pid: process.pid,
-  });
+  releaseDevSession({ pid: process.pid });
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

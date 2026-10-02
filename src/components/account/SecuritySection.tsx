@@ -1,13 +1,21 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Shield } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { getAuthErrorMessage } from "@/lib/auth/authErrors";
 import { validatePasswordPolicy } from "@/lib/auth/passwordPolicy";
 
 export const SecuritySection: React.FC = () => {
@@ -44,7 +52,7 @@ export const SecuritySection: React.FC = () => {
       });
 
       if (result?.error) {
-        toast.error(result.error.message || "Failed to change password");
+        toast.error(getAuthErrorMessage(result.error, "Failed to change password"));
         return;
       }
 
@@ -64,7 +72,7 @@ export const SecuritySection: React.FC = () => {
     try {
       const result = await authClient.revokeOtherSessions();
       if (result?.error) {
-        toast.error(result.error.message || "Failed to sign out other sessions");
+        toast.error(getAuthErrorMessage(result.error, "Failed to sign out other sessions"));
         return;
       }
       toast.success("Signed out other sessions");
@@ -78,77 +86,89 @@ export const SecuritySection: React.FC = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          Security
-        </CardTitle>
+        <CardTitle as="h2">Security</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Change password</h3>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="current-password">Current password</Label>
-              <Input
-                id="current-password"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
+      <CardContent className="flex flex-col gap-6">
+        <FieldSet>
+          <FieldLegend>Change password</FieldLegend>
+          <FieldGroup>
+            <div className="grid gap-5 md:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="current-password">Current password</FieldLabel>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="new-password">New password</FieldLabel>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                />
+              </Field>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-password">New password</Label>
+
+            <Field>
+              <FieldLabel htmlFor="confirm-new-password">Confirm new password</FieldLabel>
               <Input
-                id="new-password"
+                id="confirm-new-password"
                 type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
                 placeholder="••••••••"
                 autoComplete="new-password"
+                aria-describedby="confirm-new-password-description"
               />
-            </div>
-          </div>
+              <FieldDescription id="confirm-new-password-description">
+                Min 10 chars. Compromised/common passwords are blocked by the server.
+              </FieldDescription>
+            </Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirm-new-password">Confirm new password</Label>
-            <Input
-              id="confirm-new-password"
-              type="password"
-              value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="new-password"
-            />
-            <p className="text-xs text-muted-foreground">
-              Min 10 chars. Compromised/common passwords are blocked by the server.
-            </p>
-          </div>
+            <Field orientation="horizontal">
+              <FieldContent>
+                <FieldLabel htmlFor="revoke-other-sessions">Sign out other sessions</FieldLabel>
+                <FieldDescription id="revoke-other-sessions-description">
+                  Keeps you signed in on this device.
+                </FieldDescription>
+              </FieldContent>
+              <Switch
+                nativeButton
+                render={<button type="button" />}
+                id="revoke-other-sessions"
+                aria-describedby="revoke-other-sessions-description"
+                checked={revokeOtherSessions}
+                onCheckedChange={setRevokeOtherSessions}
+              />
+            </Field>
 
-          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
             <div>
-              <Label className="text-sm font-medium">Sign out other sessions</Label>
-              <p className="text-xs text-muted-foreground">Keeps you signed in on this device.</p>
+              <Button onClick={handleChangePassword} disabled={isSaving}>
+                {isSaving ? "Updating..." : "Update password"}
+              </Button>
             </div>
-            <Switch checked={revokeOtherSessions} onCheckedChange={setRevokeOtherSessions} />
-          </div>
-
-          <Button onClick={handleChangePassword} disabled={isSaving}>
-            {isSaving ? "Updating..." : "Update password"}
-          </Button>
-        </div>
+          </FieldGroup>
+        </FieldSet>
 
         <Separator />
 
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium">Sessions</h3>
-          <p className="text-xs text-muted-foreground">Quickly sign out other devices if you suspect misuse.</p>
-          <Button variant="outline" onClick={handleRevokeOtherSessions} disabled={isRevoking}>
-            {isRevoking ? "Signing out..." : "Sign out other sessions"}
-          </Button>
-        </div>
+        <FieldSet>
+          <FieldLegend>Sessions</FieldLegend>
+          <FieldDescription>Quickly sign out other devices if you suspect misuse.</FieldDescription>
+          <div>
+            <Button variant="outline" onClick={handleRevokeOtherSessions} disabled={isRevoking}>
+              {isRevoking ? "Signing out..." : "Sign out other sessions"}
+            </Button>
+          </div>
+        </FieldSet>
       </CardContent>
     </Card>
   );

@@ -1,8 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
-// Date rendering depends on the local timezone. Pin it so tests pass the same way on every
-// machine and in CI. Workers inherit this environment.
 process.env.TZ = 'UTC';
 
 export default defineConfig({
@@ -10,6 +8,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: './tests/setup.ts',
+    server: {
+      deps: {
+        inline: ['@opennextjs/aws'],
+      },
+    },
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -36,6 +39,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      'next/font/google': path.resolve(__dirname, './tests/support/nextFontGoogle.ts'),
       '@': path.resolve(__dirname, './src'),
       '@functions': path.resolve(__dirname, './functions'),
     },

@@ -1,7 +1,5 @@
 name: CI
 
-# One pipeline: every check must pass before anything deploys.
-# Pushes to staging/main deploy through cloudflare-pages-deploy.yml after the checks.
 on:
   pull_request:
     branches:
@@ -12,11 +10,6 @@ on:
       - main
       - staging
   workflow_dispatch:
-    inputs:
-      deploy:
-        description: Deploy this ref to Cloudflare Pages after the checks pass
-        type: boolean
-        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -37,11 +30,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # Full history: sitemap lastmod dates are derived from git log.
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -71,22 +63,24 @@ jobs:
         run: pnpm run test:local-d1
 
       - name: Build
-        run: pnpm run build
+        env:
+          SITE_ENV: production
+        run: pnpm run build:worker
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Smoke tests
         if: github.base_ref != 'main'
-        run: pnpm run test:smoke
+        run: pnpm run test:smoke -- --skip-build
 
       - name: Full end-to-end tests (promotions to main)
         if: github.base_ref == 'main'
-        run: pnpm run test:e2e:full
+        run: pnpm run test:e2e:full -- --skip-build
 
       - name: Upload Playwright evidence (traces, videos, screenshots)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-evidence
           path: tests/test-results/
@@ -101,7 +95,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -115,9 +109,9 @@ jobs:
       - name: Compare migrations with the Drizzle schema
         run: pnpm run check:db:drizzle-parity
 
-  deploy:
-    name: Deploy
+  deploy-staging:
+    name: Deploy staging
     needs: [quality, db-parity]
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy)
-    uses: ./.github/workflows/cloudflare-pages-deploy.yml
+    if: github.event_name == 'push' && github.ref_name == 'staging'
+    uses: ./.github/workflows/deploy-staging.yml
     secrets: inherit

@@ -1,0 +1,149 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getEntitlementsForUser } from "@functions/api/utils/entitlements";
+import { PRO_PRICE_ID, seedBillingUser, storeSubscriptionRow } from "../../../support/billingCheckout";
+import { billingSchemaSql, createSqliteD1, type SqliteD1 } from "./support/sqlite-d1";
+
+const USER_ID = "user-1";
+
+let d1: SqliteD1;
+
+function env(overrides: Record<string, unknown> = {}) {
+  return {
+    DB: d1.binding,
+    STRIPE_SECRET_KEY: "sk_test_entitlements",
+    STRIPE_PRO_PRICE_ID: PRO_PRICE_ID,
+    ...overrides,
+  } as never;
+}
+
+function insertOverride(plan: string, expiresAt: number | null = null) {
+  d1.sqlite.prepare(`
+    INSERT INTO entitlement_overrides (user_id, plan, expires_at, created_at) VALUES (?, ?, ?, '2026-01-01T00:00:00.000Z')
+  `).run(USER_ID, plan, expiresAt);
+}
+
+function insertSubscription(id: string, status: string, priceId = PRO_PRICE_ID) {
+  storeSubscriptionRow(d1, { id, userId: USER_ID, customerId: "cus_1", status, priceId });
+}
+
+beforeEach(() => {
+  d1 = createSqliteD1(billingSchemaSql());
+  seedBillingUser(d1, USER_ID);
+});
+
+afterEach(() => {
+  d1.close();
+});
+
+describe("getEntitlementsForUser from Stripe subscriptions, granting Pro only for the statuses the pricing spec lists", () => {
+  it.each([
+    ["active", "pro"],
+    ["trialing", "pro"],
+    ["past_due", "free"],
+    ["unpaid", "free"],
+    ["paused", "free"],
+    ["incomplete", "free"],
+    ["incomplete_expired", "free"],
+    ["canceled", "free"],
+  ])("resolves a %s subscription to %s", async (status, plan) => {
+    insertSubscription("sub_1", status);
+
+    const entitlements = await getEntitlementsForUser(env(), USER_ID);
+
+    expect(entitlements.plan).toBe(plan);
+    expect(entitlements.source).toBe(plan === "pro" ? "user_subscription" : "free");
+  });
+
+  it("grants Pro when any subscription is active, even with a newer canceled one", async () => {
+    insertSubscription("sub_active", "active");
+    insertSubscription("sub_canceled", "canceled");
+
+    expect((await getEntitlementsForUser(env(), USER_ID)).plan).toBe("pro");
+  });
+});
+
+describe("getEntitlementsForUser after the Pro price changes", () => {
+  const afterPriceChange = (legacyPriceIds?: string) =>
+    env({ STRIPE_PRO_PRICE_ID: "price_new", STRIPE_PRO_LEGACY_PRICE_IDS: legacyPriceIds });
+
+  it("keeps Pro for a subscriber still on a listed legacy price", async () => {
+    insertSubscription("sub_1", "active", "price_old");
+
+    const entitlements = await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID);
+
+    expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_subscription");
+  });
+
+  it("grants Pro only for the checkout price and listed legacy prices", async () => {
+    insertSubscription("sub_1", "active", "price_old");
+    expect((await getEntitlementsForUser(afterPriceChange(), USER_ID)).plan).toBe("free");
+
+    d1.sqlite.exec("DELETE FROM stripe_subscriptions");
+    insertSubscription("sub_2", "active", "price_unrelated");
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("free");
+  });
+
+  it("still requires a paid status on a legacy price", async () => {
+    insertSubscription("sub_1", "past_due", "price_old");
+
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("free");
+  });
+
+  it("grants Pro from the new price next to a canceled legacy subscription", async () => {
+    insertSubscription("sub_old", "canceled", "price_old");
+    insertSubscription("sub_new", "active", "price_new");
+
+    expect((await getEntitlementsForUser(afterPriceChange("price_old"), USER_ID)).plan).toBe("pro");
+  });
+});
+
+describe("getEntitlementsForUser with a manual override", () => {
+  it("keeps a Free override visible as an override, even over an active subscription", async () => {
+    insertOverride("free");
+    insertSubscription("sub_1", "active");
+
+    const entitlements = await getEntitlementsForUser(env(), USER_ID);
+
+    expect(entitlements).toEqual({
+      plan: "free",
+      source: "user_override",
+      limits: { maxTemplates: 1, maxActiveRuns: 3 },
+    });
+  });
+
+  it("ignores an expired override", async () => {
+    insertOverride("free", Math.floor(Date.now() / 1000) - 60);
+    insertSubscription("sub_1", "active");
+
+    const entitlements = await getEntitlementsForUser(env(), USER_ID);
+
+    expect(entitlements.plan).toBe("pro");
+    expect(entitlements.source).toBe("user_subscription");
+  });
+});
+
+describe("getEntitlementsForUser for a seeded persona email, which anyone can register on a deployment", () => {
+  it.each([
+    ["admin@test.com", {}],
+    ["JANE@TEST.COM", {}],
+    ["jane@test.com", { STRIPE_SECRET_KEY: undefined, STRIPE_PRO_PRICE_ID: undefined }],
+  ])("does not grant Pro to %s without an override or subscription", async (email, envOverrides) => {
+    d1.sqlite.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, USER_ID);
+
+    const entitlements = await getEntitlementsForUser(env(envOverrides), USER_ID);
+
+    expect(entitlements.plan).toBe("free");
+    expect(entitlements.source).toBe("free");
+  });
+
+  it("resolves the plan without reading the user's email", async () => {
+    const statements: string[] = [];
+    d1.setStatementHook((sql) => statements.push(sql));
+
+    await getEntitlementsForUser(env(), USER_ID);
+
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.filter((sql) => /\bfrom\s+"users"/i.test(sql))).toEqual([]);
+  });
+});

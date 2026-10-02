@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
+import { buildToolInvocation } from "./lib/run-tool.mjs";
 
 const NO_PENDING_MIGRATIONS = "No migrations to apply!";
 const PENDING_MIGRATIONS = "Migrations to be applied:";
@@ -42,18 +43,17 @@ function main() {
     return;
   }
 
-  const command = process.platform === "win32" ? "npx.cmd" : "npx";
+  const wrangler = buildToolInvocation("wrangler", [
+    "d1",
+    "migrations",
+    "list",
+    database,
+    "--remote",
+    ...(preview ? ["--preview"] : []),
+  ]);
   const result = spawnSync(
-    command,
-    [
-      "wrangler",
-      "d1",
-      "migrations",
-      "list",
-      database,
-      "--remote",
-      ...(preview ? ["--preview"] : []),
-    ],
+    wrangler.command,
+    wrangler.args,
     {
       cwd: process.cwd(),
       env: process.env,

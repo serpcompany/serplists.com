@@ -515,19 +515,19 @@ describe('Checklist Schema Validation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should handle empty strings vs null/undefined', () => {
+    it('accepts an empty title, description and slug and empty category and tag lists', () => {
       const emptyStringsTemplate = {
         id: 'empty-1',
-        title: '', // Empty string should be valid
-        description: '', // Empty optional field
+        title: '',
+        description: '',
         sections: [],
         userId: 'user-123',
         createdAt: '2024-01-01T00:00:00Z',
         updatedAt: '2024-01-01T00:00:00Z',
         isPublic: false,
-        slug: '', // Empty slug
-        categories: [], // Empty array
-        tags: [] // Empty array
+        slug: '',
+        categories: [],
+        tags: []
       };
       
       const result = checklistTemplateSchema.safeParse(emptyStringsTemplate);
@@ -541,7 +541,7 @@ describe('Checklist Schema Validation', () => {
         value: 'large-video.mp4',
         uploadType: 'upload',
         fileName: 'presentation.mp4',
-        fileSize: 5368709120 // 5GB
+        fileSize: 5 * 1024 ** 3
       };
       
       const result = checklistItemContentSchema.safeParse(largeFileContent);

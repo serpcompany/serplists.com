@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import apiWorker from '../../functions/api/[[route]].ts';
+import { varFromWranglerToml } from '../support/wranglerToml';
 
 function buildEnv(overrides?: Record<string, unknown>) {
   return {
     BETTER_AUTH_SECRET: 'test-better-auth-secret-32-chars-minimum!!',
     ...overrides,
   } as any;
+}
+
+function productionEnv(overrides?: Record<string, unknown>) {
+  return buildEnv({
+    AUTH_EMAIL_VERIFICATION_REQUIRED: varFromWranglerToml('env.production.vars', 'AUTH_EMAIL_VERIFICATION_REQUIRED'),
+    ...overrides,
+  });
 }
 
 describe('API Worker (no-wrangler integration)', () => {
@@ -43,6 +51,31 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.status).toBe(500);
     const data = await response.json();
     expect(data.error).toBe('Server configuration error');
+  });
+
+  it.each([
+    ['CORS_ALLOWED_ORIGINS has no scheme', { CORS_ALLOWED_ORIGINS: 'serplists.com' }],
+    ['CORS_ALLOWED_ORIGINS has a bad entry', { CORS_ALLOWED_ORIGINS: 'https://ok.com,localhost:8080' }],
+    ['FRONTEND_URL is host:port', { FRONTEND_URL: 'localhost:8080' }],
+  ])('fails closed without credentialed CORS when %s', async (_label, overrides) => {
+    const env = buildEnv(overrides);
+    const response = await apiWorker.fetch(
+      new Request('http://localhost/api/health', { headers: { Origin: 'https://evil.example' } }),
+      env
+    );
+
+    expect(response.status).toBe(500);
+    expect((await response.json()).error).toBe('Server configuration error');
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBeNull();
+
+    const preflight = await apiWorker.fetch(
+      new Request('http://localhost/api/health', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } }),
+      env
+    );
+    expect(preflight.status).toBe(403);
+    expect(preflight.headers.get('Access-Control-Allow-Origin')).toBeNull();
+    expect(preflight.headers.get('Access-Control-Allow-Credentials')).toBeNull();
   });
 
   it('GET /api/health fails closed when R2_PUBLIC_BASE_URL is malformed', async () => {
@@ -95,7 +128,7 @@ describe('API Worker (no-wrangler integration)', () => {
           name: "Blocked User",
         }),
       }),
-      buildEnv()
+      productionEnv()
     );
 
     expect(response.status).toBe(403);
@@ -113,7 +146,7 @@ describe('API Worker (no-wrangler integration)', () => {
           password: "password123456",
         }),
       }),
-      buildEnv()
+      productionEnv()
     );
 
     expect(response.status).toBe(403);
@@ -132,7 +165,7 @@ describe('API Worker (no-wrangler integration)', () => {
           name: "New User",
         }),
       }),
-      buildEnv({
+      productionEnv({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: undefined,
       })
@@ -141,6 +174,31 @@ describe('API Worker (no-wrangler integration)', () => {
     expect(response.status).toBe(503);
     const data = await response.json();
     expect(data.error).toBe("Auth email is temporarily unavailable. Please contact support.");
+    expect(data.code).toBe("auth_email_unavailable");
+  });
+
+  it('refuses sign-up before Better Auth creates an account when verification is required but email cannot be sent', async () => {
+    const envWithNoDatabaseForBetterAuthToReach = buildEnv({
+      AUTH_EMAIL_VERIFICATION_REQUIRED: "true",
+      RESEND_API_KEY: undefined,
+      USESEND_API_KEY: undefined,
+    });
+
+    const response = await apiWorker.fetch(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "new-user@example.com",
+          password: "password123456",
+          name: "New User",
+        }),
+      }),
+      envWithNoDatabaseForBetterAuthToReach
+    );
+
+    expect(response.status).toBe(503);
+    const data = await response.json();
     expect(data.code).toBe("auth_email_unavailable");
   });
 
@@ -200,7 +258,7 @@ describe('API Worker (no-wrangler integration)', () => {
   it('reports account registration unavailable on production when no auth email provider is configured', async () => {
     const response = await apiWorker.fetch(
       new Request('https://serplists.com/api/auth/status'),
-      buildEnv({
+      productionEnv({
         RESEND_API_KEY: undefined,
         USESEND_API_KEY: undefined,
       })
@@ -291,5 +349,99 @@ describe('API Worker (no-wrangler integration)', () => {
 
     expect(preflightAllowed.status).toBe(200);
     expect(preflightAllowed.headers.get('Access-Control-Allow-Origin')).toBe('http://127.0.0.1:4173');
+  });
+});
+
+describe('API Worker auth request guard (no-wrangler integration)', () => {
+  const blockedCredentials = { email: 'test-user@serplists.dev', password: 'password123456' };
+
+  function formBody() {
+    const form = new FormData();
+    form.set('email', blockedCredentials.email);
+    form.set('password', blockedCredentials.password);
+    return form;
+  }
+
+  it.each([
+    ['sign-in/email', 'form-urlencoded', () => new URLSearchParams(blockedCredentials)],
+    ['sign-up/email', 'form-urlencoded', () => new URLSearchParams({ ...blockedCredentials, name: 'Blocked' })],
+    ['sign-in/email', 'multipart', formBody],
+    ['sign-up/email', 'multipart', formBody],
+  ])('refuses a %s %s body before Better Auth parses it', async (path, _label, body) => {
+    const response = await apiWorker.fetch(
+      new Request(`https://serplists.com/api/auth/${path}`, { method: 'POST', body: body() }),
+      buildEnv(),
+    );
+
+    expect(response.status).toBe(415);
+    expect(response.headers.get('Set-Cookie')).toBeNull();
+  });
+
+  it.each(['text/plain', 'text/plain; x=application/json', 'application/x-www-form-urlencoded'])(
+    'refuses a JSON body sent as %s',
+    async (contentType) => {
+      const response = await apiWorker.fetch(
+        new Request('https://serplists.com/api/auth/sign-in/email', {
+          method: 'POST',
+          headers: { 'Content-Type': contentType },
+          body: JSON.stringify(blockedCredentials),
+        }),
+        buildEnv(),
+      );
+
+      expect(response.status).toBe(415);
+    },
+  );
+
+  it.each([
+    ['a foreign Origin', { Origin: 'https://evil.example' }],
+    ['Origin: null', { Origin: 'null' }],
+    ['a cross-site fetch with no Origin', { 'Sec-Fetch-Site': 'cross-site' }],
+  ])('refuses a cookieless auth POST from %s', async (_label, headers) => {
+    for (const path of ['sign-in/email', 'sign-out']) {
+      const response = await apiWorker.fetch(
+        new Request(`https://serplists.com/api/auth/${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...headers },
+          body: JSON.stringify(blockedCredentials),
+        }),
+        buildEnv(),
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('Set-Cookie')).toBeNull();
+    }
+  });
+
+  it.each([
+    ['the API origin', { Origin: 'https://serplists.com' }],
+    ['the configured frontend origin', { Origin: 'https://app.serplists.com' }],
+    ['no Origin (scripts and server calls)', {}],
+    ['a same-site fetch', { 'Sec-Fetch-Site': 'same-site' }],
+  ])('lets a JSON auth POST from %s through to the test-account check', async (_label, headers) => {
+    const response = await apiWorker.fetch(
+      new Request('https://serplists.com/api/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'APPLICATION/JSON; charset=utf-8', ...headers },
+        body: JSON.stringify(blockedCredentials),
+      }),
+      productionEnv({ FRONTEND_URL: 'https://app.serplists.com' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: 'Test accounts are disabled in production' });
+  });
+
+  it('answers malformed JSON on a guarded auth route with 400', async () => {
+    const response = await apiWorker.fetch(
+      new Request('https://serplists.com/api/auth/sign-in/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"email":',
+      }),
+      productionEnv(),
+    );
+
+    expect(response.status).toBe(400);
   });
 });

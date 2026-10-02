@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronsUpDown, X } from 'lucide-react'
+import { ChevronsUpDown, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +28,7 @@ export interface TagOption {
 interface TagsProps {
   className?: string
   emptyMessage?: string
+  id?: string
   onSelectionChange: (selected: string[]) => void
   options: TagOption[]
   placeholder?: string
@@ -38,6 +39,7 @@ interface TagsProps {
 export function Tags({
   className,
   emptyMessage = 'No options found.',
+  id,
   onSelectionChange,
   options,
   placeholder = 'Select...',
@@ -59,47 +61,49 @@ export function Tags({
   }
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('flex flex-col gap-2', className)}>
       {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {selected.map((value) => {
             const option = options.find((current) => current.value === value)
 
             return (
-              <Badge key={value} variant="secondary" className="gap-1 pr-1">
+              <Badge key={value} variant="secondary" className="pr-0.5">
                 {option?.label || value}
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="size-4 rounded-full"
                   onClick={() => handleRemove(value)}
-                  className="ml-1 rounded-full p-0.5 hover:bg-background/50"
                   aria-label={`Remove ${option?.label || value}`}
                 >
-                  <X className="h-3 w-3" />
-                </button>
+                  <X />
+                </Button>
               </Badge>
             )
           })}
         </div>
       ) : null}
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-full justify-between bg-input font-normal"
-            type="button"
-          >
-            <span className="text-muted-foreground">
-              {selected.length > 0 ? `${selected.length} selected` : placeholder}
-            </span>
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0"
-          align="start"
+        <PopoverTrigger
+          render={
+            <Button
+              id={id}
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-full justify-between font-normal"
+              type="button"
+            />
+          }
         >
+          <span className="text-muted-foreground">
+            {selected.length > 0 ? `${selected.length} selected` : placeholder}
+          </span>
+          <ChevronsUpDown className="opacity-50" />
+        </PopoverTrigger>
+        <PopoverContent className="w-(--anchor-width) p-0" align="start">
           <Command>
             <CommandInput placeholder={searchPlaceholder} />
             <CommandList>
@@ -109,14 +113,9 @@ export function Tags({
                   <CommandItem
                     key={option.value}
                     value={option.value}
+                    data-checked={selected.includes(option.value)}
                     onSelect={() => handleSelect(option.value)}
                   >
-                    <Check
-                      className={cn(
-                        'mr-2 h-4 w-4',
-                        selected.includes(option.value) ? 'opacity-100' : 'opacity-0',
-                      )}
-                    />
                     {option.label}
                   </CommandItem>
                 ))}

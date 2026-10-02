@@ -1,0 +1,67 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import {
+  RATE_LIMIT_EXEMPT_ROUTES,
+  routeRateLimitBucket,
+} from '@functions/api/utils/route-rate-limit';
+
+describe('routeRateLimitBucket', () => {
+  it.each([
+    ['POST', 'billing/checkout', 'billing'],
+    ['POST', 'billing/portal', 'billing'],
+    ['POST', 'billing', 'billing'],
+    ['GET', 'billing/status', null],
+    ['POST', 'stripe/webhook', null],
+    ['POST', 'templates', 'write'],
+    ['PUT', 'templates/abc', 'write'],
+    ['DELETE', 'checklists/abc', 'write'],
+    ['PATCH', 'teams/abc', 'write'],
+    ['POST', 'uploads', 'write'],
+    ['POST', 'agent-keys', 'write'],
+    ['DELETE', 'agent-keys/key-1', 'write'],
+    ['POST', 'mcp', 'mcp'],
+    ['GET', 'mcp', null],
+    ['POST', 'templates/generate-from-clipy', 'write'],
+    ['GET', 'templates', null],
+    ['GET', 'checklists/shared/abc', null],
+    ['POST', 'auth/sign-in/email', null],
+    ['POST', 'profiles/by-username', null],
+  ])('%s %s -> %s', (method, path, expected) => {
+    expect(routeRateLimitBucket(method, path)).toBe(expected);
+  });
+
+  it.each([
+    ['POST', 'admin/entitlements/override'],
+    ['DELETE', 'admin/entitlements/override'],
+    ['GET', 'admin/entitlements/override'],
+    ['HEAD', 'admin'],
+    ['PROPFIND', 'admin/x'],
+  ])('counts %s %s as admin, since a read must not be a free way to test guesses at the secret', (method, path) => {
+    expect(routeRateLimitBucket(method, path)).toBe('admin');
+  });
+});
+
+describe('router rate limit coverage, so no new state-changing route family ships without a limit', () => {
+  const routerSource = readFileSync(resolve(__dirname, '../../../../functions/api/[[route]].ts'), 'utf8');
+  const dispatched = Array.from(
+    routerSource.matchAll(/path(?:\s*===\s*|\.startsWith\()'([^']+)'/g),
+    (match) => match[1],
+  );
+  const families = Array.from(new Set(dispatched));
+
+  it('finds the route families the router dispatches', () => {
+    expect(families).toEqual(expect.arrayContaining(['billing', 'stripe', 'templates', 'admin', 'mcp', 'auth']));
+  });
+
+  it.each(families)('POST %s is limited or explicitly exempt', (family) => {
+    const exemptFamily = Object.keys(RATE_LIMIT_EXEMPT_ROUTES).find(
+      (exempt) => family === exempt || family.startsWith(`${exempt}/`),
+    );
+    if (exemptFamily) {
+      expect(RATE_LIMIT_EXEMPT_ROUTES[exemptFamily].length).toBeGreaterThan(0);
+      return;
+    }
+    expect(routeRateLimitBucket('POST', family)).not.toBeNull();
+  });
+});

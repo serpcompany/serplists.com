@@ -1,0 +1,28 @@
+import type { Page } from '@playwright/test';
+import { z } from 'zod';
+
+const RUN_LIMIT_MESSAGE = 'Active run limit reached. Upgrade to Pro to create more checklist runs.';
+
+const billingStatusSchema = z.record(z.unknown());
+
+export async function reportBillingEnabled(page: Page) {
+  await page.route('**/api/billing/status**', async (route) => {
+    const response = await route.fetch();
+    const status = billingStatusSchema.parse(await response.json());
+    await route.fulfill({ response, json: { ...status, billingEnabled: true } });
+  });
+}
+
+export async function answerRunStartsAtActiveRunLimit(page: Page) {
+  await page.route('**/api/checklists', async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      body: JSON.stringify({ code: 'limit_reached', error: RUN_LIMIT_MESSAGE }),
+      contentType: 'application/json',
+      status: 403,
+    });
+  });
+}

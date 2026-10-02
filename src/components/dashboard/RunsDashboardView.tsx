@@ -1,35 +1,22 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Filter,
-  MoreHorizontal,
-  Play,
-  RefreshCw,
-  Search,
-  Share2,
-  Trash2,
-} from 'lucide-react';
+import { useId, useMemo, useState } from 'react';
+import { Filter } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
+import { ListLoadErrorState } from '@/components/dashboard/ListLoadErrorState';
+import { RunListItem } from '@/components/dashboard/RunListItem';
 import {
   DashboardContentShell,
   DashboardEmptyState,
+  DashboardPageBody,
   DashboardPageHeader,
-  DashboardScrollArea,
-  DashboardToolbar,
 } from '@/components/dashboard/DashboardContentShell';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { SearchField } from '@/components/layout/SearchField';
+import { Toolbar } from '@/components/layout/Toolbar';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { RUN_SHARE_LINK_DESCRIPTION, ShareLinkDialog } from '@/components/shared/ShareLinkDialog';
+import { buttonVariants } from '@/components/ui/button';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Item, ItemContent, ItemGroup } from '@/components/ui/item';
 import {
   Select,
   SelectContent,
@@ -37,111 +24,79 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { buildPublicTemplatesPath } from '@/lib/routes';
+import { isStaleRecordError } from '@/lib/editConflicts';
+import type { ChecklistRun } from '@/types/checklist';
+import { useRunRevalidation } from '@/features/dashboard-runs/useRunRevalidation';
+import { useRunsDashboardSharing } from '@/features/dashboard-runs/useRunsDashboardSharing';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  buildConsoleTemplatePath,
-  buildConsoleTemplatesPath,
-  buildRunPath,
-} from '@/lib/routes';
-import { cn } from '@/lib/utils';
-import type { ChecklistRun, ChecklistTemplate } from '@/types/checklist';
-import { toast } from 'sonner';
-import { createRunsDashboardShareUrl } from '@/features/dashboard-runs/shareRun';
+  buildRunTemplateLookup,
+  filterDashboardRuns,
+  findRunTemplate,
+  type RunSourceTemplate,
+  type RunStatusFilter as StatusFilter,
+} from '@/features/dashboard-runs/runTemplateLookup';
+import { getRunRowActions } from '@/features/dashboard-runs/runRowActions';
+import type { ResourcePermissions } from '@/lib/organizationPermissions';
 
-type StatusFilter = 'all' | 'in_progress' | 'completed';
+import { Link } from '@/components/navigation/Link';
 
 interface RunsDashboardViewProps {
   runs: ChecklistRun[];
-  templates?: Pick<ChecklistTemplate, 'id' | 'ownerProfile' | 'title'>[];
+  templates?: RunSourceTemplate[];
+  workspaceTemplates?: RunSourceTemplate[];
+  getRunPermissions: (run: ChecklistRun) => ResourcePermissions;
   onDeleteRun: (runId: string) => void | Promise<void>;
   onRevalidateRun?: (run: ChecklistRun) => void | Promise<void>;
+  onRunShared?: (runId: string) => void;
+  onShareFailed?: (error: unknown) => Promise<void>;
+  onStopSharingRun?: (runId: string) => Promise<void>;
   loading?: boolean;
+  loadError?: unknown;
+  onRetryLoad?: () => void;
 }
 
-const formatDate = (dateString: string) =>
-  new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-
-const getTaskCounts = (run: ChecklistRun) =>
-  run.sections.reduce(
-    (acc, section) => {
-      const completed = section.items.filter((item) => item.isCompleted).length;
-      return {
-        completed: acc.completed + completed,
-        total: acc.total + section.items.length,
-      };
-    },
-    { completed: 0, total: 0 },
-  );
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All Runs',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+};
 
 export function RunsDashboardView({
   runs,
   templates = [],
+  workspaceTemplates,
+  getRunPermissions,
   onDeleteRun,
   onRevalidateRun,
+  onRunShared,
+  onShareFailed,
+  onStopSharingRun,
   loading = false,
+  loadError,
+  onRetryLoad = () => undefined,
 }: RunsDashboardViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [runToDelete, setRunToDelete] = useState<string | null>(null);
   const [isDeletingRun, setIsDeletingRun] = useState(false);
-  const [revalidatingRunId, setRevalidatingRunId] = useState<string | null>(null);
+  const fieldId = useId();
+  const { isRevalidating, revalidate } = useRunRevalidation(onRevalidateRun);
+  const { isShareDialogOpen, setIsShareDialogOpen, sharedLink, shareRun, stopSharing, stoppingShareRunId } =
+    useRunsDashboardSharing({ runs, onRunShared, onShareFailed, onStopSharingRun });
 
   const inProgressCount = runs.filter((run) => run.status === 'in_progress').length;
   const completedCount = runs.filter((run) => run.status === 'completed').length;
   const templatesById = useMemo(
-    () => new Map(templates.map((template) => [template.id, template])),
-    [templates],
+    () => buildRunTemplateLookup(templates, workspaceTemplates),
+    [templates, workspaceTemplates],
   );
 
-  const filteredRuns = useMemo(() => {
-    const lowerSearch = searchQuery.toLowerCase();
-
-    return runs
-      .filter((run) => {
-        const template = templatesById.get(run.templateId);
-        const matchesSearch = [
-          run.title,
-          run.status,
-          template?.title ?? '',
-          template?.ownerProfile?.username ?? '',
-          template?.ownerProfile?.full_name ?? '',
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(lowerSearch);
-        const matchesStatus =
-          statusFilter === 'all' || run.status === statusFilter;
-
-        return matchesSearch && matchesStatus;
-      })
-      .sort(
-        (left, right) =>
-          new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime(),
-      );
-  }, [runs, searchQuery, statusFilter, templatesById]);
-
-  const shareRun = async (runId: string) => {
-    try {
-      const shareUrl = await createRunsDashboardShareUrl(
-        runId,
-        window.location.origin,
-      );
-      await navigator.clipboard.writeText(shareUrl);
-      toast.success('Share link copied');
-    } catch {
-      toast.error('Failed to create share link');
-    }
-  };
+  const filteredRuns = useMemo(
+    () => filterDashboardRuns(runs, templatesById, searchQuery, statusFilter),
+    [runs, searchQuery, statusFilter, templatesById],
+  );
 
   const confirmDeleteRun = async () => {
     if (!runToDelete) {
@@ -157,6 +112,7 @@ export function RunsDashboardView({
       toast.error(
         error instanceof Error ? error.message : 'Failed to delete run.',
       );
+      if (isStaleRecordError(error)) setRunToDelete(null);
     } finally {
       setIsDeletingRun(false);
     }
@@ -169,56 +125,57 @@ export function RunsDashboardView({
         description={`${inProgressCount} in progress, ${completedCount} completed`}
       />
 
-      <DashboardToolbar>
-        <div className="relative w-full lg:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Search runs"
+      <Toolbar>
+        <Field className="sm:w-auto sm:flex-1 lg:max-w-md">
+          <FieldLabel htmlFor={`${fieldId}-search`}>Search</FieldLabel>
+          <SearchField
+            groupClassName="h-8"
+            id={`${fieldId}-search`}
             placeholder="Search runs..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            className="pl-9"
           />
-        </div>
+        </Field>
 
-        <Select
-          value={statusFilter}
-          onValueChange={(value) => setStatusFilter(value as StatusFilter)}
-        >
-          <SelectTrigger className="w-full lg:w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Runs</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
-      </DashboardToolbar>
+        <Field className="sm:w-40">
+          <FieldLabel htmlFor={`${fieldId}-status`}>Status</FieldLabel>
+          <Select
+            items={STATUS_FILTER_LABELS}
+            value={statusFilter}
+            onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+          >
+            <SelectTrigger className="w-full" id={`${fieldId}-status`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(STATUS_FILTER_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </Toolbar>
 
-      <DashboardScrollArea>
+      <DashboardPageBody>
         {loading ? (
-          <div className="space-y-2" aria-busy="true">
+          <ItemGroup aria-busy="true" className="gap-2">
             {Array.from({ length: 5 }).map((_, index) => (
-              <div
-                key={`run-skeleton-${index}`}
-                className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
-              >
-                <div className="h-10 w-10 shrink-0 rounded-full bg-secondary" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="h-4 w-56 rounded bg-secondary" />
-                  <div className="h-3 w-36 rounded bg-secondary/80" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="h-1.5 w-20 rounded-full bg-secondary" />
-                  <div className="h-5 w-12 rounded-full bg-secondary" />
-                </div>
-              </div>
+              <Item key={`run-skeleton-${index}`} role="listitem" variant="outline">
+                <Skeleton className="size-8 rounded-lg" />
+                <ItemContent>
+                  <Skeleton className="h-4 w-56 max-w-full" />
+                  <Skeleton className="h-3 w-36 max-w-full" />
+                </ItemContent>
+              </Item>
             ))}
-          </div>
+          </ItemGroup>
+        ) : loadError && runs.length === 0 ? (
+          <ListLoadErrorState error={loadError} listName="runs" onRetry={onRetryLoad} />
         ) : filteredRuns.length === 0 ? (
           <DashboardEmptyState
-            icon={<Filter className="h-7 w-7" />}
+            icon={<Filter />}
             title="No runs found"
             description={
               searchQuery
@@ -227,205 +184,52 @@ export function RunsDashboardView({
             }
             action={
               !searchQuery ? (
-              <Button asChild>
-                <Link to={buildConsoleTemplatesPath()}>Browse Templates</Link>
-              </Button>
+                <Link href={buildPublicTemplatesPath()} className={buttonVariants()}>
+                  Browse the Template Library
+                </Link>
               ) : null
             }
           />
         ) : (
-          <div className="space-y-2">
-            {filteredRuns.map((run) => {
-              const isCompleted = run.status === 'completed';
-              const { completed, total } = getTaskCounts(run);
-              const template = templatesById.get(run.templateId);
-
-              return (
-                <div
-                  key={run.id}
-                  className="group grid gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:border-muted-foreground/30 sm:grid-cols-[auto_minmax(0,1fr)] xl:flex xl:items-center"
-                >
-                  <div
-                    className={cn(
-                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                      isCompleted ? 'bg-success/10' : 'bg-primary/10',
-                    )}
-                  >
-                    {isCompleted ? (
-                      <CheckCircle2 className="h-5 w-5 text-success" />
-                    ) : (
-                      <Play className="h-5 w-5 text-primary" />
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to={buildRunPath(run.id)}
-                      className="text-left text-sm font-medium text-foreground hover:underline"
-                    >
-                      {run.title}
-                    </Link>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {template ? (
-                        <Link
-                          to={buildConsoleTemplatePath(template.id)}
-                          className="font-medium text-foreground/80 hover:text-foreground hover:underline"
-                        >
-                          From {template.title}
-                        </Link>
-                      ) : null}
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        Started {formatDate(run.startedAt)}
-                      </span>
-                      {isCompleted && run.completedAt ? (
-                        <span>Completed {formatDate(run.completedAt)}</span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 sm:col-start-2 xl:col-start-auto">
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-secondary">
-                        <div
-                          className={cn(
-                            'h-full transition-all duration-300',
-                            isCompleted ? 'bg-success' : 'bg-primary',
-                          )}
-                          style={{ width: `${run.progress}%` }}
-                        />
-                      </div>
-                      <span className="w-12 text-right text-xs font-medium text-muted-foreground">
-                        {completed}/{total}
-                      </span>
-                    </div>
-
-                    <span
-                      className={cn(
-                        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-                        isCompleted
-                          ? 'bg-success/10 text-success'
-                          : 'bg-primary/10 text-primary',
-                      )}
-                    >
-                      {isCompleted ? 'Completed' : 'In Progress'}
-                    </span>
-                    {run.isStale ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                        {run.isPublic ? 'Shared snapshot is out of date' : 'Needs revalidation'}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div
-                    className="flex flex-wrap items-center gap-2 opacity-100 transition-opacity xl:opacity-0 xl:group-hover:opacity-100 xl:focus-within:opacity-100"
-                    data-run-actions="true"
-                  >
-                    {run.isStale && !run.isPublic && onRevalidateRun ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={revalidatingRunId === run.id}
-                        onClick={async () => {
-                          setRevalidatingRunId(run.id);
-                          try {
-                            await onRevalidateRun(run);
-                            toast.success('Run revalidated against the latest template');
-                          } catch (error) {
-                            toast.error(error instanceof Error ? error.message : 'Unable to revalidate run');
-                          } finally {
-                            setRevalidatingRunId(null);
-                          }
-                        }}
-                      >
-                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                        {revalidatingRunId === run.id ? 'Revalidating...' : 'Revalidate'}
-                      </Button>
-                    ) : null}
-                    {!isCompleted ? (
-                      <Button asChild size="sm">
-                        <Link to={buildRunPath(run.id)}>
-                          <Play className="mr-1.5 h-3.5 w-3.5" />
-                          Continue
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={buildRunPath(run.id)}>
-                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                          View
-                        </Link>
-                      </Button>
-                    )}
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          aria-label="Run options"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40">
-                        <DropdownMenuItem onClick={() => shareRun(run.id)}>
-                          <Share2 className="mr-2 h-4 w-4" />
-                          Share Run
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => setRunToDelete(run.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ItemGroup className="gap-2">
+            {filteredRuns.map((run) => (
+              <RunListItem
+                key={run.id}
+                actions={getRunRowActions(run, getRunPermissions(run))}
+                isRevalidating={isRevalidating(run.id)}
+                isStoppingShare={stoppingShareRunId === run.id}
+                onDelete={() => setRunToDelete(run.id)}
+                onRevalidate={onRevalidateRun ? () => void revalidate(run) : undefined}
+                onShare={() => void shareRun(run.id)}
+                onStopSharing={onStopSharingRun ? () => void stopSharing(run.id) : undefined}
+                run={run}
+                template={findRunTemplate(templatesById, run.templateId)}
+              />
+            ))}
+          </ItemGroup>
         )}
-      </DashboardScrollArea>
+      </DashboardPageBody>
 
-      <Dialog
-        open={runToDelete !== null}
+      <ConfirmDialog
+        confirmLabel="Delete"
+        description="Are you sure you want to delete this run?"
+        onConfirm={() => void confirmDeleteRun()}
         onOpenChange={(open) => {
-          if (!open && !isDeletingRun) {
-            setRunToDelete(null);
-          }
+          if (!open) setRunToDelete(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete run</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this run? This action cannot be
-              undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={isDeletingRun}
-              onClick={() => setRunToDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={isDeletingRun}
-              onClick={() => void confirmDeleteRun()}
-            >
-              {isDeletingRun ? 'Deleting...' : 'Delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        open={runToDelete !== null}
+        pending={isDeletingRun}
+        pendingLabel="Deleting..."
+        title="Delete run"
+      />
+      <ShareLinkDialog
+        copiedMessage="Share link copied"
+        description={RUN_SHARE_LINK_DESCRIPTION}
+        onOpenChange={setIsShareDialogOpen}
+        open={isShareDialogOpen}
+        title="Share run"
+        url={sharedLink?.url ?? ''}
+      />
     </DashboardContentShell>
   );
 }

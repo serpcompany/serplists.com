@@ -1,4 +1,27 @@
-import type { ChecklistItemContent, ChecklistSection } from "@/types/checklist";
+import { toProgressPercent } from "@/lib/progress";
+import { sanitizeStoredItem } from "@/lib/schemas/storedSections";
+import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
+
+export function sectionFallbackTitle(sectionIndex: number): string {
+  return `Section ${sectionIndex + 1}`;
+}
+
+const displayTitle = (title: unknown): string =>
+  typeof title === "string" ? title.trim() : "";
+
+export function getSectionDisplayTitle(
+  section: Pick<ChecklistSection, "title">,
+  sectionIndex: number,
+): string {
+  return displayTitle(section.title) || sectionFallbackTitle(sectionIndex);
+}
+
+export function getSubItemDisplayTitle(
+  subItem: Pick<ChecklistSubItem, "title">,
+  subItemIndex: number,
+): string {
+  return displayTitle(subItem.title) || `Sub-task ${subItemIndex + 1}`;
+}
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   if (!Array.isArray(value)) return false;
@@ -7,84 +30,106 @@ export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   return typeof first?.items !== "undefined";
 }
 
+type JsonRecord = Record<string, unknown>;
+
+export const isJsonRecord = (value: unknown): value is JsonRecord =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toTitledRecord = (value: unknown): JsonRecord | null => {
+  if (typeof value === "string") {
+    const title = value.trim();
+    return title ? { title } : null;
+  }
+  return isJsonRecord(value) ? value : null;
+};
+
+const completionOf = (value: JsonRecord): boolean =>
+  typeof value.isCompleted === "boolean"
+    ? value.isCompleted
+    : typeof value.completed === "boolean"
+      ? value.completed
+      : false;
+
+const normalizeContent = (content: JsonRecord): JsonRecord => {
+  if (content.type !== "subItems" || !Array.isArray(content.subItems)) return content;
+  return {
+    ...content,
+    subItems: content.subItems.flatMap((entry) => {
+      const subItem = toTitledRecord(entry);
+      return subItem ? [{ ...subItem, isCompleted: completionOf(subItem) }] : [];
+    }),
+  };
+};
+
 export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
-  return raw.map((section, sectionIndex) => {
-    const s = (section ?? {}) as Record<string, unknown>;
-    const rawItems = Array.isArray(s.items) ? (s.items as unknown[]) : [];
+  return raw.flatMap((section, sectionIndex) => {
+    if (!isJsonRecord(section)) return [];
+    const rawItems = Array.isArray(section.items) ? (section.items as unknown[]) : [];
 
-    return {
-      id: typeof s.id === "string" ? s.id : String(sectionIndex + 1),
-      title: typeof s.title === "string" ? s.title : "Checklist",
-      items: rawItems.map((item, itemIndex) => {
-        const it = (item ?? {}) as Record<string, unknown>;
-        const isCompleted =
-          typeof it.isCompleted === "boolean"
-            ? it.isCompleted
-            : typeof it.completed === "boolean"
-              ? it.completed
-              : false;
+    return [{
+      id: typeof section.id === "string" ? section.id : String(sectionIndex + 1),
+      title: typeof section.title === "string" ? section.title : "Checklist",
+      items: rawItems.flatMap((entry, itemIndex) => {
+        const titled = toTitledRecord(entry);
+        if (!titled) return [];
 
-        const rawContents = Array.isArray(it.contents) ? (it.contents as unknown[]) : undefined;
-        // Content entries are passed through from stored/imported JSON as-is (only legacy sub-item
-        // completion is normalized), so their shape is trusted here rather than validated.
-        const contents = rawContents?.map((c) => {
-          const content = (c ?? {}) as Record<string, unknown>;
-          if (content.type === "subItems" && Array.isArray(content.subItems)) {
-            return {
-              ...content,
-              subItems: (content.subItems as unknown[]).map((si) => {
-                const subItem = (si ?? {}) as Record<string, unknown>;
-                return {
-                  ...subItem,
-                  isCompleted:
-                    typeof subItem.isCompleted === "boolean"
-                      ? subItem.isCompleted
-                      : typeof subItem.completed === "boolean"
-                        ? subItem.completed
-                        : false,
-                };
-              }),
-            };
-          }
-          return content;
-        }) as ChecklistItemContent[] | undefined;
+        const it = sanitizeStoredItem(
+          Array.isArray(titled.contents)
+            ? { ...titled, contents: titled.contents.filter(isJsonRecord).map(normalizeContent) }
+            : titled,
+        );
+        const contents = Array.isArray(it.contents)
+          ? (it.contents as unknown as ChecklistItemContent[])
+          : undefined;
 
         const { completed: _completed, ...rest } = it;
-        return {
+        return [{
           ...rest,
           id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,
           title: typeof it.title === "string" ? it.title : "",
-          isCompleted,
+          isCompleted: completionOf(it),
           contents,
-        };
+        }];
       }),
-    } satisfies ChecklistSection;
+    } satisfies ChecklistSection];
   });
 }
 
-export function calculateSectionsProgress(sections: ChecklistSection[]): number {
-  let completed = 0;
-  let total = 0;
+export type RunTaskCounts = {
+  subTasksCompleted: number;
+  subTasksTotal: number;
+  tasksCompleted: number;
+  tasksTotal: number;
+};
 
-  sections.forEach((section) => {
-    section.items.forEach((item) => {
-      total++;
-      if (item.isCompleted) completed++;
+export function countRunTasks(sections: ChecklistSection[]): RunTaskCounts {
+  const counts: RunTaskCounts = { subTasksCompleted: 0, subTasksTotal: 0, tasksCompleted: 0, tasksTotal: 0 };
 
-      item.contents?.forEach((content) => {
-        if (content.type === "subItems" && content.subItems) {
-          content.subItems.forEach((subItem) => {
-            total++;
-            if (subItem.isCompleted) completed++;
-          });
+  for (const section of sections) {
+    for (const item of section.items) {
+      counts.tasksTotal += 1;
+      if (item.isCompleted === true) counts.tasksCompleted += 1;
+
+      for (const content of item.contents ?? []) {
+        if (content.type !== "subItems" || !Array.isArray(content.subItems)) continue;
+        for (const subItem of content.subItems) {
+          counts.subTasksTotal += 1;
+          if (subItem.isCompleted === true) counts.subTasksCompleted += 1;
         }
-      });
-    });
-  });
+      }
+    }
+  }
 
-  return total > 0 ? Math.round((completed / total) * 100) : 0;
+  return counts;
+}
+
+export function calculateSectionsProgress(sections: ChecklistSection[]): number {
+  const counts = countRunTasks(sections);
+  const total = counts.tasksTotal + counts.subTasksTotal;
+  const completed = counts.tasksCompleted + counts.subTasksCompleted;
+  return toProgressPercent(completed, total);
 }
 
 export function resetSectionsCompletion(sections: ChecklistSection[]): ChecklistSection[] {
@@ -95,7 +140,7 @@ export function resetSectionsCompletion(sections: ChecklistSection[]): Checklist
       isCompleted: false,
       contents: item.contents?.map((content) => {
         if (content.type !== "subItems") return content;
-        if (!content.subItems) return { ...content, subItems: [] };
+        if (!Array.isArray(content.subItems)) return { ...content, subItems: [] };
         return {
           ...content,
           subItems: content.subItems.map((subItem) => ({

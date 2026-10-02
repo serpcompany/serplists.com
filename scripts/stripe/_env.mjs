@@ -23,10 +23,18 @@ export function loadLocalEnv() {
     ...parseEnvFile(".env.local"),
     ...parseEnvFile(".dev.vars"),
   };
-  // Explicit process injection must win over local defaults. This is required
-  // for one-off administrative commands that receive credentials from a
-  // secret manager rather than from a repository-adjacent file.
   return { ...fileEnv, ...process.env };
+}
+
+export const TEST_SECRET_KEY_HINT =
+  "Set STRIPE_SECRET_KEY=sk_test_... (or STRIPE_TEST_SECRET_KEY) in .dev.vars.";
+
+export function resolveTestSecretKey(env) {
+  const dedicated = [env.STRIPE_TEST_SECRET_KEY, env.STRIPE_SECRET_KEY_TEST]
+    .map((value) => value?.trim())
+    .find(Boolean);
+  const key = dedicated ?? env.STRIPE_SECRET_KEY?.trim();
+  return key?.startsWith("sk_test_") ? key : undefined;
 }
 
 export function updateEnvFile(path, updates) {

@@ -1,9 +1,22 @@
 import { expect, test, type Page } from "@playwright/test";
+import { API_BASE_URL, APP_URL } from "./support/stack";
 import { readFileSync } from "node:fs";
 import { validateXML } from "xmllint-wasm";
 
 const sitemapSchema = readFileSync(new URL("../fixtures/sitemap.xsd", import.meta.url), "utf8");
 const sitemapIndexSchema = readFileSync(new URL("../fixtures/siteindex.xsd", import.meta.url), "utf8");
+const EMPTY_REGISTRY_CATEGORY_PAGES = [
+  "https://serplists.com/categories/engineering/",
+  "https://serplists.com/categories/compliance/",
+];
+const PRIVATE_TEMPLATE_PAGES = [
+  "https://serplists.com/profile/admin/internal-publishing-checklist/",
+  "https://serplists.com/profile/admin/shared-growth-launch-checklist/",
+  "https://serplists.com/profile/jane/client-reporting-qa-checklist/",
+];
+const SHARDS_THE_INDEX_NEVER_LISTED = ["profiles/999999", "templates/2", "templates/999", "categories/2"];
+const CACHE_DIRECTIVES_THAT_STORE = /^(public|immutable|s-maxage=|stale-|max-age=(?!0$))/;
+const WINDOWS_PATH_WITH_BACKSLASH_N = "Save the list to C:\\new_folder";
 
 async function expectSchemaValid(xml: string, schema: string, fileName: string) {
   const result = await validateXML({ xml: [{ fileName, contents: xml }], schema: [schema] });
@@ -11,9 +24,9 @@ async function expectSchemaValid(xml: string, schema: string, fileName: string) 
   expect(result.valid, result.rawOutput).toBe(true);
 }
 
-const apiTemplate = {
-  id: "serp-template-technical-seo-audit",
-  user_id: "serp-user",
+const seededSampleTemplateResponse = {
+  id: "template-1",
+  user_id: "user-1",
   title: "Technical SEO Audit Checklist",
   description: "A practical technical SEO audit you can run in 60-90 minutes.",
   items: JSON.stringify([
@@ -60,11 +73,11 @@ const apiTemplate = {
   category: JSON.stringify(["SEO", "Technical SEO"]),
   categories: ["SEO", "Technical SEO"],
   tags: ["audit", "crawl"],
-  slug: "technical-seo-audit-checklist",
+  slug: "sample-technical-seo-audit-checklist",
   created_at: "2026-07-04T00:16:35.000Z",
   updated_at: "2026-07-04T00:16:35.000Z",
-  owner_username: "serp",
-  owner_full_name: "SERP",
+  owner_username: "admin",
+  owner_full_name: "Admin (Pro)",
 };
 
 async function mockApiBackedPublicTemplate(page: Page) {
@@ -81,10 +94,10 @@ async function mockApiBackedPublicTemplate(page: Page) {
       return;
     }
 
-    if (path === "/api/templates/slug/technical-seo-audit-checklist") {
+    if (path === "/api/templates/slug/sample-technical-seo-audit-checklist") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify(apiTemplate),
+        body: JSON.stringify(seededSampleTemplateResponse),
       });
       return;
     }
@@ -92,7 +105,7 @@ async function mockApiBackedPublicTemplate(page: Page) {
     if (path === "/api/templates") {
       await route.fulfill({
         contentType: "application/json",
-        body: JSON.stringify([apiTemplate]),
+        body: JSON.stringify([seededSampleTemplateResponse]),
       });
       return;
     }
@@ -113,7 +126,7 @@ test("@smoke login page renders", async ({ page }) => {
     }
   });
 
-  await page.goto("/login");
+  await page.goto("/login/");
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
@@ -123,19 +136,17 @@ test("@smoke login page renders", async ({ page }) => {
 });
 
 test("@smoke removed docs prototype renders the public not-found page", async ({ page }) => {
-  await page.goto("/docs");
+  await page.goto("/docs/");
 
   await expect(
     page.getByRole("heading", { level: 1, name: "That page does not exist" }),
   ).toBeVisible();
-  await expect(page.getByText("The route /docs could not be found.")).toBeVisible();
+  await expect(page.getByText("The route /docs/ could not be found.")).toBeVisible();
   await expect(page.getByText("Checklist & Template Experience")).toHaveCount(0);
 });
 
 test("@smoke public document installs the configured Google Tag Manager container", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
+  const pagesOrigin = new URL(APP_URL).origin;
   const response = await request.get(`${pagesOrigin}/`);
   const html = await response.text();
   const csp = response.headers()["content-security-policy"] ?? "";
@@ -150,11 +161,13 @@ test("@smoke public document installs the configured Google Tag Manager containe
   );
   expect(csp).toContain("script-src");
   expect(csp).toContain("https://www.googletagmanager.com");
+  expect(csp).toContain("https://static.cloudflareinsights.com");
+  expect(csp).toContain("https://analytics.ahrefs.com");
   expect(csp).toContain("frame-src");
 });
 
-test("@smoke authenticated template API returns the seeded private template", async ({ request }) => {
-  const apiBaseUrl = process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+test("@smoke the template API returns the owner's seeded private template, and the public catalog every visitor shares never lists it", async ({ request }) => {
+  const apiBaseUrl = API_BASE_URL;
   const signInResponse = await request.post(`${apiBaseUrl}/auth/sign-in/email`, {
     data: {
       email: "admin@test.com",
@@ -178,8 +191,6 @@ test("@smoke authenticated template API returns the seeded private template", as
     ]),
   );
 
-  // The public catalog is edge-cached and shared by every visitor, so it must never
-  // include a private template, even for its owner.
   const catalogResponse = await request.get(`${apiBaseUrl}/templates?scope=public`);
   expect(catalogResponse.status()).toBe(200);
   const catalogIds = ((await catalogResponse.json()) as Array<{ id: string }>).map((template) => template.id);
@@ -187,9 +198,7 @@ test("@smoke authenticated template API returns the seeded private template", as
 });
 
 test("@smoke sitemap index and every listed shard pass the public XML audit", async ({ request }) => {
-  const pagesOrigin = new URL(
-    process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api",
-  ).origin;
+  const pagesOrigin = new URL(APP_URL).origin;
   const indexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
   const indexXml = await indexResponse.text();
   const childLocations = Array.from(
@@ -247,6 +256,11 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
       allPageLocations.add(location);
     }
     expect(lastmods.every((value) => Number.isFinite(Date.parse(value)))).toBe(true);
+    if (childLocation.includes("/sitemaps/categories/")) {
+      const shardDateInIndex = Date.parse(shardLastmods.find(([loc]) => loc === childLocation)?.[1] ?? "");
+      const newestEntryInShard = Math.max(...lastmods.map((value) => Date.parse(value)));
+      expect(shardDateInIndex, childLocation).toBeGreaterThanOrEqual(newestEntryInShard);
+    }
     expect(childXml).not.toContain("<priority>");
     expect(childXml).not.toContain("<changefreq>");
     await expectSchemaValid(childXml, sitemapSchema, new URL(childLocation).pathname);
@@ -258,20 +272,16 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(await headResponse.text()).toBe("");
   }
 
-  expect(allPageLocations).toContain("https://serplists.com/profile/admin");
+  expect(allPageLocations).toContain("https://serplists.com/profile/admin/");
   expect(allPageLocations).toContain(
-    "https://serplists.com/profile/admin/technical-seo-audit-checklist",
+    "https://serplists.com/profile/admin/sample-technical-seo-audit-checklist/",
   );
-  expect(allPageLocations).toContain("https://serplists.com/categories/seo");
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/internal-publishing-checklist",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/admin/shared-growth-launch-checklist",
-  );
-  expect(allPageLocations).not.toContain(
-    "https://serplists.com/profile/jane/client-reporting-qa-checklist",
-  );
+  expect(allPageLocations).toContain("https://serplists.com/categories/seo/");
+  const listedWithoutTheirTrailingSlash = [...allPageLocations].filter((location) => !location.endsWith("/"));
+  expect(listedWithoutTheirTrailingSlash).toEqual([]);
+  for (const unlisted of [...EMPTY_REGISTRY_CATEGORY_PAGES, ...PRIVATE_TEMPLATE_PAGES]) {
+    expect(allPageLocations).not.toContain(unlisted);
+  }
 
   const unchangedIndexResponse = await request.get(`${pagesOrigin}/sitemap.xml`);
   const unchangedIndexXml = await unchangedIndexResponse.text();
@@ -292,7 +302,13 @@ test("@smoke sitemap index and every listed shard pass the public XML audit", as
     expect(unchangedPageLocations, childLocation).toEqual(pageLocationsByShard.get(childLocation));
   }
 
-  expect((await request.get(`${pagesOrigin}/sitemaps/profiles/999999.xml`)).status()).toBe(404);
+  for (const unpublished of SHARDS_THE_INDEX_NEVER_LISTED) {
+    const unpublishedResponse = await request.get(`${pagesOrigin}/sitemaps/${unpublished}.xml`);
+    expect(unpublishedResponse.status(), unpublished).toBe(404);
+    const directives = (unpublishedResponse.headers()["cache-control"] ?? "").split(",").map((directive) => directive.trim());
+    expect(directives, unpublished).toContain("no-store");
+    expect(directives.filter((directive) => CACHE_DIRECTIVES_THAT_STORE.test(directive)), unpublished).toEqual([]);
+  }
   expect((await request.get(`${pagesOrigin}/sitemaps/static.xml`, { maxRedirects: 0 })).status()).toBe(308);
   expect((await request.get(`${pagesOrigin}/categories/sitemap.xml`, { maxRedirects: 0 })).status()).toBe(308);
 });
@@ -301,18 +317,18 @@ test("@smoke login link renders the login page without refresh", async ({ page }
   await page.goto("/");
   await page.getByRole("link", { name: /^log in$/i }).click();
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\/$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
 });
 
-test("@smoke protected routes render login after redirect without refresh", async ({
+test("@smoke protected routes render login after redirect without refresh, with the page they came from in ?next=", async ({
   page,
 }) => {
-  await page.goto("/dashboard/settings");
+  await page.goto("/dashboard/settings/");
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\/\?next=%2Fdashboard%2Fsettings%2F$/);
   await expect(
     page.getByRole("heading", { name: /welcome back/i })
   ).toBeVisible();
@@ -321,7 +337,7 @@ test("@smoke protected routes render login after redirect without refresh", asyn
 test("@smoke API-backed public template single renders", async ({ page }) => {
   await mockApiBackedPublicTemplate(page);
 
-  await page.goto("/profile/serp/technical-seo-audit-checklist");
+  await page.goto("/profile/admin/sample-technical-seo-audit-checklist/");
 
   await expect(
     page.getByRole("heading", {
@@ -335,7 +351,7 @@ test("@smoke API-backed public template single renders", async ({ page }) => {
 
 test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   const description =
-    "First URL instruction line\nSecond URL instruction line\\nThird URL instruction line";
+    `First URL instruction line\nSecond URL instruction line\n${WINDOWS_PATH_WITH_BACKSLASH_N}\nThird URL instruction line`;
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -447,7 +463,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
     });
   });
 
-  await page.goto("/dashboard/runs/run-line-breaks");
+  await page.goto("/dashboard/runs/run-line-breaks/");
 
   await expect(
     page.getByRole("heading", { name: "Create a .txt file of URLs" }),
@@ -460,6 +476,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
   await expect(renderedDescription).toBeVisible();
   await expect(renderedDescription).toContainText("Second URL instruction line");
   await expect(renderedDescription).toContainText("Third URL instruction line");
+  await expect(renderedDescription).toContainText(WINDOWS_PATH_WITH_BACKSLASH_N);
 
   const whiteSpace = await renderedDescription.evaluate(
     (node) => getComputedStyle(node).whiteSpace,
@@ -480,7 +497,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
     await page.goto(startPath);
     await page.getByRole("link", { name: /^log in$/i }).click();
 
-    await expect(page).toHaveURL(/\/login$/);
+    await expect(page).toHaveURL(/\/login\/$/);
     await expect(
       page.getByRole("heading", { name: /welcome back/i })
     ).toBeVisible();
@@ -488,7 +505,7 @@ test("@smoke run task descriptions preserve line breaks", async ({ page }) => {
 });
 
 test("@smoke login password visibility toggles", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login/");
 
   const password = page.locator("#password");
 
@@ -500,7 +517,7 @@ test("@smoke login password visibility toggles", async ({ page }) => {
 });
 
 test("@smoke register password visibility toggles", async ({ page }) => {
-  await page.goto("/register");
+  await page.goto("/register/");
 
   const password = page.locator("#password");
   const confirmPassword = page.locator("#confirmPassword");

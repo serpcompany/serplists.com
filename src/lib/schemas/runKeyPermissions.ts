@@ -6,7 +6,6 @@ export type RunKeyPermission = (typeof RUN_KEY_PERMISSIONS)[number];
 
 export const runKeyPermissionSchema = z.enum(RUN_KEY_PERMISSIONS);
 
-// Matches the column default in migration 0027: what every key could do before template writes.
 export const DEFAULT_RUN_KEY_PERMISSIONS: readonly RunKeyPermission[] = ["templates:read", "runs:read", "runs:write"];
 
 export const RUN_KEY_PERMISSION_DETAILS: Record<RunKeyPermission, { label: string; description: string }> = {
@@ -22,8 +21,6 @@ export const RUN_KEY_PERMISSION_DETAILS: Record<RunKeyPermission, { label: strin
   },
 };
 
-// Starting a run copies the template's current content into the run, so writing runs
-// also reads templates.
 const IMPLIED_READS: Partial<Record<RunKeyPermission, readonly RunKeyPermission[]>> = {
   "templates:write": ["templates:read"],
   "runs:write": ["runs:read", "templates:read"],
@@ -46,8 +43,6 @@ export function toggleRunKeyPermission(
   return current.filter((granted) => granted !== permission && !IMPLIED_READS[granted]?.includes(permission));
 }
 
-// Stored values are parsed, not trusted: unknown entries are dropped and a malformed
-// column grants nothing.
 export function parseStoredRunKeyPermissions(value: unknown): RunKeyPermission[] {
   let raw: unknown = value;
   if (typeof value === "string") {

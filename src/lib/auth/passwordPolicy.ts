@@ -1,16 +1,21 @@
-export const MIN_PASSWORD_LENGTH = 10;
-export const MAX_PASSWORD_LENGTH = 128;
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  PASSWORD_TOO_LONG_MESSAGE,
+  PASSWORD_TOO_SHORT_MESSAGE,
+  passwordExceedsMaxBytes,
+} from "@/lib/schemas/passwordLimits";
+
+export { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH };
 
 export type PasswordPolicyResult = { ok: true } | { ok: false; message: string };
 
 export function validatePasswordPolicy(password: string): PasswordPolicyResult {
-  const trimmed = password.trim();
-  if (trimmed.length < MIN_PASSWORD_LENGTH) {
-    return { ok: false, message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` };
+  if (password.trim().length < MIN_PASSWORD_LENGTH) {
+    return { ok: false, message: PASSWORD_TOO_SHORT_MESSAGE };
   }
-  if (trimmed.length > MAX_PASSWORD_LENGTH) {
-    return { ok: false, message: `Password must be at most ${MAX_PASSWORD_LENGTH} characters` };
+  if (passwordExceedsMaxBytes(password)) {
+    return { ok: false, message: PASSWORD_TOO_LONG_MESSAGE };
   }
   return { ok: true };
 }
-

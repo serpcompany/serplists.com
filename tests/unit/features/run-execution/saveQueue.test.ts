@@ -2,16 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { createSaveQueue } from '@/features/run-execution/saveQueue';
 
-const deferred = () => {
-  let resolve!: (value: string) => void;
-  const promise = new Promise<string>((done) => { resolve = done; });
-  return { promise, resolve };
-};
+import { deferred } from '../../../support/deferred';
 
 describe('createSaveQueue', () => {
   it('ignores a key that is already pending, like a double click', async () => {
     const queue = createSaveQueue();
-    const save = deferred();
+    const save = deferred<string>();
     let calls = 0;
     const first = queue('toggle:a', () => { calls += 1; return save.promise; });
     const second = queue('toggle:a', () => { calls += 1; return save.promise; });
@@ -26,7 +22,7 @@ describe('createSaveQueue', () => {
   it('runs different saves one at a time, in order', async () => {
     const queue = createSaveQueue();
     const order: string[] = [];
-    const firstSave = deferred();
+    const firstSave = deferred<string>();
     const first = queue('toggle:a', async () => { order.push('a:start'); const value = await firstSave.promise; order.push('a:end'); return value; });
     const second = queue('notes:a', async () => { order.push('b:start'); return 'b'; });
 

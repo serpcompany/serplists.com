@@ -8,6 +8,7 @@ import {
 } from "../../../src/lib/schemas/runKeyPermissions";
 import { createDb, schema } from "../db";
 import type { Env } from "../types";
+import { resolveAgentMcpConnection } from "../utils/agent-mcp-host";
 import {
   createPersonalRunKeySecret,
   insertPersonalRunKeyWithinCap,
@@ -16,7 +17,7 @@ import {
 import { json, jsonError } from "../utils/response";
 import { getSessionUserId } from "../utils/session";
 
-// Active keys are capped, so this bounds the list to every active key plus recent revoked ones.
+const CONNECTION_SEGMENT = "connection";
 const MAX_LISTED_KEYS = 50;
 
 const createKeyBodySchema = z.object({
@@ -53,6 +54,11 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
     return jsonError("Not found", 404);
   }
   const keyId = handlerPath[1];
+
+  if (request.method === "GET" && keyId === CONNECTION_SEGMENT) {
+    return json(resolveAgentMcpConnection(request, env));
+  }
+
   const db = createDb(env);
   const { personal_run_keys } = schema;
 
@@ -117,27 +123,21 @@ export async function handleAgentKeys(request: Request, env: Env): Promise<Respo
   }
 
   if (request.method === "DELETE" && keyId) {
-    const [ownedKey] = await db
-      .select({ id: personal_run_keys.id })
-      .from(personal_run_keys)
-      .where(and(
-        eq(personal_run_keys.id, keyId),
-        eq(personal_run_keys.user_id, userId),
-        isNull(personal_run_keys.revoked_at),
-      ))
-      .limit(1);
-    if (!ownedKey) return jsonError("Personal run key not found", 404);
-
-    const revokedAt = new Date().toISOString();
-    await db
+    const ownedKey = and(eq(personal_run_keys.id, keyId), eq(personal_run_keys.user_id, userId));
+    const [revoked] = await db
       .update(personal_run_keys)
-      .set({ revoked_at: revokedAt })
-      .where(and(
-        eq(personal_run_keys.id, keyId),
-        eq(personal_run_keys.user_id, userId),
-        isNull(personal_run_keys.revoked_at),
-      ));
-    return json({ id: keyId, revokedAt });
+      .set({ revoked_at: new Date().toISOString() })
+      .where(and(ownedKey, isNull(personal_run_keys.revoked_at)))
+      .returning({ revokedAt: personal_run_keys.revoked_at });
+    if (revoked?.revokedAt) return json({ id: keyId, revokedAt: revoked.revokedAt });
+
+    const [existing] = await db
+      .select({ revokedAt: personal_run_keys.revoked_at })
+      .from(personal_run_keys)
+      .where(ownedKey)
+      .limit(1);
+    if (!existing?.revokedAt) return jsonError("Personal run key not found", 404);
+    return json({ id: keyId, revokedAt: existing.revokedAt });
   }
 
   return jsonError("Not found", 404);

@@ -1,8 +1,25 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { z } from "zod";
 
-const DEV_API_BASE_URL =
-  process.env.PLAYWRIGHT_API_URL ?? "http://localhost:8788/api";
+import { apiJson, apiRequest } from "./support/api-requests";
+import { loginAsAdmin } from "./support/sign-in";
+
+type HeaderWatchWindow = Window & { __sawNewTemplate?: boolean };
+
+const updateBodySchema = z.object({ expected_version: z.unknown() });
+const storedTemplateSchema = z
+  .object({
+    sections: z.array(
+      z.object({ items: z.array(z.object({ contents: z.array(z.unknown()) }).passthrough()) }).passthrough(),
+    ),
+  })
+  .passthrough();
+
 const PASSWORD = "Aa!template-editor-password-12345";
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
 
 function uniqueSuffix() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -11,7 +28,7 @@ function uniqueSuffix() {
 async function registerAccount(page: Page) {
   const suffix = uniqueSuffix();
 
-  await page.goto("/register");
+  await page.goto("/register/");
   await page.getByLabel("Name").fill("Template Editor QA");
   await page.getByLabel("Email").fill(`template-editor+${suffix}@e2e.local`);
   await page.locator("#password").fill(PASSWORD);
@@ -22,35 +39,187 @@ async function registerAccount(page: Page) {
   });
 }
 
-// Admin is a Pro persona created by `seed-test`, which the isolated e2e database runs.
-async function loginAsSeedUser(page: Page) {
-  await page.goto('/login');
-  await page.getByRole('button', { name: 'Fill Admin' }).click();
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Switch context' })).toBeVisible({
-    timeout: 30_000,
-  });
-}
-
 async function findTemplateByTitle(page: Page, title: string) {
-  return page.evaluate(async ({ templateTitle, apiBaseUrl }) => {
-    const response = await fetch(`${apiBaseUrl}/templates?scope=personal`, { credentials: "include" });
-    if (!response.ok) {
-      throw new Error(`Failed to load templates: ${response.status}`);
-    }
-
-    const templates = (await response.json()) as Array<Record<string, unknown>>;
-    return templates.find((template) => template.title === templateTitle) ?? null;
-  }, { templateTitle: title, apiBaseUrl: DEV_API_BASE_URL });
+  const templates = await apiJson<Array<Record<string, unknown>>>(page, "/templates?scope=personal");
+  return templates.find((template) => template.title === title) ?? null;
 }
 
 async function deleteTemplate(page: Page, templateId: string) {
-  await page.evaluate(async ({ id, apiBaseUrl }) => {
-    await fetch(`${apiBaseUrl}/templates/${id}`, {
-      method: "DELETE",
-      credentials: "include",
+  await apiRequest(page, `/templates/${templateId}`, { method: "DELETE" });
+}
+
+async function createTemplate(page: Page, body: Record<string, unknown>) {
+  return (await apiJson<{ id: string }>(page, "/templates", { method: "POST", body })).id;
+}
+
+async function createRun(page: Page, body: Record<string, unknown>) {
+  return (await apiJson<{ id: string }>(page, "/checklists", { method: "POST", body })).id;
+}
+
+async function createTwoTaskTemplate(page: Page, title: string) {
+  return createTemplate(page, {
+    title,
+    is_public: false,
+    sections: [
+      {
+        id: "guard-section",
+        title: "Prep",
+        items: [
+          { id: "guard-task-1", title: "First task", description: "" },
+          { id: "guard-task-2", title: "Second task", description: "" },
+        ],
+      },
+    ],
+  });
+}
+
+async function saveAndReturnToTemplates(page: Page) {
+  const saveAnswered = page.waitForResponse((response) => {
+    const method = response.request().method();
+    const { pathname } = new URL(response.url());
+    return (method === "POST" || method === "PUT") && /\/api\/templates(\/[^/]+)?$/.test(pathname);
+  });
+  await page.getByRole("button", { name: "Save" }).click();
+  expect((await saveAnswered).ok()).toBe(true);
+  await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
+}
+
+async function saveAndWaitUntilSaved(page: Page) {
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+}
+
+function holdUntilReleased() {
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { held, release };
+}
+
+async function dragAndDropBefore(page: Page, dragged: Locator, target: Locator, dropIndicator: string) {
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await dragged.dispatchEvent("dragstart", { dataTransfer });
+  await target.dispatchEvent("dragover", { dataTransfer });
+  await expect(page.locator(`[data-drop-indicator="${dropIndicator}"]`)).toBeVisible();
+  await target.dispatchEvent("drop", { dataTransfer });
+}
+
+async function answerUploadsWithoutStoringThem(
+  page: Page,
+  uploaded: Record<string, unknown>,
+  answerOnceReleased: Promise<void> = Promise.resolve(),
+) {
+  await page.route("**/api/uploads", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    await answerOnceReleased;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(uploaded) });
+  });
+}
+
+async function captureUploadsWithoutStoringThem(page: Page) {
+  const uploads: Array<{ body: Buffer; name: string }> = [];
+  await page.route("**/api/uploads", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const body = route.request().postDataBuffer() ?? Buffer.alloc(0);
+    const name = /filename="([^"]+)"/.exec(body.toString("latin1"))?.[1] ?? "";
+    uploads.push({ body, name });
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ url: `/api/uploads/file?key=template-images/e2e/${name}`, fileName: name }),
     });
-  }, { id: templateId, apiBaseUrl: DEV_API_BASE_URL });
+  });
+  return uploads;
+}
+
+async function holdTheFirstUpdate(page: Page, templateId: string, released: Promise<void>) {
+  const expectedVersionsSent: unknown[] = [];
+  let heldOnce = false;
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    expectedVersionsSent.push(updateBodySchema.parse(route.request().postDataJSON()).expected_version);
+    if (!heldOnce) {
+      heldOnce = true;
+      await released;
+    }
+    await route.fallback();
+  });
+  return expectedVersionsSent;
+}
+
+async function holdTheUpdateThenRefuseItAsAConflict(page: Page, templateId: string, released: Promise<void>) {
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "PUT") {
+      await route.fallback();
+      return;
+    }
+    await released;
+    await route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Template changed since it was loaded. Refresh before saving again.",
+        code: "edit_conflict",
+      }),
+    });
+  });
+}
+
+async function warnsBeforeUnload(page: Page) {
+  return page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+}
+
+async function recordWhetherTheHeaderShowsNewTemplate(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as HeaderWatchWindow;
+    w.__sawNewTemplate = false;
+    new MutationObserver(() => {
+      const headers = Array.from(document.querySelectorAll("header"));
+      if (headers.some((header) => header.textContent?.includes("New Template"))) {
+        w.__sawNewTemplate = true;
+      }
+    }).observe(document, { childList: true, subtree: true, characterData: true });
+  });
+}
+
+async function headerShowedNewTemplate(page: Page) {
+  return page.evaluate(() => (window as HeaderWatchWindow).__sawNewTemplate);
+}
+
+async function addATaskFromAnotherTab(page: Page, templateId: string) {
+  const template = await apiJson<{ sections: Array<{ items: unknown[] }>; version: number }>(
+    page,
+    `/templates/${templateId}`,
+  );
+  const { sections } = template;
+  sections[0].items.push({ id: "added-elsewhere", title: "Added elsewhere", description: "" });
+  await apiJson(page, `/templates/${templateId}`, {
+    method: "PUT",
+    body: { sections, expected_version: template.version },
+  });
+}
+
+async function serveAsARowFromBeforeTheBlockTypeCheck(page: Page, templateId: string) {
+  await page.route(`**/api/templates/${templateId}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const template = storedTemplateSchema.parse(await response.json());
+    template.sections[0].items[0].contents.push({ id: "c3", type: "link", value: "https://example.com" });
+    await route.fulfill({ response, json: template });
+  });
 }
 
 function getTemplateSections(template: Record<string, unknown>) {
@@ -86,8 +255,8 @@ function getTemplateSections(template: Record<string, unknown>) {
 
 test.describe("template editor regressions", () => {
   test('remembers the signed-in user layout independently on template screens', async ({ page }) => {
-    await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates');
+    await loginAsAdmin(page);
+    await page.goto('/dashboard/templates/');
 
     await page.getByRole('button', { name: 'Show templates in list view' }).click();
     await expect(
@@ -99,7 +268,7 @@ test.describe("template editor regressions", () => {
       page.getByRole('button', { name: 'Show templates in list view' }),
     ).toHaveAttribute('aria-pressed', 'true');
 
-    await page.goto('/categories/seo');
+    await page.goto('/categories/seo/');
     await expect(
       page.getByRole('button', { name: 'Show templates in grid view' }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -111,19 +280,19 @@ test.describe("template editor regressions", () => {
   });
 
   test('supports full-size console navigation targets', async ({ page }) => {
-    await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates');
+    await loginAsAdmin(page);
+    await page.goto('/dashboard/templates/');
 
     const runsLink = page.getByRole('link', { name: 'Runs', exact: true });
     const box = await runsLink.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
     await runsLink.click({ position: { x: 8, y: 8 } });
-    await expect(page).toHaveURL(/\/dashboard\/runs$/);
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
   });
 
   test('reorders sections and tasks with the visible drag handles', async ({ page }) => {
-    await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates/new');
+    await loginAsAdmin(page);
+    await page.goto('/dashboard/templates/new/');
 
     await page.getByRole('button', { name: /add task to section 1/i }).click();
     await page.getByLabel('Task Title').fill('First task');
@@ -132,13 +301,12 @@ test.describe("template editor regressions", () => {
     await page.getByRole('button', { name: 'Add section' }).click();
     await page.getByPlaceholder('Enter section title...').fill('Second section');
 
-    const draggedSection = page.getByRole('button', { name: 'Drag Second section' });
-    const sectionDropTarget = page.getByRole('button', { name: 'Drag Section 1' });
-    const sectionDataTransfer = await page.evaluateHandle(() => new DataTransfer());
-    await draggedSection.dispatchEvent('dragstart', { dataTransfer: sectionDataTransfer });
-    await sectionDropTarget.dispatchEvent('dragover', { dataTransfer: sectionDataTransfer });
-    await expect(page.locator('[data-drop-indicator="section-before"]')).toBeVisible();
-    await sectionDropTarget.dispatchEvent('drop', { dataTransfer: sectionDataTransfer });
+    await dragAndDropBefore(
+      page,
+      page.getByRole('button', { name: 'Drag Second section' }),
+      page.getByRole('button', { name: 'Drag Section 1' }),
+      'section-before',
+    );
     const sectionHandles = page.getByRole('button', { name: /^Drag / });
     await expect(sectionHandles.first()).toHaveAccessibleName('Drag Second section');
 
@@ -149,19 +317,55 @@ test.describe("template editor regressions", () => {
     await expect(taskButtons.first()).toHaveText('Second task');
   });
 
+  test('shows outline actions on keyboard focus, and reorders with the arrow keys keeping focus on the moved handle', async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto('/dashboard/templates/new/');
+
+    await page.getByRole('button', { name: /add task to section 1/i }).click();
+    await page.getByLabel('Task Title').fill('First task');
+    await page.getByRole('button', { name: /^Add task$/ }).click();
+    await page.getByLabel('Task Title').fill('Second task');
+    await page.getByRole('button', { name: 'Add section' }).click();
+    await page.getByLabel('Section Title').fill('Second section');
+
+    await page.getByRole('button', { name: 'Section 1', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    const addTask = page.getByRole('button', { name: 'Add task to Section 1' });
+    await expect(addTask).toBeFocused();
+    await expect(addTask.locator('..')).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name: 'Remove Section 1' })).toBeFocused();
+
+    const sectionHandle = page.getByRole('button', { name: 'Drag Second section' });
+    await sectionHandle.focus();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('button', { name: /^Drag / }).first()).toHaveAccessibleName('Drag Second section');
+    await expect(sectionHandle).toBeFocused();
+    await expect(page.getByRole('status').filter({ hasText: 'Moved Second section' })).toHaveText(
+      'Moved Second section to position 1 of 2',
+    );
+
+    const taskHandle = page.getByRole('button', { name: 'Drag First task' });
+    await taskHandle.focus();
+    await page.keyboard.press('ArrowDown');
+    const taskButtons = page.getByRole('button', { name: /^(First|Second) task$/ });
+    await expect(taskButtons.first()).toHaveText('Second task');
+    await expect(taskHandle).toBeFocused();
+  });
+
   test('previews the current unsaved template draft', async ({ page }) => {
-    await loginAsSeedUser(page);
-    await page.goto('/dashboard/templates/new');
+    await loginAsAdmin(page);
+    await page.goto('/dashboard/templates/new/');
     await page.getByPlaceholder('Enter template name...').fill('Unsaved preview title');
 
     await page.getByRole('button', { name: 'Preview' }).click();
 
     await expect(page.getByRole('dialog')).toContainText('Unsaved preview title');
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
   });
 
   test('reviews, edits, previews, and explicitly publishes a generated Clipy draft', async ({ page }) => {
-    await loginAsSeedUser(page);
+    await loginAsAdmin(page);
     let createPayload: Record<string, unknown> | null = null;
     await page.route('**/api/templates', async (route) => {
       if (route.request().method() !== 'POST') {
@@ -230,7 +434,7 @@ test.describe("template editor regressions", () => {
       });
     });
 
-    await page.goto('/dashboard/templates/new');
+    await page.goto('/dashboard/templates/new/');
     await page.getByLabel('Public Clipy video link').fill(
       'https://clipy.online/video/8fptqlnappr6',
     );
@@ -248,7 +452,7 @@ test.describe("template editor regressions", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/\/dashboard\/templates\/new$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
     expect(createPayload).toBeNull();
 
     await page.getByPlaceholder('Enter template name...').fill('Reviewed Clipy Checklist');
@@ -264,48 +468,101 @@ test.describe("template editor regressions", () => {
 
     await page.getByRole('switch').click();
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await expect(page).toHaveURL(/\/dashboard\/templates\/$/);
     expect(createPayload).toMatchObject({
       title: 'Reviewed Clipy Checklist',
       is_public: true,
     });
   });
 
-  test('shows one task-level notes area and persists it on the run', async ({ page }) => {
-    await loginAsSeedUser(page);
-    const runId = await page.evaluate(async ({ apiBaseUrl }) => {
-      const response = await fetch(`${apiBaseUrl}/checklists`, {
+  test('asks before a generated Clipy draft replaces unsaved work, and locks the form while it generates', async ({ page }) => {
+    await loginAsAdmin(page);
+    let generateCalls = 0;
+    let holdGenerate = false;
+    let releaseGenerate: () => void = () => {};
+    await page.route('**/api/templates/generate-from-clipy', async (route) => {
+      generateCalls += 1;
+      if (holdGenerate) {
+        await new Promise<void>((resolve) => {
+          releaseGenerate = resolve;
+        });
+      }
+      await route.fulfill({
+        contentType: 'application/json',
         body: JSON.stringify({
-          sections: [
+          draft: {
+            title: 'Generated Clipy title',
+            description: '',
+            templateType: 'checklist',
+            categories: [],
+            tags: [],
+            isPublic: false,
+            seoTitle: '',
+            seoDescription: '',
+            seoUrl: '',
+            sections: [
+              {
+                id: 'clipy_replace_steps',
+                title: 'Steps',
+                items: [{ id: 'clipy_replace_step_1', title: 'Generated step', description: '' }],
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto('/dashboard/templates/new/');
+    const title = page.getByPlaceholder('Enter template name...');
+    const clipyLink = page.getByLabel('Public Clipy video link');
+    await title.fill('My hand-built checklist');
+    await clipyLink.fill('https://clipy.online/video/replaceme01');
+
+    page.once('dialog', (dialog) => void dialog.dismiss());
+    await page.getByRole('button', { name: 'Generate draft' }).click();
+    await expect(title).toHaveValue('My hand-built checklist');
+    await expect(clipyLink).toHaveValue('https://clipy.online/video/replaceme01');
+    expect(generateCalls).toBe(0);
+
+    holdGenerate = true;
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: 'Generate draft' }).click();
+    await expect.poll(() => generateCalls).toBe(1);
+    await expect(title).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Generating...', exact: true })).toBeDisabled();
+
+    releaseGenerate();
+    await expect(title).toHaveValue('Generated Clipy title');
+    await expect(title).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Generated step', exact: true })).toBeVisible();
+  });
+
+  test('shows one task-level notes area and persists it on the run', async ({ page }) => {
+    await loginAsAdmin(page);
+    const runId = await createRun(page, {
+      sections: [
+        {
+          id: 'notes-section',
+          title: 'Outreach',
+          items: [
             {
-              id: 'notes-section',
-              title: 'Outreach',
-              items: [
+              id: 'notes-task',
+              title: 'Send email',
+              contents: [
                 {
-                  id: 'notes-task',
-                  title: 'Send email',
-                  contents: [
-                    {
-                      type: 'subItems',
-                      value: '',
-                      subItems: [{ id: 'notes-subtask', title: 'Wait for reply' }],
-                    },
-                  ],
+                  type: 'subItems',
+                  value: '',
+                  subItems: [{ id: 'notes-subtask', title: 'Wait for reply' }],
                 },
               ],
             },
           ],
-          title: 'Run notes QA',
-        }),
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error(`Failed to create run: ${response.status}`);
-      return ((await response.json()) as { id: string }).id;
-    }, { apiBaseUrl: DEV_API_BASE_URL });
+        },
+      ],
+      title: 'Run notes QA',
+    });
 
-    await page.goto(`/dashboard/runs/${runId}`);
+    await page.goto(`/dashboard/runs/${runId}/`);
     await expect(page.getByLabel('Task notes')).toHaveCount(1);
     await expect(page.getByLabel('Notes for Wait for reply')).toHaveCount(0);
     await page.getByLabel('Task notes').fill('Sent email: https://example.com/message/42');
@@ -326,7 +583,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
 
@@ -366,8 +623,7 @@ test.describe("template editor regressions", () => {
       secondTaskDescription,
     );
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -407,7 +663,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", {
@@ -416,7 +672,7 @@ test.describe("template editor regressions", () => {
     await page.getByLabel("Task Title").fill(taskTitle);
 
     await page.getByRole("button", { name: "Add Block" }).last().click();
-    await page.getByRole("button", { name: "Text" }).last().click();
+    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
 
     await expect(
       page.getByPlaceholder("Enter text or markdown content"),
@@ -425,8 +681,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Enter text or markdown content")
       .fill(contentValue);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -445,7 +700,7 @@ test.describe("template editor regressions", () => {
     );
 
     if (createdTemplateId) {
-      await page.goto(`/dashboard/templates/${createdTemplateId}`);
+      await page.goto(`/dashboard/templates/${createdTemplateId}/`);
       const renderedContent = page.getByText(
         new RegExp(`${contentLines[0]}\\s+${contentLines[1]}\\s+${contentLines[2]}`),
       );
@@ -461,6 +716,625 @@ test.describe("template editor regressions", () => {
     }
   });
 
+  test("keeps an uploaded image URL in the block and saves it", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Upload ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/${stamp}.png`)}`;
+    await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "photo.png", fileSize: ONE_PIXEL_PNG.length });
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with image ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "photo.png",
+      mimeType: "image/png",
+      buffer: ONE_PIXEL_PNG,
+    });
+
+    await expect(page.getByText("photo.png", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+
+    await page.getByRole("button", { name: "Remove uploaded image" }).click();
+    await expect(page.getByLabel("Image URL")).toHaveValue("");
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "photo.png",
+      mimeType: "image/png",
+      buffer: ONE_PIXEL_PNG,
+    });
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+
+    await saveAndReturnToTemplates(page);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "image", value: uploadedUrl }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("previews a corrected image URL after a broken one, also when the URL is typed one key at a time", async ({ page }) => {
+    await page.route("https://img.test/**", async (route) => {
+      if (route.request().url().endsWith("/good.png")) {
+        await route.fulfill({ body: ONE_PIXEL_PNG, contentType: "image/png" });
+        return;
+      }
+      await route.fulfill({ body: "", status: 404 });
+    });
+
+    await loginAsAdmin(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+
+    const urlField = page.getByLabel("Image URL");
+    const preview = page.getByRole("img", { name: "Preview" });
+    await urlField.fill("https://img.test/bad.png");
+    await expect(page.getByText("Preview unavailable")).toBeVisible();
+    await expect(preview).toHaveCount(0);
+
+    await urlField.fill("https://img.test/good.png");
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((image: HTMLImageElement) => image.naturalWidth))
+      .toBeGreaterThan(0);
+
+    await urlField.fill("");
+    await urlField.pressSequentially("https://img.test/good.png");
+    await expect(preview).toBeVisible();
+    await expect(page.getByText("Preview unavailable")).toHaveCount(0);
+  });
+
+  test("saves an untitled section as 'Section 1' and drops a trailing blank sub-task", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Blank titles ${stamp}`;
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with sub-tasks ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Sub-tasks", exact: true }).click();
+    await page.getByPlaceholder("Sub-task 1").fill("Check title");
+    await page.getByPlaceholder("Sub-task 1").press("Enter");
+    await expect(page.getByPlaceholder("Sub-task 2")).toBeVisible();
+
+    await saveAndReturnToTemplates(page);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect((sections[0] as { title?: string }).title).toBe("Section 1");
+    const subItems = (sections[0]?.items[0]?.contents?.[0] as { subItems?: Array<{ title: string }> })
+      ?.subItems;
+    expect(subItems?.map((subItem) => subItem.title)).toEqual(["Check title"]);
+
+    const templateId = String(savedTemplate?.id);
+    const runId = await createRun(page, { template_id: templateId, title: "Blank titles run", sections });
+
+    await page.goto(`/dashboard/runs/${runId}/`);
+    await expect(page.getByText("Section 1", { exact: true }).first()).toBeVisible();
+    const taskCheckbox = page.getByRole("checkbox", { name: `Mark "Task with sub-tasks ${stamp}" complete` });
+    const itsOneSubTaskCheckbox = page.getByRole("checkbox", { name: "Check title", exact: true });
+    await expect(taskCheckbox).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(2);
+    await expect(itsOneSubTaskCheckbox).toBeVisible();
+    await expect(page.getByText("Check title", { exact: true })).toBeVisible();
+
+    await apiRequest(page, `/checklists/${runId}`, { method: "DELETE" });
+    await deleteTemplate(page, templateId);
+  });
+
+  test("keeps focus while an embed URL is typed across the https:// prefix", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Embed ${stamp}`;
+    const embedUrl = "https://www.loom.com/share/abc";
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with embed ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
+
+    const field = page.getByLabel("Embed Code or URL");
+    await field.click();
+    await field.pressSequentially(embedUrl);
+    await expect(field).toHaveValue(embedUrl);
+    await expect(field).toBeFocused();
+    await expect(page.getByText(`Embed URL: ${embedUrl}`)).toBeVisible();
+
+    await field.press("End");
+    for (let i = 0; i < embedUrl.length - "https:/".length; i += 1) {
+      await field.press("Backspace");
+    }
+    await expect(field).toHaveValue("https:/");
+    await expect(field).toBeFocused();
+
+    await field.pressSequentially("/www.loom.com/share/abc");
+    await expect(field).toHaveValue(embedUrl);
+    await expect(field).toBeFocused();
+
+    await saveAndReturnToTemplates(page);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "embed", value: embedUrl }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("reorders content blocks by keyboard and by drag and saves the order", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Block order ${stamp}`;
+    const embedUrl = "https://www.loom.com/share/order";
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with blocks ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Text", exact: true }).click();
+    await page.getByPlaceholder("Enter text or markdown content").fill("Intro text");
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Embed", exact: true }).click();
+    await page.getByLabel("Embed Code or URL").fill(embedUrl);
+
+    const handles = page.getByRole("button", { name: /^Drag (Text|Embed) block$/ });
+    await expect(handles).toHaveCount(2);
+
+    const embedHandle = page.getByRole("button", { name: "Drag Embed block" });
+    await embedHandle.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
+    await expect(embedHandle).toBeFocused();
+
+    await dragAndDropBefore(page, page.getByRole("button", { name: "Drag Text block" }), embedHandle, "content-before");
+    await expect(handles.first()).toHaveAccessibleName("Drag Text block");
+
+    await embedHandle.focus();
+    await page.keyboard.press("ArrowUp");
+    await expect(handles.first()).toHaveAccessibleName("Drag Embed block");
+
+    await saveAndReturnToTemplates(page);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items[0]?.contents).toEqual([
+      expect.objectContaining({ type: "embed", value: embedUrl }),
+      expect.objectContaining({ type: "text", value: "Intro text" }),
+    ]);
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("waits for a file upload before saving, and asks before leaving a form whose only change is the upload", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA Held upload ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-images/e2e/held-${stamp}.png`)}`;
+    const upload = holdUntilReleased();
+    await answerUploadsWithoutStoringThem(
+      page,
+      { url: uploadedUrl, fileName: "held.png", fileSize: ONE_PIXEL_PNG.length },
+      upload.held,
+    );
+
+    await loginAsAdmin(page);
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+    await saveAndWaitUntilSaved(page);
+
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "held.png",
+      mimeType: "image/png",
+      buffer: ONE_PIXEL_PNG,
+    });
+    await expect(page.locator("header").getByRole("button", { name: "Uploading..." })).toBeDisabled();
+
+    let confirmMessage: string | null = null;
+    page.once("dialog", async (dialog) => {
+      confirmMessage = dialog.message();
+      await dialog.dismiss();
+    });
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => confirmMessage).toContain("still uploading");
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
+
+    upload.release();
+    await expect(page.getByLabel("Image URL")).toHaveValue(uploadedUrl);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect
+      .poll(async () => {
+        const savedTemplate = await findTemplateByTitle(page, templateTitle);
+        const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+        return sections[0]?.items[0]?.contents?.[0]?.value;
+      })
+      .toBe(uploadedUrl);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("keeps edits typed while a save is in flight, and saves them next on the version that save returned", async ({ page }) => {
+    await loginAsAdmin(page);
+    const templateTitle = `QA Save race ${Date.now()}`;
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
+    const firstUpdate = holdUntilReleased();
+    const expectedVersionsSent = await holdTheFirstUpdate(page, templateId, firstUpdate.held);
+
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill("Sent with the first save");
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+    await page.getByLabel("Description (Optional)").fill("Sent with the first save, then more");
+    await page.getByRole("button", { exact: true, name: "Second task" }).click();
+    await page.getByLabel("Description (Optional)").fill("Typed into another task");
+
+    firstUpdate.release();
+    await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue("Typed into another task");
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(
+      "Sent with the first save, then more",
+    );
+
+    let confirmMessage: string | null = null;
+    page.once("dialog", async (dialog) => {
+      confirmMessage = dialog.message();
+      await dialog.dismiss();
+    });
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => confirmMessage).toContain("unsaved template changes");
+    await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/edit/$`));
+
+    await saveAndWaitUntilSaved(page);
+    expect(expectedVersionsSent).toHaveLength(2);
+    expect(Number(expectedVersionsSent[1])).toBeGreaterThan(Number(expectedVersionsSent[0]));
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    expect(sections[0]?.items.map((item) => item.description)).toEqual([
+      "Sent with the first save, then more",
+      "Typed into another task",
+    ]);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("asks once before unsaved template edits are lost through the app shell, Back, Sign out or the editor's own back button", async ({ page }) => {
+    await loginAsAdmin(page);
+    const templateTitle = `QA Leave guard ${Date.now()}`;
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
+    const draft = "Edited but not saved";
+    const dialogs: string[] = [];
+    let acceptDialogs = false;
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await (acceptDialogs ? dialog.accept() : dialog.dismiss());
+    });
+
+    await page.goto(`/dashboard/templates/${templateId}/`);
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
+    await expect(page).toHaveURL(editorUrl);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill(draft);
+
+    const expectStillEditing = async (asked: number) => {
+      await expect.poll(() => dialogs.length).toBe(asked);
+      expect(dialogs.at(-1)).toContain("unsaved template changes");
+      await expect(page).toHaveURL(editorUrl);
+      await expect(page.getByLabel("Description (Optional)")).toHaveValue(draft);
+    };
+
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expectStillEditing(1);
+
+    await page.goBack();
+    await expectStillEditing(2);
+
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "My Runs" }).click();
+    await expectStillEditing(3);
+
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expectStillEditing(4);
+    await expect(page.getByRole("button", { name: "Switch context" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expectStillEditing(5);
+
+    acceptDialogs = true;
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+    expect(dialogs).toHaveLength(6);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("asks before leaving while a save is in flight, and keeps the edits if it fails", async ({ page }) => {
+    await loginAsAdmin(page);
+    const templateTitle = `QA Leave during save ${Date.now()}`;
+    const templateId = await createTwoTaskTemplate(page, templateTitle);
+    const editorUrl = new RegExp(`/dashboard/templates/${templateId}/edit/$`);
+    const draft = "Typed before a save that fails";
+    const update = holdUntilReleased();
+    await holdTheUpdateThenRefuseItAsAConflict(page, templateId, update.held);
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
+    await page.getByRole("button", { exact: true, name: "First task" }).click();
+    await page.getByLabel("Description (Optional)").fill(draft);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+
+    await page.getByRole("button", { name: "Back to templates" }).click();
+    await expect.poll(() => dialogs.length).toBe(1);
+    expect(dialogs[0]).toContain("still saving");
+    await expect(page).toHaveURL(editorUrl);
+    expect(await warnsBeforeUnload(page)).toBe(true);
+
+    update.release();
+    await expect(page.getByText("Template changed since it was loaded.").first()).toBeVisible();
+    await expect(page).toHaveURL(editorUrl);
+    await expect(page.getByLabel("Description (Optional)")).toHaveValue(draft);
+
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
+  });
+
+  test("stays where the user went when a create finishes after they left", async ({ page }) => {
+    await loginAsAdmin(page);
+    const templateTitle = `QA Leave during create ${Date.now()}`;
+    const create = holdUntilReleased();
+    let createFinished = false;
+    await page.route("**/api/templates", async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      await create.held;
+      await route.fallback();
+      createFinished = true;
+    });
+    page.on("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByRole("button", { name: "Saving..." })).toBeVisible();
+    await page.getByRole("link", { name: "Runs", exact: true }).click();
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+
+    create.release();
+    await expect.poll(() => createFinished).toBe(true);
+    await expect.poll(() => findTemplateByTitle(page, templateTitle)).toBeTruthy();
+    await expect(page).toHaveURL(/\/dashboard\/runs\/$/);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("leaves a new template without asking once it is saved", async ({ page }) => {
+    await loginAsAdmin(page);
+    const templateTitle = `QA Leave after create ${Date.now()}`;
+    const dialogs: string[] = [];
+    page.on("dialog", async (dialog) => {
+      dialogs.push(dialog.message());
+      await dialog.dismiss();
+    });
+
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await saveAndReturnToTemplates(page);
+    expect(dialogs).toEqual([]);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("uploads a transparent PNG and an animated GIF in their own formats", async ({ page }) => {
+    const transparentPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYGD4DwABBAEAHnOcQAAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const animatedGif = Buffer.from(
+      "R0lGODlhAQABAPAAAP8AAAAA/yH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwAAAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAgAAA/wAAAAICRAEAOw==",
+      "base64",
+    );
+    const uploads = await captureUploadsWithoutStoringThem(page);
+
+    await loginAsAdmin(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+
+    for (const upload of [
+      { name: "logo.png", mimeType: "image/png", buffer: transparentPng },
+      { name: "steps.gif", mimeType: "image/gif", buffer: animatedGif },
+    ]) {
+      await page.getByRole("button", { name: "Add Block" }).last().click();
+      await page.getByRole("menuitem", { name: "Image", exact: true }).click();
+      await page.locator('input[type="file"][accept="image/*"]').last().setInputFiles(upload);
+      await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
+    }
+
+    expect(uploads.map((upload) => upload.name)).toEqual(["logo.png", "steps.gif"]);
+    expect(uploads[0]?.body.toString("latin1")).toContain("Content-Type: image/png");
+    expect(uploads[1]?.body.toString("latin1")).toContain("Content-Type: image/gif");
+    expect(uploads[1]?.body.includes(animatedGif)).toBe(true);
+  });
+
+  test("uploads the file types a File block offers, as Windows reports them, and refuses another type before uploading it", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+
+    for (const upload of [
+      { name: "report.zip", mimeType: "application/x-zip-compressed", buffer: Buffer.from([0x50, 0x4b, 0x05, 0x06]) },
+      { name: "data.csv", mimeType: "application/vnd.ms-excel", buffer: Buffer.from("a,b\n1,2\n") },
+    ]) {
+      await page.getByRole("button", { name: "Add Block" }).last().click();
+      await page.getByRole("menuitem", { name: "File", exact: true }).click();
+      const input = page.locator('input[type="file"]').last();
+      await expect(input).not.toHaveAttribute("accept", "*/*");
+      await expect(input).toHaveAttribute("accept", /\.zip/);
+
+      await input.setInputFiles(upload);
+      await expect(page.getByText(upload.name, { exact: true })).toBeVisible();
+    }
+
+    let uploadRequests = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && request.url().endsWith("/api/uploads")) uploadRequests += 1;
+    });
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "File", exact: true }).click();
+    await page.locator('input[type="file"]').last().setInputFiles({
+      name: "page.html",
+      mimeType: "text/html",
+      buffer: Buffer.from("<p>hi</p>"),
+    });
+    await expect(page.getByText(/Use PDF, ZIP, CSV/)).toBeVisible();
+    expect(uploadRequests).toBe(0);
+  });
+
+  test("drops an uploaded file's name when a URL is typed over it", async ({ page }) => {
+    const stamp = Date.now();
+    const templateTitle = `QA File URL ${stamp}`;
+    const uploadedUrl = `/api/uploads/file?key=${encodeURIComponent(`template-files/e2e/${stamp}.pdf`)}`;
+    const externalUrl = "https://example.com/pricing.pdf";
+    await answerUploadsWithoutStoringThem(page, { url: uploadedUrl, fileName: "report.pdf", fileSize: 2048 });
+
+    await registerAccount(page);
+    await page.goto("/dashboard/templates/new/");
+    await page.getByPlaceholder("Enter template name...").fill(templateTitle);
+    await page.getByRole("button", { name: /add task to section 1/i }).click();
+    await page.getByLabel("Task Title").fill(`Task with file ${stamp}`);
+    await page.getByRole("button", { name: "Add Block" }).last().click();
+    await page.getByRole("menuitem", { name: "File", exact: true }).click();
+    await page.locator('input[type="file"]').last().setInputFiles({
+      name: "report.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4"),
+    });
+    await expect(page.getByText("report.pdf", { exact: true })).toBeVisible();
+
+    await page.getByLabel("File URL").fill(externalUrl);
+    await expect(page.getByRole("button", { name: "Remove uploaded file" })).toHaveCount(0);
+    await expect(page.getByText("report.pdf", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("File URL")).toHaveValue(externalUrl);
+
+    await saveAndReturnToTemplates(page);
+
+    const savedTemplate = await findTemplateByTitle(page, templateTitle);
+    expect(savedTemplate).toBeTruthy();
+    const sections = getTemplateSections(savedTemplate as Record<string, unknown>);
+    const saved = sections[0]?.items[0]?.contents?.[0] as Record<string, unknown> | undefined;
+    expect(saved).toEqual(expect.objectContaining({ type: "file", value: externalUrl, uploadType: "url" }));
+    expect(saved).not.toHaveProperty("fileName");
+    expect(saved).not.toHaveProperty("fileSize");
+
+    if (savedTemplate && typeof savedTemplate.id === "string") {
+      await deleteTemplate(page, savedTemplate.id);
+    }
+  });
+
+  test("opens every section of a saved template expanded, from the first frame", async ({ page }) => {
+    await loginAsAdmin(page);
+    const stamp = Date.now();
+    const templateTitle = `QA Outline ${stamp}`;
+    const sectionTitles = ["Before the move", "Moving day", "After the move"];
+    const templateId = await createTemplate(page, {
+      title: templateTitle,
+      is_public: false,
+      sections: sectionTitles.map((sectionTitle, index) => ({
+        id: `outline-section-${index}`,
+        title: sectionTitle,
+        items: [{ id: `outline-task-${index}`, title: `${sectionTitle} task`, description: "" }],
+      })),
+    });
+
+    await recordWhetherTheHeaderShowsNewTemplate(page);
+
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
+    for (const title of sectionTitles) {
+      await expect(page.getByRole("button", { name: `Collapse ${title}` })).toBeVisible();
+      await expect(page.getByRole("button", { name: `${title} task`, exact: true })).toBeVisible();
+    }
+    expect(await headerShowedNewTemplate(page)).toBe(false);
+
+    await deleteTemplate(page, templateId);
+  });
+
+  test("expands every section of a generated Clipy draft", async ({ page }) => {
+    await loginAsAdmin(page);
+    await page.route("**/api/templates/generate-from-clipy", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          draft: {
+            title: "Two part walkthrough",
+            description: "",
+            templateType: "checklist",
+            categories: [],
+            tags: [],
+            isPublic: false,
+            seoTitle: "",
+            seoDescription: "",
+            seoUrl: "",
+            sections: [
+              { id: "clipy_two_part_1", title: "Part one", items: [{ id: "clipy_two_part_1_task", title: "First part task", description: "" }] },
+              { id: "clipy_two_part_2", title: "Part two", items: [{ id: "clipy_two_part_2_task", title: "Second part task", description: "" }] },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/dashboard/templates/new/");
+    await page.getByLabel("Public Clipy video link").fill("https://clipy.online/video/twopart1234");
+    await page.getByRole("button", { name: "Generate draft" }).click();
+
+    await expect(page.getByRole("button", { name: "Collapse Part two" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Second part task", exact: true })).toBeVisible();
+  });
+
   test("adds tags and categories before save and persists them", async ({ page }) => {
     const templateTitle = `QA Tags ${Date.now()}`;
     const tagName = `tag-${Date.now()}`;
@@ -468,7 +1342,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByPlaceholder("Add tag...").fill(tagName);
@@ -480,8 +1354,7 @@ test.describe("template editor regressions", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByText(categoryName, { exact: true }).first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -505,7 +1378,7 @@ test.describe("template editor regressions", () => {
     let createdTemplateId: string | null = null;
 
     await registerAccount(page);
-    await page.goto("/dashboard/templates/new");
+    await page.goto("/dashboard/templates/new/");
 
     await page.getByPlaceholder("Enter template name...").fill(templateTitle);
     await page.getByRole("button", { name: /search & seo/i }).click();
@@ -515,8 +1388,7 @@ test.describe("template editor regressions", () => {
       .getByPlaceholder("Description shown in search results...")
       .fill(seoDescription);
 
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page).toHaveURL(/\/dashboard\/templates$/);
+    await saveAndReturnToTemplates(page);
 
     const savedTemplate = await findTemplateByTitle(page, templateTitle);
     createdTemplateId =
@@ -531,7 +1403,7 @@ test.describe("template editor regressions", () => {
       throw new Error("Template ID missing after save");
     }
 
-    await page.goto(`/dashboard/templates/${createdTemplateId}/edit`);
+    await page.goto(`/dashboard/templates/${createdTemplateId}/edit/`);
     await page.getByRole("button", { name: /search & seo/i }).click();
 
     await expect(page.getByPlaceholder("Title for search results...")).toHaveValue(seoTitle);
@@ -541,5 +1413,139 @@ test.describe("template editor regressions", () => {
     ).toHaveValue(seoDescription);
 
     await deleteTemplate(page, createdTemplateId);
+  });
+
+  test("opens the latest saved template, not the cached list copy", async ({ page }) => {
+    await loginAsAdmin(page);
+    const title = `Concurrent edit ${uniqueSuffix()}`;
+    const templateId = await createTwoTaskTemplate(page, title);
+
+    try {
+      await page.goto("/dashboard/templates/");
+      await page.getByRole("link", { name: title }).first().click();
+      await expect(page).toHaveURL(new RegExp(`/dashboard/templates/${templateId}/$`));
+
+      await addATaskFromAnotherTab(page, templateId);
+
+      await page.getByRole("link", { name: "Edit", exact: true }).click();
+      await expect(page.getByText("Added elsewhere").first()).toBeVisible();
+
+      await page.getByPlaceholder("Enter template name...").fill(`${title} edited`);
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
+
+      const saved = await findTemplateByTitle(page, `${title} edited`);
+      expect(JSON.stringify(saved?.sections)).toContain("Added elsewhere");
+    } finally {
+      await deleteTemplate(page, templateId);
+    }
+  });
+
+  test("saves a template whose stored content came from a legacy import, keeping a block of unknown type as text", async ({ page }) => {
+    await loginAsAdmin(page);
+    const title = `Legacy content ${uniqueSuffix()}`;
+    const templateId = await createTemplate(page, {
+      title,
+      is_public: false,
+      sections: [
+        {
+          id: "legacy-section",
+          title: "Prep",
+          items: [
+            {
+              id: "legacy-task",
+              title: "Legacy task",
+              contents: [
+                { id: 1, type: "text", value: "Numeric id" },
+                { type: "file", value: "https://example.com/doc.pdf", fileName: null, fileSize: null },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    await serveAsARowFromBeforeTheBlockTypeCheck(page, templateId);
+
+    try {
+      await page.goto(`/dashboard/templates/${templateId}/edit/`);
+      await page.getByPlaceholder("Enter template name...").fill(`${title} saved`);
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+
+      await expect(page.getByText("Template saved", { exact: true })).toBeVisible();
+      const saved = await findTemplateByTitle(page, `${title} saved`);
+      expect(JSON.stringify(saved?.sections)).toContain("https://example.com/doc.pdf");
+      const contents = getTemplateSections(saved as Record<string, unknown>)[0]?.items[0]?.contents;
+      expect(contents).toContainEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
+    } finally {
+      await page.unrouteAll({ behavior: "wait" });
+      await deleteTemplate(page, templateId);
+    }
+  });
+});
+
+test.describe("template editor route switches", () => {
+  async function createTemplateAndOpenItsEditor(page: Page) {
+    const title = `Route switch QA ${uniqueSuffix()}`;
+    const templateId = await createTemplate(page, {
+      title,
+      sections: [{ id: "route-section", title: "Section", items: [{ id: "route-task", title: "Task" }] }],
+    });
+    await page.goto(`/dashboard/templates/${templateId}/edit/`);
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue(title);
+    return { templateId, title };
+  }
+
+  test("a failed save does not follow the user to the new-template form", async ({ page }) => {
+    await loginAsAdmin(page);
+    const { templateId } = await createTemplateAndOpenItsEditor(page);
+    await page.route(`**/api/templates/${templateId}`, (route) =>
+      route.request().method() === "PUT"
+        ? route.fulfill({
+            status: 409,
+            json: { error: "Template changed since it was loaded. Refresh before saving again.", code: "edit_conflict" },
+          })
+        : route.continue(),
+    );
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.getByText("Template changed since it was loaded.")).toBeVisible();
+    await page.getByRole("link", { name: "New Template" }).first().click();
+
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
+    await expect(page.getByText("Template changed since it was loaded.")).toHaveCount(0);
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
+  });
+
+  test("a save that finishes after New Template does not fill the new form", async ({ page }) => {
+    await loginAsAdmin(page);
+    const { templateId } = await createTemplateAndOpenItsEditor(page);
+    const save = holdUntilReleased();
+    await page.route(`**/api/templates/${templateId}`, async (route) => {
+      if (route.request().method() !== "PUT") return route.continue();
+      await save.held;
+      return route.continue();
+    });
+    const creates: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/api/templates")) creates.push(request.url());
+    });
+
+    const saved = page.waitForResponse(
+      (response) => response.url().includes(`/api/templates/${templateId}`) && response.request().method() === "PUT",
+    );
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.getByRole("link", { name: "New Template" }).first().click();
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
+    save.release();
+    expect((await saved).status()).toBe(200);
+
+    await expect(page.getByText("Template saved")).toBeVisible();
+    await expect(page.getByPlaceholder("Enter template name...")).toHaveValue("");
+    await expect(page).toHaveURL(/\/dashboard\/templates\/new\/$/);
+    expect(creates).toEqual([]);
+    await page.unroute(`**/api/templates/${templateId}`);
+    await deleteTemplate(page, templateId);
   });
 });

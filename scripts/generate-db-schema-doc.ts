@@ -1,12 +1,9 @@
-// Generates docs/generated/db-schema.md from the Drizzle schema (db/schema/), which
-// `pnpm run check:db:drizzle-parity` proves matches the D1 migrations.
-//   pnpm run db:schema:generate   # write the doc
-//   pnpm run db:schema:check      # fail if the committed doc is stale
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { is, SQL } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../db/schema/index";
+import { matchesGeneratedText } from "./lib/line-endings.mjs";
 
 const outputPath = path.join(process.cwd(), "docs/generated/db-schema.md");
 const sqlOnlyPath = path.join(process.cwd(), "db/sql-only-schema.json");
@@ -82,8 +79,8 @@ if (sqlOnly.triggers?.length) {
 
 const output = `${lines.join("\n")}\n`;
 if (process.argv.includes("--check")) {
-  const existing = await readFile(outputPath, "utf8").catch(() => "");
-  if (existing !== output) {
+  const existing = await readFile(outputPath, "utf8").catch(() => null);
+  if (!matchesGeneratedText(existing, output)) {
     throw new Error("docs/generated/db-schema.md is stale. Run `pnpm run db:schema:generate` and commit it.");
   }
   console.log("docs/generated/db-schema.md is up to date");

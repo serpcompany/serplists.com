@@ -42,7 +42,7 @@ jobs:
 
       - name: Setup pnpm
         if: env.HAS_CLAUDE_TOKEN == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         if: env.HAS_CLAUDE_TOKEN == 'true'
@@ -59,15 +59,29 @@ jobs:
         if: env.HAS_CLAUDE_TOKEN == 'true'
         run: mkdir -p tmp && pnpm run --silent maintenance:report > tmp/maintenance-report.md
 
+      - name: Note when doc gardening starts
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        run: echo "GARDENING_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Garden docs with Claude
+        id: garden
         if: env.HAS_CLAUDE_TOKEN == 'true'
         uses: anthropics/claude-code-action@v1
+        env:
+          # The action stops at Claude's first result, so a subagent left running in the
+          # background is dropped with its work (see the Code Review workflow).
+          CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # No Co-Authored-By trailer on the bot's commits and no "Generated with Claude
+          # Code" line in its PRs: this repository's commits carry no attribution lines.
+          settings: '{"attribution": {"commit": false, "pr": false}}'
           prompt: |
             You are this repository's weekly doc gardener. Follow AGENTS.md.
             Goal: documentation that no longer matches the code gets fixed in one small PR.
 
+            0. First run `gh pr list --state open --search "docs: weekly doc gardening in:title"`.
+               If it lists a PR, stop and say that a gardening PR is already open, with its number.
             1. Read tmp/maintenance-report.md. Your work list is the "Docs check" failures,
                the "Docs to re-verify" list, and design docs flagged as stale under
                "Plans and scores". Handle at most 8 docs; start with the ones whose
@@ -81,17 +95,110 @@ jobs:
             4. Edit only AGENTS.md, ARCHITECTURE.md, and files under docs/. Never touch code,
                tests, workflows, baselines, or generated files in docs/generated/.
             5. Run `pnpm run docs:check`; it must pass.
-            6. If you changed nothing, stop and say "No doc drift found". Otherwise, unless
-               `gh pr list --state open --search "docs: weekly doc gardening in:title"`
-               already lists a PR (then stop and say so): create branch
-               chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with the
-               message "docs: weekly doc gardening", push it, and open a PR into staging
-               titled "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each
-               doc you changed, what was wrong, and which code you checked it against, and
-               list the docs you verified without changes.
+            6. If you changed nothing, stop and say "No doc drift found". Otherwise create
+               branch chore/doc-gardening-<YYYY-MM-DD> from the current HEAD, commit with
+               `git commit -m "docs: weekly doc gardening"` and nothing else in the message,
+               push it, and open a PR into staging titled
+               "docs: weekly doc gardening (<YYYY-MM-DD>)". In the PR body, list each doc you
+               changed, what was wrong, and which code you checked it against, and list the
+               docs you verified without changes.
+            7. This repository's commits and PRs carry no attribution: no Co-Authored-By
+               trailer in the commit, and no "Generated with Claude Code" line in the PR body.
           claude_args: |
             --max-turns 80
+            --strict-mcp-config
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr list:*),Bash(gh pr create:*),Bash(pnpm run docs:check),Bash(date:*)"
+
+      - name: Keep the doc gardening transcript
+        if: always() && env.HAS_CLAUDE_TOKEN == 'true' && steps.garden.outputs.execution_file != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: doc-gardening-transcript
+          path: ${{ steps.garden.outputs.execution_file }}
+          retention-days: 7
+          overwrite: true
+
+      # Inline on purpose, like the review's guard: this job can mint an OIDC token, so it
+      # runs no script from the checkout. tests/unit/workflows/maintenance.test.ts runs it.
+      # It checks the job's outcome: a gardening PR opened during the run, "No doc drift
+      # found", or an open gardening PR left alone. A denied tool only warns when Claude
+      # got there anyway (it often retries a refused command another way).
+      - name: Fail if Claude could not finish
+        if: env.HAS_CLAUDE_TOKEN == 'true'
+        env:
+          EXECUTION_FILE: ${{ steps.garden.outputs.execution_file }}
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: node {0}
+        run: |
+          const fs = require('node:fs');
+          // Workflow commands end at a newline and treat % as an escape.
+          const clean = (value, max = 120) => String(value).replace(/[\r\n%]+/g, ' ').slice(0, max);
+          const fail = (message) => {
+            console.log(`::error title=Doc gardening did not finish::${clean(message, 900)}`);
+            process.exit(1);
+          };
+          const readResult = () => {
+            const file = process.env.EXECUTION_FILE;
+            if (!file || !fs.existsSync(file)) fail('Doc gardening wrote no execution log.');
+            let messages;
+            try {
+              messages = JSON.parse(fs.readFileSync(file, 'utf8'));
+            } catch (error) {
+              fail(`The execution log is not valid JSON: ${error.message}`);
+            }
+            if (!Array.isArray(messages)) fail('The execution log is not a list of messages.');
+            const result = messages.filter((entry) => entry && entry.type === 'result').pop();
+            if (!result) fail('The execution log has no result entry.');
+            return { messages, result };
+          };
+          // Open doc-gardening PRs into staging, oldest first.
+          const openGardeningPrs = async () => {
+            const api = `${process.env.GITHUB_API_URL || 'https://api.github.com'}/repos/${process.env.GITHUB_REPOSITORY}`;
+            const response = await fetch(`${api}/pulls?state=open&base=staging&per_page=100`, {
+              headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+              },
+            });
+            if (!response.ok) throw new Error(`GET /pulls returned ${response.status}`);
+            return (await response.json()).filter((pr) => pr && pr.head && String(pr.head.ref).startsWith('chore/doc-gardening-'));
+          };
+          const main = async () => {
+            const { messages, result } = readResult();
+            const said = String(result.result || '');
+            console.log(`Doc gardening: ${result.num_turns} turns, about $${Number(result.total_cost_usd || 0).toFixed(2)}. Claude said: ${clean(said || '(nothing)', 400)}`);
+            if (result.is_error) fail(`Doc gardening ended with ${result.subtype || 'an error'}.`);
+            const sets = messages.filter((entry) => entry && entry.type === 'system' && entry.subtype === 'background_tasks_changed');
+            const running = ((sets.length && sets[sets.length - 1].tasks) || []).filter((task) => task && !task.ambient);
+            if (running.length) fail(`Doc gardening ended with ${running.length} background task(s) still running.`);
+            const denied = [...new Set((result.permission_denials || []).map((d) => (d.tool_input && d.tool_input.command ? `${d.tool_name} (${clean(d.tool_input.command)})` : String(d.tool_name))))];
+
+            const startedAt = Date.parse(process.env.GARDENING_STARTED_AT || '');
+            if (Number.isNaN(startedAt)) fail('GARDENING_STARTED_AT is not set, so the check cannot tell whether this run opened a PR.');
+            let prs;
+            try {
+              prs = await openGardeningPrs();
+            } catch (error) {
+              fail(`Could not list the open PRs to check the outcome: ${error.message}`);
+            }
+            // Allow for clock skew between the runner and GitHub.
+            const opened = prs.filter((pr) => Date.parse(pr.created_at) >= startedAt - 30 * 1000);
+            let outcome = null;
+            if (opened.length > 0) outcome = `opened ${opened.map((pr) => `#${pr.number}`).join(', ')}`;
+            else if (/No doc drift found/i.test(said)) outcome = 'found no doc drift';
+            else if (prs.length > 0 && /already/i.test(said)) outcome = `left the open gardening PR #${prs[0].number} alone`;
+
+            if (!outcome) {
+              const reason = denied.length > 0 ? ` Claude was denied ${denied.join(', ')}; allow the tool in claude_args.` : '';
+              fail(`Doc gardening finished without opening a PR or reporting "No doc drift found".${reason}`);
+            }
+            if (denied.length > 0) {
+              console.log(`::warning title=Doc gardening was denied tools::Claude was denied ${clean(denied.join(', '), 600)} but still ${outcome}. Allow the tool in claude_args if the job needs it.`);
+            }
+            console.log(`Doc gardening ${outcome}.`);
+          };
+          main().catch((error) => fail(`The doc gardening check failed: ${error && error.message}`));
 
   report:
     runs-on: ubuntu-latest
@@ -110,7 +217,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node
         uses: actions/setup-node@v5

@@ -13,9 +13,10 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
   });
 }
 
-async function mockTeamWorkspaceApi(page: Page) {
+async function mockTeamWorkspaceApi(page: Page, options: { failTeamsAfterTransfer?: boolean } = {}) {
   const inviteRequests: InviteRequest[] = [];
   let createdInvite: Record<string, unknown> | null = null;
+  let ownershipTransferred = false;
 
   await page.route('**/api/**', async (route) => {
     const request = route.request();
@@ -48,7 +49,17 @@ async function mockTeamWorkspaceApi(page: Page) {
       return;
     }
 
+    if (path === '/api/teams/team-1/owner' && request.method() === 'PUT') {
+      ownershipTransferred = true;
+      await fulfillJson(route, { success: true, ownerMemberId: 'member-editor', ownerUserId: 'user-editor' });
+      return;
+    }
+
     if (path === '/api/teams' && request.method() === 'GET') {
+      if (ownershipTransferred && options.failTeamsAfterTransfer) {
+        await fulfillJson(route, { error: 'Service unavailable' }, 503);
+        return;
+      }
       await fulfillJson(route, [
         {
           id: 'team-1',
@@ -92,7 +103,7 @@ async function mockTeamWorkspaceApi(page: Page) {
           avatar_url: null,
           email: 'owner@example.com',
           name: 'Owner User',
-          role: 'owner',
+          role: ownershipTransferred ? 'admin' : 'owner',
           status: 'active',
           team_id: 'team-1',
           user_id: 'user-owner',
@@ -102,7 +113,7 @@ async function mockTeamWorkspaceApi(page: Page) {
           avatar_url: null,
           email: 'editor@example.com',
           name: 'Editor User',
-          role: 'editor',
+          role: ownershipTransferred ? 'owner' : 'editor',
           status: 'active',
           team_id: 'team-1',
           user_id: 'user-editor',
@@ -118,7 +129,7 @@ async function mockTeamWorkspaceApi(page: Page) {
 
     if (path === '/api/teams/team-1/invites' && request.method() === 'POST') {
       const payload = request.postDataJSON() as InviteRequest;
-      const invitePath = '/team-invites/e2e-token';
+      const invitePath = '/team-invites/e2e-token/';
       const inviteUrl = new URL(invitePath, page.url()).toString();
       inviteRequests.push(payload);
       createdInvite = {
@@ -181,7 +192,7 @@ test('@smoke team workspace settings create link invites and expose owner contro
 }) => {
   const apiMock = await mockTeamWorkspaceApi(page);
 
-  await page.goto('/dashboard/settings');
+  await page.goto('/dashboard/settings/');
 
   await page.getByRole('button', { name: 'Switch context' }).click();
   await page.getByRole('menuitem', { name: /Acme Team/i }).click();
@@ -202,13 +213,36 @@ test('@smoke team workspace settings create link invites and expose owner contro
   await page.getByRole('button', { name: /create link/i }).click();
 
   await expect(page.getByRole('textbox', { name: 'Invite link' })).toHaveValue(
-    /\/team-invites\/e2e-token$/,
+    /\/team-invites\/e2e-token\/$/,
   );
-  await expect(page.getByText('new@example.com')).toBeVisible();
+  await expect(page.getByText('Invite link for new@example.com')).toBeVisible();
+  const pendingInviteRow = page.getByText('new@example.com', { exact: true });
+  await expect(pendingInviteRow).toBeVisible();
   expect(apiMock.inviteRequests).toEqual([
     {
       email: 'New@Example.com',
       role: 'viewer',
     },
   ]);
+});
+
+test('an ownership transfer that saved is not reported as failed when the Organization list cannot refresh', async ({
+  page,
+}) => {
+  await mockTeamWorkspaceApi(page, { failTeamsAfterTransfer: true });
+
+  await page.goto('/dashboard/settings/');
+  await page.getByRole('button', { name: 'Switch context' }).click();
+  await page.getByRole('menuitem', { name: /Acme Team/i }).click();
+  await expect(page.getByText('Your role: Owner')).toBeVisible();
+
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: /make owner/i }).click();
+
+  await expect(page.getByText('Organization ownership transferred')).toBeVisible();
+  await expect(page.getByText('Saved, but refreshing failed. Reload to see the latest state.')).toBeVisible();
+  await expect(page.getByText('Failed to transfer ownership')).toHaveCount(0);
+  await expect(page.getByText('Service unavailable')).toHaveCount(0);
+  await expect(page.getByText('Your role: Admin')).toBeVisible();
+  await expect(page.getByRole('button', { name: /make owner/i })).toHaveCount(0);
 });

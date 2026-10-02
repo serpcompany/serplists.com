@@ -12,6 +12,7 @@ export const buildPortableTemplatePackJsonSchema = () => {
     $refStrategy: "none",
     name: "SERPListsPortableTemplatePack",
     nameStrategy: "title",
+    removeAdditionalStrategy: "strict",
   });
 
   return {

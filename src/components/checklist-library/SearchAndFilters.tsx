@@ -1,29 +1,17 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { Clock, Star, TrendingUp } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type {
   DiscoveryCategory,
   DiscoverySort,
 } from '@/components/checklist-library/discovery-utils';
 
-interface SearchAndFiltersProps {
-  categories: DiscoveryCategory[];
-  onCategoryChange: (categorySlug: string | null) => void;
-  onSortChange: (sortBy: DiscoverySort) => void;
-  resultCount: number;
-  resultLabel?: string;
-  searchSlot?: React.ReactNode;
-  selectedCategorySlug: string | null;
-  sortBy: DiscoverySort;
-  getCategoryPath?: (category: DiscoveryCategory) => string;
-  trailingControls?: React.ReactNode;
-}
+import { Link } from '@/components/navigation/Link';
 
 const sortOptions: Array<{
-  icon: React.ComponentType<{ className?: string }>;
+  icon: typeof Star;
   label: string;
   value: DiscoverySort;
 }> = [
@@ -32,100 +20,86 @@ const sortOptions: Array<{
   { icon: Clock, label: 'Recent', value: 'recent' },
 ];
 
-export const SearchAndFilters: React.FC<SearchAndFiltersProps> = ({
+interface CategoryChipsProps {
+  categories: DiscoveryCategory[];
+  getCategoryPath?: (category: DiscoveryCategory) => string;
+  onCategoryChange: (categorySlug: string | null) => void;
+  selectedCategorySlug: string | null;
+}
+
+export const CategoryChips: React.FC<CategoryChipsProps> = ({
   categories,
-  onCategoryChange,
-  onSortChange,
-  resultCount,
-  resultLabel,
-  searchSlot,
-  selectedCategorySlug,
-  sortBy,
   getCategoryPath,
-  trailingControls,
+  onCategoryChange,
+  selectedCategorySlug,
 }) => {
-  const sortControls = trailingControls ?? (
-    <div className="flex items-center gap-1">
-      {sortOptions.map((option) => {
-        const Icon = option.icon;
-        const isActive = sortBy === option.value;
+  if (categories.length === 0) return null;
+
+  const chipClassName = (active: boolean) =>
+    cn(buttonVariants({ variant: active ? 'default' : 'secondary', size: 'sm' }), 'shrink-0');
+
+  return (
+    <>
+      <Button
+        type="button"
+        className={chipClassName(selectedCategorySlug === null)}
+        onClick={() => onCategoryChange(null)}
+      >
+        All
+      </Button>
+
+      {categories.map((category) => {
+        const isActive = selectedCategorySlug === category.slug;
+        const categoryPath = getCategoryPath?.(category);
+
+        if (categoryPath) {
+          return (
+            <Link key={category.slug} href={categoryPath} className={chipClassName(isActive)}>
+              {category.name}
+            </Link>
+          );
+        }
 
         return (
           <Button
-            key={option.value}
+            key={category.slug}
             type="button"
-            variant={isActive ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => onSortChange(option.value)}
-            className={cn('gap-1.5', !isActive && 'text-muted-foreground')}
+            className={chipClassName(isActive)}
+            onClick={() => onCategoryChange(category.slug)}
           >
-            <Icon className="h-3.5 w-3.5" />
-            {option.label}
+            {category.name}
           </Button>
         );
       })}
-    </div>
-  );
-
-  return (
-    <section className="space-y-6">
-      {categories.length > 0 ? (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          <Button
-            type="button"
-            variant={selectedCategorySlug === null ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => onCategoryChange(null)}
-            className="shrink-0"
-          >
-            All
-          </Button>
-
-          {categories.map((category) => {
-            const isActive = selectedCategorySlug === category.slug;
-            const categoryPath = getCategoryPath?.(category);
-
-            if (categoryPath) {
-              return (
-                <Button
-                  asChild
-                  key={category.slug}
-                  variant={isActive ? 'default' : 'outline'}
-                  size="sm"
-                  className="shrink-0"
-                >
-                  <Link to={categoryPath}>{category.name}</Link>
-                </Button>
-              );
-            }
-
-            return (
-              <Button
-                key={category.slug}
-                type="button"
-                variant={isActive ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onCategoryChange(category.slug)}
-                className="shrink-0"
-              >
-                {category.name}
-              </Button>
-            );
-          })}
-        </div>
-      ) : null}
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {searchSlot ? (
-          searchSlot
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {resultLabel ?? `${resultCount} templates`}
-          </p>
-        )}
-
-        {sortControls}
-      </div>
-    </section>
+    </>
   );
 };
+
+interface SortButtonsProps {
+  onSortChange: (sortBy: DiscoverySort) => void;
+  sortBy: DiscoverySort;
+}
+
+export const SortButtons: React.FC<SortButtonsProps> = ({ onSortChange, sortBy }) => (
+  <div className="flex items-center gap-1">
+    {sortOptions.map((option) => {
+      const Icon = option.icon;
+      const isActive = sortBy === option.value;
+
+      return (
+        <Button
+          key={option.value}
+          type="button"
+          variant={isActive ? 'secondary' : 'ghost'}
+          size="sm"
+          aria-pressed={isActive}
+          onClick={() => onSortChange(option.value)}
+          className={cn(!isActive && 'text-muted-foreground')}
+        >
+          <Icon data-icon="inline-start" />
+          {option.label}
+        </Button>
+      );
+    })}
+  </div>
+);

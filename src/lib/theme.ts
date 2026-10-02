@@ -1,4 +1,8 @@
-const THEME_STORAGE_KEY = 'serplists-theme';
+import { useSyncExternalStore } from 'react';
+
+import { getLocalStorage, safeLocalStorage, succeedsWithoutThrowing } from '@/lib/browserStorage';
+
+export const THEME_STORAGE_KEY = 'serplists-theme';
 export const THEME_CHANGE_EVENT = 'serplists-theme-change';
 
 export type SerpListsTheme = 'light' | 'dark';
@@ -7,10 +11,14 @@ const isTheme = (value: string | null): value is SerpListsTheme =>
   value === 'light' || value === 'dark';
 
 export const getStoredTheme = (
-  storage: Pick<Storage, 'getItem'> | null | undefined =
-    typeof window !== 'undefined' ? window.localStorage : undefined,
+  storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
-  const storedTheme = storage?.getItem(THEME_STORAGE_KEY) ?? null;
+  let storedTheme: string | null = null;
+  try {
+    storedTheme = storage?.getItem(THEME_STORAGE_KEY) ?? null;
+  } catch {
+    storedTheme = null;
+  }
   return isTheme(storedTheme) ? storedTheme : 'light';
 };
 
@@ -30,8 +38,7 @@ const setDocumentTheme = (documentRef: Document, theme: SerpListsTheme) => {
 
 export const applyStoredTheme = (
   documentRef: Document = document,
-  storage: Pick<Storage, 'getItem'> | null | undefined =
-    typeof window !== 'undefined' ? window.localStorage : undefined,
+  storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   const theme = getStoredTheme(storage);
   setDocumentTheme(documentRef, theme);
@@ -41,13 +48,10 @@ export const applyStoredTheme = (
 export const setStoredTheme = (
   theme: SerpListsTheme,
   documentRef: Document = document,
-  storage:
-    | Pick<Storage, 'setItem'>
-    | null
-    | undefined = typeof window !== 'undefined' ? window.localStorage : undefined,
+  storage: Pick<Storage, 'setItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   setDocumentTheme(documentRef, theme);
-  storage?.setItem(THEME_STORAGE_KEY, theme);
+  succeedsWithoutThrowing(() => storage?.setItem(THEME_STORAGE_KEY, theme));
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent<SerpListsTheme>(THEME_CHANGE_EVENT, { detail: theme }),
@@ -58,11 +62,79 @@ export const setStoredTheme = (
 
 export const toggleDocumentTheme = (
   documentRef: Document = document,
-  storage:
-    | Pick<Storage, 'getItem' | 'setItem'>
-    | null
-    | undefined = typeof window !== 'undefined' ? window.localStorage : undefined,
+  storage: Pick<Storage, 'getItem' | 'setItem'> | null | undefined = safeLocalStorage,
 ): SerpListsTheme => {
   const nextTheme = getDocumentTheme(documentRef) === 'dark' ? 'light' : 'dark';
   return setStoredTheme(nextTheme, documentRef, storage);
 };
+
+type ThemeStorageEvent = { key: string | null; storageArea: unknown };
+
+const readStorageEvent = (event: Event): ThemeStorageEvent | null => {
+  if (!('key' in event) || !('storageArea' in event)) return null;
+  const { key, storageArea } = event;
+  return key === null || typeof key === 'string' ? { key, storageArea } : null;
+};
+
+const isThemeOrClearedKey = (key: string | null): boolean => key === null || key === THEME_STORAGE_KEY;
+
+const isFromAnotherStorageArea = (event: ThemeStorageEvent, localStorageArea: unknown): boolean =>
+  Boolean(event.storageArea && localStorageArea && event.storageArea !== localStorageArea);
+
+export const syncThemeFromStorageEvent = (
+  event: ThemeStorageEvent,
+  documentRef: Document = document,
+  storage: Pick<Storage, 'getItem'> | null | undefined = safeLocalStorage,
+  localStorageArea: unknown = getLocalStorage(),
+): SerpListsTheme | null => {
+  if (!isThemeOrClearedKey(event.key) || isFromAnotherStorageArea(event, localStorageArea)) return null;
+  return applyStoredTheme(documentRef, storage);
+};
+
+interface ThemeSubscriptionOptions {
+  documentRef?: Document;
+  localStorageArea?: unknown;
+  storage?: Pick<Storage, 'getItem'> | null;
+  target?: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+}
+
+export const subscribeToThemeChanges = (
+  onChange: (theme: SerpListsTheme) => void,
+  options: ThemeSubscriptionOptions = {},
+): (() => void) => {
+  const documentRef = options.documentRef ?? document;
+  const target = options.target ?? window;
+
+  const handleThemeChange = (event: Event) => {
+    onChange(
+      event instanceof CustomEvent && isTheme(event.detail)
+        ? event.detail
+        : getDocumentTheme(documentRef),
+    );
+  };
+  const handleStorage = (event: Event) => {
+    const storageEvent = readStorageEvent(event);
+    if (!storageEvent) return;
+    const theme = syncThemeFromStorageEvent(
+      storageEvent,
+      documentRef,
+      options.storage ?? safeLocalStorage,
+      'localStorageArea' in options ? options.localStorageArea : getLocalStorage(),
+    );
+    if (theme) onChange(theme);
+  };
+
+  target.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  target.addEventListener('storage', handleStorage);
+  return () => {
+    target.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    target.removeEventListener('storage', handleStorage);
+  };
+};
+
+const subscribeToDocumentTheme = (onStoreChange: () => void) => subscribeToThemeChanges(onStoreChange);
+const getClientTheme = (): SerpListsTheme => getDocumentTheme();
+const getServerTheme = (): SerpListsTheme => 'light';
+
+export const useDocumentTheme = (): SerpListsTheme =>
+  useSyncExternalStore(subscribeToDocumentTheme, getClientTheme, getServerTheme);
