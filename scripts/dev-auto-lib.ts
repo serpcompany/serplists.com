@@ -23,9 +23,9 @@ type OwnershipCheck = (pid: number | null, startedAt: number | null) => Promise<
 type PortAvailabilityCheck = (port: number) => Promise<boolean>;
 
 export const DEFAULT_DEV_PORT = 3000;
-export const PORT_SEARCH_LIMIT = 25;
+const PORT_SEARCH_LIMIT = 25;
 export const DEV_SESSION_PATH = "tmp/dev-session.json";
-export const START_TIME_TOLERANCE_MS = 5_000;
+const START_TIME_TOLERANCE_MS = 5_000;
 export const DEV_FALLBACK_AUTH_SECRET = "local-dev-better-auth-secret-32-chars";
 const DEV_LAUNCHER_SCRIPT = /dev-auto\.ts/;
 
@@ -210,7 +210,7 @@ export function writeDevSession(session: unknown, sessionPath: string = DEV_SESS
   writeFileSync(sessionPath, `${JSON.stringify(nextSession, null, 2)}\n`, "utf8");
 }
 
-export function removeDevSession(sessionPath: string = DEV_SESSION_PATH): void {
+function removeDevSession(sessionPath: string = DEV_SESSION_PATH): void {
   if (existsSync(sessionPath)) {
     unlinkSync(sessionPath);
   }

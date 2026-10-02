@@ -23,7 +23,7 @@ const UNKNOWN = "\u0000";
 const MAX_DEPTH = 8;
 const MAX_POSSIBILITIES = 64;
 
-export const NO_SOURCE_TEXT_READS_MESSAGE =
+const NO_SOURCE_TEXT_READS_MESSAGE =
   "Tests check what code does, not how it is written: reading {{path}} as text breaks on a harmless refactor and " +
   "passes when the behavior breaks. Import the module and call it, render the component or send the request, and " +
   "assert the outcome. A rule about how all code is written (always import X from Y, never call Z) belongs in an " +

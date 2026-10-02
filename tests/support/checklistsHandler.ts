@@ -11,7 +11,6 @@ export {
   PRO_PLAN,
   resetToASignedInUser,
   resetToASignedOutVisitorOnTheFreePlan as resetChecklistsHandlerMocks,
-  successBody,
   TEAM_PLAN,
 } from './apiHandlerMocks';
 

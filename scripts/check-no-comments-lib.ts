@@ -60,9 +60,9 @@ export const WORKFLOWS_AWAITING_A_PERSON: readonly string[] = [
   ".github/workflows/maintenance.yml",
 ];
 
-export const DOCUMENTATION_FORMATS: readonly string[] = [".md"];
+const DOCUMENTATION_FORMATS: readonly string[] = [".md"];
 
-export const FORMATS_WITHOUT_COMMENTS: readonly string[] = [
+const FORMATS_WITHOUT_COMMENTS: readonly string[] = [
   ".txt",
   ".gitkeep",
   ".ico",

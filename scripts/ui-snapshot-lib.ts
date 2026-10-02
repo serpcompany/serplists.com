@@ -7,7 +7,7 @@ export const UI_SNAP_USAGE =
   "[--out <file.png|file.jpg>] [--base <app url>] [--api <api url, default <app url>/api>]\n" +
   "Flags may come before or after the route. Write the route without a leading slash (dashboard/templates).";
 
-export interface SnapshotPaths {
+interface SnapshotPaths {
   outPath: string;
   ariaPath: string;
 }
@@ -35,7 +35,7 @@ const EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE = [".png", ".jpg", ".jpeg", ".jpe"
 
 const unknownOptionErrorSchema = z.object({ code: z.literal("ERR_PARSE_ARGS_UNKNOWN_OPTION"), message: z.string() });
 
-export function resolveSnapshotPaths(outArg: string | undefined, slug: string): SnapshotPaths {
+function resolveSnapshotPaths(outArg: string | undefined, slug: string): SnapshotPaths {
   const outPath = outArg ?? path.join("tmp", "snapshots", `${slug}.png`);
   const { dir, name, ext } = path.parse(outPath);
   if (!EXTENSIONS_PLAYWRIGHT_SAVES_AS_AN_IMAGE.includes(ext)) {

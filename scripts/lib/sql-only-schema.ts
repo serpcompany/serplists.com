@@ -9,7 +9,7 @@ const sqlOnlyTriggerSchema = z.object({
   definition: z.string().min(1),
 });
 
-export const sqlOnlySchemaManifestSchema = z.object({
+const sqlOnlySchemaManifestSchema = z.object({
   version: z.number(),
   description: z.string(),
   triggers: z.array(sqlOnlyTriggerSchema),

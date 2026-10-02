@@ -5,11 +5,11 @@ type IsAlive = (pid: number | null) => boolean;
 
 const WEBHOOK_PATH = "/api/stripe/webhook";
 
-export function webhookUrlForPort(port: number): string {
+function webhookUrlForPort(port: number): string {
   return `http://localhost:${port}${WEBHOOK_PATH}`;
 }
 
-export function liveSessionPort(session: DevSession | null | undefined, isAlive: IsAlive = isProcessAlive): number | null {
+function liveSessionPort(session: DevSession | null | undefined, isAlive: IsAlive = isProcessAlive): number | null {
   if (!session) return null;
   return isAlive(session.pid) ? session.port : null;
 }

@@ -5,11 +5,8 @@ import { apiTemplateSchema } from '../../../src/lib/schemas/apiTemplates';
 
 export { apiTemplateSchema };
 export { savedTemplateSchema } from '../../../src/lib/schemas/apiTemplates';
-export { templateHistorySchema } from '../../../src/lib/schemas/historyResponses';
 
 export const jsonRecord = z.record(z.unknown());
-
-export const jsonRecords = z.array(jsonRecord);
 
 export const apiTemplateRows = z.array(apiTemplateSchema);
 
@@ -23,7 +20,7 @@ const storedTask = z
   })
   .passthrough();
 
-export const storedSections = z.array(z.object({ items: z.array(storedTask) }).passthrough());
+const storedSections = z.array(z.object({ items: z.array(storedTask) }).passthrough());
 
 export const sectionsOfStoredItems = (items: unknown) =>
   storedSections.parse(typeof items === 'string' ? JSON.parse(items) : items);

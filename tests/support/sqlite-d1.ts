@@ -27,7 +27,7 @@ export function readMigration(name: string): string {
   return readFileSync(path.join(migrationsDir, name), "utf8");
 }
 
-export function everyMigrationSql(): string[] {
+function everyMigrationSql(): string[] {
   return readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort().map(readMigration);
 }
 

@@ -6,7 +6,7 @@ export type RequiredForeignKey = { from: string; table: string; to: string; onDe
 export type ActualForeignKey = { from: string; table: string; to: string; onDelete: string };
 export type RequiredTrigger = { name: string; table: string; definition: string };
 export type ActualTrigger = { table: string; definition: string };
-export type DriftIssue = { name: string; issues: string[] };
+type DriftIssue = { name: string; issues: string[] };
 
 export type ByTable<T> = Readonly<Record<string, T>>;
 

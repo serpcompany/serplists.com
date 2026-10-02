@@ -22,7 +22,7 @@ export const migration25 = "0025_add_personal_run_keys.sql";
 export const migration27 = "0027_add_personal_run_key_permissions.sql";
 const protocolVersion = "2025-06-18";
 
-export type TestEnv = {
+type TestEnv = {
   DB: D1Database;
   PERSONAL_RUN_MCP_ENABLED?: "true" | "false";
 };

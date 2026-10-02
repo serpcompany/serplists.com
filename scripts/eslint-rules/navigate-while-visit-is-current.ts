@@ -36,7 +36,7 @@ const IS_CURRENT = /\bvisit\.isCurrent\(\)/;
 const NOT_CURRENT = /!\s*visit\.isCurrent\(\)/;
 const MENTIONS_THE_VISIT = /\bvisit\b/;
 
-export const NAVIGATE_WHILE_VISIT_IS_CURRENT_MESSAGE =
+const NAVIGATE_WHILE_VISIT_IS_CURRENT_MESSAGE =
   "{{call}}() moves the user after an await without checking that they are still on this page, so a request that " +
   "finishes after they left pulls them back. Start a visit with usePageVisit() before the request and move only " +
   "while visit.isCurrent() (or return early once it is not), or pass the visit to a helper that checks it. When an " +

@@ -7,7 +7,6 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { firstOf } from '../../support/elements';
 
 import {
-  buildPnpmInvocation,
   buildScriptInvocation,
   buildToolInvocation,
   execScript,
@@ -18,7 +17,6 @@ import {
 
 const LOCAL_TOOLS: ToolName[] = ['wrangler', 'next', 'opennextjs-cloudflare', 'drizzle-kit', 'playwright'];
 
-const envStartedBy = (npmExecPath?: string): NodeJS.ProcessEnv => ({ ...process.env, npm_execpath: npmExecPath });
 
 describe('buildToolInvocation', () => {
   it('runs local tools with the current Node and their bin script, never a shim', () => {
@@ -54,44 +52,6 @@ describe('execScript', { timeout: 60_000 }, () => {
     writeFileSync(script, 'const answer: number = 42;\nconsole.log(`answer ${answer}`);\n');
 
     expect(execScript(script, [], { cwd: outsideTheRepository, encoding: 'utf8' })).toBe('answer 42\n');
-  });
-});
-
-describe('buildPnpmInvocation', () => {
-  it('runs the pnpm entry script that started this process when there is one', () => {
-    expect(
-      buildPnpmInvocation(['run', 'build'], {
-        platform: 'win32',
-        env: envStartedBy('C:\\corepack\\pnpm\\9.2.0\\bin\\pnpm.cjs'),
-        execPath: 'C:\\node\\node.exe',
-      }),
-    ).toEqual({
-      command: 'C:\\node\\node.exe',
-      args: ['C:\\corepack\\pnpm\\9.2.0\\bin\\pnpm.cjs', 'run', 'build'],
-      options: {},
-    });
-  });
-
-  it('goes through cmd.exe on Windows without an entry script', () => {
-    for (const env of [envStartedBy(), envStartedBy('C:\\npm\\bin\\npm-cli.js'), envStartedBy('C:\\pnpm\\pnpm.exe')]) {
-      expect(buildPnpmInvocation(['run', 'build'], { platform: 'win32', env })).toEqual({
-        command: 'cmd.exe',
-        args: ['/d', '/s', '/c', '"pnpm run build"'],
-        options: { windowsVerbatimArguments: true },
-      });
-    }
-  });
-
-  it('refuses arguments cmd.exe would reinterpret', () => {
-    expect(() => buildPnpmInvocation(['run', 'a&b'], { platform: 'win32', env: envStartedBy() })).toThrow(/Cannot pass "a&b"/);
-  });
-
-  it('runs pnpm directly elsewhere', () => {
-    expect(buildPnpmInvocation(['run', 'build'], { platform: 'linux', env: envStartedBy() })).toEqual({
-      command: 'pnpm',
-      args: ['run', 'build'],
-      options: {},
-    });
   });
 });
 

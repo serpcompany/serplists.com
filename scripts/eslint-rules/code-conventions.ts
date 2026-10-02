@@ -201,8 +201,7 @@ const TOOL_SHIMS: CodeConvention = {
     ":matches(Literal[value=/^(?:npx|pnpm|pnpx)(?:\\.cmd|\\.exe)?$/], TemplateElement[value.raw=/^(?:npx|pnpm|pnpx)(?:\\.cmd|\\.exe)?$/])",
   message:
     "npx and pnpm are .cmd shims on Windows that fail to start without a shell. Launch local tools (wrangler, next, ...) " +
-    "with execTool() or spawnTool(), scripts with execScript() or buildScriptInvocation(), and pnpm with execPnpm() from " +
-    "scripts/lib/run-tool.ts.",
+    "with execTool() or spawnTool(), and scripts with execScript() or buildScriptInvocation(), from scripts/lib/run-tool.ts.",
   owners: ["scripts/lib/run-tool.ts"],
 };
 

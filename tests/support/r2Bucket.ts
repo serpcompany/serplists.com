@@ -4,7 +4,7 @@ export type R2File = { key: string; bytes: Bytes; contentType: string; etag: str
 
 type R2Value = ReadableStream | ArrayBuffer | ArrayBufferView | string | null | Blob;
 
-export const R2_UNSATISFIABLE_RANGE_ERROR = 'get: The requested range is not satisfiable (10039)';
+const R2_UNSATISFIABLE_RANGE_ERROR = 'get: The requested range is not satisfiable (10039)';
 
 class StoredR2Object implements R2Object {
   readonly key: string;

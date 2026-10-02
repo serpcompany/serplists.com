@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { normalizeEol } from './line-endings';
 
-export const templatePackSchema = z
+const templatePackSchema = z
   .object({
     templates: z.array(z.record(z.unknown())).optional(),
   })

@@ -15,7 +15,7 @@ export type LogEntry = {
   fields: LogFields;
 };
 
-export interface LogFields extends Record<string, unknown> {
+interface LogFields extends Record<string, unknown> {
   method?: unknown;
   path?: unknown;
   status?: unknown;

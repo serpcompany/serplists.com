@@ -57,7 +57,7 @@ const parseTemplateJson = (source: string) => {
   return normalizePortableTemplate(portableChecklistTemplateSchema.parse(parsed));
 };
 
-export const parseSingleTemplateSource = (source: string, extension: SupportedTemplateSourceExtension): TemplateSourceDetails => {
+const parseSingleTemplateSource = (source: string, extension: SupportedTemplateSourceExtension): TemplateSourceDetails => {
   if (isMarkdownTemplateExtension(extension)) {
     return buildTemplateSourceDetails(extension, parseTemplateMarkdown(source));
   }

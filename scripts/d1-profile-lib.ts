@@ -3,7 +3,7 @@ import { cpSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs
 import path from "node:path";
 import { z } from "zod";
 
-export type Actor = "anon" | "admin" | "john";
+type Actor = "anon" | "admin" | "john";
 
 export type Scenario = {
   name: string;
@@ -163,7 +163,7 @@ export function evaluateScenarioResults(results: ScenarioOutcome[]): { failures:
   return { failures, exitCode: failures.length > 0 ? 1 : 0 };
 }
 
-export const snapshotMetaSchema = z.object({ scale: z.number(), datasetKey: z.string() });
+const snapshotMetaSchema = z.object({ scale: z.number(), datasetKey: z.string() });
 export type SnapshotMeta = z.infer<typeof snapshotMetaSchema>;
 
 export function computeDatasetKey(parts: string[]): string {

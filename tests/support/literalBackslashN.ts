@@ -2,7 +2,7 @@ const LITERAL_BACKSLASH_N = `${String.fromCharCode(92)}n`;
 
 type StringAtPath = [path: string, text: string];
 
-export function stringsByPath(value: unknown, path: string, found: StringAtPath[] = []): StringAtPath[] {
+function stringsByPath(value: unknown, path: string, found: StringAtPath[] = []): StringAtPath[] {
   if (typeof value === "string") {
     found.push([path, value]);
   } else if (Array.isArray(value)) {

@@ -185,7 +185,7 @@ export type StatementStats = {
   totalMs: number;
 };
 
-export function normalizeStatement(sql: string): string {
+function normalizeStatement(sql: string): string {
   return sql
     .replace(/'(?:[^']|'')*'/g, "?")
     .replace(/\b\d+(?:\.\d+)?\b/g, "?")

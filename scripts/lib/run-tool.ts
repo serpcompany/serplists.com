@@ -20,7 +20,7 @@ export interface Invocation {
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-export const TOOL_PACKAGES = {
+const TOOL_PACKAGES = {
   "drizzle-kit": "drizzle-kit",
   next: "next",
   "opennextjs-cloudflare": "@opennextjs/cloudflare",
@@ -32,7 +32,7 @@ export type ToolName = keyof typeof TOOL_PACKAGES;
 
 const toolManifestSchema = z.object({ bin: z.union([z.string(), z.record(z.string())]).optional() });
 
-export function resolveToolBin(tool: ToolName, { repoRoot = REPO_ROOT }: { repoRoot?: string } = {}): string {
+function resolveToolBin(tool: ToolName, { repoRoot = REPO_ROOT }: { repoRoot?: string } = {}): string {
   const packageName = TOOL_PACKAGES[tool];
   const packageDir = path.join(repoRoot, "node_modules", ...packageName.split("/"));
   let manifestText: string;
@@ -70,38 +70,6 @@ export function buildScriptInvocation(
   return { command: execPath, args: ["--import", tsxLoaderUrl({ repoRoot }), script, ...args], options: {} };
 }
 
-const ARG_CMD_EXE_PASSES_UNCHANGED = /^[\w@+=:./\\-]+$/;
-
-export function buildPnpmInvocation(
-  args: readonly string[],
-  {
-    platform = process.platform,
-    env = process.env,
-    execPath = process.execPath,
-  }: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; execPath?: string } = {},
-): Invocation {
-  const entry = env["npm_execpath"] ?? "";
-  if (/\.[cm]?js$/i.test(entry) && /pnpm/i.test(path.basename(entry))) {
-    return { command: execPath, args: [entry, ...args], options: {} };
-  }
-
-  if (platform === "win32") {
-    const unsafe = args.find((arg) => !ARG_CMD_EXE_PASSES_UNCHANGED.test(arg));
-    if (unsafe !== undefined) {
-      throw new Error(
-        `Cannot pass "${unsafe}" to pnpm through cmd.exe. Run this script with "pnpm run", or launch the tool with execTool/spawnTool.`,
-      );
-    }
-    return {
-      command: "cmd.exe",
-      args: ["/d", "/s", "/c", `"pnpm ${args.join(" ")}"`],
-      options: { windowsVerbatimArguments: true },
-    };
-  }
-
-  return { command: "pnpm", args: [...args], options: {} };
-}
-
 function spawnInvocation(invocation: Invocation, options: SpawnOptions): ChildProcess {
   return spawn(invocation.command, invocation.args, { ...invocation.options, ...options });
 }
@@ -126,12 +94,6 @@ export function execScript(script: string, args: readonly string[], options: Exe
 export function execScript(script: string, args: readonly string[], options?: ExecFileSyncOptions): string | Buffer;
 export function execScript(script: string, args: readonly string[], options: ExecFileSyncOptions = {}): string | Buffer {
   return execInvocation(buildScriptInvocation(script, args), options);
-}
-
-export function execPnpm(args: readonly string[], options: ExecFileSyncOptionsWithStringEncoding): string;
-export function execPnpm(args: readonly string[], options?: ExecFileSyncOptions): string | Buffer;
-export function execPnpm(args: readonly string[], options: ExecFileSyncOptions = {}): string | Buffer {
-  return execInvocation(buildPnpmInvocation(args), options);
 }
 
 export function killPidTree(

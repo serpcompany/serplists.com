@@ -23,10 +23,10 @@ import {
 
 import { BROWSER_TEST_LOG_PATH, DEV_LOG_PATH } from "./log-mirror";
 
-export const defaultLogFile = DEV_LOG_PATH;
-export const browserTestLogFile = BROWSER_TEST_LOG_PATH;
+const defaultLogFile = DEV_LOG_PATH;
+const browserTestLogFile = BROWSER_TEST_LOG_PATH;
 
-export const usage = `Query the logs of the local stack: the API's JSON lines and Next.js's page lines.
+const usage = `Query the logs of the local stack: the API's JSON lines and Next.js's page lines.
 
 Usage: pnpm run logs:query [command] [options]
 

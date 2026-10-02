@@ -50,7 +50,7 @@ const collect = (html: string, pattern: RegExp, tag: (match: RegExpMatchArray) =
     text: textOf(match[3] ?? ''),
   }));
 
-export const findLabels = (html: string): MarkupElement[] =>
+const findLabels = (html: string): MarkupElement[] =>
   collect(html, /<(label)\b([^>]*)>([\s\S]*?)<\/label>/g, () => 'label');
 
 const findButtons = (html: string): MarkupElement[] =>

@@ -13,7 +13,7 @@ export const ONE_PIXEL_PNG = Buffer.from(
 
 export { uniqueSuffix };
 
-export async function registerAccount(page: Page) {
+async function registerAccount(page: Page) {
   await registerNewAccount(page, {
     name: "Template Editor QA",
     email: `template-editor+${uniqueSuffix()}@e2e.local`,

@@ -295,14 +295,12 @@ schema reads them.
 Scripts under `scripts/`, `tests/e2e/` and `tests/integration/` start tools through
 `scripts/lib/run-tool.ts`: `execTool`/`spawnTool` run a dependency's bin script
 (wrangler, next, opennextjs-cloudflare, playwright, drizzle-kit) with the current Node,
-`execScript` and `buildScriptInvocation` run a script with tsx's loader,
-and `execPnpm` runs pnpm itself through the pnpm that launched the script (`npm_execpath`).
-A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin. Outside
-`pnpm run` there is no pnpm script to reuse, so on Windows `execPnpm` goes through `cmd.exe`
-and refuses any argument that is not a plain token. Never spawn `npx` or `pnpm` by name: on
-Windows they are `.cmd` shims, so a spawn without a shell fails with `ENOENT` (or, since
-Node 18.20.2, `EINVAL` for `npx.cmd`), and passing arguments through a shell lets `cmd.exe`
-reinterpret characters such as `&`, `^` and `%` in values like the auth secret.
+and `execScript` and `buildScriptInvocation` run a script with tsx's loader.
+A new tool gets an entry in `TOOL_PACKAGES`, naming the package that ships its bin.
+Never spawn `npx` or `pnpm` by name: on Windows they are `.cmd` shims, so a spawn without a
+shell fails with `ENOENT` (or, since Node 18.20.2, `EINVAL` for `npx.cmd`), and passing
+arguments through a shell lets `cmd.exe` reinterpret characters such as `&`, `^` and `%` in
+values like the auth secret.
 ESLint refuses `npx` or `pnpm` named as a command in `scripts/`, `tests/e2e/` and
 `tests/integration/` (`serplists/restricted-code` with the conventions in
 `scripts/eslint-rules/code-conventions.ts`), outside `scripts/lib/run-tool.ts`.

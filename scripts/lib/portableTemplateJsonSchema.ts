@@ -5,7 +5,7 @@ import {
 } from "../../src/lib/schemas/checklistSchema";
 
 export const PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_RELATIVE_PATH = "docs/generated/portable-template-pack.schema.json";
-export const PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_ID = "https://serplists.com/schema/portable-template-pack.schema.json";
+const PORTABLE_TEMPLATE_PACK_JSON_SCHEMA_ID = "https://serplists.com/schema/portable-template-pack.schema.json";
 
 export const buildPortableTemplatePackJsonSchema = () => {
   const jsonSchema = zodToJsonSchema(portableTemplatePackSchema, {

@@ -327,7 +327,6 @@ export {
   mapTriggerResults,
   splitSchemaQueryResults,
 } from "./lib/d1-schema-pragmas";
-export type { SchemaQueryResults } from "./lib/d1-schema-pragmas";
 export {
   diffD1Schema,
   diffD1Triggers,
@@ -336,15 +335,7 @@ export {
   normalizeSqlFormatting,
 } from "./lib/d1-schema-drift";
 export type {
-  ActualColumnConstraints,
-  ActualForeignKey,
-  ActualIndex,
-  ActualTrigger,
   ByTable,
-  D1Drift,
-  D1SchemaDiff,
-  D1TriggerDiff,
-  DriftIssue,
   RequiredColumnConstraints,
   RequiredForeignKey,
   RequiredIndex,

@@ -9,7 +9,7 @@ vi.mock('@/components/ui/alert-dialog', async () => (await import('./overlaysInP
 
 export const openDialogs = () => screen.queryAllByRole('dialog');
 
-export async function openTheDialog(openLabel: string): Promise<HTMLElement> {
+async function openTheDialog(openLabel: string): Promise<HTMLElement> {
   await act(async () => {
     fireEvent.click(theButtonOrMenuItemNamed(openLabel));
   });
@@ -28,7 +28,7 @@ export async function openAndConfirm(openLabel: string, confirmLabel = openLabel
   await clickInTheDialog(await openTheDialog(openLabel), confirmLabel);
 }
 
-export const titleAndDescriptionOf = (dialog: HTMLElement) => ({
+const titleAndDescriptionOf = (dialog: HTMLElement) => ({
   title: within(dialog).queryByRole('heading')?.textContent,
   description: within(dialog).queryAllByRole('paragraph')[0]?.textContent,
 });

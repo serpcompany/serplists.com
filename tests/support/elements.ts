@@ -1,4 +1,4 @@
-export class MissingElementError extends Error {
+class MissingElementError extends Error {
   override name = 'MissingElementError';
 }
 
