@@ -82,6 +82,25 @@ const loadImage = (file: File): Promise<HTMLImageElement> =>
     img.src = src;
   });
 
+const canvasOfSize = (width: number, height: number) => {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Could not get canvas context');
+  }
+  canvas.width = width;
+  canvas.height = height;
+  return { canvas, context };
+};
+
+const loadSizedImage = async (file: File) => {
+  const img = await loadImage(file);
+  if (!img.naturalWidth || !img.naturalHeight) {
+    throw new Error('Image has no size');
+  }
+  return { img, width: img.naturalWidth, height: img.naturalHeight };
+};
+
 const encodeCanvas = (
   canvas: HTMLCanvasElement,
   type: EncodedImageType,
@@ -105,12 +124,7 @@ export const optimizeImage = async (
     return file;
   }
 
-  const img = await loadImage(file);
-  const width = img.naturalWidth;
-  const height = img.naturalHeight;
-  if (!width || !height) {
-    throw new Error('Image has no size');
-  }
+  const { img, width, height } = await loadSizedImage(file);
 
   const plan = planImageUpload(
     { type: file.type, size: file.size, width, height },
@@ -120,15 +134,8 @@ export const optimizeImage = async (
     return file;
   }
 
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Could not get canvas context');
-  }
-
-  canvas.width = plan.width;
-  canvas.height = plan.height;
-  ctx.drawImage(img, 0, 0, plan.width, plan.height);
+  const { canvas, context } = canvasOfSize(plan.width, plan.height);
+  context.drawImage(img, 0, 0, plan.width, plan.height);
 
   const blob = await encodeCanvas(canvas, plan.mimeType, quality);
   if (!plan.resized && REENCODED_IN_OWN_FORMAT[file.type] && blob.size >= file.size) {
@@ -140,6 +147,36 @@ export const optimizeImage = async (
     type: encodedType,
     lastModified: Date.now(),
   });
+};
+
+export const AVATAR_MAX_PIXELS = 512;
+const AVATAR_TYPE: EncodedImageType = 'image/webp';
+const AVATAR_QUALITY = 0.85;
+
+export type AvatarImagePlan = {
+  crop: { x: number; y: number; size: number };
+  size: number;
+  mimeType: EncodedImageType;
+};
+
+export const planAvatarImage = (source: { width: number; height: number }): AvatarImagePlan => {
+  const side = Math.min(source.width, source.height);
+  return {
+    crop: { x: Math.floor((source.width - side) / 2), y: Math.floor((source.height - side) / 2), size: side },
+    size: Math.max(1, Math.min(AVATAR_MAX_PIXELS, side)),
+    mimeType: AVATAR_TYPE,
+  };
+};
+
+export const prepareAvatarImage = async (file: File): Promise<File> => {
+  const { img, width, height } = await loadSizedImage(file);
+  const plan = planAvatarImage({ width, height });
+  const { canvas, context } = canvasOfSize(plan.size, plan.size);
+  context.drawImage(img, plan.crop.x, plan.crop.y, plan.crop.size, plan.crop.size, 0, 0, plan.size, plan.size);
+
+  const blob = await encodeCanvas(canvas, plan.mimeType, AVATAR_QUALITY);
+  const encodedType = blob.type || plan.mimeType;
+  return new File([blob], renameForType('avatar', '', encodedType), { type: encodedType, lastModified: Date.now() });
 };
 
 export const isImageFile = (file: File): boolean => {

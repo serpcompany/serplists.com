@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
-import { optimizeImage, planImageUpload } from '@/lib/imageOptimization';
+import { AVATAR_MAX_PIXELS, optimizeImage, planAvatarImage, planImageUpload, prepareAvatarImage } from '@/lib/imageOptimization';
 
 const LIMITS = { maxWidth: 1920, maxHeight: 1080 };
 const MB = 1024 * 1024;
@@ -42,68 +42,69 @@ type FakeImageInstance = {
   onerror: (() => void) | null;
 };
 
-describe('optimizeImage', () => {
-  let imageSize = { width: 4000, height: 3000 };
-  let loadFails = false;
-  let blobType: string | null = null;
-  let blobBytes = 10;
-  const toBlob = vi.fn();
-  const drawImage = vi.fn();
-  const createdImages: FakeImageInstance[] = [];
+let imageSize = { width: 4000, height: 3000 };
+let loadFails = false;
+let blobType: string | null = null;
+let blobBytes = 10;
+const toBlob = vi.fn();
+const drawImage = vi.fn();
+const createdImages: FakeImageInstance[] = [];
 
-  beforeEach(() => {
-    imageSize = { width: 4000, height: 3000 };
-    loadFails = false;
-    blobType = null;
-    blobBytes = 10;
-    createdImages.length = 0;
-    toBlob.mockReset();
-    drawImage.mockReset();
-    toBlob.mockImplementation((callback: (blob: Blob | null) => void, type: string) => {
-      callback(new Blob([new Uint8Array(blobBytes)], { type: blobType ?? type }));
-    });
+beforeEach(() => {
+  imageSize = { width: 4000, height: 3000 };
+  loadFails = false;
+  blobType = null;
+  blobBytes = 10;
+  createdImages.length = 0;
+  toBlob.mockReset();
+  drawImage.mockReset();
+  toBlob.mockImplementation((callback: (blob: Blob | null) => void, type: string) => {
+    callback(new Blob([new Uint8Array(blobBytes)], { type: blobType ?? type }));
+  });
 
-    class FakeImage implements FakeImageInstance {
-      naturalWidth = 0;
-      naturalHeight = 0;
-      onload: (() => void) | null = null;
-      onerror: (() => void) | null = null;
-      constructor() {
-        createdImages.push(this);
-      }
-      set src(_value: string) {
-        queueMicrotask(() => {
-          if (loadFails) {
-            this.onerror?.();
-            return;
-          }
-          this.naturalWidth = imageSize.width;
-          this.naturalHeight = imageSize.height;
-          this.onload?.();
-        });
-      }
+  class FakeImage implements FakeImageInstance {
+    naturalWidth = 0;
+    naturalHeight = 0;
+    onload: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    constructor() {
+      createdImages.push(this);
     }
+    set src(_value: string) {
+      queueMicrotask(() => {
+        if (loadFails) {
+          this.onerror?.();
+          return;
+        }
+        this.naturalWidth = imageSize.width;
+        this.naturalHeight = imageSize.height;
+        this.onload?.();
+      });
+    }
+  }
 
-    vi.stubGlobal('Image', FakeImage);
-    vi.stubGlobal('document', {
-      createElement: () => ({
-        width: 0,
-        height: 0,
-        getContext: () => ({ drawImage }),
-        toBlob,
-      }),
-    });
-    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:source');
-    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+  vi.stubGlobal('Image', FakeImage);
+  vi.stubGlobal('document', {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage }),
+      toBlob,
+    }),
   });
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:source');
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+});
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
-  const file = (name: string, type: string, size = 5 * MB) =>
-    new File([new Uint8Array(size)], name, { type });
+const file = (name: string, type: string, size = 5 * MB) =>
+  new File([new Uint8Array(size)], name, { type });
+
+describe('optimizeImage', () => {
 
   it('keeps a PNG as PNG, so transparent pixels stay transparent', async () => {
     const result = await optimizeImage(file('logo.png', 'image/png'));
@@ -277,5 +278,51 @@ describe('object URL release, so no uploaded image stays referenced until the ta
       expect(revokeObjectURL).toHaveBeenCalledTimes(1);
       expect(revokeObjectURL).toHaveBeenCalledWith('blob:test-1');
     });
+  });
+});
+
+describe('planAvatarImage', () => {
+  it.each([
+    ['a landscape photo', 4000, 3000, { x: 500, y: 0, size: 3000 }, AVATAR_MAX_PIXELS],
+    ['a portrait photo', 1200, 1600, { x: 0, y: 200, size: 1200 }, AVATAR_MAX_PIXELS],
+    ['a square image', 2000, 2000, { x: 0, y: 0, size: 2000 }, AVATAR_MAX_PIXELS],
+    ['an image smaller than the avatar size, which is never enlarged', 300, 200, { x: 50, y: 0, size: 200 }, 200],
+  ])('crops %s to its centred square and scales it to at most %s pixels', (_label, width, height, crop, size) => {
+    expect(planAvatarImage({ width, height })).toEqual({ crop, size, mimeType: 'image/webp' });
+  });
+});
+
+describe('prepareAvatarImage', () => {
+  it('draws the centred square of a large photo at the avatar size and encodes it as WebP', async () => {
+    imageSize = { width: 2000, height: 1500 };
+
+    const result = await prepareAvatarImage(file('holiday.png', 'image/png', 3 * MB));
+
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 250, 0, 1500, 1500, 0, 0, AVATAR_MAX_PIXELS, AVATAR_MAX_PIXELS);
+    expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/webp', expect.any(Number));
+    expect(result).toMatchObject({ name: 'avatar.webp', type: 'image/webp', size: blobBytes });
+  });
+
+  it('turns an animated GIF into a still image, since avatars never animate', async () => {
+    imageSize = { width: 400, height: 400 };
+
+    const result = await prepareAvatarImage(file('wave.gif', 'image/gif'));
+
+    expect(drawImage).toHaveBeenCalled();
+    expect(result.type).toBe('image/webp');
+  });
+
+  it('names and types the file from the bytes the browser produced, as when a browser without WebP encoding falls back to PNG', async () => {
+    blobType = 'image/png';
+
+    const result = await prepareAvatarImage(file('me.jpg', 'image/jpeg'));
+
+    expect(result).toMatchObject({ name: 'avatar.png', type: 'image/png' });
+  });
+
+  it('refuses an image the browser cannot read', async () => {
+    loadFails = true;
+
+    await expect(prepareAvatarImage(file('broken.png', 'image/png'))).rejects.toThrow('Failed to load image');
   });
 });
