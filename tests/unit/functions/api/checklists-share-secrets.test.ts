@@ -41,6 +41,8 @@ async function get(path: string) {
   return { response, text, data: JSON.parse(text) as unknown };
 }
 
+const firstRunIn = (data: unknown) => firstOf(z.array(z.unknown()).parse(data));
+
 function expectNoShareSecrets(run: unknown) {
   expect(run).toEqual(expect.objectContaining({ id: 'run-1', is_public: true }));
   for (const column of SHARE_COLUMNS) expect(run).not.toHaveProperty(column);
@@ -70,7 +72,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('?teamId=team-1');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
+    expectNoShareSecrets(firstRunIn(data));
     expect(text).not.toContain(SECRET);
     expectSelectOmitsShareColumns();
   });
@@ -95,7 +97,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('/archived?teamId=team-1');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
+    expectNoShareSecrets(firstRunIn(data));
     expect(text).not.toContain(SECRET);
   });
 
@@ -106,7 +108,7 @@ describe('run reads never return share tokens, which let anyone holding one edit
     const { response, text, data } = await get('');
 
     expect(response.status).toBe(200);
-    expectNoShareSecrets(firstOf(z.array(z.unknown()).parse(data)));
+    expectNoShareSecrets(firstRunIn(data));
     expect(text).not.toContain(SECRET);
   });
 
