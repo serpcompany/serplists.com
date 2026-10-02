@@ -1,5 +1,18 @@
 import { z } from "zod";
 
+import {
+  contentRecordsIn,
+  isContentRecord,
+  isSectionRecord,
+  subTaskRecordsIn,
+  taskRecordsIn,
+  type ContentRecord,
+  type JsonRecord,
+  type SectionRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from "./jsonRecords";
+
 export const CHECKLIST_CONTENT_TYPES = ["text", "image", "video", "file", "embed", "subItems"] as const;
 
 const text = z.string().nullish();
@@ -35,15 +48,10 @@ export function findStoredSectionsIssue(sections: unknown): string | null {
   return `sections${path}: ${issue.message}`;
 }
 
-type JsonRecord = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-export const isSectionedList = (values: readonly unknown[]): boolean =>
-  isRecord(values[0]) && values[0].items !== undefined;
-
-const records = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+export const isSectionedList = (values: readonly unknown[]): boolean => {
+  const [first] = values;
+  return isSectionRecord(first) && first.items !== undefined;
+};
 
 const contentTypes = new Set<unknown>(CHECKLIST_CONTENT_TYPES);
 
@@ -53,8 +61,8 @@ function withoutKeys(record: JsonRecord, keep: (key: string, value: unknown) => 
 
 const isTextOrAbsent = (value: unknown) => value === undefined || value === null || typeof value === "string";
 
-export function sanitizeStoredSubItems(value: unknown): JsonRecord[] {
-  return records(value).map((subItem) => {
+export function sanitizeStoredSubItems(value: unknown): SubTaskRecord[] {
+  return subTaskRecordsIn(value).map((subItem) => {
     const { completed, ...rest } = subItem;
     return {
       ...rest,
@@ -64,18 +72,18 @@ export function sanitizeStoredSubItems(value: unknown): JsonRecord[] {
   });
 }
 
-export const isSubTasksBlock = (content: unknown): content is JsonRecord =>
-  isRecord(content) && content.type === "subItems";
+export const isSubTasksBlock = (content: unknown): content is ContentRecord =>
+  isContentRecord(content) && content.type === "subItems";
 
-export function getTaskSubTasks(task: JsonRecord): JsonRecord[] {
-  return records(task.contents).filter(isSubTasksBlock).flatMap((content) => records(content.subItems));
+export function getTaskSubTasks(task: TaskRecord): SubTaskRecord[] {
+  return contentRecordsIn(task.contents).filter(isSubTasksBlock).flatMap((content) => subTaskRecordsIn(content.subItems));
 }
 
-export function sanitizeStoredContents(value: unknown): JsonRecord[] {
-  return records(value)
+export function sanitizeStoredContents(value: unknown): ContentRecord[] {
+  return contentRecordsIn(value)
     .filter((content) => contentTypes.has(content.type))
     .map((content) => {
-      const next = withoutKeys(content, (key, entry) =>
+      const next: ContentRecord = withoutKeys(content, (key, entry) =>
         key === "fileSize" ? entry === undefined || entry === null || typeof entry === "number"
           : key === "uploadType" || key === "fileName" ? isTextOrAbsent(entry)
             : true);
@@ -86,8 +94,8 @@ export function sanitizeStoredContents(value: unknown): JsonRecord[] {
     });
 }
 
-export function sanitizeStoredItem(item: JsonRecord): JsonRecord {
-  const next = withoutKeys(item, (key, entry) =>
+export function sanitizeStoredItem(item: TaskRecord): TaskRecord {
+  const next: TaskRecord = withoutKeys(item, (key, entry) =>
     key === "description" || key === "notes" ? isTextOrAbsent(entry) : true);
   if (!isTextOrAbsent(item.title)) next.title = "";
   if (item.contents !== undefined) next.contents = sanitizeStoredContents(item.contents);
@@ -95,11 +103,11 @@ export function sanitizeStoredItem(item: JsonRecord): JsonRecord {
   return next;
 }
 
-export function sanitizeStoredSections(sections: unknown[]): JsonRecord[] {
-  return sections.filter(isRecord).map((section) => {
-    const next: JsonRecord = { ...section };
+export function sanitizeStoredSections(sections: unknown[]): SectionRecord[] {
+  return sections.filter(isSectionRecord).map((section) => {
+    const next: SectionRecord = { ...section };
     if (!isTextOrAbsent(section.title)) next.title = "";
-    if (section.items !== undefined) next.items = records(section.items).map(sanitizeStoredItem);
+    if (section.items !== undefined) next.items = taskRecordsIn(section.items).map(sanitizeStoredItem);
     return next;
   });
 }

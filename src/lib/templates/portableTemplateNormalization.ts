@@ -3,6 +3,7 @@ import {
   portableTemplatePackSchema,
   type PortableChecklistTemplate,
   type PortableTemplatePack,
+  type PortableTemplateRule,
 } from "@/lib/schemas/checklistSchema";
 
 export const trimOptionalString = (value?: string) => {
@@ -24,11 +25,40 @@ const normalizeSubItems = (subItems?: { title: string }[]) => {
   }));
 };
 
-const normalizeContents = (contents?: PortableChecklistTemplate["sections"][number]["items"][number]["contents"]) => {
+type PortableContent = NonNullable<PortableChecklistTemplate["sections"][number]["items"][number]["contents"]>[number];
+
+type NormalizedContent = {
+  type: PortableContent["type"];
+  value?: string;
+  uploadType?: NonNullable<PortableContent["uploadType"]>;
+  fileName?: string;
+  fileSize?: number;
+  subItems?: { title: string }[];
+};
+
+type NormalizedItem = { title: string; description?: string; contents?: NormalizedContent[] };
+
+type NormalizedRule = Omit<PortableTemplateRule, "id"> & { id?: string | undefined };
+
+type NormalizedTemplate = {
+  title: string;
+  sections: { title: string; items: NormalizedItem[] }[];
+  description?: string;
+  type?: NonNullable<PortableChecklistTemplate["type"]>;
+  slug?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+  visibility?: NonNullable<PortableChecklistTemplate["visibility"]>;
+  categories?: string[];
+  tags?: string[];
+  rules?: NormalizedRule[];
+};
+
+const normalizeContents = (contents?: PortableContent[]) => {
   if (!Array.isArray(contents) || contents.length === 0) return undefined;
 
   return contents.map((content) => {
-    const nextContent: Record<string, unknown> = {
+    const nextContent: NormalizedContent = {
       type: content.type,
     };
 
@@ -44,7 +74,8 @@ const normalizeContents = (contents?: PortableChecklistTemplate["sections"][numb
 
     if (content.type === "image" || content.type === "video" || content.type === "file") {
       if (content.uploadType) nextContent.uploadType = content.uploadType;
-      if (trimOptionalString(content.fileName)) nextContent.fileName = trimOptionalString(content.fileName);
+      const fileName = trimOptionalString(content.fileName);
+      if (fileName) nextContent.fileName = fileName;
       if (typeof content.fileSize === "number") nextContent.fileSize = content.fileSize;
     }
 
@@ -61,7 +92,7 @@ const normalizeSections = (sections: PortableChecklistTemplate["sections"]) =>
   sections.map((section) => ({
     title: section.title.trim(),
     items: section.items.map((item) => {
-      const nextItem: Record<string, unknown> = {
+      const nextItem: NormalizedItem = {
         title: item.title.trim(),
       };
 
@@ -77,7 +108,7 @@ const normalizeSections = (sections: PortableChecklistTemplate["sections"]) =>
 
 export const normalizePortableTemplate = (template: PortableChecklistTemplate): PortableChecklistTemplate => {
   const validated = portableChecklistTemplateSchema.parse(template);
-  const normalizedTemplate: Record<string, unknown> = {
+  const normalizedTemplate: NormalizedTemplate = {
     title: validated.title.trim(),
     sections: normalizeSections(validated.sections),
   };
@@ -86,12 +117,17 @@ export const normalizePortableTemplate = (template: PortableChecklistTemplate): 
   if (description) normalizedTemplate.description = description;
 
   if (validated.type) normalizedTemplate.type = validated.type;
-  if (trimOptionalString(validated.slug)) normalizedTemplate.slug = trimOptionalString(validated.slug);
-  if (trimOptionalString(validated.seoTitle)) normalizedTemplate.seoTitle = trimOptionalString(validated.seoTitle);
-  if (trimOptionalString(validated.seoDescription)) normalizedTemplate.seoDescription = trimOptionalString(validated.seoDescription);
+  const slug = trimOptionalString(validated.slug);
+  if (slug) normalizedTemplate.slug = slug;
+  const seoTitle = trimOptionalString(validated.seoTitle);
+  if (seoTitle) normalizedTemplate.seoTitle = seoTitle;
+  const seoDescription = trimOptionalString(validated.seoDescription);
+  if (seoDescription) normalizedTemplate.seoDescription = seoDescription;
   if (validated.visibility) normalizedTemplate.visibility = validated.visibility;
-  if (normalizeStringArray(validated.categories)) normalizedTemplate.categories = normalizeStringArray(validated.categories);
-  if (normalizeStringArray(validated.tags)) normalizedTemplate.tags = normalizeStringArray(validated.tags);
+  const categories = normalizeStringArray(validated.categories);
+  if (categories) normalizedTemplate.categories = categories;
+  const tags = normalizeStringArray(validated.tags);
+  if (tags) normalizedTemplate.tags = tags;
   if (Array.isArray(validated.rules) && validated.rules.length > 0) {
     normalizedTemplate.rules = validated.rules.map((rule) => ({
       type: rule.type.trim(),

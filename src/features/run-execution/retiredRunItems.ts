@@ -1,34 +1,28 @@
 import { z } from 'zod';
 
+import { taskRecordsIn, type SubTaskRecord, type TaskRecord } from '@/lib/schemas/jsonRecords';
 import { getTaskSubTasks } from '@/lib/schemas/storedSections';
 import type { RetiredRunItem, RetiredRunSubTask, RetiredRunTask } from '@/types/checklist';
 
 const recordWithId = z.object({ id: z.string().min(1) }).passthrough();
 const retiredEntrySchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('section'), section: recordWithId }),
+  z.object({ kind: z.literal('section'), section: recordWithId.extend({ title: z.unknown(), items: z.unknown() }) }),
   z.object({ kind: z.literal('item'), sectionTitle: z.string().optional(), item: recordWithId }),
   z.object({ kind: z.literal('subItem'), itemTitle: z.string().optional(), subItem: recordWithId }),
 ]);
 
-type JsonRecord = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const records = (value: unknown): JsonRecord[] => (Array.isArray(value) ? value.filter(isRecord) : []);
-
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-const wasCompleted = (value: JsonRecord): boolean =>
+const wasCompleted = (value: TaskRecord | SubTaskRecord): boolean =>
   typeof value.isCompleted === 'boolean' ? value.isCompleted : value.completed === true;
 
-const toSubTask = (subItem: JsonRecord, index: number): RetiredRunSubTask => ({
+const toSubTask = (subItem: SubTaskRecord, index: number): RetiredRunSubTask => ({
   id: typeof subItem.id === 'string' ? subItem.id : String(index + 1),
   title: text(subItem.title),
   isCompleted: wasCompleted(subItem),
 });
 
-const toTask = (item: JsonRecord, index: number): RetiredRunTask => {
+const toTask = (item: TaskRecord, index: number): RetiredRunTask => {
   const subItems = getTaskSubTasks(item);
   const notes = text(item.notes);
   return {
@@ -65,7 +59,7 @@ export function parseRetiredRunItems(value: unknown): RetiredRunItem[] {
           kind: 'section',
           id: entry.section.id,
           title: text(entry.section.title),
-          tasks: records(entry.section.items).map(toTask),
+          tasks: taskRecordsIn(entry.section.items).map(toTask),
         };
         break;
       case 'item':

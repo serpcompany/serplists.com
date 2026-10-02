@@ -3,6 +3,16 @@ import { z } from "zod";
 import type { ChecklistTemplate } from "@/types/checklist";
 import { hasCurrentFileInfo, mediaSourceTypeFor } from "@/lib/utils/mediaSource";
 import {
+  isContentRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  type ContentRecord,
+  type SectionRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from "@/lib/schemas/jsonRecords";
+import {
   buildTemplateEditorDetailsFormValues,
   normalizeTemplateEditorDetailsForSave,
   templateEditorDetailsSchema,
@@ -124,11 +134,6 @@ export function createTemplateEditorSection(): TemplateEditorSection {
 
 const TEMPLATE_EDITOR_CONTENT_TYPES = templateEditorContentSchema.shape.type.options;
 
-type StoredRecord = Record<string, unknown>;
-
-const isStoredRecord = (value: unknown): value is StoredRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const toEditorText = (value: unknown): string => {
   if (typeof value === "string") {
     return value;
@@ -155,7 +160,7 @@ const toEditorContentType = (value: unknown): TemplateEditorContentType =>
   TEMPLATE_EDITOR_CONTENT_TYPES.find((type) => type === value) ?? "text";
 
 function normalizeTemplateEditorSubItem(raw: unknown): TemplateEditorSubItem {
-  const subItem = isStoredRecord(raw) ? raw : { title: raw };
+  const subItem: SubTaskRecord = isSubTaskRecord(raw) ? raw : { title: raw };
   return {
     id: toEditorId(subItem.id, "subitem"),
     isCompleted: typeof subItem.isCompleted === "boolean" ? subItem.isCompleted : undefined,
@@ -167,7 +172,7 @@ function normalizeTemplateEditorContent(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorContent {
-  const content = isStoredRecord(raw) ? raw : { value: raw };
+  const content: ContentRecord = isContentRecord(raw) ? raw : { value: raw };
   const type = toEditorContentType(content.type);
   let id = toEditorId(content.id, "content");
   if (usedContentIds.has(id)) {
@@ -205,7 +210,7 @@ function normalizeTemplateEditorItem(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorItem {
-  const item = isStoredRecord(raw) ? raw : { title: raw };
+  const item: TaskRecord = isTaskRecord(raw) ? raw : { title: raw };
   const contents = Array.isArray(item.contents) ? item.contents : [];
   return {
     contents: contents
@@ -222,7 +227,7 @@ function normalizeTemplateEditorSection(
   raw: unknown,
   usedContentIds: Set<string>,
 ): TemplateEditorSection {
-  const section = isStoredRecord(raw) ? raw : {};
+  const section: SectionRecord = isSectionRecord(raw) ? raw : {};
   const items = Array.isArray(section.items) ? section.items : [];
   return {
     id: toEditorId(section.id, "section"),

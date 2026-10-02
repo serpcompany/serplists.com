@@ -1,13 +1,20 @@
+import {
+  isChecklistNodeRecord,
+  isRecord,
+  isSectionRecord,
+  isSubTaskRecord,
+  isTaskRecord,
+  taskRecordsIn,
+  type ChecklistNodeRecord,
+  type SectionRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from '../../../src/lib/schemas/jsonRecords';
 import { getTaskSubTasks, isSectionedList, isSubTasksBlock } from '../../../src/lib/schemas/storedSections';
 import { normalizeSectionsPayload, parseJsonArray } from './payloads';
 
-export type JsonRecord = Record<string, unknown>;
-
-export const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 export const getId = (value: unknown): string | null => {
-  if (!isRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {
+  if (!isChecklistNodeRecord(value) || typeof value.id !== 'string' || value.id.trim() === '') {
     return null;
   }
   return value.id;
@@ -15,8 +22,8 @@ export const getId = (value: unknown): string | null => {
 
 export const getArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 
-export function normalizeLegacySectionShape(values: unknown[]): JsonRecord[] {
-  const records = values.filter(isRecord);
+export function normalizeLegacySectionShape(values: unknown[]): SectionRecord[] {
+  const records = values.filter(isSectionRecord);
   if (records.length === 0) return [];
   if (isSectionedList(values)) return records;
 
@@ -47,13 +54,13 @@ export function validateStableTemplateIdentities(sections: unknown[]): string | 
     if (sectionIds.has(sectionId)) return `Duplicate section id: ${sectionId}`;
     sectionIds.add(sectionId);
 
-    for (const item of getArray((section as JsonRecord).items)) {
+    for (const item of isSectionRecord(section) ? getArray(section.items) : []) {
       const itemId = getId(item);
       if (!itemId) return `Every item in section ${sectionId} requires a stable id`;
       if (itemIds.has(itemId)) return `Duplicate item id: ${itemId}`;
       itemIds.add(itemId);
 
-      for (const subItem of getSubItems(item as JsonRecord)) {
+      for (const subItem of isTaskRecord(item) ? getSubItems(item) : []) {
         const subItemId = getId(subItem);
         if (!subItemId) return `Every sub-item in item ${itemId} requires a stable id`;
         if (subItemIds.has(subItemId)) return `Duplicate sub-item id: ${subItemId}`;
@@ -65,16 +72,16 @@ export function validateStableTemplateIdentities(sections: unknown[]): string | 
   return null;
 }
 
-type SiblingMatch = { record: JsonRecord; id: string; previousIndex: number | null };
+type SiblingMatch<Sibling extends ChecklistNodeRecord> = { record: Sibling; id: string; previousIndex: number | null };
 
-function matchSiblingIdentities(
-  currentRecords: JsonRecord[],
-  previousRaw: JsonRecord[],
-  previousNormalized: JsonRecord[],
+function matchSiblingIdentities<Sibling extends ChecklistNodeRecord>(
+  currentRecords: Sibling[],
+  previousRaw: Sibling[],
+  previousNormalized: Sibling[],
   fallbackId: (index: number) => string,
-): SiblingMatch[] {
+): SiblingMatch<Sibling>[] {
   const matches = currentRecords.map(
-    (record): { record: JsonRecord; id?: string; previousIndex: number | null } => ({ record, previousIndex: null }),
+    (record): { record: Sibling; id?: string; previousIndex: number | null } => ({ record, previousIndex: null }),
   );
   const usedPrevious = new Set<number>();
 
@@ -127,16 +134,16 @@ function matchSiblingIdentities(
   }));
 }
 
-const previousAt = (previous: JsonRecord[], previousIndex: number | null): JsonRecord | undefined =>
+const previousAt = <Sibling>(previous: Sibling[], previousIndex: number | null): Sibling | undefined =>
   previousIndex === null ? undefined : previous[previousIndex];
 
-function matchedIdAt(matches: SiblingMatch[], index: number): string {
+function matchedIdAt(matches: SiblingMatch<SubTaskRecord>[], index: number): string {
   const match = matches[index];
   if (!match) throw new Error(`No id was matched for sub-item ${index + 1}`);
   return match.id;
 }
 
-function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]): JsonRecord[] {
+function assignIdentities(sections: SectionRecord[], previousSections: SectionRecord[]): SectionRecord[] {
   const previousNormalized = previousSections.length > 0
     ? assignIdentities(previousSections, [])
     : [];
@@ -150,9 +157,9 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
   return sectionMatches.map(({ record: section, id: sectionId, previousIndex: previousSectionIndex }, sectionIndex) => {
     const previousSectionRaw = previousAt(previousSections, previousSectionIndex);
     const previousSectionNormalized = previousAt(previousNormalized, previousSectionIndex);
-    const previousItemsRaw = getArray(previousSectionRaw?.items).filter(isRecord);
-    const previousItemsNormalized = getArray(previousSectionNormalized?.items).filter(isRecord);
-    const currentItems = getArray(section.items).filter(isRecord);
+    const previousItemsRaw = taskRecordsIn(previousSectionRaw?.items);
+    const previousItemsNormalized = taskRecordsIn(previousSectionNormalized?.items);
+    const currentItems = taskRecordsIn(section.items);
     const itemMatches = matchSiblingIdentities(
       currentItems,
       previousItemsRaw,
@@ -176,7 +183,7 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
           (index) => `legacy-subitem-${sectionIndex + 1}-${itemIndex + 1}-${index + 1}`,
         );
         let subItemSequence = 0;
-        const assignSubItems = (subItems: unknown[]) => subItems.filter(isRecord).map((subItem) => ({
+        const assignSubItems = (subItems: unknown[]) => subItems.filter(isSubTaskRecord).map((subItem) => ({
           ...subItem,
           id: matchedIdAt(subItemMatches, subItemSequence++),
         }));
@@ -194,18 +201,18 @@ function assignIdentities(sections: JsonRecord[], previousSections: JsonRecord[]
 export function assignMissingStableTemplateIdentities(
   sections: unknown[],
   previousSections: unknown[] = [],
-): JsonRecord[] {
+): SectionRecord[] {
   return assignIdentities(
     normalizeLegacySectionShape(sections),
     normalizeLegacySectionShape(previousSections),
   );
 }
 
-const hasMissingIdentity = (sections: unknown[]): boolean => sections.filter(isRecord).some((section) =>
-  !getId(section) || getArray(section.items).filter(isRecord).some((item) =>
+const hasMissingIdentity = (sections: unknown[]): boolean => sections.filter(isSectionRecord).some((section) =>
+  !getId(section) || taskRecordsIn(section.items).some((item) =>
     !getId(item) || getSubItems(item).some((subItem) => !getId(subItem))));
 
-function withItemIds(item: JsonRecord, stableItem: JsonRecord): JsonRecord {
+function withItemIds(item: TaskRecord, stableItem: TaskRecord): TaskRecord {
   const subItemIds = getSubItems(stableItem).map((subItem) => subItem.id);
   let subItemIndex = 0;
   const withIds = (subItems: unknown[]) => subItems.map((subItem) =>
@@ -223,18 +230,18 @@ export function withStableTemplateIdentities(sections: unknown[]): unknown[] {
   const stableSections = assignMissingStableTemplateIdentities(sections);
   let sectionIndex = 0;
   return sections.map((section) => {
-    if (!isRecord(section)) return section;
+    if (!isSectionRecord(section)) return section;
     const stableSection = stableRecordAt(stableSections, sectionIndex++, 'section');
     if (!Array.isArray(section.items)) return { ...section, id: stableSection.id };
-    const stableItems = getArray(stableSection.items).filter(isRecord);
+    const stableItems = taskRecordsIn(stableSection.items);
     let itemIndex = 0;
     const items = section.items.map((item: unknown) =>
-      (isRecord(item) ? withItemIds(item, stableRecordAt(stableItems, itemIndex++, 'item')) : item));
+      (isTaskRecord(item) ? withItemIds(item, stableRecordAt(stableItems, itemIndex++, 'item')) : item));
     return { ...section, id: stableSection.id, items };
   });
 }
 
-function stableRecordAt(stable: JsonRecord[], index: number, kind: 'section' | 'item'): JsonRecord {
+function stableRecordAt<Stable>(stable: Stable[], index: number, kind: 'section' | 'item'): Stable {
   const record = stable[index];
   if (!record) throw new Error(`Assigning stable ids returned no ${kind} at position ${index + 1}`);
   return record;

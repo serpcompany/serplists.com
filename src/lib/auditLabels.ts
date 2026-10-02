@@ -3,6 +3,7 @@ import type {
   RunAuditAction,
   TemplateHistoryAction,
 } from '@/lib/schemas/auditActions';
+import { isRecord, type JsonRecord } from '@/lib/schemas/jsonRecords';
 
 export const RUN_HISTORY_LABELS: Record<RunAuditAction, string> = {
   'checklist_run.created': 'Created run',
@@ -71,8 +72,10 @@ type AuditActor = {
   username?: string | null;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+interface ActorMetadata extends JsonRecord {
+  source?: unknown;
+  personalRunKeyName?: unknown;
+}
 
 export const getAuditActorName = (
   actor: AuditActor | undefined,
@@ -80,7 +83,7 @@ export const getAuditActorName = (
   unknownActor = 'Unknown user',
 ): string => {
   const humanName = actor?.name || actor?.username || actor?.email || '';
-  const details = isRecord(metadata) ? metadata : {};
+  const details: ActorMetadata = isRecord(metadata) ? metadata : {};
 
   if (details.source === 'mcp' && typeof details.personalRunKeyName === 'string' && details.personalRunKeyName.trim()) {
     return `${details.personalRunKeyName.trim()} via MCP · authorized by ${humanName || unknownActor}`;

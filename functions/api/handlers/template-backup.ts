@@ -30,7 +30,6 @@ import {
   findNonObjectTemplateEntry,
   validateStableTemplateIdentities,
 } from '../utils/template-reconciliation';
-import { isRecord } from '../utils/template-identities';
 import { generateUniqueSlug, insertTemplateWithUniqueSlug } from '../utils/template-insert';
 import {
   getTemplateSelectColumns,
@@ -161,6 +160,8 @@ async function exportTemplateBackup({ db, userId, backupTeamId }: BackupContext,
   });
 }
 
+const portablePackKindSchema = z.object({ kind: z.literal('serplists-template-pack') });
+
 async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupContext, request: Request): Promise<Response> {
   let body: unknown;
   try {
@@ -171,7 +172,7 @@ async function importTemplateBackup({ env, db, userId, backupTeamId }: BackupCon
 
   let fileIndexes: number[] | null = null;
   let portableFailures: TemplateImportFailure[] = [];
-  if (isRecord(body) && body.kind === 'serplists-template-pack') {
+  if (portablePackKindSchema.safeParse(body).success) {
     const portable = parsePortableTemplatePackImport(body);
     if ('response' in portable) return portable.response;
     body = { templates: portable.templates };

@@ -1,5 +1,6 @@
 import { Env } from '../types';
 import { and, eq, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 import { schema } from '../db';
 import { normalizeSectionsPayload } from '../utils/payloads';
 import { jsonError } from '../utils/response';
@@ -16,7 +17,7 @@ import {
   type TemplateInsertValues,
 } from '../utils/template-writes';
 import { contentTooLargeResponse } from '../utils/content-limits';
-import { isRecord, withStableItemsColumn } from '../utils/template-identities';
+import { withStableItemsColumn } from '../utils/template-identities';
 import {
   generateUniqueSlug,
   insertTemplateWithUniqueSlug,
@@ -25,6 +26,12 @@ import {
 } from '../utils/template-insert';
 import { getTemplateSelectColumns, withRulesColumnFallback, type TemplateDb } from '../utils/template-rows';
 import { assertTeamTemplateCreateAccess } from '../utils/template-permissions';
+
+const cloneOptionsSchema = z.object({
+  visibility: z.unknown(),
+  teamId: z.unknown(),
+  team_id: z.unknown(),
+}).passthrough();
 
 export async function cloneTemplate(
   request: Request,
@@ -37,8 +44,9 @@ export async function cloneTemplate(
 
   let visibility: 'preserve' | 'public' | 'private' = 'private';
   let cloneTeamId: string | null = null;
-  const optionalBody: unknown = await request.json().catch(() => null);
-  if (isRecord(optionalBody)) {
+  const options = cloneOptionsSchema.safeParse(await request.json().catch(() => null));
+  if (options.success) {
+    const optionalBody = options.data;
     if (optionalBody.visibility === 'preserve' || optionalBody.visibility === 'public' || optionalBody.visibility === 'private') {
       visibility = optionalBody.visibility;
     }

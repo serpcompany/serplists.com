@@ -17,7 +17,23 @@ import {
   renderTemplateMarkdownBlock,
 } from "@/lib/templates/templateMarkdownBody";
 
-const yamlObjectSchema = z.record(z.unknown());
+const frontmatterSchema = z.object({
+  title: z.unknown(),
+  type: z.unknown(),
+  slug: z.unknown(),
+  seoTitle: z.unknown(),
+  seoDescription: z.unknown(),
+  visibility: z.unknown(),
+  categories: z.unknown(),
+  tags: z.unknown(),
+  rules: z.unknown(),
+}).passthrough();
+const mediaBlockSchema = z.object({
+  value: z.unknown(),
+  uploadType: z.unknown(),
+  fileName: z.unknown(),
+  fileSize: z.unknown(),
+}).passthrough();
 const titledEntrySchema = z.object({ title: z.string() });
 
 const FRONTMATTER_DELIMITER = "---";
@@ -129,7 +145,7 @@ const extractFrontmatter = (markdown: string) => {
   const rawFrontmatter = source.slice(FRONTMATTER_DELIMITER.length + 1, closingIndex);
   const body = source.slice(closingIndex + `\n${FRONTMATTER_DELIMITER}\n`.length);
 
-  const frontmatter = yamlObjectSchema.safeParse(yaml.load(rawFrontmatter));
+  const frontmatter = frontmatterSchema.safeParse(yaml.load(rawFrontmatter));
   if (!frontmatter.success) {
     throw new Error("Markdown template frontmatter must be a YAML object");
   }
@@ -140,8 +156,8 @@ const extractFrontmatter = (markdown: string) => {
   };
 };
 
-const parseYamlBlock = (rawBlock: string) => {
-  const parsed = yamlObjectSchema.safeParse(yaml.load(rawBlock.trim()));
+const parseMediaBlock = (rawBlock: string) => {
+  const parsed = mediaBlockSchema.safeParse(yaml.load(rawBlock.trim()));
   if (!parsed.success) {
     throw new Error("Expected a YAML object block");
   }
@@ -214,7 +230,7 @@ export const parseTemplateMarkdown = (markdown: string): PortableChecklistTempla
           }
 
           if (block.type === "image" || block.type === "video" || block.type === "file") {
-            const parsedBlock = parseYamlBlock(block.body);
+            const parsedBlock = parseMediaBlock(block.body);
             return {
               type: block.type,
               value: typeof parsedBlock.value === "string" ? parsedBlock.value : "",

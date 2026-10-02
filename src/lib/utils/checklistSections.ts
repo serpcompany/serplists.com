@@ -1,7 +1,16 @@
 import { z } from "zod";
 
 import { toProgressPercent } from "@/lib/progress";
-import { CHECKLIST_CONTENT_TYPES, sanitizeStoredItem } from "@/lib/schemas/storedSections";
+import {
+  isContentRecord,
+  isSectionRecord,
+  isTaskRecord,
+  type ContentRecord,
+  type JsonRecord,
+  type SubTaskRecord,
+  type TaskRecord,
+} from "@/lib/schemas/jsonRecords";
+import { CHECKLIST_CONTENT_TYPES, isSectionedList, sanitizeStoredItem } from "@/lib/schemas/storedSections";
 import type { ChecklistItemContent, ChecklistSection, ChecklistSubItem } from "@/types/checklist";
 
 export function sectionFallbackTitle(sectionIndex: number): string {
@@ -27,32 +36,25 @@ export function getSubItemDisplayTitle(
 
 export function isSectionsShape(value: unknown): value is ChecklistSection[] {
   if (!Array.isArray(value)) return false;
-  if (value.length === 0) return true;
-  const first = value[0] as Record<string, unknown>;
-  return typeof first?.items !== "undefined";
+  return value.length === 0 || isSectionedList(value);
 }
 
-type JsonRecord = Record<string, unknown>;
-
-export const isJsonRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const toTitledRecord = (value: unknown): JsonRecord | null => {
+const toTitledRecord = (value: unknown): TaskRecord | null => {
   if (typeof value === "string") {
     const title = value.trim();
     return title ? { title } : null;
   }
-  return isJsonRecord(value) ? value : null;
+  return isTaskRecord(value) ? value : null;
 };
 
-const completionOf = (value: JsonRecord): boolean =>
+const completionOf = (value: TaskRecord | SubTaskRecord): boolean =>
   typeof value.isCompleted === "boolean"
     ? value.isCompleted
     : typeof value.completed === "boolean"
       ? value.completed
       : false;
 
-const normalizeContent = (content: JsonRecord): JsonRecord => {
+const normalizeContent = (content: ContentRecord): ContentRecord => {
   if (content.type !== "subItems" || !Array.isArray(content.subItems)) return content;
   return {
     ...content,
@@ -81,7 +83,7 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
   if (!Array.isArray(raw)) return [];
 
   return raw.flatMap((section, sectionIndex) => {
-    if (!isJsonRecord(section)) return [];
+    if (!isSectionRecord(section)) return [];
     const rawItems = Array.isArray(section.items) ? (section.items as unknown[]) : [];
 
     return [{
@@ -93,12 +95,12 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
 
         const it = sanitizeStoredItem(
           Array.isArray(titled.contents)
-            ? { ...titled, contents: titled.contents.filter(isJsonRecord).map(normalizeContent) }
+            ? { ...titled, contents: titled.contents.filter(isContentRecord).map(normalizeContent) }
             : titled,
         );
         const contents = Array.isArray(it.contents) ? shownContents(it.contents) : undefined;
 
-        const { completed: _completed, ...rest } = it;
+        const { completed: _completed, ...rest }: JsonRecord = it;
         return [{
           ...rest,
           id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,
