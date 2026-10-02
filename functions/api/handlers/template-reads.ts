@@ -26,7 +26,7 @@ import {
   serializeTemplateForViewer,
 } from '../utils/template-permissions';
 
-const PUBLIC_CATALOG_CACHE_KEY = '/api/templates?scope=public&fields=public';
+const PUBLIC_CATALOG_CACHE_KEY = '/api/templates?scope=public&fields=public-with-owner';
 const PUBLIC_CATALOG_CACHE_SECONDS = 5 * 60;
 
 function isMissingHistoryReadTableError(error: unknown): boolean {

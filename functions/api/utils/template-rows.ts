@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { portableTemplateRuleSchema } from '../../../src/lib/schemas/checklistSchema';
+import type { TemplateOwner } from '../../../src/lib/schemas/templateOwner';
 import { templateOwnerProfile } from '../../../src/lib/schemas/templateOwnerProfile';
 import { log } from './logger';
 import { normalizeSectionsPayload } from './payloads';
@@ -15,14 +16,36 @@ export type TemplateDb = ReturnType<typeof createDb>;
 type QueryResult<T> = PromiseLike<T> | T;
 
 type TemplateRow = typeof schema.templates.$inferSelect;
+type TemplateOwnerColumns = Pick<TemplateRow, 'owner_type' | 'team_id' | 'user_id'> & {
+  owner_username?: string | null | undefined;
+  owner_full_name?: string | null | undefined;
+  owner_team_slug?: string | null | undefined;
+  owner_team_name?: string | null | undefined;
+};
 export type TemplateRowColumns = Pick<
   TemplateRow,
   'id' | 'items' | 'category' | 'tags' | 'seo_title' | 'seo_description' | 'type'
-> & {
+> & TemplateOwnerColumns & {
   rules?: TemplateRow['rules'] | undefined;
-  owner_username?: string | null | undefined;
-  owner_full_name?: string | null | undefined;
 };
+
+function templateOwnerOf(template: TemplateOwnerColumns): TemplateOwner {
+  if (template.owner_type === 'team' && template.team_id) {
+    return {
+      type: 'team',
+      teamId: template.team_id,
+      publicHandle: template.owner_team_slug ?? null,
+      displayName: template.owner_team_name ?? null,
+    };
+  }
+
+  return {
+    type: 'user',
+    userId: template.user_id,
+    publicHandle: template.owner_username ?? null,
+    displayName: template.owner_full_name ?? null,
+  };
+}
 
 export function getTemplateSelectColumns(includeRules: boolean) {
   const { templates } = schema;
@@ -97,7 +120,7 @@ export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
     }
   }
 
-  const { items, ...columns } = template;
+  const { items, owner_team_slug, owner_team_name, ...columns } = template;
   return {
     ...columns,
     sections,
@@ -108,19 +131,23 @@ export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
     seoDescription: template.seo_description ?? '',
     type: template.type,
     ownerProfile: templateOwnerProfile(template),
+    owner: templateOwnerOf(template),
   };
 }
 
 export function selectTemplatesWithOwner(env: Env, includeRules = true) {
   const db = createDb(env);
-  const { templates, users } = schema;
+  const { templates, users, teams } = schema;
 
   return db
     .select({
       ...getTemplateSelectColumns(includeRules),
       owner_username: users.username,
       owner_full_name: users.name,
+      owner_team_slug: teams.slug,
+      owner_team_name: teams.name,
     })
     .from(templates)
-    .leftJoin(users, eq(users.id, templates.user_id));
+    .leftJoin(users, eq(users.id, templates.user_id))
+    .leftJoin(teams, and(eq(templates.owner_type, 'team'), eq(teams.id, templates.team_id)));
 }

@@ -156,8 +156,8 @@ const ROUTES: Route[] = [
   {
     name: "the Organization template list",
     prepare: get("admin", `templates?teamId=${ORGANIZATION}`),
-    budget: unbounded("3 rows per Organization Template", (n) => 3 * n.organizationTemplates, 4),
-    reason: "it reads every Template of the Organization through idx_templates_team_id, and their owners",
+    budget: unbounded("4 rows per Organization Template", (n) => 4 * n.organizationTemplates, 4),
+    reason: "it reads every Template of the Organization through idx_templates_team_id, its Creator, and the owning Organization by primary key",
   },
   {
     name: "the template export",

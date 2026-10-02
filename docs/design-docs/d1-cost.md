@@ -137,7 +137,7 @@ availability risk, not just a cost: once they are exceeded, D1 rejects queries.
      rate. The anonymous catalog uses `withEdgeCache()`
      (`functions/api/utils/edge-cache.ts`) for 5 minutes, the template lists' client
      `staleTime`: a hit reads nothing. Its cache key names the response shape
-     (`/api/templates?scope=public&fields=public`), so a deploy that changes the shape
+     (`/api/templates?scope=public&fields=public-with-owner`), so a deploy that changes the shape
      misses rather than serving the old one. So do the
      lookups behind the public pages' server-rendered metadata (docs/FRONTEND.md), which
      run on every visit: the template page's single-row read by slug or id
@@ -186,6 +186,13 @@ Open, all unbounded lists:
 | Organization templates | 3,007 | Unbounded |
 | Personal and archived runs | about 1,000 each | Unbounded; archived filters `deleted_at IS NOT NULL` after reading every run |
 | Sitemap cache miss | 41,449 (index), 19,419 (templates shard) | Builds every entry; now only after a deploy or a change to what that sitemap lists, once per data center, and only for pages the index published |
+
+Every Template list and detail read also joins the owning Organization by primary key for
+an Organization Template, and reads nothing more for a Personal one (`selectTemplatesWithOwner`
+in `functions/api/utils/template-rows.ts`, [data persistence](data-persistence.md#resource-ownership)).
+That adds one row per Organization Template: the Organization template list's budget went
+from 3 to 4 rows per Template on 2026-10-02, and a public Organization Template adds one row
+to a catalog miss.
 
 Everything else (session, detail pages, history, members, billing, run starts, template
 updates, cached sitemaps) reads under 25 rows. The seed has about one audit event per

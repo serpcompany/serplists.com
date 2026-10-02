@@ -111,6 +111,27 @@ Personal data uses User ownership. Organization data uses Organization ownership
 
 - Personal templates: `templates.owner_type = 'user'`, `templates.user_id = current user`, `templates.team_id IS NULL`.
 - Organization Templates: `templates.owner_type = 'team'`, `templates.team_id = active Organization`, with creator/updater attribution on User columns. The stored `team` values are legacy identifiers.
+- Every Template list and detail response names its Template Owner in `owner`, read from
+  `owner_type` and `team_id` the way permissions read them (`templateOwnerOf` in
+  `functions/api/utils/template-rows.ts`), never from the selected context or the Creator:
+  - a Personal Template: `{ type: 'user', userId, publicHandle, displayName }`, the User's
+    id, username and name;
+  - an Organization Template (`owner_type` `team` with a `team_id`):
+    `{ type: 'team', teamId, publicHandle, displayName }`, the Organization's id, slug and
+    name. A Template counts its `team_id` only while its `owner_type` is `team`, so a
+    Personal Template that still names an Organization stays its User's.
+  - The type values are the stored `owner_type` values (renaming them is TD-5).
+    `publicHandle` and `displayName` are `null` when the User or Organization has none.
+  - `selectTemplatesWithOwner` joins `teams` by primary key only for rows whose `owner_type`
+    is `team`, so a Personal row reads no `teams` row and each Organization Template reads
+    one ([D1 cost](d1-cost.md)). The Organization's slug and name reach the response only
+    inside `owner`.
+  - The Creator stays in the legacy fields, kept for now: `user_id`, `owner_username`,
+    `owner_full_name` and `ownerProfile` (the User joined on `templates.user_id`), beside
+    `owner_type` and `team_id`. Share links and the public routes, lookups and sitemaps
+    still use the Creator's username for an Organization Template until Organization
+    Public Profiles exist.
+  - MCP tool results build their own Template views and do not carry `owner`.
 - Personal runs: `checklist_runs.user_id = current user`, `checklist_runs.team_id IS NULL`.
 - Organization Runs: `checklist_runs.team_id = active Organization`, with creator/started/completed User attribution. `completed_by_user_id` and `completed_at` are written only when a run becomes completed (`functions/api/utils/run-completion.ts`), so a teammate's later save does not take over the completion: the run page sends the run's status with every save, so a rename, a tick or a note on a completed run arrives as `completed` again. Reopening keeps both stamps too; only revalidation clears them. A completion through a share link names nobody, so a reopened run does not keep its previous completer, and an already completed legacy row without a date gets one once, naming nobody. The handler decides from the status it read; the write's revision guard turns it into `409 edit_conflict` if another save changed the run in between, so the decision always matches the stored status.
 

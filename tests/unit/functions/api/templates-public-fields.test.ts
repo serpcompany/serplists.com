@@ -9,6 +9,7 @@ vi.mock('@functions/api/utils/session', () => ({
 }));
 
 import { handleTemplates } from '@functions/api/handlers/templates';
+import { toPublicTemplate } from '@functions/api/utils/template-public';
 import { getSessionUserId } from '@functions/api/utils/session';
 import { apiEnv } from '../../../support/apiEnv';
 import { readJson } from '../../../support/readJson';
@@ -20,6 +21,7 @@ const EVERY_ALLOWLISTED_PUBLIC_FIELD = [
   'description',
   'id',
   'is_public',
+  'owner',
   'ownerProfile',
   'owner_full_name',
   'owner_type',
@@ -64,6 +66,8 @@ const organizationTemplateAnotherMemberEdited = (overrides: Record<string, unkno
   deleted_at: null,
   owner_username: 'alice',
   owner_full_name: 'Alice Example',
+  owner_team_slug: 'launch-crew',
+  owner_team_name: 'Launch Crew',
   ...overrides,
 });
 
@@ -76,6 +80,8 @@ const personalRow = (overrides: Record<string, unknown> = {}) =>
     created_by_user_id: 'user-9',
     updated_by_user_id: 'user-9',
     slug: 'my-plan',
+    owner_team_slug: null,
+    owner_team_name: null,
     ...overrides,
   });
 
@@ -83,15 +89,25 @@ const activeMembership = { id: 'member-1', team_id: 'org-1', user_id: 'member-7'
 
 const sortedKeys = (value: Record<string, unknown>) => Object.keys(value).sort();
 
+const THE_ORGANIZATION_AS_OWNER = { type: 'team', teamId: 'org-1', publicHandle: 'launch-crew', displayName: 'Launch Crew' };
+const THE_USER_AS_OWNER = { type: 'user', userId: 'user-9', publicHandle: 'alice', displayName: 'Alice Example' };
+
+const publicOwner = z.object({ owner: z.object({ type: z.string() }).passthrough() }).passthrough();
+
 const expectPublicShape = (template: Record<string, unknown>) => {
   expect(sortedKeys(template)).toEqual(EVERY_ALLOWLISTED_PUBLIC_FIELD);
   expect(template).not.toHaveProperty('team_id');
   expect(template).not.toHaveProperty('created_by_user_id');
   expect(template).not.toHaveProperty('updated_by_user_id');
   expect(template).not.toHaveProperty('deleted_at');
+  expect(template).not.toHaveProperty('owner_team_slug');
+  expect(template).not.toHaveProperty('owner_team_name');
+  const { owner } = publicOwner.parse(template);
+  const ownerId = owner.type === 'team' ? 'teamId' : 'userId';
+  expect(sortedKeys(owner)).toEqual(['displayName', ownerId, 'publicHandle', 'type'].sort());
 };
 
-const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown() }).passthrough();
+const templateRow = z.object({ sections: z.unknown(), ownerProfile: z.unknown(), owner: z.unknown() }).passthrough();
 const templateRows = z.array(templateRow);
 
 async function get<Output>(path: string, schema: ResponseSchema<Output>) {
@@ -99,7 +115,7 @@ async function get<Output>(path: string, schema: ResponseSchema<Output>) {
   return { status: response.status, body: await readJson(response, schema) };
 }
 
-describe('public template responses, which never say who in an Organization created or edited a template, or which Organization owns it', () => {
+describe('public template responses, which never say who in an Organization edited a template, and name its owner only by type, id, handle and name', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chainSelectsUpdatesAndDeletes(dbMocks);
@@ -120,6 +136,7 @@ describe('public template responses, which never say who in an Organization crea
     expectPublicShape(firstOf(body));
     expect(body[0]).toMatchObject({ id: 'template-1', user_id: 'creator-1', owner_type: 'team', version: 4 });
     expect(firstOf(body).sections).toEqual(sections);
+    expect(firstOf(body).owner).toEqual(THE_ORGANIZATION_AS_OWNER);
   });
 
   it.each([
@@ -133,6 +150,7 @@ describe('public template responses, which never say who in an Organization crea
     expect(status).toBe(200);
     expectPublicShape(body);
     expect(body.ownerProfile).toEqual({ username: 'alice', full_name: 'Alice Example' });
+    expect(body.owner).toEqual(THE_ORGANIZATION_AS_OWNER);
   });
 
   it('a signed-in visitor who is not in the Organization gets only public fields', async () => {
@@ -161,6 +179,7 @@ describe('public template responses, which never say who in an Organization crea
 
     expect(status).toBe(200);
     expectPublicShape(firstOf(body));
+    expect(firstOf(body).owner).toEqual(THE_USER_AS_OWNER);
   });
 
   it('the signed-in unscoped list keeps full rows for the user\'s own templates only', async () => {
@@ -209,5 +228,12 @@ describe('public template responses, which never say who in an Organization crea
     const { status } = await get('/api/templates/template-1', templateRow);
 
     expect(status).toBe(404);
+  });
+
+  it('keeps only the public fields of an owner, whatever else its projection carries', () => {
+    const owner = { ...THE_ORGANIZATION_AS_OWNER, billingOwnerUserId: 'creator-1', memberIds: ['editor-2'], role: 'owner' };
+
+    expect(toPublicTemplate({ id: 'template-1', owner }).owner).toEqual(THE_ORGANIZATION_AS_OWNER);
+    expect(toPublicTemplate({ id: 'template-1', owner: 'org-1' })).toEqual({ id: 'template-1' });
   });
 });
