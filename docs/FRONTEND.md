@@ -314,8 +314,9 @@ write: [client data](design-docs/client-data.md).
   404 or "no templates" message only after the catalog loaded. That includes category
   lists and counts (`/categories/`), which would otherwise count only the bundled
   templates. Each page that uses `useTemplateLibrary` has tests of both states
-  (`tests/unit/views/Categories.test.tsx`, `tests/unit/views/ChecklistLibrary.test.tsx`), and an
-  ESLint convention lets only those pages import the hook, so a new one is added with its tests.
+  (`tests/unit/views/Categories.dom.test.tsx`,
+  `tests/unit/views/ChecklistLibrary.dom.test.tsx`), and an ESLint convention lets only those
+  pages import the hook, so a new one is added with its tests.
   A failed catalog request stays an error; it is never cached as an empty catalog.
 - Browser storage goes through `src/lib/browserStorage.ts` (`safeLocalStorage`,
   `getLocalStorage()`, and `getSessionStorage()` for session storage). When a browser

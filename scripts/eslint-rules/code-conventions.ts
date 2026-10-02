@@ -73,7 +73,7 @@ export const APP_CONVENTIONS: CodeConvention[] = [
     message:
       "useTemplateLibrary() lists only the bundled starter Templates until the catalog loads, and again after it fails. " +
       "A page that uses it shows its loading state and <CatalogLoadError onRetry={retryCatalog}>, with a test of both " +
-      "like tests/unit/views/Categories.test.tsx, and then joins this convention's owners.",
+      "like tests/unit/views/Categories.dom.test.tsx, and then joins this convention's owners.",
     owners: ["src/views/Categories.tsx", "src/views/CategoryDetail.tsx", "src/views/ChecklistLibrary.tsx"],
   },
   {
