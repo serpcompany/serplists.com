@@ -260,6 +260,18 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, the tests reach the app's level (807fe774..d77092e4). TD-66, TD-67
+  and TD-69 are closed.
+  - `noPropertyAccessFromIndexSignature` is on for tests. It fixed 1,059 errors, and the
+    guard holds every checked tsconfig to all five settings.
+  - `no-unsafe-type-assertion` covers tests (298 fixed). The cast rule refuses `as never`
+    (49 fixed) and casts of `postDataJSON()`.
+  - Four stored-content tests moved from JavaScript to TypeScript, and pass stored JSON
+    through the app's parsers.
+  - Two `.test.mjs` files stay, because their callers really are JavaScript: workerd's R2
+    ranges and `run-tool`.
+  - New tracker rows: TD-73 to TD-75. TD-75 is a possible Sub-task misalignment in the
+    shared-run merge.
 - 2026-10-01: phase 4, app side of round 4 done: naming conventions (836ec7b4..47d6e0f7).
   - `@typescript-eslint/naming-convention` covers every TypeScript file, with its options
     in `scripts/eslint-rules/naming-conventions.mjs`.
