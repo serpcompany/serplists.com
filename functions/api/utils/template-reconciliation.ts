@@ -86,7 +86,7 @@ function createEarlierRetiredLookup(previousRetired: unknown[]) {
 }
 
 function freshRunState(value: TaskRecord): TaskRecord {
-  const { completed: _completed, ...next } = preserveRunState(value, undefined);
+  const { completed, ...next } = preserveRunState(value, undefined);
   return next;
 }
 

@@ -143,7 +143,7 @@ export const templatesApi = {
     const search = new URLSearchParams();
     if (payload.teamId) search.set('teamId', payload.teamId);
     const query = search.toString();
-    const { teamId: _teamId, ...body } = payload;
+    const { teamId, ...body } = payload;
     return apiRequest(`/templates/backup${query ? `?${query}` : ''}`, templateImportSummarySchema, {
       method: 'POST',
       body: JSON.stringify(body),

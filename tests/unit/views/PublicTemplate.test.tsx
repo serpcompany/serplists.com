@@ -37,7 +37,7 @@ const templateOfAlice = (fields: Partial<ChecklistTemplate>): ChecklistTemplate 
 
 const statValue = (html: string, label: string) => html.match(new RegExp(`>([^<]*)</p><p class="[^"]*">${label}</p>`))?.[1];
 
-const { ownerProfile: _noOwnerProfile, ...bundledTemplate } = templateOfAlice({
+const { ownerProfile, ...bundledTemplate } = templateOfAlice({
   id: 'repo:ultimate-camping-checklist',
   slug: 'ultimate-camping-checklist',
   title: 'Ultimate Camping Checklist',

@@ -21,9 +21,9 @@ export type SharedRunRow = Pick<
 
 function runResponseColumns() {
   const {
-    share_token: _token,
-    share_expires_at: _expires,
-    share_used_at: _used,
+    share_token,
+    share_expires_at,
+    share_used_at,
     ...columns
   } = getTableColumns(schema.checklist_runs);
   return columns;

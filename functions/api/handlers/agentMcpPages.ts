@@ -278,7 +278,7 @@ export function sectionPage(paged: Paged, sections: SectionRecord[], sectionInde
   const fieldsUnit = 0;
   const firstTaskUnit = 1;
   const section = sectionAt(sections, sectionIndex);
-  const { items: _items, ...fields } = section;
+  const { items, ...fields } = section;
   const tasks = tasksOf(section);
   const values: JsonRecord[] = [fields, ...tasks];
   const frame = { [paged.key]: paged.ref, section: { ...frameId("id", section.id), taskCount: tasks.length, firstTask: tasks.length, items: [] } };

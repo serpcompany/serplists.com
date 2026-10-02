@@ -20,7 +20,7 @@ export function isMissingRulesColumnError(error: unknown): boolean {
 }
 
 export function omitRulesColumn<T extends Record<string, unknown>>(values: T): Omit<T, 'rules'> {
-  const { rules: _rules, ...rest } = values;
+  const { rules, ...rest } = values;
   return rest;
 }
 

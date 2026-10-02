@@ -186,7 +186,7 @@ export function updateRunAuditDiff(
   existing: Pick<RunRow, "progress" | "revision">,
   updates: RunUpdates,
 ): RunAuditDiff {
-  const { runId: _runId, expectedRevision: _expectedRevision, ...change } = args;
+  const { runId, expectedRevision, ...change } = args;
   const diff: RunAuditDiff = {
     ...change,
     progress: { from: typeof existing.progress === "number" ? existing.progress : 0, to: updates.progress },

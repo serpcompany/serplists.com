@@ -30,7 +30,7 @@ function utf8Bytes(value: string): number {
 
 export function compactAuditSnapshot<T>(value: T): T | JsonRecord {
   if (!isRecord(value)) return value;
-  const { items: _items, retired_items: _retired, share_token: _shareToken, ...rest } = value;
+  const { items, retired_items, share_token, ...rest } = value;
   return rest;
 }
 

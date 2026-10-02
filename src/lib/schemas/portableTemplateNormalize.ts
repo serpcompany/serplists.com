@@ -27,7 +27,7 @@ const CONTENT_TYPES = new Set(["text", "image", "video", "file", "embed", "subIt
 const VALUE_CONTENT_TYPES = new Set(["image", "video", "file", "embed"]);
 
 const withoutKey = (record: JsonRecord, key: string): JsonRecord => {
-  const { [key]: _dropped, ...rest } = record;
+  const { [key]: dropped, ...rest } = record;
   return rest;
 };
 
@@ -71,7 +71,7 @@ function normalizeContents(contents: unknown[]): JsonRecord[] {
     }
 
     if (VALUE_CONTENT_TYPES.has(record.type) && isBlank(value)) return [];
-    const { subItems: _notSubTasks, ...block } = content;
+    const { subItems, ...block } = content;
     return [{ ...block, value }];
   });
 }

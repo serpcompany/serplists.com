@@ -100,7 +100,7 @@ export function normalizeSections(raw: unknown): ChecklistSection[] {
         );
         const contents = Array.isArray(it.contents) ? shownContents(it.contents) : undefined;
 
-        const { completed: _completed, ...rest }: JsonRecord = it;
+        const { completed, ...rest }: JsonRecord = it;
         return [{
           ...rest,
           id: typeof it.id === "string" ? it.id : `${sectionIndex + 1}-${itemIndex + 1}`,

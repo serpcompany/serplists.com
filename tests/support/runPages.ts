@@ -46,11 +46,11 @@ export async function readRunInFull(read: PagedRead, runId: string): Promise<{ r
   for (const entry of outline) sections.push(await readSectionInFull(call, entry.id));
   const retiredItems = await readRetiredWork(call);
   const {
-    sectionCount: _sectionCount,
-    taskCount: _taskCount,
-    bytes: _bytes,
+    sectionCount,
+    taskCount,
+    bytes,
     retiredCount,
-    retiredBytes: _retiredBytes,
+    retiredBytes,
     ...header
   } = fields;
   if (retiredCount !== retiredItems.length) throw new Error(`read ${retiredItems.length} retired entries of ${String(retiredCount)}`);

@@ -51,7 +51,7 @@ export function applyTemplateOperation(stored: SectionRecord[], args: TemplateOp
   switch (args.operation) {
     case "replace_section": {
       const index = findSection(sections, args.sectionId);
-      const { id: _id, items, ...fields } = args.section;
+      const { id, items, ...fields } = args.section;
       sections[index] = { ...sectionAt(sections, index), ...fields, ...(items ? { items: items.map(withTaskIds) } : {}) };
       return { sections, sectionId: args.sectionId };
     }
@@ -82,7 +82,7 @@ export function applyTemplateOperation(stored: SectionRecord[], args: TemplateOp
     }
     case "replace_task": {
       const { sectionIndex, taskIndex } = findTask(sections, args.taskId);
-      const { id: _id, ...fields } = args.task;
+      const { id, ...fields } = args.task;
       tasksAt(sectionIndex)[taskIndex] = withTaskIds({ ...tasksAt(sectionIndex)[taskIndex], ...fields });
       return { sections, taskId: args.taskId };
     }

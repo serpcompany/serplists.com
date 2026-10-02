@@ -63,7 +63,7 @@ export async function readSectionInFull(call: PagedRead, sectionId: unknown): Pr
         else tasks.push(completedUnit);
       }
     } else {
-      const { taskCount: _taskCount, firstTask, items, ...rest } = jsonObject.parse(page.section);
+      const { taskCount, firstTask, items, ...rest } = jsonObject.parse(page.section);
       fieldsOnTheFirstPage ??= rest;
       if (firstTask !== tasks.length) throw new Error(`page starts at task ${String(firstTask)}, expected ${tasks.length}`);
       tasks.push(...jsonObjects.parse(items));
@@ -122,6 +122,6 @@ export async function readTemplateInFull(
   const { fields, outline } = await readOutlineFromItsFirstPage(call, page, 'template');
   const sections: JsonRecord[] = [];
   for (const entry of outline) sections.push(await readSectionInFull(call, entry.id));
-  const { sectionCount: _sectionCount, taskCount: _taskCount, bytes: _bytes, ...header } = fields;
+  const { sectionCount, taskCount, bytes, ...header } = fields;
   return { template: { ...header, sections }, results };
 }

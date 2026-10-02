@@ -97,7 +97,7 @@ export function parseTemplateRow<T extends TemplateRowColumns>(template: T) {
     }
   }
 
-  const { items: _rawItemsColumn, ...columns } = template;
+  const { items, ...columns } = template;
   return {
     ...columns,
     sections,
