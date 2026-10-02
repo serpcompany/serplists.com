@@ -1,5 +1,5 @@
 import { ESLint } from 'eslint';
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { beforeAll, describe, expect, expectTypeOf, it } from 'vitest';
 
 import { DEV_TEST_USERS } from '@/lib/auth/devUsers';
 import { queryKeys } from '@/lib/queryKeys';
@@ -27,6 +27,8 @@ async function expectCase({ file, code, refusal }: Case, ruleId: string) {
 
 const APP = 'src/components/Sample.tsx';
 const API = 'functions/api/handlers/sample.ts';
+
+beforeAll(() => eslint.lintText('', { filePath: APP }), 60_000);
 
 const APP_CASES: Case[] = [
   refused('a billing redirect flag from useState', APP, 'const [isStartingCheckout, setIsStartingCheckout] = useState(false);', 'useRedirectPending()'),
