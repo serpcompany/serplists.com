@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contentAt, elementAt, firstOf, present, subTaskAt } from '../../../support/elements';
+import { contentAt, elementAt, firstOf, present, subTaskAt, taskIn } from '../../../support/elements';
 import {
   MAX_SHARED_RUN_NOTES_LENGTH,
   mergeSharedRunState,
@@ -7,6 +7,7 @@ import {
 } from '@functions/api/utils/shared-run-merge';
 import { withoutKeys } from '../../../support/guestState';
 import { storedSections } from '../../../support/storedJson';
+import { normalizeSections } from '@/lib/utils/checklistSections';
 
 type Json = Record<string, unknown>;
 
@@ -99,6 +100,30 @@ describe('mergeSharedRunState', () => {
     expect(subTaskAt(item, 0).isCompleted).toBe(true);
     expect(contentAt(item, 0).value).toBe('Instructions');
     expect(present(contentAt(item, 1).subItems, 'the sub-tasks').map((subItem) => subItem.isCompleted)).toEqual([false, true]);
+  });
+
+  it('pairs Sub-tasks without ids with the ones the share page shows, past legacy entries it leaves out', () => {
+    const legacyTask = (third: boolean) => ({
+      id: 'i1',
+      title: 'Task',
+      subItems: [null, 'Direct text', { title: 'Direct A', isCompleted: false }, { title: 'Direct B', isCompleted: true }],
+      contents: [
+        null,
+        { type: 'retired', value: 'Unknown block' },
+        { type: 'subItems', value: '', subItems: [{ title: 'First', isCompleted: false }] },
+        {
+          type: 'subItems',
+          value: '',
+          subItems: [null, '  ', 'Legacy text', { title: 'Second', isCompleted: true }, { title: 'Third', isCompleted: third }],
+        },
+      ],
+    });
+    const storedWithLegacyEntries = [{ id: 's1', title: 'Section', items: [legacyTask(false)] }];
+    const shown = normalizeSections(structuredClone(storedWithLegacyEntries));
+    subTaskAt(contentAt(taskIn(shown, 0, 0), 1), 2).isCompleted = true;
+
+    expect(mergeSharedRunState(copy(storedWithLegacyEntries), guest(shown)))
+      .toEqual({ sections: [{ id: 's1', title: 'Section', items: [{ ...legacyTask(true), isCompleted: false }] }] });
   });
 
   it('falls back to position for duplicate sub-item ids', () => {

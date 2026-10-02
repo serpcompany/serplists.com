@@ -10,6 +10,7 @@ import {
 } from '../../../src/lib/schemas/jsonRecords';
 import { normalizeSectionsPayload } from './payloads';
 import { parseJsonArray } from '../../../src/lib/schemas/jsonArrays';
+import { isKnownContent } from '../../../src/lib/schemas/storedSections';
 
 export const MAX_SHARED_RUN_NOTES_LENGTH = 5000;
 
@@ -42,6 +43,14 @@ const sharedSubItemSchema = z.object({
 type SharedSubItem = z.infer<typeof sharedSubItemSchema>;
 
 const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const isShownContentSubTask = (value: unknown): boolean =>
+  isSubTaskRecord(value) || (typeof value === 'string' && value.trim() !== '');
+
+const pairWithShown = (stored: unknown[], guest: unknown[], isShown: (value: unknown) => boolean): unknown[] => {
+  const unpaired = [...guest];
+  return stored.map((entry) => (isShown(entry) ? unpaired.shift() : undefined));
+};
 
 const stringId = (value: unknown): string | null =>
   isChecklistNodeRecord(value) && typeof value.id === 'string' && value.id !== '' ? value.id : null;
@@ -82,11 +91,12 @@ function mergeItemSubItems(stored: TaskRecord, guest: SharedRunItem): { subItems
     if (id) storedIdCounts.set(id, (storedIdCounts.get(id) ?? 0) + 1);
   }
 
-  const mergeList = (storedList: unknown[], guestList: unknown[]) => storedList.map((subItem, index) => {
+  const mergeList = (storedList: unknown[], guestPartners: unknown[]) => storedList.map((subItem, index) => {
     if (!isSubTaskRecord(subItem)) return subItem;
     const id = stringId(subItem);
     const byId = id && storedIdCounts.get(id) === 1 ? guestById.get(id) : undefined;
-    const positional = stringId(guestList[index]) === id ? guestList[index] : undefined;
+    const partner = guestPartners[index];
+    const positional = stringId(partner) === id ? partner : undefined;
     const match = parseSubItem(byId?.length === 1 ? byId[0] : positional);
     if (!match) return subItem;
     const next: SubTaskRecord = { ...subItem };
@@ -96,15 +106,17 @@ function mergeItemSubItems(stored: TaskRecord, guest: SharedRunItem): { subItems
 
   const merged: { subItems?: unknown[]; contents?: unknown[] } = {};
   if (Array.isArray(stored.subItems)) {
-    merged.subItems = mergeList(stored.subItems, asArray(guest.subItems));
+    merged.subItems = mergeList(stored.subItems, pairWithShown(stored.subItems, asArray(guest.subItems), isSubTaskRecord));
   }
   if (Array.isArray(stored.contents)) {
+    const guestContentPartners = pairWithShown(stored.contents, guestContents, isKnownContent);
     merged.contents = stored.contents.map((content: unknown, index) => {
       if (!isContentRecord(content) || !Array.isArray(content.subItems)) return content;
-      const guestContent = guestContents[index];
+      const guestContent = guestContentPartners[index];
+      const guestSubItems = isContentRecord(guestContent) ? asArray(guestContent.subItems) : [];
       return {
         ...content,
-        subItems: mergeList(content.subItems, isContentRecord(guestContent) ? asArray(guestContent.subItems) : []),
+        subItems: mergeList(content.subItems, pairWithShown(content.subItems, guestSubItems, isShownContentSubTask)),
       };
     });
   }

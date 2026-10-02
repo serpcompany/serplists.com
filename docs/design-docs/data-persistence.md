@@ -243,8 +243,11 @@ stored sections, matched by the ids the share page uses (the stored ids, or posi
 such as `1` and `1-1` where an id is missing). A stored entry the payload leaves out
 keeps its state, and an unknown id is ignored. A Sub-task matches by its id when that id
 is unique within the task, and otherwise by its position in the same list, only when the
-guest's entry carries the same id or none. The share page sends back stored values it
-does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
+guest's entry carries the same id or none. Positions count only what the share page shows:
+it leaves out legacy entries (a `null` content block or Sub-task, a content block of an
+unknown type, a blank text Sub-task), so the merge skips those too and a Sub-task after
+them pairs with its own guest entry (`functions/api/utils/shared-run-merge.ts`). The share
+page sends back stored values it does not normalize, so a save checks notes and Sub-task shapes where it uses them rather
 than failing whole. When sharing fails, distinguish an
 entitlement `limit_reached` response from schema/migration failures before
 changing sharing logic.

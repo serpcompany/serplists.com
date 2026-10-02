@@ -55,6 +55,9 @@ export const isSectionedList = (values: readonly unknown[]): boolean => {
 
 const contentTypes = new Set<unknown>(CHECKLIST_CONTENT_TYPES);
 
+export const isKnownContent = (content: unknown): content is ContentRecord =>
+  isContentRecord(content) && contentTypes.has(content.type);
+
 function withoutKeys(record: JsonRecord, keep: (key: string, value: unknown) => boolean): JsonRecord {
   return Object.fromEntries(Object.entries(record).filter(([key, value]) => keep(key, value)));
 }
@@ -81,7 +84,7 @@ export function getTaskSubTasks(task: TaskRecord): SubTaskRecord[] {
 
 export function sanitizeStoredContents(value: unknown): ContentRecord[] {
   return contentRecordsIn(value)
-    .filter((content) => contentTypes.has(content.type))
+    .filter(isKnownContent)
     .map((content) => {
       const next: ContentRecord = withoutKeys(content, (key, entry) =>
         key === "fileSize" ? entry === undefined || entry === null || typeof entry === "number"
