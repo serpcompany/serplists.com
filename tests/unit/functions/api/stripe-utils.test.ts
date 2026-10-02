@@ -39,8 +39,8 @@ describe("verifyStripeWebhookSignature", () => {
     expect(result.ok).toBe(false);
   });
 
-  async function signedHeader(payload: string, timestamp: number) {
-    return `t=${timestamp},v1=${await hmacSha256Hex("whsec_test", `${timestamp}.${payload}`)}`;
+  function signedHeader(payload: string, timestamp: number) {
+    return `t=${timestamp},v1=${hmacSha256Hex("whsec_test", `${timestamp}.${payload}`)}`;
   }
 
   it("accepts valid signature", async () => {
@@ -48,7 +48,7 @@ describe("verifyStripeWebhookSignature", () => {
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: await signedHeader(payload, Math.floor(Date.now() / 1000)),
+      signatureHeader: signedHeader(payload, Math.floor(Date.now() / 1000)),
       webhookSecret: "whsec_test",
     });
 
@@ -60,7 +60,7 @@ describe("verifyStripeWebhookSignature", () => {
 
     const result = await verifyStripeWebhookSignature({
       payload,
-      signatureHeader: await signedHeader(payload, Math.floor(Date.now() / 1000) - 1000),
+      signatureHeader: signedHeader(payload, Math.floor(Date.now() / 1000) - 1000),
       webhookSecret: "whsec_test",
       toleranceSeconds: 10,
     });
