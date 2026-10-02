@@ -271,9 +271,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     schema)`, stored JSON columns with `tests/support/storedJson.ts`, and browser specs through
     request helpers that take a schema ([testing conventions](#testing-conventions)). They
     narrow as app code does, through the helpers the testing conventions list: a handler on an
-    element through `handlerOf` or `handlerIn`, a fake DOM node through `elementOf`, a SQL
-    expression through `sqlExpression`, a server's port through `listeningPort`, and doubles
-    and environments built as the type they stand in for.
+    element through `handlerOf` or `handlerIn`, a DOM element through `instanceof` or
+    `inputNamed`, a SQL expression through `sqlExpression`, a server's port through
+    `listeningPort`, and doubles and environments built as the type they stand in for.
   - `tests/unit/scripts/no-external-data-casts-rule.test.ts` covers the rule, and
     `tests/unit/config/external-data-boundaries.test.ts` fails if `pnpm run lint` stops using
     the type-aware config, a folder loses the rules (the assertion rule included), a test file
@@ -319,11 +319,9 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     JSON fields, HTTP headers, env vars and MCP tool and field names. Named imports keep the
     exporter's names, and the rule does not read them;
   - names another module gives are matched by name, never by file: the HTTP method functions
-    a Next.js route module exports (`GET`, `POST` and the rest), and React DOM's
-    `DO_NOT_USE_OR_YOU_WILL_BE_FIRED_EXPERIMENTAL_CREATE_ROOT_CONTAINERS`, which the fake DOM
-    in `tests/fixtures/fakeDom.ts` augments. A stand-in for another module declares camelCase
-    values and exports them under that module's names (`export { geistMono as Geist_Mono }` in
-    `tests/support/nextFontGoogle.ts`);
+    a Next.js route module exports (`GET`, `POST` and the rest). A stand-in for another
+    module declares camelCase values and exports them under that module's names
+    (`export { geistMono as Geist_Mono }` in `tests/support/nextFontGoogle.ts`);
   - Drizzle tables are camelCase exports that hold their SQL names
     ([database operations](design-docs/database-operations.md#schema-ownership)).
   - `tests/unit/config/naming-conventions.test.ts` lints a sample of each case with the real
@@ -556,8 +554,8 @@ Common failures:
     `launchChecklistTemplate.ts`, `runExecutionFixtures.ts`, `runStartFixtures.ts`),
     workspaces and plans (`workspaces.ts`, `plans.ts`), Run Keys (`agentKeys.ts`), the template
     detail page's API client (`templateDetailApiClient.ts`), the template editor's hooks
-    (`templateEditorHooks.ts`), storage (`memoryStorage.ts`), JSON files (`jsonFile.ts`), the
-    fake DOM (`fakeDom.ts`) and query clients (`queryClient.ts`).
+    (`templateEditorHooks.ts`), storage (`memoryStorage.ts`), JSON files (`jsonFile.ts`) and
+    query clients (`queryClient.ts`).
   - `tests/support/`: modules that mock what the code under test imports, imported before it
     (see the API handler tests below), and harnesses that run it:
     - API handlers: `apiHandlerMocks.ts` and the modules for each area
@@ -576,13 +574,14 @@ Common failures:
       `uploadMocks.ts`.
     - Components called without a DOM: `reactHookStubs.ts`, `reactHooksKeptBetweenRenders.ts`,
       `reactHookFormMock.ts`, `hookStateSlots.ts` and `elementTree.ts`.
-    - Components on the fake DOM: `aFakeDomForEachTest()` in `fakeDomRoots.ts` installs the
-      globals for a file and unmounts each test's roots; `overlaysInPlace.tsx`,
-      `confirmDialogInPlace.ts` and `queryClientsPerTest.ts`; and the providers and pages
-      ready to mount (`authProviderHarness.tsx`, `templatesProviderHarness.tsx`,
-      `checklistRunPage.tsx`, `templateDetailPage.tsx`, `publicTemplatePage.tsx`,
-      `categoryPage.tsx`, `teamInvitePage.ts`); a mounted page restored from the back/forward
-      cache (`pageRestore.ts`) and a sign-out control that must wait for the server
+    - Components in the DOM: `renderInTheDom.ts` (`renderSettled()`, the in-memory browser
+      as the page's window, `typeInto()`, `inputNamed()` and `theButtonOrMenuItemNamed()`),
+      `overlaysInPlace.tsx`, `confirmDialogInPlace.ts` and `queryClientsPerTest.ts`; and the
+      providers, hook probes and pages ready to mount (`authProviderHarness.tsx`,
+      `queryHookProbe.tsx`, `templatesProviderHarness.tsx`, `checklistRunPage.tsx`,
+      `templateDetailPage.tsx`, `publicTemplatePage.tsx`, `categoryPage.tsx`,
+      `teamInvitePage.ts`); a mounted page restored from the back/forward cache
+      (`pageRestore.ts`) and a sign-out control that must wait for the server
       (`signOutControl.ts`).
     - The root layout and the stylesheet: `rootLayout.ts` (`rootLayoutOn(siteEnv)`,
       `plainScriptsInTheHead()`) and `appStylesheet.ts`
@@ -678,12 +677,10 @@ Common failures:
     R2's `json<T>()` promise a row type nothing checks, in the platform as in the doubles, so
     the doubles declare those generic signatures as overloads over an implementation that
     returns what it read. A `Request` that must hand over a form as is subclasses `Request`.
-  - React DOM's `createRoot` accepts the fake DOM's `FakeElement` in the tests' program:
-    `tests/fixtures/fakeDom.ts` adds it to the `Container` type React's types leave open for
-    that, and declares the `value` and `type` React DOM sets on inputs. A node a query found is
-    narrowed with `elementOf(node, what)` or `isFakeElement` from the same file. A component's
-    React props on a fake element are read with `typeThroughTheFieldsOwnOnChange()`
-    (`tests/support/fakeDomRoots.ts`).
+  - A DOM query returns an `HTMLElement`. Narrow it as app code does, with `instanceof`
+    (`HTMLInputElement`, `HTMLButtonElement`), or find a field through `inputNamed(label)`
+    (`tests/support/renderInTheDom.ts`), which returns the `HTMLInputElement` its label
+    names; read an input's `value` and `type` from it.
   - An element's props are typed by `ElementProps` (`tests/support/elementTree.ts`), and a
     handler on them is called through `handlerOf(element, name)`, or `handlerIn(props, name)`
     for a props object or a hook's result, which parse it as a function with Zod. A drizzle
@@ -985,8 +982,27 @@ Common failures:
 - Unit tests run in UTC: `vitest.config.ts` sets `TZ` before Vitest starts its workers, which
   inherit it, so a date renders the same on every machine and in CI
   (`tests/unit/config/test-environment.test.ts`).
-- Unit tests run in Vitest's node environment, with no DOM, jsdom or testing-library, so a
-  component test takes one of three routes:
+- Vitest runs each test file in one of two projects (`vitest.config.ts`):
+  - a file named `*.dom.test.tsx` runs in happy-dom, a DOM implementation in Node, and is
+    the only kind of file that renders into a DOM;
+  - every other test runs in Node with no DOM: the API, script and config tests, and every
+    static render, since a server render has no `window`. happy-dom also replaces Node's
+    `fetch`, `Request` and `Response` with its own, which the API tests must not get.
+
+  `tests/unit/config/test-environment.test.ts` and `test-environment.dom.test.tsx` check
+  each side. The root config is the Node project and declares the DOM project inline, since
+  Vitest 3 hands the `--exclude` that `test:run` passes for the local D1 tests to the root
+  project only. happy-dom follows no link (the `navigation` settings in `vitest.config.ts`),
+  so a click the app leaves to the browser loads nothing.
+
+  happy-dom was chosen over jsdom, both maintained (happy-dom 20.14.5 from September 2026,
+  22 million downloads a week; jsdom 30.1.1, 124 million): the DOM test files run in 32 s in
+  happy-dom and 53 s in jsdom (`--maxWorkers=2`), jsdom has no `matchMedia`, which
+  `useMediaQuery` reads, and jsdom 30 needs Node 22.22. With the DOM tests in happy-dom the
+  unit suite (`pnpm exec vitest run tests/unit src --maxWorkers=2`) took 248 s, against 222 s
+  on the hand-written fake DOM it replaced.
+
+  So a component test takes one of three routes:
   - Render the component to HTML with `renderToStaticMarkup` and read the markup.
     `tests/unit/components/accessibleMarkup.ts` finds its controls (fields, buttons and any
     element with a widget role) and names them as a screen reader does: `aria-labelledby`,
@@ -1003,33 +1019,35 @@ Common failures:
     dependencies change, and `unmountEffects()` runs the cleanups.
     `createFormControlMountedLikeUseForm` (`tests/support/editorFormControl.ts`) gives the
     template editor a real react-hook-form control.
-  - Mount it with React DOM into the fake DOM of `tests/fixtures/fakeDom.ts`
-    (`installFakeDomGlobals`, `createFakeContainer`) and drive it with `act()`, `click()` and
-    `dispatch()`, when the test needs effects, focus or clicks. `installFakeDomGlobals()`, in
-    `beforeAll` with its returned undo in `afterAll`, gives React DOM a window while it commits
-    and turns on `act()`; a page that navigates gets the window of the Next.js stand-in
-    (below). `click()` and `dispatch()` deliver an event to the container's capture
-    listeners, then its bubbling ones, where React DOM listens; a click's `detail` is its click
-    count, 2 for the second click of a double click. A hook that needs React's own
-    effects or TanStack Query runs the same way, in a probe component that renders nothing.
-    React DOM loaded without a DOM listens for the old IE input events, so a test types into a
-    field by calling the `onChange` in the props React keeps on the node (`__reactProps$...`).
-    React DOM sets an input's `type` and `value` as properties, so read them from the node,
-    not its attributes. After unmounting a tree that used TanStack Query, wait one timer tick
-    before `afterAll` restores the globals: Query hands React its batched notifications on a
-    timer, and React fails on one that runs after the fake window is gone.
-    `letQueryUpdatesReachObservers()` (`tests/support/queryNotifications.ts`) waits, inside
-    `act()`, the few timer rounds an answer takes to reach the observers and render.
+  - Render it into the DOM with Testing Library, in a `*.dom.test.tsx` file, when the test
+    needs effects, focus or clicks. `renderSettled(ui)` (`tests/support/renderInTheDom.ts`)
+    renders inside `act()` and waits for the effects, and Testing Library unmounts every tree
+    after each test. Find what a user finds: by role and name
+    (`screen.getByRole('button', { name: 'Save' })`), by label (`inputNamed('Email')`) and by
+    text, rather than by a class, an id or React's props on a node.
+    `theButtonOrMenuItemNamed(name)` finds a control a menu may render as either. Act with
+    `fireEvent`: `fireEvent.click()`, with `{ detail: 2 }` for the second click of a double
+    click, a `createEvent.click()` passed to `fireEvent()` when the test reads whether the app
+    prevented the default, and `typeInto(field, value)`, which fires the change React listens
+    for. A hook that needs
+    React's own effects or TanStack Query runs in a probe component that renders nothing
+    (`mountQueryHook()` in `tests/support/queryHookProbe.tsx`, `mountAuth()` in
+    `tests/support/authProviderHarness.tsx`). `letQueryUpdatesReachObservers()`
+    (`tests/support/queryNotifications.ts`) waits, inside `act()`, the few timer rounds an
+    answer takes to reach the observers and render.
 
-  Base UI's overlays render nothing until they open, and their portals render nothing without
-  a DOM, so component tests replace dialogs, alert dialogs, menus and select popups with the
-  in-place versions in `tests/support/overlaysInPlace.tsx`. A test that renders a failed query
-  statically seeds the failure with `seedQueryError()` on `createTestQueryClient()`
-  (`tests/fixtures/queryClient.ts`), which does not retry on mount, so the error shows instead
-  of the fetching state of a query about to retry; `data` makes it a refresh that failed after
-  a successful load. A static render runs no effects, so a page never counts as shown to
-  `usePageVisit` and drops every late result: a test that acts as a user still on the page
-  mocks `@/hooks/usePageVisit` with `pageVisitOfAUserStillOnThePage`
+  Base UI's overlays render nothing until they open, and their portals render nothing in a
+  static render, so component tests replace dialogs, alert dialogs, menus and select popups
+  with the in-place versions in `tests/support/overlaysInPlace.tsx`. DOM tests use them too:
+  happy-dom opens a real Base UI alert dialog, but it closes after its exit transition, and a
+  check that it closed passed or failed with the machine's load.
+
+  A test that renders a failed query statically seeds the failure with `seedQueryError()` on
+  `createTestQueryClient()` (`tests/fixtures/queryClient.ts`), which does not retry on mount,
+  so the error shows instead of the fetching state of a query about to retry; `data` makes it
+  a refresh that failed after a successful load. A static render runs no effects, so a page
+  never counts as shown to `usePageVisit` and drops every late result: a test that acts as a
+  user still on the page mocks `@/hooks/usePageVisit` with `pageVisitOfAUserStillOnThePage`
   (`tests/support/pageVisitMock.ts`).
 - The App Router exists only in a Next.js app, so `tests/support/` stands in for what the
   app imports from Next.js:
@@ -1055,15 +1073,18 @@ Common failures:
     `useSearchParams` and `useParams` follow the current entry, including one written with
     `pushState` or `replaceState`. `navigation.router` is what `useRouter()` returns, with
     `vi.fn` methods; `navigation.log` lists each navigation and whether a `Link` or the
-    router sent it, and `navigation.documentLoads` each full page load. A test that mounts
-    with React DOM installs `navigation.window` (its history and location, events, storage
-    and a `confirm()` answering true) with `navigation.installWindow()` or
-    `installFakeDomGlobals(navigation.window)`. Back, Forward and `go()` fire `popstate` on a
-    later task, as a browser does: `navigation.settle()` lets one run, so a Back the page
-    answers with a traversal of its own needs two. `<RoutedPages>` renders the page whose
-    pattern matches, remounted for another pattern or other params and kept for the same
-    URL or another query, as the App Router does; `renderPageAt()` returns a URL's server
-    HTML, with no effects.
+    router sent it, and `navigation.documentLoads` each full page load. A DOM test makes
+    `navigation.window` (its history and location, events, storage and a `confirm()`
+    answering true) the page's window with `theInMemoryBrowserAsTheWindow()` for a file or a
+    `describe` block, or `onTheInMemoryBrowser(run)` for one test
+    (`tests/support/renderInTheDom.ts`); what it does not stand in for, such as the document
+    and the element classes, comes from happy-dom's window. A static render that reads the
+    window installs it with `navigation.installWindow()`. Back, Forward and `go()` fire
+    `popstate` on a later task, as a browser does: `navigation.settle()` lets one run, so a
+    Back the page answers with a traversal of its own needs two. `<RoutedPages>` renders the
+    page whose pattern matches, remounted for another pattern or other params and kept for the
+    same URL or another query, as the App Router does; `renderPageAt()` returns a URL's
+    server HTML, with no effects.
   - `nextRouting.ts` loads `next.config.ts`'s redirects and headers as `next build` does for
     a build's `SITE_ENV` (`loadBuiltRoutes()`; `withSiteEnv()` from `siteEnv.ts` sets the
     variable, or leaves it unset for `undefined`) and answers a URL the two ways the app is
