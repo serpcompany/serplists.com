@@ -17,6 +17,7 @@ import {
   restoreNavigationWindow,
 } from '../../support/publicTemplatePage';
 import PublicTemplate from '@/views/PublicTemplate';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import { createFakeContainer, installFakeDomGlobals } from '../../fixtures/fakeDom';
 import { deferred } from '../../support/deferred';
 import { navigation } from '../../support/nextNavigation';
@@ -82,7 +83,7 @@ describe('PublicTemplate Save', () => {
   ])('reports %s as not saved', async (_label, result, billingEnabled) => {
     const saveTemplate = vi.fn().mockResolvedValue(result);
     renderPublishedRoute(publishedClipyTemplate, {
-      billingState: { billingEnabled, isLoading: false, isPro: false },
+      billingState: { billingEnabled, isError: false, isLoading: false, isPro: false },
       saveTemplate,
     });
 
@@ -136,7 +137,7 @@ describe('PublicTemplate Start a Run dialog', () => {
       saveTemplate: vi.fn(),
       startRun,
       template: publishedClipyTemplate,
-      totalItems: 0,
+      totalItems: countTemplateItems(publishedClipyTemplate),
     });
     navigation.reset(`${CLEAN_VISIT.origin}${CLEAN_VISIT.path}`, { routes: ['/profile/[username]/[templateSlug]'] });
     const restoreGlobals = installFakeDomGlobals(navigation.window);

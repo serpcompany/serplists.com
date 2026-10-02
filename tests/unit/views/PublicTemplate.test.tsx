@@ -35,6 +35,8 @@ const templateOfAlice = (fields: Partial<ChecklistTemplate>): ChecklistTemplate 
   ...fields,
 });
 
+const statValue = (html: string, label: string) => html.match(new RegExp(`>([^<]*)</p><p class="[^"]*">${label}</p>`))?.[1];
+
 const { ownerProfile: _noOwnerProfile, ...bundledTemplate } = templateOfAlice({
   id: 'repo:ultimate-camping-checklist',
   slug: 'ultimate-camping-checklist',
@@ -105,6 +107,20 @@ describe('PublicTemplate rendered route', () => {
     expect(html).toContain('href="https://clipy.online/video/8fptqlnappr6?ref=m4d8e9p&amp;utm_source=serplists.com"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="nofollow noopener noreferrer"');
+  });
+
+  it('counts every task in every section in its Tasks stat', () => {
+    const template = templateOfAlice({
+      slug: 'three-tasks',
+      title: 'Three tasks',
+      sections: [
+        { id: 'before', title: 'Before', items: [{ id: 'pack', title: 'Pack' }, { id: 'charge', title: 'Charge' }] },
+        { id: 'after', title: 'After', items: [{ id: 'unpack', title: 'Unpack' }] },
+      ],
+    });
+
+    expect(statValue(renderPublishedRoute(template).html, 'Tasks')).toBe('3');
+    expect(statValue(renderPublishedRoute(publishedClipyTemplate).html, 'Tasks')).toBe('1');
   });
 
   it('adds no robots rule of its own to a template that loaded, on any host', () => {

@@ -4,11 +4,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { vi } from 'vitest';
 
 import PublicTemplate from '@/views/PublicTemplate';
+import type { PublicTemplateView } from '@/components/template/PublicTemplateView';
+import type { RunNameDialog } from '@/components/ui/run-name-dialog';
+import { countTemplateItems } from '@/lib/templates/templateItemCount';
 import type { ChecklistTemplate } from '@/types/checklist';
 import type { useTemplateDetailModel } from '@/features/template-detail/useTemplateDetailModel';
+import { lastOf } from './elements';
 
 type TemplateDetailModelArgs = Parameters<typeof useTemplateDetailModel>;
-type TemplateDetailModelDouble = (...args: TemplateDetailModelArgs) => Partial<ReturnType<typeof useTemplateDetailModel>>;
+type TemplateDetailModel = Partial<ReturnType<typeof useTemplateDetailModel>>;
+type TemplateDetailModelDouble = (...args: TemplateDetailModelArgs) => TemplateDetailModel;
+type ViewProps = React.ComponentProps<typeof PublicTemplateView>;
+type DialogProps = React.ComponentProps<typeof RunNameDialog>;
 
 const {
   authState,
@@ -26,11 +33,11 @@ const {
     user: null as { id: string } | null,
   },
   mockCreateBillingCheckout: vi.fn(),
-  mockDialogProps: vi.fn(),
+  mockDialogProps: vi.fn<(props: DialogProps) => void>(),
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockUseTemplateDetailModel: vi.fn<TemplateDetailModelDouble>(),
-  mockViewProps: vi.fn(),
+  mockViewProps: vi.fn<(props: ViewProps) => void>(),
   staleCatalogCopy: {
     id: 'clipy-template-1',
     slug: 'reviewed-clipy-checklist',
@@ -104,7 +111,7 @@ vi.mock('@/components/template/PublicTemplateView', async (importOriginal) => {
 });
 
 vi.mock('@/components/ui/run-name-dialog', () => ({
-  RunNameDialog: (props: Record<string, unknown>) => {
+  RunNameDialog: (props: DialogProps) => {
     mockDialogProps(props);
     return null;
   },
@@ -201,7 +208,7 @@ export const robotsTagThePageAdds = (html: string) => html.match(/<meta name="ro
 
 export function renderPublishedRoute(
   template: ChecklistTemplate,
-  modelOverrides: Record<string, unknown> = {},
+  modelOverrides: TemplateDetailModel = {},
   visit: RouteVisit = CLEAN_VISIT,
 ) {
   mockUseTemplateDetailModel.mockReturnValue({
@@ -211,7 +218,7 @@ export function renderPublishedRoute(
     saveTemplate: vi.fn(),
     startRun: vi.fn(),
     template,
-    totalItems: 0,
+    totalItems: countTemplateItems(template),
     ...modelOverrides,
   });
   navigation.reset(`${visit.origin}${visit.path}${visit.search ?? ''}${visit.hash ?? ''}`, {
@@ -220,26 +227,6 @@ export function renderPublishedRoute(
   return { html: renderToStaticMarkup(<PublicTemplate />) };
 }
 
-type CapturedViewProps = {
-  canSaveTemplate: boolean;
-  canStartRun: boolean;
-  isCreatingRun: boolean;
-  isSaving: boolean;
-  onSaveTemplate: () => unknown;
-  onStartRun: () => unknown;
-  workspaceError: { onContinueInPersonal: () => void; onRetry: () => void } | null;
-};
+export const lastViewProps = (): ViewProps => lastOf(mockViewProps.mock.calls)[0];
 
-export const lastViewProps = (): CapturedViewProps =>
-  mockViewProps.mock.calls[mockViewProps.mock.calls.length - 1]?.[0] as CapturedViewProps;
-
-type CapturedDialogProps = {
-  loading: boolean;
-  onConfirm: (name: string) => Promise<void>;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  templateTitle: string;
-};
-
-export const lastDialogProps = (): CapturedDialogProps =>
-  mockDialogProps.mock.calls[mockDialogProps.mock.calls.length - 1]?.[0] as CapturedDialogProps;
+export const lastDialogProps = (): DialogProps => lastOf(mockDialogProps.mock.calls)[0];
