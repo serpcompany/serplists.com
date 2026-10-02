@@ -3,6 +3,7 @@ import { assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { FileUpload, ImagePreview } from '@/components/ui/file-upload';
+import { UserContentImage } from '@/components/shared/UserContentImage';
 import { uploadAcceptAttribute } from '@/lib/schemas/uploadTypes';
 
 import { findByAriaLabel, findElement, findFileInput, type AnyElement } from '../../../support/elementTree';
@@ -176,7 +177,7 @@ describe('FileUpload', () => {
 
     it('marks a failed load in state instead of hiding the element', () => {
       const img = ImagePreview({ src: 'https://example.com/photo.png' }) as AnyElement;
-      expect(img.type).toBe('img');
+      expect(img.type).toBe(UserContentImage);
       expect(img.props.style).toBeUndefined();
 
       const target = { style: {} as Record<string, string> };
@@ -193,7 +194,7 @@ describe('FileUpload', () => {
       const partial = ImagePreview({ src: null }) as AnyElement;
 
       for (const element of [failed, partial]) {
-        expect(element.type).not.toBe('img');
+        expect(element.type).not.toBe(UserContentImage);
         expect(element.props.children).toBe('Preview unavailable');
       }
     });
