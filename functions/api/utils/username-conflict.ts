@@ -41,18 +41,16 @@ export function mapUsernameConflicts<Options>(createAdapter: (options: Options) 
     const adapter = createAdapter(options);
     return {
       ...adapter,
-      create: mapConflictsFrom(adapter.create, 'create'),
-      update: mapConflictsFrom(adapter.update, 'update'),
+      create: (data) => mapConflicts(adapter.create(data), 'create'),
+      update: (data) => mapConflicts(adapter.update(data), 'update'),
     };
   };
 }
 
-function mapConflictsFrom<Write extends (...args: never[]) => Promise<unknown>>(write: Write, operation: string): Write {
-  const mapped = (...args: Parameters<Write>) =>
-    write(...args).catch((error: unknown) => {
-      if (!isUsernameUniqueViolation(error)) throw error;
-      log('warn', 'username_unique_conflict', { operation });
-      throw usernameTakenError();
-    });
-  return mapped as Write;
+function mapConflicts<Result>(write: Promise<Result>, operation: string): Promise<Result> {
+  return write.catch((error: unknown) => {
+    if (!isUsernameUniqueViolation(error)) throw error;
+    log('warn', 'username_unique_conflict', { operation });
+    throw usernameTakenError();
+  });
 }

@@ -3,7 +3,7 @@ import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { insertAuditEventWhen } from './audit';
 import { batchUpdateMissed } from './checklist-runs';
-import { insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql, withoutColumns } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
 type Db = ReturnType<typeof createDb>;
@@ -27,9 +27,9 @@ export function omitRulesColumn<T extends Record<string, unknown>>(values: T): O
 
 export function templatesInContext(owner: TemplateOwnerContext): SQL {
   const { templates } = schema;
-  return (owner.teamId
-    ? and(eq(templates.owner_type, 'team'), eq(templates.team_id, owner.teamId), isNull(templates.deleted_at))
-    : and(eq(templates.owner_type, 'user'), eq(templates.user_id, owner.userId), isNull(templates.team_id), isNull(templates.deleted_at))) as SQL;
+  return owner.teamId
+    ? allConditions(eq(templates.owner_type, 'team'), eq(templates.team_id, owner.teamId), isNull(templates.deleted_at))
+    : allConditions(eq(templates.owner_type, 'user'), eq(templates.user_id, owner.userId), isNull(templates.team_id), isNull(templates.deleted_at));
 }
 
 export async function countTemplates(env: Env, owner: TemplateOwnerContext): Promise<number> {
@@ -65,9 +65,7 @@ export async function insertTemplateWithHistoryFallback(
   const templateId = String(values.id);
 
   const runBatch = (omitColumns: readonly string[]) => {
-    const templateValues = (omitColumns.length
-      ? omitRulesColumn(values as Record<string, unknown>)
-      : values) as TemplateInsertValues;
+    const templateValues: TemplateInsertValues = omitColumns.length ? omitRulesColumn(values) : values;
     return capacity
       ? db.batch([
           insertRowWhere(db, templates, templateValues, templateCapacityAvailableSql(capacity), { omitColumns }),

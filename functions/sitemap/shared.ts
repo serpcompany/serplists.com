@@ -423,7 +423,7 @@ export async function loadCategoryEntries(env: Env): Promise<SitemapEntry[]> {
 
 type PagedSitemapOptions<Row> = {
   request: Request;
-  params: Record<string, string | string[]>;
+  params: { readonly page?: string | string[] | undefined };
   loadRows: (pagination: { limit: number; offset: number }) => Promise<Row[]>;
   toEntry: (row: Row) => SitemapEntry | null;
   prefixEntries?: SitemapEntry[];

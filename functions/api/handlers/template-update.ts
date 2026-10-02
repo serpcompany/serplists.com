@@ -62,10 +62,9 @@ export async function updateTemplateForUser(
   }
 
   const { title, description, type, seoTitle, seoDescription, rules, is_public, categories, category, tags, slug: requestedSlug, sections, items: bodyItems, expected_version } = parsed.data;
-  const rawBody = body as Record<string, unknown>;
 
   const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {};
+  const updates: TemplateUpdateValues = {};
   let syncedItems: string | null = null;
   let incomingSections: unknown[] | null = null;
 
@@ -75,33 +74,33 @@ export async function updateTemplateForUser(
   if (typeof description !== 'undefined') {
     updates.description = description || '';
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'type') && typeof type === 'string') {
+  if (Object.prototype.hasOwnProperty.call(body, 'type') && typeof type === 'string') {
     updates.type = type;
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'seoTitle')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'seoTitle')) {
     updates.seo_title = seoTitle || '';
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'seoDescription')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'seoDescription')) {
     updates.seo_description = seoDescription || '';
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'rules')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'rules')) {
     updates.rules = Array.isArray(rules) && rules.length > 0 ? JSON.stringify(rules) : null;
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'sections') || Object.prototype.hasOwnProperty.call(rawBody, 'items')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'sections') || Object.prototype.hasOwnProperty.call(body, 'items')) {
     const normalizedSections = parseSectionsPayload(sections ?? bodyItems);
     if (normalizedSections.error) {
       return jsonError(normalizedSections.error, 400);
     }
     incomingSections = normalizedSections.sections;
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'is_public') && typeof is_public === 'boolean') {
+  if (Object.prototype.hasOwnProperty.call(body, 'is_public') && typeof is_public === 'boolean') {
     updates.is_public = is_public;
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'categories') || Object.prototype.hasOwnProperty.call(rawBody, 'category')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'categories') || Object.prototype.hasOwnProperty.call(body, 'category')) {
     const finalCategories = normalizeStringArray(categories ?? category);
     updates.category = JSON.stringify(finalCategories);
   }
-  if (Object.prototype.hasOwnProperty.call(rawBody, 'tags')) {
+  if (Object.prototype.hasOwnProperty.call(body, 'tags')) {
     const finalTags = normalizeStringArray(tags);
     updates.tags = JSON.stringify(finalTags);
   }
@@ -146,7 +145,7 @@ export async function updateTemplateForUser(
   }
   const slugRequest = resolveRequestedSlug(requestedSlug, existingTemplate.slug);
   if (slugRequest.kind === 'invalid') return jsonError(slugRequest.message, 400);
-  const versionRequired = requestsContentChange(rawBody, slugRequest.kind === 'changed');
+  const versionRequired = requestsContentChange(body, slugRequest.kind === 'changed');
   if (typeof expected_version === 'number' ? expected_version !== existingTemplate.version : versionRequired) {
     return jsonError('Template changed since it was loaded. Refresh before saving again.', 409, {
       code: 'edit_conflict',
@@ -194,7 +193,7 @@ export async function updateTemplateForUser(
   }
   const nextVersion = currentVersion + 1;
   const nextContentVersion = syncedItems === null ? currentContentVersion : currentContentVersion + 1;
-  const templateValues: Record<string, unknown> = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
+  const templateValues: TemplateUpdateValues = { ...changes, version: nextVersion, updated_at: now, updated_by_user_id: userId };
   if (syncedItems !== null) {
     templateValues.content_version = nextContentVersion;
   }
@@ -323,7 +322,7 @@ export async function updateTemplateForUser(
   try {
     const { updated, runResults } = await updateTemplateWithHistoryFallback(
       db,
-      templateValues as TemplateUpdateValues,
+      templateValues,
       templateWriteGuard,
       auditEvent,
       versionValues,

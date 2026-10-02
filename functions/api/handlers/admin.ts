@@ -91,7 +91,8 @@ async function upsertOverride(request: Request, env: Env): Promise<Response> {
   if (idFromUserId !== undefined && idFromEmail !== undefined && idFromUserId !== idFromEmail) {
     return jsonError("userId and email belong to different users", 400);
   }
-  const resolvedUserId = (idFromUserId ?? idFromEmail) as string;
+  const resolvedUserId = idFromUserId ?? idFromEmail;
+  if (resolvedUserId === undefined) return jsonError("userId or email required", 400);
 
   const { entitlement_overrides } = schema;
   const nowIso = new Date().toISOString();

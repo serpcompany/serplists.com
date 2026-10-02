@@ -1,5 +1,6 @@
 import { APIError } from 'better-auth/api';
 import type { ZodError } from 'zod';
+import type { JsonRecord } from '../../../src/lib/schemas/jsonRecords';
 import type { Env } from '../types';
 import {
   USER_IMAGE_URL_MAX_LENGTH,
@@ -7,7 +8,13 @@ import {
   userNameSchema,
 } from '../../../src/lib/schemas/userProfileSchema';
 
-type UserWrite = Record<string, unknown>;
+type UserWrite = JsonRecord;
+
+interface UserProfileFields extends UserWrite {
+  name?: unknown;
+  image?: unknown;
+  displayUsername?: unknown;
+}
 
 export type UserProfileWritePolicy = {
   avatarUrlPrefixes: string[];
@@ -54,20 +61,21 @@ export function validateUserProfileWrite(
   action: 'create' | 'update',
   policy: UserProfileWritePolicy,
 ): UserWrite {
-  const sanitized: UserWrite = { ...data };
+  const fields: UserProfileFields = data;
+  const sanitized: UserProfileFields = { ...data };
 
-  if (action === 'create' || data.name !== undefined) {
-    const name = userNameSchema.safeParse(data.name);
+  if (action === 'create' || fields.name !== undefined) {
+    const name = userNameSchema.safeParse(fields.name);
     if (!name.success) reject(firstIssue(name.error));
     sanitized.name = name.data;
   }
 
-  if (data.image !== undefined) {
-    sanitized.image = parseAvatarUrl(data.image, policy);
+  if (fields.image !== undefined) {
+    sanitized.image = parseAvatarUrl(fields.image, policy);
   }
 
-  if (data.displayUsername !== undefined) {
-    const displayUsername = displayUsernameSchema.safeParse(data.displayUsername);
+  if (fields.displayUsername !== undefined) {
+    const displayUsername = displayUsernameSchema.safeParse(fields.displayUsername);
     if (!displayUsername.success) reject(firstIssue(displayUsername.error));
   }
 

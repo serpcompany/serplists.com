@@ -17,7 +17,7 @@ const checkoutSessionSchema = z
     mode: z.string().min(1),
     url: z.string().nullish(),
     expires_at: z.number(),
-    metadata: z.record(z.unknown()).nullish(),
+    metadata: z.object({ userId: z.unknown(), checkoutParams: z.unknown() }).passthrough().nullish(),
     subscription: expandableStripeIdSchema.nullish().transform((subscriptionId) => subscriptionId ?? null),
   })
   .passthrough();

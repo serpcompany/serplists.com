@@ -111,7 +111,7 @@ const stripeSubscriptionSchema = z
     canceled_at: z.number().nullish(),
     trial_end: z.number().nullish(),
     current_period_end: z.number().nullish(),
-    metadata: z.record(z.unknown()).nullish(),
+    metadata: z.object({ userId: z.unknown() }).passthrough().nullish(),
     items: z.object({ data: z.array(subscriptionItemSchema).nonempty() }).passthrough(),
   })
   .passthrough();

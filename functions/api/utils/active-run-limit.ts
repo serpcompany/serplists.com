@@ -2,7 +2,7 @@ import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { createDb, schema } from '../db';
 import type { Env } from '../types';
 import { getEntitlementsForContext, getEntitlementsForUser } from './entitlements';
-import { insertRowWhere, rowExistsSql } from './guarded-insert';
+import { allConditions, insertRowWhere, rowExistsSql } from './guarded-insert';
 import { limitReachedResponse } from './limit-reached';
 
 export type RunOwnerContext = { userId: string; teamId: string | null };
@@ -18,7 +18,7 @@ export function activeRunsInContext(owner: RunOwnerContext): SQL {
   const inContext = owner.teamId
     ? eq(checklist_runs.team_id, owner.teamId)
     : and(eq(checklist_runs.user_id, owner.userId), isNull(checklist_runs.team_id));
-  return and(inContext, eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at)) as SQL;
+  return allConditions(inContext, eq(checklist_runs.status, 'in_progress'), isNull(checklist_runs.deleted_at));
 }
 
 export function activeRunCapacityAvailableSql(owner: RunOwnerContext, limit: number): SQL {

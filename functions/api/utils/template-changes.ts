@@ -1,5 +1,6 @@
 import { describePayloadError, normalizeStringArray, parseJsonArray, templatePayloadSchema } from './payloads';
 import { assignMissingStableTemplateIdentities } from './template-reconciliation';
+import type { TemplateUpdateValues } from './template-writes';
 
 type Row = Record<string, unknown>;
 
@@ -52,7 +53,7 @@ const COLUMN_NORMALIZERS: Record<string, (value: unknown) => unknown> = {
   is_public: (value) => value === true || value === 1,
 };
 
-export function omitUnchangedTemplateColumns(existing: Row, updates: Row): Row {
+export function omitUnchangedTemplateColumns(existing: Row, updates: TemplateUpdateValues): TemplateUpdateValues {
   return Object.fromEntries(
     Object.entries(updates).filter(([column, value]) => {
       const normalize = COLUMN_NORMALIZERS[column];
@@ -89,11 +90,11 @@ const CONTENT_FIELDS = [
   'categories', 'category', 'tags',
 ] as const;
 
-export function requestsContentChange(body: Row, slugChanged: boolean): boolean {
+export function requestsContentChange(body: unknown, slugChanged: boolean): boolean {
   return slugChanged || CONTENT_FIELDS.some((field) => Object.prototype.hasOwnProperty.call(body, field));
 }
 
-export function visibilityChangeMetadata(changes: Row): { visibility: 'public' | 'private' } | undefined {
+export function visibilityChangeMetadata(changes: TemplateUpdateValues): { visibility: 'public' | 'private' } | undefined {
   const keys = Object.keys(changes);
   if (keys.length !== 1 || keys[0] !== 'is_public') return undefined;
   return { visibility: changes.is_public ? 'public' : 'private' };

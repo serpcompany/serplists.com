@@ -2,6 +2,7 @@ import { and, eq, exists, gt, isNull, notExists, sql, type SQL } from "drizzle-o
 import { alias } from "drizzle-orm/sqlite-core";
 import { schema, type createDb } from "../db";
 import { buildAuditEventValues } from "./audit";
+import { allConditions } from "./guarded-insert";
 import { insertAuditEventWhere } from "./guarded-writes";
 
 type Db = ReturnType<typeof createDb>;
@@ -116,7 +117,7 @@ export async function buildInviteRevocation({
     insertAuditEventWhere(
       db,
       auditEvent,
-      and(
+      allConditions(
         revokedNow,
         notExists(
           db.select({ id: loggedRevoke.id }).from(loggedRevoke).where(
@@ -127,7 +128,7 @@ export async function buildInviteRevocation({
             ),
           ),
         ),
-      ) as SQL,
+      ),
     ),
   ] as const;
 }

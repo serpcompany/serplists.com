@@ -1,4 +1,4 @@
-import { getTableColumns, is, sql, SQL, type Column } from 'drizzle-orm';
+import { and, getTableColumns, is, sql, SQL, type Column, type SQLWrapper } from 'drizzle-orm';
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { createDb } from '../db';
 
@@ -24,7 +24,19 @@ export function withoutColumns<TTable extends SQLiteTable>(table: TTable, omit: 
   const columns = Object.fromEntries(
     Object.entries(getTableColumns(table)).filter(([key]) => !omit.includes(key)),
   );
-  return Object.create(table, { [DRIZZLE_TABLE_COLUMNS]: { value: columns } }) as TTable;
+  const narrowed: unknown = Object.create(table, { [DRIZZLE_TABLE_COLUMNS]: { value: columns } });
+  if (!inheritsFrom(narrowed, table)) throw new Error('withoutColumns: the narrowed table does not inherit from the table');
+  return narrowed;
+}
+
+function inheritsFrom<Base extends object>(value: unknown, base: Base): value is Base {
+  return typeof value === 'object' && value !== null && Object.getPrototypeOf(value) === base;
+}
+
+export function allConditions(...conditions: (SQLWrapper | undefined)[]): SQL {
+  const combined = and(...conditions);
+  if (!combined) throw new Error('allConditions: pass at least one condition');
+  return combined;
 }
 
 const isWritableColumn = (column: Column): boolean => !column.generated || column.generated.type === 'byDefault';

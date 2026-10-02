@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { Env } from '../types';
 import { json, jsonError } from '../utils/response';
 import { getSessionUserId } from '../utils/session';
@@ -19,30 +20,28 @@ type ClipyMoment = {
   tMs: number;
 };
 
-type ClipyContext = {
-  readiness?: {
-    state?: string;
-    summary?: string;
-    transcript?: string;
-    video?: string;
-    keyMoments?: string;
-  };
-  clip?: {
-    accessMode?: string;
-    publicId?: string;
-    title?: string;
-  };
-  summary?: {
-    keyPoints?: unknown;
-    tldr?: unknown;
-  };
-  transcript?: {
-    plaintext?: unknown;
-  };
-  keyMoments?: {
-    moments?: unknown;
-  };
-};
+const optionalPart = <Shape extends z.ZodRawShape>(shape: Shape) =>
+  z.object(shape).passthrough().optional().catch(undefined);
+
+const clipyContextSchema = z.object({
+  readiness: optionalPart({
+    state: z.unknown(),
+    summary: z.unknown(),
+    transcript: z.unknown(),
+    video: z.unknown(),
+    keyMoments: z.unknown(),
+  }),
+  clip: optionalPart({ accessMode: z.unknown(), publicId: z.unknown(), title: z.unknown() }),
+  summary: optionalPart({ keyPoints: z.unknown(), tldr: z.unknown() }),
+  transcript: optionalPart({ plaintext: z.unknown() }),
+  keyMoments: optionalPart({ moments: z.unknown() }),
+}).passthrough();
+
+type ClipyContext = z.infer<typeof clipyContextSchema>;
+
+const clipyMomentSchema = z.object({ caption: z.unknown(), frameUrl: z.unknown(), tMs: z.unknown() }).passthrough();
+
+const clipyRequestSchema = z.object({ url: z.unknown() }).passthrough();
 
 export type ClipyTemplateDraft = {
   title: string;
@@ -198,8 +197,9 @@ function normalizeMoments(value: unknown): ClipyMoment[] {
   if (!Array.isArray(value)) return [];
 
   return value.flatMap((entry): ClipyMoment[] => {
-    if (!entry || typeof entry !== 'object') return [];
-    const record = entry as Record<string, unknown>;
+    const parsedEntry = clipyMomentSchema.safeParse(entry);
+    if (!parsedEntry.success) return [];
+    const record = parsedEntry.data;
     const caption = boundedString(record.caption, 1_000);
     const frameUrl = boundedString(record.frameUrl, 2_000);
     const tMs = typeof record.tMs === 'number' && Number.isFinite(record.tMs)
@@ -400,9 +400,7 @@ export async function handleGenerateTemplateFromClipy(
     return jsonError('Invalid JSON payload', 400, { code: 'invalid_json' });
   }
 
-  const source = parseClipyWatchUrl(
-    body && typeof body === 'object' ? (body as Record<string, unknown>).url : undefined,
-  );
+  const source = parseClipyWatchUrl(clipyRequestSchema.safeParse(body).data?.url);
   if (!source) {
     return jsonError('Enter a public Clipy watch link like https://clipy.online/video/abc123', 400, {
       code: 'invalid_clipy_url',
@@ -440,9 +438,9 @@ export async function handleGenerateTemplateFromClipy(
     });
   }
 
-  let context: ClipyContext;
+  let context: unknown;
   try {
-    context = (await readJsonWithinLimit(response)) as ClipyContext;
+    context = await readJsonWithinLimit(response);
   } catch {
     clearTimeout(timeout);
     return jsonError('Clipy returned an invalid or oversized response.', 502, {
@@ -451,31 +449,33 @@ export async function handleGenerateTemplateFromClipy(
   }
   clearTimeout(timeout);
 
-  if (!context || typeof context !== 'object') {
+  const parsedContext = clipyContextSchema.safeParse(context);
+  if (!parsedContext.success) {
     return jsonError('Clipy returned an invalid or oversized response.', 502, {
       code: 'clipy_invalid_response',
     });
   }
+  const { readiness, clip } = parsedContext.data;
 
   if (
-    context.readiness?.state !== 'complete' ||
-    context.readiness?.video !== 'ready' ||
-    context.readiness?.transcript !== 'ready' ||
-    context.readiness?.summary !== 'ready' ||
-    context.readiness?.keyMoments !== 'ready'
+    readiness?.state !== 'complete' ||
+    readiness.video !== 'ready' ||
+    readiness.transcript !== 'ready' ||
+    readiness.summary !== 'ready' ||
+    readiness.keyMoments !== 'ready'
   ) {
     return jsonError('This Clipy recording is still processing. Try again when it is ready.', 409, {
       code: 'clipy_not_ready',
     });
   }
-  if (context.clip?.accessMode !== 'public' || context.clip?.publicId !== source.id) {
+  if (clip?.accessMode !== 'public' || clip.publicId !== source.id) {
     return jsonError('Clipy recording was not found or is not public.', 404, {
       code: 'clipy_not_found',
     });
   }
 
   try {
-    return json({ draft: buildClipyTemplateDraft(context, source) });
+    return json({ draft: buildClipyTemplateDraft(parsedContext.data, source) });
   } catch {
     return jsonError('This Clipy recording does not contain enough information to create a checklist.', 422, {
       code: 'clipy_missing_content',
