@@ -260,6 +260,19 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-01: phase 4, app side of round 4 done: naming conventions (836ec7b4..47d6e0f7).
+  - `@typescript-eslint/naming-convention` covers every TypeScript file, with its options
+    in `scripts/eslint-rules/naming-conventions.mjs`.
+    - camelCase by default, with PascalCase allowed for components.
+    - UPPER_CASE only for module-scope `const`.
+    - Properties and destructured names are unchecked, since they mirror external
+      contracts.
+  - It fixed 68 names:
+    - the 18 Drizzle table exports, now camelCase with their SQL names kept;
+    - 34 underscore-prefixed destructured names;
+    - 11 UPPER_CASE constants declared inside functions;
+    - 5 others.
+  - The guard fails if any file gets other options.
 - 2026-10-01: phase 4, app side of round 5 done (41956020..a380a868). TD-30 to TD-32 are
   closed.
   - `duplicates:check` runs over `src`, `functions`, `scripts`, `db` and `tests`. The 37
@@ -473,6 +486,11 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
   its route is exempt. Before, the router's source was read by a test to check that each
   family was listed. Existing routes are limited as before, and a write to a path no
   handler serves now counts too.
+- 2026-10-01: the naming rule matches two names by name, because another module dictates
+  them; no file is carved out.
+  - The HTTP method names Next.js route handlers must export.
+  - React DOM's create-root container interface, which the fake DOM augments. That one
+    goes with TD-68.
 - 2026-10-01: rule override audit decisions.
   - `argsIgnorePattern: "^_"` stays. Some parameters exist only for their type:
     TanStack infers `mutate()`'s variables from `mutationFn`'s parameter, and test doubles
