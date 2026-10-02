@@ -7,6 +7,6 @@ export function templateOwnerProfile(row: {
   owner_full_name?: unknown;
 }): TemplateOwnerProfile | undefined {
   const username = stringOrUndefined(row.owner_username);
-  const full_name = stringOrUndefined(row.owner_full_name);
-  return username === undefined && full_name === undefined ? undefined : { username, full_name };
+  const fullName = stringOrUndefined(row.owner_full_name);
+  return username === undefined && fullName === undefined ? undefined : { username, full_name: fullName };
 }

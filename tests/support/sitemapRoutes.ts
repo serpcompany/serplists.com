@@ -18,11 +18,11 @@ type WorkerRequest = {
   params?: { page?: string };
 };
 
-export const sitemapRouteInTheWorker = (GET: SitemapRouteGet) => async ({ request, env, waitUntil, params }: WorkerRequest) => {
+export const sitemapRouteInTheWorker = (getSitemap: SitemapRouteGet) => async ({ request, env, waitUntil, params }: WorkerRequest) => {
   serverContext.env = env;
   serverContext.waitUntil = [];
   const pageFileNameAsNextJsPassesIt = `${params?.page ?? ''}.xml`;
-  const response = await GET(request, { params: Promise.resolve({ page: pageFileNameAsNextJsPassesIt }) });
+  const response = await getSitemap(request, { params: Promise.resolve({ page: pageFileNameAsNextJsPassesIt }) });
   serverContext.waitUntil.forEach((promise) => waitUntil?.(promise));
   return response;
 };

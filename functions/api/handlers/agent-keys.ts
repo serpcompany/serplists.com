@@ -26,14 +26,14 @@ const createKeyBodySchema = z.object({
   permissions: z.array(runKeyPermissionSchema).min(1, "Choose at least one permission").max(8).optional(),
 }).strict();
 
-const safeKeySelection = (personal_run_keys: typeof schema.personal_run_keys) => ({
-  id: personal_run_keys.id,
-  name: personal_run_keys.name,
-  prefix: personal_run_keys.key_prefix,
-  createdAt: personal_run_keys.created_at,
-  lastUsedAt: personal_run_keys.last_used_at,
-  revokedAt: personal_run_keys.revoked_at,
-  permissions: personal_run_keys.permissions,
+const safeKeySelection = (personalRunKeys: typeof schema.personal_run_keys) => ({
+  id: personalRunKeys.id,
+  name: personalRunKeys.name,
+  prefix: personalRunKeys.key_prefix,
+  createdAt: personalRunKeys.created_at,
+  lastUsedAt: personalRunKeys.last_used_at,
+  revokedAt: personalRunKeys.revoked_at,
+  permissions: personalRunKeys.permissions,
 });
 
 export async function handleAgentKeys(request: Request, env: Env): Promise<Response> {
