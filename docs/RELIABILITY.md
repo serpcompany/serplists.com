@@ -49,12 +49,12 @@ that is right for that case, or throw an error that says what was missing. Add
 `| undefined` to an optional property only where a caller really passes `undefined`, and
 never silence the error with a `!` or a cast. ESLint's `@typescript-eslint/no-non-null-assertion`
 refuses a `!` in every TypeScript file, and `tests/unit/config/typecheck-coverage.test.ts`
-fails when a tsconfig that `pnpm run typecheck` runs turns one of the four settings off. Tests
-read what may be missing through the helpers in `tests/support/elements.ts`
+fails when a tsconfig that `pnpm run typecheck` runs turns one of the four settings, or the fifth
+below, off. Tests read what may be missing through the helpers in `tests/support/elements.ts`
 ([testing conventions](#testing-conventions)).
 
-The app, node and API tsconfigs add a fifth, `noPropertyAccessFromIndexSignature`: a key read
-with a dot must come from a type that names it, so `record.title` on a
+All four tsconfigs add a fifth, `noPropertyAccessFromIndexSignature` (the tests' by inheriting
+it): a key read with a dot must come from a type that names it, so `record.title` on a
 `Record<string, unknown>` is an error. Type the value with the shape it has instead:
 - a Drizzle row (`$inferSelect`, or a `Pick` or `Partial` of it), a Zod output, or the result
   type of the function that built it;
@@ -71,9 +71,24 @@ Index with brackets only a dictionary whose keys vary: `process.env` in scripts 
 `dataset`, headers, query parameters. Read the `undefined` that `noUncheckedIndexedAccess`
 gives. The app's `NEXT_PUBLIC_` variables are declared on `NodeJS.ProcessEnv`
 (`src/next-public-env.d.ts`), since Next.js inlines only `process.env.NAME` read with a dot.
-`typecheck-coverage.test.ts` fails when the app, node or API tsconfig turns the setting off.
-The tests' tsconfig turns it off until a later round of the
-[harness hardening plan](exec-plans/active/harness-hardening.md).
+`typecheck-coverage.test.ts` fails when any tsconfig `pnpm run typecheck` runs turns the setting
+off. The tests' tsconfig includes `src/next-public-env.d.ts` too, since they type-check
+`src/env.ts`.
+
+Tests read known keys the same way:
+- a D1 row a handler wrote or a test selected as `StoredRow` (`tests/support/d1Doubles.ts`), which
+  names every column of every Drizzle table as `unknown`. The Drizzle chain mocks record each
+  `values()` and `set()` row with it, and `SqliteD1.rows()` returns it.
+- stored sections through `storedSections` (`tests/support/storedJson.ts`), which parses into the
+  record shapes above, and a log line through `logLineIn`;
+- an MCP result as `McpRecord` (`tests/support/mcpResponses.ts`), and an element's props as
+  `ElementProps` (`tests/support/elementTree.ts`);
+- a response body through the app's schema for it, or a passthrough schema that names the keys
+  the test reads.
+
+A test reads with brackets only a dictionary whose keys vary: `process.env`, headers, a workflow
+step's `env` and `with`, an HTML element's attributes, a log line's event fields, and an audit
+row's diff and metadata, whose keys vary by action.
 
 No project takes JavaScript into its program untyped: the app's tsconfig sets `allowJs: false`
 (Next.js adds its suggested `allowJs: true` only when the key is missing), the node and API
@@ -87,9 +102,10 @@ SingleStore builders, `lib.dom.d.ts` against the Workers types, the generated
 `pnpm run lint` runs ESLint with `eslint.type-aware.config.js`: everything in
 `eslint.config.js`, plus the `@typescript-eslint/no-unsafe-*` rules, which read types from the
 app, API, node and tests projects, and `@typescript-eslint/no-unsafe-type-assertion` on app,
-API, script and database code ([repository checks](#repository-checks)). Type information
-makes a run about four times as long: 85 to 91 s against 22 s for `eslint .` on the owner's
-machine, of which the tests project adds about 35 s (the run took 52 to 54 s without it). So
+API, script and database code and every test file ([repository checks](#repository-checks)). Type information
+makes a run three to four times as long: 70 to 91 s against 22 s for `eslint .` on the owner's
+machine (70 and 74 s once the assertion rule covered the tests), of which the tests project adds
+about 35 s (the run took 52 to 54 s without it). So
 the pre-commit hook and editors use `eslint.config.js` alone and the type-aware rules fail at
 `pnpm run verify` (the push hook) and in CI.
 
@@ -222,9 +238,11 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     the code in `src/`), a cast (`as T` or `<T>`) of
     `JSON.parse(...)`, a response body (`.json()`, awaited or not, and `.json<T>()`), a
     `getItem(...)` result, `event.data` or `message.data`, `request.formData()` or a form's
-    `get()`/`getAll()`, and every `as unknown as T`. Widening to `unknown` is allowed. Each
-    message names what to use: `apiRequest(endpoint, schema)` for the API, a schema's
-    `parse` or `safeParse` for the rest, Drizzle's `$inferSelect` for D1 rows.
+    `get()`/`getAll()`, Playwright's `postDataJSON()` (a request body the browser sent), every
+    `as unknown as T`, and every cast to `never`, which stops the type checker as
+    `as unknown as T` does. Widening to `unknown` is allowed. Each message names what to use:
+    `apiRequest(endpoint, schema)` for the API, a schema's `parse` or `safeParse` for the rest,
+    Drizzle's `$inferSelect` for D1 rows, `apiEnv()` for an environment in a test.
   - The type-aware rules `no-unsafe-assignment`, `no-unsafe-member-access`, `no-unsafe-call`,
     `no-unsafe-return` and `no-unsafe-argument` refuse an `any` flowing on uncast, as in
     `const data: Foo = await response.json()`, in the TypeScript files of the same folders and
@@ -233,21 +251,24 @@ in the [tech debt tracker](exec-plans/tech-debt-tracker.md).
     checks only the cast rule reads them, beside ESLint's recommended JavaScript rules
     ([quality gates](#quality-gates)). Tests are held to `no-explicit-any` and
     `no-this-alias` as app code is: no override turns them off for test files.
-  - `@typescript-eslint/no-unsafe-type-assertion`, in the same config and app folders, refuses an
-    `as` that narrows a type, whatever the value: a cast from `unknown` or `any`, from a
-    union to one member, or from `string` to a literal. Narrow instead: a type guard, `in`,
+  - `@typescript-eslint/no-unsafe-type-assertion`, in the same config, folders and test files,
+    refuses an `as` that narrows a type, whatever the value: a cast from `unknown` or `any`,
+    from a union to one member, or from `string` to a literal. Narrow instead: a type guard, `in`,
     `instanceof`, a Zod parse, `skipToken` for a TanStack query that waits for an id, a guard
     that throws an error naming what is missing, or the null check a Base UI `Select`'s
     `onValueChange` needs. An `as` that widens or names the same type is allowed.
   - Tests parse what they read the same way: response bodies with `readJson(response,
     schema)`, stored JSON columns with `tests/support/storedJson.ts`, and browser specs through
-    request helpers that take a schema ([testing conventions](#testing-conventions)). The
-    assertion rule does not cover tests yet: a later round of the
-    [harness hardening plan](exec-plans/active/harness-hardening.md) adds it.
+    request helpers that take a schema ([testing conventions](#testing-conventions)). They
+    narrow as app code does, through the helpers the testing conventions list: a handler on an
+    element through `handlerOf` or `handlerIn`, a fake DOM node through `elementOf`, a SQL
+    expression through `sqlExpression`, a server's port through `listeningPort`, and doubles
+    and environments built as the type they stand in for.
   - `tests/unit/scripts/no-external-data-casts-rule.test.ts` covers the rule, and
     `tests/unit/config/external-data-boundaries.test.ts` fails if `pnpm run lint` stops using
     the type-aware config, a folder loses the rules (the assertion rule included), a test file
-    loses the cast rule or the `no-unsafe-*` rules, or a test file gets `no-explicit-any` or
+    loses the cast rule, the `no-unsafe-*` rules or the assertion rule, or a test file gets
+    `no-explicit-any` or
     `no-this-alias` turned off.
 - **Code conventions.** A rule about how all code is written lives in ESLint, not in a test
   that scans the code:
@@ -548,8 +569,8 @@ Common failures:
     - The root layout and the stylesheet: `rootLayout.ts` (`rootLayoutOn(siteEnv)`,
       `plainScriptsInTheHead()`) and `appStylesheet.ts`
       (`compileTheStylesheetTheRootLayoutImports()`).
-    - Scripts and workflows: `workflowGuards.ts` and `throwawayGitRepository.ts`; ESLint
-      rules: `ruleTester.ts`.
+    - Scripts and workflows: `workflowGuards.ts` and `throwawayGitRepository.ts`; a server's
+      port: `listeningPort.ts`; ESLint rules: `ruleTester.ts`.
   - `tests/e2e/support/`: browser spec steps: signing in and registering (`sign-in.ts`), the
     template editor (`template-editor.ts`), runs (`run-saves.ts`), billing stubs
     (`billing.ts`), API calls (`api-requests.ts`) and the schemas of what they read
@@ -569,12 +590,12 @@ Common failures:
 - Tests are type-checked like the app; Vitest and Playwright strip types without checking
   them. `tests/tsconfig.json` extends the app's `tsconfig.json`, includes every TypeScript
   file under `tests/` (unit and integration tests, browser specs, support and fixtures) with
-  `next-env.d.ts`, `cloudflare-env.d.ts` and `src/js-yaml.d.ts`, and runs in
-  `pnpm run typecheck`. It holds the tests to `strict` and the four settings the app's config
-  adds, which it inherits ([quality gates](#quality-gates)).
+  `next-env.d.ts`, `cloudflare-env.d.ts`, `src/js-yaml.d.ts` and `src/next-public-env.d.ts`, and
+  runs in `pnpm run typecheck`. It holds the tests to `strict` and the five settings the app's
+  config adds, which it inherits ([quality gates](#quality-gates)).
   `tests/unit/config/typecheck-coverage.test.ts` fails when `pnpm run typecheck` runs no
   tsconfig that includes a TypeScript file the repository holds, skips a tsconfig, or runs one
-  that turns off any of the four settings. A
+  that turns off any of the five settings. A
   `.tsx` file next to a `.ts` file of the same name is in no include: TypeScript keeps only
   the `.ts` one, so the test names it.
 - Read a response body with `readJson(response, schema)` from `tests/support/readJson.ts`,
@@ -595,10 +616,17 @@ Common failures:
     keeps its own reference to it.
   - What a handler stored (a D1 row's `items`, `retired_items` or audit JSON, a log line) is
     parsed with `tests/support/storedJson.ts`: `storedSectionsIn(column)` for checklist
-    sections, `jsonRecordIn` and `jsonRecordsIn` for other JSON, and `parseJsonText(text,
-    schema)` for any other shape. The Drizzle chain mocks (`tests/support/drizzleChainMocks.ts`)
-    record each `set()` and `values()` row as `Record<string, unknown>`, so a test reads a
-    stored column through these instead of trusting `any`.
+    sections (parsed into the `SectionRecord`, `TaskRecord`, `ContentRecord` and `SubTaskRecord`
+    shapes), `jsonRecordIn` and `jsonRecordsIn` for other JSON, `logLineIn` for an API log line
+    (`LogLine` names the logger's own fields), and `parseJsonText(text, schema)` for any other
+    shape. The Drizzle chain mocks (`tests/support/drizzleChainMocks.ts`) record each `set()`
+    and `values()` row as a `StoredRow` (`tests/support/d1Doubles.ts`), which names every column
+    of every Drizzle table as `unknown`, so a test reads a stored column through these instead
+    of trusting `any`. `SqliteD1.rows()` returns `StoredRow`s too, and a row read straight from
+    `node:sqlite` is typed as one.
+  - An MCP result's fields are typed by `McpRecord` in `tests/support/mcpResponses.ts`, which
+    `recordIn` and the paged-read helpers (`tests/support/templatePages.ts`,
+    `tests/support/runPages.ts`) return.
   - Browser specs run in Playwright, which cannot load Vitest, so they import only modules
     that do not import Vitest. The request helpers in `tests/e2e/support/api-requests.ts`
     take a schema, as `readJson()` does: `apiRequest(page, path, schema, init)`,
@@ -626,14 +654,23 @@ Common failures:
   - A test double of a platform type implements it. `SqliteD1` implements `D1Database`, its
     statements extend `D1StatementDouble` from `tests/support/d1Doubles.ts`, and a D1 fake with
     canned answers extends `D1StatementDouble` and `D1DatabaseDouble` from the same file;
-    `InMemoryR2Bucket` implements `R2Bucket`. D1's `all<T>()`, `first<T>()` and `raw<T>()` and
+    `InMemoryR2Bucket` implements `R2Bucket`. Drizzle that only builds SQL runs on
+    `d1ThatRunsNoQuery()` (`tests/support/apiEnv.ts`), and `apiEnvOn(database)` is the `Env` of a
+    test on a `SqliteD1`. D1's `all<T>()`, `first<T>()` and `raw<T>()` and
     R2's `json<T>()` promise a row type nothing checks, in the platform as in the doubles, so
     the doubles declare those generic signatures as overloads over an implementation that
     returns what it read. A `Request` that must hand over a form as is subclasses `Request`.
   - React DOM's `createRoot` accepts the fake DOM's `FakeElement` in the tests' program:
     `tests/fixtures/fakeDom.ts` adds it to the `Container` type React's types leave open for
-    that. A component's React props on a fake element are read with
-    `typeThroughTheFieldsOwnOnChange()` (`tests/support/fakeDomRoots.ts`).
+    that, and declares the `value` and `type` React DOM sets on inputs. A node a query found is
+    narrowed with `elementOf(node, what)` or `isFakeElement` from the same file. A component's
+    React props on a fake element are read with `typeThroughTheFieldsOwnOnChange()`
+    (`tests/support/fakeDomRoots.ts`).
+  - An element's props are typed by `ElementProps` (`tests/support/elementTree.ts`), and a
+    handler on them is called through `handlerOf(element, name)`, or `handlerIn(props, name)`
+    for a props object or a hook's result, which parse it as a function with Zod. A drizzle
+    expression a mock recorded narrows with `sqlExpression()` (`tests/support/drizzleSql.ts`),
+    and a server's port is read with `listeningPort()` (`tests/support/listeningPort.ts`).
   - A hook mocked with `vi.mock` gets a typed mock: `vi.fn<HookDouble<typeof useHook>>()`
     (`tests/support/hookDoubles.ts`) returns a `Partial` of the hook's result, so each field a
     test sets is checked against the hook while the rest stay out.
@@ -659,10 +696,15 @@ Common failures:
     and a parameter that defaults to `null` then accepts only `null`. `tests/tsconfig.json`
     turns `allowJs` off, so `pnpm run typecheck` fails on an import that has none.
   - A test of what a JavaScript caller may pass but the declared types rule out is a
-    `.test.mjs` file (`tests/unit/scripts/run-tool-from-javascript.test.mjs`). So is a test of
-    content stored before the API checked every write, which the types also rule out
-    (`tests/unit/components/ContentRenderer-stored-content.test.mjs`,
-    `tests/unit/lib/forms/templateEditorForm.storedContent.test.mjs`).
+    `.test.mjs` file: the scripts that call `run-tool.mjs` from JavaScript
+    (`tests/unit/scripts/run-tool-from-javascript.test.mjs`), and workerd, whose local R2
+    reports a range with its unused fields set to `undefined`
+    (`tests/unit/functions/api/r2-file-response-from-workerd.test.mjs`). A test of content
+    stored before the API checked every write is TypeScript: it passes the stored JSON as
+    `unknown` through the parser the app reads it with (`normalizeSections`, `apiTemplateSchema`
+    and the Template mapper) and checks what the code downstream does with the result
+    (`tests/unit/components/ContentRenderer-stored-content.test.tsx`,
+    `tests/unit/lib/forms/templateEditorForm.storedContent.test.ts`).
   - In the tests' program `NodeJS.ProcessEnv` requires the Worker vars
     `cloudflare-env.d.ts` declares, so an environment for a child process starts from a
     complete one (`tests/unit/scripts/check-env.test.ts`) or from `process.env`.
