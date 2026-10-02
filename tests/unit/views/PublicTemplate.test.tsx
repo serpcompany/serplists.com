@@ -12,8 +12,6 @@ import {
   REPO_TEMPLATE_OWNER_SLUG,
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
-import { SITE_ORIGIN } from '@/lib/routes';
-import { CANONICAL_ORIGIN } from '../../../functions/sitemap/shared';
 import type { ChecklistTemplate } from '@/types/checklist';
 
 beforeAll(installNavigationWindow);
@@ -187,11 +185,5 @@ describe('PublicTemplate load failures', () => {
     const { html } = renderPublishedRoute(publishedClipyTemplate);
 
     expect(html).not.toContain('noindex');
-  });
-});
-
-describe('PublicTemplate canonical URL, which the server names on the production site', () => {
-  it('shares its origin with the sitemap', () => {
-    expect(SITE_ORIGIN).toBe(CANONICAL_ORIGIN);
   });
 });

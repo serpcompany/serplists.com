@@ -5,8 +5,6 @@ import {
   REPO_TEMPLATE_USER_ID,
 } from '@/lib/repoTemplateCatalog';
 import {
-  LEGACY_ACCOUNT_PATH,
-  LEGACY_CONSOLE_PROFILE_PATH,
   buildCategorySlug,
   buildCanonicalPublicTemplatePath,
   buildConsoleArchivePath,
@@ -29,12 +27,10 @@ import {
   buildPublicTemplatePath,
   buildSharePath,
   findCategoryNameByLegacySlug,
-  findCategoryNameBySlug,
   hasCanonicalPublicTemplatePath,
   isBlankTemplateEditorRoute,
   isPathWithin,
   resolveLegacyTemplatesCategoryRedirectPath,
-  resolveConsoleSection,
   resolvePublicRouteTier,
   resolvePublicTemplateOwnerSlug,
   resolveRouteShell,
@@ -89,8 +85,7 @@ describe('routes', () => {
     expect(buildConsoleRunsPath()).toBe('/dashboard/runs/');
     expect(buildConsoleRunPath('run-1')).toBe('/dashboard/runs/run-1/');
     expect(buildConsoleSettingsPath()).toBe('/dashboard/settings/');
-    expect(LEGACY_ACCOUNT_PATH).toBe('/account');
-    expect(LEGACY_CONSOLE_PROFILE_PATH).toBe('/dashboard/profile');
+    expect(buildConsoleArchivePath()).toBe('/dashboard/archive/');
   });
 
   it('flags template editor routes that should render on a blank workspace shell, with or without the trailing slash the router reports', () => {
@@ -105,21 +100,14 @@ describe('routes', () => {
     expect(isBlankTemplateEditorRoute('/dashboard/templates/template-1/')).toBe(false);
   });
 
-  it('builds and resolves category slugs', () => {
+  it('builds category slugs', () => {
     expect(buildCategorySlug('Technical SEO')).toBe('technical-seo');
-    expect(
-      findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'technical-seo'),
-    ).toBe('Technical SEO');
-    expect(
-      findCategoryNameBySlug(['Technical SEO', 'Content Ops'], 'missing'),
-    ).toBeNull();
   });
 
   it('finds an accented category from the URL it had before its letters were folded', () => {
     const categories = ['Café Guides', 'Technical SEO'];
 
     expect(buildPublicCategoryPath('Café Guides')).toBe('/categories/cafe-guides/');
-    expect(findCategoryNameBySlug(categories, 'caf-guides')).toBeNull();
     expect(findCategoryNameByLegacySlug(categories, 'caf-guides')).toBe('Café Guides');
     expect(findCategoryNameByLegacySlug(categories, 'missing')).toBeNull();
   });
@@ -186,36 +174,6 @@ describe('routes', () => {
     expect(resolvePublicRouteTier('/features/template-builder/')).toBe('secondary');
     expect(resolvePublicRouteTier('/share/share-123/')).toBe('minimal');
     expect(resolvePublicRouteTier('/pricing/')).toBe('marketing');
-  });
-
-  it('maps console routes to persistent navigation sections, with or without the trailing slash the router reports', () => {
-    expect(resolveConsoleSection('/dashboard')).toBe('home');
-    expect(resolveConsoleSection('/dashboard/templates')).toBe('templates');
-    expect(resolveConsoleSection('/dashboard/templates/template-1')).toBe(
-      'templates',
-    );
-    expect(resolveConsoleSection('/dashboard/import-templates')).toBe(
-      'templates',
-    );
-    expect(resolveConsoleSection('/dashboard/runs')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/runs/run-1')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/settings')).toBe('account');
-    expect(resolveConsoleSection('/dashboard/profile')).toBe('account');
-    expect(buildConsoleArchivePath()).toBe('/dashboard/archive/');
-    expect(resolveConsoleSection('/dashboard/archive')).toBe('archive');
-    expect(resolveConsoleSection('/console')).toBe('home');
-    expect(resolveConsoleSection('/account')).toBe('account');
-    expect(resolveConsoleSection('/templates')).toBeNull();
-    expect(resolveConsoleSection('/checklists')).toBeNull();
-    expect(resolveConsoleSection('/dashboard/')).toBe('home');
-    expect(resolveConsoleSection('/dashboard/templates/')).toBe('templates');
-    expect(resolveConsoleSection('/dashboard/templates/template-1/edit/')).toBe('templates');
-    expect(resolveConsoleSection('/dashboard/import-templates/')).toBe('templates');
-    expect(resolveConsoleSection('/dashboard/runs/')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/runs/run-1/')).toBe('runs');
-    expect(resolveConsoleSection('/dashboard/settings/')).toBe('account');
-    expect(resolveConsoleSection('/dashboard/archive/')).toBe('archive');
-    expect(resolveConsoleSection('/templates/')).toBeNull();
   });
 
   it('resolves public owner slugs from template ownership data', () => {

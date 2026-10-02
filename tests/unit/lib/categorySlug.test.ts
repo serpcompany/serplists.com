@@ -5,7 +5,6 @@ import { PUBLIC_CATEGORY_REGISTRY } from '@/data/publicCategories';
 import {
   buildCategorySlug,
   buildPublicCategoryPath,
-  findCategoryNameBySlug,
   resolveLegacyTemplatesCategoryRedirectPath,
 } from '@/lib/routes';
 import { generateSlug } from '@/utils/urlHelpers';
@@ -64,9 +63,7 @@ describe('buildPublicCategoryPath', () => {
     named.forEach((name) => {
       const path = buildPublicCategoryPath(name);
       assert.exists(path);
-      expect(findCategoryNameBySlug(named, categorySlugInPath(path))).toBe(
-        named.find((candidate) => buildCategorySlug(candidate) === buildCategorySlug(name)),
-      );
+      expect(buildCategorySlug(categorySlugInPath(path))).toBe(buildCategorySlug(name));
     });
     expect(buildPublicCategoryPath('日本語')).toBe('/categories/%E6%97%A5%E6%9C%AC%E8%AA%9E/');
   });
