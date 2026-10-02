@@ -37,7 +37,7 @@ const TYPE_CHECKED_TEST_FILES = [
 
 const CO_LOCATED_TEST_FILE = 'src/lib/routes.test.ts';
 
-const JAVASCRIPT_TEST_FILE = 'tests/unit/functions/api/log-path-from-javascript.test.mjs';
+const JAVASCRIPT_TEST_FILE = 'tests/unit/functions/api/r2-file-response-from-workerd.test.mjs';
 
 const lintScript = z
   .object({ scripts: z.object({ lint: z.string() }) })

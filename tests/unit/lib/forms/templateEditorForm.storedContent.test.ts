@@ -7,8 +7,9 @@ import {
   templateEditorFormSchema,
   validateTemplateEditorFormForSave,
 } from "@/lib/forms/templateEditorForm";
+import { apiTemplateSchema } from "@/lib/schemas/apiTemplates";
 
-const contentsStoredBeforeTheApiCheckedWrites = [
+const contentsStoredBeforeTheApiCheckedWrites: Array<[string, unknown]> = [
   ["null file details", { id: "c1", type: "file", value: "https://x/doc.pdf", fileName: null, fileSize: null, uploadType: null }],
   ["a numeric id and value", { id: 1, type: "text", value: 5 }],
   ["an unknown type", { id: "c2", type: "link", value: "https://example.com" }],
@@ -20,53 +21,39 @@ const contentsStoredBeforeTheApiCheckedWrites = [
   ["a bare string", "Just some text"],
 ];
 
-const sectionsWith = (content) =>
-  [
-    {
-      id: "section-1",
-      title: "Prep",
-      items: [{ id: "item-1", title: "Task", description: 12, contents: [content] }],
-    },
-  ];
+const sectionsWith = (...contents: unknown[]): unknown => [
+  {
+    id: "section-1",
+    title: "Prep",
+    items: [{ id: "item-1", title: "Task", description: 12, contents }],
+  },
+];
+
+const formValuesOfTheStored = (sections: unknown) => buildTemplateEditorFormValues({ title: "Legacy", sections });
+
+const formValuesOfTheLoaded = (sections: unknown) =>
+  buildTemplateEditorFormValues(
+    mapApiTemplateToChecklistTemplate(
+      apiTemplateSchema.parse({ id: "t1", title: "Legacy", items: JSON.stringify(sections) }),
+      "legacy",
+    ),
+  );
 
 describe("buildTemplateEditorFormValues with content stored before the API checked every write", () => {
   it.each(contentsStoredBeforeTheApiCheckedWrites)("opens %s in a state the editor can save", (_label, content) => {
-    const direct = buildTemplateEditorFormValues({ title: "Legacy", sections: sectionsWith(content) });
-    const loaded = buildTemplateEditorFormValues(
-      mapApiTemplateToChecklistTemplate(
-        { id: "t1", title: "Legacy", items: JSON.stringify(sectionsWith(content)) },
-        "legacy",
-      ),
-    );
-
-    for (const values of [direct, loaded]) {
+    for (const values of [formValuesOfTheStored(sectionsWith(content)), formValuesOfTheLoaded(sectionsWith(content))]) {
       const parsed = templateEditorFormSchema.safeParse(values);
       expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
     }
   });
 
   it("keeps what the stored content says", () => {
-    const [unknownType, numeric, file, bare] = taskAt(buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: "section-1",
-          title: "Prep",
-          items: [
-            {
-              id: "item-1",
-              title: "Task",
-              description: 12,
-              contents: [
-                { id: "c2", type: "link", value: "https://example.com" },
-                { id: 1, type: "text", value: 5 },
-                { id: "c1", type: "file", value: "/api/uploads/file?key=template-files%2Fu1%2Fdoc.pdf", fileName: "doc.pdf", fileSize: 2048, uploadType: "upload" },
-                "Just some text",
-              ],
-            },
-          ],
-        },
-      ],
-    }), 0, 0).contents ?? [];
+    const [unknownType, numeric, file, bare] = taskAt(formValuesOfTheStored(sectionsWith(
+      { id: "c2", type: "link", value: "https://example.com" },
+      { id: 1, type: "text", value: 5 },
+      { id: "c1", type: "file", value: "/api/uploads/file?key=template-files%2Fu1%2Fdoc.pdf", fileName: "doc.pdf", fileSize: 2048, uploadType: "upload" },
+      "Just some text",
+    )), 0, 0).contents ?? [];
 
     expect(unknownType).toEqual(expect.objectContaining({ type: "text", value: "https://example.com" }));
     expect(numeric).toEqual(expect.objectContaining({ id: "1", type: "text", value: "5" }));
@@ -77,26 +64,12 @@ describe("buildTemplateEditorFormValues with content stored before the API check
   });
 
   it("drops a file name and size left over from an upload the value no longer points to, so the next save stores the fix, and keeps a name an author gave a linked file", () => {
-    const contents = taskAt(buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: "section-1",
-          title: "Prep",
-          items: [
-            {
-              id: "item-1",
-              title: "Task",
-              contents: [
-                { id: "c1", type: "file", value: "https://example.com/pricing.pdf", fileName: "report.pdf", fileSize: 2048, uploadType: "upload" },
-                { id: "c2", type: "image", value: "https://example.com/a.png", fileName: "a.png", fileSize: 10 },
-                { id: "c3", type: "file", value: "https://example.com/launch.pdf", fileName: "launch.pdf", uploadType: "url" },
-                { id: "c4", type: "file", value: "/api/uploads/file?key=k", fileName: "doc.pdf", fileSize: 5 },
-              ],
-            },
-          ],
-        },
-      ],
-    }), 0, 0).contents ?? [];
+    const contents = taskAt(formValuesOfTheStored(sectionsWith(
+      { id: "c1", type: "file", value: "https://example.com/pricing.pdf", fileName: "report.pdf", fileSize: 2048, uploadType: "upload" },
+      { id: "c2", type: "image", value: "https://example.com/a.png", fileName: "a.png", fileSize: 10 },
+      { id: "c3", type: "file", value: "https://example.com/launch.pdf", fileName: "launch.pdf", uploadType: "url" },
+      { id: "c4", type: "file", value: "/api/uploads/file?key=k", fileName: "doc.pdf", fileSize: 5 },
+    )), 0, 0).contents ?? [];
 
     expect(contents[0]).toEqual(
       expect.objectContaining({ value: "https://example.com/pricing.pdf", fileName: undefined, fileSize: undefined, uploadType: "url" }),
@@ -107,18 +80,16 @@ describe("buildTemplateEditorFormValues with content stored before the API check
   });
 
   it("gives every content block its own id, since an upload finds its block by id", () => {
-    const values = buildTemplateEditorFormValues({
-      sections: [
-        {
-          id: "section-1",
-          title: "Prep",
-          items: [
-            { id: "item-1", title: "A", contents: [{ id: 1, type: "text", value: "a" }, { id: "1", type: "text", value: "b" }] },
-            { id: "item-2", title: "B", contents: [{ id: 1, type: "image", value: "" }] },
-          ],
-        },
-      ],
-    });
+    const values = formValuesOfTheStored([
+      {
+        id: "section-1",
+        title: "Prep",
+        items: [
+          { id: "item-1", title: "A", contents: [{ id: 1, type: "text", value: "a" }, { id: "1", type: "text", value: "b" }] },
+          { id: "item-2", title: "B", contents: [{ id: 1, type: "image", value: "" }] },
+        ],
+      },
+    ]);
 
     const ids = values.sections.flatMap((section) =>
       section.items.flatMap((item) => (item.contents ?? []).map((content) => content.id)),
@@ -134,7 +105,7 @@ describe("validateTemplateEditorFormForSave", () => {
     sectionAt(values, 0).items.push({
       id: "item-1",
       title: "Task",
-      contents: [{ id: 1, type: "text", value: "x" }],
+      contents: [{ id: "c1", type: "file", value: "https://example.com/doc.pdf", fileSize: Number.NaN }],
     });
 
     const errors = validateTemplateEditorFormForSave(values);
