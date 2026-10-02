@@ -48,7 +48,7 @@ allow no code comments: code is structured, named and documented so that it need
    with tests; size the new verifications in report mode.
 3. [x] Remove every comment, area by area, moving what each one knew into the doc that owns
    the area, a name, or a test; then enable the comment checks.
-4. [ ] New verifications: a tests tsconfig, then `max-lines` on every authored file, naming
+4. [x] New verifications: a tests tsconfig, then `max-lines` on every authored file, naming
    conventions, boundary validation, duplicates, dead code, stricter types and rows-read
    budgets; audit the rule overrides; fix what each finds, then enforce it.
 5. [ ] Agent loops: code gardening, quality re-grading, `@claude` feedback. They were proven in
@@ -260,6 +260,12 @@ different files. Each item ends with its check enforced in `pnpm run verify`.
       check doesn't and the bundled-pack test, which moved.
     - jscpd has no tokenizer for XSD, so it does not read the two official sitemaps.org
       schemas in `tests/fixtures/`. The guard test fails on any other file it skips.
+- 2026-10-02: phase 4 done.
+  - The full browser suite ran on a fresh production build: 269 of 270 passed. The one
+    failure was a stale mocked reply in `team-settings-conflicts.spec.ts`, which the client
+    now correctly refuses. Its mock is built through the client's schema now (cbc52c08),
+    and the spec's 7 tests pass.
+  - `pnpm run verify` passed on a clean copy at 9f40df4f.
 - 2026-10-02: the build and the browser tests moved out of CI into
   `.github/workflows/browser-tests.yml`, which runs only on pull requests into `main` and
   `staging`, on `ubuntu-latest`. It runs smoke tests on PRs into `staging` and the full
